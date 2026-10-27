@@ -1,5 +1,7 @@
 # EXPERIENCE coverage ledger
 
+Updated 2026-10-27 for the confirmed privacy/sharing/memory/revocation/reviewer-agent decisions; see [decision reconciliation](../reconcile-confirmed-decisions-2026-10-27.md).
+
 Source: [final PRD](../../../prds/prd-inquello-2026-10-26/prd.md) and companion. Destination: [EXPERIENCE.md](../EXPERIENCE.md). This is a traceability and mechanical coverage aid, not validation of a running product.
 
 ## Functional requirements
@@ -22,7 +24,7 @@ Source: [final PRD](../../../prds/prd-inquello-2026-10-26/prd.md) and companion.
 | FR-14 — Generate and deliver visual or hosted outputs | V1 | S02, S10 | UJ-6 steps 3–5; SP4 |
 | FR-15 — Research with attributable sources | V1 | S02 | UJ-6 step 2 |
 | FR-16 — Use browser, site and computer actions | V1 | S02, S12 | UJ-1 step 3; SP6 |
-| FR-17 — Review, correct and recheck work | V1 | S03 | UJ-4 steps 2–4 |
+| FR-17 — Review, correct and recheck work | V1 | S02, S03, S10 | UJ-2 steps 2–7; UJ-4 steps 2–4; reviewer-private tool reperform, human-issued notes, preparer-agent revisions and changed/impacted rechecks |
 | FR-18 — Retain actual technical and security capabilities | V1 | S11 | UJ-5 steps 1–3 |
 | FR-19 — Turn guidance into reusable work | V1 | S06 | UJ-7 steps 1–4 |
 | FR-20 — Preserve method authority and departures | V1 | S06, S02, S03 | S06 responsibility/state; UJ-7 steps 2–4 and recovery; Task-specific departure records retain Method/version, rationale and affected scope/outputs for review separately from maintained Method changes and action authority |
@@ -32,7 +34,7 @@ Source: [final PRD](../../../prds/prd-inquello-2026-10-26/prd.md) and companion.
 | FR-24 — Run bounded schedules and events | V1 | S04 | UJ-8 steps 1–3 |
 | FR-25 — Delegate and consolidate bounded work | V1 | S02, S11 | UJ-5 steps 2–4 |
 | FR-26 — Explore without losing origin | V1 | S08 | UJ-5 step 3; SP2 |
-| FR-27 — Resume with scoped knowledge | V1 | S08 | UJ-1 step 5; UJ-7 step 3; SP2 |
+| FR-27 — Resume with scoped knowledge | V1 | S08 | UJ-1 step 5; UJ-7 step 3; SP2; automatic eligibility for issued/explicitly team-shared work across auditors/engagements, privacy/admission/current-access bounds |
 | FR-28 — Control activity recall | V1 | S08 | SP2 |
 | FR-29 — Use permitted processing routes | V1 | S07, S09 | SP1; Information Architecture route paragraph; effective provider/deployment/service identity, gateways/local models and named provider breadth |
 | FR-30 — Control reasoning, speed and consumption | V1 | S07, S04 | SP1; UJ-8 step 1 and recovery |
@@ -41,7 +43,7 @@ Source: [final PRD](../../../prds/prd-inquello-2026-10-26/prd.md) and companion.
 | FR-33 — Enforce effective action authority | V1 | S07, S09, S10 | SP1; SP3; SP4 |
 | FR-34 — Treat evidence as data | V1 | S02, S06 | UJ-7 failure/recovery |
 | FR-35 — Assign work and human review | V1 | S03, S09 | UJ-2 steps 2–3; SP3 |
-| FR-36 — Reassign and revoke access | V1 | S04, S09 | UJ-8 step 5 and recovery; SP3 |
+| FR-36 — Reassign and revoke access | V1 | S02, S04, S05, S08, S09, S10 | Basic revocation in first team-enabled increment: State Patterns, UJ-2 recovery, SP3/SP4; advanced unattended-job reassignment UJ-8 step 5/recovery |
 | FR-37 — Govern V1-held material | V1 | S09 | SP3 |
 | FR-38 — Govern native audit records — V2 | V2 | S13 | SP7 — V2 |
 | FR-39 — Coordinate practice workflows using external records | V1 | S02, S03, S04 | UJ-2; UJ-8 |
@@ -94,7 +96,7 @@ The shared State Patterns baseline covers cold-load, empty, focus, errors, offli
 | S07 | spine-only | UJ-1/5/7/8 |
 | S08 | spine-only | UJ-1/5/7 |
 | S09 | spine-only | UJ-2/4/8 |
-| S10 | spine-only | UJ-4/6/8 |
+| S10 | spine-only | UJ-2/4/6/8 |
 | S11 | spine-only | UJ-5/3/8 |
 | S12 | spine-only | UJ-1/3/5/8 |
 | S13 | spine-only | V2 continuation of UJ-2/4/8 |
@@ -111,5 +113,5 @@ The `.working/token-contract.json` mirror is the checkable DESIGN frontmatter co
 - State coverage: S01–S13 each inherit the six shared baseline states and have specific states/actions.
 - Phase coverage: FR-38/FR-40/FR-42 remain V2 in S13/SP7; other requirements remain the full V1 target.
 - Reference coverage: four imported routed compositions are identified; remaining arrangements are spine-only. Imports are retained with a manifest; visual values/file inventory are owned by DESIGN.
-- Unresolved work: implementation handlers and integration effects are not verified; unprovided placements, responsive arrangements, interaction completion and existing-token accessibility applications are explicit AS-UX1–AS-UX4 design assumptions with proposed owners/revisit conditions. PRD OQ-1–OQ-12 remain downstream gates.
+- Unresolved work: implementation handlers and integration effects are not verified; unprovided placements, responsive arrangements, interaction completion and existing-token accessibility applications are explicit AS-UX1–AS-UX4 design assumptions with proposed owners/revisit conditions. The current EXPERIENCE Open Items section carries decided OQs and remaining OQ-11/OQ-12/OQ-15/OQ-16 gates; earlier blanket statements that all OQs remained open are superseded.
 - No new mock generated; no product/runtime test is claimed; no scope cut or production framework selected.

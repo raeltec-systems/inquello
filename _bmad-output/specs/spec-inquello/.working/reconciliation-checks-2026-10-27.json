@@ -1,0 +1,43 @@
+{
+  "baseline": "df5b14f73f4742afbd66d3ad633ca9d8d84988c7",
+  "checks": {
+    "cap_ids_preserved": true,
+    "fr_ids_preserved": true,
+    "v2_fr_unchanged": true,
+    "cap_intent_success": true,
+    "nfrs_unchanged": true,
+    "journeys_preserved": true,
+    "no_blanket_extract_visibility": true,
+    "local_links_resolve": true,
+    "all_companions_exist": true,
+    "new_contract_adopted": true,
+    "current_ad_range": true,
+    "fixtures_preserved": true
+  },
+  "missing_links": [],
+  "cap_count": 25,
+  "fr_count": 44,
+  "v1_fr_count": 41,
+  "v2_fr_ids": [
+    38,
+    40,
+    42
+  ],
+  "companion_count": 12,
+  "runtime_tests_run": false,
+  "readiness_claim": "Not assessed by these document checks",
+  "open_gates": [
+    "OQ-11 native policy",
+    "OQ-12 name/public brand",
+    "OQ-15 external audit client/independence",
+    "OQ-16 concrete shared service/route choices"
+  ],
+  "files": {
+    "_bmad-output/specs/spec-inquello/SPEC.md": "eab6a38af7dae424cf0ce259bf03b8c3ee046b2970f200abe974f6cbabd29ccf",
+    "_bmad-output/specs/spec-inquello/scope-and-gates.md": "4087ef153ee0c1ba1ac465f36800e4a6321fbe2722fb7483d70e959f840f8fc8",
+    "_bmad-output/specs/spec-inquello/glossary.md": "a30fb8f7895391500a5c3c2caad0743159e6a993f4e9e8926762cee14d55bd1a",
+    "_bmad-output/specs/spec-inquello/collaboration-and-memory.md": "db88d123e1127a65e87141033b70d2f7862c9f4322cecc872b47c9ec7ce153b3",
+    "_bmad-output/planning-artifacts/prds/prd-inquello-2026-10-26/prd.md": "5eedd9160d264ff3631cda6b93ede43660817501365bcda93096c4b4dff3cf9d",
+    "_bmad-output/planning-artifacts/prds/prd-inquello-2026-10-26/addendum.md": "a1b98d785292502e6b21951158a0e3ad2185bafa77b39a686bc0529bfe6669bb"
+  }
+}
