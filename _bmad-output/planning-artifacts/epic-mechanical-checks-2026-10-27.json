@@ -1,0 +1,12 @@
+{
+  "story_count": 139,
+  "unique_story_ids": 139,
+  "ac_count": 372,
+  "unique_ac_ids": 372,
+  "original_stories": 89,
+  "original_acs": 238,
+  "unmapped_original_acs": [],
+  "mechanical_issues": [],
+  "epics_sha256": "7dc2af5a1cf14ce4edeb6fd17a292f7d4d1f03be5c81b7858bcd15df8f94a26e",
+  "note": "Mechanical source/mapping/format/order checks only; semantic review and unresolved implementation gates are separate."
+}

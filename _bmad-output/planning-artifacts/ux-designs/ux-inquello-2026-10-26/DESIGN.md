@@ -4,10 +4,11 @@ description: User-selected Inquello desktop visual system, with explicit source 
   applications.
 status: final
 created: '2026-10-26'
-updated: '2026-10-26'
+updated: '2026-10-27'
 sources:
 - ../../prds/prd-inquello-2026-10-26/prd.md
 - ../../prds/prd-inquello-2026-10-26/addendum.md
+- reconcile-confirmed-decisions-2026-10-27.md
 - imports/inquello-design-system.zip
 - imports/IMPORT-MANIFEST.md
 - imports/inquello-design-system/readme.md
@@ -534,7 +535,7 @@ The following **18 primitives and 10 source compositions** are the exact shared 
 | Workbook | Compact artifact view with file identity/version, segmented sheet selector, aligned numeric columns, supplied row highlights and judgment legend. Table radius 8px and 12.5px type; horizontal scroll preserves values. Its sample calculations are reference data, not W1 acceptance evidence. | [ActiveScreen.jsx](imports/inquello-design-system/ui_kits/workspace/ActiveScreen.jsx) |
 | StartScreen | Header and centred 720px-max column; symbol 40px, display 28px opening prompt, Composer, applied-method row and suggested existing files. Concrete method names/data are examples, not mandatory workflow. | [StartScreen.jsx](imports/inquello-design-system/ui_kits/workspace/StartScreen.jsx) |
 | ActiveScreen | Thread beside artifact region with Changes/Preview/Summary; plan/specialists/approval request and persistent Composer. Declared artifact minimum 380px wins over 340px prototype clamp. Stopping cannot visually mark remaining work completed. | [ActiveScreen.jsx](imports/inquello-design-system/ui_kits/workspace/ActiveScreen.jsx) |
-| ReviewScreen | Artifact-dominant source table plus reviewer/agent explanation, claim tags, choices, reason and affected-output diffs. Source rows highlighted without colour-only meaning. Keep/local review remains visually distinct from Professional Approval. | [ReviewScreen.jsx](imports/inquello-design-system/ui_kits/workspace/ReviewScreen.jsx) |
+| ReviewScreen | Artifact-dominant source table plus reviewer/agent explanation, claim tags, choices, reason and affected-output diffs. Source rows highlighted without colour-only meaning. Reuse this composition inside reviewer-private agent Tasks; distinguish submitted version, agent checks, private draft notes and human-issued notes through text/identity rather than new colours. Keep/local review remains distinct from Professional Approval. | [ReviewScreen.jsx](imports/inquello-design-system/ui_kits/workspace/ReviewScreen.jsx) |
 | AutomationsScreen | Header 14px title, compact automation list with selected blue-50 row, readable trigger/last-run context and detailed check/action region. A successful run must not borrow an accepted human-decision appearance without the corresponding decision. | [AutomationsScreen.jsx](imports/inquello-design-system/ui_kits/workspace/AutomationsScreen.jsx) |
 
 [Component source files](imports/IMPORT-MANIFEST.md#component-jsx-and-icon-path-source--implementation-references-19), [API declarations](imports/IMPORT-MANIFEST.md#component-typescript-declarations--api-and-state-references-18) and [prompt examples](imports/IMPORT-MANIFEST.md#component-prompt-examples--untrusted-descriptive-source-data-18) preserve the complete source contracts and local literal values. [Five component cards plus preview loader](imports/IMPORT-MANIFEST.md#component-html-cards-and-loader--executable-preview-references-6) and the [workspace kit](imports/IMPORT-MANIFEST.md#workspace-kit--scenario-and-layout-implementation-references-8) are executable preview references, not production components or proof of interaction behavior. They were inspected without executing the loader, JSX or remote CDN scripts.
@@ -552,6 +553,7 @@ All [40 icon assets](imports/IMPORT-MANIFEST.md#icon-svg-assets--directly-reusab
 | Keep small-symbol, title 14px and panel minimum 380px reconciliations explicit. | Modify imports to hide disagreements or infer a new token from a specimen label. |
 | Let labels, prefixes, outlines and identity accompany semantic colour. | Treat a green chip, successful automation or agent review as human approval. |
 | Preserve visible work, source context, uncertainty, version and confirmed/uncertain delivery distinctions. | Copy prototype Keep, Stop, Excel or message callbacks as real runtime behavior. |
+| Show creator-private versus explicitly shared scope, submitted version and private versus issued review notes with readable labels using existing tokens. | Treat Workspace membership, agent agreement or a share icon as authority, professional independence or proof of recipient access. |
 | Support text resize/zoom, complete value disclosure and reduced motion. | Shrink a dense desktop table until it fits or rely solely on animation/colour. |
 | Use document/artifact previews as the visual material. | Add photography, decorative imagery, gradients, glass effects, coloured side stripes or bounce animation. |
 | Treat S05–S13 arrangements and secondary-client details as explicit derived/downstream work. | Omit broad V1 capabilities because the source kit contains only four desktop screens. |

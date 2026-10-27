@@ -9,6 +9,8 @@ updated: 2026-10-26
 
 This companion to the [PRD](prd.md) preserves research detail and evaluation evidence. It introduces no new requirements or accepted architecture. The [product-definition addendum](../../../../docs/addendum.md) and [traceability map](../../../../docs/PRODUCT_BRIEF_TRACEABILITY.md) retain the complete original scope. All fixtures and acceptance scenarios below remain proposed and unexecuted.
 
+> **Current-contract precedence (2026-10-27):** The historical evidence and exact fixtures below are preserved. Later adopted UX/architecture and the [collaboration contract](../../../specs/spec-inquello/collaboration-and-memory.md) supersede earlier unselected-design/topology wording. Hybrid sharing, team memory admission, first-increment revocation and agent-assisted review now bind the existing acceptance scenarios; no runtime evidence is implied.
+
 ## Source and mechanism constraints
 
 The [foundation study](../../../../docs/research/2026-10-26-methodology/FOUNDATION_REUSE.md) inspected Codex commit `970111f6cb62cc02fe36a82ea7d71b37a2889c97`. Core/CLI, app-server and the TypeScript SDK are candidate reusable components. The SDK wraps CLI execution; it does not supply a desktop interface. Reusable desktop UI source and complete hosted connector, tool and scheduler implementations were not established. Each capability needs a documented component or supported service route and separate operational validation.

@@ -1,0 +1,14 @@
+{
+  "scope": "documentation checks only",
+  "checks": {
+    "stable_ad_ids": true,
+    "all_22_group_rows": true,
+    "all_44_fr_scope": true,
+    "basic_revocation_first_team": true,
+    "no_blanket_ready_claim": true,
+    "preserved_human_authority": true,
+    "open_gate_ids": true
+  },
+  "all_pass": true,
+  "spine_sha256": "c09b5c8832a5c2dc36ad2030d1be656a958db3b80a7884b7ac7a82009e417e3c"
+}

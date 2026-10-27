@@ -1,0 +1,138 @@
+# Scope: approved Increment 1 only (Epics 1–6, 84 stories).
+# Planning tracker; no implementation authorization. Full roadmap remains in epics.md.
+# Deterministic-equivalent fallback; see sprint-scope-2026-10-27.json.
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+# 
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created, ready for development
+#   - in-progress: Developer actively working on implementation
+#   - review: Implementation complete, ready for review
+#   - done: Story completed
+# 
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+# 
+# Action Item Status:
+#   - open: Committed during a retrospective, not yet addressed
+#   - in-progress: Actively being worked on
+#   - done: Completed
+# 
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when its first story starts (via build's sprint sync)
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates the next story after the previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+# - Retrospective appends its action items to action_items; the status view surfaces open ones
+
+generated: 10-27-2026 19:11
+last_updated: 10-27-2026 19:11
+project: inquello
+project_key: INQUELLO
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts
+development_status:
+  epic-1: backlog
+  epic-1-retrospective: optional
+  epic-2: backlog
+  epic-2-retrospective: optional
+  epic-3: backlog
+  epic-3-retrospective: optional
+  epic-4: backlog
+  epic-4-retrospective: optional
+  epic-5: backlog
+  epic-5-retrospective: optional
+  epic-6: backlog
+  epic-6-retrospective: optional
+  1-1-set-up-the-initial-inquello-fork-from-the-selected-public-co: backlog
+  1-2-run-the-packaged-runtime-over-a-bounded-desktop-transport: backlog
+  1-3-isolate-desktop-renderers-from-host-privilege: backlog
+  1-4-keep-local-working-metadata-behind-domain-owned-commands: backlog
+  1-5-apply-the-selected-typography-tokens-and-icon-semantics: backlog
+  1-6-operate-core-action-and-input-primitives: backlog
+  1-7-navigate-and-identify-work-with-accessible-primitives: backlog
+  1-8-inspect-progress-and-proposed-actions-with-accessible-primit: backlog
+  1-9-register-capability-limits-before-enablement: backlog
+  1-10-authenticate-an-inquello-identity-independently-of-inference: backlog
+  1-11-enforce-internal-company-memberships-without-disclosing-priv: backlog
+  1-12-govern-the-local-data-actually-held-by-the-first-private-rou: backlog
+  1-13-keep-provider-credentials-separate-and-protected: backlog
+  1-14-organise-private-workspaces-engagements-folders-and-tasks: backlog
+  1-15-distinguish-execution-checks-review-and-delivery-states: backlog
+  1-16-navigate-the-desktop-shell-with-keyboard-and-responsive-layo: backlog
+  1-17-compose-a-plain-private-request-without-claiming-later-input: backlog
+  1-18-inspect-effective-managed-policy-and-explicit-broader-modes: backlog
+  1-19-bound-initial-tool-reads-writes-and-network-access: backlog
+  1-20-authorize-specific-actions-without-granting-professional-app: backlog
+  1-21-discover-current-tools-and-connection-states-honestly: backlog
+  1-22-configure-initial-processing-routes-without-silent-fallback: backlog
+  1-23-show-local-execution-separately-from-inference: backlog
+  1-24-choose-reasoning-and-inspect-attributable-usage: backlog
+  1-25-start-a-real-plain-text-private-task-on-a-configured-route: backlog
+  1-26-follow-actual-basic-progress-and-truthful-results: backlog
+  1-27-reject-untrusted-instructions-in-initial-tool-output: backlog
+  1-28-gate-current-route-real-data-use-on-negative-authorization-e: backlog
+  1-29-steer-stop-and-recover-the-same-private-task: backlog
+  1-30-find-and-reopen-only-permitted-saved-work: backlog
+  2-1-understand-an-existing-work-folder-with-precise-references: backlog
+  2-2-use-images-and-screenshots-as-attributable-context: backlog
+  2-3-capture-selections-and-application-snapshots-with-saved-or-l: backlog
+  2-4-attach-connector-identity-entity-scope-and-extraction-contex: backlog
+  2-5-run-calculations-queries-and-scripts-with-retained-derivatio: backlog
+  2-6-apply-standing-instructions-and-workspace-guidance-with-prov: backlog
+  2-7-define-select-and-validate-a-method-before-task-invocation: backlog
+  2-8-start-a-task-with-actual-files-and-a-selected-method: backlog
+  2-9-retain-composer-attachments-and-selected-method-during-navig: backlog
+  2-10-execute-and-verify-a-registered-method-on-its-supplied-input: backlog
+  2-11-record-task-specific-departures-separately-from-method-chang: backlog
+  2-12-show-population-exclusions-sampling-and-actual-coverage: backlog
+  2-13-inspect-technical-investigation-detail-without-forcing-it-on: backlog
+  2-14-show-attributable-parallel-reads-and-complete-analysis-progr: backlog
+  2-15-run-hooks-with-observable-outcomes-and-defined-mandatory-che: backlog
+  2-16-keep-m1-evidence-and-retrieved-source-instructions-subordina: backlog
+  2-17-research-with-attributable-sources-and-labelled-limits: backlog
+  2-18-verify-source-authority-before-enabling-attributable-analysi: backlog
+  3-1-create-and-revise-workbooks-and-csv-with-format-aware-change: backlog
+  3-2-create-and-revise-word-documents-preserving-review-metadata: backlog
+  3-3-create-and-revise-presentations-preserving-theme-charts-and: backlog
+  3-4-continue-the-same-saved-file-in-excel-word-or-powerpoint-and: backlog
+  3-5-work-in-isolated-alternatives-and-promote-deliberately: backlog
+  3-6-generate-explanatory-visuals-labelled-distinct-from-evidence: backlog
+  3-7-render-source-and-artifact-previews-without-decision-authori: backlog
+  3-8-reconcile-the-w1-ledger-to-bank-fixture-exactly: backlog
+  3-9-identify-affected-outputs-when-a-method-changes-pass-m1: backlog
+  3-10-attribute-artifact-effort-to-its-producing-task: backlog
+  4-1-bind-explicit-share-grants-to-private-resources: backlog
+  4-2-make-the-exact-shared-version-usable-on-the-recipient-comput: backlog
+  4-3-stop-revoked-shared-retrieval-and-active-agent-use: backlog
+  4-4-apply-revocation-to-derived-knowledge-and-shared-held-data-c: backlog
+  4-5-admit-team-knowledge-without-publishing-private-exploration: backlog
+  4-6-prove-private-shared-memory-and-revocation-boundaries: backlog
+  4-7-assign-task-and-human-review-responsibility-with-attribution: backlog
+  5-1-open-a-private-reviewer-task-anchored-to-the-submission: backlog
+  5-2-reperform-the-analysis-and-challenge-its-basis: backlog
+  5-3-request-a-review-with-evidence-anchored-findings: backlog
+  5-4-let-the-reviewer-issue-only-human-selected-anchored-notes: backlog
+  5-5-review-evidence-choose-a-treatment-and-keep-or-revert-a-prop: backlog
+  5-6-maintain-the-reviewed-basis-and-mark-affected-decisions-stal: backlog
+  5-7-correct-recheck-and-keep-closure-separate-pass-w2: backlog
+  5-8-resolve-notes-with-the-preparer-agent-and-return-a-precise-h: backlog
+  5-9-recheck-the-revision-with-the-reviewer-agent-before-human-ac: backlog
+  5-10-retain-code-configuration-and-security-review-for-it-audit: backlog
+  5-11-export-and-import-a-reviewable-package-with-declared-losses: backlog
+  5-12-preserve-task-context-across-editor-environment-delegation-r: backlog
+  5-13-expose-the-complete-state-model-including-delivery-and-profe: backlog
+  5-14-demonstrate-the-workbook-to-review-to-export-engineering-che: backlog
+  6-1-plan-scope-and-run-procedures-with-the-practice-s-own-termin: backlog
+  6-2-track-evidence-requests-and-receipt-and-prepare-stakeholder: backlog
+  6-3-inspect-authorise-and-verify-a-bounded-external-update-again: backlog
+  6-4-handle-responses-actions-and-retests-without-agent-closure: backlog
+  6-5-complete-first-increment-fixture-validation-and-deferral-acc: backlog
+action_items: []

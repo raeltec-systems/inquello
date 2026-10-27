@@ -1,5 +1,8 @@
 # Inquello product brief — scope traceability
 
+> **2026-10-27 planning supersession:** The current [SPEC and its companions](../_bmad-output/specs/spec-inquello/SPEC.md), especially [collaboration, institutional memory and review](../_bmad-output/specs/spec-inquello/collaboration-and-memory.md), govern later confirmed decisions: hybrid local execution/shared Inquello authority; private Tasks and explicit granular sharing; team-wide admitted internal-company memory; first-team-increment revocation; and agent-assisted human-controlled review. Earlier unselected-topology, all-retained-extract visibility, personal-only recall or manual-only review implications are superseded, not current defaults. External-audit client/independence boundaries and detailed service choices remain open. The original research/inventory below is preserved; its coverage is not runtime acceptance.
+
+
 **Date:** October 26, 2026. This appendix links the researched inventory to proposed requirements in the [product definition addendum](addendum.md), accompanying the [product brief](PRODUCT_BRIEF_V0_1.md). It verifies reference coverage, not implementation, service eligibility or passing acceptance.
 
 **Accepted phasing:** V1 is the full Codex-derived workbench using external record systems and working files. V2 adds built-in authoritative audit records and their lifecycle. The domain-mode deferral removes no Codex capability from the V1 mirror inventory.

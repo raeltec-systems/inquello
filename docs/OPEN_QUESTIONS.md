@@ -1,5 +1,8 @@
 # Open questions and choice menu
 
+> **2026-10-27 planning supersession:** The current [SPEC and its companions](../_bmad-output/specs/spec-inquello/SPEC.md), especially [collaboration, institutional memory and review](../_bmad-output/specs/spec-inquello/collaboration-and-memory.md), govern later confirmed decisions: hybrid local execution/shared Inquello authority; private Tasks and explicit granular sharing; team-wide admitted internal-company memory; first-team-increment revocation; and agent-assisted human-controlled review. Earlier unselected-topology, all-retained-extract visibility, personal-only recall or manual-only review implications are superseded, not current defaults. External-audit client/independence boundaries and detailed service choices remain open. The original research/inventory below is preserved; its coverage is not runtime acceptance.
+
+
 **Latest accepted phasing — October 26, 2026:** built-in audit-record mode is a V2 feature. V1 is the full Codex-derived auditor workbench using supported files and the team's external record systems. Q3 A remains the organisation/workspace scope for selecting modes when V2 introduces the built-in alternative. This supersedes any earlier suggestion that native authoritative record foundations were required in V1.
 
 **Current phase:** the user has authorised the [first detailed product brief](PRODUCT_BRIEF_V0_1.md). Outstanding quality/fidelity questions are carried into acceptance criteria for built-product testing. Policy and service eligibility remain explicit dependencies; they do not block drafting the brief. The selections below remain authoritative, and unselected recommendations remain proposals.

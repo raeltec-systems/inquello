@@ -8,6 +8,9 @@ version: 0.2
 
 # Inquello — product definition addendum
 
+> **2026-10-27 planning supersession:** The current [SPEC and its companions](../_bmad-output/specs/spec-inquello/SPEC.md), especially [collaboration, institutional memory and review](../_bmad-output/specs/spec-inquello/collaboration-and-memory.md), govern later confirmed decisions: hybrid local execution/shared Inquello authority; private Tasks and explicit granular sharing; team-wide admitted internal-company memory; first-team-increment revocation; and agent-assisted human-controlled review. Earlier unselected-topology, all-retained-extract visibility, personal-only recall or manual-only review implications are superseded, not current defaults. External-audit client/independence boundaries and detailed service choices remain open. The original research/inventory below is preserved; its coverage is not runtime acceptance.
+
+
 This companion to the [product brief](PRODUCT_BRIEF_V0_1.md) holds the detailed decision baseline, work model, requirements, journeys, evaluation criteria and research references. P01–P22, J1–J8 and A01–A18 remain draft proposals; their inclusion does not imply implementation, validation or user acceptance of every detail.
 
 **Reading route:** [accepted decisions and proposal status](#2-decision-baseline-and-requirement-status); [detailed scope](#7-functional-scope); [journeys](#8-core-user-journeys); [evaluation criteria](#12-acceptance-and-evaluation-plan); [phase boundaries](#13-v1-functional-mirror-and-v2-built-in-record-mode); [unresolved choices](#14-dependencies-and-decisions-carried-forward). The [traceability map](PRODUCT_BRIEF_TRACEABILITY.md) connects the research inventory to these requirements.

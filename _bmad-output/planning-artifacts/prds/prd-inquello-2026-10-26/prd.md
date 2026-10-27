@@ -2,7 +2,7 @@
 title: Inquello — product requirements document
 status: final
 created: 2026-10-26
-updated: 2026-10-26
+updated: 2026-10-27
 audience: Internal product and design team
 ---
 
@@ -14,7 +14,9 @@ This PRD gives the **internal product and design team** a product baseline for U
 
 The accepted direction is distinguished from the requirements that operationalise it. Functional Requirements (FRs), Non-Functional Requirements (NFRs) and metrics below define intended behaviour, not implemented or tested capability. Open choices remain visible in section 10; finalising this document does not choose their answers or authorise production deployment. The PRD is suitable for exploring UX and architecture; affected implementation commitments must satisfy their listed decision gates.
 
-**Scope authority:** all 22 source requirement groups, eight source journeys and 18 evaluation criteria remain in force. The [existing scope inventory](../../../../docs/PRODUCT_BRIEF_TRACEABILITY.md) retains 79 C entries, 20 expanded behaviours, 270 subfeature mappings and 93 proposed enhancements. Those detailed cards remain scope inputs; grouped FRs do not remove them. The separate GCP/Vertex route remains a named inventory delta. No narrower MVP or first shipping increment has been selected.
+**Scope authority:** all 22 source requirement groups, eight source journeys and 18 evaluation criteria remain in force. The [existing scope inventory](../../../../docs/PRODUCT_BRIEF_TRACEABILITY.md) retains 79 C entries, 20 expanded behaviours, 270 subfeature mappings and 93 proposed enhancements. Those detailed cards remain scope inputs; grouped FRs do not remove them. The separate GCP/Vertex route remains a named inventory delta. The pending epic reconciliation must record dependency-correct increments and explicit unmet scope; the full V1/V2 boundary is unchanged.
+
+**Current collaboration decisions:** private-by-default Tasks, explicit artifact/package versus whole-Task sharing, team-wide admitted institutional memory, first-team-increment revocation and agent-assisted human-controlled review are specified in [the collaboration contract](../../../specs/spec-inquello/collaboration-and-memory.md). Earlier blanket retained-extract visibility is superseded; OQ-15/16 remain explicit gates.
 
 ## 1. Vision and accepted direction
 
@@ -26,7 +28,7 @@ The product serves internal audit, external audit, advisory and IT/IS audit acro
 
 **V1** is the full Codex-derived capability target and its audit adaptations using external authoritative audit systems and supported working files. It includes scheduled work, approved unattended execution and continuous assurance. **V2** adds native authoritative audit records and their lifecycle. V2 foundations are not prerequisites for V1. When both modes exist, record-mode choice is at organisation/workspace level; an individual task cannot silently change authority.
 
-The default is execution within a scoped, user-started task. Methods begin with instructions, examples, skills, tools, agents, configuration and memory. Actual organisational policy governs processing; no exclusive provider or deployment topology is selected. Bedrock and Azure Foundry/Azure OpenAI remain explicit provider routes alongside the other researched options. Source reuse, hosted-service access and model routing are separate dependencies.
+The default is execution within a scoped, user-started task. Methods begin with instructions, examples, skills, tools, agents, configuration and memory. Actual organisational policy governs processing; hybrid local desktop execution/files and a shared Inquello identity/permissions/collaboration service are selected at contract level; no exclusive provider, vendor, region or budget is selected. Bedrock and Azure Foundry/Azure OpenAI remain explicit provider routes alongside the other researched options. Source reuse, hosted-service access and model routing are separate dependencies.
 
 ## 2. People, jobs and source journeys
 
@@ -47,20 +49,20 @@ Guest participation by management, clients and evidence providers is out of V1 s
 **[ASSUMPTION AS-1]** Amina (practitioner), Noah (human reviewer/team lead) and Dev (technical specialist) are illustrative names used to structure the eight existing J scenarios. They are not interview participants or observed sessions. These UJs preserve the source behaviour without selecting screens, authentication mechanisms or a new workflow. All are V1 journeys; V2 can later carry them through native records.
 
 - **UJ-1 — Amina answers an ad hoc question (source J1).** Starting with permitted existing files and a question, Amina asks Inquello to investigate, inspects cited sources and steers the analysis. Value arrives as a useful response or saved artifact with uncertainty and coverage visible. She can continue from that work without engagement setup; inaccessible or missing sources remain explicit.
-- **UJ-2 — Amina and Noah carry an engagement through review (J2).** Amina brings the team's method, scope and evidence, prepares procedures and results, then asks Noah to review. Noah traces relied-on results to evidence and requests revisions where necessary. The resolution is a reviewable reporting package and a clear decision/delivery state under the external authority, using the practice's terminology rather than mandatory control objects.
+- **UJ-2 — Amina and Noah carry an engagement through review (J2).** Amina works privately, then explicitly shares a submitted version and permitted supporting package without automatically sharing her conversation. Noah opens his own private reviewer Task; his agent redoes computations from sources, checks Method and coverage, challenges contradictory evidence and compares authorised historical findings. Noah chooses anchored notes to issue. Amina and her agent resolve them in a new version with a precise handoff/impact summary; Noah's agent rechecks changed and impacted work, widening checks when impact is uncertain. The resolution is a reviewable reporting package and a clear decision/delivery state under the external authority, using the practice's terminology rather than mandatory control objects.
 - **UJ-3 — Amina continues a reconciliation in Excel (J3).** Amina requests a reconciliation, inspects the workbook, edits that same saved file in Excel and asks Inquello to continue. Inquello detects changed inputs, recomputes or marks prior results stale, and preserves supported formulas, comments and references. Concurrent changes produce an explicit conflict rather than lost edits.
 - **UJ-4 — Amina and Noah revise a Word workpaper (J4).** Amina drafts a workpaper from evidence; Noah challenges its interpretation. They revise the same saved artifact through Word or Inquello and complete any required approval in the designated record authority. The revised argument, evidence and review context remain inspectable. Accepting a text change does not approve an audit conclusion.
 - **UJ-5 — Dev reconciles specialist investigations (J5).** Dev delegates bounded access, configuration or code-security work, inspects progress and compares findings. The result preserves actual population and coverage, disagreements, gaps and supporting analysis. A specialist agent cannot impersonate the human reviewer or establish professional independence through its role name.
 - **UJ-6 — Amina develops advisory options (J6).** Amina researches a process, compares alternatives and prepares an options paper or presentation. Facts, assumptions and recommendations remain distinguishable, and estimates have support or explicit labels. The output stays editable and need not become a deficiency or control-testing workflow.
 - **UJ-7 — Amina teaches and reuses a procedure (J7).** Amina supplies a procedure and worked example, refines reusable guidance and applies it to another assignment. The method version, parameters and applicable instructions are visible. Client evidence remains separately scoped and does not silently become shared method content or memory.
-- **UJ-8 — Noah follows a triggered procedure through (J8).** A configured schedule or supported business event starts a bounded procedure. Noah reviews its coverage and exceptions, delivers authorised changes and later retests actions. The resolution identifies delivery and closure authority separately from the agent run. Missing events, incomplete runs and uncertain delivery must not appear as successful assurance.
+- **UJ-8 — Noah follows a triggered procedure through (J8).** A configured schedule or supported business event starts a bounded procedure. Noah reviews its coverage and exceptions, delivers authorised changes and later retests actions. The resolution identifies delivery and closure authority separately from the agent run; enabled runs cease use of revoked inputs even before advanced ownership reassignment ships. Missing events, incomplete runs and uncertain delivery must not appear as successful assurance.
 
 ## 3. Shared product vocabulary
 
 These terms identify product concepts, not a database schema. Teams may display practice-specific labels without changing the distinctions.
 
 - **Organisation / Workspace:** the policy and working context for membership, permitted resources and record mode. Exact policy precedence remains OQ-11.
-- **Workspace:** the broader working area for an audit team: its work, available resources, reusable procedures and settings (e.g. "Acme Internal Audit"). One Workspace holds several Engagements. **Engagement** (decided 2026-10-27; replaces the earlier term Assignment): a particular audit or advisory engagement with objectives, scope, period, team members and outputs (e.g. "Procurement Audit — 2026"). A **Task** is a conversation with Inquello directed towards an outcome, with its instructions, progress and resulting work (e.g. "Analyse purchase orders for approval exceptions"); a Task need not belong to an Engagement.
+- **Workspace:** the broader working area for an audit team: its work, available resources, reusable procedures and settings (e.g. "Acme Internal Audit"). One Workspace holds several Engagements. **Engagement** (decided 2026-10-27; replaces the earlier term Assignment): a particular audit or advisory engagement with objectives, scope, period, team members and outputs (e.g. "Procurement Audit — 2026"). A **Task** is a private-by-default conversation with Inquello directed towards an outcome, with its instructions, progress and resulting work (e.g. "Analyse purchase orders for approval exceptions"); a Task need not belong to an Engagement.
 - **Source:** material examined, including evidence, with origin, version/date, scope and known limitations. **Analysis** is performed work with inputs, parameters, derivations, actual coverage, exceptions and limits.
 - **Method:** reusable guidance or a procedure, including criteria, instructions, skills, templates, references and optional executable helpers. Method authority is distinct from model memory and tool permission.
 - **Artifact:** a saved workbook, document, presentation, dataset, script, visual or other inspectable output. A workpaper is an Artifact used to document audit work. **Saved state** is the file on storage; **Live state** includes unsaved selections or application state available through a separate supported mechanism.
@@ -81,7 +83,7 @@ Users organise and recover work without losing its context. Realises UJ-1 and UJ
 #### FR-1 — Organise work
 Practitioners can create and organise Engagements, folders, Tasks and concurrent workstreams, including ad hoc Tasks without an Engagement.
 
-**Consequences:** relevant entity/client/period and effective Workspace remain visible when supplied; opening an ad hoc Task does not require invented engagement fields; moving or reopening work preserves its permitted references.
+**Consequences:** Tasks start private to their creator; Workspace/Engagement membership alone does not disclose them. Relevant entity/client/period and effective Workspace remain visible when supplied; opening an ad hoc Task does not require invented engagement fields; moving or reopening work preserves its permitted references.
 
 #### FR-2 — Find and distinguish work
 Users can search, revisit, pin and archive work and distinguish Tasks awaiting input, review or Delivery.
@@ -170,7 +172,7 @@ Users can create and revise spreadsheets, documents, presentations, datasets, sc
 #### FR-14 — Generate and deliver visual or hosted outputs
 Users can generate/edit visuals and prepare supported shared, published or hosted outputs under the required audience and destination authority.
 
-**Consequences:** the intended audience and included content are inspectable before publication; source/analysis references remain usable where claimed; delivery states distinguish generated, published and verified rather than equating preview with publication.
+**Consequences:** file/folder/review-package sharing is explicit and independent from entire-conversation sharing; whole Task sharing requires its own explicit action. The selected artifact version and necessary permitted supporting context must be accessible on the recipient computer, not just a sender-local path. The intended audience and included content are inspectable before publication; source/analysis references remain usable where claimed; delivery states distinguish generated, published and verified rather than equating preview with publication.
 
 ### 4.8 Research and application interaction — P08
 
@@ -191,9 +193,9 @@ The assistant can use available browser context, site-exposed tools and computer
 Review supports correction without substituting for human authority. Realises UJ-2, UJ-4 and UJ-5.
 
 #### FR-17 — Review, correct and recheck work
-Users can request reviews of artifacts/changes, examine supported exceptions, apply authorised corrections and recheck results.
+Reviewers can use their own private agent Tasks anchored to a submitted artifact version and accessible evidence to reperform calculations with tools, examine Method and actual coverage, challenge conclusions/contradictory evidence, compare permitted historical findings and draft precise anchored review notes. Humans select which notes to issue; preparer agents help resolve them and reviewer agents recheck changed and impacted work.
 
-**Consequences:** findings retain scope, evidence, uncertainty and revision context; unsupported findings are distinguished from established errors; a correction or agent recheck does not automatically close a Finding or grant Professional Approval.
+**Consequences:** submitted versions are not silently mutated and private reviewer thoughts/unselected notes are not automatically shared. Revision handoffs identify per-note resolution, changed evidence/Method/coverage/conclusions and precise impact; uncertain impact requires broader recheck rather than claiming unchanged work. Human acceptance remains required under actual authority, and agent agreement does not establish professional independence. Findings retain scope, evidence, uncertainty and revision context; unsupported findings are distinguished from established errors; a correction or agent recheck does not automatically close a Finding or grant Professional Approval.
 
 #### FR-18 — Retain actual technical and security capabilities
 Technical specialists can inspect code/configuration, perform permitted security analysis, manage available scans/findings and pursue focused follow-up investigations.
@@ -263,7 +265,7 @@ Continuity preserves evidence boundaries. Realises UJ-1 and UJ-7.
 #### FR-27 — Resume with scoped knowledge
 Users can resume history and manage limited active context through compaction while retaining accessible source and decision references. Users can inspect and control memory use and contributions separately, subject to effective policy.
 
-**Consequences:** missing context or changed access is identified; personal preferences, approved reusable knowledge and Engagement/client evidence remain distinguishable; users can identify what may contribute to memory and what retained knowledge may be used; memory and recall are shared across a Workspace's Engagements and clients and isolated between Workspaces (OQ-3, decided 2026-10-27).
+**Consequences:** missing context or changed access is identified; personal preferences, approved reusable knowledge and Engagement/client evidence remain distinguishable; users can identify what may contribute to memory and what retained knowledge may be used; institutional memory is team-wide across engagements and different auditors of the same internal-audit company Workspace. Issued or explicitly team-shared work is automatically eligible, including ongoing work; private exploratory drafts/conversations are excluded. Admission is separate from generic contribution/use controls. Preserve origin, period, status, changes and current access; historical recall supports investigation, not proof of a current/repeat finding. No cross-company leakage; external-audit client/independence specifics remain OQ-15.
 
 #### FR-28 — Control activity recall
 Users can enable, inspect and control permitted recall of application/site activity separately from conversation history and reusable Methods.
@@ -296,7 +298,7 @@ Users can use supported voice/dictation, notifications and optional task compani
 #### FR-32 — Migrate setup and share scoped snapshots
 Users can import supported setup/history and share selected conversation snapshots under an explicit audience.
 
-**Consequences:** imported items and transfer limitations are reported; snapshots expose only selected permitted content; migration does not silently copy unavailable credentials, grant authority or change Record Authority.
+**Consequences:** artifact/package sharing need not share a conversation; whole Task sharing is separate and explicit. Imported items and transfer limitations are reported; snapshots expose only selected permitted content; migration does not silently copy unavailable credentials, grant authority or change Record Authority.
 
 ### 4.17 Permissions and input trust — P17
 
@@ -305,7 +307,7 @@ Authority remains separate from execution success and professional judgment. Rea
 #### FR-33 — Enforce effective action authority
 Teams can apply sandbox/permission profiles, command rules, approvals, managed policy and source identity. Default execution is a scoped user-started Task; broader/no-prompt modes require an explicit permitted configuration.
 
-**Consequences:** negative permission cases prevent the prohibited action; an approval identifies its action/scope and cannot become blanket Professional Approval; eligible automatic review, prompt inspection and specialist access retain declared limits.
+**Consequences:** Inquello identity and permissions are owned by its shared service, separately from provider sign-in; local desktop execution/files do not confer team access. Negative permission cases prevent the prohibited action; an approval identifies its action/scope and cannot become blanket Professional Approval; eligible automatic review, prompt inspection and specialist access retain declared limits.
 
 #### FR-34 — Treat evidence as data
 The assistant must distinguish trusted task/policy instructions from instructions embedded in Sources, retrieved pages, tool results or examples.
@@ -319,12 +321,12 @@ Human accountability persists through reassignment and departure. Realises UJ-2 
 #### FR-35 — Assign work and human review
 Teams can assign Task and Human Review responsibility with Workspace/Engagement access and attribution.
 
-**Consequences:** the responsible human and reviewed version are identifiable; multiple responsibilities can coexist where permitted; reviewer hierarchy and guest rights follow selected policy, not a hard-coded firm structure.
+**Consequences:** reviewer agent work is private by default and bound to the submitted version/evidence; only human-selected notes are issued. The responsible human and reviewed version are identifiable; multiple responsibilities can coexist where permitted; reviewer hierarchy and guest rights follow selected policy, not a hard-coded firm structure.
 
 #### FR-36 — Reassign and revoke access
 Administrators can handle access revocation, reassignment and departures, including retained work and unattended job ownership.
 
-**Consequences:** subsequent prohibited use is prevented after effective revocation; orphaned unattended work is surfaced and handled under policy; retained artifacts/history are addressed separately from current access rather than assumed deleted.
+**Consequences:** first-team-increment Workspace removal blocks subsequent shared retrieval/recall; withdrawing a share removes that route unless another current valid grant exists. Active agents cease revoked use, and retained extracts, derived knowledge, summaries/indexes/caches and diagnostic/export routes must not leak revoked content. Previously downloaded/exported copies cannot be magically recalled. Advanced unattended-job reassignment follows with automation; orphaned jobs are surfaced under policy. Retained material is addressed separately from current access rather than assumed deleted.
 
 ### 4.19 Retention and operating visibility — P19
 
@@ -333,7 +335,7 @@ Workbench history, diagnostics and authoritative audit records have distinct pur
 #### FR-37 — Govern V1-held material
 Teams can apply applicable access, retention, deletion, export and recovery policy to working files/history, evidence references, logs and telemetry held by Inquello.
 
-**Consequences:** these categories are distinguishable from external authoritative records; usage/task counts do not stand in for accepted work or Coverage; recovery/export declares losses and respects relevant access.
+**Consequences:** access/retention/deletion/export/recovery controls for actually enabled local/shared categories ship with those routes, including derivative non-disclosure after revocation; V2 native hold/amendment policy is not imported into V1. These categories are distinguishable from external authoritative records; usage/task counts do not stand in for accepted work or Coverage; recovery/export declares losses and respects relevant access.
 
 #### FR-38 — Govern native audit records — V2
 Native-record mode must support its applicable retention, deletion, hold, amendment and recovery obligations with attributable history.
@@ -375,7 +377,7 @@ Capabilities compose into continuous work rather than disconnected outputs. Real
 #### FR-43 — Preserve meaning across boundaries
 Users can delegate, switch editors or environments, review and resume without manually reconstructing Task context or losing artifact identity.
 
-**Consequences:** sources, Method, artifacts, decisions and actual status remain accessible across the boundary; unsupported transfers disclose missing context; external edits and changed evidence identify affected outputs and approvals.
+**Consequences:** sources, Method, artifacts, decisions and actual status remain accessible under current grants across the boundary; unsupported transfers disclose missing context. Handoffs identify artifact/evidence versions, per-note resolution and precise change impact; uncertain impact requires broader recheck. External edits and changed evidence or Method identify affected outputs and approvals.
 
 #### FR-44 — Make scope and completion claims inspectable
 The product must expose actual completion states and maintain Capability Contracts for the mapped behaviours, including the smaller and technical capabilities.
@@ -403,7 +405,7 @@ These apply to enabled capabilities in their phase. Policy-specific values are s
 
 V1 includes every FR except FR-38, FR-40 and FR-42, plus applicable NFRs and the full underlying capability cards. It retains existing tools/files, external audit records, automation, continuous assurance, technical execution and smaller interaction features. Individual FRs may depend on several supported service routes; this dependency does not remove them from the target.
 
-The first shipped increment has not been selected. Release planning must record any deferred capability, unmet acceptance and dependency explicitly. A validation slice using W1–W3/M1 is evidence gathering, not authorisation to redefine V1. Full parity cannot be claimed while requirements are deferred or unverified.
+The epic plan is the increment/dependency authority and must preserve old-to-new traceability. Basic sharing revocation and retained-data controls belong in the first team-enabled increment; advanced unattended-job reassignment may follow with automation. Release planning records every deferred capability, unmet acceptance and dependency explicitly. A validation slice using W1–W3/M1 is evidence gathering, not authorisation to redefine V1. Full parity cannot be claimed while requirements are deferred or unverified.
 
 ### 6.2 V2 and additional candidates
 
@@ -449,7 +451,7 @@ Every integration needs a named destination, acting identity, supported read/wri
 
 Operational and processing commitments require actual workload/data classification, service eligibility and policy. Client support, account lifecycle, retention, support responsibility, accessibility targets, availability, recovery objectives and cost limits are defined before a promise about the affected route. UX/architecture may compare options while those choices remain open; build/rollout plans must not treat an unspecified contract as settled.
 
-Candidate component and transport details belong in the addendum and subsequent architecture. The established Codex-derived foundation does not imply that all desktop UI source, hosted tools or services are reusable or transferable. No architecture, SSO system, database, tenancy topology or public endpoint design is selected here.
+Candidate component and transport details belong in the addendum and subsequent architecture. The established Codex-derived foundation does not imply that all desktop UI source, hosted tools or services are reusable or transferable. The hybrid responsibility split is confirmed; specific SSO/service/vendor/region/protocol choices are not selected here. See the current Architecture Spine for contract invariants and unresolved implementation gates.
 
 ## 9. Product risks and validation response
 
@@ -464,8 +466,8 @@ Candidate component and transport details belong in the addendum and subsequent 
 **[ASSUMPTION AS-2]** Owners below are proposed role assignments for the internal team, not confirmed appointments. Assign named people when the affected work begins. These are downstream gates, not a request to reopen the accepted product breadth or V1/V2 boundary. Gates marked **Decided 2026-10-27** were settled by the product owner during spec review; the decision text replaces the earlier option list.
 
 1. **OQ-1 — Human and guest collaboration. Decided 2026-10-27:** team-only participation. Workspace audit-team and reviewer access with external stakeholder exchange; no guest participation in V1. **Owner:** product lead with audit lead.
-2. **OQ-2 — Retained supporting evidence. Decided 2026-10-27:** retain references plus the extracts and derivations the analysis relied on, as Codex thread history already does; no full source copies. Under OQ-3, retained extracts are visible across a Workspace's Engagements. **Owner:** audit method owner and organisation data-policy owner.
-3. **OQ-3 — Cross-Engagement recall. Decided 2026-10-27:** no isolation between Engagements or clients within a Workspace; isolation between Workspaces. Inquello extends an auditor who already holds knowledge of all their engagements, as existing audit tools do. Not configurable. **Owner:** product lead and data-policy owner.
+2. **OQ-2 — Retained supporting evidence. Decided 2026-10-27:** retain references plus the extracts and derivations the analysis relied on, as Codex thread history already does; no full source copies. Retention does not grant team visibility. Issued or explicitly team-shared work becomes eligible for shared knowledge under current access; private drafts/conversations remain excluded. Explicit selected-artifact transfer is not automatic all-source upload. **Owner:** audit method owner and organisation data-policy owner.
+3. **OQ-3 — Cross-Engagement recall. Decided 2026-10-27:** team-wide institutional recall across engagements and different auditors of the same internal-audit company Workspace, admitting issued or explicitly team-shared work automatically and excluding private exploration. Preserve origin/period/status/changes/current rights; historical context is not a present finding. This supersedes unconditional all-retained-extract visibility and the assumption that external-audit boundaries are identical. External-audit specifics remain OQ-15; no cross-company Workspace leakage. **Owner:** product lead and data-policy owner.
 4. **OQ-4 — Method distribution and review authority. Decided 2026-10-27:** inherit Codex mechanisms (Workspace, local and plugin-packaged skills; curated or team plugin marketplaces; MCP configuration; Agent Security managed policy). No managed catalogue or approval workflow for first validation; refine on usage evidence. **Owner:** method owner with audit lead.
 5. **OQ-5 — Task/team cost policy. Decided 2026-10-27:** inherit Codex usage handling (plan/workspace limits, model/reasoning/speed selection, usage inspection, enterprise analytics). No Inquello budget values for first validation; adjust on usage evidence. **Owner:** product lead with team administrator.
 6. **OQ-6 — Initial clients, formats and integrations. Decided 2026-10-27:** desktop first, mirroring Codex clients; Excel, Word, PowerPoint and CSV; no named external record system for first validation, import/export only. The full target remains unchanged. **Owner:** product lead with integration/architecture lead.
@@ -474,11 +476,14 @@ Candidate component and transport details belong in the addendum and subsequent 
 9. **OQ-9 — Processing and provider eligibility. Decided 2026-10-27:** every documented route stays in scope and must be tested; none is excluded or presumed approved. Organisational policy eligibility is verified per route before real data uses that route. **Owner:** organisation policy/security owner with architecture lead.
 10. **OQ-10 — Release sequencing. Decided 2026-10-27:** sequencing, first increment and explicit deferrals are decided at story breakdown and recorded there with unmet acceptance. No implicit MVP cut. **Owner:** product lead.
 11. **OQ-11 — V2 record policy.** Resolve organisation/workspace precedence, supported native lifecycle rules, review/hold/amendment/retention and migration contracts. Workspace choice within organisation policy is a recommendation. **Owner:** product lead, audit lead and data-policy owner. **Revisit:** before native-mode architecture and implementation commitments; not a V1 blocker.
-12. **OQ-12 — Final name and design direction.** Select the final visual identity/UX and complete appropriate name checks; concept-screen and naming-research territories do not select launch markets. **Owner:** product/design lead. **Revisit:** before public brand commitments; Inquello remains the working name.
+12. **OQ-12 — Final name and design direction.** The selected visual identity/UX is adopted; complete appropriate name clearance and public-brand validation. Naming-research territories do not select launch markets. **Owner:** product/design lead. **Revisit:** before public brand commitments; Inquello remains the working name.
 13. **OQ-13 — Hosted agent browser and sandbox. Added and decided 2026-10-27:** the agent browser and agent sandbox are local in V1 (Codex desktop built-in browser profile, Computer Use, OS sandbox enforcement); a hosted browser or hosted sandbox is deferred to V2 and must be revisited there. **Owner:** product lead with architecture lead. **Revisit:** at V2 planning, explicitly.
-14. **OQ-14 — Identity and authorisation. Added and decided 2026-10-27:** Inquello owns identity and authorisation through its own auth module covering Workspace membership, audit-team roles, Engagement membership and the differing internal-audit and external-audit models; inference-provider sign-in (ChatGPT subscription, Claude, Azure, Bedrock, Vertex) is separate and only selects and authorises the inference route. Claude as a direct route is not in the documented Codex route list; the architecture update confirms how it is reached. **Owner:** product lead with architecture and security leads. **Revisit:** architecture update must define the module and where it runs.
+14. **OQ-14 — Identity and authorisation. Added and decided 2026-10-27:** Inquello owns identity and authorisation through its own auth module covering Workspace membership, audit-team roles, Engagement membership and the differing internal-audit and external-audit models; inference-provider sign-in (ChatGPT subscription, Claude, Azure, Bedrock, Vertex) is separate and only selects and authorises the inference route. Claude as a direct route is not in the documented Codex route list; the architecture update confirms how it is reached. **Owner:** product lead with architecture and security leads. **Revisit:** shared Inquello service owns team authority/coordination; local desktop owns agent execution/files. Detailed service/deployment decisions remain OQ-16.
 
-There is no unresolved contradiction in the documented product direction. OQ-1/2/3/4/5/6/8/9/10 were decided on 2026-10-27 and travel downstream as decisions. OQ-7 was decided on 2026-10-27 as measure-first; numeric thresholds follow the baseline. OQ-8 commitments are revisited after first validation; OQ-11 and OQ-12 remain open. OQ-13 and OQ-14 were added and decided on 2026-10-27; OQ-13 carries an explicit V2 revisit.
+15. **OQ-15 — External-audit knowledge boundaries.** Specify client confidentiality, independence and permitted cross-client recall before enabling that use; internal-company team memory is already decided. **Proposed owners:** product/audit/data-policy roles.
+16. **OQ-16 — Hybrid service implementation and supply.** Select concrete identity/session, recipient-accessible artifact/context transfer, revocation freshness/offline enforcement, deployment vendor/region/spend and operations before dependent implementation/enablement. These choices are not approved by the hybrid decision. **Proposed owners:** architecture/security/implementation roles and product owner for material commitments.
+
+The confirmed product decisions are reconciled, while concrete supply and external-audit boundaries remain open. OQ-1/2/3/4/5/6/8/9/10 were decided on 2026-10-27 and travel downstream as decisions. OQ-7 was decided on 2026-10-27 as measure-first; numeric thresholds follow the baseline. OQ-8 commitments are revisited after first validation; OQ-11, OQ-12, OQ-15 and OQ-16 remain open. OQ-13 and OQ-14 were added and decided on 2026-10-27; OQ-13 carries an explicit V2 revisit.
 
 ## 11. Assumptions and handoff
 
@@ -488,3 +493,7 @@ There is no unresolved contradiction in the documented product direction. OQ-1/2
 No product audience assumption remains. Guest, retention, recall, Method-distribution, budget, client/format/integration, operating-scale, provider-route and sequencing choices were decided by the product owner on 2026-10-27 (§10); none was inferred.
 
 UX should turn the retained scenarios, status distinctions and Capability Contracts into reviewable interaction designs. Architecture should evaluate component/service routes, file and external-record consistency, identity/policy boundaries and operational constraints while keeping open decisions visible. Story creation should preserve FR/NFR/UJ IDs and satisfy the applicable decision gates. The addendum's technical context and existing brand explorations are inputs, not selected implementations.
+
+## 12. Confirmed collaboration contract and engineering checkpoint
+
+The [collaboration, institutional memory and review contract](../../../specs/spec-inquello/collaboration-and-memory.md) supplies the precise admission, sharing, revocation and reviewer/preparer loop for the existing FRs. The workbook → same-file Excel edit → recomputation → agent/human review → export checkpoint exercises engineering dependencies; it does not narrow eventual validation choices or defer the remaining full-scope obligations implicitly. No runtime/route test has been run by this update.

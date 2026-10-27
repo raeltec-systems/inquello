@@ -1,5 +1,8 @@
 # Full Codex-to-auditor feature mirror
 
+> **2026-10-27 planning supersession:** The current [SPEC and its companions](../_bmad-output/specs/spec-inquello/SPEC.md), especially [collaboration, institutional memory and review](../_bmad-output/specs/spec-inquello/collaboration-and-memory.md), govern later confirmed decisions: hybrid local execution/shared Inquello authority; private Tasks and explicit granular sharing; team-wide admitted internal-company memory; first-team-increment revocation; and agent-assisted human-controlled review. Earlier unselected-topology, all-retained-extract visibility, personal-only recall or manual-only review implications are superseded, not current defaults. External-audit client/independence boundaries and detailed service choices remain open. The original research/inventory below is preserved; its coverage is not runtime acceptance.
+
+
 **Date:** October 26, 2026. **Phase:** research and functional mapping. The auditor side describes proposed behavior, not an implemented product. Accepted product phasing is V1 external-record workbench and V2 built-in audit-record mode; detailed architecture and implementation are not selected.
 
 Coverage: **76 capability groups**, **3 separately labelled composition lenses**, **270 subfeature mappings** (261 within capability groups), **93 proposed audit enhancements**, and **20 expanded behavior entries** linked to the parent groups. The six public component patterns are also mapped separately. Expanded entries unpack grouped capabilities and are not added to the independent feature count.

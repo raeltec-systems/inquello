@@ -1,5 +1,8 @@
 # Codex-to-auditor feature map
 
+> **2026-10-27 planning supersession:** The current [SPEC and its companions](../_bmad-output/specs/spec-inquello/SPEC.md), especially [collaboration, institutional memory and review](../_bmad-output/specs/spec-inquello/collaboration-and-memory.md), govern later confirmed decisions: hybrid local execution/shared Inquello authority; private Tasks and explicit granular sharing; team-wide admitted internal-company memory; first-team-increment revocation; and agent-assisted human-controlled review. Earlier unselected-topology, all-retained-extract visibility, personal-only recall or manual-only review implications are superseded, not current defaults. External-audit client/independence boundaries and detailed service choices remain open. The original research/inventory below is preserved; its coverage is not runtime acceptance.
+
+
 **Date:** October 26, 2026. **Purpose:** map Codex as it is to an auditor experience, including the enhancements needed for that equivalent. This is the first functional mirror layer; V2 additions and architecture planning come afterwards.
 
 The map covers **76 Codex capability groups and 3 separate composition lenses**, with **270 detailed subfeature mappings**, **93 proposed enhancements**, and **20 expanded behavior entries**. All baseline entries have a counterpart; none was removed because it seemed developer-specific or peripheral.
