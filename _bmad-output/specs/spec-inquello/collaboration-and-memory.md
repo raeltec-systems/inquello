@@ -4,11 +4,11 @@ Confirmed owner decisions, 2026-10-27. This companion refines existing V1 capabi
 
 ## Local work and shared authority
 
-- The desktop runs the agent and works with local files. A shared Inquello service owns Inquello identity, memberships, effective permissions and shared-work/review coordination. Provider sign-in authorises inference, not team access.
+- The desktop hosts agent tools and works with local files; cloud-model inference still needs its model connection, for private as well as shared Tasks. Local storage/execution does not mean offline AI. A shared Inquello service owns Inquello identity, memberships, effective permissions and shared-work/review coordination. Provider sign-in authorises inference, not team access.
 - A Task starts private to its creator, including instructions, drafts and conversation. Membership in a Workspace or Engagement is not a grant to private Tasks.
 - A file, folder or review package can be explicitly shared without its entire Task/conversation. Sharing a whole Task is a separate explicit action with audience and included content visible. Neither action silently broadens another grant.
 - Sharing names the artifact/version and required supporting context, intended recipients and allowed actions. Recipients must actually retrieve the authorised bytes/context on their own computer through a supported route; a sender-local path or a link without recipient access is not a usable handoff. Missing or prohibited evidence is shown as missing, never as reviewed.
-- No automatic upload of all source files. Retain source references and relied-on extracts/derivations under policy; explicit sharing of a selected artifact/version is not blanket source replication. The selected transfer/storage route remains an implementation gate.
+- No automatic upload of all source files. Retain source references and relied-on extracts/derivations under policy; explicit sharing of a selected artifact/version is not blanket source replication. The concrete transfer/storage contract is SC-3/4 in the architecture companion under the adopted OQ-16A direction; actual-route eligibility remains OQ-16B.
 - Shared review coordination is not a native authoritative audit-record system. V1 formal acceptance follows the designated external authority; shared coordination history is labelled accordingly.
 
 ## Admission and retrieval of institutional memory
@@ -54,5 +54,10 @@ Planned checks include private Task exclusion; artifact-only sharing without con
 ## Open implementation and policy gates
 
 - **OQ-15:** external-audit client/independence boundaries, before external-audit cross-client memory use. Product/audit/data-policy roles are proposed owners, not appointed people.
-- **OQ-16:** service vendor, spend, region, detailed identity/session/transfer protocols, revocation freshness/offline enforcement and operational supply. These are not owner-approved choices. Resolve the concrete contracts before dependent implementation/route enablement; do not infer them from a contract-level hybrid decision.
+- **OQ-16A resolved:** clarified technical direction adopted 2026-10-27; AD-18–22 / SC-1–6 provide architect-derived enforcement details. This is not supplier, region, spending or implementation approval.
+- **OQ-16B:** actual issuer, service operator/vendor, spend, region, retained-data policy, backup/recovery and route eligibility remain real-data/deployment gates. Proposal adoption does not authorize these commitments.
 - Existing provider eligibility, desktop/fork compatibility, source-format support and operating gates remain. A document check does not pass runtime, security, service or release gates. The readiness workflow must distinguish first-story blockers from later-route prerequisites.
+
+## Connectivity clarification — 2026-10-27
+
+Loss of the cloud-model connection pauses affected agent work regardless of Task privacy. Shared-derived use additionally requires current Inquello authority, so a service outage can block shared work even when inference remains reachable. Preserve supported progress and revalidate on recovery; no silent resend or local-model fallback. Local models are not a current priority. Manual use of independent applications on permitted private files is not a promised Inquello offline editor. The owner subsequently adopted the clarified direction in Sentinel_f111d58b637c8191a30a23234ec55314. A separate eligible private-only Task is distinct from relabelling a shared-derived context; the latter never bypasses current-access checks.

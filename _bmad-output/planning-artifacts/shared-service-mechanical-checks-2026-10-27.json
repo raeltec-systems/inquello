@@ -1,0 +1,35 @@
+{
+  "status": "pass",
+  "kind": "planning-document-mechanical-check-only",
+  "runtime_tests_executed": false,
+  "source_head": "d43047b643cc6aa91a7969c2368a54fb4e0bbf5f",
+  "story_count": 139,
+  "old_acceptance_count": 372,
+  "current_acceptance_count": 382,
+  "added_acceptance_ids": [
+    "1.10.2",
+    "1.10.3",
+    "1.11.4",
+    "1.22.5",
+    "1.22.6",
+    "4.1.3",
+    "4.2.4",
+    "4.3.5",
+    "4.4.4",
+    "4.4.5"
+  ],
+  "removed_or_changed_existing_acceptance_ids": [
+    "1.22.4"
+  ],
+  "documented_editorial_qualification": "AC1.22.4 narrows blanket unresolved Claude gate to conditional subscription integration after API-key owner choice; all other371 baseline blocks unchanged",
+  "mapped_original_story_count": 89,
+  "mapped_original_acceptance_count": 238,
+  "missing_mapping_targets": [],
+  "source_hash_mismatches": [],
+  "capabilities": 25,
+  "spec_companions": 14,
+  "broken_spec_companions": [],
+  "epics_sha256": "b2204471de5b7765fff6e6ac7b6b31e0ffc83753b031d5d2e8bb2bb03b28d06d",
+  "issues": [],
+  "historical_checker": "check-spec.py reports 15/17: old hardcoded companion inventory and unchanged-source snapshot are stale for the already revised baseline; kept unchanged and not misreported as passing. This current check validates actual companion paths and stable CAP IDs."
+}

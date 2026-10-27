@@ -12,6 +12,8 @@ companions:
   - ../../planning-artifacts/ux-designs/ux-inquello-2026-10-26/DESIGN.md
   - ../../planning-artifacts/ux-designs/ux-inquello-2026-10-26/EXPERIENCE.md
   - ../../planning-artifacts/architecture/architecture-inquello-2026-10-26/ARCHITECTURE-SPINE.md
+  - ../../planning-artifacts/architecture/architecture-inquello-2026-10-26/shared-service-contract-proposal-2026-10-27.md
+  - ../../planning-artifacts/architecture/architecture-inquello-2026-10-26/claude-access-routes-2026-10-27.md
   - ../../../docs/addendum.md
   - ../../../docs/PRODUCT_BRIEF_TRACEABILITY.md
   - ../../../docs/CODEX_AUDITOR_FEATURE_MIRROR.md
@@ -153,7 +155,10 @@ Inquello brings the Codex-style working experience to internal audit, external a
 - Tasks are private by default; file/folder/review-package sharing need not disclose a conversation and whole Task sharing is explicit. Recipients must access the selected artifact version and permitted supporting context on their computer, not merely a sender-local path.
 - Basic revocation, active-agent cessation and derivative access controls ship with the first team-enabled increment; advanced unattended-job reassignment can follow with automation. Already downloaded/exported copies cannot be recalled.
 - Local desktop execution/files plus shared identity/permissions/review coordination do not select vendor, budget, region or detailed protocols; no automatic all-source upload.
+- Local storage/tool execution is not local inference. Cloud-model agent work requires its model connection for both private and shared Tasks; shared-derived use additionally requires live Inquello authority. Pause affected work on dependency loss and preserve supported progress. Local models are not a current priority; no automatic fallback, offline agent mode or new offline editor is committed.
 - V1 agent browser and sandbox are local: the built-in browser profile, Computer Use and OS sandbox enforcement inherited from Codex (OQ-13).
+
+- The selected initial additional inference route is Claude API-key access. Subscription login is conditional on officially permitted integration, distinct from Inquello identity; follow the Claude route companion and CR-1 compatibility gate. Selection authorizes no calls, credentials, spending or implementation.
 
 ## Non-goals
 
@@ -180,6 +185,8 @@ Inherited only; owners and revisit triggers remain in [scope and gates](scope-an
 - **AS-UX3:** Interaction completion remains unproved on actual hosts/integrations.
 - **AS-UX4:** Existing-token accessibility applications require rendered-state checks.
 
+- **AS-SVC1–5 resolved/refined:** The owner adopted OIDC/shared Rust/PostgreSQL/private selected-storage and clarified connectivity direction on 2026-10-27. Detailed interoperability and recovery rules are architect-derived, not individually owner-reviewed. Historical assumption IDs remain traceable in the shared-service companion.
+
 ## Open Questions
 
 Contract adoption does not establish implementation readiness. Open gates block dependent commitments; owners and exact triggers are in [scope and gates](scope-and-gates.md#open-product-gates). OQ-1 to OQ-10, OQ-13 and OQ-14 were decided 2026-10-27; see [decided gates](scope-and-gates.md#decided-gates).
@@ -188,4 +195,7 @@ Contract adoption does not establish implementation readiness. Open gates block 
 - **OQ-12:** What name/brand clearance and final validation remain?
 
 - **OQ-15:** Which external-audit client/confidentiality/independence boundaries govern cross-client knowledge? Resolve before enabling that reuse.
-- **OQ-16:** Which concrete shared-service identity, transfer, revocation/offline and deployment contracts are implementable and approved? Resolve before dependent implementation/route enablement.
+- **OQ-16A resolved:** The clarified technical direction was adopted in Sentinel_f111d58b637c8191a30a23234ec55314; detailed SC-1–6 contracts are architect-derived. No implementation authorization follows.
+- **OQ-16B:** Establish actual identity issuer, operator/hosting/region, retained-data/recovery policy and route eligibility before real shared data; technical proposal approval does not approve procurement or deployment.
+
+- **CR-1 design recorded:** The Claude companion fixes the native Messages adapter ownership and normalized protocol contract; implementation and actual route acceptance remain work to perform. Pinned Responses-only configuration is not drop-in compatibility. Subscription integration remains separately conditional.

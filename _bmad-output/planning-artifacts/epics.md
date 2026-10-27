@@ -17,6 +17,8 @@ inputDocuments:
   - _bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/DESIGN.md
   - _bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/EXPERIENCE.md
   - _bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/ARCHITECTURE-SPINE.md
+  - _bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/shared-service-contract-proposal-2026-10-27.md
+  - _bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/claude-access-routes-2026-10-27.md
   - docs/addendum.md
   - docs/PRODUCT_BRIEF_TRACEABILITY.md
   - docs/CODEX_AUDITOR_FEATURE_MIRROR.md
@@ -213,7 +215,7 @@ Source: final PRD section 5. All apply to enabled capabilities in their phase; p
 - **AD-12 Automation mandates and collaboration ownership [DERIVED]:** Retain trigger/input/Method/identity/limits/destination/escalation mandates and actual event/run outcomes. Each accepted run and its effects bind to one immutable authorised mandate revision. Configuration changes apply prospectively unless a trusted, explicit domain rebind records the authority and impact checks for running work. Current revocation and restrictive policy always apply. Disabling changes future eligibility; handle running work separately. Enforce ownership/revocation and duplicate-effect controls across supported entry paths using shared domain rules. Observe execution-host/context availability; never assume automatic cloud continuation. Scheduler, team-coordination and hosted-route gaps remain required V1 implementation dependencies with the owners/gates below. AD-15 selects the shared-service responsibility boundary; its implementation and the scheduler supply remain unproven. Basic sharing revocation is mandatory before first team enablement; advanced unattended-job reassignment can follow with automation.
 - **AD-13 Phase-specific record authority [DERIVED]:** V1 retains useful local working/review records and links any Method-required formal acceptance to verified designated external authority. Preserve authorised human/scope/version attribution and affected approvals. V1-held files, histories, extracts, derived knowledge and shared coordination still require access, retention/deletion and recovery controls for enabled routes. Only V2 adds FR-38/40/42 native authoritative record identity, relationships, lifecycle, hold/amendment/retention, recovery/export and deliberate organisation/Workspace migration. Tasks/Engagements cannot silently change authority; operational source systems remain separate. V2 policy is not a V1 gate.
 - **AD-14 Capability evidence and operating commitments:** each enabled route declares owner, implementation/service supply, identity/processing/source limits, versions and capability-specific acceptance; missing/partial/failed/uncertain outcomes, diagnostics, recovery and cost evidence inspectable under data policy; deferred or unverified requirements remain unmet scope.
-- **AD-15 Hybrid authority and explicit private-to-shared handoff [ADOPTED]:** Desktop executes agents and holds local working files; a shared Inquello service owns its own authenticated identities, memberships, grants and shared coordination. Provider sign-in remains separate. Tasks are creator-private by default. Grant file/folder/review-package access independently of conversation/history; whole-Task access requires explicit sharing. Every shared operation binds Workspace, actor, object, immutable version or declared folder scope, recipient/audience and permissions. Sharing selected artifacts/context is deliberate, not automatic upload of all sources. A recipient must actually access the authorised artifact version and relied-on evidence/Method/coverage context through a permitted transfer or materialisation route; sender-local paths alone never satisfy a handoff. Missing/inaccessible/version-mismatched context is blocked or partial, not silently substituted. Shared requests validate current authority and expected revision at the service; local caches cannot grant access. Detailed protocol, service stack and materialisation route remain OQ-16 gates.
+- **AD-15 Hybrid authority and explicit private-to-shared handoff [ADOPTED]:** Desktop executes agents and holds local working files; a shared Inquello service owns its own authenticated identities, memberships, grants and shared coordination. Provider sign-in remains separate. Tasks are creator-private by default. Grant file/folder/review-package access independently of conversation/history; whole-Task access requires explicit sharing. Every shared operation binds Workspace, actor, object, immutable version or declared folder scope, recipient/audience and permissions. Sharing selected artifacts/context is deliberate, not automatic upload of all sources. A recipient must actually access the authorised artifact version and relied-on evidence/Method/coverage context through a permitted transfer or materialisation route; sender-local paths alone never satisfy a handoff. Missing/inaccessible/version-mismatched context is blocked or partial, not silently substituted. Shared requests validate current authority and expected revision at the service; local caches cannot grant access. AD-18–22 and SC-1–6 now propose detailed protocol, service seed and materialisation; OQ-16A direction is adopted; OQ-16B actual-route gates remain.
 - **AD-16 Team-wide knowledge admission and basic revocation [ADOPTED]:** Within an internal-audit company Workspace, formally issued or explicitly team-shared work is automatically eligible for shared knowledge admission, including ongoing shared work; private exploratory drafts and conversations are excluded. Admission is distinct from generic contribution/use controls: those controls cannot broaden eligibility or create a grant. This supersedes unconditional Workspace visibility of all retained extracts under earlier OQ-2/OQ-3 language. Knowledge preserves source/version, originating engagement, period, finding/status history and changes, admission basis and access lineage; historical recall aids investigation and is not evidence of a current or repeat finding. Current grants apply on every retrieval and use; no cross-company Workspace leakage. Workspace removal blocks subsequent shared retrieval/recall. Share withdrawal removes that route unless another current valid grant covers the exact content/action. Active agents cease revoked use and dependent actions; revocation reaches task context, caches, indices, summaries and other derived knowledge, including restored state, so these cannot re-expose prohibited content. If current access or derived lineage is unprovable, block shared recall/use. Basic enforcement and necessary retained-data controls ship before first team enablement, not with later automation. Already downloaded/exported copies cannot be magically recalled. Advanced unattended-job reassignment remains with automation. External-audit client/independence boundaries require OQ-15 before enabling those routes.
 - **AD-17 Private reviewer-agent work and versioned human handoff [ADOPTED]:** Reviewer creates a private Task anchored to the immutable submitted version and common reviewed-basis revision. With permitted accessible evidence, the agent uses tools to recalculate/reperform, inspect Method and actual coverage, challenge conclusions and contradictory evidence, and compare admitted historical findings. It drafts notes precisely anchored to artifact/version/location or scoped evidence/Method/coverage. The human chooses notes to issue; private conversation and unissued notes stay private unless explicitly shared. Preparer-agent revisions produce a new version with a handoff summary identifying changes, supporting basis, resolved/unresolved notes and exact known impact. Reviewer agent rechecks changed and impacted work; uncertain impact widens the recheck and never certifies untouched scope as unchanged. No agent silently mutates the submitted artifact or professionally accepts work. Human acceptance remains attributable to person/scope/version under Method and V1 external authority; agent agreement does not establish professional independence.
 - **Consistency conventions:** identifiers stable and scope-qualified across client/runtime/destination references; runtime events describe runtime facts while domain commands establish domain outcomes; errors retain operation identity, applied effects and recovery status; a toast, completed turn or green chip establishes no acceptance; confirmed saved work and review/context references preserved; no universal offline, queued-write, reconnect-resend or rollback promise.
@@ -295,7 +297,7 @@ Source: final PRD section 5. All apply to enabled capabilities in their phase; p
 #### Identity and authorisation obligation (OQ-14, V1, no FR number assigned)
 
 - **Inquello auth module:** Inquello authenticates its users and authorises them against Workspace membership, audit-team roles, Engagement membership and the internal-audit versus external-audit models. Effective identity from this module supplies the acting/reviewer identity and permitted scope that AD-6, AD-7, AD-8, AD-12 and FR-33, FR-35, FR-36, FR-37 rely on. Inference-provider credentials (ChatGPT subscription, Claude, Azure Foundry/Azure OpenAI, Bedrock, GCP/Vertex, gateway, local) are held separately and only select and authorise an inference route (FR-29); signing in to a provider grants no Workspace, Engagement or review authority, and losing a provider session revokes no Inquello authority.
-- **Dependency:** AD-15 adopts the shared-service authority/local-desktop boundary, not its vendor, deployment or protocol. OQ-16 must resolve the identity/session, interoperable permission/version/invalidation and recipient-materialisation contracts before dependent implementation. OQ-15 separately gates external-audit client/independence boundaries. Claude route reachability remains unresolved; no adapter or provider is assumed.
+- **Dependency:** AD-15 adopts the shared-service authority/local-desktop boundary; OQ-16A now adopts its technical direction and SC-1–6 fix identity/session, permission/version/invalidation and recipient-materialisation contracts. OQ-16B still gates actual supplier/deployment and real-data eligibility. OQ-15 separately gates external-audit client/independence boundaries. Claude API-key access is selected and CR-1 specifies the adapter; conditional subscription access and later route eligibility remain separately gated. SC-7 defines the synthetic service topology.
 
 #### Open gates carried as explicit story dependencies
 
@@ -407,7 +409,7 @@ Stable IDs are unchanged; this map follows the approved 17 groups. Detailed old-
 | FR-39, FR-41 | 5 reviewable package; 6 practice/fixture delivery; 14 actual destination |
 | FR-40, FR-42 (V2) | 16 native practice/migration |
 | FR-43, FR-44 | 1 state/register foundations; per-route tests with each capability; 5/6 first-increment integration; 15 full-V1 integration |
-| OQ-14, OQ-15, OQ-16 | 1 own identity boundary; 4 actual shared transfer/current grants; unresolved concrete service and external-client decisions gate dependent work |
+| OQ-14, OQ-15, OQ-16 | 1 own identity boundary; 4 actual shared transfer/current grants; OQ-16A direction adopted with SC-1–6 contracts, OQ-16B actual-route and OQ-15 external-client gates retained |
 | UX-DR1–55 plus reconciled sharing/reviewer rules | 1 tokens/primitives/shell/initial states; 2 context/Methods; 3 artifact/editor/technical preview; 4 team/sharing/memory; 5 review/export; 6 practice/delivery; 7–15 corresponding later surfaces; 16 native surface |
 | NFR-1–10 | Acceptance in each owning capability; enabled-route matrix 6/15; no document check establishes runtime acceptance |
 
@@ -472,7 +474,7 @@ V2; 1 stories; complete group details below.
 - The full original scope is retained through AC-level traceability; later portions embedded in first-increment story prose now have explicit delivery stories. Basic revocation, actual recipient access, admitted team memory and private agent-assisted review are first-team-enabled work, not deferred administration.
 - Epic 1 provides a genuine plain private synthetic Task; Epic 2 adds attributable files and Methods; Epic 3 adds editable artifact/Excel recomputation; Epics 4–5 complete accessible team sharing, private agent review, revision and export; Epic 6 completes original first-increment practice/fixture breadth. Workbook review is an engineering checkpoint, not a narrowing of eventual owner-selected validation tasks or formats.
 - Capability register schema and current-route authority tests arrive before real-data route enablement. Each later route supplies its own entry and tests before enablement. Epic 15 checks integration; it does not defer those obligations.
-- First fork/build stories can proceed only after their actual cut/toolchain verification. OQ-16 blocks dependent concrete identity/service/materialisation/revocation implementation choices; OQ-15 separately blocks unresolved external-audit client/independence routes. Neither blocks retaining their product scope. Supplier eligibility, production scheduler, remote execution, actual destination adapter and V2 policy gates remain explicit.
+- First fork/build stories can proceed only after their actual cut/toolchain verification. OQ-16A direction and SC-1–6 resolve the concrete identity/service/materialisation/revocation contract gap; OQ-16B still gates actual-route/real-data enablement; OQ-15 separately blocks unresolved external-audit client/independence routes. Neither blocks retaining their product scope. Supplier eligibility, production scheduler, remote execution, actual destination adapter and V2 policy gates remain explicit.
 - Story dependencies are earlier implemented capability contracts, not assertions that their runtime tests already passed. Route supply and acceptance fixtures remain unexecuted. No sprint tracking or ready-for-dev status is created here.
 
 ## Epic 1: Secure private desktop work
@@ -694,7 +696,7 @@ Increment 1. Origin: old Story 2.1. Requirements/inventory: AD-6, AD-7, C71, OQ-
 
 **Prerequisites:** Story 1.4.
 
-**Gate:** BLOCKED for dependent implementation until OQ-16 defines identity/session protocol and service contract; do not choose vendor, token format, deployment region or spend here.
+**Gate:** OQ-16A direction adopted; AD-18/19 and SC-1/2 define the architect-derived identity/session contract. OQ-16B actual issuer/operator/region and real-data eligibility remain separate; no vendor/spend is chosen here. Synthetic identity conformance is not proof of production issuer integration.
 
 **Acceptance Criteria:**
 
@@ -703,6 +705,20 @@ Increment 1. Origin: old Story 2.1. Requirements/inventory: AD-6, AD-7, C71, OQ-
 **When** a person signs in
 **Then** the shared Inquello service supplies authenticated identity, membership/role revisions and session validity; every protected command validates that authority
 **And** local metadata caches cannot mint membership or authorize stale access; failed/unavailable validation cannot masquerade as a valid shared-service session.
+
+
+**AC 1.10.2**
+**Given** Wrong issuer/audience/state, matching email on a different subject, and an expired or rotated session are supplied under the adopted SC-1 contract
+**When** authentication and refresh are attempted
+**Then** no identity merging, stale membership or private disclosure occurs; refresh-family replay is rejected and recovery requires valid sign-in
+**And** only current session/principal records and synthetic authority fixtures are required here; later Task/sharing UI is not a prerequisite.
+
+
+**AC 1.10.3**
+**Given** an authenticated session command is interrupted after a potentially committed result
+**When** the client retries or queries the same operation ID under SC-2
+**Then** the durable receipt resolves the outcome without duplicate mutation; a different payload with the same ID conflicts
+**And** credential storage excludes renderer/model/tools/logs and local private work is distinguished from shared-service availability.
 
 ### Story 1.11: Enforce internal-company memberships without disclosing private Tasks
 
@@ -714,7 +730,7 @@ Increment 1. Origin: old Story 2.1. Requirements/inventory: AD-6, AD-7, C71, OQ-
 
 **Prerequisites:** Story 1.10.
 
-**Gate:** OQ-16 for implemented permission/revision contract; OQ-15 before enabling external-audit client/independence routes.
+**Gate:** OQ-16A direction adopted; SC-2/3 permission/revision contract applies; OQ-16B before real shared data; OQ-15 before external-audit client/independence routes.
 
 **Acceptance Criteria:**
 
@@ -734,6 +750,13 @@ Increment 1. Origin: old Story 2.1. Requirements/inventory: AD-6, AD-7, C71, OQ-
 **Given** no guest role exists in V1 (OQ-1)
 **When** roles are listed
 **Then** only audit-team and reviewer roles are offered and external exchange happens through exports, not guest accounts.
+
+
+**AC 1.11.4**
+**Given** membership removal races with a protected synthetic service command
+**When** SC-2 authorization epoch and expected revision are checked in the transaction
+**Then** the service establishes one ordering; an operation ordered after removal cannot commit with old membership
+**And** administrative membership rights do not create private-resource grants and the current record is not replaced by a stale client revision.
 
 ### Story 1.12: Govern the local data actually held by the first private route
 
@@ -1029,14 +1052,14 @@ Increment 1. Origin: old Story 8.1. Requirements/inventory: C33, C36, FR-21, OQ-
 ### Story 1.22: Configure initial processing routes without silent fallback
 
 As an administrator,
-I want each documented route (ChatGPT/OpenAI sign-in, API key, Azure Foundry/Azure OpenAI, Bedrock, GCP/Vertex, organisation gateway, local model; Claude subject to unresolved supply/eligibility) configurable with its effective provider, deployment and capability limits shown per Task,
+I want each documented route (ChatGPT/OpenAI sign-in, API key, Azure Foundry/Azure OpenAI, Bedrock, GCP/Vertex, organisation gateway, local model; Claude API key selected; subscription conditional on official permission and integration eligibility) configurable with its effective provider, deployment and capability limits shown per Task,
 So that an unsupported operation never silently switches route (FR-29, C53 to C57, OQ-9).
 
 Increment 1. Origin: old Story 8.5. Requirements/inventory: A15, AD-8, C53, C57, FR-29, NFR-8, NFR-9, OQ-14, OQ-9, UX-DR40.
 
 **Prerequisites:** Story 1.9, Story 1.13, Story 1.19, Story 1.20, Story 1.21.
 
-**Gate:** The validating team must select the additional organisation-approved route; no provider, region, adapter or spend is chosen by this document. Synthetic configuration does not authorize real data.
+**Gate:** Owner selected Claude API-key access as the initial additional route (Sentinel_1ee4b9e93af48191bd5a2f035d7b74c6). CR-1 now records the native Messages adapter ownership/normalization contract; Story 1.22 implements it at the selected fork cut. Current inspected Responses-only configuration is not plug-and-play. Actual account/model/processing eligibility remains separate. Subscription access is conditional per AD-23, not an API-key prerequisite. No paid calls, credentials, region, spend or implementation authorized.
 
 **Acceptance Criteria:**
 
@@ -1059,7 +1082,20 @@ Increment 1. Origin: old Story 8.5. Requirements/inventory: A15, AD-8, C53, C57,
 **Given** the inherited default and one organisation-approved route are candidates for Increment 1
 **When** each is configured
 **Then** its capability/identity/processing contract is recorded separately and it stays synthetic-only until its current-route negative and eligibility checks pass
-**And** remaining named routes, including unresolved Claude reachability, remain explicit later supply/eligibility gates.
+**And** remaining named routes, including conditional Claude subscription integration, remain explicit later supply/eligibility gates.
+
+
+**AC 1.22.5**
+**Given** the owner-selected Claude API-key route and the actual selected fork cut
+**When** CR-1 adapter planning is checked before implementation
+**Then** exact provider-dispatch, request/history/tool/stream mapping, credential isolation, capability limits and error/retry boundaries are recorded with shared schema fixtures
+**And** changing a URL/key is not counted as Messages compatibility; no fixture is mislabelled as a live provider test or real-data eligibility.
+
+**AC 1.22.6**
+**Given** Claude subscription login is desired only where Anthropic permits it
+**When** available routes and their status are presented
+**Then** the selected API-key route is distinct from any conditional official-binary integration or prior-approved custom subscription integration
+**And** no Claude.ai token collection/reuse, hidden local-model fallback, silent harness replacement or unapproved paid call occurs.
 
 ### Story 1.23: Show local execution separately from inference
 
@@ -2058,7 +2094,7 @@ Increment 1. New detail for confirmed hybrid/private-sharing/admission/revocatio
 
 **Prerequisites:** completed Epic 3 delivery and earlier required contracts; no later epic is required.
 
-**Gate:** OQ-16 grant/version/revision contract must be resolved before implementation; external-audit client/independence routes remain OQ-15 gated.
+**Gate:** OQ-16A direction adopted; AD-19/20 and SC-2/3/4 define the implementation contract; OQ-16B before real-data route enablement; external-audit client/independence routes remain OQ-15 gated.
 
 **Acceptance Criteria:**
 
@@ -2074,6 +2110,13 @@ Increment 1. New detail for confirmed hybrid/private-sharing/admission/revocatio
 **Then** included content, evidence/context, recipients and omissions are visible
 **And** changing scope, audience or version requires deliberate confirmation and current authority; no automatic full-source upload occurs.
 
+
+**AC 4.1.3**
+**Given** a folder share or individually shared package is prepared under SC-3
+**When** the person confirms its audience and version scope
+**Then** enumerated versions are the default, future registered-version inclusion requires explicit choice, and no filesystem watcher uploads unselected material
+**And** an individual recipient grant does not admit company-wide memory and no grant exceeds delegable source rights.
+
 ### Story 4.2: Make the exact shared version usable on the recipient computer
 
 As an Internal Audit Manager,
@@ -2084,7 +2127,7 @@ Increment 1. New detail for confirmed hybrid/private-sharing/admission/revocatio
 
 **Prerequisites:** 4.1.
 
-**Gate:** OQ-16 recipient materialisation/transfer contract must resolve interoperable version and availability behavior before implementation.
+**Gate:** OQ-16A direction adopted; AD-20 / SC-4 exact-version materialization contract applies; OQ-16B storage/processing eligibility before real shared data.
 
 **Acceptance Criteria:**
 
@@ -2106,6 +2149,13 @@ Increment 1. New detail for confirmed hybrid/private-sharing/admission/revocatio
 **Then** applicable policy identities, versions and effective periods accompany evidence, Method and departures
 **And** missing policy makes affected checks incomplete; changed policy marks dependent review applicability stale before reliance.
 
+
+**AC 4.2.4**
+**Given** upload chunks are interrupted, a hash is wrong, a blob is missing, or the commit response is lost
+**When** SC-4 transfer resumes or the operation receipt is queried
+**Then** only verified exact bytes become a committed accessible version, partial staging remains unpublished, and retries do not duplicate registration
+**And** recipient materialization does not overwrite an existing edited local file and missing context remains component-level incomplete.
+
 ### Story 4.3: Stop revoked shared retrieval and active-agent use
 
 As an administrator,
@@ -2116,7 +2166,7 @@ Increment 1. Origin: old Story 12.1. Requirements/inventory: A14, AD-12, AD-8, C
 
 **Prerequisites:** 4.2.
 
-**Gate:** OQ-16 must define revocation freshness, offline failure and active-run invalidation; unresolved behavior blocks real-data sharing.
+**Gate:** OQ-16A clarified connectivity direction adopted; AD-21 / SC-5 current-access and active-run contract applies; OQ-16B actual host/service enforcement must pass before real-data sharing.
 
 **Acceptance Criteria:**
 
@@ -2143,6 +2193,13 @@ Increment 1. Origin: old Story 12.1. Requirements/inventory: A14, AD-12, AD-8, C
 **When** these control contracts are validated
 **Then** current share/retained-category paths and synthetic derivative-lineage objects are tested now
 **And** actual admitted-memory retrieval and its revocation are then exercised in later story IDs 4.5 and 4.6 (deferred live-memory regressions, not prerequisites for current control completion) before memory real-data enablement; this is not a dependency on a future live memory implementation to complete current controls.
+
+
+**AC 4.3.5**
+**Given** shared-derived work loses its live authority channel or receives an invalidation cursor gap
+**When** SC-5 governs its next read, tool/model dispatch, output use, export or resume
+**Then** affected work pauses, stale in-flight output is suppressed, and reconnect requires current authorization before resuming
+**And** loss of the cloud-model connection also pauses affected private agent work; local files/tools do not imply offline inference, local models are not a current priority, and no automatic local fallback or offline editor is introduced; a runtime unable to isolate/remove revoked context terminates and requires a fresh permitted-context rebase, never relabelling the same shared-derived context as private.
 
 ### Story 4.4: Apply revocation to derived knowledge and shared held-data controls
 
@@ -2173,6 +2230,20 @@ Increment 1. Origin: old Story 12.3. Requirements/inventory: AD-13, AD-14, C75, 
 **When** these control contracts are validated
 **Then** current share/retained-category paths and synthetic derivative-lineage objects are tested now
 **And** actual admitted-memory retrieval and its revocation are then exercised in later story IDs 4.5 and 4.6 (deferred live-memory regressions, not prerequisites for current control completion) before memory real-data enablement; this is not a dependency on a future live memory implementation to complete current controls.
+
+
+**AC 4.4.4**
+**Given** a shared derived item depends on source versions A and B and A has two independent grants
+**When** one A grant is withdrawn and access to B is denied
+**Then** SC-3/5 preserves the alternative A grant but withholds the combined derivation because all source dependencies must be permitted
+**And** an allowed subset must be re-derived with new lineage, not obtained by relabelling the blocked item.
+
+
+**AC 4.4.5**
+**Given** backup metadata predates a revocation or deletion
+**When** SC-6 recovery restores it
+**Then** the service remains quarantined until current restrictions and blob manifests are reconciled; prior sessions are not revived and unavailable current restrictions block serving
+**And** no recovery service level or V2 authoritative-record lifecycle is inferred.
 
 ### Story 4.5: Admit team knowledge without publishing private exploration
 
@@ -3353,7 +3424,7 @@ Increment 2 (V1). Origin: old Story 8.5. Requirements/inventory: A15, AD-8, C53,
 **Then** its identity, processing, allowed features, version limits and negative authority evidence are recorded separately
 **And** one passing route never certifies another; unsupported image/browser/tool features fail without silent substitution.
 
-### Story 9.10: Supply and verify the Claude (supply/adapter unresolved) route
+### Story 9.10: Extend and verify the selected and conditionally permitted Claude routes
 
 As an administrator,
 I want the Claude (supply/adapter unresolved) route supplied and verified independently,
@@ -3363,7 +3434,7 @@ Increment 2 (V1). Origin: old Story 8.5. Requirements/inventory: A15, AD-8, C53,
 
 **Prerequisites:** Story 1.13, Story 1.19, Story 1.22, Story 1.28 and the applicable earlier capability contracts; no other new provider route is a prerequisite.
 
-**Gate:** Resolve this named route’s concrete adapter/supply and eligibility before implementation/enablement; preserve provider credentials outside model context. No vendor deployment, region, spend or compatibility is inferred. Claude reachability/adapter is specifically unresolved; obtain the route decision before dependent implementation.
+**Gate:** Claude API-key route preference is selected; implement/regress the recorded CR-1 adapter contract and verify actual eligibility rather than asking for provider selection again. Regress an initial adapter already delivered in 1.22, then extend later capabilities. Subscription integration stays conditional per AD-23/Claude companion and must not bypass native-flow/credential restrictions or silently replace the Codex harness. No deployment, region, spending or implementation is inferred.
 
 **Acceptance Criteria:**
 
@@ -4282,3 +4353,21 @@ V2 decision revisit; not implementation-ready. Origin: old Story 15.5. Requireme
 Total: 139 stories. I1: 84; I2/V1: 50; V2: 5. A higher count reflects explicit splits and confirmed capability detail, not a new product-scope reduction.
 
 Unmet after I1: A08 full parallel delegation (10); A09 compaction/secondary-route continuity (10/15); A10 actual production destination (14, fixture evidence in 6 only); A13 schedules/events (12); A14 unattended reassignment and conversation snapshot extension (12/11), **not basic sharing/revocation** (4/5); A15 unenabled remaining providers/environments (8/9); A16 browser/demonstration/dynamic tools/Code Mode/prediction/scans/activity recall/secondary clients/programmatic entry (7–12); hosted outputs (8). A12 native authority remains V2 (16); hosted browser/sandbox is a V2 decision revisit (17). Every not-enabled route stays unmet regardless of passing another route’s test.
+
+## Shared-service proposal reconciliation — 2026-10-27
+
+The architecture Update adds AD-18–22 / SC-1–6 without changing the 17 groups or 139 story IDs. OQ-16A direction was adopted after the connectivity clarification; OQ-16B remains actual issuer/operator/region/retained-data and route eligibility. All earlier OQ-16 references are refined by this split. The appended conformance acceptance criteria in 1.10, 1.11 and 4.1–4.4 are implementation requirements under the adopted direction, not executed results or authorization to implement. Earlier exact-source mappings retain their targets unchanged; new checks are architecture-derived additions.
+
+SC-1 belongs to 1.10, SC-2/3 membership to 1.11, SC-2/3 grants to 4.1, SC-4 transfer to 4.2, SC-5 connection-loss and active-authority control to 4.3, SC-6 retained-data/recovery and conjunctive lineage to 4.4, actual admission/retrieval to 4.5/4.6, and reviewed-basis coordination to Epic 5. Build records only at introduction; early fixtures do not require later memory/review UI. Existing CAP/FR/C/E/UX inventory, native-V2 boundary and external-audit gate remain.
+
+Connectivity correction from the owner: cloud-model agent work needs model connectivity whether private or shared; shared-derived use additionally needs live Inquello authority. Connection failures are distinguished, affected work pauses, and supported progress is preserved. Manual use of other applications on private local files is not offline agent execution or a new Inquello feature. Local-model routes remain inventory scope but are not a current priority or automatic fallback. Subsequent owner message Sentinel_f111d58b637c8191a30a23234ec55314 adopts the clarified technical direction, not implementation or vendor commitments.
+
+## Technical direction adopted — 2026-10-27
+
+OQ-16A is resolved by Sentinel_f111d58b637c8191a30a23234ec55314 following the connectivity scenario. Pending-adoption descriptions in earlier reconciliation history are superseded. AD-18–21 distinguish owner-adopted direction from engineer-derived protocol rules; AD-22 derives recovery controls. OQ-16B actual route/real-data gates, OQ-15 external-audit policy, Story 1.22 additional inference-route selection and later/V2 gates remain. No implementation authorization or runtime acceptance is inferred, and full increment scope is unchanged.
+
+## Initial Claude route selected — 2026-10-27
+
+Owner preference now selects Claude API-key access and conditionally permitted subscription login. Earlier unselected-provider references are superseded. AD-23 and the Claude companion distinguish actual official access conditions from pinned runtime compatibility. CR-1 now records the adapter design; build/tests remain acceptance work, not unresolved provider preference; full scope and existing story IDs stay unchanged. Story 9.10 expands/regresses an initial implementation rather than duplicating it. All original AC text remains historical traceable acceptance; added AC1.22.5–6 clarify the selected route. No API calls, credentials, costs or implementation authorized.
+
+CR-1 native Messages adapter ownership/normalization and SC-7 synthetic service/OIDC/blob/test-data topology are recorded. Production identity/operator/region/retention eligibility remains a real-data gate, not a blanket block on the synthetic first-increment build plan. Actual inference required by 1.25 is future acceptance work, not a prerequisite test that must already pass before planning.

@@ -103,7 +103,7 @@ Owners are inherited proposed roles, not appointments (AS-2). Existing recommend
 |---|---|---|---|
 | OQ-11 | Resolve Organisation/Workspace precedence, review/hold/amendment/retention and migration; workspace choice within organisation policy remains a recommendation. | Product lead, audit lead and data-policy owner | Before native-mode implementation commitments; not a V1 blocker and not a reopening of AD boundaries. |
 | OQ-15 | External-audit client confidentiality, independence and cross-client memory boundaries; do not import internal-company rules silently. | Product/audit/data-policy owners | Before external-audit cross-client admission/retrieval; not a blocker to the decided internal-company memory contract. |
-| OQ-16 | Concrete shared-service identity/session, recipient transfer, revocation freshness/offline, deployment vendor/region/spend and operational supply. | Architecture/security/implementation owners; product owner for material commitments | Before dependent implementation or route enablement; separate first-story blockers from later route gates. |
+| OQ-16B | Actual identity issuer/operator, hosting/region, retained-data/recovery policy and route eligibility. OQ-16A direction is adopted; SC-1–6 define the architect-derived implementation seams. | Architecture/security/operations owners; product owner for material commitments | Before actual route/real-data enablement; no supplier, spend or implementation approval inferred. |
 | OQ-12 | The supplied visual kit and final UX are selected; final name clearance/public-brand validation remain. Research territories do not select launch markets. | Product/design lead | Before public brand commitments; validate inherited UX assumptions before their dependent commitments. |
 
 OQ-11 native-record policy does not block V1; OQ-12 gates public brand commitments. Numeric thresholds follow the validating team's baseline (OQ-7). Decided gates bind through the SPEC constraints. The confirmed reconciliation decisions below supersede earlier blanket recall and local-only shared-authority implications; no vendor, budget, region or numerical operating target is inferred.
@@ -139,3 +139,19 @@ Source constraints, deferred gates and proposed acceptance retain their evidence
 ## Confirmed collaboration reconciliation
 
 Read [collaboration, institutional memory and review](collaboration-and-memory.md) as the detailed contract for CAP-1/7/9/14/18/19/22 and FR-1/14/17/27/32/33/35/36/37/43. It supersedes blanket retained-extract visibility, preserves team-wide recall and supplies first-team-increment revocation and agent-review acceptance obligations. The epic plan owns dependency order and old-to-new story mapping. Workbook-through-review/export is an engineering checkpoint, not a reduced product or validation scope. Prior validation files are historical evidence only; this update does not rerun their runtime scenarios.
+
+## OQ-16 proposal checkpoint — 2026-10-27 update
+
+The architecture Update supplies AD-18–22 and SC-1–6 in its shared-service companion. The owner subsequently adopted the OQ-16A direction; OQ-16B remains actual issuer/operator/hosting/region/retained-data/recovery eligibility before real shared data. Existing OQ-16 rows describe the original gap and are refined by this split. No vendor procurement, deployment, implementation or service guarantee is authorized. Internal-company routes remain separate from OQ-15 external-audit policy.
+
+The owner clarified in Sentinel_e37ce8af9b048191a6a87aa24934b662 that local models are not a current priority. Local files/tools do not provide offline AI: private and shared cloud-model work needs model connectivity, and shared-derived use also needs current service authority. Preserve the full route inventory without introducing automatic local fallback or an offline-editor commitment.
+
+## OQ-16A adoption — supersedes pending-proposal status above
+
+On 2026-10-27, Sentinel_f111d58b637c8191a30a23234ec55314 adopted the clarified OIDC/shared Rust/PostgreSQL/private selected-storage and model-versus-authority connectivity direction. Detailed SC-1–6 are architect-derived, not owner-reviewed line by line. OQ-16A is closed; OQ-16B actual supplier/issuer/region/retained-data/route gates remain. No implementation, procurement or deployment is authorized. The full 84-story first increment still needs its additional actual inference route under Story 1.22; synthetic fixtures do not replace real agent execution in Story 1.25.
+
+## Claude route decision — 2026-10-27
+
+Sentinel_1ee4b9e93af48191bd5a2f035d7b74c6 selects Claude API-key access for the initial additional route and subscription login only if permitted. This supersedes unselected-provider wording above, not route eligibility. The architecture Claude companion records official policy distinctions and pinned Responses-versus-Messages evidence. CR-1 now gates the concrete adapter design; no API call, credential handling, spending, native-binary installation or implementation is authorized.
+
+CR-1 ownership/normalization and SC-7 isolated synthetic topology are now recorded architecture contracts. Future adapter implementation, actual inference and route tests are acceptance/enablement work, not evidence of an unresolved owner decision. This supersedes the earlier CR-1 design-gap note; production OQ-16B remains.

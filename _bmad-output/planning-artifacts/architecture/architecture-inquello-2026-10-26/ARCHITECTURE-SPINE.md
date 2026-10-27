@@ -5,7 +5,7 @@ purpose: build-substrate
 altitude: initiative
 paradigm: Hybrid desktop/shared service with layered Rust domain ports and adapters
 scope: Whole Inquello platform and consistency between its features
-status: draft
+status: final
 created: 2026-10-27
 updated: 2026-10-27
 binds: [P01-P22, FR-1-FR-44, NFR-1-NFR-10, UJ-1-UJ-8]
@@ -19,15 +19,17 @@ sources:
   - .working/technology-evidence.md
 companions:
   - reconcile-confirmed-decisions-2026-10-27.md
+  - shared-service-contract-proposal-2026-10-27.md
+  - claude-access-routes-2026-10-27.md
 ---
 
 # Architecture Spine — Inquello
 
 ## Design Paradigm
 
-**Layered modular Rust domain with ports and adapters**, surrounding the retained Codex engine/app-server and an Electron React/TypeScript desktop client. The adopted hybrid extends AD-1–4: local execution/files and domain working metadata coexist with a shared Inquello identity, permission and collaboration service (AD-15). Shared audit modules own consistent domain rules; adapters connect runtime, local persistence, the shared service, files and external systems; clients expose the supplied UX. No shared-service vendor or implementation stack is selected.
+**Layered modular Rust domain with ports and adapters**, surrounding the retained Codex engine/app-server and an Electron React/TypeScript desktop client. The adopted hybrid extends AD-1–4: local execution/files and domain working metadata coexist with a shared Inquello identity, permission and collaboration service (AD-15). Shared audit modules own consistent domain rules; adapters connect runtime, local persistence, the shared service, files and external systems; clients expose the supplied UX. No shared-service vendor is selected. AD-18–21 record the owner-adopted technical direction with architect-derived contracts; AD-22 derives recovery controls. No supplier or deployment is selected.
 
-This initiative contract binds independently implemented features. The full target retains **41 V1 FRs and three V2 FRs (38, 40, 42)**, all applicable NFRs, eight source journeys and the PRD's detailed inventory. The prior final review is historical; this reconciliation is subject to a fresh gate recorded in reviews/reconciliation-2026-10-27.md. Open hybrid supply/protocol and external-audit-boundary decisions prevent a blanket readiness claim. Nothing here claims implemented capability, runtime validation or release approval.
+This initiative contract binds independently implemented features. The full target retains **41 V1 FRs and three V2 FRs (38, 40, 42)**, all applicable NFRs, eight source journeys and the PRD's detailed inventory. Prior review snapshots are historical; this update has current spine lint, three service-contract reviewer reports and the bounded adoption/connectivity recheck under reviews/. The hybrid technical direction is adopted (OQ-16A, 2026-10-27); actual supply/data eligibility (OQ-16B) and external-audit boundaries (OQ-15) prevent a blanket readiness claim. SC-1–6 are architect-derived interoperability contracts, not claims that the owner individually reviewed each protocol field. Nothing here claims implemented capability, runtime validation or release approval.
 
 Arrows below denote allowed dependencies; dashed arrows denote port implementation. The composition host wires implementations. Domain modules do not import Electron or concrete runtime/storage adapters.
 
@@ -144,7 +146,7 @@ AD-1–4 and AD-15–17 are user-adopted choices. AD-5–14 derive enforcement r
 
 - **Binds:** Desktop/files, Inquello identity, Workspace memberships, permissions, shared work and review coordination.
 - **Prevents:** Provider sign-in becoming team identity; local stores posing as shared authority; implicit conversation disclosure and inaccessible handoffs.
-- **Rule:** Desktop executes agents and holds local working files; a shared Inquello service owns its own authenticated identities, memberships, grants and shared coordination. Provider sign-in remains separate. Tasks are creator-private by default. Grant file/folder/review-package access independently of conversation/history; whole-Task access requires explicit sharing. Every shared operation binds Workspace, actor, object, immutable version or declared folder scope, recipient/audience and permissions. Sharing selected artifacts/context is deliberate, not automatic upload of all sources. A recipient must actually access the authorised artifact version and relied-on evidence/Method/coverage context through a permitted transfer or materialisation route; sender-local paths alone never satisfy a handoff. Missing/inaccessible/version-mismatched context is blocked or partial, not silently substituted. Shared requests validate current authority and expected revision at the service; local caches cannot grant access. Detailed protocol, service stack and materialisation route remain OQ-16 gates.
+- **Rule:** Desktop executes agents and holds local working files; a shared Inquello service owns its own authenticated identities, memberships, grants and shared coordination. Provider sign-in remains separate. Tasks are creator-private by default. Grant file/folder/review-package access independently of conversation/history; whole-Task access requires explicit sharing. Every shared operation binds Workspace, actor, object, immutable version or declared folder scope, recipient/audience and permissions. Sharing selected artifacts/context is deliberate, not automatic upload of all sources. A recipient must actually access the authorised artifact version and relied-on evidence/Method/coverage context through a permitted transfer or materialisation route; sender-local paths alone never satisfy a handoff. Missing/inaccessible/version-mismatched context is blocked or partial, not silently substituted. Shared requests validate current authority and expected revision at the service; local caches cannot grant access. The concrete protocol, service seed and materialisation route are in AD-18–22 and the companion; OQ-16A direction is adopted, while OQ-16B actual-route gates remain.
 
 ### AD-16 — Team-wide knowledge admission and basic revocation [ADOPTED]
 
@@ -165,6 +167,48 @@ AD-1–4 and AD-15–17 are user-adopted choices. AD-5–14 derive enforcement r
 | Vocabulary and identifiers | Retain PRD concepts and practice-specific labels; identifiers stay stable and scope-qualified across client/runtime/destination references. Exact formats and schema names belong to implementation. |
 | Events and outcomes | Runtime events describe runtime facts; domain commands establish permitted domain outcomes. Errors retain operation identity, known applied effects and recovery status. A UI toast, completed turn or green chip establishes no acceptance. |
 | Continuity | Preserve confirmed saved work and accessible review/context references; transient draft retention follows UX guarantees. No universal offline, queued-write, reconnect-resend or rollback promise. |
+
+### AD-18 — Separate authentication, application sessions and resource authority [ADOPTED DIRECTION; DERIVED CONTRACT]
+
+- **Binds:** Identity service, trusted desktop host and all shared commands.
+- **Prevents:** Email-based identity collision, provider login as membership and stale token claims as grants.
+- **Rule:** Following the adopted direction, implement SC-1 in the [shared-service contract proposal](shared-service-contract-proposal-2026-10-27.md): external-browser OIDC native PKCE flow, issuer/subject principal mapping, opaque revocable app sessions, rotating refresh families and current server-side membership checks. Keep credentials outside renderer/model/tools. Issuer/vendor and real-data eligibility remain OQ-16B.
+
+### AD-19 — One transactional shared-command authority [ADOPTED DIRECTION; DERIVED CONTRACT]
+
+- **Binds:** Service persistence, desktop/CLI adapters and shared mutation clients.
+- **Prevents:** Incompatible IDs/revisions, duplicate commands and authorization races across separately built features.
+- **Rule:** Following the adopted direction, SC-2/3/6 define versioned HTTPS JSON, canonical schema fixtures, current authorization plus expected revision in the mutation transaction, durable operation receipts and authorization-epoch ordering. One Rust-domain service owns shared records using transactional metadata and private blobs; local SQLite is not a writable shared replica. Introduce records only when stories need them.
+
+### AD-20 — Immutable, recipient-usable reviewed basis [ADOPTED DIRECTION; DERIVED CONTRACT]
+
+- **Binds:** Artifact sharing, transfer adapters, folder scopes and review coordination.
+- **Prevents:** Sender-local handoffs, latest-version substitution, partial publication and conversation disclosure.
+- **Rule:** Following the adopted direction, SC-3/4 define explicit staged upload, verified manifest, atomic registration/grant commit and authenticated exact-version materialization. A reviewed basis includes permitted evidence, Method, coverage and policy as well as artifact bytes. Folder future-version inclusion is separately explicit; no automatic filesystem upload. Shared content never becomes native V2 record authority.
+
+### AD-21 — Current-access mediation and connection-loss boundary [ADOPTED DIRECTION; DERIVED CONTRACT]
+
+- **Binds:** Shared reads, tool/model dispatch, memory, output presentation/export and active run recovery.
+- **Prevents:** Event-only or expiry-only revocation, offline stale grants and post-withdrawal derived leakage.
+- **Rule:** Following the adopted direction, SC-5 requires service-ordered current checks at protected boundaries plus live invalidation. Loss of the cloud-model connection pauses affected agent work for private and shared Tasks; shared-derived use also requires live Inquello authority. Local storage/tools do not imply local inference. No offline agent mode, new offline editor or automatic local-model fallback is selected; local models are not a current priority. Preserve supported progress and revalidate the affected connection/authority before resume. Cancel affected runs and withhold stale in-flight results; if safe context removal is impossible, rebase in a fresh run. Preserve already-transmitted/exported-copy limits and require actual host isolation before shared agent enablement.
+
+### AD-22 — Revocation-safe cross-store recovery [DERIVED]
+
+- **Binds:** Upload reconciliation, metadata/blob/index persistence, deletion and restore.
+- **Prevents:** Backup resurrection of access, partial shared publication and derivative grants by indexing.
+- **Rule:** Derived from AD-7/16, SC-6 uses committed metadata plus outbox, immutable staged blobs, idempotent consumers, lineage and a protected current deletion/revocation journal. Restored state remains quarantined until current restrictions and blobs reconcile; inability to establish them fails closed. Exact retention periods/operator/region and recovery commitments remain OQ-16B; V2 lifecycle is not introduced.
+
+### AD-23 — Selected Claude route, independent credentials and compatibility gate [ADOPTED DIRECTION; DERIVED CONTRACT]
+
+- **Binds:** Initial inference routing, provider adapters, credential storage and later Claude integration.
+- **Prevents:** Subscription tokens reused as API credentials, provider login becoming Inquello authority and an incompatible API advertised as enabled.
+- **Rule:** Claude API-key access is the owner-selected initial additional route; subscription login remains conditional on Anthropic-permitted integration. Follow [Claude route decision](claude-access-routes-2026-10-27.md): custom subscription OAuth is not enabled; unmodified official Claude Code is a distinct gated candidate, not a substitute runtime implicitly approved. Pinned Responses-only provider evidence does not establish Messages compatibility. CR-1 fixes adapter ownership, canonical request/event/tool/usage/error/cancellation mapping; implement it at the selected fork cut and test actual route eligibility separately. Not-yet-run acceptance tests do not themselves make a recorded design unimplementable. No paid requests, credentials, supplier terms or implementation are authorized by route selection.
+
+### AD-24 — Isolated synthetic validation topology [DERIVED]
+
+- **Binds:** First-increment service, auth, blob, model-route and recovery acceptance environments.
+- **Prevents:** Production-provider selection blocking all fixture work, test identities escaping into production and simulated results counted as actual inference.
+- **Rule:** SC-7 defines an isolated local service/PostgreSQL/private-filesystem blob/test-OIDC topology with generated data and explicit fixture policy. Production rejects test issuer/auth configuration. Paid/model calls and host trust changes require their own authority during implementation. Actual inference acceptance remains actual inference, while OQ-16B production identity/operator/region/retained-data eligibility gates real-data enablement rather than the synthetic build plan.
 
 ## Stack
 
@@ -196,13 +240,13 @@ fork/
   desktop/                              Electron main/preload and React interface
 ```
 
-The separate domain store owns working metadata; saved artifacts remain in their supported file locations; upstream JSONL/SQLite retain runtime responsibilities. Physical data paths, migrations and adapter package splits require implementation verification. AD-15 selects logical shared-service ownership without choosing vendor, region, spend, server language, datastore or transport. The local SQLite store is not replicated as shared authority.
+The separate domain store owns working metadata; saved artifacts remain in their supported file locations; upstream JSONL/SQLite retain runtime responsibilities. Physical data paths, migrations and adapter package splits require implementation verification. AD-15 selects logical shared-service ownership. AD-18–22 supply the adopted Rust-domain service/PostgreSQL/private-storage direction and derived blob-port/HTTPS JSON contracts without choosing vendor, region or spend; OQ-16A is resolved. Exact adapter libraries/patches are verified and pinned before dependent code, not guessed here. The local SQLite store is not replicated as shared authority.
 
 | Envelope / supply gap | Required contract and owner/gate |
 | --- | --- |
 | Local desktop | Main manages the local runtime child; local sources remain tied to that host. Scheduled work needing those files observes actual computer/app availability. Loss of host/connection exposes unavailable or interrupted work, not cloud completion. |
 | Scheduler/event supply | Architecture/integration lead with team administrator owns the missing production trigger/scheduler/mandate route. OQ-5/6/8/9 are decided (2026-10-27); the missing production route still gates enablement and promises. Queue/heartbeat support alone is insufficient; FR-23/24 remain V1. |
-| Team coordination and cross-host work | Product/audit leads with architecture/integration lead are proposed owners of the AD-15 shared-service route. Identity, grants and coordination authority are decided; interoperable protocol, accessible artifact/context materialisation, current-access invalidation and recovery remain OQ-16 implementation/data-controls. Local threads/SQLite alone do not implement FR-35/36. First team enablement requires AD-16 basic revocation, not later automation. |
+| Team coordination and cross-host work | Product/audit leads with architecture/integration lead are proposed owners of the AD-15 shared-service route. Identity, grants and coordination authority are decided; SC-1–6 define interoperable protocol, accessible version/context materialisation, invalidation and recovery under the adopted OQ-16A direction; OQ-16B actual-route/data controls remain. Local threads/SQLite alone do not implement FR-35/36. First team enablement requires AD-16 basic revocation, not later automation. |
 | Remote execution and connected services | Architecture/integration lead with organisation policy/security owner names the actual service, identity, context and provider eligibility before use under OQ-6/9. No inferred hosted backend, automatic local-to-cloud handoff or fully local inference. |
 | Environments and operations | Product/design/operations leads with policy owner set workload, availability/support, recovery/loss, deployment/data eligibility and retention under OQ-2/8/9. Synthetic fixtures may proceed; real-data and production promises wait for their gates. Collect total effort, costs, recovery and quality counter-metrics, not token/run counts as assurance. |
 
@@ -254,15 +298,15 @@ Open choices retain proposed role owners, not named appointments. Rows marked de
 | OQ-11 | Product/audit/data-policy leads; before native-mode commitments | V2 mode precedence, lifecycle, review/hold/amendment/retention and migration; not a V1 blocker. |
 | OQ-12 | Product/design lead; before public brand commitments | Name clearance and final validation; supplied visual source and final UX remain selected inputs. |
 | OQ-13 | Product lead with architecture lead; decided 2026-10-27, revisit at V2 planning | Agent browser and sandbox are local in V1 (built-in browser profile, Computer Use, OS sandbox); hosted browser/sandbox deferred to V2. |
-| OQ-14 | Product lead with architecture and security leads; decided 2026-10-27, module design pending | Inquello owns identity/authorisation via its own auth module (Workspace membership, audit-team roles, Engagement membership, internal vs external audit models). Provider sign-in only selects the inference route. Supersedes reliance on trusted host/policy context as identity source; AD-15 now places shared identity/membership/permission authority in the Inquello service, with local execution/files retained. Claude route reachability to be confirmed. |
+| OQ-14 | Product lead with architecture and security leads; decided 2026-10-27, module design pending | Inquello owns identity/authorisation via its own auth module (Workspace membership, audit-team roles, Engagement membership, internal vs external audit models). Provider sign-in only selects the inference route. Supersedes reliance on trusted host/policy context as identity source; AD-15 now places shared identity/membership/permission authority in the Inquello service, with local execution/files retained. Claude API-key preference now selected; CR-1 adapter compatibility and actual-route eligibility remain; subscription is conditional per AD-23. |
 | AS-UX1/2 | Design with practitioner/reviewer and client/architecture leads; before layouts/client commitments | Validate derived placements and responsive arrangements; four imported references/nine written surfaces are not runtime evidence. |
 | AS-UX3/4 | Design/implementation/accessibility reviewers; before supported-interaction/shipping claims | Verify handlers, focus, recovery, rendered contrast and targets on actual clients. |
-| OQ-16 shared-service implementation | Architecture/integration and security leads (proposed); before dependent implementation | Resolve authentication/session, permission version/invalidation and client/service protocol, shared persistence, accessible version/context transfer and recovery topology. Vendor, region, spend and service stack are unselected; do not infer approval. |
-| OQ-16 (data-controls subgate) | Organisation policy/security and operations leads (proposed); before real shared data | Select actual hosting/operator/region and processing eligibility; validate revocation, derived-data retention/deletion, backups/restore and recovery for enabled V1 routes. No new V2 native lifecycle implied. |
+| OQ-16A technical direction | Product owner; adopted 2026-10-27, Sentinel_f111d58b637c8191a30a23234ec55314 | OIDC separate from inference, shared Rust service/PostgreSQL/private selected-file storage and clarified model/service connectivity adopted. Detailed SC-1–6 rules are architect-derived; no supplier, spend, region or implementation authorization follows. |
+| OQ-16B actual-route/data-controls subgate | Organisation policy/security and operations leads (proposed); before real shared data | Select actual hosting/operator/region and processing eligibility; validate revocation, derived-data retention/deletion, backups/restore and recovery for enabled V1 routes. No new V2 native lifecycle implied. |
 | OQ-15 external-audit boundaries | Audit/independence and data-policy leads (proposed); before external-audit shared recall | Resolve client confidentiality/independence, team/Engagement and item grants. Internal-company Workspace memory is not silently generalised across external clients. |
 | Implementation seed | Architecture/implementation leads; before dependent code | Delivery fork cut, concrete facade/extension/protocol seams, compiler/package/SQLite-driver compatibility, schema/migrations, conflict mechanics, secure data paths, packaging/update and ownership-transfer contracts. The AD ownership/direction rules remain fixed. |
 
-Detailed code layout can wait for implementation; shared authority, dependency direction and mutation ownership cannot vary by feature. The relevant OQ-16 interoperable protocol/schema and authentication/revocation contracts must resolve before their dependent service stories, not after conflicting implementations exist. These gates need not block unrelated synthetic local-foundation work, but that work cannot claim team capability. The named V1 supply gaps remain owned delivery work until implemented and verified.
+Detailed code layout can wait for implementation; shared authority, dependency direction and mutation ownership cannot vary by feature. OQ-16A direction is now adopted and SC-1–6 fix the dependent interoperability seams. OQ-16B deployment and real-data gates still apply to the actual route; architecture finalization does not authorize implementation. These gates need not block unrelated synthetic local-foundation work, but that work cannot claim team capability. The named V1 supply gaps remain owned delivery work until implemented and verified.
 
 ## Dependency and delivery evidence
 
