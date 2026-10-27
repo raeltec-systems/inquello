@@ -1,0 +1,14 @@
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  font: var(--type-ui);
+  color: var(--text-primary);
+  background: var(--surface-app);
+  font-variant-numeric: tabular-nums;
+}
+a { color: var(--text-link); }
+a:hover { color: var(--text-link-hover); }
+textarea, input, button { font-family: inherit; color: inherit; }
+::placeholder { color: var(--text-faint); }
+@keyframes iq-spin { to { transform: rotate(360deg); } }
+@keyframes iq-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }

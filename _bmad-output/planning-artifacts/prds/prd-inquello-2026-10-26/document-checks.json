@@ -1,0 +1,44 @@
+{
+  "date": "2026-10-26",
+  "check_type": "documentation-only",
+  "status": "passed",
+  "documents": [
+    "prd.md",
+    "addendum.md"
+  ],
+  "document_status": "final",
+  "counts": {
+    "FR": 44,
+    "NFR": 10,
+    "UJ": 8,
+    "OQ": 12,
+    "SM": 4,
+    "SM-C": 4,
+    "AS": 2
+  },
+  "source_capability_groups": 22,
+  "source_acceptance_criteria": 18,
+  "v2_functional_requirements": [
+    "FR-38",
+    "FR-40",
+    "FR-42"
+  ],
+  "id_sequence_issues": [],
+  "unresolved_id_references": [],
+  "local_links_checked": 18,
+  "anchors_checked": 1,
+  "missing_targets": [],
+  "prd_word_count": 6773,
+  "companion_word_count": 1145,
+  "source_reconciliations_completed": 2,
+  "reconciliation_findings_resolved": 2,
+  "reviewer_gate": {
+    "scope_decisions": "pass",
+    "outstanding_findings": 0,
+    "rubric": "pass"
+  },
+  "structure_and_prose_completed": true,
+  "product_runtime_tested": false,
+  "prd_sha256": "DC2F625A0C47C25046E8BB9713010CF894C15A478A8EEFE11DA034D32A385DCF",
+  "companion_sha256": "FD15C658805C1C506989A1060BDD399E08CB4CC9D21761D5BE7EE8237C492CAE"
+}

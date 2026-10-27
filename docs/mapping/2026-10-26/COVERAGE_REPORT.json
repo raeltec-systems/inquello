@@ -1,0 +1,21 @@
+{
+  "date": "2026-10-26",
+  "baseline_entries": 78,
+  "additional_entries": 1,
+  "mapped_entries": 79,
+  "missing_ids": [],
+  "duplicate_ids": [],
+  "name_mismatches": [],
+  "capability_groups": 76,
+  "composition_lenses": 3,
+  "subfeature_mappings": 270,
+  "capability_subfeature_mappings": 261,
+  "proposed_enhancements": 93,
+  "expanded_behavior_entries": 20,
+  "implementation_component_groups": 6,
+  "distinct_row_source_urls": 82,
+  "rechecked_row_source_urls": 16,
+  "live_product_workflows_tested": 0,
+  "product_code_built": false,
+  "completeness_boundary": "Reconciled against frozen documented inventory; expanded behaviors are not extra independent feature groups."
+}

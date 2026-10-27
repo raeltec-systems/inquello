@@ -1,0 +1,11 @@
+{
+  "checked_date": "2026-10-27",
+  "reviewed_initial_spine_sha256": "63c33b62f1d33629e7ce6bfa8607d71088f9cd431547497b42c600350d4423f5",
+  "gate_input_sha256": "1ab973bf8336883c72f9dd74cb04c59a5e602220c0cc0bea50246c8880c82d02",
+  "prd": "reconcile-prd.md: zero gaps",
+  "addendum": ".working/reconcile-addendum.md: zero gaps",
+  "ux": "reconcile-ux.md: zero gaps",
+  "upstream": "reconcile-upstream.md: support caveat clarified in spine and two working evidence notes",
+  "scope_changes": false,
+  "governing_source_documents_edited": false
+}

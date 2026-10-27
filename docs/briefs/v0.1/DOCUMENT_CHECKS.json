@@ -1,0 +1,15 @@
+{
+  "date": "2026-10-26",
+  "check_type": "documentation-only",
+  "revision": "User assigns built-in audit-record mode to V2",
+  "documents_checked": 7,
+  "local_link_targets_checked": 306,
+  "missing_targets": [],
+  "requirement_count": 22,
+  "journey_count": 8,
+  "acceptance_count": 18,
+  "duplicate_requirement_ids": [],
+  "product_word_count": 5884,
+  "independent_scope_review_completed": true,
+  "product_tests_run": false
+}

@@ -1,0 +1,79 @@
+{
+  "date": "2026-10-27",
+  "status": "final",
+  "capabilities": 25,
+  "v1_capabilities": 22,
+  "v2_capabilities": 3,
+  "frs": 44,
+  "v1_frs": 41,
+  "v2_frs": [
+    "FR-38",
+    "FR-40",
+    "FR-42"
+  ],
+  "adopted_companions": 9,
+  "authored_companions": 1,
+  "inherited_assumptions": 6,
+  "open_product_questions": 12,
+  "coherence": "pass: validation-coherence.md",
+  "preservation": [
+    "pass: validation-preservation-product.md",
+    "pass: validation-preservation-companions.md"
+  ],
+  "precision_amendment": "Applied during full final derivation; support-language clarification only",
+  "mechanical": "17 passed / 0 failed: mechanical-final.json",
+  "outputs": {
+    "spec_sha256": "3bce49319d7fbf1ce87f66ca2960fabcbc946b4537e5d4451db3526a5279da9a",
+    "scope_and_gates_sha256": "7af1b023852e805083608c9bfd7927c852aeda26ccd92ab617b257c0114dac41"
+  },
+  "adopted_sources": [
+    {
+      "path": "_bmad-output/planning-artifacts/prds/prd-inquello-2026-10-26/prd.md",
+      "sha256": "dc2f625a0c47c25046e8bb9713010cf894c15a478a8eefe11da034d32a385dcf",
+      "unchanged": true
+    },
+    {
+      "path": "_bmad-output/planning-artifacts/prds/prd-inquello-2026-10-26/addendum.md",
+      "sha256": "fd15c658805c1c506989a1060bdd399e08cb4cc9d21761d5be7ee8237c492cae",
+      "unchanged": true
+    },
+    {
+      "path": "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/DESIGN.md",
+      "sha256": "bfcf9be0a13c474b017fd5cd5971655162c83d1361debb4e611577d8e1f109e3",
+      "unchanged": true
+    },
+    {
+      "path": "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/EXPERIENCE.md",
+      "sha256": "6ce184c470887382f80b9a2668d9b3518c55c1a550984f0a1665d29f4f06003b",
+      "unchanged": true
+    },
+    {
+      "path": "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/ARCHITECTURE-SPINE.md",
+      "sha256": "557d29bd4970424b8464311bc04bd0bc0d5772fbb74caf20b485665b6ced2054",
+      "unchanged": true
+    },
+    {
+      "path": "docs/addendum.md",
+      "sha256": "ff42db917c41fa2b8427e4d229dcf41bff9f377eb593f66cb2852ba1ee40a2ee",
+      "unchanged": true
+    },
+    {
+      "path": "docs/PRODUCT_BRIEF_TRACEABILITY.md",
+      "sha256": "a24e449dc65b492c6cf3bee762402abe741733c6af3124db83e23a3188507b46",
+      "unchanged": true
+    },
+    {
+      "path": "docs/CODEX_AUDITOR_FEATURE_MIRROR.md",
+      "sha256": "82de15e339768bbed6df374a500833b3e26e4718974b1aff962eb4a2edb4c4e2",
+      "unchanged": true
+    },
+    {
+      "path": "docs/CODEX_AUDITOR_FEATURE_MAP.md",
+      "sha256": "35d14d408516fc4124daaf190bddbe6d06ff0a4e6ac2213efe3e8c10d167f654",
+      "unchanged": true
+    }
+  ],
+  "runtime_acceptance_tested": false,
+  "story_breakdown_created": false,
+  "remaining_gates": "Existing product, UX and architecture gates retain owners/triggers; full target unchanged."
+}

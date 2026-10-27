@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>UX Design Validation: Inquello</title>
+<style>
+  :root {
+    --bg: #fafaf9;
+    --surface: #ffffff;
+    --border: #e7e5e4;
+    --text: #1c1917;
+    --muted: #78716c;
+
+    --verdict-strong: #16a34a;
+    --verdict-adequate: #65a30d;
+    --verdict-thin: #d97706;
+    --verdict-broken: #dc2626;
+
+    --sev-low: #64748b;
+    --sev-medium: #ca8a04;
+    --sev-high: #ea580c;
+    --sev-critical: #dc2626;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    font-size: 15px;
+  }
+  .container { max-width: 960px; margin: 0 auto; padding: 32px 24px 64px; }
+
+  header.report-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 24px;
+  }
+  .title h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+  .title .subtitle { color: var(--muted); font-size: 13px; margin-top: 4px; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+
+  .synthesis {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--muted);
+    border-radius: 8px;
+    padding: 18px 22px;
+    margin-bottom: 24px;
+    font-size: 15.5px;
+  }
+  .synthesis p { margin: 0 0 10px; }
+  .synthesis p:last-child { margin-bottom: 0; }
+
+  .dimension-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+    margin-bottom: 24px;
+  }
+  .dim-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .dim-card .dim-name { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .dim-card .dim-verdict { font-size: 14px; font-weight: 600; }
+
+  section.dimension, section.reviewer-section { margin-bottom: 14px; }
+  section.dimension details, section.reviewer-section details {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  section summary {
+    padding: 14px 20px;
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  section summary::-webkit-details-marker { display: none; }
+  section summary::before {
+    content: "▸";
+    display: inline-block;
+    color: var(--muted);
+    transition: transform 0.15s ease;
+  }
+  section details[open] summary::before { transform: rotate(90deg); }
+  section summary h2 {
+    display: inline;
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    flex: 1;
+  }
+  .verdict-pill {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: white;
+  }
+  .verdict-strong { background: var(--verdict-strong); }
+  .verdict-adequate { background: var(--verdict-adequate); }
+  .verdict-thin { background: var(--verdict-thin); }
+  .verdict-broken { background: var(--verdict-broken); }
+
+  .dim-body { padding: 4px 20px 18px; }
+  .dim-judgment { color: var(--text); font-size: 14.5px; }
+  .dim-judgment p { margin: 0 0 10px; }
+
+  .findings-list { padding: 0 20px 4px; }
+  article.finding {
+    padding: 14px 0;
+    border-top: 1px solid var(--border);
+  }
+  article.finding:first-child { border-top: none; }
+  article.finding header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+  .badge {
+    font-size: 10.5px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    line-height: 1.4;
+  }
+  .badge-sev-low { background: rgba(100, 116, 139, 0.12); color: var(--sev-low); }
+  .badge-sev-medium { background: rgba(202, 138, 4, 0.14); color: var(--sev-medium); }
+  .badge-sev-high { background: rgba(234, 88, 12, 0.14); color: var(--sev-high); }
+  .badge-sev-critical { background: rgba(220, 38, 38, 0.14); color: var(--sev-critical); }
+  .finding-title { margin: 0; font-size: 15px; font-weight: 500; flex: 1; min-width: 200px; }
+  .finding-location { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12.5px; color: var(--muted); }
+  .finding-note, .finding-fix { margin-top: 6px; font-size: 14px; }
+  .finding-fix strong { color: var(--muted); font-weight: 500; }
+
+  .reviewer-source {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  .mechanical {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-top: 24px;
+    font-size: 14px;
+  }
+  .mechanical h3 { margin: 0 0 10px; font-size: 14px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .mechanical ul { margin: 0; padding-left: 20px; }
+  .mechanical li { margin-bottom: 4px; color: var(--text); }
+
+  footer.report-footer {
+    margin-top: 40px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--muted);
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  footer .meta { display: flex; gap: 24px; flex-wrap: wrap; }
+</style>
+</head>
+
+<body>
+<div class="container">
+<header class="report-header"><div class="title"><h1>Inquello — UX Design Validation Report</h1><div class="subtitle">DESIGN.md + EXPERIENCE.md · 26 October 2026</div></div></header>
+<div class="synthesis"><p>The reviewed pair is a coherent, source-traceable UX contract for the declared scope. Visual values, named components, surface states, source authority and prototype boundaries support downstream use. The rubric recorded flow coverage as adequate and the other seven categories as strong; there were no critical or high findings.</p><p>The rubric and scope reviews recorded the same FR-20 omission: recording a Task-specific Method departure and exposing it during review. Those are two medium observations of one unique issue. The bounded correction and targeted recheck are complete: one unique issue resolved, zero outstanding reviewer findings. The accessibility/authority review added no findings. Original observations and snapshot verdicts remain preserved in the individual reports.</p><p>This is static document, source and contrast review. It does not establish working integrations, rendered fidelity, practitioner acceptance or accessibility conformance. Four imported references and nine written-only surface groups remain the user-accepted visual boundary. AS-UX1–AS-UX4 and the PRD open decisions remain downstream gates, not silently accepted product choices.</p><p>Severity accounting: observed critical 0 · high 0 · medium 2 · low 0. Unique issues: critical 0 · high 0 · medium 1 · low 0. Resolved 1 · outstanding 0.</p></div>
+<div class="dimension-summary">
+<div class="dim-card"><div class="dim-name">Flow coverage</div><div class="dim-verdict" style="color: var(--verdict-adequate)">adequate</div></div>
+<div class="dim-card"><div class="dim-name">Token completeness</div><div class="dim-verdict" style="color: var(--verdict-strong)">strong</div></div>
+<div class="dim-card"><div class="dim-name">Component coverage</div><div class="dim-verdict" style="color: var(--verdict-strong)">strong</div></div>
+<div class="dim-card"><div class="dim-name">State coverage</div><div class="dim-verdict" style="color: var(--verdict-strong)">strong</div></div>
+<div class="dim-card"><div class="dim-name">Visual reference coverage</div><div class="dim-verdict" style="color: var(--verdict-strong)">strong</div></div>
+<div class="dim-card"><div class="dim-name">Bloat &amp; overspecification</div><div class="dim-verdict" style="color: var(--verdict-strong)">strong</div></div>
+<div class="dim-card"><div class="dim-name">Inheritance discipline</div><div class="dim-verdict" style="color: var(--verdict-strong)">strong</div></div>
+<div class="dim-card"><div class="dim-name">Shape fit</div><div class="dim-verdict" style="color: var(--verdict-strong)">strong</div></div>
+</div>
+<section class="dimension"><details><summary><h2>1. Flow coverage</h2><span class="verdict-pill verdict-adequate">adequate</span></summary><div class="dim-body"><div class="dim-judgment"><p>The reviewed baseline preserves all eight exact source journeys, with named protagonists, numbered steps, climax and recovery, plus supporting paths for 44 FRs and 10 NFRs. One explicit FR-20 departure interaction was missing. Its correction is now verified; the original category verdict is retained rather than silently rescored.</p></div></div>
+<div class="findings-list"><article class="finding"><header><span class="badge badge-sev-medium">medium · resolved</span><h3 class="finding-title">Record Task-specific Method departures without changing the maintained Method</h3><span class="finding-location">RUB-01 / SF-1 · EXPERIENCE S06 and UJ-7</span></header><div class="finding-note">RUB-01 and SF-1 describe one omission in S06/UJ-7: the original text exposed Method versions and reuse but did not retain a particular Task’s departure or show it with relied-on outputs. This could hide the relationship to the maintained baseline.</div><div class="finding-fix"><strong>Correction:</strong> Resolved: S06 records permitted Task-specific departures and keeps denied departures unapplied. UJ-7 records what differs, the selected Method/version, rationale and affected scope/outputs, then exposes the departure in S02/S03 to the practitioner and any applicable reviewer. Recording it neither changes maintained guidance nor grants authority; no universal review checkpoint was added. The FR-20 coverage destination now points to this treatment.</div><div class="finding-note">The scope-review resolution appendix and a synthesis reread verified EXPERIENCE lines 36, 117, 252 and 254 plus the FR-20 ledger row. The post-correction, pre-editorial EXPERIENCE snapshot SHA-256 is 219a2bfb9a6ed91ae2c66232bbec6bb81197143c37872081c141548cd2a0cc30. This is a targeted correction recheck, not a second full rubric score. See <a href="review-scope-fidelity.md#resolution-and-targeted-recheck--2026-10-26">the preserved finding and resolution appendix</a>.</div></article></div>
+</details></section>
+<section class="dimension"><details><summary><h2>2. Token completeness</h2><span class="verdict-pill verdict-strong">strong</span></summary><div class="dim-body"><div class="dim-judgment"><p>All 95 colour aliases are valid hex values matching source CSS. Typed typography, spacing, radius and component references resolve. Contrast targets and stronger existing-token applications are explicit; no complete dark theme or runtime conformance is claimed.</p></div></div>
+</details></section>
+<section class="dimension"><details><summary><h2>3. Component coverage</h2><span class="verdict-pill verdict-strong">strong</span></summary><div class="dim-body"><div class="dim-judgment"><p>All 18 primitives and ten source compositions have paired visual and behavioural rules. Names and token objects agree; Over remains an overline and Shell a source file. Derived surfaces and optional companions do not invent supplied component APIs.</p></div></div>
+</details></section>
+<section class="dimension"><details><summary><h2>4. State coverage</h2><span class="verdict-pill verdict-strong">strong</span></summary><div class="dim-body"><div class="dim-judgment"><p>All 13 logical surfaces cover applicable loading, empty, focus, error, offline and denied states. Surface-specific recovery distinguishes interrupted work, stale edits, unavailable routes, revoked access, partial events and uncertain delivery without promising automatic synchronisation or resend.</p></div></div>
+</details></section>
+<section class="dimension"><details><summary><h2>5. Visual reference coverage</h2><span class="verdict-pill verdict-strong">strong</span></summary><div class="dim-body"><div class="dim-judgment"><p>The import manifest accounts for all 158 extracted files, with relevant source-group and composition links. The user accepted four imported desktop references and nine spine-only surface groups. No extra mockups or wireframes are claimed; precedence and prototype limitations are explicit.</p></div></div>
+</details></section>
+<section class="dimension"><details><summary><h2>6. Bloat &amp; overspecification</h2><span class="verdict-pill verdict-strong">strong</span></summary><div class="dim-body"><div class="dim-judgment"><p>Tables carry the component, surface, state and flow decisions; the separate ledger carries requirement-name mapping. The breadth and source dimensions serve downstream use. No decorative experience narrative, unnecessary framework/topology commitment or invented approval process warranted a finding.</p></div></div>
+</details></section>
+<section class="dimension"><details><summary><h2>7. Inheritance discipline</h2><span class="verdict-pill verdict-strong">strong</span></summary><div class="dim-body"><div class="dim-judgment"><p>Sources, local links, component names and token paths resolve; all eight journey names retain source wording. The full V1 target, three V2 requirements, external-record authority and open choices remain intact. Source conflicts and UX assumptions stay visible.</p></div></div>
+</details></section>
+<section class="dimension"><details><summary><h2>8. Shape fit</h2><span class="verdict-pill verdict-strong">strong</span></summary><div class="dim-body"><div class="dim-judgment"><p>DESIGN follows the canonical eight-section order. EXPERIENCE retains every required default plus responsive/platform and inspiration sections. Authority and delivery distinctions and the open-item ownership/revisit index justify their additional sections.</p></div></div>
+</details></section>
+<section class="reviewer-section"><details><summary><h2>Source and scope fidelity review</h2><span class="reviewer-source"><a href="review-scope-fidelity.md">review-scope-fidelity.md</a></span></summary><div class="dim-body"><div class="dim-judgment"><p>The scope reviewer found one bounded source-to-UX omission and no other material mismatch against the final PRD/companion. “A mapping to the FR title does not itself supply this interaction”: task-specific departures had to remain distinct from Method changes. SF-1 overlaps RUB-01 and is counted once above. Its resolution appendix confirms the corrected recording, policy boundaries and review visibility. Broad V1 scope, same-file continuation, technical work, automation, human authority, fixtures and open gates remain preserved.</p></div></div></details></section>
+<section class="reviewer-section"><details><summary><h2>Accessibility and authority review</h2><span class="reviewer-source"><a href="review-accessibility-authority.md">review-accessibility-authority.md</a></span></summary><div class="dim-body"><div class="dim-judgment"><p>No additional actionable accessibility/authority findings. The reviewer independently recomputed 27 contrast pairs and confirmed all 95 colour aliases against the supplied CSS. Weak source pairs are restricted or replaced using existing tokens; values are not rounded up to pass. Keyboard/focus/semantics, persistent recovery states, actual authority and verified delivery are specified without treating prototype callbacks as working services. Source handler gaps remain implementation work, not proof of conformance. The FR-20 correction is compatible with these findings and changes no visual token or approval/delivery meaning.</p></div></div></details></section>
+<div class="mechanical"><h3>Final handoff evidence</h3><p>Both spines are marked final, updated 26 October 2026. The editorial and final mechanical passes are complete. These document statuses do not approve production, select open product choices or claim implemented capability.</p><p>Accepted editorial work made two wording-only corrections in EXPERIENCE and three grouped prose corrections in DESIGN, implemented as 40 ordered replacements across 44 occurrences. The DESIGN changes clarify joined measurements, type size/line height and Composer radius. No structural, token, scope or decision change was introduced.</p><p><strong>Final mechanical result: 24 passed, 0 failed.</strong> Import integrity passed: the retained ZIP is byte-identical to the user-supplied archive, and all 158 extracted files are identical. No imported code was executed.</p><p>Final DESIGN SHA-256: <code>bfcf9be0a13c474b017fd5cd5971655162c83d1361debb4e611577d8e1f109e3</code><br>Final EXPERIENCE SHA-256: <code>6ce184c470887382f80b9a2668d9b3518c55c1a550984f0a1665d29f4f06003b</code></p><p><a href="editorial-design.md">editorial-design.md</a> · <a href="editorial-experience.md">editorial-experience.md</a> · <a href="document-checks.json">document-checks.json</a> · <a href="import-integrity.json">import-integrity.json</a></p><p>Final handoff updated: 2026-10-26T21:49:40+00:00</p></div>
+<div class="mechanical"><h3>Prior source reconciliation</h3><p>Before the reviewer gate, three separate PRD-to-UX reconciliation gaps were resolved: notification/optional-companion semantics; population/sample scope, exclusions and duplicate treatment; and distinct execution, inference and browser/connector routes with provider/service identity and related policies. These are prior source-reconciliation corrections, not additional findings in this gate. The later FR-20 observation superseded the earlier general completeness statement until its own correction; all four bounded corrections are now recorded.</p><a href="reconcile-prd.md">Preserved findings and resolutions</a></div>
+<div class="mechanical"><h3>Evidence boundaries and next checks</h3><ul><li>The final document check passed all 24 read-only mechanical checks after the accepted editorial edits, covering YAML, references, tokens, headings, paired component names, coverage identifiers and imported inventory. The FR-20 correction also has its targeted source reread and 44-FR/10-NFR/eight-UJ recheck. Final hashes are recorded in document-checks.json; this is document verification, not runtime acceptance.</li><li>V1 retains 41 FRs; only FR-38, FR-40 and FR-42 are V2. Full underlying source scope remains binding; the four imported routes do not define a smaller release.</li><li>No imported code, application runtime, external service, document round trip or assistive-technology traversal was executed by these reviews. External URLs were not fetched by the rubric review.</li><li>Rendered states, keyboard/assistive-technology traversal, permission/revocation recovery, file round trips, provider/integration eligibility and practitioner walkthroughs remain to be validated under the existing gates.</li><li>AS-UX1 derived placements, AS-UX2 responsive arrangements, AS-UX3 interaction completion and AS-UX4 existing-token accessibility applications retain owners/revisit conditions. OQ-1–OQ-12 remain in force; the later visual-source selection advances only that part of OQ-12.</li><li>Original review files and their reviewed hashes persist. This synthesis changes no spine, source, import or memlog.</li></ul></div>
+<footer class="report-footer"><div class="meta"><span>Workspace: D:/<wbr>Projects/<wbr>inquello/<wbr>_bmad-output/<wbr>planning-artifacts/<wbr>ux-designs/<wbr>ux-inquello-2026-10-26</span><span>Generated: 2026-10-26T21:46:11+00:00</span></div><p><a href="DESIGN.md">DESIGN.md</a> · <a href="EXPERIENCE.md">EXPERIENCE.md</a> · <a href="review-rubric.md">review-rubric.md</a> · <a href="review-scope-fidelity.md">review-scope-fidelity.md</a> · <a href="review-accessibility-authority.md">review-accessibility-authority.md</a> · <a href="reconcile-prd.md">reconcile-prd.md</a> · <a href="editorial-design.md">editorial-design.md</a> · <a href="editorial-experience.md">editorial-experience.md</a> · <a href="document-checks.json">document-checks.json</a> · <a href="import-integrity.json">import-integrity.json</a> · <a href="validation-report.md">Markdown twin</a></p></footer></div></body></html>

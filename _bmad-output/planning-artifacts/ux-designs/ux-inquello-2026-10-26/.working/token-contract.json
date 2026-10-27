@@ -1,0 +1,453 @@
+{
+  "_meta": {
+    "status": "draft",
+    "date": "2026-10-26",
+    "canonicalFile": "../DESIGN.md",
+    "sourcePackage": "../imports/inquello-design-system",
+    "sourceZipSha256": "644ADADB6F6E0E693BA4DFC35A2E1ECC773753521F19DC683A04FC9F308718BF",
+    "referenceSyntax": "{colors.text-primary}; paths begin at this object and match DESIGN frontmatter",
+    "palettePolicy": "Every colour is an exact resolved source CSS value. Semantic source aliases remain unchanged. Component pair changes below use only existing colours.",
+    "adaptationsStatus": "Proposed accessibility applications; explicit source-conflict resolutions recorded in memlog. Not direct user approval of every adaptation.",
+    "sourceCssMap": {
+      "colors.*": "tokens/colors.css, key prefixed --; focus-ring is non-hex and represented in components.TextField.focusRing",
+      "typography.*": "tokens/typography.css semantic --type-* roles; title remains14px",
+      "rounded.*": "tokens/layout.css --radius-*",
+      "spacing.numeric": "tokens/layout.css --space-*",
+      "spacing.named": "tokens/layout.css exact named sizes"
+    },
+    "componentCount": 28,
+    "primitiveCount": 18,
+    "compositionCount": 10,
+    "adaptations": [
+      "Informative faint-text applications use existing text-muted; source text-faint remains for nonessential/decorative use.",
+      "Badge attention foreground uses ink-900 rather than source white.",
+      "StatusChip accepted/explained foreground uses green-800 rather than source green-600.",
+      "Essential control boundaries use ink-600 when pale source borders cannot identify the control; source structural borders remain unchanged.",
+      "Focus includes blue-600 edge/indicator; pale ring remains supplementary.",
+      "Title14px, panel minimum380px, small-symbol asset<=20px retain explicit source resolutions."
+    ],
+    "darkMode": "No complete dark palette supplied. Dark console/toast are local light-theme surfaces, not a dark theme."
+  },
+  "colors": {
+    "ink-900": "#16191d",
+    "ink-800": "#2b3036",
+    "ink-700": "#3d434b",
+    "ink-600": "#5b636e",
+    "ink-500": "#8a919a",
+    "ink-400": "#aeb5bd",
+    "ink-300": "#c4c9cf",
+    "ink-250": "#cfd4da",
+    "ink-200": "#d6dade",
+    "ink-150": "#e3e6ea",
+    "ink-100": "#eef0f2",
+    "ink-75": "#f3f4f6",
+    "ink-50": "#fafbfc",
+    "white": "#ffffff",
+    "blue-800": "#1d3f80",
+    "blue-700": "#244a8f",
+    "blue-600": "#2f5fb3",
+    "blue-200": "#c9d6ee",
+    "blue-150": "#dfe7f5",
+    "blue-100": "#eaf1fb",
+    "blue-50": "#f2f6fc",
+    "green-800": "#1e5236",
+    "green-600": "#2f7a52",
+    "green-200": "#bfdcc9",
+    "green-150": "#e3f1e8",
+    "green-100": "#eef6f0",
+    "green-50": "#f6fbf8",
+    "amber-800": "#5c4210",
+    "amber-700": "#8a5a12",
+    "amber-500": "#c98a1b",
+    "amber-200": "#ecd9ae",
+    "amber-150": "#fbf0d9",
+    "amber-50": "#fffaf0",
+    "red-800": "#7a2e2b",
+    "red-600": "#b0413e",
+    "red-200": "#efc9c6",
+    "red-50": "#fdf3f2",
+    "text-primary": "#16191d",
+    "text-secondary": "#3d434b",
+    "text-muted": "#5b636e",
+    "text-faint": "#8a919a",
+    "text-inverse": "#ffffff",
+    "text-link": "#2f5fb3",
+    "text-link-hover": "#1d3f80",
+    "surface-app": "#ffffff",
+    "surface-sidebar": "#f3f4f6",
+    "surface-panel": "#fafbfc",
+    "surface-raised": "#ffffff",
+    "surface-subtle": "#eef0f2",
+    "surface-hover": "#e6e8eb",
+    "surface-selected": "#e3e6ea",
+    "surface-console": "#16191d",
+    "surface-console-raised": "#2b3036",
+    "border-subtle": "#eef0f2",
+    "border-default": "#e3e6ea",
+    "border-strong": "#d6dade",
+    "border-input": "#cfd4da",
+    "action-primary-bg": "#16191d",
+    "action-primary-bg-hover": "#2b3036",
+    "action-primary-fg": "#ffffff",
+    "action-secondary-bg": "#ffffff",
+    "action-secondary-border": "#d6dade",
+    "action-quiet-bg": "#eef0f3",
+    "judgment-calculation": "#16191d",
+    "judgment-observation": "#5b636e",
+    "judgment-suggestion": "#2f5fb3",
+    "judgment-decision": "#2f7a52",
+    "judgment-gap": "#8a5a12",
+    "status-suggested-fg": "#2f5fb3",
+    "status-suggested-border": "#2f5fb3",
+    "status-investigating-bg": "#eef0f2",
+    "status-investigating-fg": "#3d434b",
+    "status-open-fg": "#3d434b",
+    "status-open-border": "#bfc5cc",
+    "status-evidence-bg": "#fbf0d9",
+    "status-evidence-fg": "#8a5a12",
+    "status-evidence-border": "#ecd9ae",
+    "status-accepted-bg": "#e3f1e8",
+    "status-accepted-fg": "#2f7a52",
+    "status-accepted-border": "#bfdcc9",
+    "row-added-bg": "#f6fbf8",
+    "row-added-mark": "#2f7a52",
+    "row-changed-bg": "#eef6f0",
+    "row-selected-bg": "#f2f6fc",
+    "source-highlight-bg": "#eaf1fb",
+    "diff-add-bg": "#f0f8f3",
+    "diff-add-fg": "#1e5236",
+    "diff-del-bg": "#fdf3f2",
+    "diff-del-fg": "#7a2e2b",
+    "approval-bg": "#fffaf0",
+    "approval-border": "#ecd9ae",
+    "file-pdf": "#b0413e",
+    "file-xls": "#2f7a52",
+    "file-doc": "#2f5fb3",
+    "file-folder": "#5b636e"
+  },
+  "typography": {
+    "hero": {
+      "fontFamily": "'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif",
+      "fontSize": "32px",
+      "fontWeight": "600",
+      "lineHeight": "1.15",
+      "letterSpacing": "-0.02em"
+    },
+    "display": {
+      "fontFamily": "'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif",
+      "fontSize": "28px",
+      "fontWeight": "600",
+      "lineHeight": "1.2",
+      "letterSpacing": "-0.02em"
+    },
+    "title": {
+      "fontFamily": "'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif",
+      "fontSize": "14px",
+      "fontWeight": "600",
+      "lineHeight": "1.45"
+    },
+    "body": {
+      "fontFamily": "'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif",
+      "fontSize": "14px",
+      "fontWeight": "400",
+      "lineHeight": "1.55"
+    },
+    "ui": {
+      "fontFamily": "'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif",
+      "fontSize": "13px",
+      "fontWeight": "400",
+      "lineHeight": "1.45"
+    },
+    "caption": {
+      "fontFamily": "'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif",
+      "fontSize": "12px",
+      "fontWeight": "400",
+      "lineHeight": "1.45"
+    },
+    "label": {
+      "fontFamily": "'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace",
+      "fontSize": "11px",
+      "fontWeight": "500",
+      "lineHeight": "1",
+      "letterSpacing": "0.04em"
+    },
+    "code": {
+      "fontFamily": "'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace",
+      "fontSize": "11.5px",
+      "fontWeight": "400",
+      "lineHeight": "1.6"
+    }
+  },
+  "rounded": {
+    "chip": "3px",
+    "sm": "5px",
+    "md": "6px",
+    "lg": "8px",
+    "card": "10px",
+    "composer": "14px",
+    "pill": "999px",
+    "app-icon": "22.7%"
+  },
+  "spacing": {
+    "0-5": "2px",
+    "1": "4px",
+    "1-5": "6px",
+    "2": "8px",
+    "2-5": "10px",
+    "3": "12px",
+    "4": "16px",
+    "5": "20px",
+    "6": "24px",
+    "7": "28px",
+    "8": "32px",
+    "10": "40px",
+    "12": "48px",
+    "16": "64px",
+    "header-height": "48px",
+    "panel-tabs-height": "40px",
+    "sidebar-width": "264px",
+    "rail-width": "52px",
+    "thread-max-width": "720px",
+    "panel-min-width": "380px",
+    "panel-default-width": "560px",
+    "console-height": "230px",
+    "control-sm": "26px",
+    "control-md": "28px",
+    "control-lg": "32px",
+    "control-round": "30px"
+  },
+  "components": {
+    "Icon": {
+      "size": "16px",
+      "denseSize": "14px",
+      "railSize": "18px",
+      "strokeWidth": "1.75",
+      "foreground": "{colors.text-secondary}"
+    },
+    "Button": {
+      "primaryBackground": "{colors.action-primary-bg}",
+      "primaryForeground": "{colors.action-primary-fg}",
+      "hoverBackground": "{colors.action-primary-bg-hover}",
+      "secondaryBackground": "{colors.action-secondary-bg}",
+      "secondaryBorder": "{colors.action-secondary-border}",
+      "quietBackground": "{colors.action-quiet-bg}",
+      "radius": "{rounded.md}",
+      "smallHeight": "{spacing.control-sm}",
+      "height": "{spacing.control-md}",
+      "largeHeight": "{spacing.control-lg}",
+      "disabledOpacity": "0.45"
+    },
+    "IconButton": {
+      "size": "28px",
+      "roundSize": "{spacing.control-round}",
+      "radius": "{rounded.md}",
+      "foreground": "{colors.text-secondary}",
+      "activeBackground": "{colors.action-quiet-bg}"
+    },
+    "Avatar": {
+      "size": "24px",
+      "personRadius": "50%",
+      "agentScale": "0.8",
+      "decidedBackground": "{colors.green-600}",
+      "decidedForeground": "{colors.white}"
+    },
+    "Badge": {
+      "attentionBackground": "{colors.amber-500}",
+      "attentionForeground": "{colors.ink-900}",
+      "neutralBackground": "{colors.ink-150}",
+      "neutralForeground": "{colors.text-secondary}",
+      "accentBackground": "{colors.blue-600}",
+      "accentForeground": "{colors.white}",
+      "radius": "8px",
+      "fontSize": "11px",
+      "lineHeight": "16px"
+    },
+    "TextField": {
+      "background": "{colors.white}",
+      "foreground": "{colors.text-primary}",
+      "labelForeground": "{colors.text-muted}",
+      "placeholderForeground": "{colors.text-muted}",
+      "border": "{colors.ink-600}",
+      "focusBorder": "{colors.blue-600}",
+      "focusRing": "0 0 0 3px {colors.blue-150}",
+      "radius": "{rounded.md}",
+      "fontSize": "12.5px",
+      "lineHeight": "1.45"
+    },
+    "Switch": {
+      "onBackground": "{colors.blue-600}",
+      "offBackground": "{colors.ink-300}",
+      "thumbBackground": "{colors.white}",
+      "width": "28px",
+      "height": "16px",
+      "thumbSize": "12px",
+      "radius": "8px",
+      "essentialBoundary": "{colors.ink-600}"
+    },
+    "Choice": {
+      "selectedForeground": "{colors.blue-600}",
+      "selectedBackground": "{colors.blue-50}",
+      "checkboxSelectedBackground": "{colors.ink-900}",
+      "essentialBoundary": "{colors.ink-600}",
+      "radioSize": "14px",
+      "checkboxSize": "16px",
+      "cardRadius": "{rounded.md}"
+    },
+    "SegmentedControl": {
+      "background": "{colors.white}",
+      "selectedBackground": "{colors.ink-900}",
+      "selectedForeground": "{colors.white}",
+      "foreground": "{colors.text-muted}",
+      "radius": "{rounded.md}"
+    },
+    "Tabs": {
+      "selectedBackground": "{colors.action-quiet-bg}",
+      "selectedForeground": "{colors.text-primary}",
+      "foreground": "{colors.text-muted}",
+      "countForeground": "{colors.text-muted}",
+      "radius": "{rounded.sm}"
+    },
+    "Menu": {
+      "width": "300px",
+      "background": "{colors.white}",
+      "foreground": "{colors.text-primary}",
+      "headingForeground": "{colors.text-muted}",
+      "radius": "{rounded.card}",
+      "shadow": "0 12px 32px rgba(16, 24, 40, 0.14)"
+    },
+    "StatusChip": {
+      "suggestedForeground": "{colors.status-suggested-fg}",
+      "suggestedBorder": "{colors.status-suggested-border}",
+      "evidenceBackground": "{colors.status-evidence-bg}",
+      "evidenceForeground": "{colors.status-evidence-fg}",
+      "acceptedBackground": "{colors.status-accepted-bg}",
+      "acceptedForeground": "{colors.green-800}",
+      "radius": "{rounded.chip}",
+      "fontSize": "11px"
+    },
+    "JudgmentTag": {
+      "calculation": "{colors.judgment-calculation}",
+      "observation": "{colors.judgment-observation}",
+      "suggestion": "{colors.judgment-suggestion}",
+      "decision": "{colors.judgment-decision}",
+      "gap": "{colors.judgment-gap}",
+      "uppercaseFontSize": "10px",
+      "sentenceFontSize": "11px"
+    },
+    "FileChip": {
+      "background": "{colors.ink-50}",
+      "foreground": "{colors.text-primary}",
+      "removeForeground": "{colors.text-muted}",
+      "radius": "{rounded.md}",
+      "tagFontSize": "9px",
+      "labelFontSize": "12px"
+    },
+    "PlanStep": {
+      "foreground": "{colors.text-primary}",
+      "doneForeground": "{colors.text-muted}",
+      "metaForeground": "{colors.text-muted}",
+      "doneMarker": "{colors.green-600}",
+      "runningMarker": "{colors.blue-600}",
+      "pendingBoundary": "{colors.ink-600}",
+      "indicatorSize": "14px",
+      "indicatorRadius": "4px"
+    },
+    "ApprovalCard": {
+      "background": "{colors.approval-bg}",
+      "border": "{colors.approval-border}",
+      "labelForeground": "{colors.amber-700}",
+      "metaForeground": "{colors.text-muted}",
+      "radius": "{rounded.card}",
+      "padding": "12px 14px",
+      "questionFontSize": "13.5px"
+    },
+    "DiffLine": {
+      "addedBackground": "{colors.diff-add-bg}",
+      "addedForeground": "{colors.diff-add-fg}",
+      "deletedBackground": "{colors.diff-del-bg}",
+      "deletedForeground": "{colors.diff-del-fg}",
+      "changedBackground": "{colors.blue-50}",
+      "gutterForeground": "{colors.text-muted}",
+      "fontSize": "12.5px",
+      "gutterWidth": "40px"
+    },
+    "Toast": {
+      "background": "{colors.ink-900}",
+      "foreground": "{colors.white}",
+      "radius": "{rounded.md}",
+      "padding": "8px 14px",
+      "fontSize": "12.5px",
+      "shadow": "0 8px 24px rgba(0, 0, 0, 0.2)"
+    },
+    "Sidebar": {
+      "background": "{colors.surface-sidebar}",
+      "width": "{spacing.sidebar-width}",
+      "railWidth": "{spacing.rail-width}",
+      "border": "{colors.border-default}",
+      "lockupHeight": "20px"
+    },
+    "Header": {
+      "height": "{spacing.header-height}",
+      "background": "{colors.surface-app}",
+      "titleTypography": "{typography.title}",
+      "metaForeground": "{colors.text-muted}",
+      "border": "{colors.border-default}"
+    },
+    "Composer": {
+      "background": "{colors.white}",
+      "foreground": "{colors.text-primary}",
+      "placeholderForeground": "{colors.text-muted}",
+      "radius": "{rounded.composer}",
+      "border": "{colors.ink-600}",
+      "bodyTypography": "{typography.body}",
+      "shadow": "0 1px 2px rgba(16, 24, 40, 0.04), 0 6px 18px rgba(16, 24, 40, 0.05)"
+    },
+    "NavRow": {
+      "selectedBackground": "{colors.surface-selected}",
+      "hoverBackground": "{colors.surface-hover}",
+      "foreground": "{colors.text-primary}",
+      "metaForeground": "{colors.text-muted}",
+      "radius": "{rounded.md}",
+      "padding": "6px 8px"
+    },
+    "Over": {
+      "typography": "{typography.label}",
+      "foreground": "{colors.text-muted}",
+      "letterSpacing": "0.04em",
+      "textTransform": "uppercase"
+    },
+    "Workbook": {
+      "background": "{colors.surface-panel}",
+      "selectedRowBackground": "{colors.row-selected-bg}",
+      "sourceHighlightBackground": "{colors.source-highlight-bg}",
+      "addedRowBackground": "{colors.row-added-bg}",
+      "changedRowBackground": "{colors.row-changed-bg}",
+      "tableRadius": "{rounded.lg}",
+      "fontSize": "12.5px"
+    },
+    "StartScreen": {
+      "background": "{colors.surface-app}",
+      "threadMaxWidth": "{spacing.thread-max-width}",
+      "heroTypography": "{typography.display}"
+    },
+    "ActiveScreen": {
+      "background": "{colors.surface-app}",
+      "panelBackground": "{colors.surface-panel}",
+      "panelDefaultWidth": "{spacing.panel-default-width}",
+      "panelMinimumWidth": "{spacing.panel-min-width}",
+      "threadMaxWidth": "{spacing.thread-max-width}"
+    },
+    "ReviewScreen": {
+      "background": "{colors.surface-app}",
+      "panelBackground": "{colors.surface-panel}",
+      "sourceHighlightBackground": "{colors.source-highlight-bg}",
+      "selectedRowBackground": "{colors.row-selected-bg}"
+    },
+    "AutomationsScreen": {
+      "background": "{colors.surface-app}",
+      "titleTypography": "{typography.title}",
+      "rowForeground": "{colors.text-primary}",
+      "attentionForeground": "{colors.amber-700}"
+    }
+  }
+}

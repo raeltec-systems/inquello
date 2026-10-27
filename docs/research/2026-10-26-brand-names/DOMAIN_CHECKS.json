@@ -1,0 +1,1201 @@
+{
+  "checked_date_utc": "2026-10-26",
+  "finalist_recheck_utc": "2026-10-26 18:05 UTC",
+  "source": "Vercel search_domains read-only registrar lookup",
+  "currency": "USD",
+  "interpretation": {
+    "available_true": "Registrar reported available at lookup time; not reserved or purchased.",
+    "available_false": "Unavailable or availability unconfirmed; does not establish registration or ownership.",
+    "price": "Registration price for the returned years term.",
+    "renewalPrice": "Quoted renewal for the returned term; may change.",
+    "brand_clearance": "Not established by domain lookup. Public web screening is preliminary; formal trademark/register and social handle availability not completed."
+  },
+  "distinct_domain_count": 181,
+  "batches": [
+    {
+      "label": "initial",
+      "results": [
+        {
+          "domain": "evidara.com",
+          "available": false
+        },
+        {
+          "domain": "evidara.ai",
+          "available": false
+        },
+        {
+          "domain": "scopewell.com",
+          "available": false
+        },
+        {
+          "domain": "scopewell.ai",
+          "available": false
+        },
+        {
+          "domain": "tracefold.com",
+          "available": false
+        },
+        {
+          "domain": "tracefold.ai",
+          "available": false
+        },
+        {
+          "domain": "vouchlane.com",
+          "available": false
+        },
+        {
+          "domain": "vouchlane.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "evidesk.com",
+          "available": false
+        },
+        {
+          "domain": "evidesk.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "prooflane.com",
+          "available": false
+        },
+        {
+          "domain": "prooflane.ai",
+          "available": false
+        },
+        {
+          "domain": "scopewright.com",
+          "available": false
+        },
+        {
+          "domain": "scopewright.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "reasonwell.com",
+          "available": false
+        },
+        {
+          "domain": "reasonwell.ai",
+          "available": false
+        },
+        {
+          "domain": "siftara.com",
+          "available": false
+        },
+        {
+          "domain": "siftara.ai",
+          "available": false
+        },
+        {
+          "domain": "auditrove.com",
+          "available": false
+        },
+        {
+          "domain": "auditrove.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "fieldora.com",
+          "available": false
+        },
+        {
+          "domain": "fieldora.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "evidlane.com",
+          "available": false
+        },
+        {
+          "domain": "evidlane.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "siftmark.com",
+          "available": false
+        },
+        {
+          "domain": "siftmark.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "siftlane.com",
+          "available": false
+        },
+        {
+          "domain": "siftlane.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "scopara.com",
+          "available": false
+        },
+        {
+          "domain": "scopara.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "vouchwell.com",
+          "available": false
+        },
+        {
+          "domain": "vouchwell.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "vouchcraft.com",
+          "available": false
+        },
+        {
+          "domain": "vouchcraft.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "evidloom.com",
+          "available": false
+        },
+        {
+          "domain": "evidloom.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "traceora.com",
+          "available": false
+        },
+        {
+          "domain": "traceora.ai",
+          "available": false
+        },
+        {
+          "domain": "audivane.com",
+          "available": false
+        },
+        {
+          "domain": "audivane.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "siftory.com",
+          "available": false
+        },
+        {
+          "domain": "siftory.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "scopeward.com",
+          "available": false
+        },
+        {
+          "domain": "scopeward.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "evidraft.com",
+          "available": false
+        },
+        {
+          "domain": "evidraft.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "auditide.com",
+          "available": true,
+          "years": 1,
+          "price": 11.25,
+          "renewalPrice": 11.25,
+          "premium": false
+        },
+        {
+          "domain": "auditide.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "audetra.com",
+          "available": false
+        },
+        {
+          "domain": "audetra.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "auditstride.com",
+          "available": false
+        },
+        {
+          "domain": "auditstride.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "fieldloom.com",
+          "available": false
+        },
+        {
+          "domain": "fieldloom.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "trailwright.com",
+          "available": false
+        },
+        {
+          "domain": "trailwright.ai",
+          "available": false
+        },
+        {
+          "domain": "proofnest.com",
+          "available": false
+        },
+        {
+          "domain": "proofnest.ai",
+          "available": false
+        },
+        {
+          "domain": "assurelane.com",
+          "available": false
+        },
+        {
+          "domain": "assurelane.ai",
+          "available": false
+        }
+      ]
+    },
+    {
+      "label": "second",
+      "results": [
+        {
+          "domain": "corrovia.com",
+          "available": false
+        },
+        {
+          "domain": "corrovia.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "corrova.com",
+          "available": false
+        },
+        {
+          "domain": "corrova.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "inquello.com",
+          "available": true,
+          "years": 1,
+          "price": 11.25,
+          "renewalPrice": 11.25,
+          "premium": false
+        },
+        {
+          "domain": "inquello.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "inquora.com",
+          "available": false
+        },
+        {
+          "domain": "inquora.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "audivy.com",
+          "available": false
+        },
+        {
+          "domain": "audivy.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "evidory.com",
+          "available": false
+        },
+        {
+          "domain": "evidory.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "tracevane.com",
+          "available": false
+        },
+        {
+          "domain": "tracevane.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "fieldvane.com",
+          "available": false
+        },
+        {
+          "domain": "fieldvane.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "scopefolio.com",
+          "available": false
+        },
+        {
+          "domain": "scopefolio.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "siftfolio.com",
+          "available": true,
+          "years": 1,
+          "price": 11.25,
+          "renewalPrice": 11.25,
+          "premium": false
+        },
+        {
+          "domain": "siftfolio.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "vouchfolio.com",
+          "available": false
+        },
+        {
+          "domain": "vouchfolio.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "evidrel.com",
+          "available": true,
+          "years": 1,
+          "price": 11.25,
+          "renewalPrice": 11.25,
+          "premium": false
+        },
+        {
+          "domain": "evidrel.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "audrel.com",
+          "available": false
+        },
+        {
+          "domain": "audrel.ai",
+          "available": false
+        },
+        {
+          "domain": "audivon.com",
+          "available": false
+        },
+        {
+          "domain": "audivon.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "auditern.com",
+          "available": false
+        },
+        {
+          "domain": "auditern.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "auditova.com",
+          "available": false
+        },
+        {
+          "domain": "auditova.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "verisift.com",
+          "available": false
+        },
+        {
+          "domain": "verisift.ai",
+          "available": false
+        },
+        {
+          "domain": "criterra.com",
+          "available": false
+        },
+        {
+          "domain": "criterra.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "kriterra.com",
+          "available": false
+        },
+        {
+          "domain": "kriterra.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "evidren.com",
+          "available": false
+        },
+        {
+          "domain": "evidren.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "evidaro.com",
+          "available": false
+        },
+        {
+          "domain": "evidaro.ai",
+          "available": false
+        },
+        {
+          "domain": "eviduno.com",
+          "available": false
+        },
+        {
+          "domain": "eviduno.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "audivaro.com",
+          "available": false
+        },
+        {
+          "domain": "audivaro.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "audelvo.com",
+          "available": false
+        },
+        {
+          "domain": "audelvo.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "verimble.com",
+          "available": true,
+          "years": 1,
+          "price": 11.25,
+          "renewalPrice": 11.25,
+          "premium": false
+        },
+        {
+          "domain": "verimble.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "audivey.com",
+          "available": true,
+          "years": 1,
+          "price": 11.25,
+          "renewalPrice": 11.25,
+          "premium": false
+        },
+        {
+          "domain": "audivey.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "audiforge.com",
+          "available": true,
+          "years": 1,
+          "price": 11.25,
+          "renewalPrice": 11.25,
+          "premium": false
+        },
+        {
+          "domain": "audiforge.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "evidcraft.com",
+          "available": true,
+          "years": 1,
+          "price": 11.25,
+          "renewalPrice": 11.25,
+          "premium": false
+        },
+        {
+          "domain": "evidcraft.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "audivra.com",
+          "available": false
+        },
+        {
+          "domain": "audivra.ai",
+          "available": false
+        },
+        {
+          "domain": "scopehaven.com",
+          "available": false
+        },
+        {
+          "domain": "scopehaven.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        }
+      ]
+    },
+    {
+      "label": "third",
+      "results": [
+        {
+          "domain": "audelva.com",
+          "available": true,
+          "years": 1,
+          "price": 11.25,
+          "renewalPrice": 11.25,
+          "premium": false
+        },
+        {
+          "domain": "audelva.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "inquelo.com",
+          "available": false
+        },
+        {
+          "domain": "inquelo.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "auditrove.app",
+          "available": true,
+          "years": 1,
+          "price": 14.99,
+          "renewalPrice": 15,
+          "premium": false
+        },
+        {
+          "domain": "auditrove.io",
+          "available": true,
+          "years": 1,
+          "price": 14.99,
+          "renewalPrice": 46,
+          "premium": false
+        },
+        {
+          "domain": "getauditrove.com",
+          "available": true,
+          "years": 1,
+          "price": 11.25,
+          "renewalPrice": 11.25,
+          "premium": false
+        },
+        {
+          "domain": "useauditrove.com",
+          "available": true,
+          "years": 1,
+          "price": 11.25,
+          "renewalPrice": 11.25,
+          "premium": false
+        },
+        {
+          "domain": "evidrel.app",
+          "available": true,
+          "years": 1,
+          "price": 14.99,
+          "renewalPrice": 15,
+          "premium": false
+        },
+        {
+          "domain": "evidcraft.app",
+          "available": true,
+          "years": 1,
+          "price": 14.99,
+          "renewalPrice": 15,
+          "premium": false
+        },
+        {
+          "domain": "inquello.app",
+          "available": true,
+          "years": 1,
+          "price": 14.99,
+          "renewalPrice": 15,
+          "premium": false
+        },
+        {
+          "domain": "verimble.app",
+          "available": true,
+          "years": 1,
+          "price": 14.99,
+          "renewalPrice": 15,
+          "premium": false
+        }
+      ]
+    },
+    {
+      "label": "fourth",
+      "results": [
+        {
+          "domain": "auditloom.com",
+          "available": false
+        },
+        {
+          "domain": "auditloom.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "auditcove.com",
+          "available": false
+        },
+        {
+          "domain": "auditcove.ai",
+          "available": false
+        },
+        {
+          "domain": "auditlift.com",
+          "available": false
+        },
+        {
+          "domain": "auditlift.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "auditkind.com",
+          "available": false
+        },
+        {
+          "domain": "auditkind.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "audirise.com",
+          "available": false
+        },
+        {
+          "domain": "audirise.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "auditella.com",
+          "available": true,
+          "years": 1,
+          "price": 11.25,
+          "renewalPrice": 11.25,
+          "premium": false
+        },
+        {
+          "domain": "auditella.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "audelio.com",
+          "available": false
+        },
+        {
+          "domain": "audelio.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "audely.com",
+          "available": false
+        },
+        {
+          "domain": "audely.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "auvren.com",
+          "available": false
+        },
+        {
+          "domain": "auvren.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "ternwell.com",
+          "available": false
+        },
+        {
+          "domain": "ternwell.ai",
+          "available": false
+        },
+        {
+          "domain": "keenfolio.com",
+          "available": false
+        },
+        {
+          "domain": "keenfolio.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "scopekind.com",
+          "available": true,
+          "years": 1,
+          "price": 11.25,
+          "renewalPrice": 11.25,
+          "premium": false
+        },
+        {
+          "domain": "scopekind.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "scopeweave.com",
+          "available": false
+        },
+        {
+          "domain": "scopeweave.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "trailweave.com",
+          "available": false
+        },
+        {
+          "domain": "trailweave.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "workverity.com",
+          "available": false
+        },
+        {
+          "domain": "workverity.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "vouchory.com",
+          "available": false
+        },
+        {
+          "domain": "vouchory.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "audentra.com",
+          "available": false
+        },
+        {
+          "domain": "audentra.ai",
+          "available": false
+        },
+        {
+          "domain": "auditoria.com",
+          "available": false
+        },
+        {
+          "domain": "auditoria.ai",
+          "available": false
+        },
+        {
+          "domain": "quorlen.com",
+          "available": false
+        },
+        {
+          "domain": "quorlen.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "keenvia.com",
+          "available": false
+        },
+        {
+          "domain": "keenvia.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "audixen.com",
+          "available": false
+        },
+        {
+          "domain": "audixen.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "corrolyn.com",
+          "available": true,
+          "years": 1,
+          "price": 11.25,
+          "renewalPrice": 11.25,
+          "premium": false
+        },
+        {
+          "domain": "corrolyn.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "fieldquill.com",
+          "available": false
+        },
+        {
+          "domain": "fieldquill.ai",
+          "available": false
+        }
+      ]
+    },
+    {
+      "label": "finalists",
+      "results": [
+        {
+          "domain": "inquello.com",
+          "available": true,
+          "years": 1,
+          "price": 11.25,
+          "renewalPrice": 11.25,
+          "premium": false
+        },
+        {
+          "domain": "inquello.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "scopekind.com",
+          "available": true,
+          "years": 1,
+          "price": 11.25,
+          "renewalPrice": 11.25,
+          "premium": false
+        },
+        {
+          "domain": "scopekind.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "verimble.com",
+          "available": true,
+          "years": 1,
+          "price": 11.25,
+          "renewalPrice": 11.25,
+          "premium": false
+        },
+        {
+          "domain": "verimble.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "auditstride.com",
+          "available": false
+        },
+        {
+          "domain": "auditstride.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "auditrove.com",
+          "available": false
+        },
+        {
+          "domain": "auditrove.ai",
+          "available": true,
+          "years": 2,
+          "price": 160,
+          "renewalPrice": 160,
+          "premium": false
+        },
+        {
+          "domain": "useauditstride.com",
+          "available": true,
+          "years": 1,
+          "price": 11.25,
+          "renewalPrice": 11.25,
+          "premium": false
+        },
+        {
+          "domain": "getauditstride.com",
+          "available": true,
+          "years": 1,
+          "price": 11.25,
+          "renewalPrice": 11.25,
+          "premium": false
+        },
+        {
+          "domain": "auditstride.app",
+          "available": true,
+          "years": 1,
+          "price": 14.99,
+          "renewalPrice": 15,
+          "premium": false
+        },
+        {
+          "domain": "useauditrove.com",
+          "available": true,
+          "years": 1,
+          "price": 11.25,
+          "renewalPrice": 11.25,
+          "premium": false
+        }
+      ]
+    }
+  ]
+}

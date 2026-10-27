@@ -1,0 +1,12 @@
+# Bytecode and tool caches
+__pycache__/
+*.py[cod]
+**/.working/uv-cache/
+
+# BMAD personal install answers (see _bmad/custom/.gitignore)
+*.user.toml
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini

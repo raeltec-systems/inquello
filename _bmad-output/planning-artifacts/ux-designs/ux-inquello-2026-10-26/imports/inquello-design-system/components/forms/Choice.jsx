@@ -1,0 +1,8 @@
+import React from 'react';
+export function Choice({ type = 'radio', checked, label, description, onChange }) {
+  const box = type === 'radio'
+    ? React.createElement('span', { style: { width: 14, height: 14, borderRadius: '50%', border: '1.5px solid ' + (checked ? 'var(--blue-600)' : '#bfc5cc'), boxSizing: 'border-box', flex: 'none', marginTop: 2, display: 'flex', alignItems: 'center', justifyContent: 'center' } }, React.createElement('span', { style: { width: 6, height: 6, borderRadius: '50%', background: checked ? 'var(--blue-600)' : 'transparent' } }))
+    : React.createElement('span', { style: { width: 16, height: 16, borderRadius: 4, border: '1.5px solid ' + (checked ? 'var(--ink-900)' : 'var(--ink-300)'), background: checked ? 'var(--ink-900)' : 'var(--white)', color: 'var(--white)', fontSize: 10, lineHeight: '13px', textAlign: 'center', boxSizing: 'border-box', flex: 'none', marginTop: 1 } }, checked ? '✓' : '');
+  return React.createElement('div', { role: type, 'aria-checked': !!checked, onClick: () => onChange && onChange(!checked), style: { display: 'flex', gap: 10, padding: description ? '9px 10px' : '6px 8px', border: description ? '1px solid ' + (checked ? 'var(--blue-600)' : 'var(--border-default)') : 'none', background: description && checked ? 'var(--blue-50)' : 'transparent', borderRadius: 'var(--radius-md)', cursor: 'pointer' } },
+    box, React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 1 } }, React.createElement('span', { style: { font: 'var(--weight-medium) 13px/1.4 var(--font-sans)' } }, label), description ? React.createElement('span', { style: { font: 'var(--type-caption)', color: 'var(--text-muted)' } }, description) : null));
+}

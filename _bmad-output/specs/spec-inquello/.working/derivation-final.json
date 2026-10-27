@@ -1,0 +1,15 @@
+{
+  "derivation": "final revision from acknowledged base decisions plus logged support-language amendment",
+  "status": "final",
+  "capabilities": 25,
+  "capability_ids_changed": false,
+  "adopted_sources_edited": false,
+  "outputs": {
+    "SPEC.md": {
+      "sha256": "37c30bf7024830d8408a97053941c8cb356a9f41ae8e7993da426374d102d060"
+    },
+    "scope-and-gates.md": {
+      "sha256": "4acaba1043638091677331608b8c5de4de6b4606c54a3ed23d51686f011d7987"
+    }
+  }
+}

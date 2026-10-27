@@ -1,0 +1,39 @@
+<!-- @dsCard group="Workspace" viewport="1440x900" name="Workspace UI kit" subtitle="Start, active work, review and automations" -->
+<!doctype html><html><head><meta charset="utf-8"><title>Inquello · Workspace UI kit</title>
+<link rel="icon" type="image/svg+xml" href="../../assets/logo/inquello-app-icon-small.svg">
+<link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone@7.26.4/babel.min.js"></script>
+<script src="../../components/preview-loader.js"></script>
+<script src="data.js"></script>
+<script type="text/babel" src="Shell.jsx"></script>
+<script type="text/babel" src="StartScreen.jsx"></script>
+<script type="text/babel" src="ActiveScreen.jsx"></script>
+<script type="text/babel" src="ReviewScreen.jsx"></script>
+<script type="text/babel" src="AutomationsScreen.jsx"></script>
+</head><body style="margin:0;height:100vh;overflow:hidden"><div id="root" style="height:100%"></div>
+<script type="text/babel">
+function App() {
+  const D = window.IQDATA;
+  const [screen, setScreen] = React.useState(localStorage.getItem('iq-kit-screen') || 'active');
+  const [collapsed, setCollapsed] = React.useState(false);
+  const [items, setItems] = React.useState(D.items);
+  const [running, setRunning] = React.useState(true);
+  const [approved, setApproved] = React.useState(false);
+  const [toast, setToast] = React.useState(null);
+  const go = s => { setScreen(s); localStorage.setItem('iq-kit-screen', s); };
+  const notify = t => { setToast(t); clearTimeout(window.__iqT); window.__iqT = setTimeout(() => setToast(null), 2600); };
+  const decide = (id, status) => setItems(xs => xs.map(x => x.id === id ? { ...x, status, decidedBy: 'PR' } : x));
+  const onItem = id => go('review');
+  return <div style={{ display: 'flex', height: '100%', background: 'var(--surface-app)' }}>
+    <Sidebar screen={screen} go={go} collapsed={collapsed} setCollapsed={setCollapsed} running={running} />
+    {screen === 'start' ? <StartScreen onStart={() => { setRunning(true); go('active'); }} />
+      : screen === 'review' ? <ReviewScreen rows={D.rows} items={items} decide={decide} back={() => go('active')} notify={notify} />
+      : screen === 'automations' ? <AutomationsScreen autos={D.autos} notify={notify} />
+      : <ActiveScreen items={items} onItem={onItem} running={running} setRunning={setRunning} approved={approved} setApproved={setApproved} notify={notify} />}
+    <div style={{ position: 'fixed', top: 14, left: '50%', transform: 'translateX(-50%)', zIndex: 10 }}><Toast visible={!!toast}>{toast}</Toast></div>
+  </div>;
+}
+IQ.ready.then(DS => { Object.assign(window, DS); ReactDOM.createRoot(document.getElementById('root')).render(<App />); });
+</script></body></html>

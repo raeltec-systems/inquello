@@ -1,0 +1,1448 @@
+[
+  {
+    "id": "C01",
+    "feature": "Codex in the ChatGPT desktop app",
+    "audit_feature": "Auditor desktop workbench",
+    "codex_behavior": "The desktop experience brings projects, chats, agent activity, files, execution tools, review, configuration and execution-location choices into one workspace. Available features differ by operating system, account and client release.",
+    "trigger": "The auditor opens a workspace or starts a task.",
+    "inputs": [
+      "Working folder and audit materials",
+      "Task instructions and permitted tools",
+      "Existing conversations and outputs"
+    ],
+    "audit_action": "Coordinate audit work through conversation while keeping source material, workpapers, calculations and agent progress inspectable beside it.",
+    "outputs": [
+      "Reviewable work artifacts",
+      "Task progress and action history",
+      "Links to existing files and tools"
+    ],
+    "auditor_control": "Choose the task and execution location, inspect changes, steer work, and open the same saved artifacts in external editors.",
+    "example": "Ask for a loan-interest reconciliation, inspect its workbook beside the chat, then continue reviewing that workbook in Excel.",
+    "adaptation_boundary": "Retain the working experience while replacing developer emphasis with audit materials. Embedded editing depth and platform parity require validation; a desktop workspace alone does not establish formal audit records.",
+    "evidence": [
+      {
+        "url": "https://learn.chatgpt.com/docs/artifacts-viewer?surface=app",
+        "label": "File previews and review surfaces",
+        "status": "checked-2026-10-26"
+      },
+      {
+        "url": "https://learn.chatgpt.com/docs/environments/modes",
+        "label": "Desktop execution choices",
+        "status": "checked-2026-10-26"
+      }
+    ],
+    "subfeatures": [
+      {
+        "codex": "Chat beside files and previews",
+        "audit": "Conversation beside evidence and workpapers"
+      },
+      {
+        "codex": "Agent activity and terminal",
+        "audit": "Visible analysis jobs and inspectable execution"
+      },
+      {
+        "codex": "Git/review views",
+        "audit": "Review changed audit work and its supporting calculations"
+      },
+      {
+        "codex": "Settings, skills and plugins",
+        "audit": "Configure the same assistance mechanisms around audit work"
+      }
+    ],
+    "audit_enhancements": [
+      {
+        "change": "Show workbook ranges, document passages and evidence references beside the conversation.",
+        "why": "Auditors review work in units that differ from code lines."
+      },
+      {
+        "change": "Provide an explicit open-in-existing-tool path for supported artifacts.",
+        "why": "Review must continue in established applications without replacing the underlying work files."
+      }
+    ]
+  },
+  {
+    "id": "C02",
+    "feature": "Projects, chats, and navigation",
+    "audit_feature": "Audit workspaces and focused work conversations",
+    "codex_behavior": "Projects group files, instructions and chats; local projects can attach folders. Each chat retains its own transcript. Navigation supports search, renaming, pinning and archival. CLI and IDE project context follow their directory or workspace.",
+    "trigger": "Start a new assignment, standalone investigation or conversation within an existing workspace.",
+    "inputs": [
+      "Related folders and sources",
+      "Workspace instructions",
+      "Prior tasks and named outcomes"
+    ],
+    "audit_action": "Group related audit work and start separate conversations for distinct outcomes, with explicit access to the relevant files and guidance.",
+    "outputs": [
+      "Organised task history",
+      "Searchable work conversations",
+      "Reusable workspace context"
+    ],
+    "auditor_control": "Select attached folders, rename or pin recurring work, and archive or restore completed conversations.",
+    "example": "Keep rate-change testing, borrower communications review and report drafting in separate chats under the same assignment.",
+    "adaptation_boundary": "A workspace can support ad hoc work or a formal engagement. Folder organisation and pinning do not themselves grant access or enforce confidentiality; primary-folder instruction discovery needs explicit treatment.",
+    "evidence": [
+      {
+        "url": "https://learn.chatgpt.com/docs/projects",
+        "label": "Projects and chats",
+        "status": "checked-2026-10-26"
+      }
+    ],
+    "subfeatures": [
+      {
+        "codex": "Projectless chat",
+        "audit": "Standalone audit question without creating an engagement"
+      },
+      {
+        "codex": "Multiple project chats",
+        "audit": "Separate workstreams sharing selected materials"
+      },
+      {
+        "codex": "Attached primary and secondary folders",
+        "audit": "Related evidence and working-file locations with explicit guidance scope"
+      },
+      {
+        "codex": "Search, pin, rename, archive and restore",
+        "audit": "Find and organise current and completed audit conversations"
+      }
+    ],
+    "audit_enhancements": [
+      {
+        "change": "Use assignment, client and reporting-period labels while retaining standalone tasks.",
+        "why": "Auditors must distinguish related work without forcing every request into an engagement."
+      },
+      {
+        "change": "Show which instructions and folders belong to the current task.",
+        "why": "Similar files from different periods or clients can otherwise be mistaken for the applicable material."
+      }
+    ]
+  },
+  {
+    "id": "C03",
+    "feature": "Codex CLI",
+    "audit_feature": "Auditor command-line and batch work client",
+    "codex_behavior": "The CLI supports interactive investigation, planning, file edits, tool execution and review within a directory. Non-interactive codex exec can run scripted tasks and emit structured events for other processes to consume.",
+    "trigger": "An auditor or analyst starts an interactive command, or an authorised job invokes a saved task.",
+    "inputs": [
+      "Workspace path and task prompt",
+      "Source files and procedures",
+      "Configured tools and permissions"
+    ],
+    "audit_action": "Offer the same audit assistance through a terminal for technical auditors, data analysts and repeatable batch jobs.",
+    "outputs": [
+      "Working files and analysis results",
+      "Readable task response",
+      "Structured execution events for automation"
+    ],
+    "auditor_control": "Set working directory, execution scope and requested output; interrupt interactive work or review batch results before relying on them.",
+    "example": "An IT auditor runs a saved access-review procedure against an approved directory export and receives an exceptions file.",
+    "adaptation_boundary": "Keep the CLI as a legitimate surface rather than forcing all auditors into it. Installed analysis tools, input formats and event consumers determine what an individual job can do.",
+    "evidence": [
+      {
+        "url": "https://learn.chatgpt.com/docs/cli/reference",
+        "label": "CLI commands",
+        "status": "inherited-2026-10-22"
+      },
+      {
+        "url": "https://learn.chatgpt.com/docs/non-interactive-mode",
+        "label": "Non-interactive execution",
+        "status": "inherited-2026-10-22"
+      }
+    ],
+    "subfeatures": [
+      {
+        "codex": "Interactive repository work",
+        "audit": "Interactive investigation of an audit folder"
+      },
+      {
+        "codex": "Non-interactive exec",
+        "audit": "Reusable headless audit jobs"
+      },
+      {
+        "codex": "Structured JSONL events",
+        "audit": "Machine-readable job progress and results"
+      },
+      {
+        "codex": "Resume and cloud handoff",
+        "audit": "Continue eligible work through another execution surface"
+      }
+    ],
+    "audit_enhancements": [
+      {
+        "change": "Accept named audit procedures and structured procedure parameters through the command surface.",
+        "why": "Repeated analyses need explicit period, population and criteria inputs rather than only a freeform prompt."
+      }
+    ]
+  },
+  {
+    "id": "C04",
+    "feature": "CLI command and session controls",
+    "audit_feature": "Audit task command and session controls",
+    "codex_behavior": "CLI and slash commands manage sessions, plans, goals, models, permissions, tools and review. Commands also expose context compaction, configuration, keymaps and reconnect controls. Maturity varies: some cloud and remote-control commands remain experimental.",
+    "trigger": "The auditor invokes a task control through a command, shortcut or equivalent interface action.",
+    "inputs": [
+      "Current task state",
+      "Selected command and parameters",
+      "User configuration and policy"
+    ],
+    "audit_action": "Expose the same task-management operations using audit-friendly labels while preserving access for power users.",
+    "outputs": [
+      "Updated task or session state",
+      "Requested review or plan",
+      "Visible configuration and status"
+    ],
+    "auditor_control": "Explicitly choose operations that change execution, permissions, context or task direction.",
+    "example": "Pause analysis, inspect its status, revise the plan, change the model effort, then resume the same investigation.",
+    "adaptation_boundary": "Command names are not audit controls by themselves. Preserve actual semantics and maturity labels; do not imply experimental remote or cloud commands are universally available.",
+    "evidence": [
+      {
+        "url": "https://learn.chatgpt.com/docs/cli/reference",
+        "label": "CLI command reference",
+        "status": "inherited-2026-10-22"
+      },
+      {
+        "url": "https://learn.chatgpt.com/docs/developer-commands",
+        "label": "Interactive commands",
+        "status": "inherited-2026-10-22"
+      }
+    ],
+    "subfeatures": [
+      {
+        "codex": "Start, resume, fork and export",
+        "audit": "Manage investigation sessions and alternate approaches"
+      },
+      {
+        "codex": "Plan, goal and review",
+        "audit": "Control a work approach, objective and review pass"
+      },
+      {
+        "codex": "Model, status and compaction",
+        "audit": "Control effort and inspect available working context"
+      },
+      {
+        "codex": "Permissions and sandbox",
+        "audit": "Adjust permitted analysis actions within policy"
+      },
+      {
+        "codex": "Agents, subagents, apps, plugins and hooks",
+        "audit": "Manage assistance and extension mechanisms"
+      },
+      {
+        "codex": "Login, logout and project navigation",
+        "audit": "Select identity and working scope"
+      },
+      {
+        "codex": "Config, keymap, editor and completions",
+        "audit": "Personalise controls without changing audit methods"
+      },
+      {
+        "codex": "Daemon reconnect and remote/cloud handoff",
+        "audit": "Recover or move supported sessions"
+      }
+    ],
+    "audit_enhancements": [
+      {
+        "change": "Expose audit-friendly labels and descriptions for task controls while retaining power-user commands.",
+        "why": "Users should understand execution, review and context operations without knowing developer terminology."
+      }
+    ]
+  },
+  {
+    "id": "C05",
+    "feature": "Agent Command Center (`codex agents`)",
+    "audit_feature": "Audit agent and workstream command center",
+    "codex_behavior": "The command center lists chats and their status on a shared local or remote server and lets a user switch into them. It is a coordination surface separate from spawning delegated subagents.",
+    "trigger": "The auditor opens the task command center to inspect ongoing work.",
+    "inputs": [
+      "Accessible server and chats",
+      "Task status and attention signals",
+      "User-selected workstream"
+    ],
+    "audit_action": "Provide one place to see active audit investigations, identify work awaiting input, and enter the relevant conversation.",
+    "outputs": [
+      "Workstream status list",
+      "Direct access to task context",
+      "Attention items"
+    ],
+    "auditor_control": "Choose which investigation to enter and respond to its questions; visibility remains bounded by accessible work.",
+    "example": "Move between a loan recalculation, an access review and report preparation without losing each conversation's context.",
+    "adaptation_boundary": "Preserve the distinction between finding a running task and directing a delegated agent. A shared server list does not by itself provide organisation-wide audit portfolio management or new access rights.",
+    "evidence": [
+      {
+        "url": "https://learn.chatgpt.com/docs/cli/reference",
+        "label": "codex agents command",
+        "status": "inherited-2026-10-22"
+      }
+    ],
+    "subfeatures": [
+      {
+        "codex": "Local/remote server task list",
+        "audit": "Accessible audit workstreams by execution server"
+      },
+      {
+        "codex": "Task status",
+        "audit": "Identify work running, finished or requiring attention"
+      },
+      {
+        "codex": "Switch into a chat",
+        "audit": "Resume the chosen investigation in context"
+      }
+    ],
+    "audit_enhancements": [
+      {
+        "change": "Display assignment and tested period beside each workstream's status.",
+        "why": "Auditors need to distinguish similarly named investigations across clients and periods."
+      }
+    ]
+  },
+  {
+    "id": "C06",
+    "feature": "IDE extension",
+    "audit_feature": "Assistance inside an auditor's working application",
+    "codex_behavior": "The IDE extension provides Codex conversation and tools within supported code editors, using the open workspace and selected context. Its integration, orchestration and review features differ from desktop and CLI clients.",
+    "trigger": "The auditor opens an available extension in a supported working tool and asks about selected material.",
+    "inputs": [
+      "Current workbook, document or presentation",
+      "Selected content where exposed",
+      "Task instructions and available tools"
+    ],
+    "audit_action": "Bring conversation and contextual assistance beside the work already open in an auditor's application, using supported integration mechanisms.",
+    "outputs": [
+      "Contextual explanations and proposed changes",
+      "Updated artifacts where supported",
+      "A continuing task conversation"
+    ],
+    "auditor_control": "Select the material and requested action, inspect proposed changes, and choose whether to apply them.",
+    "example": "Select an exceptions table in a supported Excel extension and ask the agent to explain differences or prepare follow-up questions.",
+    "adaptation_boundary": "This directly mirrors the IDE-extension experience. It is additional to shared-file assistance; basic use of saved Office files does not depend on building an add-in. Live selection and unsaved state require explicit host support.",
+    "evidence": [
+      {
+        "url": "https://learn.chatgpt.com/docs/projects",
+        "label": "IDE workspace and selection context",
+        "status": "checked-2026-10-26"
+      },
+      {
+        "url": "https://learn.chatgpt.com/docs/codex/ide",
+        "label": "IDE capability baseline",
+        "status": "inherited-2026-10-22"
+      }
+    ],
+    "subfeatures": [
+      {
+        "codex": "Conversation inside editor",
+        "audit": "Conversation beside current audit work"
+      },
+      {
+        "codex": "Workspace/open-file context",
+        "audit": "Current artifact context under host permissions"
+      },
+      {
+        "codex": "Selection context",
+        "audit": "Ask about a selected range, paragraph or slide"
+      },
+      {
+        "codex": "Review and apply changes",
+        "audit": "Inspect and accept supported changes without leaving the working tool"
+      }
+    ],
+    "audit_enhancements": [
+      {
+        "change": "Map host selection to stable range, paragraph or slide references where the host supports them.",
+        "why": "Contextual assistance must identify the precise material being discussed."
+      },
+      {
+        "change": "Expose whether context is saved file state or live application state.",
+        "why": "The agent and auditor must not unknowingly work from different versions."
+      }
+    ]
+  },
+  {
+    "id": "C07",
+    "feature": "Codex Cloud",
+    "audit_feature": "Remote audit execution workspace",
+    "codex_behavior": "Cloud tasks run in prepared remote workspaces with selected repositories, dependencies and tools. Work can continue while the local computer sleeps, and users can inspect results and follow up on the task.",
+    "trigger": "The auditor starts or delegates an eligible task to a prepared cloud environment.",
+    "inputs": [
+      "Explicitly supplied working materials",
+      "Prepared analysis tools and procedure",
+      "Authorised remote service access"
+    ],
+    "audit_action": "Execute an audit analysis or document task remotely and return its artifacts and task history for review.",
+    "outputs": [
+      "Analysis results and workpapers",
+      "Execution progress and logs",
+      "Proposed changes or a review package"
+    ],
+    "auditor_control": "Select what is provided to the remote task, follow progress, stop work and review its returned outputs.",
+    "example": "Run an overnight reconciliation on an approved extract and review the exceptions the following morning.",
+    "adaptation_boundary": "A cloud task cannot assume access to the auditor's local Excel session, local-only folders, VPN or browser sign-in. Residency, tools and permissions depend on the selected execution route.",
+    "evidence": [
+      {
+        "url": "https://learn.chatgpt.com/docs/cloud",
+        "label": "Codex Cloud",
+        "status": "inherited-2026-10-22"
+      },
+      {
+        "url": "https://learn.chatgpt.com/docs/environments/cloud-environments",
+        "label": "Prepared cloud environments",
+        "status": "inherited-2026-10-22"
+      }
+    ],
+    "subfeatures": [
+      {
+        "codex": "Prepared remote environment",
+        "audit": "Reusable audit execution environment"
+      },
+      {
+        "codex": "Task-specific working files",
+        "audit": "Scoped materials for a remote analysis"
+      },
+      {
+        "codex": "Continue while computer sleeps",
+        "audit": "Long remote analyses independent of the workstation"
+      },
+      {
+        "codex": "Inspect and follow up results",
+        "audit": "Review findings and request further testing in context"
+      }
+    ],
+    "audit_enhancements": [
+      {
+        "change": "Make the supplied dataset version and procedure version visible in remote results.",
+        "why": "The reviewer must know what an unattended analysis actually examined."
+      }
+    ]
+  },
+  {
+    "id": "C08",
+    "feature": "Mobile and remote control",
+    "audit_feature": "Remote steering and review of audit work",
+    "codex_behavior": "Supported mobile and remote clients can start, steer, approve and review tasks running on a connected host or in Cloud. Execution retains the chosen host's files, tools and permissions; the mobile device is a control surface.",
+    "trigger": "The auditor connects from a supported remote device to accessible work.",
+    "inputs": [
+      "Connected execution host or cloud task",
+      "Current task status",
+      "User instructions or approval response"
+    ],
+    "audit_action": "Let the auditor monitor and steer an investigation away from the workstation while preserving its execution context.",
+    "outputs": [
+      "Task updates and reviewable results",
+      "Recorded steering or decisions",
+      "Continued work on the execution host"
+    ],
+    "auditor_control": "Choose the host and task, inspect what an approval authorises, and interrupt or revise the work.",
+    "example": "During a site visit, check an ongoing reconciliation and tell the agent to investigate one flagged branch further.",
+    "adaptation_boundary": "Phone access does not move all data or execution onto the phone. Mobile remote workflows and the experimental CLI remote-control command have different maturity and platform conditions.",
+    "evidence": [
+      {
+        "url": "https://learn.chatgpt.com/docs/mobile",
+        "label": "Mobile task control",
+        "status": "inherited-2026-10-22"
+      },
+      {
+        "url": "https://learn.chatgpt.com/docs/remote-connections",
+        "label": "Remote hosts and connections",
+        "status": "inherited-2026-10-22"
+      }
+    ],
+    "subfeatures": [
+      {
+        "codex": "Start and steer remotely",
+        "audit": "Direct audit work from another device"
+      },
+      {
+        "codex": "Remote approvals and review",
+        "audit": "Respond to scoped requests and inspect findings"
+      },
+      {
+        "codex": "Host-bound execution",
+        "audit": "Retain the authorised data and tool environment"
+      },
+      {
+        "codex": "Supported host handoff",
+        "audit": "Move an eligible investigation with explicit context transfer"
+      }
+    ],
+    "audit_enhancements": [
+      {
+        "change": "Present concise findings with accessible supporting evidence on the remote review surface.",
+        "why": "An auditor away from the desk needs enough context to steer responsibly."
+      }
+    ]
+  },
+  {
+    "id": "C09",
+    "feature": "Codex Micro hardware controls",
+    "audit_feature": "Physical controls for audit task navigation",
+    "codex_behavior": "Codex Micro is a limited-run input device whose keys and other controls can reflect chat status and invoke desktop actions, skills, voice and navigation. Availability depends on hardware, companion software and operating-system permissions.",
+    "trigger": "The auditor presses or turns an assigned physical control.",
+    "inputs": [
+      "User-defined task/action bindings",
+      "Current workstream status",
+      "Connected supported hardware"
+    ],
+    "audit_action": "Offer optional physical shortcuts to switch investigations, dictate instructions, invoke a procedure or inspect a task needing attention.",
+    "outputs": [
+      "Selected conversation or action",
+      "Physical status indication",
+      "Invoked task control"
+    ],
+    "auditor_control": "Choose bindings and keep the meaning of consequential commands visible before using them.",
+    "example": "Bind keys to three active assignments and use a voice control to add an observation during a walkthrough.",
+    "adaptation_boundary": "This is retained in the feature mirror as an optional peripheral. It does not require designing new hardware, and a physical approval key cannot establish professional sign-off semantics by itself.",
+    "evidence": [
+      {
+        "url": "https://learn.chatgpt.com/docs/features/codex-micro",
+        "label": "Codex Micro hardware",
+        "status": "inherited-2026-10-22"
+      }
+    ],
+    "subfeatures": [
+      {
+        "codex": "Agent Keys show chat status",
+        "audit": "Physical indicators for active audit tasks"
+      },
+      {
+        "codex": "Command Keys invoke actions/skills",
+        "audit": "Shortcuts to configured procedures and work controls"
+      },
+      {
+        "codex": "Stick, dial and voice controls",
+        "audit": "Navigate work and dictate observations"
+      }
+    ],
+    "audit_enhancements": [
+      {
+        "change": "Name bindings with the audit task and action they invoke.",
+        "why": "A shortcut must remain understandable when several assignments are active."
+      }
+    ]
+  },
+  {
+    "id": "C10",
+    "feature": "Local, worktree, and cloud environments",
+    "audit_feature": "Choice of working location and isolated analysis copies",
+    "codex_behavior": "A task can run in its local project directory, an isolated Git worktree, or a remote workspace created from a published environment. Supported handoff changes where work runs and which working files it uses.",
+    "trigger": "The auditor starts a task or moves eligible work to another environment.",
+    "inputs": [
+      "Source workspace and permitted materials",
+      "Selected execution location",
+      "Analysis tools and configuration"
+    ],
+    "audit_action": "Offer direct work on current artifacts, an isolated working copy for parallel investigation, or prepared remote execution.",
+    "outputs": [
+      "Changed working artifacts",
+      "Separately reviewable analysis alternatives",
+      "Task context tied to its environment"
+    ],
+    "auditor_control": "Select the environment, understand its data access, and reconcile results before replacing shared working files.",
+    "example": "Compare two sampling approaches in isolated work areas while retaining the original population extract.",
+    "adaptation_boundary": "Git worktrees remain usable for suitable versioned material. Applying isolation to complex Office files requires checking copy/version/merge behavior; neither a worktree nor a working copy is an independent confidentiality boundary.",
+    "evidence": [
+      {
+        "url": "https://learn.chatgpt.com/docs/environments/modes",
+        "label": "Execution modes",
+        "status": "checked-2026-10-26"
+      },
+      {
+        "url": "https://learn.chatgpt.com/docs/environments/git-worktrees",
+        "label": "Git worktree lifecycle",
+        "status": "inherited-2026-10-22"
+      }
+    ],
+    "subfeatures": [
+      {
+        "codex": "Local mode",
+        "audit": "Work on authorised current files"
+      },
+      {
+        "codex": "Worktree mode",
+        "audit": "Isolate competing edits or investigation variants"
+      },
+      {
+        "codex": "Cloud mode",
+        "audit": "Run with explicitly supplied remote materials"
+      },
+      {
+        "codex": "Environment handoff",
+        "audit": "Move eligible work while making context and file changes explicit"
+      }
+    ],
+    "audit_enhancements": [
+      {
+        "change": "Support isolated copies or versions of supported audit artifacts with explicit reconciliation of changes.",
+        "why": "Office files cannot be assumed to merge like source-code text."
+      }
+    ]
+  },
+  {
+    "id": "C11",
+    "feature": "Agent harness / tool loop",
+    "audit_feature": "Audit agent execution loop",
+    "codex_behavior": "The harness maintains turn state, requests model responses, routes tool calls, applies relevant permissions, streams activity and persists supported task history. The model proposes work while tools perform permitted operations.",
+    "trigger": "An auditor submits a task or a configured task receives an authorised continuation.",
+    "inputs": [
+      "Objective and working context",
+      "Available tool definitions",
+      "Permissions and prior tool results"
+    ],
+    "audit_action": "Use the same iterative loop to inspect evidence, calculate or transform data, inspect results, revise work and explain the outcome.",
+    "outputs": [
+      "Working artifacts and findings",
+      "Tool results and visible progress",
+      "Resumable task context"
+    ],
+    "auditor_control": "Steer the objective, set accessible resources, respond to approvals and stop work.",
+    "example": "Investigate a reconciliation difference by reading extracts, running a calculation, inspecting unmatched items and drafting an explanation.",
+    "adaptation_boundary": "The audit mirror changes tools, context and procedures while preserving the execution loop. The public harness is separate from model services, hosted integrations and the complete desktop interface.",
+    "evidence": [
+      {
+        "url": "https://developers.openai.com/blog/codex-as-a-platform",
+        "label": "Open agent harness and client boundary",
+        "status": "inherited-2026-10-22"
+      },
+      {
+        "url": "https://learn.chatgpt.com/docs/app-server",
+        "label": "Task and tool protocol",
+        "status": "inherited-2026-10-22"
+      }
+    ],
+    "subfeatures": [
+      {
+        "codex": "Model requests and tool routing",
+        "audit": "Reason over evidence and execute authorised analyses"
+      },
+      {
+        "codex": "Tool-result feedback loop",
+        "audit": "Investigate further based on actual results"
+      },
+      {
+        "codex": "Permission enforcement",
+        "audit": "Keep actions within the task's authority"
+      },
+      {
+        "codex": "Streaming and persistence",
+        "audit": "Make work inspectable and continuable"
+      }
+    ],
+    "audit_enhancements": [
+      {
+        "change": "Supply audit procedures, artifact-aware tools and evidence context to the retained execution loop.",
+        "why": "The loop is general-purpose; the relevant criteria and work objects make its assistance useful to auditors."
+      }
+    ]
+  },
+  {
+    "id": "C12",
+    "feature": "Parallel independent read-only lookups",
+    "audit_feature": "Concurrent retrieval of independent audit context",
+    "codex_behavior": "Documented CLI changes allow independent read-only lookups, including skill, memory and conversation-history reads, to run concurrently. This is a retrieval optimisation, separate from delegated subagents and concurrent writes.",
+    "trigger": "A task needs several independent pieces of context.",
+    "inputs": [
+      "Independent context requests",
+      "Permitted skills, memory or history",
+      "Source-specific results or failures"
+    ],
+    "audit_action": "Retrieve eligible independent guidance and task history concurrently, then combine the returned context for the main investigation.",
+    "outputs": [
+      "Retrieved context with its source",
+      "Individual lookup failures",
+      "A combined working context"
+    ],
+    "auditor_control": "Choose accessible sources and inspect material used; source permissions remain unchanged by concurrent retrieval.",
+    "example": "Load the configured reconciliation procedure and the current task's earlier decisions at the same time.",
+    "adaptation_boundary": "Preserve the narrow documented scope. Do not infer safe simultaneous workbook changes, unrestricted parallel connector requests, or a guarantee that every tool read can execute concurrently.",
+    "evidence": [
+      {
+        "url": "https://learn.chatgpt.com/docs/changelog",
+        "label": "Parallel read-only lookup release notes",
+        "status": "inherited-2026-10-22"
+      }
+    ],
+    "subfeatures": [
+      {
+        "codex": "Independent skill reads",
+        "audit": "Retrieve relevant procedures without serial delay"
+      },
+      {
+        "codex": "Memory and conversation-history reads",
+        "audit": "Load eligible prior context alongside instructions"
+      },
+      {
+        "codex": "Single-agent result synthesis",
+        "audit": "Main investigator reconciles the returned context"
+      }
+    ],
+    "audit_enhancements": [
+      {
+        "change": "Retain source and assignment scope on retrieved guidance and history.",
+        "why": "Concurrent retrieval must not blend another client's facts or a superseded method into the task."
+      }
+    ]
+  },
+  {
+    "id": "C13",
+    "feature": "Threads and turns",
+    "audit_feature": "Persistent audit investigations and work turns",
+    "codex_behavior": "Threads can be started, read, resumed, forked, listed, archived or deleted through supported interfaces. Turns accept input, stream execution and reach completed, failed or interrupted states while retaining their thread context.",
+    "trigger": "Start a new investigation or send another instruction to existing work.",
+    "inputs": [
+      "Task history and current instructions",
+      "Current working files",
+      "Thread state and access scope"
+    ],
+    "audit_action": "Maintain a continuing audit conversation across questions, analysis runs, corrections and review responses.",
+    "outputs": [
+      "Task transcript and artifacts",
+      "Turn completion or failure status",
+      "Alternative investigation branches"
+    ],
+    "auditor_control": "Resume an investigation, fork a different approach, interrupt a turn and manage chat visibility under applicable policy.",
+    "example": "Resume an inventory investigation when missing count sheets arrive, retaining earlier questions and results.",
+    "adaptation_boundary": "A chat's current files may have changed since its earlier turn. Transcript persistence, archiving and deletion are distinct from approved workpaper retention or immutable audit records.",
+    "evidence": [
+      {
+        "url": "https://learn.chatgpt.com/docs/app-server",
+        "label": "Thread and turn lifecycle",
+        "status": "inherited-2026-10-22"
+      }
+    ],
+    "subfeatures": [
+      {
+        "codex": "Start/read/list/resume",
+        "audit": "Maintain and revisit investigations"
+      },
+      {
+        "codex": "Fork",
+        "audit": "Explore another approach while preserving prior conversation"
+      },
+      {
+        "codex": "Archive/delete",
+        "audit": "Manage chat lifecycle subject to record policy"
+      },
+      {
+        "codex": "Completed/failed/interrupted turns",
+        "audit": "Distinguish task outcomes and unfinished analysis"
+      }
+    ],
+    "audit_enhancements": [
+      {
+        "change": "Associate relied-on outputs with the input versions used in their turn.",
+        "why": "Resuming a conversation against changed evidence should not silently reuse an old conclusion."
+      }
+    ]
+  },
+  {
+    "id": "C14",
+    "feature": "Progress, steering, and interruption",
+    "audit_feature": "Visible and steerable audit execution",
+    "codex_behavior": "Clients stream messages, tool activity, command output, edits and approval requests. Supported surfaces let users answer questions, send follow-ups, steer or queue instructions, and interrupt the current turn.",
+    "trigger": "An analysis is running and the auditor observes progress or supplies new direction.",
+    "inputs": [
+      "Current execution state",
+      "User clarification or correction",
+      "Questions and approval requests"
+    ],
+    "audit_action": "Keep analysis visible and let the auditor correct scope, explain context or stop an unsuitable line of work as it develops.",
+    "outputs": [
+      "Updated task direction",
+      "Visible intermediate results",
+      "Completed or interrupted work state"
+    ],
+    "auditor_control": "Inspect actual tool results, respond to the agent, and stop the task without assuming already completed actions are undone.",
+    "example": "During procurement analysis, clarify which cancelled orders belong outside the population and ask the agent to revise the calculation.",
+    "adaptation_boundary": "Progress narration does not prove an action succeeded. Interruption and queued steering must preserve partial results and make unfinished work clear; behavior depends on the execution path.",
+    "evidence": [
+      {
+        "url": "https://learn.chatgpt.com/docs/long-running-work",
+        "label": "Steering long-running work",
+        "status": "inherited-2026-10-22"
+      },
+      {
+        "url": "https://learn.chatgpt.com/docs/app-server",
+        "label": "Streaming and interruption",
+        "status": "inherited-2026-10-22"
+      }
+    ],
+    "subfeatures": [
+      {
+        "codex": "Stream tool activity and edits",
+        "audit": "Inspect ongoing analysis and artifact changes"
+      },
+      {
+        "codex": "Answer questions and approvals",
+        "audit": "Supply missing context or scoped authorisation"
+      },
+      {
+        "codex": "Steer or queue follow-ups",
+        "audit": "Refine the investigation during work"
+      },
+      {
+        "codex": "Interrupt",
+        "audit": "Stop further work and inspect partial outputs"
+      }
+    ],
+    "audit_enhancements": [
+      {
+        "change": "Explain changed testing scope and identify results affected by a steering correction.",
+        "why": "A revised criterion may invalidate earlier calculations even though the conversation continues."
+      }
+    ]
+  },
+  {
+    "id": "C15",
+    "feature": "Plan mode and task lists",
+    "audit_feature": "Reviewable audit task planning",
+    "codex_behavior": "Supported clients can produce a plan and clarifying questions before making changes, expose a task checklist, and let the user refine the proposed approach. The plan is working guidance generated within the task.",
+    "trigger": "The auditor asks for an approach before analysis or artifact changes begin.",
+    "inputs": [
+      "Audit question and intended output",
+      "Available sources and constraints",
+      "Applicable procedure or methodology guidance"
+    ],
+    "audit_action": "Draft the sequence of work, identify missing evidence and propose checks that the auditor can revise before execution.",
+    "outputs": [
+      "Proposed task plan",
+      "Clarifying questions",
+      "Visible work checklist"
+    ],
+    "auditor_control": "Modify scope, methods and stopping conditions, then explicitly move from planning to execution where required.",
+    "example": "Plan an external-audit account analysis, identifying the assertions, supplied criteria, relevant records, procedure and expected supporting work.",
+    "adaptation_boundary": "This mirrors planning assistance. A model-generated checklist is not automatically an authorised engagement work program; professional approval requirements come from the applicable practice and record workflow.",
+    "evidence": [
+      {
+        "url": "https://learn.chatgpt.com/docs/developer-commands",
+        "label": "Planning command surface",
+        "status": "inherited-2026-10-22"
+      },
+      {
+        "url": "https://learn.chatgpt.com/docs/learn/best-practices",
+        "label": "Planning and context practices",
+        "status": "inherited-2026-10-22"
+      }
+    ],
+    "subfeatures": [
+      {
+        "codex": "Plan before edits",
+        "audit": "Agree the analysis approach before changing work"
+      },
+      {
+        "codex": "Clarification questions",
+        "audit": "Resolve scope and missing evidence"
+      },
+      {
+        "codex": "Editable task checklist",
+        "audit": "Track the proposed testing steps"
+      }
+    ],
+    "audit_enhancements": [
+      {
+        "change": "Express plans using objective, population, procedure, criteria, expected output and outstanding evidence.",
+        "why": "These elements let an auditor evaluate whether a proposed analysis addresses the question."
+      }
+    ]
+  },
+  {
+    "id": "C16",
+    "feature": "Goals and long-running tasks",
+    "audit_feature": "Persistent objectives for sustained audit work",
+    "codex_behavior": "Goals retain an objective, completion criteria and steering context while work continues across turns. Supported controls inspect, edit, pause, resume or clear the goal. Goal state is separate from general memory and reusable instructions.",
+    "trigger": "The auditor sets a sustained objective with explicit completion conditions.",
+    "inputs": [
+      "Objective and permitted scope",
+      "Completion criteria and limits",
+      "Current task evidence and progress"
+    ],
+    "audit_action": "Continue a bounded investigation through repeated analyses until its completion conditions are met, it needs input, or the auditor stops it.",
+    "outputs": [
+      "Progress toward the objective",
+      "Completed work products",
+      "Outstanding blockers or unfinished tests"
+    ],
+    "auditor_control": "Inspect and revise the objective, pause or resume it, and decide when the evidence supports ending the task.",
+    "example": "Reconcile the approved inventory extract to its control total and explain material unmatched items within an agreed time or cost allowance.",
+    "adaptation_boundary": "A persistent goal is not a schedule or an event subscription. Completing a task objective does not itself approve an audit conclusion or authorise scope expansion.",
+    "evidence": [
+      {
+        "url": "https://learn.chatgpt.com/docs/long-running-work",
+        "label": "Persistent objectives and controls",
+        "status": "inherited-2026-10-22"
+      },
+      {
+        "url": "https://learn.chatgpt.com/docs/config-file/config-reference",
+        "label": "Persisted goals feature setting",
+        "status": "checked-2026-10-26"
+      }
+    ],
+    "subfeatures": [
+      {
+        "codex": "Objective and stopping criteria",
+        "audit": "Bounded investigation outcome"
+      },
+      {
+        "codex": "Automatic continuation",
+        "audit": "Continue eligible work across task turns"
+      },
+      {
+        "codex": "Inspect/edit/pause/resume/clear",
+        "audit": "Retain control of sustained audit work"
+      }
+    ],
+    "audit_enhancements": [
+      {
+        "change": "State completion conditions in terms of reconciled populations, explained exceptions or reviewed outputs.",
+        "why": "A finished command or generated report is not necessarily the requested audit outcome."
+      }
+    ]
+  },
+  {
+    "id": "C17",
+    "feature": "Background tasks and parallel work",
+    "audit_feature": "Concurrent audit work in the background",
+    "codex_behavior": "Supported clients keep long commands, tasks and delegated work running while users attend to other work. Status views expose active or completed tasks and work needing attention, subject to host and client behavior.",
+    "trigger": "An auditor starts a longer job or multiple independent workstreams.",
+    "inputs": [
+      "Scoped tasks and permitted data",
+      "Execution resources",
+      "Task-specific instructions and tools"
+    ],
+    "audit_action": "Run eligible independent audit tasks concurrently and surface their results or requests for input without blocking unrelated work.",
+    "outputs": [
+      "Completed analyses or artifacts",
+      "Per-task status and failures",
+      "Requests for clarification or approval"
+    ],
+    "auditor_control": "Inspect and stop each task, prioritise attention, and review results before relying on them.",
+    "example": "Run duplicate-payment analysis while separately drafting walkthrough questions from a process narrative.",
+    "adaptation_boundary": "Background execution depends on host availability and the tools used. Two jobs editing the same workbook need coordination; GUI automation may occupy the foreground rather than allowing simultaneous human use.",
+    "evidence": [
+      {
+        "url": "https://learn.chatgpt.com/docs/long-running-work",
+        "label": "Long-running and parallel work",
+        "status": "inherited-2026-10-22"
+      },
+      {
+        "url": "https://learn.chatgpt.com/docs/computer-use",
+        "label": "Foreground GUI execution limits",
+        "status": "checked-2026-10-26"
+      }
+    ],
+    "subfeatures": [
+      {
+        "codex": "Long-running commands",
+        "audit": "Allow large analyses to finish while other work continues"
+      },
+      {
+        "codex": "Independent concurrent tasks",
+        "audit": "Separate audit procedures running in parallel"
+      },
+      {
+        "codex": "Attention and completion states",
+        "audit": "Surface results, failures and required input by workstream"
+      }
+    ],
+    "audit_enhancements": [
+      {
+        "change": "Identify shared-file conflicts and separate analysis output destinations before concurrent edits.",
+        "why": "Parallel audit tasks may otherwise overwrite the same working file."
+      }
+    ]
+  },
+  {
+    "id": "C18",
+    "feature": "Repository and file understanding",
+    "audit_feature": "Understanding an existing audit work folder",
+    "codex_behavior": "Codex reads and searches relevant workspace files, follows applicable repository instructions and uses attached or path-selected context to explain unfamiliar material. Actual read access depends on the execution environment and permission boundary.",
+    "trigger": "The auditor asks a question about an existing collection of work or supplies specific files.",
+    "inputs": [
+      "Authorised source documents and data files",
+      "Folder guidance and task context",
+      "Explicit paths or attachments"
+    ],
+    "audit_action": "Find relevant material, explain how files relate, identify procedures and prior work, and ground the task in the existing audit context.",
+    "outputs": [
+      "Source-linked explanation",
+      "Relevant file references",
+      "Identified gaps or contradictions"
+    ],
+    "auditor_control": "Select sources and scope, inspect cited material, and correct the agent's interpretation.",
+    "example": "Explain a supplier-onboarding process using its policy, workflow narrative, configuration export and prior workpapers.",
+    "adaptation_boundary": "File discovery does not prove population completeness or document authenticity. Complex formats require appropriate readers, and saved-file access does not imply visibility into unsaved application state.",
+    "evidence": [
+      {
+        "url": "https://learn.chatgpt.com/docs/learn/best-practices",
+        "label": "File context and repository investigation",
+        "status": "inherited-2026-10-22"
+      },
+      {
+        "url": "https://learn.chatgpt.com/docs/agent-configuration/agents-md",
+        "label": "Scoped project instructions",
+        "status": "inherited-2026-10-22"
+      }
+    ],
+    "subfeatures": [
+      {
+        "codex": "Search/read workspace",
+        "audit": "Locate and read relevant evidence and workpapers"
+      },
+      {
+        "codex": "Follow repository guidance",
+        "audit": "Apply assignment and method instructions"
+      },
+      {
+        "codex": "Explain unfamiliar code",
+        "audit": "Explain unfamiliar processes, calculations or data structures"
+      },
+      {
+        "codex": "Attached/path-selected context",
+        "audit": "Direct the agent to specific supporting material"
+      }
+    ],
+    "audit_enhancements": [
+      {
+        "change": "Read supported audit formats and retain references to the relevant sheet, range, page or passage.",
+        "why": "Source-backed explanations require more precise references than a filename alone."
+      },
+      {
+        "change": "Report inaccessible or unreadable material separately from searched material.",
+        "why": "An auditor must understand the actual scope of the investigation."
+      }
+    ]
+  },
+  {
+    "id": "C19",
+    "feature": "Code and shell execution",
+    "audit_feature": "Executable audit analysis and utility work",
+    "codex_behavior": "Codex can run available commands, scripts and project tools, inspect their output and use results in later reasoning. Execution and file changes remain subject to the relevant environment, sandbox and approval policy.",
+    "trigger": "An audit task needs calculation, transformation, validation or a supported external utility.",
+    "inputs": [
+      "Permitted data and calculation parameters",
+      "Analysis scripts or generated code",
+      "Available execution tools"
+    ],
+    "audit_action": "Write or use executable analyses to reconcile data, recalculate values, test conditions and produce reviewable results.",
+    "outputs": [
+      "Result datasets and exception lists",
+      "Calculation scripts and parameters",
+      "Execution output and errors"
+    ],
+    "auditor_control": "Inspect methods and inputs, choose permitted execution, and verify results against known checks or control totals.",
+    "example": "Recalculate expected payroll amounts from approved inputs and supplied rules, then compare them with the payment extract.",
+    "adaptation_boundary": "The code engine is general-purpose; audit formulas and rules must come from the task's actual criteria. A successful script exit does not establish correct inputs, methodology or conclusions.",
+    "evidence": [
+      {
+        "url": "https://learn.chatgpt.com/docs/cli/reference",
+        "label": "Command execution capabilities",
+        "status": "inherited-2026-10-22"
+      },
+      {
+        "url": "https://learn.chatgpt.com/docs/agent-approvals-security",
+        "label": "Execution boundaries",
+        "status": "inherited-2026-10-22"
+      }
+    ],
+    "subfeatures": [
+      {
+        "codex": "Generate/run scripts",
+        "audit": "Perform reproducible audit calculations"
+      },
+      {
+        "codex": "Invoke installed tools",
+        "audit": "Use approved data, document and system utilities"
+      },
+      {
+        "codex": "Inspect output and errors",
+        "audit": "Verify analysis and diagnose failed procedures"
+      },
+      {
+        "codex": "Iterate based on results",
+        "audit": "Refine the test without hiding earlier assumptions"
+      }
+    ],
+    "audit_enhancements": [
+      {
+        "change": "Retain procedure code, input identifiers, parameters and reconciliation checks with results.",
+        "why": "Another auditor needs to inspect and reperform the calculation."
+      }
+    ]
+  },
+  {
+    "id": "C20",
+    "feature": "Code Mode",
+    "audit_feature": "Programmatic composition of audit tools",
+    "codex_behavior": "Where enabled, Code Mode lets model-authored JavaScript compose tool calls through an execution host. The public configuration labels the feature under development and off by default, with controls over exposed tool namespaces.",
+    "trigger": "An enabled task needs to combine several permitted tool operations in a programmatic step.",
+    "inputs": [
+      "Tool definitions exposed to the cell",
+      "Task data and tool results",
+      "Execution and namespace restrictions"
+    ],
+    "audit_action": "Compose permitted retrieval and analysis operations, transform their results and return the relevant material to the conversation.",
+    "outputs": [
+      "Combined tool results",
+      "Derived intermediate data",
+      "Execution errors or partial results"
+    ],
+    "auditor_control": "Keep effective tool permissions visible, inspect results, and interrupt work through supported controls.",
+    "example": "Retrieve independent approved extracts, align their identifiers and pass only the exceptions into the next analysis step.",
+    "adaptation_boundary": "Keep its experimental maturity explicit in the mirror. Programmatic composition does not enlarge tool authority or guarantee cancellation of every nested operation; interruption behavior needs verification on the chosen host.",
+    "evidence": [
+      {
+        "url": "https://learn.chatgpt.com/docs/config-file/config-reference",
+        "label": "Code Mode configuration and maturity",
+        "status": "checked-2026-10-26"
+      }
+    ],
+    "subfeatures": [
+      {
+        "codex": "Model-authored execution cell",
+        "audit": "Compose a bounded audit-tool procedure"
+      },
+      {
+        "codex": "Nested tool calls",
+        "audit": "Pass authorised results between tools"
+      },
+      {
+        "codex": "Direct-only/excluded namespaces",
+        "audit": "Restrict which audit tools may be composed"
+      },
+      {
+        "codex": "Cell and nested-call interruption",
+        "audit": "Stop supported execution while reporting partial work"
+      }
+    ],
+    "audit_enhancements": [
+      {
+        "change": "Preserve provenance through intermediate transformations and composed tool calls.",
+        "why": "A compact programmatic result must remain traceable to the evidence and procedure that produced it."
+      }
+    ]
+  },
+  {
+    "id": "C21",
+    "feature": "File creation and editing",
+    "audit_feature": "Create and revise the auditor's actual work files",
+    "codex_behavior": "Codex creates and changes workspace files and supports inspection of changes through relevant clients. Desktop file surfaces can preview supported outputs; Git-specific actions and terminal review differ from artifact-focused editing experiences.",
+    "trigger": "The auditor requests a new deliverable or a revision to existing work.",
+    "inputs": [
+      "Existing saved files or output requirements",
+      "Supporting evidence and analysis",
+      "Requested changes and formatting constraints"
+    ],
+    "audit_action": "Create or revise supported workbooks, documents, presentations, scripts and other files while retaining their use in existing applications.",
+    "outputs": [
+      "Editable working artifacts",
+      "Inspectable changes",
+      "Supporting calculation or source references"
+    ],
+    "auditor_control": "Review changes in the workbench or another editor, accept or revise them, and continue assistance after saving external edits.",
+    "example": "Update a reconciliation workbook and its report narrative, then let the auditor refine both in Excel and Word.",
+    "adaptation_boundary": "Baseline shared-file work requires no API to the editor. Semantic comparisons, formula preservation, macros, comments and concurrent edits require format-specific verification; Git text diffs do not establish Office-file merge safety.",
+    "evidence": [
+      {
+        "url": "https://learn.chatgpt.com/docs/artifacts-viewer?surface=app",
+        "label": "Supported output previews and refinement",
+        "status": "checked-2026-10-26"
+      },
+      {
+        "url": "https://learn.chatgpt.com/docs/code-review",
+        "label": "Change inspection and Git review",
+        "status": "inherited-2026-10-22"
+      }
+    ],
+    "subfeatures": [
+      {
+        "codex": "Create new files",
+        "audit": "Generate workpapers, analyses and reports"
+      },
+      {
+        "codex": "Edit existing files",
+        "audit": "Revise the auditor's current working artifacts"
+      },
+      {
+        "codex": "Inspect/revert selected changes",
+        "audit": "Review and control changes with format-appropriate support"
+      },
+      {
+        "codex": "Continue in external editor",
+        "audit": "Keep Excel, Word and PowerPoint in the working flow"
+      }
+    ],
+    "audit_enhancements": [
+      {
+        "change": "Use format-aware comparisons for supported workbooks, documents and presentations.",
+        "why": "A reviewer needs to see meaningful changes such as formulas, values and narrative revisions."
+      },
+      {
+        "change": "Detect external saved edits before applying another change.",
+        "why": "The auditor and agent share artifacts and may modify them through different tools."
+      }
+    ]
+  },
+  {
+    "id": "C22",
+    "feature": "Images and visual inputs",
+    "audit_feature": "Visual material as audit task context",
+    "codex_behavior": "Supported clients accept image inputs such as screenshots and diagrams. Attachment handling and supported formats vary by client, host and version, including differences in remote and mobile flows.",
+    "trigger": "The auditor supplies a screenshot, diagram or other supported image.",
+    "inputs": [
+      "Image and its provenance",
+      "Question about visible content",
+      "Relevant task context"
+    ],
+    "audit_action": "Interpret visible material, relate it to the task and identify what further evidence is needed to test the relevant assertion.",
+    "outputs": [
+      "Explanation of visible content",
+      "Potential exceptions or follow-up questions",
+      "References to the supplied image"
+    ],
+    "auditor_control": "Confirm the image's source and context, inspect the interpretation and supply clearer or authoritative material where needed.",
+    "example": "Provide a screenshot of an access-administration screen and ask which visible entitlements differ from the supplied approved-role matrix.",
+    "adaptation_boundary": "A screenshot may omit fields, history or population scope. Visual interpretation does not establish authenticity, completeness or that the visible configuration was active at the relevant time.",
+    "evidence": [
+      {
+        "url": "https://learn.chatgpt.com/docs/image-inputs?surface=cli",
+        "label": "Image input support",
+        "status": "inherited-2026-10-22"
+      }
+    ],
+    "subfeatures": [
+      {
+        "codex": "Screenshot input",
+        "audit": "Inspect captured application context"
+      },
+      {
+        "codex": "Diagram interpretation",
+        "audit": "Understand a supplied process or system diagram"
+      },
+      {
+        "codex": "Client-specific attachments",
+        "audit": "Provide visual context through supported local or remote surfaces"
+      }
+    ],
+    "audit_enhancements": [
+      {
+        "change": "Keep image provenance, capture context and interpretation uncertainty beside the analysis.",
+        "why": "Visible content alone does not establish the relevant period or completeness of evidence."
+      }
+    ]
+  },
+  {
+    "id": "C23",
+    "feature": "Image generation and editing",
+    "audit_feature": "Create explanatory audit visuals",
+    "codex_behavior": "Supported Codex surfaces can generate or edit images using available image tooling, including a reusable skill. Generated visual files can accompany other work; availability and usage conditions depend on the client and workspace.",
+    "trigger": "The auditor requests an illustration or a revision to an explanatory visual.",
+    "inputs": [
+      "Visual brief and intended audience",
+      "Source diagram or image where applicable",
+      "Required labels and approved content"
+    ],
+    "audit_action": "Produce visuals for explanations, presentations and training, keeping them distinct from captured source evidence.",
+    "outputs": [
+      "Generated or edited image files",
+      "Illustrative report or slide assets",
+      "Revision variants for review"
+    ],
+    "auditor_control": "Check wording and depicted relationships, request revisions and decide where the visual will be used.",
+    "example": "Create a clearly labelled illustration explaining role separation in a procurement process for an advisory presentation.",
+    "adaptation_boundary": "Retain image generation as a general capability without treating a generated illustration as proof of how a process operates. Exact data charts and validated process models need appropriate source-backed methods.",
+    "evidence": [
+      {
+        "url": "https://learn.chatgpt.com/docs/image-generation",
+        "label": "Image generation and editing",
+        "status": "inherited-2026-10-22"
+      }
+    ],
+    "subfeatures": [
+      {
+        "codex": "Generate an image",
+        "audit": "Create an explanatory audit illustration"
+      },
+      {
+        "codex": "Edit a supplied image",
+        "audit": "Revise an authorised presentation visual"
+      },
+      {
+        "codex": "Reusable image skill",
+        "audit": "Reuse visual production instructions for audit deliverables"
+      }
+    ],
+    "audit_enhancements": [
+      {
+        "change": "Label explanatory generated visuals distinctly from captured source material.",
+        "why": "Illustrations used in reports must not be mistaken for observed evidence."
+      }
+    ]
+  },
+  {
+    "id": "C24",
+    "feature": "Composer Predictions",
+    "audit_feature": "Suggested continuations while writing audit instructions",
+    "codex_behavior": "Eligible desktop users can receive a suggested continuation while drafting a prompt. Accepting it places text in the composer rather than sending it. The documented beta has account, plan, age and region conditions.",
+    "trigger": "The auditor types an instruction in an enabled composer.",
+    "inputs": [
+      "Draft instruction",
+      "Available composer context",
+      "User acceptance or rejection"
+    ],
+    "audit_action": "Suggest a continuation that helps the auditor articulate a task, while leaving the complete instruction editable before submission.",
+    "outputs": [
+      "Suggested draft continuation",
+      "User-edited task prompt"
+    ],
+    "auditor_control": "Ignore or accept the suggestion, edit it and explicitly send the instruction.",
+    "example": "While writing a reconciliation request, accept a suggestion to include the relevant reporting period, then correct the date before sending.",
+    "adaptation_boundary": "A suggested prompt is neither a discovered fact nor permission to execute. Preserve the distinction between accepting draft text and submitting a task; the reference feature remains eligibility-limited beta.",
+    "evidence": [
+      {
+        "url": "https://learn.chatgpt.com/docs/changelog",
+        "label": "Composer Predictions beta behavior",
+        "status": "inherited-2026-10-22"
+      }
+    ],
+    "subfeatures": [
+      {
+        "codex": "Suggest prompt continuation",
+        "audit": "Help formulate an audit request"
+      },
+      {
+        "codex": "Accept into draft",
+        "audit": "Retain editable user control before submission"
+      },
+      {
+        "codex": "Eligibility limits",
+        "audit": "Expose availability rather than assuming universal support"
+      }
+    ],
+    "audit_enhancements": [
+      {
+        "change": "Keep suggested audit wording editable and distinguish it from submitted instructions.",
+        "why": "Convenient drafting must not silently introduce a criterion or authorisation."
+      }
+    ]
+  },
+  {
+    "id": "C25",
+    "feature": "Web search, built-in browser, browser extension, and Computer Use",
+    "audit_feature": "Research and interact with relevant audit sources and applications",
+    "codex_behavior": "Codex distinguishes web search, a separate-profile built-in browser, approved extension access to existing browser context, and permitted desktop GUI control. These routes have different session and permission boundaries; Windows GUI control uses the foreground.",
+    "trigger": "An audit task requires current public information, a web workflow or authorised application interaction.",
+    "inputs": [
+      "Research question or target workflow",
+      "Approved sites/apps and signed-in context",
+      "Applicable task authority"
+    ],
+    "audit_action": "Research criteria, inspect relevant interfaces or carry out scoped application steps through the appropriate available route.",
+    "outputs": [
+      "Source-linked research",
+      "Observed workflow details",
+      "Retrieved artifacts or action results"
+    ],
+    "auditor_control": "Choose the target and action scope, approve access where needed, inspect consequences and stop the operation.",
+    "example": "Inspect an authorised vendor-onboarding workflow in a test environment and compare visible approval steps with its documented procedure.",
+    "adaptation_boundary": "Browser state, GUI state and shell networking are distinct. Treat source content as untrusted; confirm consequential actions and recorded results. Windows foreground use and macOS locked-use conditions are not interchangeable.",
+    "evidence": [
+      {
+        "url": "https://learn.chatgpt.com/docs/computer-use",
+        "label": "GUI interaction and platform boundaries",
+        "status": "checked-2026-10-26"
+      },
+      {
+        "url": "https://learn.chatgpt.com/docs/browser",
+        "label": "Built-in browser profile",
+        "status": "inherited-2026-10-22"
+      },
+      {
+        "url": "https://learn.chatgpt.com/docs/chrome-extension",
+        "label": "Existing browser context",
+        "status": "inherited-2026-10-22"
+      },
+      {
+        "url": "https://learn.chatgpt.com/docs/web-search",
+        "label": "Cached/live search",
+        "status": "inherited-2026-10-22"
+      }
+    ],
+    "subfeatures": [
+      {
+        "codex": "Cached/live web search",
+        "audit": "Find relevant current criteria and public sources"
+      },
+      {
+        "codex": "Separate built-in browser",
+        "audit": "Inspect public pages and local audit tools"
+      },
+      {
+        "codex": "Approved browser extension",
+        "audit": "Work with permitted existing tabs and authenticated sources"
+      },
+      {
+        "codex": "Desktop Computer Use",
+        "audit": "Observe or operate supported applications when needed"
+      },
+      {
+        "codex": "Per-app and action permissions",
+        "audit": "Keep research access separate from authority to change business state"
+      }
+    ],
+    "audit_enhancements": [
+      {
+        "change": "Capture the source location, observation time and permitted action scope for a workflow observation.",
+        "why": "Reviewers need to know where an observation came from and whether business state was changed."
+      }
+    ]
+  },
+  {
+    "id": "C26",
+    "feature": "Browser annotations and site integration API",
+    "audit_feature": "Point at a specific source passage or application object",
+    "codex_behavior": "Users can select page content, annotate it and send it with available context to Codex. A site integration API can customise selectable targets and metadata. This is separate from general browser actions and WebMCP tools.",
+    "trigger": "The auditor selects content in a supported browser surface and adds an instruction.",
+    "inputs": [
+      "Selected text or page object",
+      "User annotation",
+      "Available page metadata and context"
+    ],
+    "audit_action": "Anchor an audit question or revision request to the material the auditor is viewing, rather than requiring a separate description of its location.",
+    "outputs": [
+      "Contextual response or proposed revision",
+      "Referenced selection",
+      "Follow-up analysis tied to the selected material"
+    ],
+    "auditor_control": "Choose the selection, inspect supplied context and state the requested action.",
+    "example": "Select a clause in an online incident-management procedure and ask how it relates to the proposed walkthrough.",
+    "adaptation_boundary": "Selection metadata is context, not automatic evidence capture or source authenticity. Website-defined metadata must remain distinguishable from the auditor's instructions; browser annotation does not imply connector write access.",
+    "evidence": [
+      {
+        "url": "https://learn.chatgpt.com/docs/annotations-extensibility",
+        "label": "Browser annotation targets and metadata",
+        "status": "inherited-2026-10-22"
+      },
+      {
+        "url": "https://learn.chatgpt.com/docs/webmcp",
+        "label": "Separate site-tool boundary",
+        "status": "inherited-2026-10-22"
+      }
+    ],
+    "subfeatures": [
+      {
+        "codex": "Select and comment on content",
+        "audit": "Ask about a particular passage or displayed object"
+      },
+      {
+        "codex": "Custom annotation targets",
+        "audit": "Let supported audit pages identify meaningful selectable records"
+      },
+      {
+        "codex": "Context metadata and preview controls",
+        "audit": "Provide relevant source context while showing what is supplied"
+      }
+    ],
+    "audit_enhancements": [
+      {
+        "change": "Carry useful audit references such as policy section or record identifier with selected content when available.",
+        "why": "A later reviewer needs to locate the material behind the question."
+      }
+    ]
+  }
+]

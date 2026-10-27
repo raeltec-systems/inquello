@@ -1,0 +1,61 @@
+[
+  {
+    "id": "C54A",
+    "feature": "Microsoft Azure Foundry / Azure OpenAI provider",
+    "family": "Context, memory, and continuity",
+    "kind": "capability",
+    "source_line": null,
+    "audit_feature": "Run the audit assistant through an approved Azure model deployment",
+    "codex_behavior": "Microsoft documents Codex CLI and its VS Code extension using an Azure OpenAI deployment in Microsoft Foundry through the v1 Responses API and configured provider credentials.",
+    "trigger": "An organisation configures an approved Azure provider profile, and the auditor selects or inherits that profile for the task.",
+    "inputs": [
+      "Approved Azure OpenAI deployment name and endpoint",
+      "Provider credentials supplied outside task prompts",
+      "Permitted audit context and local tools"
+    ],
+    "audit_action": "Retain the same audit workspace and tool workflow while routing permitted model requests through the organisation's selected Azure deployment.",
+    "outputs": [
+      "Analysis using the selected Azure deployment",
+      "Visible deployment and processing route",
+      "Clear capability and authentication failures"
+    ],
+    "auditor_control": "Administrators approve provider profiles and credential handling; auditors use permitted deployments and can inspect the effective processing route.",
+    "example": "An audit team reviews policy documents and prepares workpapers using its approved Azure model deployment while continuing to edit the saved outputs in Word and Excel.",
+    "adaptation_boundary": "The checked Microsoft guide establishes an Azure OpenAI provider path for CLI and VS Code, not support for every Foundry model or automatic availability of hosted Codex services. Its documented configuration uses API keys and currently lists Entra ID as unavailable for that Codex path; alternative identity routes require separate verification. Model routing does not determine where files, tools, connectors or browser traffic run. Desktop parity and deployment-specific data handling remain verification items.",
+    "audit_enhancements": [
+      {
+        "change": "Show the effective Azure deployment, endpoint and processing route for each task.",
+        "why": "Auditors need to distinguish the model's processing route from the location of their work files."
+      },
+      {
+        "change": "Provide administrator-managed credential handling and a capability check for each approved deployment.",
+        "why": "The audit workflow must use supported tools and formats without placing provider credentials in engagement prompts."
+      }
+    ],
+    "subfeatures": [
+      {
+        "codex": "Azure OpenAI v1 Responses provider configuration",
+        "audit": "Use an organisation-approved Azure inference route while preserving the workbench experience."
+      },
+      {
+        "codex": "Deployment-name and endpoint selection",
+        "audit": "Identify the actual model deployment and route used for the audit task."
+      },
+      {
+        "codex": "API-key environment-variable configuration",
+        "audit": "Supply approved provider credentials outside audit prompts and workpapers."
+      },
+      {
+        "codex": "CLI and VS Code extension use of provider configuration",
+        "audit": "Preserve provider choice across supported attended and scripted work paths; validate each intended client."
+      }
+    ],
+    "evidence": [
+      {
+        "url": "https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/codex?view=foundry-classic",
+        "label": "Microsoft: Codex with Azure OpenAI in Microsoft Foundry Models",
+        "status": "checked-2026-10-26"
+      }
+    ]
+  }
+]

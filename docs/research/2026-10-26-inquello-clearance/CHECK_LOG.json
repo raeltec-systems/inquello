@@ -1,0 +1,208 @@
+{
+  "date_utc": "2026-10-26",
+  "scope": {
+    "priority": "Zambia",
+    "initial_additional": [
+      "South Africa",
+      "Kenya"
+    ],
+    "regional_scope_only": [
+      "ARIPO",
+      "OAPI",
+      "Madrid"
+    ],
+    "legal_clearance": false
+  },
+  "journal": {
+    "title": "PACRA Intellectual Property Journal Volume 1 No. 9",
+    "issue_date": "2026-09-30",
+    "archive": "https://www.pacra.org.zm/archives/journals",
+    "download_url": "https://xatuplus.pacra.org.zm:5000/xatu/api/athena/Publications/journals/6abe52d15614460931f9762e/download",
+    "local_file": "PACRA_SEPTEMBER_2026_IP_JOURNAL.pdf",
+    "bytes": 7028896,
+    "sha256": "15527AE1CEA8F4D9E3ADBC4915206CDDFD5F762D6A3556E5EFB470CD7ECF7E4C",
+    "pages": 459,
+    "extracted_characters": 603529,
+    "empty_text_pages": 0,
+    "method": "Case-insensitive literal substring search of extracted PDF text, performed by africa research agent.",
+    "terms": [
+      "inquello",
+      "inquelo",
+      "inkwello",
+      "inquella",
+      "inkwell",
+      "enquello"
+    ],
+    "matches": 0,
+    "limit": "Single monthly issue only; not full register or comprehensive image/figurative mark OCR."
+  },
+  "register_access": [
+    {
+      "source": "PACRA IP online",
+      "url": "https://www.pacra.org.zm/ip-online",
+      "outcome": "Under renovation",
+      "name_query_completed": false
+    },
+    {
+      "source": "TMview",
+      "url": "https://www.tmdn.org/tmview/",
+      "outcome": "Browser navigation/connection timeouts; no search run",
+      "name_query_completed": false
+    },
+    {
+      "source": "Legacy TMview alternative",
+      "url": "https://www.tmview.europa.eu/tmview/welcome.html",
+      "outcome": "Certificate common-name error; not bypassed",
+      "name_query_completed": false
+    },
+    {
+      "source": "WIPO coverage",
+      "url": "https://branddb.wipo.int/en/coverage",
+      "outcome": "Anti-automation challenge in web response; no live name query",
+      "name_query_completed": false
+    },
+    {
+      "source": "CIPC",
+      "url": "https://iponline.cipc.co.za/Trademarks/Search/FreeTMSearch.aspx",
+      "outcome": "Login required",
+      "name_query_completed": false
+    },
+    {
+      "source": "KIPI",
+      "url": "https://www.kipi.go.ke/faqs",
+      "outcome": "Official search-request route identified; no paid request",
+      "name_query_completed": false
+    }
+  ],
+  "pacra_search_service": {
+    "url": "https://www.pacra.org.zm/fees-and-forms?q=search",
+    "method": "Direct browser UI",
+    "form": "TM29",
+    "fees_zmw": {
+      "local": 55.6,
+      "foreign": 466.8
+    },
+    "lodgement_schedule_required": true,
+    "includes_registrar_advice": false,
+    "total_for_requested_scope_confirmed": false,
+    "submitted": false
+  },
+  "domains": [
+    {
+      "domain": "inquello.com",
+      "available": true,
+      "years": 1,
+      "price": 11.25,
+      "renewalPrice": 11.25,
+      "premium": false
+    },
+    {
+      "domain": "inquello.ai",
+      "available": true,
+      "years": 2,
+      "price": 160,
+      "renewalPrice": 160,
+      "premium": false
+    },
+    {
+      "domain": "inquello.app",
+      "available": true,
+      "years": 1,
+      "price": 14.99,
+      "renewalPrice": 15,
+      "premium": false
+    },
+    {
+      "domain": "inquello.co.za",
+      "available": false
+    }
+  ],
+  "social": {
+    "observed_utc": "2026-10-26 approximately 18:10-18:13",
+    "method": "Direct public browser visits by social research agent",
+    "claimability_confirmed": false,
+    "rows": [
+      {
+        "platform": "LinkedIn",
+        "url": "https://www.linkedin.com/company/inquello/",
+        "observation": "Page not found",
+        "fallback_url": "https://www.linkedin.com/company/inquelloai/",
+        "fallback_observation": "Auth wall"
+      },
+      {
+        "platform": "X",
+        "url": "https://x.com/inquello",
+        "observation": "Account does not exist",
+        "fallback_url": "https://x.com/inquelloai",
+        "fallback_observation": "Account does not exist"
+      },
+      {
+        "platform": "GitHub",
+        "url": "https://github.com/inquello",
+        "observation": "404",
+        "fallback_url": "https://github.com/inquelloai",
+        "fallback_observation": "404"
+      },
+      {
+        "platform": "YouTube",
+        "url": "https://www.youtube.com/@inquello",
+        "observation": "404 / page unavailable",
+        "fallback_url": "https://www.youtube.com/@inquelloai",
+        "fallback_observation": "404 / page unavailable"
+      },
+      {
+        "platform": "TikTok",
+        "url": "https://www.tiktok.com/@inquello",
+        "observation": "Account not found",
+        "fallback_url": "https://www.tiktok.com/@inquelloai",
+        "fallback_observation": "Account not found"
+      },
+      {
+        "platform": "Bluesky",
+        "url": "https://bsky.app/profile/inquello.bsky.social",
+        "observation": "Unable to resolve handle",
+        "fallback_url": "https://bsky.app/profile/inquelloai.bsky.social",
+        "fallback_observation": "Unable to resolve handle"
+      },
+      {
+        "platform": "Instagram",
+        "url": "https://www.instagram.com/inquello/",
+        "observation": "Login required / unknown",
+        "fallback_url": "https://www.instagram.com/inquelloai/",
+        "fallback_observation": "Login required / unknown"
+      },
+      {
+        "platform": "Facebook",
+        "url": "https://www.facebook.com/inquello",
+        "observation": "Login required / unknown",
+        "fallback_url": "https://www.facebook.com/inquelloai",
+        "fallback_observation": "Login required / unknown"
+      }
+    ]
+  },
+  "near_mark": {
+    "word": "INKWELL",
+    "office": "CIPO",
+    "application": "2402599",
+    "url": "https://ised-isde.canada.ca/cipo/trademark-search/pdf/2402599?lang=eng",
+    "applicant": "Inkwell Technology Studios, Inc.",
+    "classes": [
+      9,
+      38,
+      42
+    ],
+    "filing_date": "2025-05-31",
+    "status_shown_in_returned_record": "SEARCHED / LIVE APPLICATION / Under Examination",
+    "status_after_2026_09_04_confirmed": false,
+    "african_rights_established": false
+  },
+  "actions": {
+    "accounts_created": false,
+    "handles_reserved": false,
+    "domains_purchased": false,
+    "filings_submitted": false,
+    "messages_sent": false,
+    "settings_changed": false
+  },
+  "artifact_handling": "Browser auto-saved one official PDF in Downloads. Root relocated that exact newly downloaded file to this folder; no other downloaded artifacts retained outside the project."
+}

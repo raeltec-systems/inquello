@@ -1,0 +1,440 @@
+{
+  "status": "pass",
+  "checked_at": "2026-10-27T03:59:43.019977+00:00",
+  "workspace": "D:\\Projects\\inquello\\_bmad-output\\specs\\spec-inquello",
+  "check_type": "read-only-spec-document-check",
+  "runtime_conformance_tested": false,
+  "semantic_preservation_validated": false,
+  "manual_review_required": [
+    "Capability intent WHAT versus HOW",
+    "Capability success testability",
+    "Constraint relevance and non-goals",
+    "Load-bearing source preservation",
+    "Lean prose and unrecognized diagram syntax"
+  ],
+  "external_urls_fetched": false,
+  "imported_code_executed": false,
+  "documents": {
+    "SPEC.md": {
+      "path": "D:\\Projects\\inquello\\_bmad-output\\specs\\spec-inquello\\SPEC.md",
+      "sha256": "3bce49319d7fbf1ce87f66ca2960fabcbc946b4537e5d4451db3526a5279da9a"
+    },
+    "scope-and-gates.md": {
+      "path": "D:\\Projects\\inquello\\_bmad-output\\specs\\spec-inquello\\scope-and-gates.md",
+      "sha256": "7af1b023852e805083608c9bfd7927c852aeda26ccd92ab617b257c0114dac41"
+    },
+    "source_baseline": {
+      "path": "D:\\Projects\\inquello\\_bmad-output\\specs\\spec-inquello\\.working\\source-baseline.json",
+      "sha256": "b8813707c28a77d5bedb7d41f7f8463d06e13a6c3054b362a4d8dcd409edb22c"
+    },
+    "adopted:_bmad-output/planning-artifacts/prds/prd-inquello-2026-10-26/prd.md": {
+      "path": "D:\\Projects\\inquello\\_bmad-output\\planning-artifacts\\prds\\prd-inquello-2026-10-26\\prd.md",
+      "sha256": "dc2f625a0c47c25046e8bb9713010cf894c15a478a8eefe11da034d32a385dcf"
+    },
+    "adopted:_bmad-output/planning-artifacts/prds/prd-inquello-2026-10-26/addendum.md": {
+      "path": "D:\\Projects\\inquello\\_bmad-output\\planning-artifacts\\prds\\prd-inquello-2026-10-26\\addendum.md",
+      "sha256": "fd15c658805c1c506989a1060bdd399e08cb4cc9d21761d5be7ee8237c492cae"
+    },
+    "adopted:_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/DESIGN.md": {
+      "path": "D:\\Projects\\inquello\\_bmad-output\\planning-artifacts\\ux-designs\\ux-inquello-2026-10-26\\DESIGN.md",
+      "sha256": "bfcf9be0a13c474b017fd5cd5971655162c83d1361debb4e611577d8e1f109e3"
+    },
+    "adopted:_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/EXPERIENCE.md": {
+      "path": "D:\\Projects\\inquello\\_bmad-output\\planning-artifacts\\ux-designs\\ux-inquello-2026-10-26\\EXPERIENCE.md",
+      "sha256": "6ce184c470887382f80b9a2668d9b3518c55c1a550984f0a1665d29f4f06003b"
+    },
+    "adopted:_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/ARCHITECTURE-SPINE.md": {
+      "path": "D:\\Projects\\inquello\\_bmad-output\\planning-artifacts\\architecture\\architecture-inquello-2026-10-26\\ARCHITECTURE-SPINE.md",
+      "sha256": "557d29bd4970424b8464311bc04bd0bc0d5772fbb74caf20b485665b6ced2054"
+    },
+    "adopted:addendum.md": {
+      "path": "D:\\Projects\\inquello\\docs\\addendum.md",
+      "sha256": "ff42db917c41fa2b8427e4d229dcf41bff9f377eb593f66cb2852ba1ee40a2ee"
+    },
+    "adopted:PRODUCT_BRIEF_TRACEABILITY.md": {
+      "path": "D:\\Projects\\inquello\\docs\\PRODUCT_BRIEF_TRACEABILITY.md",
+      "sha256": "a24e449dc65b492c6cf3bee762402abe741733c6af3124db83e23a3188507b46"
+    },
+    "adopted:CODEX_AUDITOR_FEATURE_MIRROR.md": {
+      "path": "D:\\Projects\\inquello\\docs\\CODEX_AUDITOR_FEATURE_MIRROR.md",
+      "sha256": "82de15e339768bbed6df374a500833b3e26e4718974b1aff962eb4a2edb4c4e2"
+    },
+    "adopted:CODEX_AUDITOR_FEATURE_MAP.md": {
+      "path": "D:\\Projects\\inquello\\docs\\CODEX_AUDITOR_FEATURE_MAP.md",
+      "sha256": "35d14d408516fc4124daaf190bddbe6d06ff0a4e6ac2213efe3e8c10d167f654"
+    },
+    "capability_map": {
+      "path": "D:\\Projects\\inquello\\_bmad-output\\specs\\spec-inquello\\.working\\capability-map.json",
+      "sha256": "f42fafe533510f178d6336bf5b28a83bd87a980faf10c5f1a19039993b396a18"
+    }
+  },
+  "summary": {
+    "checks": 17,
+    "passed": 17,
+    "failed": 0
+  },
+  "checks": [
+    {
+      "check": "yaml_parse_and_unique_keys",
+      "status": "pass"
+    },
+    {
+      "check": "required_metadata",
+      "status": "pass",
+      "missing": [],
+      "invalid": {},
+      "empty_sources_legitimate": true
+    },
+    {
+      "check": "companion_contract",
+      "status": "pass",
+      "expected_count": 10,
+      "expected_authored_count": 1,
+      "expected_adopted_count": 9,
+      "actual_count": 10,
+      "missing": [],
+      "unexpected": [],
+      "duplicate_targets": [],
+      "errors": []
+    },
+    {
+      "check": "all_inputs_remain_companions",
+      "status": "pass",
+      "actual_sources": [],
+      "meaning": "This package retains downstream value in all nine adopted inputs; an empty sources array is correct."
+    },
+    {
+      "check": "five_kernel_sections",
+      "status": "pass",
+      "headings": [
+        "Why",
+        "Capabilities",
+        "Constraints",
+        "Non-goals",
+        "Success signal",
+        "Assumptions",
+        "Open Questions"
+      ],
+      "missing_or_repeated_required": [],
+      "unexpected": [],
+      "empty": [],
+      "duplicate_headings": []
+    },
+    {
+      "check": "capability_ids_unique_stable",
+      "status": "pass",
+      "expected_count": 25,
+      "actual_count": 25,
+      "ids": [
+        "CAP-1",
+        "CAP-2",
+        "CAP-3",
+        "CAP-4",
+        "CAP-5",
+        "CAP-6",
+        "CAP-7",
+        "CAP-8",
+        "CAP-9",
+        "CAP-10",
+        "CAP-11",
+        "CAP-12",
+        "CAP-13",
+        "CAP-14",
+        "CAP-15",
+        "CAP-16",
+        "CAP-17",
+        "CAP-18",
+        "CAP-19",
+        "CAP-20",
+        "CAP-21",
+        "CAP-22",
+        "CAP-23",
+        "CAP-24",
+        "CAP-25"
+      ],
+      "duplicates": [],
+      "missing": [],
+      "unexpected": []
+    },
+    {
+      "check": "capability_intent_success_prose",
+      "status": "pass",
+      "fields": {
+        "CAP-1": {
+          "intent": 1,
+          "success": 1
+        },
+        "CAP-2": {
+          "intent": 1,
+          "success": 1
+        },
+        "CAP-3": {
+          "intent": 1,
+          "success": 1
+        },
+        "CAP-4": {
+          "intent": 1,
+          "success": 1
+        },
+        "CAP-5": {
+          "intent": 1,
+          "success": 1
+        },
+        "CAP-6": {
+          "intent": 1,
+          "success": 1
+        },
+        "CAP-7": {
+          "intent": 1,
+          "success": 1
+        },
+        "CAP-8": {
+          "intent": 1,
+          "success": 1
+        },
+        "CAP-9": {
+          "intent": 1,
+          "success": 1
+        },
+        "CAP-10": {
+          "intent": 1,
+          "success": 1
+        },
+        "CAP-11": {
+          "intent": 1,
+          "success": 1
+        },
+        "CAP-12": {
+          "intent": 1,
+          "success": 1
+        },
+        "CAP-13": {
+          "intent": 1,
+          "success": 1
+        },
+        "CAP-14": {
+          "intent": 1,
+          "success": 1
+        },
+        "CAP-15": {
+          "intent": 1,
+          "success": 1
+        },
+        "CAP-16": {
+          "intent": 1,
+          "success": 1
+        },
+        "CAP-17": {
+          "intent": 1,
+          "success": 1
+        },
+        "CAP-18": {
+          "intent": 1,
+          "success": 1
+        },
+        "CAP-19": {
+          "intent": 1,
+          "success": 1
+        },
+        "CAP-20": {
+          "intent": 1,
+          "success": 1
+        },
+        "CAP-21": {
+          "intent": 1,
+          "success": 1
+        },
+        "CAP-22": {
+          "intent": 1,
+          "success": 1
+        },
+        "CAP-23": {
+          "intent": 1,
+          "success": 1
+        },
+        "CAP-24": {
+          "intent": 1,
+          "success": 1
+        },
+        "CAP-25": {
+          "intent": 1,
+          "success": 1
+        }
+      },
+      "errors": [],
+      "semantic_what_vs_how_reviewed": false
+    },
+    {
+      "check": "no_placeholders_or_template_comments",
+      "status": "pass",
+      "html_comments": [],
+      "markers": [],
+      "template_comments": []
+    },
+    {
+      "check": "kernel_has_no_diagrams_or_code_blocks",
+      "status": "pass",
+      "fenced_blocks": [],
+      "unclosed_fence": null,
+      "diagram_markers": [],
+      "meaning": "Prose-only kernel check; bare ASCII diagrams still require manual review."
+    },
+    {
+      "check": "markdown_links:SPEC.md",
+      "status": "pass",
+      "local_checked": 6,
+      "external_not_fetched": [],
+      "missing": [],
+      "bad_anchors": [],
+      "unresolved_reference_labels": [],
+      "errors": []
+    },
+    {
+      "check": "markdown_links:scope-and-gates.md",
+      "status": "pass",
+      "local_checked": 11,
+      "external_not_fetched": [],
+      "missing": [],
+      "bad_anchors": [],
+      "unresolved_reference_labels": [],
+      "errors": []
+    },
+    {
+      "check": "nine_source_baseline_unchanged",
+      "status": "pass",
+      "expected_count": 9,
+      "comparisons": [
+        {
+          "path": "_bmad-output/planning-artifacts/prds/prd-inquello-2026-10-26/prd.md",
+          "baseline_sha256": "dc2f625a0c47c25046e8bb9713010cf894c15a478a8eefe11da034d32a385dcf",
+          "current_sha256": "dc2f625a0c47c25046e8bb9713010cf894c15a478a8eefe11da034d32a385dcf",
+          "unchanged": true
+        },
+        {
+          "path": "_bmad-output/planning-artifacts/prds/prd-inquello-2026-10-26/addendum.md",
+          "baseline_sha256": "fd15c658805c1c506989a1060bdd399e08cb4cc9d21761d5be7ee8237c492cae",
+          "current_sha256": "fd15c658805c1c506989a1060bdd399e08cb4cc9d21761d5be7ee8237c492cae",
+          "unchanged": true
+        },
+        {
+          "path": "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/DESIGN.md",
+          "baseline_sha256": "bfcf9be0a13c474b017fd5cd5971655162c83d1361debb4e611577d8e1f109e3",
+          "current_sha256": "bfcf9be0a13c474b017fd5cd5971655162c83d1361debb4e611577d8e1f109e3",
+          "unchanged": true
+        },
+        {
+          "path": "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/EXPERIENCE.md",
+          "baseline_sha256": "6ce184c470887382f80b9a2668d9b3518c55c1a550984f0a1665d29f4f06003b",
+          "current_sha256": "6ce184c470887382f80b9a2668d9b3518c55c1a550984f0a1665d29f4f06003b",
+          "unchanged": true
+        },
+        {
+          "path": "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/ARCHITECTURE-SPINE.md",
+          "baseline_sha256": "557d29bd4970424b8464311bc04bd0bc0d5772fbb74caf20b485665b6ced2054",
+          "current_sha256": "557d29bd4970424b8464311bc04bd0bc0d5772fbb74caf20b485665b6ced2054",
+          "unchanged": true
+        },
+        {
+          "path": "docs/addendum.md",
+          "baseline_sha256": "ff42db917c41fa2b8427e4d229dcf41bff9f377eb593f66cb2852ba1ee40a2ee",
+          "current_sha256": "ff42db917c41fa2b8427e4d229dcf41bff9f377eb593f66cb2852ba1ee40a2ee",
+          "unchanged": true
+        },
+        {
+          "path": "docs/PRODUCT_BRIEF_TRACEABILITY.md",
+          "baseline_sha256": "a24e449dc65b492c6cf3bee762402abe741733c6af3124db83e23a3188507b46",
+          "current_sha256": "a24e449dc65b492c6cf3bee762402abe741733c6af3124db83e23a3188507b46",
+          "unchanged": true
+        },
+        {
+          "path": "docs/CODEX_AUDITOR_FEATURE_MIRROR.md",
+          "baseline_sha256": "82de15e339768bbed6df374a500833b3e26e4718974b1aff962eb4a2edb4c4e2",
+          "current_sha256": "82de15e339768bbed6df374a500833b3e26e4718974b1aff962eb4a2edb4c4e2",
+          "unchanged": true
+        },
+        {
+          "path": "docs/CODEX_AUDITOR_FEATURE_MAP.md",
+          "baseline_sha256": "35d14d408516fc4124daaf190bddbe6d06ff0a4e6ac2213efe3e8c10d167f654",
+          "current_sha256": "35d14d408516fc4124daaf190bddbe6d06ff0a4e6ac2213efe3e8c10d167f654",
+          "unchanged": true
+        }
+      ],
+      "errors": [],
+      "duplicate_targets": [],
+      "missing": [],
+      "unexpected": []
+    },
+    {
+      "check": "actual_prd_inventory",
+      "status": "pass",
+      "counts": {
+        "FR": 44,
+        "NFR": 10,
+        "P": 22,
+        "UJ": 8
+      },
+      "expected_counts": {
+        "FR": 44,
+        "NFR": 10,
+        "P": 22,
+        "UJ": 8
+      },
+      "phase_counts": {
+        "V1": 41,
+        "V2": 3
+      },
+      "duplicate_ids": {
+        "FR": [],
+        "NFR": [],
+        "P": [],
+        "UJ": []
+      },
+      "V2_FRs": [
+        "FR-38",
+        "FR-40",
+        "FR-42"
+      ]
+    },
+    {
+      "check": "capability_map_shape_and_ids",
+      "status": "pass",
+      "errors": [],
+      "map_count": 25,
+      "duplicate_ids": []
+    },
+    {
+      "check": "fr_exactly_once_and_phase_coverage",
+      "status": "pass",
+      "FR_count": 44,
+      "phase_counts": {
+        "V1": 41,
+        "V2": 3
+      },
+      "duplicates": {},
+      "missing": [],
+      "unexpected": []
+    },
+    {
+      "check": "capability_to_prd_group_and_phase_mapping",
+      "status": "pass",
+      "represented_P_count": 22,
+      "mismatches": [],
+      "meaning": "CAP-1–22 own V1 portions of P01–P22; CAP-23/24/25 own FR-38/40/42 in P19/20/21 respectively. This proves mapping, not semantic coverage."
+    },
+    {
+      "check": "inspected_inputs_unchanged_during_check",
+      "status": "pass",
+      "file_count": 13,
+      "changed": [],
+      "errors": []
+    }
+  ],
+  "limits": [
+    "Capability labels, prose fields and exact FR ownership are mechanical checks; intent WHAT versus HOW, testability, lean prose and semantic preservation need manual review.",
+    "Source hashes compare with the supplied baseline; this does not authenticate the initial baseline or prove source authority.",
+    "Only SPEC.md and scope-and-gates.md Markdown links are crawled; a target is read only to check a requested fragment. Adopted companions are checked for existence/hash, not recursively crawled.",
+    "GitHub-style Markdown heading anchors and ordinary inline/reference links are approximated; uncommon Markdown extensions, shortcut reference syntax and bare ASCII diagrams require manual review.",
+    "External URLs are recorded but not fetched. No source, spec, memlog or report file is written; stdout redirection is the caller's choice.",
+    "No package installation, imported code execution, technology re-verification, runtime/security/accessibility testing, product acceptance or release validation occurs."
+  ]
+}

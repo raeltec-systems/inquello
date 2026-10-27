@@ -1,0 +1,124 @@
+/* Inquello colour tokens. Colour carries meaning: blue = agent, green = people and additions, amber = needs you, red = broken. */
+:root {
+  /* Ink neutrals (cool) */
+  --ink-900: #16191d;
+  --ink-800: #2b3036;
+  --ink-700: #3d434b;
+  --ink-600: #5b636e;
+  --ink-500: #8a919a;
+  --ink-400: #aeb5bd;
+  --ink-300: #c4c9cf;
+  --ink-250: #cfd4da;
+  --ink-200: #d6dade;
+  --ink-150: #e3e6ea;
+  --ink-100: #eef0f2;
+  --ink-75: #f3f4f6;
+  --ink-50: #fafbfc;
+  --white: #ffffff;
+
+  /* Agent blue */
+  --blue-800: #1d3f80;
+  --blue-700: #244a8f;
+  --blue-600: #2f5fb3;
+  --blue-200: #c9d6ee;
+  --blue-150: #dfe7f5;
+  --blue-100: #eaf1fb;
+  --blue-50: #f2f6fc;
+
+  /* People and additions green */
+  --green-800: #1e5236;
+  --green-600: #2f7a52;
+  --green-200: #bfdcc9;
+  --green-150: #e3f1e8;
+  --green-100: #eef6f0;
+  --green-50: #f6fbf8;
+
+  /* Needs-you amber */
+  --amber-800: #5c4210;
+  --amber-700: #8a5a12;
+  --amber-500: #c98a1b;
+  --amber-200: #ecd9ae;
+  --amber-150: #fbf0d9;
+  --amber-50: #fffaf0;
+
+  /* Broken red (integrity, removed lines). Never used for findings. */
+  --red-800: #7a2e2b;
+  --red-600: #b0413e;
+  --red-200: #efc9c6;
+  --red-50: #fdf3f2;
+
+  /* Semantic: text */
+  --text-primary: var(--ink-900);
+  --text-secondary: var(--ink-700);
+  --text-muted: var(--ink-600);
+  --text-faint: var(--ink-500);
+  --text-inverse: var(--white);
+  --text-link: var(--blue-600);
+  --text-link-hover: var(--blue-800);
+
+  /* Semantic: surfaces */
+  --surface-app: var(--white);
+  --surface-sidebar: var(--ink-75);
+  --surface-panel: var(--ink-50);
+  --surface-raised: var(--white);
+  --surface-subtle: var(--ink-100);
+  --surface-hover: #e6e8eb;
+  --surface-selected: var(--ink-150);
+  --surface-console: var(--ink-900);
+  --surface-console-raised: var(--ink-800);
+
+  /* Semantic: borders */
+  --border-subtle: var(--ink-100);
+  --border-default: var(--ink-150);
+  --border-strong: var(--ink-200);
+  --border-input: var(--ink-250);
+
+  /* Semantic: actions */
+  --action-primary-bg: var(--ink-900);
+  --action-primary-bg-hover: var(--ink-800);
+  --action-primary-fg: var(--white);
+  --action-secondary-bg: var(--white);
+  --action-secondary-border: var(--ink-200);
+  --action-quiet-bg: #eef0f3;
+  --focus-ring: 0 0 0 3px var(--blue-150);
+
+  /* Judgment taxonomy */
+  --judgment-calculation: var(--ink-900);
+  --judgment-observation: var(--ink-600);
+  --judgment-suggestion: var(--blue-600);
+  --judgment-decision: var(--green-600);
+  --judgment-gap: var(--amber-700);
+
+  /* Item status chips */
+  --status-suggested-fg: var(--blue-600);
+  --status-suggested-border: var(--blue-600);
+  --status-investigating-bg: var(--ink-100);
+  --status-investigating-fg: var(--ink-700);
+  --status-open-fg: var(--ink-700);
+  --status-open-border: #bfc5cc;
+  --status-evidence-bg: var(--amber-150);
+  --status-evidence-fg: var(--amber-700);
+  --status-evidence-border: var(--amber-200);
+  --status-accepted-bg: var(--green-150);
+  --status-accepted-fg: var(--green-600);
+  --status-accepted-border: var(--green-200);
+
+  /* Review annotations */
+  --row-added-bg: var(--green-50);
+  --row-added-mark: var(--green-600);
+  --row-changed-bg: var(--green-100);
+  --row-selected-bg: var(--blue-50);
+  --source-highlight-bg: var(--blue-100);
+  --diff-add-bg: #f0f8f3;
+  --diff-add-fg: var(--green-800);
+  --diff-del-bg: var(--red-50);
+  --diff-del-fg: var(--red-800);
+  --approval-bg: var(--amber-50);
+  --approval-border: var(--amber-200);
+
+  /* File types */
+  --file-pdf: var(--red-600);
+  --file-xls: var(--green-600);
+  --file-doc: var(--blue-600);
+  --file-folder: var(--ink-600);
+}

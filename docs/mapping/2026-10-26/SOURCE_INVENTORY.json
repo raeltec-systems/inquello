@@ -1,0 +1,632 @@
+{
+  "captured": "2026-10-26",
+  "source_file": "CODEX_CAPABILITY_CATALOG.md",
+  "source_sha256": "AEDE39501A1AD802228917F19D88C1632AE93AD81425418088A9F0E55036CCE6",
+  "source_cutoff": "2026-10-22",
+  "entries": [
+    {
+      "id": "C01",
+      "family": "Product surfaces and run locations",
+      "feature": "Codex in the ChatGPT desktop app",
+      "codex_description": "A project-oriented Codex surface in the ChatGPT desktop client. It brings together projects, threads, agent activity, files, an integrated terminal, Git/review views, settings, skills/plugins, scheduled tasks, and local/cloud execution choices. The app is available on macOS and Windows, with a Linux preview; feature availability differs by platform (for example, Computer Use is not in the Linux preview, and native Wayland support is experimental).",
+      "prior_audit_lens": "Study how a user moves from an engagement/project to a task, sees agent activity, and reviews results. UI organization alone does not provide engagement records or sign-off controls.",
+      "source_line": 19
+    },
+    {
+      "id": "C02",
+      "family": "Product surfaces and run locations",
+      "feature": "Projects, chats, and navigation",
+      "codex_description": "Codex projects organize related local folders, instructions, and chats; a Codex chat can also start without a project for self-contained work. Projects can contain parallel chats for distinct outcomes. The desktop app provides task/project navigation and search, while the CLI treats its current directory as the project and the IDE extension uses the open workspace. Project context and automatic instruction discovery differ by client and by primary/secondary folder.",
+      "prior_audit_lens": "This is the product's main context and continuity model. Map what is shared across chats, what each task can read, how users resume/search/archive/pin work, and which project folder sets the execution boundary.",
+      "source_line": 20
+    },
+    {
+      "id": "C03",
+      "family": "Product surfaces and run locations",
+      "feature": "Codex CLI",
+      "codex_description": "An interactive terminal client for exploring a repository, planning, editing files, running local development tools, reviewing changes, connecting tools, resuming chats, and handing work to cloud environments. `codex exec` runs non-interactive jobs in scripts or CI and can stream structured JSONL events.",
+      "prior_audit_lens": "Provides an inspectable, tool-rich work loop. The CLI is developer-oriented; commands, raw diffs, and repository assumptions may not fit an auditor's task language.",
+      "source_line": 21
+    },
+    {
+      "id": "C04",
+      "family": "Product surfaces and run locations",
+      "feature": "CLI command and session controls",
+      "codex_description": "The command surface includes interactive and non-interactive task start, resume/fork/export, login/logout, model/config selection, project navigation, permissions/sandbox controls, review, cloud/remote handoff, app/MCP/plugin management, and automation. The CLI cloud and cloud-tasks commands are documented as Experimental, while codex agents is Stable. CLI customization also covers the terminal interface, editor, completions, and keyboard shortcuts. Slash commands control an active session, including plan, goal, model, permissions, agents, subagents, apps, plugins, hooks, review, status, context compaction, configuration search (`/config`), keymap customization (`/keymap`), and server restart/reconnect (`/daemon`). `codex remote-control` is an Experimental CLI command; it is distinct from the separately documented Codex Remote mobile workflow. References mark command maturity; experimental and deprecated entries are not equivalent to stable defaults.",
+      "prior_audit_lens": "Treat commands as part of the product's interaction design and control plane, not just terminal syntax. For each workflow record the entry point, state change, confirmation, permissions, and output/event behavior.",
+      "source_line": 22
+    },
+    {
+      "id": "C05",
+      "family": "Product surfaces and run locations",
+      "feature": "Agent Command Center (`codex agents`)",
+      "codex_description": "The Stable CLI command `codex agents` opens a command center for chats on a shared local or remote server; it shows task status and lets users switch between chats/agents. `/agents` opens the same center in an interactive session. Remote use can target an app-server endpoint. This is a navigation/coordination surface, not the act of spawning a subagent.",
+      "prior_audit_lens": "Study its server boundary, which workstreams are visible, status/attention states, and how a user resumes or switches work. Keep it distinct from delegated agent orchestration and from ChatGPT Work task navigation.",
+      "source_line": 23
+    },
+    {
+      "id": "C06",
+      "family": "Product surfaces and run locations",
+      "feature": "IDE extension",
+      "codex_description": "Brings Codex into a supported code editor with project context, agent conversations, tools, and code review. Specific plugin, UI, and orchestration features differ from desktop and CLI.",
+      "prior_audit_lens": "A useful comparison surface for inline evidence and action review; it is not a general audit workspace.",
+      "source_line": 24
+    },
+    {
+      "id": "C07",
+      "family": "Product surfaces and run locations",
+      "feature": "Codex Cloud",
+      "codex_description": "Runs a task in a remote workspace prepared from selected repositories, dependencies, tools, and allowed services. Each task has its own working files; it can continue while the user's computer sleeps. Results can be inspected, followed up, committed, or turned into a pull request.",
+      "prior_audit_lens": "Cloud work can be isolated and persistent without a local workstation. It cannot automatically see local files, running processes, browser sign-ins, VPN access, or local-only policy.",
+      "source_line": 25
+    },
+    {
+      "id": "C08",
+      "family": "Product surfaces and run locations",
+      "feature": "Mobile and remote control",
+      "codex_description": "Supported mobile clients can start, steer, approve, and review Codex work running on a connected computer or in Cloud. Remote access uses the host's project, files, tools, permissions, and credentials; the phone is a control/review surface, not the local execution environment. The mobile Codex Remote experience reached general availability for connected Mac/Windows hosts in the June 25, 2026 release. This is distinct from the CLI `codex remote-control` command, which remains Experimental. Supported remote-host and SSH workflows can also move threads and Git state between hosts.",
+      "prior_audit_lens": "Shows how work can remain steerable away from the workstation. Verify who is connected, which host executes, and which host's permissions apply. Availability still varies by platform, plan, and workspace policy.",
+      "source_line": 26
+    },
+    {
+      "id": "C09",
+      "family": "Product surfaces and run locations",
+      "feature": "Codex Micro hardware controls",
+      "codex_description": "Codex Micro is a limited-run physical input device for the ChatGPT desktop app. Its Agent Keys can follow chats and reflect status; Command Keys, a stick, and a dial can trigger chat actions, approvals, skills, voice input, navigation, and other desktop commands. Supported hardware, OS input permissions, and the companion app affect availability.",
+      "prior_audit_lens": "A hardware surface can make task switching/status/steering more immediate. It is an optional peripheral, not a capability of the agent runtime itself; study its device permissions, accessibility value, and hardware dependency separately.",
+      "source_line": 27
+    },
+    {
+      "id": "C10",
+      "family": "Product surfaces and run locations",
+      "feature": "Local, worktree, and cloud environments",
+      "codex_description": "A thread can work directly in a local checkout, in an isolated Git worktree, or in a published Cloud environment. Worktrees separate concurrent Git tasks; cloud environments package reusable repositories, tools, and setup. Handoff can move a supported thread between local and worktree execution.",
+      "prior_audit_lens": "The execution location changes available data and isolation boundaries. A worktree isolates Git changes but is not a separate identity or audit engagement by itself.",
+      "source_line": 28
+    },
+    {
+      "id": "C11",
+      "family": "Agent runtime and work lifecycle",
+      "feature": "Agent harness / tool loop",
+      "codex_description": "The open Codex harness manages conversation state, streams model and tool activity, calls tools, applies sandbox and approval policy, and carries a task across turns. A model proposes or selects work; tools perform allowed operations; the client presents progress and decisions. Model access and some managed services are separate from the open-source harness.",
+      "prior_audit_lens": "This is the runtime foundation relevant to your comparison with Work. Capture the boundary between model reasoning, orchestration, tool execution, application UI, and external services rather than attributing every product capability to one component.",
+      "source_line": 67
+    },
+    {
+      "id": "C12",
+      "family": "Agent runtime and work lifecycle",
+      "feature": "Parallel independent read-only lookups",
+      "codex_description": "Recent CLI release notes document parallel execution of independent read-only lookups, including skill, memory, and conversation-history reads. This is a narrow optimization for independent reads; it does not establish general parallel writes or replace the separate subagent workflow.",
+      "prior_audit_lens": "Parallel reads can reduce wait time while keeping the main agent in control. Study the declared independence conditions, ordering, cancellation, and how partial failures are represented; do not infer concurrent mutation safety.",
+      "source_line": 68
+    },
+    {
+      "id": "C13",
+      "family": "Agent runtime and work lifecycle",
+      "feature": "Threads and turns",
+      "codex_description": "App-server exposes thread start/resume/fork/read/list/archive/delete operations and turns that accept input, execute, stream events, and complete, fail, or be interrupted. A thread can be resumed and continued; forks provide an alternate history branch.",
+      "prior_audit_lens": "Thread history can help preserve investigative context. A chat transcript does not automatically meet evidence-record, retention, or supervisory-review requirements.",
+      "source_line": 69
+    },
+    {
+      "id": "C14",
+      "family": "Agent runtime and work lifecycle",
+      "feature": "Progress, steering, and interruption",
+      "codex_description": "Clients stream agent messages, tool calls, command output, file changes, questions, approvals, and status. Users can send follow-up instructions, steer or queue work in supported clients, answer questions, or interrupt a turn. Behavior and controls vary across clients.",
+      "prior_audit_lens": "Useful for a human-in-the-loop investigation. Need to distinguish a model's progress statement from verified work performed and preserve the user's review/decision points.",
+      "source_line": 70
+    },
+    {
+      "id": "C15",
+      "family": "Agent runtime and work lifecycle",
+      "feature": "Plan mode and task lists",
+      "codex_description": "Supported clients can ask Codex to plan before making changes, show questions or a task checklist, and let the user refine the approach. Plan-mode availability and exact interaction differ by client and version; a displayed plan is model-generated working guidance, not an approved engagement program or instruction.",
+      "prior_audit_lens": "Could make an investigative approach reviewable before execution. For IIA internal audits, it would not substitute for the CAE-approved work program; other practices have their own approval roles and requirements.",
+      "source_line": 71
+    },
+    {
+      "id": "C16",
+      "family": "Agent runtime and work lifecycle",
+      "feature": "Goals and long-running tasks",
+      "codex_description": "A Codex goal can persist an objective, completion criteria, and steering context across repeated work until a stopping condition; users can inspect, edit, pause, resume, or clear it. A goal is thread state, not global memory or project instructions.",
+      "prior_audit_lens": "Could represent a bounded recurring analysis objective in later exploration. It is not equivalent to an approved audit engagement or authorization to expand scope.",
+      "source_line": 72
+    },
+    {
+      "id": "C17",
+      "family": "Agent runtime and work lifecycle",
+      "feature": "Background tasks and parallel work",
+      "codex_description": "Supported clients can keep long tasks, terminals, delegated agents, or scheduled work running while the user follows progress or does other work. Some status/task views let users inspect active or completed work and attend to items needing input.",
+      "prior_audit_lens": "Background completion should lead to a human review gate. Determine what is retained, what can still run, and how failures or missed triggers are surfaced.",
+      "source_line": 73
+    },
+    {
+      "id": "C18",
+      "family": "Inputs, reasoning, execution, and outputs",
+      "feature": "Repository and file understanding",
+      "codex_description": "Codex can inspect the working directory, search/read relevant files, follow repository instructions, explain unfamiliar code, and use attached/path-selected context. The exact read scope depends on the environment and sandbox.",
+      "prior_audit_lens": "This suggests source-bounded investigation patterns, but Codex's repo-indexing assumptions are code-specific. For audits, sources need stable IDs, provenance, scope, and evidence completeness checks.",
+      "source_line": 79
+    },
+    {
+      "id": "C19",
+      "family": "Inputs, reasoning, execution, and outputs",
+      "feature": "Code and shell execution",
+      "codex_description": "Codex can propose or run shell commands, local programs, and project tools; it can inspect output and use it in subsequent reasoning. In the CLI, the environment determines what analysis libraries and programs are present. File writes and commands are subject to sandbox and approval policy.",
+      "prior_audit_lens": "Shell/Python use may support custom data analysis when tools are installed, but the public sources do not establish a dedicated general-purpose spreadsheet/data-analysis engine in Codex CLI. Treat an analysis result as method-dependent and inspectable, not automatically validated.",
+      "source_line": 80
+    },
+    {
+      "id": "C20",
+      "family": "Inputs, reasoning, execution, and outputs",
+      "feature": "Code Mode",
+      "codex_description": "Public configuration documentation describes Code Mode as under development and off by default. Where enabled, it lets a model-authored JavaScript cell call tools through an execution host; where enabled, turn interruption is intended to stop active cells and nested tool calls, but this is feature-dependent and not an unconditional reliability guarantee; [public issue #51696](https://github.com/openai/codex/issues/51696) reports a Windows case where an interrupted cell leaves the turn hung. The public repository also has a separate [CodeModeInterrupt feature flag](https://github.com/openai/codex/blob/main/codex-rs/features/src/lib.rs). Availability depends on client/configuration; preserve the documented maturity label rather than treating it as a generally available capability.",
+      "prior_audit_lens": "Include emerging runtimes in the capability map, but keep their maturity and effective permissions visible. An execution-host interface does not by itself define a safe or auditable boundary.",
+      "source_line": 81
+    },
+    {
+      "id": "C21",
+      "family": "Inputs, reasoning, execution, and outputs",
+      "feature": "File creation and editing",
+      "codex_description": "Codex can create or modify workspace files and present diffs. Users can inspect, stage, unstage, revert, commit, or push changes in supported clients. CLI output is generally a developer file/diff workflow; it lacks Work's side-by-side artifact annotation experience.",
+      "prior_audit_lens": "In external-record mode, generated reports, analysis, scripts, or workpapers should be transferable to the practitioner's chosen systems. In built-in-record mode, questions include how drafts, evidence links, authorship, review status, and authoritative records relate.",
+      "source_line": 82
+    },
+    {
+      "id": "C22",
+      "family": "Inputs, reasoning, execution, and outputs",
+      "feature": "Images and visual inputs",
+      "codex_description": "Supported Codex clients can accept image inputs such as screenshots or diagrams. Remote and mobile clients add attachment flows, with supported types varying by host/client/version.",
+      "prior_audit_lens": "A screenshot can supply context but may not be a complete or authentic system record. Capture source, timestamp, scope, and limitations separately.",
+      "source_line": 83
+    },
+    {
+      "id": "C23",
+      "family": "Inputs, reasoning, execution, and outputs",
+      "feature": "Image generation and editing",
+      "codex_description": "Supported Codex desktop, CLI, and IDE flows can generate or edit images, including through the reusable image-generation skill. Outputs can be UI assets, illustrations, or other visual files used alongside code. Usage, quality options, and availability depend on the surface and workspace.",
+      "prior_audit_lens": "This expands Codex outputs beyond text and code. Preserve source inputs and label illustrative generated images separately from evidence or validated diagrams.",
+      "source_line": 84
+    },
+    {
+      "id": "C24",
+      "family": "Inputs, reasoning, execution, and outputs",
+      "feature": "Composer Predictions",
+      "codex_description": "In the desktop composer, an eligible user can receive a suggested continuation while drafting; Tab accepts it as a draft in the composer rather than sending the message. The changelog describes the feature as beta with account, plan, age, and region eligibility limits.",
+      "prior_audit_lens": "This is an input-efficiency aid, separate from autonomous agent action. Study whether suggestions can be distinguished from user-authored text and how accidental acceptance/send is prevented.",
+      "source_line": 85
+    },
+    {
+      "id": "C25",
+      "family": "Inputs, reasoning, execution, and outputs",
+      "feature": "Web search, built-in browser, browser extension, and Computer Use",
+      "codex_description": "CLI/IDE web search can use cached or live results according to settings; it is distinct from the local shell network proxy. The desktop built-in browser has a separate browser profile and is suited to public sites or local web apps. A supported browser extension can use existing tabs and signed-in browser context after its permissions and website access are approved. Desktop Computer Use operates supported macOS/Windows GUI apps with OS permissions and action approvals. It can expose screen content, screenshots, clipboard, and app content; per-app access and allow-list policy apply. Windows use remains in the foreground with the target visible. macOS locked use is a separate, opt-in, short-lived path scoped to trusted active turns and re-locks on local input. These are distinct paths with different browser state and policy boundaries; browser/Computer Use do not inherit shell network rules. Page content remains untrusted, and some UI actions, such as built-in-browser file upload, are unsupported.",
+      "prior_audit_lens": "Useful for public criteria or observing application workflows. Treat page content and visual output as untrusted/contextual evidence; retain source, access date, and scope. GUI actions can expose signed-in sessions or affect external systems, so distinguish inspection from consequential change and record which browser path supplied context.",
+      "source_line": 86
+    },
+    {
+      "id": "C26",
+      "family": "Inputs, reasoning, execution, and outputs",
+      "feature": "Browser annotations and site integration API",
+      "codex_description": "In the desktop app built-in browser, a user can select page content, add a comment, and send selected content plus available context into Codex. The Browser Annotation API lets a website customize selectable targets, metadata, and preview controls; some controls are available only in Codex or on localhost. In the reviewed docs, WebMCP is separate: Work/Codex may use regular browser interactions without those being WebMCP tool calls.",
+      "prior_audit_lens": "This gives the user a structured way to point Codex at a passage, object, or UI state. Study what page metadata accompanies the selection, whether it is user-visible, and how it differs from evidence capture or an app connector action.",
+      "source_line": 87
+    },
+    {
+      "id": "C27",
+      "family": "Inputs, reasoning, execution, and outputs",
+      "feature": "Appshots",
+      "codex_description": "In the ChatGPT desktop app on macOS and Windows, an Appshot attaches an image of the frontmost window plus text the app makes available, which can include accessible text outside the visible scroll area. Some apps expose only the screenshot/visible content. It requires relevant OS permissions and becomes an attachment in the chat/session.",
+      "prior_audit_lens": "A fast way to provide context from another application, but it is a point-in-time capture with app-dependent text coverage, not a complete system record or evidence acquisition protocol.",
+      "source_line": 88
+    },
+    {
+      "id": "C28",
+      "family": "Inputs, reasoning, execution, and outputs",
+      "feature": "Analysis and code review",
+      "codex_description": "Codex can reason over repository state and tool output, run project-specific analysis commands, and perform a dedicated `/review` of a diff, commit, or branch. Review reports prioritized findings without changing the working tree. Desktop review surfaces support Git review and inline feedback. The separate Codex Security capability has local plugin/workbench, Cloud, CLI, and SDK entry points; it produces code-vulnerability findings with evidence and supports validation/remediation workflows. Security Cloud is a research preview for connected GitHub repository scans and monitoring new commits. Security Review can post findings meeting configured thresholds to GitHub PRs while keeping its full report in Codex. Access and maturity differ by entry point.",
+      "prior_audit_lens": "The review workflow is a strong example of separating analysis from mutation. A software finding review or vulnerability scan is not the same as an auditor’s evaluation or a conclusion approved under a specific practice methodology.",
+      "source_line": 89
+    },
+    {
+      "id": "C29",
+      "family": "Inputs, reasoning, execution, and outputs",
+      "feature": "Codex Security scans and workbench",
+      "codex_description": "Codex Security is a distinct security product family: a local plugin/workbench for interactive repository scans and findings; a Cloud plugin for connected GitHub repositories and commit monitoring; and CLI/SDK paths for repeatable or automated scans. It supports deep and bulk scans, change reviews, triage of existing findings, patch generation and verification, hardening proposals, vulnerability reports, export/tracking, and GitHub/GitLab CI flows. Cloud is documented as research preview; access, runtime, and maturity differ by entry point. This is separate from the sandbox and permissions that secure Codex itself.",
+      "prior_audit_lens": "Study scan scope, coverage, finding evidence, history, triage, fix verification, and exports. This security product is not an audit methodology or general-purpose audit assurance layer.",
+      "source_line": 90
+    },
+    {
+      "id": "C30",
+      "family": "Inputs, reasoning, execution, and outputs",
+      "feature": "Desktop editor and PR Chat",
+      "codex_description": "The ChatGPT desktop app lets users edit Markdown and code, annotate selected content to request revisions, and review GitHub PRs in contextual PR Chat. Supported flows include inline review feedback and inspecting, editing, accepting, or rejecting proposed patches. These are desktop product interactions layered on the Codex work loop.",
+      "prior_audit_lens": "Study the distinction between in-place artifact editing, conversational requests, review comments, and accepted changes. A patch acceptance is not equivalent to audit-workpaper approval.",
+      "source_line": 91
+    },
+    {
+      "id": "C31",
+      "family": "Inputs, reasoning, execution, and outputs",
+      "feature": "Generated outputs and previews",
+      "codex_description": "Codex returns text and file changes, with file previews for supported documents, presentations, spreadsheets, PDFs, and HTML where available; supported previews can accept annotations. CLI has no equivalent visual preview/annotation surface, and IDE workflows depend on a compatible external viewer. Code review is especially Git-diff-centered. CLI clients expose results in the terminal.",
+      "prior_audit_lens": "Study which outputs can be reopened/reviewed and which are only transient conversation content. Do not assume Codex artifact handling equals Work's document/spreadsheet authoring workflow.",
+      "source_line": 92
+    },
+    {
+      "id": "C32",
+      "family": "Inputs, reasoning, execution, and outputs",
+      "feature": "Sites and hosted app outputs",
+      "codex_description": "As of this catalog's cut-off, Sites is a public-beta, ChatGPT-managed capability in supported web or desktop flows. Codex can help create/refine websites, dashboards, web apps, games, or compatible existing projects, then save, deploy, and manage them through the Sites experience. CLI/IDE can edit and test local source but do not provide the same Sites project management workflow. Deployment URLs are production deployments, so a saved non-deployed version is available for review first.",
+      "prior_audit_lens": "This is a productized build-and-publish workflow with hosting and optional data storage, not just code generation. Study versioning, identity/access controls, deployment visibility, hosting boundary, and how generated app data is handled.",
+      "source_line": 93
+    },
+    {
+      "id": "C33",
+      "family": "Tools, integrations, and extension mechanisms",
+      "feature": "Built-in tools",
+      "codex_description": "The runtime provides tools for workspace files, shell/process execution, images, web search, and related agent operations depending on surface and environment. A tool's availability is not the same as permission to use it; sandbox and approval checks apply.",
+      "prior_audit_lens": "Make capability, authorization, and actual invocation separately observable.",
+      "source_line": 99
+    },
+    {
+      "id": "C34",
+      "family": "Tools, integrations, and extension mechanisms",
+      "feature": "Connected apps and app catalog",
+      "codex_description": "App integrations are a separate capability family from arbitrary MCP servers. App-server exposes app catalog and installation/effective-state information; clients can distinguish an app that is accessible from one that is enabled and one that is currently callable under configuration, tool policy, and identity. CLI exposes an `/apps` picker where supported. App/connector traffic is outside the sandboxed-command network proxy and its domain allowlist, so it has a separate network-control path.",
+      "prior_audit_lens": "Inventory the app, its effective enabled/callable state, identity, scopes, network path, and available operations separately from MCP server configuration. A visible app entry does not prove a particular tool call is available or authorized.",
+      "source_line": 100
+    },
+    {
+      "id": "C35",
+      "family": "Tools, integrations, and extension mechanisms",
+      "feature": "MCP servers and connected tools",
+      "codex_description": "Codex can connect to local or remote Model Context Protocol servers. Servers can expose tools, readable resources, and reusable prompts; the user can inspect available servers/tools and authenticate. Tools may be read-only or cause external side effects. Codex can connect to external MCP servers; its former standalone codex mcp-server host was removed. The app-server uses a separate JSON-RPC protocol and is not a drop-in MCP replacement.",
+      "prior_audit_lens": "An auditor-specific tool connection needs least-privilege scopes, identity transparency, freshness indicators, and a distinction between reading evidence and changing a source system.",
+      "source_line": 101
+    },
+    {
+      "id": "C36",
+      "family": "Tools, integrations, and extension mechanisms",
+      "feature": "Plugins and marketplaces",
+      "codex_description": "Plugins package reusable capabilities and can include skills, MCP servers, optional UI, browser extensions, or hooks. Plugins may be installed from curated or project/team marketplaces. Installing a plugin and authorizing each embedded capability are separate concerns. Workspace skills, local filesystem skills, and plugin-packaged skills have distinct ownership and lifecycle controls; plugin support and management differ by client, including the IDE extension.",
+      "prior_audit_lens": "A plugin can package approved audit procedures and authorized data connectors. Review every included script, tool, identity, and permission; a marketplace listing is not assurance of audit-methodology approval.",
+      "source_line": 102
+    },
+    {
+      "id": "C37",
+      "family": "Tools, integrations, and extension mechanisms",
+      "feature": "Skills",
+      "codex_description": "A skill is a reusable workflow bundle: instructions plus optional reference material, scripts, and resources. Codex can select a skill from its description or a user can invoke it explicitly. Skills guide behavior; they do not themselves grant access to records or apps. Workspace skills, local filesystem skills, and plugin-packaged skills have different owners, distribution paths, and administrator controls.",
+      "prior_audit_lens": "Could encode a controlled test method or report convention. Research ownership, versioning, approval, and evidence of which skill version was used.",
+      "source_line": 103
+    },
+    {
+      "id": "C38",
+      "family": "Tools, integrations, and extension mechanisms",
+      "feature": "Record & Replay",
+      "codex_description": "On supported macOS desktop setups with Computer Use enabled, a user can demonstrate a workflow after granting recording permission. Codex observes actions and window content until recording is stopped, then drafts a reusable skill with inputs, steps, and verification guidance. The skill can later use tools available in that task, including Computer Use, browser actions, and plugins. The guidance recommends avoiding secrets and sensitive data.",
+      "prior_audit_lens": "This could turn a demonstrated repetitive workflow into a draft procedure. The steps need review and validation across cases; recording does not establish that a procedure is appropriate or prove a later replay was performed correctly.",
+      "source_line": 104
+    },
+    {
+      "id": "C39",
+      "family": "Tools, integrations, and extension mechanisms",
+      "feature": "Repository instructions and configuration",
+      "codex_description": "`AGENTS.md` gives durable repository/project guidance; Codex discovers applicable instruction files across relevant directories. `config.toml` and managed requirements configure models, tools, approvals, sandboxing, and other behavior with layered precedence. Some config can exist outside the project.",
+      "prior_audit_lens": "This is powerful operational context. For a folder-scoped auditor product, explicitly study precedence and prevent unintended user-wide or machine-wide context from silently shaping engagement work.",
+      "source_line": 105
+    },
+    {
+      "id": "C40",
+      "family": "Tools, integrations, and extension mechanisms",
+      "feature": "Hooks",
+      "codex_description": "Lifecycle hooks can invoke scripts or already-connected MCP tools at events such as prompt submission, tool use, compaction, subagent stop, or turn/session end. Hooks can add context or enforce a supported policy; command hooks run in the execution environment. Non-managed hooks require review/trust, and hook capabilities vary by execution mode.",
+      "prior_audit_lens": "Hooks can apply validation, logging, or policy checks, but failure semantics and coverage matter. A hook is not automatically a complete immutable audit log; verify which events it sees and what happens on error/timeout.",
+      "source_line": 106
+    },
+    {
+      "id": "C41",
+      "family": "Tools, integrations, and extension mechanisms",
+      "feature": "App-server protocol",
+      "codex_description": "The open-source app-server lets a rich client communicate with a local Codex process over JSON-RPC using stdio by default, with Unix socket and experimental WebSocket transports under documented limitations. It exposes account/auth, thread/turn operations, streamed events, models/config, tools, app catalog state, and approvals. The former codex mcp-server was removed; the app-server is a different JSON-RPC protocol, not an MCP server. Its dynamicTools/item-tool-call extension is experimental and requires opt-in. Execution APIs have different authority: `thread/shellCommand` is explicitly user-initiated and outside the thread sandbox with full access; `command/exec` runs under the server sandbox; experimental `process/spawn` can run outside the sandbox and requires opting into the experimental API. The `codex app-server` command is Experimental; docs say the command and WebSocket transport are not supported for production.",
+      "prior_audit_lens": "This is the clearest public integration surface for studying how a host UI can own workflow while Codex supplies a runtime. Execution paths demonstrate why an integrator must map authority per operation and avoid treating the app-server as one uniform sandbox. Experimental API status and limitations need checking before any later decision; this is not evidence Work uses this design.",
+      "source_line": 107
+    },
+    {
+      "id": "C42",
+      "family": "Tools, integrations, and extension mechanisms",
+      "feature": "Client-supplied dynamic tools (app-server)",
+      "codex_description": "The app-server supports clients supplying dynamic tool definitions and handling model requests through an item/tool/call cycle. The API is experimental, requires experimental API opt-in, and is distinct from connecting an external MCP server.",
+      "prior_audit_lens": "This lets an integrating product provide task-specific tools at runtime. Study schema trust, identity, approvals, cancellation, result validation, and how the host sees each call.",
+      "source_line": 108
+    },
+    {
+      "id": "C43",
+      "family": "Tools, integrations, and extension mechanisms",
+      "feature": "Codex SDK, non-interactive execution, and GitHub Action",
+      "codex_description": "The TypeScript SDK wraps/spawns the CLI and exchanges JSONL for local thread run/stream/resume; the Python SDK controls local app-server over JSON-RPC and is documented as stable. The Python SDK is documented as a stable package, while the `codex app-server` command is Experimental and the WebSocket transport is not supported for production; these are separate maturity labels. `codex exec` runs scripted/CI tasks and can emit JSONL lifecycle/tool events or avoid persisting rollout files when ephemeral. OpenAI documents a GitHub Action for repository automation.",
+      "prior_audit_lens": "Separate attended engagement tasks from unattended batch jobs. Any later audit use would need explicit scope, identity, approval, logging, and stop conditions.",
+      "source_line": 109
+    },
+    {
+      "id": "C44",
+      "family": "Tools, integrations, and extension mechanisms",
+      "feature": "Task entry points from connected services",
+      "codex_description": "Depending on plan and configuration, Codex can participate in GitHub review flows and selected integrations such as GitHub, GitLab, Slack, or Linear. GitLab Cloud support is beta as of this catalog's research cut-off. Enterprise Cloud delegation can also let users route tasks from Slack or Microsoft Teams into configured Cloud environments. These entry points create or route work from another service; they are separate from the local CLI/app-server tool loop and may use hosted execution.",
+      "prior_audit_lens": "Determine whether an item is a task request, source evidence, comment, or approval, and which identity and record system owns it. Connector availability and automation behavior are workspace-specific.",
+      "source_line": 110
+    },
+    {
+      "id": "C45",
+      "family": "Delegation and collaboration",
+      "feature": "Subagents",
+      "codex_description": "A main agent can delegate independent questions to specialized agents, each with its own task context; the main agent coordinates and combines returned findings. Local Codex can be instructed directly or by applicable `AGENTS.md`/skill guidance. Custom definitions can set role instructions and supported model/reasoning options. Users can inspect agent activity/threads in supported clients.",
+      "prior_audit_lens": "Parallel research can cover criteria, population analysis, or evidence groups. Preserve who/what produced each result, source range, independence, and reviewer verification. Parallel output is not corroboration unless the methods and evidence are independent.",
+      "source_line": 116
+    },
+    {
+      "id": "C46",
+      "family": "Delegation and collaboration",
+      "feature": "Side chats, fork, and task references",
+      "codex_description": "A side chat or fork starts a separate conversation path so a focused question or alternate approach can be explored without rewriting the parent transcript. Some clients can reference other tasks and navigate between parent/child work.",
+      "prior_audit_lens": "Supports focused consultation and rework. Research how conclusions flow back and how superseded branches are marked so an auditor does not cite a stale path.",
+      "source_line": 117
+    },
+    {
+      "id": "C47",
+      "family": "Delegation and collaboration",
+      "feature": "Worktrees and concurrent tasks",
+      "codex_description": "Git worktrees give independent Codex chats separate working directories for the same repository; app-managed worktrees can be disposable or permanent. Local, remote, scheduled, and cloud task behavior differs.",
+      "prior_audit_lens": "This is a concurrency/isolation pattern for code. Filesystem isolation does not replace the practitioner's chosen engagement, evidence, approval, or transaction systems.",
+      "source_line": 118
+    },
+    {
+      "id": "C48",
+      "family": "Context, memory, and continuity",
+      "feature": "Active context and compaction",
+      "codex_description": "Codex carries relevant thread instructions, user turns, tool results, and working state in the active context. When context grows, automatic or requested compaction replaces earlier history with a condensed continuation state; clients can expose compaction/activity events. Compaction reduces context pressure but is not a promise that every detail remains.",
+      "prior_audit_lens": "Important scope, criteria, evidence IDs, and approvals should be persisted in explicit records, not left dependent on a compressed conversational context. Examine recovery and traceability behavior.",
+      "source_line": 124
+    },
+    {
+      "id": "C49",
+      "family": "Context, memory, and continuity",
+      "feature": "Conversation persistence and history",
+      "codex_description": "Codex clients can resume, list, search, fork, archive, or delete local/cloud/remote threads depending on surface. App-server history is structured in thread/turn/item events; local rollout storage and Cloud storage differ.",
+      "prior_audit_lens": "A persistent thread is useful working context, but it is not necessarily the authoritative audit file, final workpaper, or immutable log.",
+      "source_line": 125
+    },
+    {
+      "id": "C50",
+      "family": "Context, memory, and continuity",
+      "feature": "Memory",
+      "codex_description": "Local Codex memory can retrieve reusable details from prior work when enabled; current docs describe it as a separate, controllable local store, disabled by default in the documented configuration. It is distinct from ChatGPT account/workspace memory.",
+      "prior_audit_lens": "Do not rely on recalled memory for audit criteria, transaction facts, or approvals. Study inspectability, deletion, scope, and how task-specific data is kept out of reusable memory.",
+      "source_line": 126
+    },
+    {
+      "id": "C51",
+      "family": "Context, memory, and continuity",
+      "feature": "Computer History",
+      "codex_description": "An optional macOS desktop capability turns interaction events and accessibility text from user-allowed apps/sites into a searchable timeline and local Markdown memories that ChatGPT and Codex can reference. It requires Memories; workspace access and individual opt-in are separate in managed workspaces. Temporary event files are kept locally for up to 48 hours. An ephemeral Codex session processes the event stream on OpenAI servers to create summaries; generated Markdown memories remain local and are not encrypted by this feature. It does not include screenshots or private-mode browsing.",
+      "prior_audit_lens": "This is a distinct, ambient context source, not ordinary conversation memory. Study consent, per-app/site scope, pause/delete controls, local storage, processing path, and whether its event-derived summaries are suitable for any specific work.",
+      "source_line": 127
+    },
+    {
+      "id": "C52",
+      "family": "Context, memory, and continuity",
+      "feature": "Durable instructions vs memory vs skills",
+      "codex_description": "`AGENTS.md` sets project/repository guidance; skills package repeatable task procedures; memory recalls selected prior context; conversation history stores the current/previous interaction. They have different scope, lifecycle, precedence, and visibility.",
+      "prior_audit_lens": "This separation is central to the user's two-layer study. Audit methodology, engagement-specific facts, and personal preferences should not be conflated; later planning must define authority and retention for each.",
+      "source_line": 128
+    },
+    {
+      "id": "C53",
+      "family": "Context, memory, and continuity",
+      "feature": "Usage, models, speed, and reasoning controls",
+      "codex_description": "Users can select available models/reasoning effort and inspect usage, token activity, or limits in supported clients. Fast mode speeds supported models with higher usage; Ultrafast supports selected models on eligible plans and has higher usage multipliers. Fast is documented for desktop, CLI, and IDE with ChatGPT sign-in; Ultrafast availability and workspace enablement depend on model, plan, residency, and billing arrangement. Subagents and tool work also consume resources.",
+      "prior_audit_lens": "For later review, determine which model, speed, effort, skill, and agent configuration shaped an output, and how cost/usage is attributed. A selected model or faster setting is not a substitute for human validation.",
+      "source_line": 129
+    },
+    {
+      "id": "C54",
+      "family": "Context, memory, and continuity",
+      "feature": "Amazon Bedrock provider",
+      "codex_description": "Supported local desktop, CLI, IDE, and SDK workflows can send model requests directly to Amazon Bedrock using AWS-native authentication and access controls. In that request path, the OpenAI-hosted Responses API is not involved. Cloud-hosted Codex tasks and features requiring OpenAI-hosted services are not supported through this direct provider path; supported models and features vary by AWS Region and endpoint.",
+      "prior_audit_lens": "This changes the model provider, identity, and data path while leaving the local Codex harness in use. Capture which client, endpoint, model, AWS identity, region, and unavailable hosted features apply.",
+      "source_line": 130
+    },
+    {
+      "id": "C55",
+      "family": "Context, memory, and continuity",
+      "feature": "Organization model gateway",
+      "codex_description": "Codex can route model-provider requests through an organization-configured LLM gateway using a gateway URL, provider ID, model alias, credential or token resolver, and optional model catalog. The gateway must support the documented Responses API streaming/tool behavior. A separate ChatGPT-sign-in-through-gateway path is documented. This governs model requests only: MCP, plugins, apps, and other tools can use separate network and identity paths.",
+      "prior_audit_lens": "A gateway can centralize model routing, credentials, and some observability without making the entire agent task or every connected tool pass through that gateway. Map model traffic separately from evidence-source access and tool execution.",
+      "source_line": 131
+    },
+    {
+      "id": "C56",
+      "family": "Context, memory, and continuity",
+      "feature": "Local open-source model provider (`--oss`)",
+      "codex_description": "The CLI can use a local Ollama or LM Studio provider with `--oss`; `--local-provider` selects one for a run, while `oss_provider` sets the default. Interactive CLI can prompt if none is selected; non-interactive `codex exec` errors when no local provider is configured. This is a CLI model path and does not establish that integrations or every tool work offline.",
+      "prior_audit_lens": "Local model execution changes the inference path but not necessarily the data path of connected apps or tools. Keep provider identity, local service, model capability, and online integrations distinct.",
+      "source_line": 132
+    },
+    {
+      "id": "C57",
+      "family": "Context, memory, and continuity",
+      "feature": "Programmatic access and service identities",
+      "codex_description": "In supported Enterprise/Business configurations, Codex access tokens can authenticate trusted non-interactive local CLI or app-server workflows as the workspace user who created the token; service-account flows are separately documented. These are credentials for automation, not ordinary interactive sign-in or general API keys.",
+      "prior_audit_lens": "Record the effective principal and credential type for unattended runs. Token support and scopes are plan/admin dependent; public CI, shared runners, or reused human tokens change the exposure and attribution model.",
+      "source_line": 133
+    },
+    {
+      "id": "C58",
+      "family": "Workflow, review, and operational controls",
+      "feature": "Git and change review",
+      "codex_description": "Desktop Codex can show unstaged/staged/commit/branch/last-turn diffs, annotate lines, stage/unstage/revert chunks or files, commit, push, and create pull requests in supported setups. `/review` can analyze a selected diff without changing the working tree.",
+      "prior_audit_lens": "This provides granular review and acceptance steps for code. Map analogous audit review concepts only after separating software changes from audit evidence and workpaper approval.",
+      "source_line": 139
+    },
+    {
+      "id": "C59",
+      "family": "Workflow, review, and operational controls",
+      "feature": "Scheduled tasks",
+      "codex_description": "The desktop app can schedule tasks against local projects or isolated worktrees; tasks can recur and use skills/plugins. Local schedules require the computer/app to be available; CLI and IDE do not provide the same management UI. Scheduled tasks may be configured to return to an existing chat or start separately, and run unattended under configured/default sandbox and approval settings. Event-triggered Work tasks (Gmail, Slack, GitHub) are a separate workflow documented in the Work catalog, not the Codex desktop local-project schedule path.",
+      "prior_audit_lens": "Could support repeat monitoring or recurring evidence checks, but scheduling does not assure successful execution or authorize closure of an audit action. Review every run and its access scope.",
+      "source_line": 140
+    },
+    {
+      "id": "C60",
+      "family": "Workflow, review, and operational controls",
+      "feature": "Voice and dictation",
+      "codex_description": "Supported desktop/mobile clients offer voice input or voice task interaction to start, steer, or review work; model and platform support vary. Desktop voice can continue with an existing task's context/model. Screen context is documented for macOS and may include accessible text outside the current viewport; CLI `/voice` is a separate experimental path. No general audio/video-file input claim is established for CLI in this pass.",
+      "prior_audit_lens": "Useful for hands-free steering or notes, but does not establish an audit interview record, consent, transcription completeness, or evidence retention.",
+      "source_line": 141
+    },
+    {
+      "id": "C61",
+      "family": "Workflow, review, and operational controls",
+      "feature": "Notifications and task visibility",
+      "codex_description": "Desktop/mobile surfaces show active, unread, blocked, or waiting work and can notify the user when attention is needed. Exact states, filters, and alerts vary by client.",
+      "prior_audit_lens": "A status indicator should lead to examination of the underlying run and output, not serve as a sign-off.",
+      "source_line": 142
+    },
+    {
+      "id": "C62",
+      "family": "Workflow, review, and operational controls",
+      "feature": "Pets and floating task companion",
+      "codex_description": "In the ChatGPT desktop app, an optional animated pet can float above other windows, open a chat by text or voice, and show task activity. The selected pet changes appearance rather than agent behavior. Custom pets are available through the app; Codex CLI can use a user's own pet.",
+      "prior_audit_lens": "This is a peripheral status and entry surface rather than an agent capability. Evaluate whether ambient cues help practitioners, while keeping status indicators distinct from authoritative completion or approval records.",
+      "source_line": 143
+    },
+    {
+      "id": "C63",
+      "family": "Workflow, review, and operational controls",
+      "feature": "Import and setup migration",
+      "codex_description": "The desktop app can import supported setup/recent work from Claude Code, Claude Cowork, or Cursor. Codex CLI imports from Claude Code or Cursor using local `/import`; it can include up to 50 chats from the last 30 days and is unavailable during a running task, remote session, or local app-server daemon. Supported imports can include instruction files, settings, skills, plugins, project folders, memories, MCP configuration, hooks, slash commands, subagents, and recent chats. Imported plugins/connections may still need authorization.",
+      "prior_audit_lens": "Useful for studying portability, but importing an instruction or hook can change behavior. Maintain provenance and review configuration before relying on it.",
+      "source_line": 144
+    },
+    {
+      "id": "C64",
+      "family": "Workflow, review, and operational controls",
+      "feature": "Shared thread snapshots",
+      "codex_description": "The ChatGPT desktop app on macOS can publish a read-only point-in-time snapshot of a local Codex thread. Personal-account links can be opened by anyone with the link; workspace links can be restricted to the originating workspace and invited people/groups. A snapshot includes supported visible thread content and diffs, not original tool calls or their inputs/outputs; known secret patterns are redacted, but other sensitive content can remain. Links can be reviewed or revoked.",
+      "prior_audit_lens": "Sharing a result is separate from granting access to its project or execution environment. Examine audience, snapshot contents, redaction limits, and revocation when mapping collaboration and review.",
+      "source_line": 145
+    },
+    {
+      "id": "C65",
+      "family": "Security, privacy, and trust boundaries",
+      "feature": "Sandbox and permission profiles",
+      "codex_description": "Codex distinguishes filesystem write scope from network access; the sandbox governs what a command can technically access. Local OS enforcement differs by macOS, Linux/WSL, and Windows. Local, worktree, remote host, and Cloud environments have separate available resources. New named permission profiles for local commands are documented as beta and actively changing; they define filesystem/network access and differ from legacy `sandbox_mode` settings. Cloud setup and agent phases also have separate access.",
+      "prior_audit_lens": "Model technical reach separately from identity and approval. A workspace sandbox is a technical boundary, not an engagement authorization decision.",
+      "source_line": 151
+    },
+    {
+      "id": "C66",
+      "family": "Security, privacy, and trust boundaries",
+      "feature": "Approvals and automatic review",
+      "codex_description": "Sandbox and approval policy are separate. Routine operations allowed inside the active sandbox can proceed without a separate prompt; approval is generally relevant when an action would cross the boundary or configured policy requires confirmation. Auto-review routes eligible interactive approval requests to a separate reviewer; it does not grant permissions or expand access, requires an interactive approval mode, and can make mistakes. Computer Use prompts still go to the user. Full access combines `danger-full-access` and `approval_policy=never`, removing sandbox boundaries and approval prompts.",
+      "prior_audit_lens": "Study what is permitted, what triggers a prompt, who can approve/review, and what evidence the client records. Never assume every action has a separate prompt or that user/agent approval validates the result.",
+      "source_line": 152
+    },
+    {
+      "id": "C67",
+      "family": "Security, privacy, and trust boundaries",
+      "feature": "Approved cyber model access (Daybreak / Trusted Access)",
+      "codex_description": "Daybreak Blue is an approved defensive-cyber model offering; Daybreak Red is a specialist cyber offering for explicitly authorized advanced work and requires separate approval/provisioning. Access is conditional on the approved identity or service, workspace/API organization and project, model/offering, and product surface. Approval for Blue does not grant Red, and Trusted Access does not itself grant Zero Data Retention. This model-access program is separate from the Codex Security scanner.",
+      "prior_audit_lens": "This is a specialized access/safeguard path rather than a general Codex capability or audit methodology. For IT/IS audit research, record the authorization boundary, eligible model, client, project, environment, and oversight requirements; never infer that approval authorizes activity outside its stated scope.",
+      "source_line": 153
+    },
+    {
+      "id": "C68",
+      "family": "Security, privacy, and trust boundaries",
+      "feature": "Prisma AIRS prompt inspection",
+      "codex_description": "In supported ChatGPT-workspace-authenticated Codex app, CLI, IDE, and Cloud workflows, an administrator can route newly submitted prompt text to configured Prisma AIRS for DLP, prompt-injection, or malicious-URL checks. Policy can block or alert and can be configured fail-open or fail-closed. This does not scan model responses, tool calls/results, files, or images; API-key-authenticated sessions are excluded. Availability is organization-configured and request/enablement-dependent.",
+      "prior_audit_lens": "This is an external prompt guardrail with a narrow inspection boundary. Study exactly which inputs are inspected, which identities and surfaces are in scope, and how block/alert outcomes are exposed and recorded.",
+      "source_line": 154
+    },
+    {
+      "id": "C69",
+      "family": "Security, privacy, and trust boundaries",
+      "feature": "Command rules",
+      "codex_description": "Separate command-prefix rules can allow a command outside the sandbox without prompting, require a prompt on each matching invocation, or forbid it. Rules are documented as experimental; when multiple rules match, the most restrictive decision wins. Rules are not a general control over apps, MCP, browser, Computer Use, or Cloud tools.",
+      "prior_audit_lens": "Treat command rules as another authorization layer, distinct from sandbox reach, approval policy, and connector permissions. Record rule source, matching logic, precedence, and shell parsing limits.",
+      "source_line": 155
+    },
+    {
+      "id": "C70",
+      "family": "Security, privacy, and trust boundaries",
+      "feature": "Agent Security and managed policy",
+      "codex_description": "Enterprise Agent Security separates Global orchestrator controls (such as approvals and web-search modes) from execution settings, with supported Local and Codex Cloud overrides and inheritance rules. Managed requirements can govern permission profiles, sandboxing, networking, apps/MCP/plugins, rules, and hooks. ChatGPT Work Cloud has separate capability permissions and does not inherit Codex Cloud Agent Security requirements.",
+      "prior_audit_lens": "This is an administrator policy plane above personal configuration. Study effective settings, precedence, environment scope, and how the product explains inherited or managed restrictions.",
+      "source_line": 156
+    },
+    {
+      "id": "C71",
+      "family": "Security, privacy, and trust boundaries",
+      "feature": "Workspace roles, access, and user lifecycle",
+      "codex_description": "Enterprise/business administration separates workspace seat and role from local runtime access, Codex Cloud, Platform API, plugin access, and source-system permissions. SCIM/groups can provision access; lifecycle workflows include moves and deprovisioning. Codex tokens require separate review/revocation: disabling local access can suspend tokens without revoking them, so restoring access can reactivate them. Controls and available surfaces depend on plan and organization configuration.",
+      "prior_audit_lens": "Map effective identity, runtime entitlement, source-system principal, and administrator authority separately. A removed workspace seat or disabled local feature does not necessarily revoke every credential or external connection.",
+      "source_line": 157
+    },
+    {
+      "id": "C72",
+      "family": "Security, privacy, and trust boundaries",
+      "feature": "Source/connector identity",
+      "codex_description": "MCP/app connections use their configured authentication and permission scope; connected remote hosts use host-side credentials and tools. The identity that executes a task can differ from the person steering it.",
+      "prior_audit_lens": "Show the principal, source account, host, and scope for every evidence access or consequential action.",
+      "source_line": 158
+    },
+    {
+      "id": "C73",
+      "family": "Security, privacy, and trust boundaries",
+      "feature": "Untrusted inputs and hooks",
+      "codex_description": "Repository files, web pages, tool outputs, and plugin content can contain untrusted instructions. Hooks and plugin-bundled code execute in the local runtime after their required trust review; external tools can have side effects.",
+      "prior_audit_lens": "Keep evidence content separate from agent instruction authority. Review extensions and tool outputs, and make side-effect boundaries explicit.",
+      "source_line": 159
+    },
+    {
+      "id": "C74",
+      "family": "Security, privacy, and trust boundaries",
+      "feature": "Enterprise usage analytics and compliance records",
+      "codex_description": "Workspace analytics and Usage Insights summarize adoption and usage; the Analytics API provides aggregated daily usage and requires the relevant enterprise admin scope. The Compliance API is a distinct append-only event stream for supported records, while OpenTelemetry provides a separate local runtime telemetry path. These are not interchangeable or complete logs of every prompt, local command, file operation, screenshot, approval, connector action, or model decision; availability and coverage depend on the product surface, role, and API scope.",
+      "prior_audit_lens": "Separate product-usage measurement, operational telemetry, and compliance records. For auditors, make coverage gaps and export/retention limits explicit; do not treat any one source as an authoritative workpaper record.",
+      "source_line": 160
+    },
+    {
+      "id": "C75",
+      "family": "Security, privacy, and trust boundaries",
+      "feature": "Retention, logs, and telemetry",
+      "codex_description": "Codex stores thread/rollout data and may expose usage, app-server events, or task histories depending on surface. Optional OpenTelemetry monitoring is off by default; this is distinct from Enterprise Analytics API usage summaries and the Compliance API event stream, which have separate scope and retention rules. When enabled, documented structured events include chats, API requests, stream activity, user prompts (redacted by default), approval decisions, and tool results. Public docs do not establish one complete immutable audit log of every model decision, file read, command, external tool action, approval, or output. Retention and deletion vary by product/environment.",
+      "prior_audit_lens": "Treat logging coverage, export, deletion, and legal retention as an open research area. OTel can provide operational telemetry, but a run transcript or monitoring stream should not be presumed complete or immutable without checking documented coverage.",
+      "source_line": 161
+    },
+    {
+      "id": "C76",
+      "family": "User-supplied composition hypothesis for later planning",
+      "feature": "Task workflow",
+      "codex_description": "ChatGPT Work documentation: outcome-focused requests, multi-step research, connected sources, progress steering, approvals, recurring work, and reviewable artifacts.",
+      "prior_audit_lens": "Which workflow concepts make a complex engagement understandable, steerable, and reviewable for an auditor?",
+      "source_line": 169
+    },
+    {
+      "id": "C77",
+      "family": "User-supplied composition hypothesis for later planning",
+      "feature": "Agent capability/runtime",
+      "codex_description": "Codex docs and public source: tool loop, file and shell execution, local/cloud/worktree environments, app-server, thread/context lifecycle, subagents, skills/plugins/MCP/hooks, and security controls.",
+      "prior_audit_lens": "Which runtime and extension concepts enable safe, inspectable analysis and flexible tooling? What capabilities are platform-specific?",
+      "source_line": 170
+    },
+    {
+      "id": "C78",
+      "family": "User-supplied composition hypothesis for later planning",
+      "feature": "Auditor-tailored workflow",
+      "codex_description": "Multiple audit/advisory practice contexts; the IIA 2024 Standards crosswalk is one internal-audit example.",
+      "prior_audit_lens": "Which workflow concepts are common, which should be configurable by practice area, industry, team, and methodology, and how should the external-record and built-in-record modes work?",
+      "source_line": 171
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "date": "2026-10-26",
+  "check_type": "documentation-only",
+  "documents_checked": 10,
+  "local_link_targets_checked": 136,
+  "missing_targets": [],
+  "baseline_files_checked": 9,
+  "baseline_hash_mismatches": 0,
+  "source_index_urls": 56,
+  "pinned_source_file_urls": 30,
+  "feature_map_validation": "79 entries; zero missing IDs, duplicate IDs or name mismatches",
+  "proposed_workflow_specifications": 4,
+  "executed_workflow_specifications": 0,
+  "product_code_built": false,
+  "installs_or_global_config_changes": false
+}

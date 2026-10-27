@@ -1,0 +1,40 @@
+:root {
+  --font-sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+
+  --text-2xs: 10.5px;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-sm-plus: 12.5px;
+  --text-ui: 13px;
+  --text-body-sm: 13.5px;
+  --text-body: 14px;
+  --text-lg: 16px;
+  --text-title: 18px;
+  --text-display: 28px;
+  --text-hero: 32px;
+
+  --leading-tight: 1.2;
+  --leading-ui: 1.45;
+  --leading-body: 1.55;
+  --leading-code: 1.6;
+
+  --tracking-display: -0.02em;
+  --tracking-title: -0.01em;
+  --tracking-label: 0.04em;
+  --tracking-overline: 0.06em;
+
+  /* Semantic type roles */
+  --type-hero: var(--weight-semibold) var(--text-hero)/1.15 var(--font-sans);
+  --type-display: var(--weight-semibold) var(--text-display)/var(--leading-tight) var(--font-sans);
+  --type-title: var(--weight-semibold) var(--text-body)/var(--leading-ui) var(--font-sans);
+  --type-body: var(--weight-regular) var(--text-body)/var(--leading-body) var(--font-sans);
+  --type-ui: var(--weight-regular) var(--text-ui)/var(--leading-ui) var(--font-sans);
+  --type-caption: var(--weight-regular) var(--text-sm)/var(--leading-ui) var(--font-sans);
+  --type-label: var(--weight-medium) var(--text-xs)/1 var(--font-mono);
+  --type-code: var(--weight-regular) 11.5px/var(--leading-code) var(--font-mono);
+}

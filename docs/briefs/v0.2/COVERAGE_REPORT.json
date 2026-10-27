@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-26",
+  "document": "PRODUCT_BRIEF_V0_1.md (v0.2)",
+  "validation_type": "documentation-scope-coverage",
+  "accepted_phasing": {
+    "v1": "Full Codex-derived auditor workbench using external record systems and supported working files",
+    "v2": "Built-in authoritative audit-record mode and its native lifecycle",
+    "a11": "V1 external authority/export; V2 mode selection/migration",
+    "a12": "V2 only"
+  },
+  "capability_groups": 76,
+  "composition_lenses": 3,
+  "c_entries_expected": 79,
+  "c_entries_assigned": 79,
+  "c_missing": [],
+  "c_extra": [],
+  "c_duplicate_assignments": [],
+  "expanded_behaviors_assigned": 20,
+  "product_requirement_groups": 22,
+  "journeys": 8,
+  "acceptance_criteria": 18,
+  "subfeature_scope_reference_count": 270,
+  "proposed_enhancement_scope_reference_count": 93,
+  "individual_subfeature_acceptance_validated": false,
+  "product_runtime_tested": false,
+  "implementation_built": false,
+  "requirements_document": "addendum.md",
+  "traceability_document": "PRODUCT_BRIEF_TRACEABILITY.md"
+}

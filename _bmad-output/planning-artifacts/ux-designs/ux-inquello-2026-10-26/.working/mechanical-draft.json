@@ -1,0 +1,249 @@
+{
+  "status": "pass",
+  "workspace": "D:\\Projects\\inquello\\_bmad-output\\planning-artifacts\\ux-designs\\ux-inquello-2026-10-26",
+  "check_type": "mechanical-document-coverage",
+  "runtime_conformance_tested": false,
+  "imported_code_executed": false,
+  "optional_reviewer_gate_run": false,
+  "documents": {
+    "DESIGN.md": {
+      "sha256": "eb25d9df0d52d8c1969c59dc8cabc51ba95b098a2f907b7b07ddf1b05db7941d"
+    },
+    "EXPERIENCE.md": {
+      "sha256": "7a14e4b13e195fb2865128b532aa7293b9a7e2a97d07a82387f7df00142ec84c"
+    }
+  },
+  "summary": {
+    "checks": 24,
+    "passed": 24,
+    "failed": 0
+  },
+  "checks": [
+    {
+      "check": "DESIGN.md.yaml",
+      "status": "pass",
+      "duplicate_keys": false
+    },
+    {
+      "check": "DESIGN.md.sources",
+      "status": "pass",
+      "source_count": 9,
+      "missing_targets": [],
+      "errors": []
+    },
+    {
+      "check": "DESIGN.md.links",
+      "status": "pass",
+      "local_links_checked": 54,
+      "external_links_not_fetched": 3,
+      "missing_targets": [],
+      "invalid_fragments": [],
+      "errors": []
+    },
+    {
+      "check": "EXPERIENCE.md.yaml",
+      "status": "pass",
+      "duplicate_keys": false
+    },
+    {
+      "check": "EXPERIENCE.md.sources",
+      "status": "pass",
+      "source_count": 3,
+      "missing_targets": [],
+      "errors": []
+    },
+    {
+      "check": "EXPERIENCE.md.links",
+      "status": "pass",
+      "local_links_checked": 19,
+      "external_links_not_fetched": 3,
+      "missing_targets": [],
+      "invalid_fragments": [],
+      "errors": []
+    },
+    {
+      "check": "design.colors_flat_hex",
+      "status": "pass",
+      "color_count": 95,
+      "invalid": {}
+    },
+    {
+      "check": "design.typography_mapping",
+      "status": "pass"
+    },
+    {
+      "check": "design.rounded_mapping",
+      "status": "pass"
+    },
+    {
+      "check": "design.spacing_mapping",
+      "status": "pass"
+    },
+    {
+      "check": "design.components_mapping",
+      "status": "pass"
+    },
+    {
+      "check": "design.canonical_h2_order",
+      "status": "pass",
+      "present": [
+        "Brand & Style",
+        "Colors",
+        "Typography",
+        "Layout & Spacing",
+        "Elevation & Depth",
+        "Shapes",
+        "Components",
+        "Do's and Don'ts"
+      ],
+      "unknown": [],
+      "expected_order": [
+        "Brand & Style",
+        "Colors",
+        "Typography",
+        "Layout & Spacing",
+        "Elevation & Depth",
+        "Shapes",
+        "Components",
+        "Do's and Don'ts"
+      ],
+      "sections_may_be_omitted": true
+    },
+    {
+      "check": "DESIGN.md.token_references",
+      "status": "pass",
+      "references_checked": 188,
+      "namespaces": [
+        "colors",
+        "typography",
+        "rounded",
+        "spacing",
+        "components"
+      ],
+      "unresolved": []
+    },
+    {
+      "check": "EXPERIENCE.md.token_references",
+      "status": "pass",
+      "references_checked": 13,
+      "namespaces": [
+        "colors",
+        "typography",
+        "rounded",
+        "spacing",
+        "components"
+      ],
+      "unresolved": []
+    },
+    {
+      "check": "experience.required_h2",
+      "status": "pass",
+      "missing": [],
+      "duplicate": [],
+      "present": [
+        "Foundation",
+        "Information Architecture",
+        "Voice and Tone",
+        "Component Patterns",
+        "State Patterns",
+        "Interaction Primitives",
+        "Accessibility Floor",
+        "Responsive & Platform",
+        "Authority and Delivery",
+        "Inspiration & Anti-patterns",
+        "Key Flows",
+        "Open Items and Validation Boundaries"
+      ]
+    },
+    {
+      "check": "components.paired_table_names",
+      "status": "pass",
+      "expected_count": 28,
+      "design_count": 28,
+      "experience_count": 28,
+      "design_missing": [],
+      "experience_missing": [],
+      "design_extra": [],
+      "experience_extra": [],
+      "duplicates": {
+        "DESIGN": [],
+        "EXPERIENCE": []
+      }
+    },
+    {
+      "check": "components.frontmatter_names",
+      "status": "pass",
+      "missing": [],
+      "extra": []
+    },
+    {
+      "check": "coverage_links:.working/design-coverage.md",
+      "status": "pass",
+      "local_links_checked": 0,
+      "external_links_not_fetched": 0,
+      "missing_targets": [],
+      "invalid_fragments": [],
+      "errors": []
+    },
+    {
+      "check": "coverage_links:.working/experience-coverage.md",
+      "status": "pass",
+      "local_links_checked": 2,
+      "external_links_not_fetched": 0,
+      "missing_targets": [],
+      "invalid_fragments": [],
+      "errors": []
+    },
+    {
+      "check": "coverage.artifacts_read",
+      "status": "pass",
+      "artifacts": [
+        ".working/design-coverage.md",
+        ".working/experience-coverage.md"
+      ],
+      "errors": []
+    },
+    {
+      "check": "coverage.UJ_references",
+      "status": "pass",
+      "expected_count": 8,
+      "referenced_count": 8,
+      "missing": [],
+      "unexpected": [],
+      "meaning": "ID mentions including ranges/slash lists; not semantic requirement or flow completeness."
+    },
+    {
+      "check": "coverage.FR_references",
+      "status": "pass",
+      "expected_count": 44,
+      "referenced_count": 44,
+      "missing": [],
+      "unexpected": [],
+      "meaning": "ID mentions including ranges/slash lists; not semantic requirement or flow completeness."
+    },
+    {
+      "check": "imports.manifest_links",
+      "status": "pass",
+      "local_links_checked": 159,
+      "external_links_not_fetched": 0,
+      "missing_targets": [],
+      "invalid_fragments": [],
+      "errors": []
+    },
+    {
+      "check": "imports.all_158_accounted",
+      "status": "pass",
+      "expected_file_count": 158,
+      "actual_file_count": 158,
+      "manifest_entry_count": 158,
+      "unlisted": [],
+      "extra": [],
+      "duplicate": []
+    }
+  ],
+  "limits": [
+    "Does not assess UI behavior, visual rendering, accessibility conformance, contrast, or semantic completeness.",
+    "External links are recorded but not fetched. Token-like placeholders outside the five namespaces are ignored.",
+    "Imported inventory coverage does not repeat the archive byte-integrity comparison."
+  ]
+}

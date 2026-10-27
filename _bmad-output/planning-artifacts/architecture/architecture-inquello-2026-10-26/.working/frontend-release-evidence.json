@@ -1,0 +1,21 @@
+{
+  "checked_date": "2026-10-26",
+  "purpose": "Read-only current release verification for the pending desktop UI choice; versions are not yet selected.",
+  "releases": [
+    {
+      "name": "React",
+      "tag": "v19.3.1",
+      "published_at": "2026-10-14T17:06:15Z",
+      "url": "https://github.com/react/react/releases/tag/v19.3.1",
+      "prerelease": false
+    },
+    {
+      "name": "TypeScript",
+      "tag": "v7.0.2",
+      "published_at": "2026-08-20T18:09:49Z",
+      "url": "https://github.com/microsoft/TypeScript/releases/tag/v7.0.2",
+      "prerelease": false
+    }
+  ],
+  "react_repository_note": "facebook/react release endpoint redirected; repository ID10270250 resolves to react/react."
+}

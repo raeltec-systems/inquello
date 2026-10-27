@@ -1,0 +1,14 @@
+{
+  "status": "pass",
+  "final_document_hashes_match": true,
+  "rubric_sections": 8,
+  "extra_reviewer_sections": 2,
+  "collapsible_sections": 10,
+  "report_missing_local_links": [],
+  "report_scripts": 0,
+  "mechanical_checks": {
+    "checks": 24,
+    "passed": 24,
+    "failed": 0
+  }
+}

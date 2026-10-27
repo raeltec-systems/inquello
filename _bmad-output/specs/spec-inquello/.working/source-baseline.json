@@ -1,0 +1,42 @@
+{
+  "date": "2026-10-27",
+  "sources": [
+    {
+      "path": "_bmad-output/planning-artifacts/prds/prd-inquello-2026-10-26/prd.md",
+      "sha256": "dc2f625a0c47c25046e8bb9713010cf894c15a478a8eefe11da034d32a385dcf"
+    },
+    {
+      "path": "_bmad-output/planning-artifacts/prds/prd-inquello-2026-10-26/addendum.md",
+      "sha256": "fd15c658805c1c506989a1060bdd399e08cb4cc9d21761d5be7ee8237c492cae"
+    },
+    {
+      "path": "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/DESIGN.md",
+      "sha256": "bfcf9be0a13c474b017fd5cd5971655162c83d1361debb4e611577d8e1f109e3"
+    },
+    {
+      "path": "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/EXPERIENCE.md",
+      "sha256": "6ce184c470887382f80b9a2668d9b3518c55c1a550984f0a1665d29f4f06003b"
+    },
+    {
+      "path": "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/ARCHITECTURE-SPINE.md",
+      "sha256": "557d29bd4970424b8464311bc04bd0bc0d5772fbb74caf20b485665b6ced2054"
+    },
+    {
+      "path": "docs/addendum.md",
+      "sha256": "ff42db917c41fa2b8427e4d229dcf41bff9f377eb593f66cb2852ba1ee40a2ee"
+    },
+    {
+      "path": "docs/PRODUCT_BRIEF_TRACEABILITY.md",
+      "sha256": "a24e449dc65b492c6cf3bee762402abe741733c6af3124db83e23a3188507b46"
+    },
+    {
+      "path": "docs/CODEX_AUDITOR_FEATURE_MIRROR.md",
+      "sha256": "82de15e339768bbed6df374a500833b3e26e4718974b1aff962eb4a2edb4c4e2"
+    },
+    {
+      "path": "docs/CODEX_AUDITOR_FEATURE_MAP.md",
+      "sha256": "35d14d408516fc4124daaf190bddbe6d06ff0a4e6ac2213efe3e8c10d167f654"
+    }
+  ],
+  "sources_edited": false
+}

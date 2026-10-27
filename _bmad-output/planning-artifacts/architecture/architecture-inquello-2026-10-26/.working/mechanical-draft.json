@@ -1,0 +1,273 @@
+{
+  "status": "pass",
+  "workspace": "D:\\Projects\\inquello\\_bmad-output\\planning-artifacts\\architecture\\architecture-inquello-2026-10-26",
+  "check_type": "read-only-architecture-document-check",
+  "optional_review_run": false,
+  "runtime_conformance_tested": false,
+  "imported_code_executed": false,
+  "documents": {
+    "ARCHITECTURE-SPINE.md": {
+      "path": "D:\\Projects\\inquello\\_bmad-output\\planning-artifacts\\architecture\\architecture-inquello-2026-10-26\\ARCHITECTURE-SPINE.md",
+      "sha256": "63c33b62f1d33629e7ce6bfa8607d71088f9cd431547497b42c600350d4423f5"
+    },
+    "upstream_linter": {
+      "path": "D:\\Projects\\inquello\\.agents\\skills\\bmad-architecture\\scripts\\lint_spine.py",
+      "sha256": "dd48be20384adfa281d295e34a39c1ae55727af7e98efe42525be31d1c5c001e"
+    },
+    "source_prd": {
+      "path": "D:\\Projects\\inquello\\_bmad-output\\planning-artifacts\\prds\\prd-inquello-2026-10-26\\prd.md",
+      "sha256": "dc2f625a0c47c25046e8bb9713010cf894c15a478a8eefe11da034d32a385dcf"
+    }
+  },
+  "summary": {
+    "checks": 18,
+    "passed": 18,
+    "failed": 0,
+    "warnings": 0
+  },
+  "checks": [
+    {
+      "check": "yaml_parse_and_unique_keys",
+      "status": "pass",
+      "duplicate_keys": false
+    },
+    {
+      "check": "required_metadata",
+      "status": "pass",
+      "required": [
+        "name",
+        "type",
+        "purpose",
+        "altitude",
+        "paradigm",
+        "scope",
+        "status",
+        "created",
+        "updated",
+        "binds",
+        "sources",
+        "companions"
+      ],
+      "missing": [],
+      "invalid": {}
+    },
+    {
+      "check": "frontmatter_sources_targets",
+      "status": "pass",
+      "local_checked": 7,
+      "external_not_fetched": [],
+      "missing": [],
+      "bad_anchors": [],
+      "errors": []
+    },
+    {
+      "check": "frontmatter_companions_targets",
+      "status": "pass",
+      "local_checked": 2,
+      "external_not_fetched": [],
+      "missing": [],
+      "bad_anchors": [],
+      "errors": []
+    },
+    {
+      "check": "markdown_targets_and_anchors",
+      "status": "pass",
+      "local_checked": 2,
+      "external_not_fetched": [],
+      "missing": [],
+      "bad_anchors": [],
+      "errors": []
+    },
+    {
+      "check": "supplied_lint_spine",
+      "status": "pass",
+      "process_exit": 0,
+      "result": {
+        "ok": true,
+        "spine": "ARCHITECTURE-SPINE.md",
+        "total_findings": 0,
+        "by_severity": {},
+        "findings": []
+      },
+      "actual_failures": [],
+      "possible_brace_tokens_for_manual_check": []
+    },
+    {
+      "check": "closed_code_fences",
+      "status": "pass",
+      "unclosed_line": null
+    },
+    {
+      "check": "all_ad_headings_unique_ascending",
+      "status": "pass",
+      "definitions": [
+        {
+          "id": "AD-1",
+          "line": 57
+        },
+        {
+          "id": "AD-2",
+          "line": 63
+        },
+        {
+          "id": "AD-3",
+          "line": 69
+        },
+        {
+          "id": "AD-4",
+          "line": 75
+        },
+        {
+          "id": "AD-5",
+          "line": 81
+        },
+        {
+          "id": "AD-6",
+          "line": 87
+        },
+        {
+          "id": "AD-7",
+          "line": 93
+        },
+        {
+          "id": "AD-8",
+          "line": 99
+        },
+        {
+          "id": "AD-9",
+          "line": 105
+        },
+        {
+          "id": "AD-10",
+          "line": 111
+        },
+        {
+          "id": "AD-11",
+          "line": 117
+        },
+        {
+          "id": "AD-12",
+          "line": 123
+        },
+        {
+          "id": "AD-13",
+          "line": 129
+        },
+        {
+          "id": "AD-14",
+          "line": 135
+        }
+      ],
+      "duplicate_ids": []
+    },
+    {
+      "check": "ad_labelled_fields_nonempty",
+      "status": "pass",
+      "errors": [],
+      "meaning": "Mechanical labelled content check; no semantic judgment about enforceability."
+    },
+    {
+      "check": "ad_crossreferences",
+      "status": "pass",
+      "referenced_ids": [
+        "AD-1",
+        "AD-2",
+        "AD-3",
+        "AD-4",
+        "AD-5",
+        "AD-6",
+        "AD-7",
+        "AD-8",
+        "AD-9",
+        "AD-10",
+        "AD-11",
+        "AD-12",
+        "AD-13",
+        "AD-14"
+      ],
+      "unresolved": []
+    },
+    {
+      "check": "no_template_comments_or_markers",
+      "status": "pass",
+      "html_comments": [],
+      "markers": [],
+      "literal_template_tokens": []
+    },
+    {
+      "check": "mermaid_diagrams_nonempty",
+      "status": "pass",
+      "diagrams": [
+        {
+          "line": 35,
+          "nonempty_after_declaration": true
+        }
+      ],
+      "empty_lines": [],
+      "parser_used": false,
+      "meaning": "Nonempty content only; not Mermaid syntax or rendering validation."
+    },
+    {
+      "check": "source_prd_inventory",
+      "status": "pass",
+      "counts": {
+        "FR": 44,
+        "NFR": 10,
+        "P": 22
+      },
+      "expected_counts": {
+        "FR": 44,
+        "NFR": 10,
+        "P": 22
+      }
+    },
+    {
+      "check": "coverage_inputs",
+      "status": "pass",
+      "supplemental_files": [],
+      "errors": [],
+      "source_extracts_automatically_counted": false
+    },
+    {
+      "check": "coverage_FR_presence",
+      "status": "pass",
+      "expected_count": 44,
+      "referenced_count": 44,
+      "missing": [],
+      "unexpected": [],
+      "meaning": "Reference presence only; ranges and slash shorthand allowed, no semantic completeness claim."
+    },
+    {
+      "check": "coverage_NFR_presence",
+      "status": "pass",
+      "expected_count": 10,
+      "referenced_count": 10,
+      "missing": [],
+      "unexpected": [],
+      "meaning": "Reference presence only; ranges and slash shorthand allowed, no semantic completeness claim."
+    },
+    {
+      "check": "coverage_P_presence",
+      "status": "pass",
+      "expected_count": 22,
+      "referenced_count": 22,
+      "missing": [],
+      "unexpected": [],
+      "meaning": "Reference presence only; ranges and slash shorthand allowed, no semantic completeness claim."
+    },
+    {
+      "check": "spine_unchanged_during_check",
+      "status": "pass",
+      "initial_sha256": "63c33b62f1d33629e7ce6bfa8607d71088f9cd431547497b42c600350d4423f5",
+      "final_sha256": "63c33b62f1d33629e7ce6bfa8607d71088f9cd431547497b42c600350d4423f5"
+    }
+  ],
+  "limits": [
+    "Presence of FR/NFR/P identifiers, including ranges, is not semantic requirement coverage.",
+    "AD field/ordering checks use the supplied linter plus a complete heading scan; enforceability and architecture quality are not assessed.",
+    "Mermaid checks only confirm fenced blocks contain content beyond a declaration/comments. No Mermaid parser or renderer is used.",
+    "Markdown links and GitHub-style heading anchors are checked mechanically; uncommon Markdown extensions may require manual verification.",
+    "External URLs are recorded but not fetched. No transitive source-document crawl, imported code execution or package installation occurs.",
+    "Does not verify technology versions, runtime compatibility, security, accessibility, product conformance or decision authorization."
+  ]
+}
