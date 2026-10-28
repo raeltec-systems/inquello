@@ -1,0 +1,13 @@
+{
+  "principal_id": "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d",
+  "principal_revision": "1",
+  "memberships": [
+    {
+      "workspace_id": "5d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e",
+      "workspace_kind": "internal_company",
+      "role": "member",
+      "status": "active",
+      "revision": "3"
+    }
+  ]
+}

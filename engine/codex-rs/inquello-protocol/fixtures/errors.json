@@ -1,0 +1,44 @@
+[
+  {
+    "error": {
+      "kind": "unauthenticated",
+      "message": "sign-in is required"
+    }
+  },
+  {
+    "error": {
+      "kind": "denied",
+      "message": "the request is not permitted"
+    }
+  },
+  {
+    "error": {
+      "kind": "version_conflict",
+      "message": "the request conflicts with the current state or an earlier operation; reload and review"
+    }
+  },
+  {
+    "error": {
+      "kind": "unsupported_contract",
+      "message": "the request does not match a supported contract"
+    }
+  },
+  {
+    "error": {
+      "kind": "incomplete_material",
+      "message": "the request is missing required material"
+    }
+  },
+  {
+    "error": {
+      "kind": "dependency_unavailable",
+      "message": "a required dependency is unavailable"
+    }
+  },
+  {
+    "error": {
+      "kind": "uncertain_outcome",
+      "message": "the outcome is uncertain; look up the operation receipt before retrying"
+    }
+  }
+]

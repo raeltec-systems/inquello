@@ -1,0 +1,6 @@
+{
+  "login_transaction_id": "0b8e2f4c-1a2b-4c3d-9e8f-7a6b5c4d3e2f",
+  "transaction_proof": "iqp_FIXTURE-not-a-real-proof",
+  "redirect_uri": "http://127.0.0.1:53682/callback",
+  "id_token": "eyJGSVhUVVJFIjp0cnVlfQ.e30.FIXTURE-not-a-signature"
+}

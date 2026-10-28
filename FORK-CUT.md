@@ -103,6 +103,17 @@ Adds code inside `inquello-domain` only; no upstream crate changes.
 - **`inquello-domain/register/`**: `capabilities.json` (the reviewed register, compiled in with `include_str!`) and `inventory-map.json` (one row per C/E item, generated and proved by `tests/inventory_map.rs`).
 - **Dependencies**: `inquello-domain` now also uses the workspace pins `serde` (with `derive`) and `serde_json`. `Cargo.lock` gains only those two entries under `inquello-domain`; no external package or pin changed.
 
+### Patch 3: Shared-service identity crates (Story 1.10a, 2026-10-28)
+
+Adds two crates beside upstream; no upstream crate's code changes.
+
+- **New crates** in `engine/codex-rs/`:
+  - `inquello-protocol`: the SC-1/SC-2 wire types (login transaction, bootstrap, refresh, family revoke, session and membership views, the SC-2 envelope, response and error kinds) and the JSON conformance fixtures under `fixtures/`, with round-trip tests. Depends on `chrono`, `serde` and `uuid` only.
+  - `inquello-service`: the axum service on sqlx/PostgreSQL with the embedded migration `0001_identity_sessions_receipts.sql`. Its only PostgreSQL connect call lives in `src/postgres.rs`, which carries the `clippy::disallowed_methods` expectation the same way `state/src/sqlite.rs` does. The `test-issuer` feature adds `src/test_issuer.rs` (ephemeral P-256 key via `ring`) and the `SyntheticTest` deployment; the PostgreSQL 18 conformance suite `tests/identity.rs` requires that feature. It depends on `inquello-domain` (never the reverse).
+  - Neither crate has a `BUILD.bazel`.
+- **Workspace manifest** `engine/codex-rs/Cargo.toml`: both crates added to `[workspace] members` and as path entries under `[workspace.dependencies]`, plus a new `ring = "0.17.14"` workspace entry for a crate already locked through `jsonwebtoken` and `rustls`. No existing pin changed. The service enables extra features on existing pins only: `sqlx` `postgres`, `axum` `http1`/`json`/`tokio`, `uuid` `serde`, and `reqwest` `json` for tests.
+- **Lockfile** `engine/codex-rs/Cargo.lock`: gains only the two new package entries. No external package or version changed (`sqlx-postgres` and its dependencies were already locked).
+
 ## Toolchain setup (Windows, everything on D:)
 
 The owner authorized these installs on 2026-10-28. Toolchains, caches and build output stay on D:. The Microsoft C++ build tools were already present and were not installed.
