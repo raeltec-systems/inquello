@@ -1,6 +1,8 @@
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  // Renderer components under test use the automatic JSX runtime, as in `vite.config.ts`.
+  oxc: { jsx: { runtime: 'automatic', importSource: 'react' } },
   test: {
     include: ['test/**/*.test.ts'],
     environment: 'node',

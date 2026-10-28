@@ -1,0 +1,302 @@
+/**
+ * Story 1.5: the renderer's design layer equals DESIGN.md and the
+ * design-system import.
+ *
+ * - Token maps equal the DESIGN.md frontmatter, compared both ways.
+ * - Shadows and motion equal the Elevation & Depth table and paragraph.
+ * - `tokens.css` declares exactly `cssVariables()`.
+ * - Fonts are byte-identical to the import; icons match the source SVGs.
+ * - `Icon` follows the accessibility matrix (rendered with react-dom/server).
+ */
+import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { parse as parseYaml } from 'yaml';
+
+import { cssVariables, FONT_MONO, FONT_SANS, tokens } from '../src/renderer/design/tokens';
+import { Icon, type IconProps } from '../src/renderer/icons/Icon';
+import { ICON_NAMES, ICON_PATHS, type IconName } from '../src/renderer/icons/icon-paths';
+import { evaluateDesign, EXPECTED_FONT_FACES, type DesignProbeResult } from '../src/main/smoke-probe';
+
+const desktop = path.resolve(__dirname, '..');
+const renderer = path.join(desktop, 'src', 'renderer');
+const designDir = path.resolve(desktop, '..', '_bmad-output', 'planning-artifacts', 'ux-designs', 'ux-inquello-2026-10-26');
+const importDir = path.join(designDir, 'imports', 'inquello-design-system');
+const designMd = fs.readFileSync(path.join(designDir, 'DESIGN.md'), 'utf8');
+
+function frontmatter(): Record<string, any> {
+  const match = /^---\n([\s\S]*?)\n---\n/.exec(designMd);
+  if (!match?.[1]) throw new Error('DESIGN.md has no frontmatter');
+  return parseYaml(match[1]) as Record<string, any>;
+}
+
+/** Every key path whose value differs, or that exists on only one side. */
+function drift(expected: unknown, actual: unknown, at = '', [source, target] = ['DESIGN.md', 'tokens']): string[] {
+  const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
+  if (isObject(expected) && isObject(actual)) {
+    const keys = new Set([...Object.keys(expected), ...Object.keys(actual)]);
+    return [...keys].flatMap((key) => {
+      const where = at ? `${at}.${key}` : key;
+      if (!(key in actual)) return [`${where}: missing from ${target}`];
+      if (!(key in expected)) return [`${where}: not in ${source}`];
+      return drift(expected[key], actual[key], where, [source, target]);
+    });
+  }
+  return expected === actual ? [] : [`${at}: ${source} ${JSON.stringify(expected)} != ${target} ${JSON.stringify(actual)}`];
+}
+
+const sha256 = (file: string) => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+
+describe('DESIGN.md conformance', () => {
+  const design = frontmatter();
+
+  it.each(['colors', 'typography', 'rounded', 'spacing'] as const)('%s equals the frontmatter, both ways', (group) => {
+    expect(drift(design[group], tokens[group], group)).toEqual([]);
+  });
+
+  it('icon equals components.Icon, both ways', () => {
+    expect(drift(design.components.Icon, tokens.icon, 'components.Icon')).toEqual([]);
+  });
+
+  it('keeps the source aliases and the literal pill value', () => {
+    expect(tokens.colors['text-faint']).toBe('#8a919a');
+    expect(tokens.colors['status-accepted-fg']).toBe('#2f7a52');
+    expect(tokens.rounded.pill).toBe('999px');
+  });
+
+  it('keeps the fallback stacks exactly', () => {
+    expect(FONT_SANS).toBe("'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif");
+    expect(FONT_MONO).toBe("'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace");
+  });
+
+  it('reports drift by key name', () => {
+    expect(drift({ a: { b: '1px' } }, { a: { b: '2px', c: '3px' } }, 'x')).toEqual([
+      'x.a.b: DESIGN.md "1px" != tokens "2px"',
+      'x.a.c: not in DESIGN.md',
+    ]);
+  });
+});
+
+describe('shadow and motion values', () => {
+  const elevation = designMd.slice(designMd.indexOf('## Elevation & Depth'), designMd.indexOf('## Shapes'));
+
+  it('shadows equal the Elevation & Depth table, both ways', () => {
+    const table: Record<string, string> = {};
+    for (const row of elevation.matchAll(/^\| (\w+) \| `([^`]+)` \|/gm)) table[row[1]!] = row[2]!;
+    expect(Object.keys(table)).toHaveLength(6);
+    expect(drift(table, tokens.shadows, 'shadows')).toEqual([]);
+  });
+
+  it('motion equals the Elevation & Depth paragraph', () => {
+    const timing = /timing is (\d+)\/(\d+)\/(\d+)ms with `(cubic-bezier\([^)]*\))` and an (\d+)ms (\w+) spinner/.exec(elevation);
+    const pulse = /pulse varies opacity from ([\d.]+) to ([\d.]+) and back/.exec(elevation);
+    expect(timing).not.toBeNull();
+    expect(pulse).not.toBeNull();
+    const bezier = (value: string) => value.replace(/\s+/g, '');
+    expect({
+      durationFast: `${timing![1]}ms`,
+      durationBase: `${timing![2]}ms`,
+      durationSlow: `${timing![3]}ms`,
+      easeStandard: bezier(timing![4]!),
+      spinDuration: `${timing![5]}ms`,
+      spinEasing: timing![6],
+      pulseOpacityFrom: pulse![1],
+      pulseOpacityTo: pulse![2],
+    }).toEqual({ ...tokens.motion, easeStandard: bezier(tokens.motion.easeStandard) });
+    expect(tokens.motion.easeStandard).toBe('cubic-bezier(0.2, 0.8, 0.2, 1)');
+  });
+
+  it('base.css spins and pulses with the motion values', () => {
+    const base = fs.readFileSync(path.join(renderer, 'design', 'base.css'), 'utf8');
+    expect(base).toContain('@keyframes iq-spin { to { transform: rotate(360deg); } }');
+    expect(base).toContain(
+      `@keyframes iq-pulse { 0%, 100% { opacity: ${tokens.motion.pulseOpacityFrom}; } 50% { opacity: ${tokens.motion.pulseOpacityTo}; } }`,
+    );
+  });
+});
+
+describe('tokens.css', () => {
+  const css = fs.readFileSync(path.join(renderer, 'design', 'tokens.css'), 'utf8');
+
+  it('declares exactly the variables of tokens.ts, both ways', () => {
+    const declared: Record<string, string> = {};
+    for (const match of css.matchAll(/^\s*(--[\w-]+):\s*([^;]+);/gm)) {
+      expect(declared[match[1]!], `${match[1]} declared twice`).toBeUndefined();
+      declared[match[1]!] = match[2]!.trim();
+    }
+    expect(drift(cssVariables(), declared, '', ['tokens.ts', 'tokens.css'])).toEqual([]);
+  });
+
+  it('uses the import’s source variable names', () => {
+    const source = ['colors.css', 'typography.css', 'layout.css']
+      .map((file) => fs.readFileSync(path.join(importDir, 'tokens', file), 'utf8'))
+      .join('\n');
+    const sourceNames = new Set([...source.matchAll(/^\s*(--[\w-]+):/gm)].map((match) => match[1]));
+    const unknown = Object.keys(cssVariables()).filter((name) => !sourceNames.has(name));
+    expect(unknown).toEqual([]);
+  });
+
+  it('has no dark theme', () => {
+    for (const file of ['tokens.css', 'base.css', 'fonts.css', 'index.css']) {
+      expect(fs.readFileSync(path.join(renderer, 'design', file), 'utf8')).not.toMatch(/prefers-color-scheme|\.dark\b|data-theme/);
+    }
+  });
+});
+
+describe('fonts', () => {
+  const ours = path.join(renderer, 'design', 'assets', 'fonts');
+  const theirs = path.join(importDir, 'assets', 'fonts');
+  const woff2 = (dir: string) => fs.readdirSync(dir).filter((file) => file.endsWith('.woff2')).sort();
+
+  it('copies the five WOFF2 files byte for byte', () => {
+    expect(woff2(ours)).toEqual(woff2(theirs));
+    expect(woff2(ours)).toHaveLength(5);
+    for (const file of woff2(theirs)) expect(sha256(path.join(ours, file)), file).toBe(sha256(path.join(theirs, file)));
+  });
+
+  it('declares one swap @font-face per face, all local', () => {
+    const css = fs.readFileSync(path.join(renderer, 'design', 'fonts.css'), 'utf8');
+    const faces = [...css.matchAll(/@font-face\s*\{([^}]*)\}/g)].map((match) => {
+      const body = match[1]!;
+      const prop = (name: string) => new RegExp(`${name}:\\s*([^;]+);`).exec(body)?.[1]?.trim();
+      return {
+        family: prop('font-family')?.replace(/'/g, ''),
+        weight: Number(prop('font-weight')),
+        style: prop('font-style'),
+        display: prop('font-display'),
+        src: prop('src'),
+      };
+    });
+    expect(faces.map(({ family, weight }) => ({ family, weight })).sort((a, b) => `${a.family}${a.weight}`.localeCompare(`${b.family}${b.weight}`))).toEqual(
+      [...EXPECTED_FONT_FACES].sort((a, b) => `${a.family}${a.weight}`.localeCompare(`${b.family}${b.weight}`)),
+    );
+    for (const face of faces) {
+      expect(face.style).toBe('normal');
+      expect(face.display).toBe('swap');
+      const file = `${face.family!.replace(/ /g, '')}-${face.weight}.woff2`;
+      expect(face.src).toBe(`url('./assets/fonts/${file}') format('woff2')`);
+    }
+    expect(css).not.toMatch(/https?:|\/\/fonts\./);
+  });
+
+  it('ships the licence texts', () => {
+    // Vite copies src/renderer/public verbatim into dist/renderer, so these ship with every build.
+    const licenses = path.join(renderer, 'public', 'licenses');
+    expect(fs.readFileSync(path.join(licenses, 'IBM-Plex-OFL.txt'), 'utf8')).toContain('SIL OPEN FONT LICENSE Version 1.1');
+    expect(fs.readFileSync(path.join(licenses, 'LUCIDE-LICENSE.txt'), 'utf8')).toMatch(/^ISC License/);
+  });
+});
+
+type ParsedElement = [string, Record<string, string>];
+
+function parseElements(markup: string): ParsedElement[] {
+  const withoutMetadata = markup.replace(/<metadata>[\s\S]*?<\/metadata>/g, '').replace(/<svg[^>]*>|<\/svg>/g, '');
+  return [...withoutMetadata.matchAll(/<(\w+)((?:\s+[\w-]+="[^"]*")*)\s*\/?>/g)].map((match) => [
+    match[1]!,
+    Object.fromEntries([...match[2]!.matchAll(/([\w-]+)="([^"]*)"/g)].map((attr) => [attr[1]!, attr[2]!])),
+  ]);
+}
+
+describe('icon paths', () => {
+  const svgDir = path.join(importDir, 'assets', 'icons');
+  const svgNames = fs.readdirSync(svgDir).filter((file) => file.endsWith('.svg')).map((file) => file.slice(0, -4)).sort();
+  const asData = (name: IconName) => ICON_PATHS[name].map(([tag, attrs]) => [tag, { ...attrs }]);
+
+  it('has the same 40 names as the source SVGs', () => {
+    expect([...ICON_NAMES].sort()).toEqual(svgNames);
+    expect(ICON_NAMES).toHaveLength(40);
+  });
+
+  it.each(svgNames)('%s matches its source SVG', (name) => {
+    expect(asData(name as IconName)).toEqual(parseElements(fs.readFileSync(path.join(svgDir, `${name}.svg`), 'utf8')));
+  });
+
+  it('matches the import’s icon-paths.js', () => {
+    const source = fs.readFileSync(path.join(importDir, 'components', 'core', 'icon-paths.js'), 'utf8');
+    const icons = JSON.parse(/export const ICONS = (\{[\s\S]*\});/.exec(source)![1]!) as Record<string, string>;
+    expect(Object.keys(icons).sort()).toEqual([...ICON_NAMES].sort());
+    for (const name of ICON_NAMES) expect(asData(name), name).toEqual(parseElements(icons[name]!));
+  });
+});
+
+describe('Icon', () => {
+  const render = (props: IconProps) => renderToStaticMarkup(createElement(Icon, props));
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it('is decorative without a label: aria-hidden, no role, no label', () => {
+    const html = render({ name: 'search' });
+    expect(html).toContain('aria-hidden="true"');
+    expect(html).not.toContain('role=');
+    expect(html).not.toContain('aria-label');
+  });
+
+  it('is informative with a label: role="img" and aria-label', () => {
+    const html = render({ name: 'triangle-alert', label: 'Needs evidence' });
+    expect(html).toContain('role="img"');
+    expect(html).toContain('aria-label="Needs evidence"');
+    expect(html).not.toContain('aria-hidden');
+  });
+
+  it('defaults to 16px, 1.75 stroke, currentColor and a 24×24 viewBox', () => {
+    const html = render({ name: 'search' });
+    expect(html).toMatch(/^<svg [^>]*width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/);
+    expect(html).toContain('<circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>');
+  });
+
+  it('honours size, stroke and colour overrides', () => {
+    const html = render({ name: 'check', size: 14, strokeWidth: 2, color: '#2f7a52' });
+    expect(html).toContain('width="14" height="14"');
+    expect(html).toContain('stroke="#2f7a52" stroke-width="2"');
+  });
+
+  it('renders nothing for an unknown name and warns once', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const unknown = { name: 'not-an-icon' as IconName };
+    expect(render(unknown)).toBe('');
+    expect(render(unknown)).toBe('');
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]?.[0]).toContain('not-an-icon');
+    // @ts-expect-error -- a name outside the 40 is a compile-time error.
+    void render({ name: 'not-an-icon' });
+  });
+
+  it('builds React elements, never innerHTML', () => {
+    const source = fs.readFileSync(path.join(renderer, 'icons', 'Icon.tsx'), 'utf8');
+    expect(source).not.toMatch(/dangerouslySetInnerHTML|innerHTML/);
+  });
+});
+
+describe('smoke design evaluation', () => {
+  const loaded = EXPECTED_FONT_FACES.map(({ family, weight }) => ({ family, weight, declared: 1, statuses: ['loaded'], check: true }));
+  const clean: DesignProbeResult = {
+    title: 'Inquello',
+    fonts: loaded,
+    decorativeIcon: { 'aria-hidden': 'true', role: null, 'aria-label': null },
+    informativeIcon: { 'aria-hidden': null, role: 'img', 'aria-label': 'Needs evidence' },
+  };
+
+  it('passes the specimen with five loaded faces and correct icon semantics', () => {
+    expect(evaluateDesign(clean)).toMatchObject({ ok: true, failures: [] });
+  });
+
+  it.each<[string, Partial<DesignProbeResult>]>([
+    ['a face is still loading', { fonts: loaded.map((font, i) => (i === 2 ? { ...font, statuses: ['loading'] } : font)) }],
+    ['a face is not declared', { fonts: loaded.slice(1) }],
+    ['document.fonts.check fails', { fonts: loaded.map((font, i) => (i === 4 ? { ...font, check: false } : font)) }],
+    ['the decorative icon has a role', { decorativeIcon: { 'aria-hidden': 'true', role: 'img', 'aria-label': null } }],
+    ['the decorative icon is not hidden', { decorativeIcon: { 'aria-hidden': null, role: null, 'aria-label': null } }],
+    ['the informative icon has no label', { informativeIcon: { 'aria-hidden': null, role: 'img', 'aria-label': null } }],
+    ['an icon is missing', { informativeIcon: null }],
+  ])('fails when %s', (_label, change) => {
+    expect(evaluateDesign({ ...clean, ...change }).ok).toBe(false);
+  });
+
+  it('fails when the probe returned nothing', () => {
+    expect(evaluateDesign(undefined).ok).toBe(false);
+  });
+});

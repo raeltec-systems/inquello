@@ -1,7 +1,7 @@
 /**
  * The `inquello://app/` scheme: the only origin renderer content loads from.
  *
- * It serves files under `static/` and nothing else. Paths are resolved by the
+ * It serves files under the renderer build (`dist/renderer/`) and nothing else. Paths are resolved by the
  * pure `resolveAppPath`, which rejects traversal (`..`, encoded `..`, encoded
  * separators, backslashes, NUL) and anything that resolves outside the root.
  * Files are read with `fs` in main rather than `net.fetch(file://)`, so no

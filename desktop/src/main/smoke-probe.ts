@@ -5,6 +5,11 @@
  * can reach: Node globals, the exact `window.inquello` tree, the result of
  * `runtime.getStatus`, and whether `window.open`, `fetch` and a top-level
  * navigation get through. `evaluatePrivileges` is pure and decides pass/fail.
+ *
+ * The same script also reads the Story 1.5 design specimen: whether each of
+ * the five IBM Plex faces is loaded (`FontFace.status` and
+ * `document.fonts.check`), and the accessibility attributes of the decorative
+ * and informative icons. `evaluateDesign` is pure and decides pass/fail.
  */
 import type { WebContents } from 'electron';
 
@@ -12,6 +17,20 @@ import type { BlockedKind } from './security/policy';
 
 const PROBE_TARGET = 'https://example.com/';
 const NAVIGATION_SETTLE_MS = 500;
+/** How long the probe waits for the specimen to render and its fonts to load. */
+const DESIGN_SETTLE_MS = 5_000;
+
+/** The five self-hosted faces the renderer must load. */
+export const EXPECTED_FONT_FACES = [
+  { family: 'IBM Plex Sans', weight: 400 },
+  { family: 'IBM Plex Sans', weight: 500 },
+  { family: 'IBM Plex Sans', weight: 600 },
+  { family: 'IBM Plex Mono', weight: 400 },
+  { family: 'IBM Plex Mono', weight: 500 },
+] as const;
+
+/** The specimen's informative icon label (`<Icon name="triangle-alert" label=… />`). */
+export const EXPECTED_ICON_LABEL = 'Needs evidence';
 
 /** The tree `window.inquello` must expose, as `describe` renders it. */
 export const EXPECTED_BRIDGE_TREE = { runtime: { getStatus: 'function' } } as const;
@@ -36,6 +55,34 @@ const RENDERER_PROBE = `(async () => {
   } catch (error) {
     result.statusError = String(error && error.message);
   }
+  const faces = ${JSON.stringify(EXPECTED_FONT_FACES)};
+  const unquote = (family) => family.replace(/^["']|["']$/g, '');
+  const readIcon = (probe) => {
+    const svg = document.querySelector('[data-probe="' + probe + '"] svg');
+    if (!svg) return null;
+    const attrs = {};
+    for (const name of ['aria-hidden', 'role', 'aria-label', 'viewBox', 'width', 'height', 'stroke', 'stroke-width']) attrs[name] = svg.getAttribute(name);
+    return attrs;
+  };
+  const readDesign = () => ({
+    title: document.querySelector('h1') ? document.querySelector('h1').textContent : null,
+    fonts: faces.map(({ family, weight }) => {
+      const matching = [...document.fonts].filter((face) => unquote(face.family) === family && String(face.weight) === String(weight) && face.style === 'normal');
+      return { family, weight, declared: matching.length, statuses: matching.map((face) => face.status), check: document.fonts.check(weight + ' 16px "' + family + '"') };
+    }),
+    decorativeIcon: readIcon('icon-decorative'),
+    informativeIcon: readIcon('icon-informative'),
+  });
+  const settled = (design) => design.decorativeIcon && design.informativeIcon && design.fonts.every((font) => font.statuses.includes('loaded'));
+  const deadline = Date.now() + ${DESIGN_SETTLE_MS};
+  await document.fonts.ready;
+  let design = readDesign();
+  while (!settled(design) && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    await document.fonts.ready;
+    design = readDesign();
+  }
+  result.design = design;
   try {
     result.windowOpen = window.open(${JSON.stringify(PROBE_TARGET)}) === null ? 'blocked' : 'opened';
   } catch {
@@ -58,6 +105,46 @@ export interface RendererProbeResult {
   statusError?: string;
   windowOpen: 'blocked' | 'opened';
   fetch: 'blocked' | 'allowed';
+}
+
+/** Everything `RENDERER_PROBE` returns: the privilege fields plus the design specimen. */
+export interface RendererProbeOutput extends RendererProbeResult {
+  design: DesignProbeResult;
+}
+
+export interface FontProbe {
+  family: string;
+  weight: number;
+  /** `@font-face` rules declared for this family and weight. */
+  declared: number;
+  /** `FontFace.status` of each declared rule. */
+  statuses: string[];
+  /** `document.fonts.check('<weight> 16px "<family>"')`. */
+  check: boolean;
+}
+
+/** The icon `<svg>`'s attributes, or `null` when it was not rendered. */
+export type IconProbe = Record<string, string | null> | null;
+
+export interface DesignProbeResult {
+  title: string | null;
+  fonts: FontProbe[];
+  decorativeIcon: IconProbe;
+  informativeIcon: IconProbe;
+}
+
+export interface DesignReport {
+  ok: boolean;
+  failures: string[];
+  title: string | null;
+  fonts: Array<{ family: string; weight: number; loaded: boolean; check: boolean }>;
+  decorativeIcon: IconProbe;
+  informativeIcon: IconProbe;
+}
+
+export interface RendererReport {
+  privileges: PrivilegeReport;
+  design: DesignReport;
 }
 
 export interface PrivilegeReport {
@@ -108,6 +195,42 @@ export function evaluatePrivileges(
   };
 }
 
+/** Pass/fail for the design specimen: all five faces loaded, both icons with the right semantics. */
+export function evaluateDesign(probe: DesignProbeResult | undefined): DesignReport {
+  const failures: string[] = [];
+  const fonts = EXPECTED_FONT_FACES.map(({ family, weight }) => {
+    const font = probe?.fonts.find((entry) => entry.family === family && entry.weight === weight);
+    const loaded = font !== undefined && font.declared > 0 && font.statuses.includes('loaded');
+    const check = font?.check === true;
+    if (!font || font.declared === 0) failures.push(`${family} ${weight} has no @font-face`);
+    else if (!loaded) failures.push(`${family} ${weight} did not load (${font.statuses.join(', ')})`);
+    if (font && !check) failures.push(`document.fonts.check failed for ${family} ${weight}`);
+    return { family, weight, loaded, check };
+  });
+  const decorative = probe?.decorativeIcon ?? null;
+  if (!decorative) failures.push('decorative icon was not rendered');
+  else {
+    if (decorative['aria-hidden'] !== 'true') failures.push(`decorative icon aria-hidden is ${JSON.stringify(decorative['aria-hidden'])}`);
+    if (decorative.role !== null) failures.push(`decorative icon has role ${JSON.stringify(decorative.role)}`);
+    if (decorative['aria-label'] !== null) failures.push('decorative icon has an aria-label');
+  }
+  const informative = probe?.informativeIcon ?? null;
+  if (!informative) failures.push('informative icon was not rendered');
+  else {
+    if (informative.role !== 'img') failures.push(`informative icon role is ${JSON.stringify(informative.role)}`);
+    if (informative['aria-label'] !== EXPECTED_ICON_LABEL) failures.push(`informative icon aria-label is ${JSON.stringify(informative['aria-label'])}`);
+    if (informative['aria-hidden'] !== null) failures.push('informative icon is aria-hidden');
+  }
+  return {
+    ok: failures.length === 0,
+    failures,
+    title: probe?.title ?? null,
+    fonts,
+    decorativeIcon: decorative,
+    informativeIcon: informative,
+  };
+}
+
 async function waitForLoad(contents: WebContents): Promise<void> {
   if (!contents.isLoading()) return;
   await new Promise<void>((resolve, reject) => {
@@ -121,10 +244,10 @@ export async function probeRenderer(
   contents: WebContents,
   blocked: ReadonlyArray<{ kind: BlockedKind; url: string }>,
   runtimeVersion: string,
-): Promise<PrivilegeReport> {
+): Promise<RendererReport> {
   await waitForLoad(contents);
   const url = contents.getURL();
-  const probe = (await contents.executeJavaScript(RENDERER_PROBE)) as RendererProbeResult;
+  const probe = (await contents.executeJavaScript(RENDERER_PROBE)) as RendererProbeOutput;
   const before = blocked.length;
   await contents.executeJavaScript(`location.href = ${JSON.stringify(PROBE_TARGET)}; true`);
   await new Promise((resolve) => setTimeout(resolve, NAVIGATION_SETTLE_MS));
@@ -133,5 +256,5 @@ export async function probeRenderer(
     .slice(before)
     .some((entry) => (entry.kind === 'navigation' || entry.kind === 'frame-navigation') && entry.url === PROBE_TARGET);
   const navigation = navigationLogged && contents.getURL() === url ? 'blocked' : 'allowed';
-  return evaluatePrivileges(probe, navigation, url, runtimeVersion);
+  return { privileges: evaluatePrivileges(probe, navigation, url, runtimeVersion), design: evaluateDesign(probe.design) };
 }

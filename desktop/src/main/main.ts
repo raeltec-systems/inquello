@@ -5,16 +5,17 @@
  * is ready and stops it (stdin EOF, bounded grace) before quitting.
  *
  * Renderer isolation (AD-5): every window is sandboxed and context-isolated
- * with no Node integration, loads only `inquello://app/` (served from
- * `static/`), and reaches main only through the named operations of the
+ * with no Node integration, loads only `inquello://app/` (served from the
+ * Vite build in `dist/renderer/`), and reaches main only through the named operations of the
  * self-contained preload. Navigation, window, webview, permission and request
  * policies apply to every `webContents` through `web-contents-created`.
  *
  * `--smoke` runs headless: it prints the handshake as one JSON line on stdout,
- * then probes the live renderer and prints a `renderer-privileges` line, quits,
- * prints the runtime's exit as a final JSON line, and exits 0 only if the
- * handshake and version check passed, the renderer showed no unexpected
- * privilege, and the runtime exited 0 on its own.
+ * then probes the live renderer and prints a `renderer-privileges` line and a
+ * `design` line, quits, prints the runtime's exit as a final JSON line, and
+ * exits 0 only if the handshake and version check passed, the renderer showed
+ * no unexpected privilege, the design specimen loaded all five fonts with the
+ * right icon semantics, and the runtime exited 0 on its own.
  */
 import fs from 'node:fs';
 import os from 'node:os';
@@ -43,6 +44,7 @@ let runtime: AppServerRuntime | undefined;
 let mainWindow: BrowserWindow | undefined;
 let handshakeOk = false;
 let privilegesOk = false;
+let designOk = false;
 /** `webContents` ids main created for app windows; the only trusted operation senders. */
 const trustedWebContentsIds = new Set<number>();
 const blocked: Array<{ kind: BlockedKind; url: string }> = [];
@@ -126,15 +128,18 @@ async function startRuntime(): Promise<void> {
 }
 
 async function runSmokeProbe(contents: WebContents): Promise<void> {
-  const report = await probeRenderer(contents, blocked, schemaStamp.runtimeVersion);
-  privilegesOk = report.ok;
-  process.stdout.write(`${JSON.stringify({ event: 'renderer-privileges', ...report })}\n`);
-  if (!report.ok) logger.error(`renderer privilege probe failed: ${report.failures.join('; ')}`);
+  const { privileges, design } = await probeRenderer(contents, blocked, schemaStamp.runtimeVersion);
+  privilegesOk = privileges.ok;
+  designOk = design.ok;
+  process.stdout.write(`${JSON.stringify({ event: 'renderer-privileges', ...privileges })}\n`);
+  process.stdout.write(`${JSON.stringify({ event: 'design', ...design })}\n`);
+  if (!privileges.ok) logger.error(`renderer privilege probe failed: ${privileges.failures.join('; ')}`);
+  if (!design.ok) logger.error(`design probe failed: ${design.failures.join('; ')}`);
 }
 
 function exitCodeFor(exit: ExitInfo | undefined): number {
   if (!smoke) return 0;
-  return handshakeOk && privilegesOk && exit !== undefined && exit.exitCode === 0 && !exit.killed ? 0 : 1;
+  return handshakeOk && privilegesOk && designOk && exit !== undefined && exit.exitCode === 0 && !exit.killed ? 0 : 1;
 }
 
 app.on('before-quit', (event) => {
@@ -168,7 +173,7 @@ app.on('window-all-closed', () => app.quit());
 
 void app.whenReady().then(async () => {
   applySessionPolicy(session.defaultSession, policyOptions);
-  handleAppProtocol(protocol, path.join(app.getAppPath(), 'static'), logger);
+  handleAppProtocol(protocol, path.join(app.getAppPath(), 'dist', 'renderer'), logger);
   registerOperations(
     ipcMain,
     createOperations({ runtimeState: () => runtime?.state ?? 'stopped', runtimeVersion: schemaStamp.runtimeVersion }),

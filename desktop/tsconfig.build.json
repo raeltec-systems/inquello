@@ -8,5 +8,6 @@
     "outDir": "dist",
     "sourceMap": true
   },
-  "include": ["src/**/*.ts", "src/**/*.json"]
+  "include": ["src/**/*.ts", "src/**/*.json"],
+  "exclude": ["src/renderer"]
 }

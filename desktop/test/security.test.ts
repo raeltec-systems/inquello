@@ -332,9 +332,27 @@ describe('app protocol', () => {
     expect((await get('inquello://app/index.html', 'POST')).status).toBe(405);
   });
 
-  it('mirrors the CSP meta in static/index.html', () => {
-    const html = fs.readFileSync(path.join(desktop, 'static', 'index.html'), 'utf8');
+  it("mirrors the CSP meta in the renderer's index.html", () => {
+    const html = fs.readFileSync(path.join(desktop, 'src', 'renderer', 'index.html'), 'utf8');
     expect(html).toContain(`content="${CONTENT_SECURITY_POLICY}"`);
+  });
+
+  it("widens the CSP only to 'self' for script, style, font and img sources", () => {
+    const directives = Object.fromEntries(
+      CONTENT_SECURITY_POLICY.split(';').map((directive) => {
+        const [name, ...values] = directive.trim().split(/\s+/);
+        return [name, values.join(' ')];
+      }),
+    );
+    expect(directives).toEqual({
+      'default-src': "'none'",
+      'script-src': "'self'",
+      'style-src': "'self'",
+      'font-src': "'self'",
+      'img-src': "'self'",
+      'base-uri': "'none'",
+      'form-action': "'none'",
+    });
   });
 });
 

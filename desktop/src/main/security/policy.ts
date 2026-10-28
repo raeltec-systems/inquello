@@ -6,7 +6,7 @@
  * - New windows and `<webview>` attachment are denied.
  * - Every permission request and check is denied.
  * - Session requests other than `inquello:` and `devtools:` are cancelled.
- * - Responses carry the same CSP as `static/index.html`.
+ * - Responses carry the same CSP as the renderer's `index.html` (`src/renderer/`).
  *
  * Electron is used through `import type` only; callers pass the live objects in.
  */
@@ -19,8 +19,12 @@ export const APP_HOST = 'app';
 export const APP_ORIGIN = `${APP_SCHEME}://${APP_HOST}`;
 export const APP_ENTRY_URL = `${APP_ORIGIN}/index.html`;
 
-/** Mirrors the CSP meta in `static/index.html`. */
-export const CONTENT_SECURITY_POLICY = "default-src 'none'; base-uri 'none'; form-action 'none'";
+/**
+ * Mirrors the CSP meta in `src/renderer/index.html`. Scripts, styles, fonts and
+ * images may load only from the app origin; everything else stays `'none'`.
+ */
+export const CONTENT_SECURITY_POLICY =
+  "default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'";
 
 /** URL schemes the renderer session may request; everything else is cancelled. */
 export const ALLOWED_REQUEST_SCHEMES: readonly string[] = [`${APP_SCHEME}:`, 'devtools:'];
