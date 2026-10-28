@@ -3,8 +3,8 @@
   "story": "1.2",
   "acceptanceCriterion": "AC 1.2.2",
   "recordedOn": "2026-10-28",
-  "purpose": "Bootstrap record of the desktop runtime transport configuration and the upstream support wording, for import into the capability register once that register exists. It is evidence only and grants no eligibility.",
-  "importTarget": "capability register (not yet created; see Story 1.9)",
+  "purpose": "Bootstrap record of the desktop runtime transport configuration and the upstream support wording, cited as evidence by the capability register entry desktop.runtime-transport.stdio. It is evidence only and grants no eligibility.",
+  "importTarget": "capability register entry desktop.runtime-transport.stdio (engine/codex-rs/inquello-domain/register/capabilities.json, Story 1.9)",
   "forkCut": {
     "upstream": "https://github.com/openai/codex",
     "tag": "rust-v0.165.0",
@@ -74,5 +74,5 @@
   ],
   "interpretation": "Default stdio availability establishes neither blanket production support nor Inquello readiness. The selected fork and route must be verified and hardened before release.",
   "productionEligibility": false,
-  "productionEligibilityReason": "Upstream labels the app-server command experimental, and no Inquello hardening, capability-register entry or release verification exists yet."
+  "productionEligibilityReason": "Upstream labels the app-server command experimental, and the capability register (Story 1.9) holds this transport at synthetic-only, and no Inquello hardening or release verification exists yet."
 }

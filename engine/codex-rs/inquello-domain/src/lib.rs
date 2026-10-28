@@ -8,7 +8,11 @@
 //!
 //! This crate owns the ports; adapters (such as `inquello-adapters`) implement them.
 //! It depends on no storage engine, async runtime, Electron or `codex-*` crate.
+//!
+//! The [`capability`] module holds the protected capability register: reviewed
+//! entries compiled into the binary and a fail-closed enablement query.
 
+pub mod capability;
 mod commands;
 mod error;
 mod model;

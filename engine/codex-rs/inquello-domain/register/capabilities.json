@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "entries": [
+    {
+      "id": "desktop.runtime-transport.stdio",
+      "owner": "Inquello desktop: Electron main process (desktop/src/main/runtime/process.ts)",
+      "supply": "codex-app-server from the Inquello fork of openai/codex at rust-v0.165.0, launched as an owned child with --listen stdio://",
+      "versions": {
+        "codex-app-server": "0.165.0",
+        "electron": "45.0.0",
+        "fork-cut": "rust-v0.165.0 (360319d8dee62d87e2d59fc0c21805d79519cfed)"
+      },
+      "limits": [
+        "stdio only: the WebSocket and unix transports are not enabled and no desktop code path requests them",
+        "the Electron main process is the only client; renderers reach it only through named preload operations",
+        "newline-delimited JSON framing with a 64 MiB line limit; child stderr is captured separately and never parsed as protocol",
+        "upstream labels the app-server command experimental; no production eligibility is claimed"
+      ],
+      "identity": "No user identity: the runtime runs as the desktop user's own process and carries no Inquello or provider identity",
+      "formats": [
+        "app-server JSON-RPC messages without the jsonrpc field, one per line"
+      ],
+      "processing_scope": "Local process-to-process transport on the user's machine. It carries no inference and no real data by itself",
+      "eligibility": "synthetic-only",
+      "evidence": [
+        {
+          "kind": "record",
+          "status": "passed",
+          "reference": "desktop/transport-evidence.json"
+        },
+        {
+          "kind": "synthetic",
+          "status": "passed",
+          "reference": "desktop/src/main/main.ts#--smoke handshake (pnpm smoke, temporary CODEX_HOME)"
+        }
+      ]
+    }
+  ]
+}

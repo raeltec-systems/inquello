@@ -9526,6 +9526,8 @@ name = "inquello-domain"
 version = "0.165.0"
 dependencies = [
  "pretty_assertions",
+ "serde",
+ "serde_json",
  "thiserror 2.0.18",
  "uuid",
 ]

@@ -95,6 +95,14 @@ The first deliberate engine patch. It adds code beside upstream and changes no u
 
 After a future `git subtree pull`, expect conflicts only in `Cargo.toml` members and `Cargo.lock`; regenerate the lock with cargo rather than merging it by hand.
 
+### Patch 2: Capability register (Story 1.9, 2026-10-28)
+
+Adds code inside `inquello-domain` only; no upstream crate changes.
+
+- **`inquello-domain/src/capability/`**: the register entry types, validation, `CapabilityRegister::load_embedded()` and the fail-closed `enablement(id)` query, plus the C/E `InventoryMap`.
+- **`inquello-domain/register/`**: `capabilities.json` (the reviewed register, compiled in with `include_str!`) and `inventory-map.json` (one row per C/E item, generated and proved by `tests/inventory_map.rs`).
+- **Dependencies**: `inquello-domain` now also uses the workspace pins `serde` (with `derive`) and `serde_json`. `Cargo.lock` gains only those two entries under `inquello-domain`; no external package or pin changed.
+
 ## Toolchain setup (Windows, everything on D:)
 
 The owner authorized these installs on 2026-10-28. Toolchains, caches and build output stay on D:. The Microsoft C++ build tools were already present and were not installed.

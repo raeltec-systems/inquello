@@ -1,0 +1,2045 @@
+{
+  "schema_version": 1,
+  "sources": [
+    "_bmad-output/planning-artifacts/epics.md",
+    "docs/PRODUCT_BRIEF_TRACEABILITY.md"
+  ],
+  "items": [
+    {
+      "id": "C01",
+      "title": "Codex in the ChatGPT desktop app",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "1.16",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "1.17",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "1.25",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "2.8",
+          "epic": 2,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "2.9",
+          "epic": 2,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "3.4",
+          "epic": 3,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C02",
+      "title": "Projects, chats, and navigation",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "1.14",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "1.25",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "1.30",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "2.8",
+          "epic": 2,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C03",
+      "title": "Codex CLI",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "11.1",
+          "epic": 11,
+          "increment": "Increment 2 (V1)"
+        },
+        {
+          "story": "12.1",
+          "epic": 12,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C04",
+      "title": "CLI command and session controls",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "11.1",
+          "epic": 11,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C05",
+      "title": "Agent Command Center (`codex agents`)",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "1.14",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "1.30",
+          "epic": 1,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C06",
+      "title": "IDE extension",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "11.2",
+          "epic": 11,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C07",
+      "title": "Codex Cloud",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "1.23",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "8.1",
+          "epic": 8,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C08",
+      "title": "Mobile and remote control",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "11.3",
+          "epic": 11,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C09",
+      "title": "Codex Micro hardware controls",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "11.4",
+          "epic": 11,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C10",
+      "title": "Local, worktree, and cloud environments",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "1.23",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "3.5",
+          "epic": 3,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "8.1",
+          "epic": 8,
+          "increment": "Increment 2 (V1)"
+        },
+        {
+          "story": "8.2",
+          "epic": 8,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C11",
+      "title": "Agent harness / tool loop",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "1.25",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "1.26",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "2.8",
+          "epic": 2,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "2.14",
+          "epic": 2,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "3.7",
+          "epic": 3,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C12",
+      "title": "Parallel independent read-only lookups",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "1.26",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "2.14",
+          "epic": 2,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "3.7",
+          "epic": 3,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C13",
+      "title": "Threads and turns",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "1.14",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "1.15",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "1.29",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "10.2",
+          "epic": 10,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C14",
+      "title": "Progress, steering, and interruption",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "1.26",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "1.29",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "2.14",
+          "epic": 2,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "3.7",
+          "epic": 3,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C15",
+      "title": "Plan mode and task lists",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "1.26",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "2.14",
+          "epic": 2,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "3.7",
+          "epic": 3,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C16",
+      "title": "Goals and long-running tasks",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "1.29",
+          "epic": 1,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C17",
+      "title": "Background tasks and parallel work",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "1.29",
+          "epic": 1,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C18",
+      "title": "Repository and file understanding",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "2.1",
+          "epic": 2,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C19",
+      "title": "Code and shell execution",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "2.5",
+          "epic": 2,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "9.13",
+          "epic": 9,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C20",
+      "title": "Code Mode",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "2.5",
+          "epic": 2,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "9.13",
+          "epic": 9,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C21",
+      "title": "File creation and editing",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "3.1",
+          "epic": 3,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "3.4",
+          "epic": 3,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C22",
+      "title": "Images and visual inputs",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "2.2",
+          "epic": 2,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C23",
+      "title": "Image generation and editing",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "3.6",
+          "epic": 3,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C24",
+      "title": "Composer Predictions",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "2.3",
+          "epic": 2,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "7.5",
+          "epic": 7,
+          "increment": "Increment 2 (V1)"
+        },
+        {
+          "story": "9.12",
+          "epic": 9,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C25",
+      "title": "Web search, built-in browser, browser extension, and Computer Use",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "2.17",
+          "epic": 2,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "7.1",
+          "epic": 7,
+          "increment": "Increment 2 (V1)"
+        },
+        {
+          "story": "7.3",
+          "epic": 7,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C26",
+      "title": "Browser annotations and site integration API",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "2.3",
+          "epic": 2,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "7.2",
+          "epic": 7,
+          "increment": "Increment 2 (V1)"
+        },
+        {
+          "story": "7.5",
+          "epic": 7,
+          "increment": "Increment 2 (V1)"
+        },
+        {
+          "story": "9.12",
+          "epic": 9,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C27",
+      "title": "Appshots",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "2.3",
+          "epic": 2,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "7.5",
+          "epic": 7,
+          "increment": "Increment 2 (V1)"
+        },
+        {
+          "story": "9.12",
+          "epic": 9,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C28",
+      "title": "Analysis and code review",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "5.3",
+          "epic": 5,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "5.10",
+          "epic": 5,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "9.14",
+          "epic": 9,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C29",
+      "title": "Codex Security scans and workbench",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "5.10",
+          "epic": 5,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "9.14",
+          "epic": 9,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C30",
+      "title": "Desktop editor and PR Chat",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "5.5",
+          "epic": 5,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C31",
+      "title": "Generated outputs and previews",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "3.1",
+          "epic": 3,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "3.4",
+          "epic": 3,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C32",
+      "title": "Sites and hosted app outputs",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "8.3",
+          "epic": 8,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C33",
+      "title": "Built-in tools",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "1.21",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "1.25",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "2.1",
+          "epic": 2,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "2.5",
+          "epic": 2,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "2.8",
+          "epic": 2,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "9.13",
+          "epic": 9,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C34",
+      "title": "Connected apps and app catalog",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "1.21",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "2.4",
+          "epic": 2,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C35",
+      "title": "MCP servers and connected tools",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "1.21",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "2.4",
+          "epic": 2,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C36",
+      "title": "Plugins and marketplaces",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "1.21",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "2.7",
+          "epic": 2,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "2.10",
+          "epic": 2,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C37",
+      "title": "Skills",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "2.7",
+          "epic": 2,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "2.10",
+          "epic": 2,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C38",
+      "title": "Record & Replay",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "7.4",
+          "epic": 7,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C39",
+      "title": "Repository instructions and configuration",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "2.6",
+          "epic": 2,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C40",
+      "title": "Hooks",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "2.15",
+          "epic": 2,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C41",
+      "title": "App-server protocol",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "1.1",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "1.2",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "1.3",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "1.4",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "1.15",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "1.26",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "2.14",
+          "epic": 2,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "3.7",
+          "epic": 3,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "9.1",
+          "epic": 9,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C42",
+      "title": "Client-supplied dynamic tools (app-server)",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "9.1",
+          "epic": 9,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C43",
+      "title": "Codex SDK, non-interactive execution, and GitHub Action",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "12.1",
+          "epic": 12,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C44",
+      "title": "Task entry points from connected services",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "12.5",
+          "epic": 12,
+          "increment": "Increment 2 (V1)"
+        },
+        {
+          "story": "12.7",
+          "epic": 12,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C45",
+      "title": "Subagents",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "10.1",
+          "epic": 10,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C46",
+      "title": "Side chats, fork, and task references",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "10.2",
+          "epic": 10,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C47",
+      "title": "Worktrees and concurrent tasks",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "3.5",
+          "epic": 3,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "8.2",
+          "epic": 8,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C48",
+      "title": "Active context and compaction",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "10.3",
+          "epic": 10,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C49",
+      "title": "Conversation persistence and history",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "1.30",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "10.3",
+          "epic": 10,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C50",
+      "title": "Memory",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "4.5",
+          "epic": 4,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C51",
+      "title": "Computer History",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "10.4",
+          "epic": 10,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C52",
+      "title": "Durable instructions vs memory vs skills",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "2.6",
+          "epic": 2,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C53",
+      "title": "Usage, models, speed, and reasoning controls",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "1.13",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "1.22",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "1.24",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "3.10",
+          "epic": 3,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "9.2",
+          "epic": 9,
+          "increment": "Increment 2 (V1)"
+        },
+        {
+          "story": "9.3",
+          "epic": 9,
+          "increment": "Increment 2 (V1)"
+        },
+        {
+          "story": "9.4",
+          "epic": 9,
+          "increment": "Increment 2 (V1)"
+        },
+        {
+          "story": "9.5",
+          "epic": 9,
+          "increment": "Increment 2 (V1)"
+        },
+        {
+          "story": "9.6",
+          "epic": 9,
+          "increment": "Increment 2 (V1)"
+        },
+        {
+          "story": "9.7",
+          "epic": 9,
+          "increment": "Increment 2 (V1)"
+        },
+        {
+          "story": "9.8",
+          "epic": 9,
+          "increment": "Increment 2 (V1)"
+        },
+        {
+          "story": "9.9",
+          "epic": 9,
+          "increment": "Increment 2 (V1)"
+        },
+        {
+          "story": "9.10",
+          "epic": 9,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C54",
+      "title": "Amazon Bedrock provider",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "1.13",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "1.22",
+          "epic": 1,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C54A",
+      "title": "Microsoft Azure Foundry / Azure OpenAI provider",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "1.13",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "1.22",
+          "epic": 1,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C55",
+      "title": "Organization model gateway",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "1.13",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "1.22",
+          "epic": 1,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C56",
+      "title": "Local open-source model provider (`--oss`)",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "1.13",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "1.22",
+          "epic": 1,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C57",
+      "title": "Programmatic access and service identities",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "1.13",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "1.22",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "9.2",
+          "epic": 9,
+          "increment": "Increment 2 (V1)"
+        },
+        {
+          "story": "9.3",
+          "epic": 9,
+          "increment": "Increment 2 (V1)"
+        },
+        {
+          "story": "9.4",
+          "epic": 9,
+          "increment": "Increment 2 (V1)"
+        },
+        {
+          "story": "9.5",
+          "epic": 9,
+          "increment": "Increment 2 (V1)"
+        },
+        {
+          "story": "9.6",
+          "epic": 9,
+          "increment": "Increment 2 (V1)"
+        },
+        {
+          "story": "9.7",
+          "epic": 9,
+          "increment": "Increment 2 (V1)"
+        },
+        {
+          "story": "9.8",
+          "epic": 9,
+          "increment": "Increment 2 (V1)"
+        },
+        {
+          "story": "9.9",
+          "epic": 9,
+          "increment": "Increment 2 (V1)"
+        },
+        {
+          "story": "9.10",
+          "epic": 9,
+          "increment": "Increment 2 (V1)"
+        },
+        {
+          "story": "12.2",
+          "epic": 12,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C58",
+      "title": "Git and change review",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "3.1",
+          "epic": 3,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "5.5",
+          "epic": 5,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "5.6",
+          "epic": 5,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C59",
+      "title": "Scheduled tasks",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "12.5",
+          "epic": 12,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C60",
+      "title": "Voice and dictation",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "11.5",
+          "epic": 11,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C61",
+      "title": "Notifications and task visibility",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "1.15",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "1.30",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "11.6",
+          "epic": 11,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C62",
+      "title": "Pets and floating task companion",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "11.6",
+          "epic": 11,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C63",
+      "title": "Import and setup migration",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "11.7",
+          "epic": 11,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C64",
+      "title": "Shared thread snapshots",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "11.8",
+          "epic": 11,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C65",
+      "title": "Sandbox and permission profiles",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "1.19",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "1.28",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "2.18",
+          "epic": 2,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "4.6",
+          "epic": 4,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "12.8",
+          "epic": 12,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C66",
+      "title": "Approvals and automatic review",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "1.20",
+          "epic": 1,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C67",
+      "title": "Approved cyber model access (Daybreak / Trusted Access)",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "1.18",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "5.10",
+          "epic": 5,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "9.11",
+          "epic": 9,
+          "increment": "Increment 2 (V1)"
+        },
+        {
+          "story": "9.14",
+          "epic": 9,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C68",
+      "title": "Prisma AIRS prompt inspection",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "1.18",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "9.11",
+          "epic": 9,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C69",
+      "title": "Command rules",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "1.20",
+          "epic": 1,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C70",
+      "title": "Agent Security and managed policy",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "1.18",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "1.28",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "4.6",
+          "epic": 4,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "9.11",
+          "epic": 9,
+          "increment": "Increment 2 (V1)"
+        },
+        {
+          "story": "12.8",
+          "epic": 12,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C71",
+      "title": "Workspace roles, access, and user lifecycle",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "1.10",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "1.11",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "4.3",
+          "epic": 4,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "4.7",
+          "epic": 4,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "10.5",
+          "epic": 10,
+          "increment": "Increment 2 (V1)"
+        },
+        {
+          "story": "12.3",
+          "epic": 12,
+          "increment": "Increment 2 (V1)"
+        },
+        {
+          "story": "12.4",
+          "epic": 12,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C72",
+      "title": "Source/connector identity",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "1.28",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "2.4",
+          "epic": 2,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "4.6",
+          "epic": 4,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "12.8",
+          "epic": 12,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C73",
+      "title": "Untrusted inputs and hooks",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "1.27",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "2.16",
+          "epic": 2,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C74",
+      "title": "Enterprise usage analytics and compliance records",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "13.2",
+          "epic": 13,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C75",
+      "title": "Retention, logs, and telemetry",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "1.12",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "4.4",
+          "epic": 4,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "13.1",
+          "epic": 13,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C76",
+      "title": "Task workflow",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "1.26",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "2.14",
+          "epic": 2,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "3.7",
+          "epic": 3,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C77",
+      "title": "Agent capability/runtime",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "1.1",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "1.2",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "1.3",
+          "epic": 1,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "1.4",
+          "epic": 1,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "C78",
+      "title": "Auditor-tailored workflow",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "6.1",
+          "epic": 6,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "E01",
+      "title": "Requested review of submitted work",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "5.3",
+          "epic": 5,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "E02",
+      "title": "Automatic review after an eligible change event",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "12.5",
+          "epic": 12,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "E03",
+      "title": "Persistent and one-off review criteria",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "5.3",
+          "epic": 5,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "E04",
+      "title": "Follow-up correction and recheck",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "5.7",
+          "epic": 5,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "E05",
+      "title": "Non-interactive event-driven procedure",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "12.5",
+          "epic": 12,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "E06",
+      "title": "Review from alternative source platforms",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "12.7",
+          "epic": 12,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "E07",
+      "title": "Delegation from collaboration threads",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "12.7",
+          "epic": 12,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "E08",
+      "title": "Assignment from an external task system",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "12.7",
+          "epic": 12,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "E09",
+      "title": "Automatic task triage and routing",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "12.6",
+          "epic": 12,
+          "increment": "Increment 2 (V1)"
+        },
+        {
+          "story": "12.7",
+          "epic": 12,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "E10",
+      "title": "Specialist review pass",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "5.10",
+          "epic": 5,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "9.14",
+          "epic": 9,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "E11",
+      "title": "Saved scans, findings and history",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "5.10",
+          "epic": 5,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "E12",
+      "title": "Additional focused analysis passes",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "5.10",
+          "epic": 5,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "E13",
+      "title": "Inherited findings/backlog triage",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "5.10",
+          "epic": 5,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "9.14",
+          "epic": 9,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "E14",
+      "title": "Propose, inspect, apply and verify changes",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "5.7",
+          "epic": 5,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "6.4",
+          "epic": 6,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "E15",
+      "title": "Advisory options grounded in findings",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "6.1",
+          "epic": 6,
+          "increment": "Increment 1"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "E16",
+      "title": "Self-contained observation/report",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "8.3",
+          "epic": 8,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "E17",
+      "title": "Export and reviewed finding writeback",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "5.11",
+          "epic": 5,
+          "increment": "Increment 1"
+        },
+        {
+          "story": "14.1",
+          "epic": 14,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "E18",
+      "title": "Bulk review across entities and resume",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "12.1",
+          "epic": 12,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "E19",
+      "title": "Programmatic structured review results",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "12.1",
+          "epic": 12,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    },
+    {
+      "id": "E20",
+      "title": "Website-exposed actions and page context",
+      "status": "planned",
+      "stories": [
+        {
+          "story": "7.2",
+          "epic": 7,
+          "increment": "Increment 2 (V1)"
+        }
+      ],
+      "register_entries": [],
+      "reason": null
+    }
+  ]
+}
