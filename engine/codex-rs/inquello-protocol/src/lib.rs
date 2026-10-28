@@ -8,19 +8,25 @@
 //!   refresh-family revoke, and the session and membership views.
 //! - **SC-2 commands** ([`command`]): the mutation envelope, the service response
 //!   and the durable-receipt semantics it implies.
+//! - **Workspaces** ([`workspace`]): Workspace and role views, invite
+//!   acceptance, Workspace-scoped SC-2 commands and access checks, with the
+//!   fixed set of deny reasons (Story 1.11).
 //! - **Errors** ([`error`]): the closed set of SC-2 error kinds.
 //!
 //! Conventions (SC-2): IDs are opaque UUID strings; times are UTC RFC 3339 with
 //! millisecond precision; revisions and command epochs are monotonically
 //! increasing integers serialized as decimal strings. The JSON files under
-//! `fixtures/` are the conformance fixtures; `tests/fixtures.rs` proves every one
-//! round-trips through these types unchanged.
+//! `fixtures/` and `fixtures/workspace/` are the conformance fixtures;
+//! `tests/fixtures.rs` proves every one round-trips through these types
+//! unchanged. The Story 1.11 Workspace fixtures sit in their own subdirectory
+//! because the desktop mirrors only the top-level SC-1/SC-2 fixtures so far.
 
 pub mod command;
 pub mod error;
 pub mod login;
 pub mod session;
 mod values;
+pub mod workspace;
 
 pub use values::CommandEpoch;
 pub use values::Revision;

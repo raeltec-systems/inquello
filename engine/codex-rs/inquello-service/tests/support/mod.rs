@@ -48,9 +48,18 @@ const TABLES: &[&str] = &[
     "refresh_families",
     "sessions",
     "session_credentials",
-    "memberships",
     "operation_receipts",
     "invalidation_events",
+    "workspaces",
+    "workspace_policies",
+    "memberships",
+    "engagements",
+    "engagement_memberships",
+    "invites",
+    "operator_receipts",
+    "workspace_events",
+    "resource_registrations",
+    "grants",
 ];
 
 pub fn lifetimes() -> Lifetimes {
@@ -60,6 +69,7 @@ pub fn lifetimes() -> Lifetimes {
         refresh: Duration::from_secs(24 * 60 * 60),
         session: Duration::from_secs(30 * 24 * 60 * 60),
         id_token_clock_skew: Duration::from_secs(60),
+        invite: Duration::from_secs(7 * 24 * 60 * 60),
     }
 }
 
@@ -184,6 +194,14 @@ impl TestDatabase {
 
     pub fn options(&self) -> PgConnectOptions {
         admin_options().database(&self.name)
+    }
+
+    /// A connection URL for this database (for the operator CLI).
+    pub fn url(&self) -> String {
+        let base = std::env::var(DATABASE_ENV).expect("test database URL");
+        let mut url = url::Url::parse(&base).expect("test database URL parses");
+        url.set_path(&format!("/{}", self.name));
+        url.to_string()
     }
 
     /// Makes the database refuse connections and drops every open one: the
@@ -336,6 +354,11 @@ impl Harness {
 
     pub fn now(&self) -> DateTime<Utc> {
         self.clock.now()
+    }
+
+    /// Every error body the service has answered so far.
+    pub fn error_bodies(&self) -> Vec<String> {
+        self.error_bodies.lock().expect("bodies").clone()
     }
 
     /// Registers a secret that must never appear in logs, receipts, error bodies

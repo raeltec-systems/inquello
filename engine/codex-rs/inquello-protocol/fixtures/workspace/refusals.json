@@ -1,0 +1,44 @@
+[
+  {
+    "error": {
+      "kind": "unauthenticated",
+      "message": "sign-in is required",
+      "reason": "not_signed_in"
+    }
+  },
+  {
+    "error": {
+      "kind": "denied",
+      "message": "the request is not permitted",
+      "reason": "not_a_member"
+    }
+  },
+  {
+    "error": {
+      "kind": "denied",
+      "message": "the request is not permitted",
+      "reason": "role_lacks_action"
+    }
+  },
+  {
+    "error": {
+      "kind": "denied",
+      "message": "the request is not permitted",
+      "reason": "no_grant"
+    }
+  },
+  {
+    "error": {
+      "kind": "denied",
+      "message": "the request is not permitted",
+      "reason": "not_the_creator"
+    }
+  },
+  {
+    "error": {
+      "kind": "denied",
+      "message": "the request is not permitted",
+      "reason": "route_not_available"
+    }
+  }
+]

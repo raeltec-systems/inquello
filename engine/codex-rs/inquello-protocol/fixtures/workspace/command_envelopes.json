@@ -1,0 +1,84 @@
+[
+  {
+    "command_epoch": "1",
+    "operation_id": "op-invite-0001",
+    "workspace_id": "5d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e",
+    "expected_revision": "0",
+    "schema_version": 1,
+    "payload": {
+      "command": "issue_invite",
+      "issuer": "https://test-issuer.inquello.invalid",
+      "subject": "synthetic-auditor",
+      "roles": ["auditor"]
+    }
+  },
+  {
+    "command_epoch": "1",
+    "operation_id": "op-revoke-invite-0001",
+    "workspace_id": "5d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e",
+    "expected_revision": "1",
+    "schema_version": 1,
+    "payload": {
+      "command": "revoke_invite",
+      "invite_id": "0a1b2c3d-4e5f-4a6b-8c7d-8e9f0a1b2c3d"
+    }
+  },
+  {
+    "command_epoch": "1",
+    "operation_id": "op-roles-0001",
+    "workspace_id": "5d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e",
+    "expected_revision": "1",
+    "schema_version": 1,
+    "payload": {
+      "command": "change_roles",
+      "principal_id": "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d",
+      "roles": ["auditor", "reviewer"]
+    }
+  },
+  {
+    "command_epoch": "1",
+    "operation_id": "op-remove-0001",
+    "workspace_id": "5d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e",
+    "expected_revision": "2",
+    "schema_version": 1,
+    "payload": {
+      "command": "remove_member",
+      "principal_id": "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d"
+    }
+  },
+  {
+    "command_epoch": "1",
+    "operation_id": "op-engagement-0001",
+    "workspace_id": "5d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e",
+    "expected_revision": "0",
+    "schema_version": 1,
+    "payload": {
+      "command": "create_engagement",
+      "name": "FY26 synthetic engagement"
+    }
+  },
+  {
+    "command_epoch": "1",
+    "operation_id": "op-engagement-add-0001",
+    "workspace_id": "5d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e",
+    "expected_revision": "1",
+    "schema_version": 1,
+    "payload": {
+      "command": "add_engagement_member",
+      "engagement_id": "1f2e3d4c-5b6a-4978-8a6b-5c4d3e2f1a0b",
+      "principal_id": "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d"
+    }
+  },
+  {
+    "command_epoch": "1",
+    "operation_id": "op-engagement-remove-0001",
+    "workspace_id": "5d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e",
+    "expected_revision": "2",
+    "schema_version": 1,
+    "payload": {
+      "command": "remove_engagement_member",
+      "engagement_id": "1f2e3d4c-5b6a-4978-8a6b-5c4d3e2f1a0b",
+      "principal_id": "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d"
+    }
+  }
+]

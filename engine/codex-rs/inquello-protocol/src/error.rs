@@ -1,8 +1,10 @@
 //! SC-2 error kinds and the error body.
 //!
 //! Error messages are fixed per kind. They never echo request content, never carry
-//! a credential and never confirm whether an inaccessible resource exists.
+//! a credential and never confirm whether an inaccessible resource exists. A
+//! Workspace-scoped `denied` body also carries a reason from a fixed set.
 
+use crate::workspace::DenyReason;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -65,6 +67,11 @@ impl ErrorKind {
 pub struct ErrorDetail {
     pub kind: ErrorKind,
     pub message: String,
+    /// Only on a Workspace-scoped refusal (`denied`, or `unauthenticated` with
+    /// `not_signed_in`): the caller's missing authority, from a fixed set. It
+    /// never names a resource.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<DenyReason>,
 }
 
 /// The body of every error response.
@@ -80,7 +87,20 @@ impl ErrorBody {
             error: ErrorDetail {
                 kind,
                 message: kind.message().to_string(),
+                reason: None,
             },
         }
+    }
+
+    /// The body of a Workspace-scoped refusal: `unauthenticated` for
+    /// `not_signed_in`, otherwise `denied`, carrying the reason.
+    pub fn refused(reason: DenyReason) -> Self {
+        let kind = match reason {
+            DenyReason::NotSignedIn => ErrorKind::Unauthenticated,
+            _ => ErrorKind::Denied,
+        };
+        let mut body = Self::new(kind);
+        body.error.reason = Some(reason);
+        body
     }
 }

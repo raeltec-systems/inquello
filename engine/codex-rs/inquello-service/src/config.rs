@@ -62,6 +62,8 @@ pub struct Lifetimes {
     pub session: Duration,
     /// Clock-skew allowance applied to ID-token `exp`, `iat` and `nbf`.
     pub id_token_clock_skew: Duration,
+    /// How long an invite issued by a Workspace administrator stays acceptable.
+    pub invite: Duration,
 }
 
 /// One allowlisted OIDC issuer and the single native client registered with it.
@@ -320,6 +322,7 @@ impl Lifetimes {
             ("access", self.access),
             ("refresh", self.refresh),
             ("session", self.session),
+            ("invite", self.invite),
         ] {
             if value.is_zero() {
                 return Err(invalid(name, "must be positive"));

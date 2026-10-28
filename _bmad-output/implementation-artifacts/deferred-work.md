@@ -49,3 +49,12 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-10b-desktop-sign-in-and-https-topology.md`
   summary: Load real deployment TLS material (certificate chain and key from protected storage, rotation) for the shared service.
   evidence: `TlsConfig` takes in-memory DER material; only the ephemeral test CA (`test_tls.rs`, `test-issuer` feature) produces it today. A real deployment's key handling and rotation are OQ-16B decisions and must fail closed until supplied.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-11-enforce-internal-company-memberships.md`
+  summary: Mirror the Story 1.11 Workspace wire types in the desktop (Story 1.14), including the optional `reason` on refusal bodies.
+  evidence: The Workspace fixtures live in `engine/codex-rs/inquello-protocol/fixtures/workspace/` so the desktop's top-level fixture-coverage test is unchanged ("no desktop changes"). The desktop's `parseErrorBody` rejects unknown keys, so it would refuse a Workspace refusal body that carries `reason`; no desktop code calls a Workspace route yet. `GET /v1/memberships` keeps its shape but now lists one row per role binding of an active `internal_company` membership.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-11-enforce-internal-company-memberships.md`
+  summary: Replace the fixture-only `resource_registrations` and `grants` tables with Epic 4's registration and grant-issuing commands, and decide where the authority learns a private Task's creator.
+  evidence: Story 1.11 forbids a grant-issuing API, so access checks read seeded rows only. Private Tasks are local (desktop SQLite); the service knows a private Task's creator only through a registration row. Epic 4 (sharing) owns registration, grants and the SC-5 per-use rechecks.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-11-enforce-internal-company-memberships.md`
+  summary: Add an expiry and retention policy for closed invites, operator receipts and Workspace events, and decide whether `update-policy` should also rebind members whose roles the new policy drops.
+  evidence: Rows are kept forever for now (a data-retention decision under SC-6). A binding to a role the current policy no longer defines grants nothing (fail closed) but stays stored until an administrator changes that member's roles.

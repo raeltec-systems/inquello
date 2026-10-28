@@ -443,7 +443,7 @@ pub(crate) async fn session_view(state: &AppState, access: &str) -> Result<Sessi
     Ok(view)
 }
 
-/// `GET /v1/memberships`: the caller's fixture-seeded memberships.
+/// `GET /v1/memberships`: the caller's role bindings as displayable revisions.
 pub(crate) async fn memberships_view(
     state: &AppState,
     access: &str,
@@ -452,9 +452,14 @@ pub(crate) async fn memberships_view(
     let mut tx = state.pool.begin().await?;
     let auth = authenticate(&mut tx, access, now, LockMode::Share, LockMode::Share).await?;
     let principal = principal_view(&mut tx, auth.principal_id).await?;
+    // One displayable row per role binding of an active membership in an
+    // enabled Workspace; `GET /v1/workspaces` is the full view.
     let rows = sqlx::query(
-        "SELECT workspace_id, workspace_kind, role, status, revision FROM memberships \
-         WHERE principal_id = $1 ORDER BY workspace_id",
+        "SELECT m.workspace_id, w.kind AS workspace_kind, r.role, m.status, m.revision \
+         FROM memberships m JOIN workspaces w ON w.workspace_id = m.workspace_id \
+         CROSS JOIN LATERAL unnest(m.roles) AS r(role) \
+         WHERE m.principal_id = $1 AND m.status = 'active' AND w.kind = 'internal_company' \
+         ORDER BY m.workspace_id, r.role",
     )
     .bind(auth.principal_id)
     .fetch_all(&mut *tx)

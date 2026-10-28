@@ -1,0 +1,24 @@
+{
+  "workspace_id": "5d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e",
+  "policy_revision": "1",
+  "roles": [
+    {
+      "role_id": "audit_lead",
+      "kind": "audit_team",
+      "label": "Audit lead",
+      "actions": ["read", "comment", "manage_membership"]
+    },
+    {
+      "role_id": "auditor",
+      "kind": "audit_team",
+      "label": "Auditor",
+      "actions": ["read", "derive", "comment", "share", "export"]
+    },
+    {
+      "role_id": "reviewer",
+      "kind": "reviewer",
+      "label": "Reviewer",
+      "actions": ["read", "comment", "submit_review", "issue_notes"]
+    }
+  ]
+}

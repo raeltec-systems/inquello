@@ -124,6 +124,15 @@ Changes only `inquello-service`; no upstream crate's code changes.
 - **Workspace manifest**: unchanged. The service adds dependency edges on crates already locked and pinned in the workspace: `rustls`, `tokio-rustls`, `url`, and (optional) `rcgen`, `time`, `tracing-subscriber`; `tokio` gains the `signal` feature, which another workspace crate already enables.
 - **Lockfile**: only `inquello-service`'s dependency list gains `rcgen`, `rustls`, `time`, `tokio-rustls` and `url` (`tracing-subscriber` was already listed as a dev-dependency). No package entry, version or checksum changed.
 
+### Patch 5: Internal-company memberships (Story 1.11, 2026-10-28)
+
+Changes only the Inquello crates; no upstream crate's code changes.
+
+- **`inquello-domain/src/authorization/`**: the versioned Workspace role policy (roles of kind `audit_team` or `reviewer` only; any other kind, an unknown action, a policy without a `manage_membership` role, or a client/independence attribute is refused, the last as `route_not_available`), and the pure `decide` function over session, Workspace kind, membership role bindings, Engagement memberships and explicit grants, with the fixed `DenyReason` set. A `private_task` is reachable only by its creator. No new dependency: it uses the crate's existing `serde_json` and `uuid`.
+- **`inquello-protocol`**: `src/workspace.rs` (Workspace and role views, invite acceptance, the Workspace-scoped SC-2 envelope and commands, access checks, deny reasons) and an optional `reason` on `ErrorDetail` (absent from every existing fixture). The new fixtures sit in `fixtures/workspace/` so the desktop's top-level fixture mirror stays unchanged.
+- **`inquello-service`**: migration `0002_workspaces_memberships.sql` (Workspaces, policy revisions, memberships with role bindings, Engagements and their memberships, identity-bound invites, operator receipts, Workspace events, and the fixture-only `resource_registrations` and `grants`; it drops 0001's fixture-only `memberships` table). New routes `GET /v1/workspaces`, `GET /v1/workspaces/{id}/roles`, `POST /v1/invites/{id}/accept`, `POST /v1/workspaces/{id}/commands` and `POST /v1/workspaces/{id}/access-checks`. New `Lifetimes.invite`. New binary `inquello-service` (`admin create-workspace`, `admin update-policy`), which connects to PostgreSQL directly; no HTTP route creates a Workspace. New test target `tests/memberships.rs` (requires `test-issuer`).
+- **Workspace manifest and lockfile**: unchanged. No dependency edge was added.
+
 ## Toolchain setup (Windows, everything on D:)
 
 The owner authorized these installs on 2026-10-28. Toolchains, caches and build output stay on D:. The Microsoft C++ build tools were already present and were not installed.

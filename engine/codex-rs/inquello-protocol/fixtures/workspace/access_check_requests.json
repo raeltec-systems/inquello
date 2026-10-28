@@ -1,0 +1,19 @@
+[
+  {
+    "action": "manage_membership"
+  },
+  {
+    "action": "read",
+    "resource": {
+      "kind": "private_task",
+      "resource_id": "6a7b8c9d-0e1f-4a2b-8c3d-4e5f6a7b8c9d"
+    }
+  },
+  {
+    "action": "read",
+    "resource": {
+      "kind": "shared_resource",
+      "resource_id": "7b8c9d0e-1f2a-4b3c-9d4e-5f6a7b8c9d0e"
+    }
+  }
+]

@@ -5,11 +5,13 @@ edition.workspace = true
 license.workspace = true
 
 # Inquello's shared service (SC-1 identity and sessions, SC-2 principal-scoped
-# session commands with durable receipts) on axum and sqlx/PostgreSQL. It runs
-# only in the SC-7 synthetic topology for now: HTTPS (rustls) or loopback plain
-# HTTP, PostgreSQL 18 test metadata and, behind the `test-issuer` feature, an
-# in-process OIDC test issuer with ephemeral keys, a synthetic OIDC provider, an
-# ephemeral test CA and the `inquello-dev-topology` binary.
+# session commands with durable receipts, Story 1.11 internal-company Workspaces,
+# memberships, invites and Workspace-scoped commands, and the operator CLI) on
+# axum and sqlx/PostgreSQL. It runs only in the SC-7 synthetic topology for now:
+# HTTPS (rustls) or loopback plain HTTP, PostgreSQL 18 test metadata and, behind
+# the `test-issuer` feature, an in-process OIDC test issuer with ephemeral keys,
+# a synthetic OIDC provider, an ephemeral test CA and the `inquello-dev-topology`
+# binary.
 
 [features]
 # The synthetic OIDC test issuer and the synthetic-test deployment. Without this
@@ -52,6 +54,12 @@ reqwest = { workspace = true, features = ["json"] }
 tempfile = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["fmt"] }
 
+# The operator CLI (`inquello-service admin ...`). It connects to PostgreSQL
+# directly; no HTTP route reaches its commands.
+[[bin]]
+name = "inquello-service"
+path = "src/bin/inquello-service.rs"
+
 [[bin]]
 name = "inquello-dev-topology"
 path = "src/bin/inquello-dev-topology.rs"
@@ -63,6 +71,10 @@ required-features = ["test-issuer"]
 
 [[test]]
 name = "topology"
+required-features = ["test-issuer"]
+
+[[test]]
+name = "memberships"
 required-features = ["test-issuer"]
 
 [lints]

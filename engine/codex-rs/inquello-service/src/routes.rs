@@ -10,9 +10,12 @@ use crate::error::ApiError;
 use crate::login;
 use crate::server::AppState;
 use crate::sessions;
+use crate::workspace_commands;
+use crate::workspaces;
 use axum::Json;
 use axum::Router;
 use axum::body::Bytes;
+use axum::extract::Path;
 use axum::extract::State;
 use axum::http::HeaderMap;
 use axum::http::HeaderValue;
@@ -43,6 +46,17 @@ pub(crate) fn router(state: Arc<AppState>) -> Router {
         .route("/v1/session/refresh-family/revoke", post(revoke_family))
         .route("/v1/session/commands", post(session_command))
         .route("/v1/memberships", get(memberships))
+        .route("/v1/workspaces", get(list_workspaces))
+        .route("/v1/workspaces/{workspace_id}/roles", get(workspace_roles))
+        .route(
+            "/v1/workspaces/{workspace_id}/commands",
+            post(workspace_command),
+        )
+        .route(
+            "/v1/workspaces/{workspace_id}/access-checks",
+            post(access_check),
+        )
+        .route("/v1/invites/{invite_id}/accept", post(accept_invite))
         .layer(axum::middleware::map_response(no_store))
         .with_state(state)
 }
@@ -149,6 +163,82 @@ async fn session_command(State(state): SharedState, headers: HeaderMap, body: By
     let result = async {
         let access = required_bearer(&headers)?;
         commands::handle_session_command(&state, access, parse(&body)?).await
+    }
+    .await;
+    respond(result)
+}
+
+async fn list_workspaces(State(state): SharedState, headers: HeaderMap) -> Response {
+    let result = async {
+        let access = required_bearer(&headers).map_err(ApiError::on_workspace_route)?;
+        workspaces::list_workspaces(&state, access).await
+    }
+    .await;
+    respond(result)
+}
+
+async fn workspace_roles(
+    State(state): SharedState,
+    Path(workspace_id): Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    let result = async {
+        let access = required_bearer(&headers).map_err(ApiError::on_workspace_route)?;
+        let workspace_id = workspaces::path_id(&workspace_id)?;
+        workspaces::roles(&state, access, workspace_id).await
+    }
+    .await;
+    respond(result)
+}
+
+async fn workspace_command(
+    State(state): SharedState,
+    Path(workspace_id): Path<String>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    let result = async {
+        let access = required_bearer(&headers).map_err(ApiError::on_workspace_route)?;
+        let workspace_id = workspaces::path_id(&workspace_id)?;
+        workspace_commands::handle(&state, access, workspace_id, parse(&body)?).await
+    }
+    .await;
+    respond(result)
+}
+
+async fn access_check(
+    State(state): SharedState,
+    Path(workspace_id): Path<String>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    let result = async {
+        let access = required_bearer(&headers).map_err(ApiError::on_workspace_route)?;
+        let workspace_id = workspaces::path_id(&workspace_id)?;
+        workspaces::access_check(&state, access, workspace_id, parse(&body)?).await
+    }
+    .await;
+    respond(result)
+}
+
+/// The accept body is empty or `{}`: the invite is named by the path and the
+/// principal by the credential.
+async fn accept_invite(
+    State(state): SharedState,
+    Path(invite_id): Path<String>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    let result = async {
+        let access = required_bearer(&headers).map_err(ApiError::on_workspace_route)?;
+        let invite_id = workspaces::path_id(&invite_id)?;
+        if !body.is_empty() {
+            let object: serde_json::Map<String, serde_json::Value> = parse(&body)?;
+            if !object.is_empty() {
+                return Err(ApiError::unsupported_contract("unexpected accept body"));
+            }
+        }
+        workspaces::accept_invite(&state, access, invite_id).await
     }
     .await;
     respond(result)

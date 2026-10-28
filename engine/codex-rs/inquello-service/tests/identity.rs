@@ -821,7 +821,8 @@ async fn a_production_config_naming_the_test_issuer_refuses_to_start() {
     h.finish().await;
 }
 
-// Memberships are displayable revisions from the fixture-seeded table.
+// Memberships are displayable revisions: one row per role binding of an active
+// membership (seeded directly here; Story 1.11's suite covers the real paths).
 #[tokio::test(flavor = "multi_thread")]
 async fn memberships_are_returned_as_displayable_revisions_for_the_caller_only() {
     let h = Harness::start().await;
@@ -829,11 +830,21 @@ async fn memberships_are_returned_as_displayable_revisions_for_the_caller_only()
     let quinn = h.sign_in("quinn").await;
     let workspace_id = Uuid::new_v4();
     sqlx::query(
-        "INSERT INTO memberships (principal_id, workspace_id, workspace_kind, role, status, revision) \
-         VALUES ($1, $2, 'internal_company', 'member', 'active', 3)",
+        "INSERT INTO workspaces (workspace_id, name, kind, policy_revision, authorization_epoch, \
+         revision, created_at, updated_at) \
+         VALUES ($1, 'Seeded', 'internal_company', 1, 1, 1, now(), now())",
     )
-    .bind(paul.principal_id)
     .bind(workspace_id)
+    .execute(&h.pool)
+    .await
+    .expect("seed workspace");
+    sqlx::query(
+        "INSERT INTO memberships (workspace_id, principal_id, status, roles, policy_revision, \
+         revision, created_at, updated_at) \
+         VALUES ($1, $2, 'active', '{member}', 1, 3, now(), now())",
+    )
+    .bind(workspace_id)
+    .bind(paul.principal_id)
     .execute(&h.pool)
     .await
     .expect("seed membership");

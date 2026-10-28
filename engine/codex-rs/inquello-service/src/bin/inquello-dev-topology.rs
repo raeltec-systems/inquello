@@ -374,6 +374,7 @@ async fn run(options: Options) -> Result<(), String> {
                 refresh: Duration::from_secs(24 * 60 * 60),
                 session: Duration::from_secs(30 * 24 * 60 * 60),
                 id_token_clock_skew: Duration::from_secs(60),
+                invite: Duration::from_secs(7 * 24 * 60 * 60),
             },
             database: database_config(database.options()),
         };

@@ -1,0 +1,8 @@
+{
+  "invite_id": "0a1b2c3d-4e5f-4a6b-8c7d-8e9f0a1b2c3d",
+  "workspace_id": "5d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e",
+  "principal_id": "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d",
+  "roles": ["auditor"],
+  "membership_revision": "1",
+  "authorization_epoch": "1"
+}

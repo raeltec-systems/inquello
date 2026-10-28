@@ -17,6 +17,16 @@
 //! - **SC-2 receipts**: session commands carry the SC-2 envelope; the receipt,
 //!   the mutation and the authorization check share one transaction.
 //!
+//! - **Workspaces** (Story 1.11): `internal_company` Workspaces with a versioned
+//!   role policy (`audit_team` and `reviewer` kinds only), memberships with role
+//!   bindings, Engagements, identity-bound one-use invites, Workspace-scoped SC-2
+//!   membership commands and access checks. Every decision is the domain's
+//!   [`inquello_domain::authorization::decide`] over facts read under the lock
+//!   order principal → session → Workspace authorization epoch → resource. A
+//!   private Task is reachable only by its creator. Workspaces are created only
+//!   through the operator CLI ([`admin`], `inquello-service admin`), never over
+//!   HTTP; `external_audit` is `route_not_available`.
+//!
 //! - **Transport**: plain HTTP on loopback only, or HTTPS terminated by the
 //!   service itself (rustls) when a [`TlsConfig`] is given, which may then bind
 //!   any address.
@@ -25,6 +35,7 @@
 //! the `inquello-dev-topology` binary exist only behind the `test-issuer`
 //! feature, and a production deployment refuses a test issuer.
 
+pub mod admin;
 mod clock;
 mod commands;
 pub mod config;
@@ -44,6 +55,8 @@ pub mod test_provider;
 #[cfg(feature = "test-issuer")]
 pub mod test_tls;
 mod tls;
+mod workspace_commands;
+mod workspaces;
 
 pub use clock::Clock;
 pub use clock::SystemClock;

@@ -28,6 +28,7 @@ pub(crate) struct EffectiveLifetimes {
     pub(crate) refresh: TimeDelta,
     pub(crate) session: TimeDelta,
     pub(crate) id_token_clock_skew: Duration,
+    pub(crate) invite: TimeDelta,
 }
 
 pub(crate) struct AppState {
@@ -124,6 +125,7 @@ pub async fn start(
         refresh: delta(config.lifetimes.refresh)?,
         session: delta(config.lifetimes.session)?,
         id_token_clock_skew: config.lifetimes.id_token_clock_skew,
+        invite: delta(config.lifetimes.invite)?,
     };
     let tls_config = tls_server_config(config.tls.as_ref())?;
 

@@ -1,0 +1,26 @@
+{
+  "principal_id": "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d",
+  "workspaces": [
+    {
+      "workspace_id": "5d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e",
+      "name": "Synthetic Audit Co",
+      "kind": "internal_company",
+      "revision": "4",
+      "authorization_epoch": "3",
+      "policy_revision": "1",
+      "membership": {
+        "status": "active",
+        "roles": ["audit_lead", "auditor"],
+        "policy_revision": "1",
+        "revision": "2"
+      },
+      "engagements": [
+        {
+          "engagement_id": "1f2e3d4c-5b6a-4978-8a6b-5c4d3e2f1a0b",
+          "name": "FY26 synthetic engagement",
+          "revision": "3"
+        }
+      ]
+    }
+  ]
+}

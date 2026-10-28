@@ -9,9 +9,13 @@
 //! This crate owns the ports; adapters (such as `inquello-adapters`) implement them.
 //! It depends on no storage engine, async runtime, Electron or `codex-*` crate.
 //!
+//! The [`authorization`] module holds the Workspace role policy and the pure
+//! allow-or-deny decision the shared service evaluates (Story 1.11).
+//!
 //! The [`capability`] module holds the protected capability register: reviewed
 //! entries compiled into the binary and a fail-closed enablement query.
 
+pub mod authorization;
 pub mod capability;
 mod commands;
 mod error;
