@@ -175,6 +175,76 @@ export const icon = {
   foreground: '{colors.text-secondary}',
 } as const;
 
+/**
+ * DESIGN.md `components.*` for the Story 1.6 action and input primitives, keys
+ * and values unchanged (references such as `{colors.ink-600}` kept as written;
+ * `resolveToken` resolves them). `test/primitives.test.tsx` holds these equal
+ * to the frontmatter both ways.
+ */
+export const components = {
+  Button: {
+    primaryBackground: '{colors.action-primary-bg}',
+    primaryForeground: '{colors.action-primary-fg}',
+    hoverBackground: '{colors.action-primary-bg-hover}',
+    secondaryBackground: '{colors.action-secondary-bg}',
+    secondaryBorder: '{colors.action-secondary-border}',
+    quietBackground: '{colors.action-quiet-bg}',
+    radius: '{rounded.md}',
+    smallHeight: '{spacing.control-sm}',
+    height: '{spacing.control-md}',
+    largeHeight: '{spacing.control-lg}',
+    disabledOpacity: '0.45',
+  },
+  IconButton: {
+    size: '28px',
+    roundSize: '{spacing.control-round}',
+    radius: '{rounded.md}',
+    foreground: '{colors.text-secondary}',
+    activeBackground: '{colors.action-quiet-bg}',
+  },
+  TextField: {
+    background: '{colors.white}',
+    foreground: '{colors.text-primary}',
+    labelForeground: '{colors.text-muted}',
+    placeholderForeground: '{colors.text-muted}',
+    border: '{colors.ink-600}',
+    focusBorder: '{colors.blue-600}',
+    focusRing: '0 0 0 3px {colors.blue-150}',
+    radius: '{rounded.md}',
+    fontSize: '12.5px',
+    lineHeight: '1.45',
+  },
+  Switch: {
+    onBackground: '{colors.blue-600}',
+    offBackground: '{colors.ink-300}',
+    thumbBackground: '{colors.white}',
+    width: '28px',
+    height: '16px',
+    thumbSize: '12px',
+    radius: '8px',
+    essentialBoundary: '{colors.ink-600}',
+  },
+  Choice: {
+    selectedForeground: '{colors.blue-600}',
+    selectedBackground: '{colors.blue-50}',
+    checkboxSelectedBackground: '{colors.ink-900}',
+    essentialBoundary: '{colors.ink-600}',
+    radioSize: '14px',
+    checkboxSize: '16px',
+    cardRadius: '{rounded.md}',
+  },
+} as const;
+
+/** Resolves every `{group.key}` reference in a DESIGN token value to its literal. */
+export function resolveToken(value: string): string {
+  const groups: Record<string, Record<string, string>> = { colors, rounded, spacing };
+  return value.replace(/\{(\w+)\.([\w-]+)\}/g, (match, group: string, key: string) => {
+    const resolved = groups[group]?.[key];
+    if (resolved === undefined) throw new Error(`unknown token reference ${match}`);
+    return resolved;
+  });
+}
+
 /** DESIGN.md Elevation & Depth table. */
 export const shadows = {
   none: 'none',
@@ -197,7 +267,7 @@ export const motion = {
   pulseOpacityTo: '0.3',
 } as const;
 
-export const tokens = { colors, typography, rounded, spacing, icon, shadows, motion } as const;
+export const tokens = { colors, typography, rounded, spacing, icon, components, shadows, motion } as const;
 
 export type ColorToken = keyof typeof colors;
 export type TypographyRole = keyof typeof typography;

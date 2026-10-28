@@ -15,7 +15,9 @@
  * `design` line, quits, prints the runtime's exit as a final JSON line, and
  * exits 0 only if the handshake and version check passed, the renderer showed
  * no unexpected privilege, the design specimen loaded all five fonts with the
- * right icon semantics, and the runtime exited 0 on its own.
+ * right icon semantics, every rendered primitive contrast pair met its
+ * threshold, Tab showed the `:focus-visible` indicator on each focus hook, and
+ * the runtime exited 0 on its own.
  */
 import fs from 'node:fs';
 import os from 'node:os';

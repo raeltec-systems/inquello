@@ -33,7 +33,7 @@
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 
 generated: 10-27-2026 19:11
-last_updated: 10-28-2026 12:27
+last_updated: 10-28-2026 14:40
 project: inquello
 project_key: INQUELLO
 tracking_system: file-system
@@ -56,7 +56,7 @@ development_status:
   1-3-isolate-desktop-renderers-from-host-privilege: review
   1-4-keep-local-working-metadata-behind-domain-owned-commands: review
   1-5-apply-the-selected-typography-tokens-and-icon-semantics: review
-  1-6-operate-core-action-and-input-primitives: backlog
+  1-6-operate-core-action-and-input-primitives: review
   1-7-navigate-and-identify-work-with-accessible-primitives: backlog
   1-8-inspect-progress-and-proposed-actions-with-accessible-primit: backlog
   1-9-register-capability-limits-before-enablement: backlog

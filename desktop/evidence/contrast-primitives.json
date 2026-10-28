@@ -1,0 +1,1931 @@
+{
+  "kind": "primitive-contrast-evidence",
+  "story": "1.6",
+  "source": "src/renderer/design/contrast.ts (CONTRAST_PAIRS) over src/renderer/design/tokens.ts",
+  "method": "WCAG 2.2 relative luminance; ratios unrounded. Text needs 4.5:1, non-text indicators and boundaries 3:1.",
+  "rendered": "pnpm smoke re-reads every pair whose \"rendered\" is \"static\" or \"focus\" from computed styles in Chromium and prints the ratios in its design report; \"token-only\" pairs (hover, placeholder, sidebar placements) are recorded here only.",
+  "thresholds": {
+    "text": 4.5,
+    "non-text": 3
+  },
+  "summary": {
+    "pairs": 91,
+    "passing": 91,
+    "rendered": 72,
+    "minimum": 3.647993864961982
+  },
+  "pairs": [
+    {
+      "id": "button.primary.default.label",
+      "primitive": "Button",
+      "variant": "primary",
+      "state": "default",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "action-primary-fg",
+        "value": "#ffffff"
+      },
+      "adjacent": {
+        "token": "action-primary-bg",
+        "value": "#16191d"
+      },
+      "ratio": 17.63359508009438,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "button.primary.hover.label",
+      "primitive": "Button",
+      "variant": "primary",
+      "state": "hover",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "action-primary-fg",
+        "value": "#ffffff"
+      },
+      "adjacent": {
+        "token": "action-primary-bg-hover",
+        "value": "#2b3036"
+      },
+      "ratio": 13.301514595748142,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "token-only"
+    },
+    {
+      "id": "button.primary.pending.label",
+      "primitive": "Button",
+      "variant": "primary",
+      "state": "pending",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "action-primary-fg",
+        "value": "#ffffff"
+      },
+      "adjacent": {
+        "token": "action-primary-bg",
+        "value": "#16191d"
+      },
+      "ratio": 17.63359508009438,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "button.secondary.default.label",
+      "primitive": "Button",
+      "variant": "secondary",
+      "state": "default",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "text-primary",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "action-secondary-bg",
+        "value": "#ffffff"
+      },
+      "ratio": 17.63359508009438,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "button.secondary.hover.label",
+      "primitive": "Button",
+      "variant": "secondary",
+      "state": "hover",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "text-primary",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "ink-75",
+        "value": "#f3f4f6"
+      },
+      "ratio": 16.02303901120785,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "token-only"
+    },
+    {
+      "id": "button.secondary.pending.label",
+      "primitive": "Button",
+      "variant": "secondary",
+      "state": "pending",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "text-primary",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "action-secondary-bg",
+        "value": "#ffffff"
+      },
+      "ratio": 17.63359508009438,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "button.quiet.default.label",
+      "primitive": "Button",
+      "variant": "quiet",
+      "state": "default",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "text-primary",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "action-quiet-bg",
+        "value": "#eef0f3"
+      },
+      "ratio": 15.445078501523636,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "button.quiet.hover.label",
+      "primitive": "Button",
+      "variant": "quiet",
+      "state": "hover",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "text-primary",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "surface-hover",
+        "value": "#e6e8eb"
+      },
+      "ratio": 14.364558004144977,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "token-only"
+    },
+    {
+      "id": "button.quiet.pending.label",
+      "primitive": "Button",
+      "variant": "quiet",
+      "state": "pending",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "text-primary",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "action-quiet-bg",
+        "value": "#eef0f3"
+      },
+      "ratio": 15.445078501523636,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "button.ghost.default.label",
+      "primitive": "Button",
+      "variant": "ghost",
+      "state": "default",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.078634637744844,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "button.ghost.hover.label",
+      "primitive": "Button",
+      "variant": "ghost",
+      "state": "hover",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "ink-75",
+        "value": "#f3f4f6"
+      },
+      "ratio": 5.523445417288306,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "token-only"
+    },
+    {
+      "id": "button.ghost.pending.label",
+      "primitive": "Button",
+      "variant": "ghost",
+      "state": "pending",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.078634637744844,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "button.ghost.default.label on sidebar",
+      "primitive": "Button",
+      "variant": "ghost",
+      "state": "default",
+      "part": "label on sidebar",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "surface-sidebar",
+        "value": "#f3f4f6"
+      },
+      "ratio": 5.523445417288306,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "token-only"
+    },
+    {
+      "id": "button.any.pending.pending text",
+      "primitive": "Button",
+      "variant": "any",
+      "state": "pending",
+      "part": "pending text",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.078634637744844,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "button.any.disabled.disabled reason text",
+      "primitive": "Button",
+      "variant": "any",
+      "state": "disabled",
+      "part": "disabled reason text",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.078634637744844,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "button.any.focus-visible.focus edge against ring",
+      "primitive": "Button",
+      "variant": "any",
+      "state": "focus-visible",
+      "part": "focus edge against ring",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "blue-150",
+        "value": "#dfe7f5"
+      },
+      "ratio": 4.953954743132232,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "focus"
+    },
+    {
+      "id": "button.any.focus-visible.focus edge against surface",
+      "primitive": "Button",
+      "variant": "any",
+      "state": "focus-visible",
+      "part": "focus edge against surface",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.160732132578806,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "focus"
+    },
+    {
+      "id": "button.any.focus-visible.focus edge against sidebar",
+      "primitive": "Button",
+      "variant": "any",
+      "state": "focus-visible",
+      "part": "focus edge against sidebar",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "surface-sidebar",
+        "value": "#f3f4f6"
+      },
+      "ratio": 5.598044576250052,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "token-only"
+    },
+    {
+      "id": "iconbutton.ghost.default.icon",
+      "primitive": "IconButton",
+      "variant": "ghost",
+      "state": "default",
+      "part": "icon",
+      "kind": "non-text",
+      "foreground": {
+        "token": "text-secondary",
+        "value": "#3d434b"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 9.986295725725416,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "iconbutton.ghost.default.icon on sidebar",
+      "primitive": "IconButton",
+      "variant": "ghost",
+      "state": "default",
+      "part": "icon on sidebar",
+      "kind": "non-text",
+      "foreground": {
+        "token": "text-secondary",
+        "value": "#3d434b"
+      },
+      "adjacent": {
+        "token": "surface-sidebar",
+        "value": "#f3f4f6"
+      },
+      "ratio": 9.07420212747111,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "token-only"
+    },
+    {
+      "id": "iconbutton.ghost.hover.icon",
+      "primitive": "IconButton",
+      "variant": "ghost",
+      "state": "hover",
+      "part": "icon",
+      "kind": "non-text",
+      "foreground": {
+        "token": "text-secondary",
+        "value": "#3d434b"
+      },
+      "adjacent": {
+        "token": "surface-hover",
+        "value": "#e6e8eb"
+      },
+      "ratio": 8.134967574516859,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "token-only"
+    },
+    {
+      "id": "iconbutton.outline.default.icon",
+      "primitive": "IconButton",
+      "variant": "outline",
+      "state": "default",
+      "part": "icon",
+      "kind": "non-text",
+      "foreground": {
+        "token": "text-secondary",
+        "value": "#3d434b"
+      },
+      "adjacent": {
+        "token": "white",
+        "value": "#ffffff"
+      },
+      "ratio": 9.986295725725416,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "iconbutton.outline.hover.icon",
+      "primitive": "IconButton",
+      "variant": "outline",
+      "state": "hover",
+      "part": "icon",
+      "kind": "non-text",
+      "foreground": {
+        "token": "text-secondary",
+        "value": "#3d434b"
+      },
+      "adjacent": {
+        "token": "surface-hover",
+        "value": "#e6e8eb"
+      },
+      "ratio": 8.134967574516859,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "token-only"
+    },
+    {
+      "id": "iconbutton.active.default.icon",
+      "primitive": "IconButton",
+      "variant": "active",
+      "state": "default",
+      "part": "icon",
+      "kind": "non-text",
+      "foreground": {
+        "token": "text-secondary",
+        "value": "#3d434b"
+      },
+      "adjacent": {
+        "token": "action-quiet-bg",
+        "value": "#eef0f3"
+      },
+      "ratio": 8.746890280891801,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "iconbutton.ghost.expanded.icon",
+      "primitive": "IconButton",
+      "variant": "ghost",
+      "state": "expanded",
+      "part": "icon",
+      "kind": "non-text",
+      "foreground": {
+        "token": "text-secondary",
+        "value": "#3d434b"
+      },
+      "adjacent": {
+        "token": "action-quiet-bg",
+        "value": "#eef0f3"
+      },
+      "ratio": 8.746890280891801,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "iconbutton.send.default.arrow icon",
+      "primitive": "IconButton",
+      "variant": "send",
+      "state": "default",
+      "part": "arrow icon",
+      "kind": "non-text",
+      "foreground": {
+        "token": "action-primary-fg",
+        "value": "#ffffff"
+      },
+      "adjacent": {
+        "token": "action-primary-bg",
+        "value": "#16191d"
+      },
+      "ratio": 17.63359508009438,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "iconbutton.send.hover.arrow icon",
+      "primitive": "IconButton",
+      "variant": "send",
+      "state": "hover",
+      "part": "arrow icon",
+      "kind": "non-text",
+      "foreground": {
+        "token": "action-primary-fg",
+        "value": "#ffffff"
+      },
+      "adjacent": {
+        "token": "action-primary-bg-hover",
+        "value": "#2b3036"
+      },
+      "ratio": 13.301514595748142,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "token-only"
+    },
+    {
+      "id": "iconbutton.send.default.round boundary against surface",
+      "primitive": "IconButton",
+      "variant": "send",
+      "state": "default",
+      "part": "round boundary against surface",
+      "kind": "non-text",
+      "foreground": {
+        "token": "action-primary-bg",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 17.63359508009438,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "iconbutton.stop.default.9px stop square",
+      "primitive": "IconButton",
+      "variant": "stop",
+      "state": "default",
+      "part": "9px stop square",
+      "kind": "non-text",
+      "foreground": {
+        "token": "action-primary-fg",
+        "value": "#ffffff"
+      },
+      "adjacent": {
+        "token": "action-primary-bg",
+        "value": "#16191d"
+      },
+      "ratio": 17.63359508009438,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "iconbutton.stop.hover.9px stop square",
+      "primitive": "IconButton",
+      "variant": "stop",
+      "state": "hover",
+      "part": "9px stop square",
+      "kind": "non-text",
+      "foreground": {
+        "token": "action-primary-fg",
+        "value": "#ffffff"
+      },
+      "adjacent": {
+        "token": "action-primary-bg-hover",
+        "value": "#2b3036"
+      },
+      "ratio": 13.301514595748142,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "token-only"
+    },
+    {
+      "id": "iconbutton.stop.default.round boundary against surface",
+      "primitive": "IconButton",
+      "variant": "stop",
+      "state": "default",
+      "part": "round boundary against surface",
+      "kind": "non-text",
+      "foreground": {
+        "token": "action-primary-bg",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 17.63359508009438,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "iconbutton.any.disabled.disabled reason text",
+      "primitive": "IconButton",
+      "variant": "any",
+      "state": "disabled",
+      "part": "disabled reason text",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.078634637744844,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "iconbutton.any.focus-visible.focus edge against ring",
+      "primitive": "IconButton",
+      "variant": "any",
+      "state": "focus-visible",
+      "part": "focus edge against ring",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "blue-150",
+        "value": "#dfe7f5"
+      },
+      "ratio": 4.953954743132232,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "focus"
+    },
+    {
+      "id": "iconbutton.any.focus-visible.focus edge against surface",
+      "primitive": "IconButton",
+      "variant": "any",
+      "state": "focus-visible",
+      "part": "focus edge against surface",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.160732132578806,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "focus"
+    },
+    {
+      "id": "iconbutton.any.focus-visible.focus edge against sidebar",
+      "primitive": "IconButton",
+      "variant": "any",
+      "state": "focus-visible",
+      "part": "focus edge against sidebar",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "surface-sidebar",
+        "value": "#f3f4f6"
+      },
+      "ratio": 5.598044576250052,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "token-only"
+    },
+    {
+      "id": "textfield.single.default.value",
+      "primitive": "TextField",
+      "variant": "single",
+      "state": "default",
+      "part": "value",
+      "kind": "text",
+      "foreground": {
+        "token": "text-primary",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "white",
+        "value": "#ffffff"
+      },
+      "ratio": 17.63359508009438,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "textfield.single.default.placeholder",
+      "primitive": "TextField",
+      "variant": "single",
+      "state": "default",
+      "part": "placeholder",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "white",
+        "value": "#ffffff"
+      },
+      "ratio": 6.078634637744844,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "token-only"
+    },
+    {
+      "id": "textfield.single.default.label",
+      "primitive": "TextField",
+      "variant": "single",
+      "state": "default",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.078634637744844,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "textfield.single.default.instruction",
+      "primitive": "TextField",
+      "variant": "single",
+      "state": "default",
+      "part": "instruction",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.078634637744844,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "textfield.single.default.boundary against field",
+      "primitive": "TextField",
+      "variant": "single",
+      "state": "default",
+      "part": "boundary against field",
+      "kind": "non-text",
+      "foreground": {
+        "token": "ink-600",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "white",
+        "value": "#ffffff"
+      },
+      "ratio": 6.078634637744844,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "textfield.single.default.boundary against surface",
+      "primitive": "TextField",
+      "variant": "single",
+      "state": "default",
+      "part": "boundary against surface",
+      "kind": "non-text",
+      "foreground": {
+        "token": "ink-600",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.078634637744844,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "textfield.single.default.boundary against sidebar",
+      "primitive": "TextField",
+      "variant": "single",
+      "state": "default",
+      "part": "boundary against sidebar",
+      "kind": "non-text",
+      "foreground": {
+        "token": "ink-600",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "surface-sidebar",
+        "value": "#f3f4f6"
+      },
+      "ratio": 5.523445417288306,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "token-only"
+    },
+    {
+      "id": "textfield.multiline.default.boundary against field",
+      "primitive": "TextField",
+      "variant": "multiline",
+      "state": "default",
+      "part": "boundary against field",
+      "kind": "non-text",
+      "foreground": {
+        "token": "ink-600",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "white",
+        "value": "#ffffff"
+      },
+      "ratio": 6.078634637744844,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "textfield.single.error.error text",
+      "primitive": "TextField",
+      "variant": "single",
+      "state": "error",
+      "part": "error text",
+      "kind": "text",
+      "foreground": {
+        "token": "red-800",
+        "value": "#7a2e2b"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 9.320091884042018,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "textfield.single.error.boundary against field",
+      "primitive": "TextField",
+      "variant": "single",
+      "state": "error",
+      "part": "boundary against field",
+      "kind": "non-text",
+      "foreground": {
+        "token": "red-600",
+        "value": "#b0413e"
+      },
+      "adjacent": {
+        "token": "white",
+        "value": "#ffffff"
+      },
+      "ratio": 5.719421411986913,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "textfield.single.error.value",
+      "primitive": "TextField",
+      "variant": "single",
+      "state": "error",
+      "part": "value",
+      "kind": "text",
+      "foreground": {
+        "token": "text-primary",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "white",
+        "value": "#ffffff"
+      },
+      "ratio": 17.63359508009438,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "textfield.single.read-only.value",
+      "primitive": "TextField",
+      "variant": "single",
+      "state": "read-only",
+      "part": "value",
+      "kind": "text",
+      "foreground": {
+        "token": "text-primary",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "surface-panel",
+        "value": "#fafbfc"
+      },
+      "ratio": 17.020051594218778,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "textfield.single.read-only.boundary against field",
+      "primitive": "TextField",
+      "variant": "single",
+      "state": "read-only",
+      "part": "boundary against field",
+      "kind": "non-text",
+      "foreground": {
+        "token": "ink-600",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "surface-panel",
+        "value": "#fafbfc"
+      },
+      "ratio": 5.8671345625720726,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "textfield.any.disabled.disabled reason text",
+      "primitive": "TextField",
+      "variant": "any",
+      "state": "disabled",
+      "part": "disabled reason text",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.078634637744844,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "textfield.any.focus-visible.focus edge against field",
+      "primitive": "TextField",
+      "variant": "any",
+      "state": "focus-visible",
+      "part": "focus edge against field",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "white",
+        "value": "#ffffff"
+      },
+      "ratio": 6.160732132578806,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "focus"
+    },
+    {
+      "id": "textfield.any.focus-visible.focus edge against ring",
+      "primitive": "TextField",
+      "variant": "any",
+      "state": "focus-visible",
+      "part": "focus edge against ring",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "blue-150",
+        "value": "#dfe7f5"
+      },
+      "ratio": 4.953954743132232,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "focus"
+    },
+    {
+      "id": "switch.off.default.track boundary against surface",
+      "primitive": "Switch",
+      "variant": "off",
+      "state": "default",
+      "part": "track boundary against surface",
+      "kind": "non-text",
+      "foreground": {
+        "token": "ink-600",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.078634637744844,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "switch.off.default.track boundary against sidebar",
+      "primitive": "Switch",
+      "variant": "off",
+      "state": "default",
+      "part": "track boundary against sidebar",
+      "kind": "non-text",
+      "foreground": {
+        "token": "ink-600",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "surface-sidebar",
+        "value": "#f3f4f6"
+      },
+      "ratio": 5.523445417288306,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "token-only"
+    },
+    {
+      "id": "switch.off.default.track boundary against off track",
+      "primitive": "Switch",
+      "variant": "off",
+      "state": "default",
+      "part": "track boundary against off track",
+      "kind": "non-text",
+      "foreground": {
+        "token": "ink-600",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "ink-300",
+        "value": "#c4c9cf"
+      },
+      "ratio": 3.647993864961982,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "switch.on.default.track against surface",
+      "primitive": "Switch",
+      "variant": "on",
+      "state": "default",
+      "part": "track against surface",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.160732132578806,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "switch.on.default.track against sidebar",
+      "primitive": "Switch",
+      "variant": "on",
+      "state": "default",
+      "part": "track against sidebar",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "surface-sidebar",
+        "value": "#f3f4f6"
+      },
+      "ratio": 5.598044576250052,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "token-only"
+    },
+    {
+      "id": "switch.on.default.thumb against track",
+      "primitive": "Switch",
+      "variant": "on",
+      "state": "default",
+      "part": "thumb against track",
+      "kind": "non-text",
+      "foreground": {
+        "token": "white",
+        "value": "#ffffff"
+      },
+      "adjacent": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "ratio": 6.160732132578806,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "switch.off.default.on/off text",
+      "primitive": "Switch",
+      "variant": "off",
+      "state": "default",
+      "part": "On/Off text",
+      "kind": "text",
+      "foreground": {
+        "token": "text-secondary",
+        "value": "#3d434b"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 9.986295725725416,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "switch.off.default.label",
+      "primitive": "Switch",
+      "variant": "off",
+      "state": "default",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "text-primary",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 17.63359508009438,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "switch.on.default.on/off text",
+      "primitive": "Switch",
+      "variant": "on",
+      "state": "default",
+      "part": "On/Off text",
+      "kind": "text",
+      "foreground": {
+        "token": "text-secondary",
+        "value": "#3d434b"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 9.986295725725416,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "switch.on.default.label",
+      "primitive": "Switch",
+      "variant": "on",
+      "state": "default",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "text-primary",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 17.63359508009438,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "switch.any.disabled.disabled reason text",
+      "primitive": "Switch",
+      "variant": "any",
+      "state": "disabled",
+      "part": "disabled reason text",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.078634637744844,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "switch.any.focus-visible.focus edge against ring",
+      "primitive": "Switch",
+      "variant": "any",
+      "state": "focus-visible",
+      "part": "focus edge against ring",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "blue-150",
+        "value": "#dfe7f5"
+      },
+      "ratio": 4.953954743132232,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "focus"
+    },
+    {
+      "id": "switch.any.focus-visible.focus edge against surface",
+      "primitive": "Switch",
+      "variant": "any",
+      "state": "focus-visible",
+      "part": "focus edge against surface",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.160732132578806,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "focus"
+    },
+    {
+      "id": "switch.any.focus-visible.focus edge against sidebar",
+      "primitive": "Switch",
+      "variant": "any",
+      "state": "focus-visible",
+      "part": "focus edge against sidebar",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "surface-sidebar",
+        "value": "#f3f4f6"
+      },
+      "ratio": 5.598044576250052,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "token-only"
+    },
+    {
+      "id": "choice.group.default.legend",
+      "primitive": "Choice",
+      "variant": "group",
+      "state": "default",
+      "part": "legend",
+      "kind": "text",
+      "foreground": {
+        "token": "text-primary",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 17.63359508009438,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "choice.group.default.instruction",
+      "primitive": "Choice",
+      "variant": "group",
+      "state": "default",
+      "part": "instruction",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.078634637744844,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "choice.radio.unselected.boundary against surface",
+      "primitive": "Choice",
+      "variant": "radio",
+      "state": "unselected",
+      "part": "boundary against surface",
+      "kind": "non-text",
+      "foreground": {
+        "token": "ink-600",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.078634637744844,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "choice.radio.unselected.boundary against sidebar",
+      "primitive": "Choice",
+      "variant": "radio",
+      "state": "unselected",
+      "part": "boundary against sidebar",
+      "kind": "non-text",
+      "foreground": {
+        "token": "ink-600",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "surface-sidebar",
+        "value": "#f3f4f6"
+      },
+      "ratio": 5.523445417288306,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "token-only"
+    },
+    {
+      "id": "choice.radio.unselected.label",
+      "primitive": "Choice",
+      "variant": "radio",
+      "state": "unselected",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "text-primary",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 17.63359508009438,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "choice.radio.selected.boundary against surface",
+      "primitive": "Choice",
+      "variant": "radio",
+      "state": "selected",
+      "part": "boundary against surface",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.160732132578806,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "choice.radio.selected.dot against inner ring",
+      "primitive": "Choice",
+      "variant": "radio",
+      "state": "selected",
+      "part": "dot against inner ring",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "white",
+        "value": "#ffffff"
+      },
+      "ratio": 6.160732132578806,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "choice.radio.selected.label",
+      "primitive": "Choice",
+      "variant": "radio",
+      "state": "selected",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "text-primary",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 17.63359508009438,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "choice.checkbox.unselected.boundary against surface",
+      "primitive": "Choice",
+      "variant": "checkbox",
+      "state": "unselected",
+      "part": "boundary against surface",
+      "kind": "non-text",
+      "foreground": {
+        "token": "ink-600",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.078634637744844,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "choice.checkbox.unselected.boundary against box",
+      "primitive": "Choice",
+      "variant": "checkbox",
+      "state": "unselected",
+      "part": "boundary against box",
+      "kind": "non-text",
+      "foreground": {
+        "token": "ink-600",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "white",
+        "value": "#ffffff"
+      },
+      "ratio": 6.078634637744844,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "choice.checkbox.unselected.label",
+      "primitive": "Choice",
+      "variant": "checkbox",
+      "state": "unselected",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "text-primary",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 17.63359508009438,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "choice.checkbox.selected.box against surface",
+      "primitive": "Choice",
+      "variant": "checkbox",
+      "state": "selected",
+      "part": "box against surface",
+      "kind": "non-text",
+      "foreground": {
+        "token": "ink-900",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 17.63359508009438,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "choice.checkbox.selected.check mark against box",
+      "primitive": "Choice",
+      "variant": "checkbox",
+      "state": "selected",
+      "part": "check mark against box",
+      "kind": "non-text",
+      "foreground": {
+        "token": "white",
+        "value": "#ffffff"
+      },
+      "adjacent": {
+        "token": "ink-900",
+        "value": "#16191d"
+      },
+      "ratio": 17.63359508009438,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "choice.card.unselected.label",
+      "primitive": "Choice",
+      "variant": "card",
+      "state": "unselected",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "text-primary",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 17.63359508009438,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "choice.card.unselected.description",
+      "primitive": "Choice",
+      "variant": "card",
+      "state": "unselected",
+      "part": "description",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.078634637744844,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "choice.card.unselected.radio boundary against surface",
+      "primitive": "Choice",
+      "variant": "card",
+      "state": "unselected",
+      "part": "radio boundary against surface",
+      "kind": "non-text",
+      "foreground": {
+        "token": "ink-600",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.078634637744844,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "choice.card.selected.label",
+      "primitive": "Choice",
+      "variant": "card",
+      "state": "selected",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "text-primary",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "blue-50",
+        "value": "#f2f6fc"
+      },
+      "ratio": 16.2593594472652,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "choice.card.selected.description",
+      "primitive": "Choice",
+      "variant": "card",
+      "state": "selected",
+      "part": "description",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "blue-50",
+        "value": "#f2f6fc"
+      },
+      "ratio": 5.604909553313908,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "choice.card.selected.card border against card",
+      "primitive": "Choice",
+      "variant": "card",
+      "state": "selected",
+      "part": "card border against card",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "blue-50",
+        "value": "#f2f6fc"
+      },
+      "ratio": 5.680608959598462,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "choice.card.selected.card border against surface",
+      "primitive": "Choice",
+      "variant": "card",
+      "state": "selected",
+      "part": "card border against surface",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.160732132578806,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "choice.card.selected.radio boundary against card",
+      "primitive": "Choice",
+      "variant": "card",
+      "state": "selected",
+      "part": "radio boundary against card",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "blue-50",
+        "value": "#f2f6fc"
+      },
+      "ratio": 5.680608959598462,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "choice.card.selected.radio dot against inner ring",
+      "primitive": "Choice",
+      "variant": "card",
+      "state": "selected",
+      "part": "radio dot against inner ring",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "white",
+        "value": "#ffffff"
+      },
+      "ratio": 6.160732132578806,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "choice.any.disabled.disabled reason text",
+      "primitive": "Choice",
+      "variant": "any",
+      "state": "disabled",
+      "part": "disabled reason text",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.078634637744844,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "choice.any.focus-visible.focus edge against ring",
+      "primitive": "Choice",
+      "variant": "any",
+      "state": "focus-visible",
+      "part": "focus edge against ring",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "blue-150",
+        "value": "#dfe7f5"
+      },
+      "ratio": 4.953954743132232,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "focus"
+    },
+    {
+      "id": "choice.any.focus-visible.focus edge against surface",
+      "primitive": "Choice",
+      "variant": "any",
+      "state": "focus-visible",
+      "part": "focus edge against surface",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.160732132578806,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "focus"
+    },
+    {
+      "id": "choice.any.focus-visible.focus edge against sidebar",
+      "primitive": "Choice",
+      "variant": "any",
+      "state": "focus-visible",
+      "part": "focus edge against sidebar",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "surface-sidebar",
+        "value": "#f3f4f6"
+      },
+      "ratio": 5.598044576250052,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "token-only"
+    }
+  ],
+  "exempt": [
+    {
+      "primitive": "Button",
+      "variant": "any",
+      "state": "disabled",
+      "part": "control at the .45 disabled opacity",
+      "foreground": "opacity 0.45",
+      "adjacent": "surface-app",
+      "reason": "Inactive user-interface components are exempt from WCAG 1.4.3 and 1.4.11; the disabled reason beside the control is measured as text instead."
+    },
+    {
+      "primitive": "IconButton",
+      "variant": "any",
+      "state": "disabled",
+      "part": "control at the .45 disabled opacity",
+      "foreground": "opacity 0.45",
+      "adjacent": "surface-app",
+      "reason": "Inactive user-interface components are exempt from WCAG 1.4.3 and 1.4.11; the disabled reason beside the control is measured as text instead."
+    },
+    {
+      "primitive": "TextField",
+      "variant": "any",
+      "state": "disabled",
+      "part": "control at the .45 disabled opacity",
+      "foreground": "opacity 0.45",
+      "adjacent": "surface-app",
+      "reason": "Inactive user-interface components are exempt from WCAG 1.4.3 and 1.4.11; the disabled reason beside the control is measured as text instead."
+    },
+    {
+      "primitive": "Switch",
+      "variant": "any",
+      "state": "disabled",
+      "part": "control at the .45 disabled opacity",
+      "foreground": "opacity 0.45",
+      "adjacent": "surface-app",
+      "reason": "Inactive user-interface components are exempt from WCAG 1.4.3 and 1.4.11; the disabled reason beside the control is measured as text instead."
+    },
+    {
+      "primitive": "Choice",
+      "variant": "any",
+      "state": "disabled",
+      "part": "control at the .45 disabled opacity",
+      "foreground": "opacity 0.45",
+      "adjacent": "surface-app",
+      "reason": "Inactive user-interface components are exempt from WCAG 1.4.3 and 1.4.11; the disabled reason beside the control is measured as text instead."
+    },
+    {
+      "primitive": "Button",
+      "variant": "secondary",
+      "state": "default",
+      "part": "outline",
+      "foreground": "action-secondary-border",
+      "adjacent": "surface-app",
+      "reason": "The text label identifies the control (WCAG 1.4.11 does not require a boundary for text buttons); the outline is decorative."
+    },
+    {
+      "primitive": "IconButton",
+      "variant": "outline",
+      "state": "default",
+      "part": "outline",
+      "foreground": "border-strong",
+      "adjacent": "surface-app",
+      "reason": "The measured icon identifies the control; the outline is decorative."
+    },
+    {
+      "primitive": "Switch",
+      "variant": "off",
+      "state": "default",
+      "part": "thumb against off track",
+      "foreground": "white",
+      "adjacent": "ink-300",
+      "reason": "State is carried by the visible On/Off text and aria-checked; the thumb position is supplementary. The track boundary is measured as ink-600."
+    },
+    {
+      "primitive": "Choice",
+      "variant": "card",
+      "state": "unselected",
+      "part": "card border",
+      "foreground": "border-default",
+      "adjacent": "surface-app",
+      "reason": "The radio or checkbox boundary inside the card (ink-600, measured) identifies the control; the card border is decorative."
+    },
+    {
+      "primitive": "Button",
+      "variant": "any",
+      "state": "focus-visible",
+      "part": "blue-150 ring against surface",
+      "foreground": "blue-150",
+      "adjacent": "surface-app",
+      "reason": "DESIGN.md keeps the pale ring supplementary; the blue-600 edge is the measured focus indicator."
+    }
+  ]
+}

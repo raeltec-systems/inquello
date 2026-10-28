@@ -1,0 +1,320 @@
+/*
+ * Story 1.6 primitives. Every colour is a tokens.css variable; every size,
+ * radius and opacity is a DESIGN.md token: spacing/rounded variables, the
+ * components.* values (IconButton 28px, TextField 12.5px and 3px ring, Switch
+ * 28×16px/12px/8px, Choice 14px/16px, disabled opacity 0.45) and the
+ * component table's literals (TextField 7×9px padding, checkbox 4px radius,
+ * 9px stop square). test/primitives.test.tsx enforces this.
+ */
+
+/* ---------- Shared ---------- */
+.iq-action {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.iq-note {
+  font: var(--type-caption);
+  color: var(--text-muted);
+}
+
+/* Focus: a blue-600 edge outside the pale 3px blue-150 ring (DESIGN.md AS-UX4). */
+.iq-button:focus-visible,
+.iq-icon-button:focus-visible,
+.iq-switch:focus-visible,
+.iq-choice-input:focus-visible + .iq-choice-box {
+  outline: 1px solid var(--blue-600);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 3px var(--blue-150);
+}
+
+/* ---------- Button ---------- */
+.iq-button {
+  box-sizing: border-box;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1-5);
+  height: var(--control-md);
+  margin: 0;
+  padding: 0 var(--space-2-5);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+.iq-button--sm { height: var(--control-sm); }
+.iq-button--lg { height: var(--control-lg); padding: 0 var(--space-3); font: var(--type-ui); font-weight: 500; line-height: 1; }
+.iq-button--primary { background: var(--action-primary-bg); border-color: var(--action-primary-bg); color: var(--action-primary-fg); }
+.iq-button--secondary { background: var(--action-secondary-bg); border-color: var(--action-secondary-border); color: var(--text-primary); }
+.iq-button--quiet { background: var(--action-quiet-bg); color: var(--text-primary); }
+.iq-button--ghost { background: transparent; color: var(--text-muted); }
+.iq-button--primary:hover:not([aria-disabled='true'], [aria-busy='true']) { background: var(--action-primary-bg-hover); border-color: var(--action-primary-bg-hover); }
+.iq-button--secondary:hover:not([aria-disabled='true'], [aria-busy='true']) { background: var(--ink-75); }
+.iq-button--quiet:hover:not([aria-disabled='true'], [aria-busy='true']) { background: var(--surface-hover); }
+.iq-button--ghost:hover:not([aria-disabled='true'], [aria-busy='true']) { background: var(--ink-75); }
+.iq-button[aria-busy='true'] { cursor: progress; }
+
+/* The decorative pending spinner (DESIGN.md motion: 800ms linear). */
+.iq-spinner {
+  box-sizing: border-box;
+  flex: none;
+  width: var(--space-3);
+  height: var(--space-3);
+  border: var(--space-0-5) solid currentColor;
+  border-right-color: transparent;
+  border-radius: var(--radius-pill);
+  animation: iq-spin var(--spin-duration) linear infinite;
+}
+
+/* ---------- IconButton ---------- */
+.iq-icon-button {
+  box-sizing: border-box;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+.iq-icon-button--outline { background: var(--white); border-color: var(--border-strong); }
+.iq-icon-button--active,
+.iq-icon-button[aria-pressed='true'],
+.iq-icon-button[aria-expanded='true'] { background: var(--action-quiet-bg); }
+.iq-icon-button:hover:not([aria-disabled='true']) { background: var(--surface-hover); }
+.iq-icon-button--round {
+  width: var(--control-round);
+  height: var(--control-round);
+  border-color: var(--action-primary-bg);
+  border-radius: var(--radius-pill);
+  background: var(--action-primary-bg);
+  color: var(--action-primary-fg);
+}
+.iq-icon-button--round:hover:not([aria-disabled='true']) { background: var(--action-primary-bg-hover); border-color: var(--action-primary-bg-hover); }
+.iq-icon-button-stop {
+  display: block;
+  width: 9px;
+  height: 9px;
+  background: currentColor;
+}
+
+/* ---------- Disabled (shared .45 opacity; the reason note stays full strength) ---------- */
+.iq-button[aria-disabled='true'],
+.iq-icon-button[aria-disabled='true'],
+.iq-switch[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* ---------- TextField ---------- */
+.iq-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+.iq-field-label {
+  font: var(--type-caption);
+  color: var(--text-muted);
+}
+.iq-field-instruction {
+  font: var(--type-caption);
+  color: var(--text-muted);
+}
+.iq-field-control {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+  padding: 7px 9px;
+  border: 1px solid var(--ink-600);
+  border-radius: var(--radius-md);
+  background: var(--white);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 400;
+  line-height: 1.45;
+  outline: none;
+}
+textarea.iq-field-control { resize: vertical; }
+.iq-field-control::placeholder { color: var(--text-muted); }
+.iq-field-control[aria-invalid='true'] { border-color: var(--red-600); }
+.iq-field-control:read-only:not(:disabled) { background: var(--surface-panel); }
+.iq-field-control:disabled { opacity: 0.45; cursor: default; }
+.iq-field-control:focus-visible {
+  border-color: var(--blue-600);
+  box-shadow: 0 0 0 3px var(--blue-150);
+}
+.iq-field-error {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font: var(--type-caption);
+  color: var(--red-800);
+}
+
+/* ---------- Switch ---------- */
+.iq-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-primary);
+  font: var(--type-caption);
+  cursor: pointer;
+}
+.iq-switch-label { color: var(--text-primary); }
+.iq-switch-track {
+  box-sizing: border-box;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  width: 28px;
+  height: 16px;
+  padding: 0 1px;
+  border: 1px solid var(--ink-600);
+  border-radius: 8px;
+  background: var(--ink-300);
+}
+.iq-switch[aria-checked='true'] .iq-switch-track {
+  justify-content: flex-end;
+  border-color: var(--blue-600);
+  background: var(--blue-600);
+}
+.iq-switch-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius-pill);
+  background: var(--white);
+}
+.iq-switch-state {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+/* ---------- Choice ---------- */
+.iq-choice-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.iq-choice-legend {
+  margin-bottom: var(--space-1);
+  padding: 0;
+  font: var(--type-title);
+  color: var(--text-primary);
+}
+.iq-choice-instruction {
+  font: var(--type-caption);
+  color: var(--text-muted);
+}
+.iq-choice-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+}
+.iq-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2-5);
+  padding: var(--space-1-5) var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+.iq-choice--card { padding: var(--space-2) var(--space-2-5); border-color: var(--border-default); }
+.iq-choice--card.iq-choice--checked { border-color: var(--blue-600); background: var(--blue-50); }
+.iq-choice--disabled,
+.iq-choice-group:disabled .iq-choice { opacity: 0.45; cursor: default; }
+.iq-choice-control {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  margin-top: var(--space-0-5);
+}
+.iq-choice-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+.iq-choice-box {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--ink-600);
+  border-radius: var(--radius-pill);
+  background: var(--white);
+  color: var(--white);
+}
+.iq-choice--checkbox .iq-choice-box { width: 16px; height: 16px; border-radius: 4px; }
+.iq-choice--checkbox .iq-choice-control { margin-top: 1px; }
+.iq-choice-check { visibility: hidden; }
+/* Radio: blue-600 edge with a 6px blue-600 dot inside a 3px white inset. */
+.iq-choice--radio .iq-choice-input:checked + .iq-choice-box {
+  border-color: var(--blue-600);
+  background: var(--blue-600);
+  box-shadow: inset 0 0 0 3px var(--white);
+}
+.iq-choice--checkbox .iq-choice-input:checked + .iq-choice-box { border-color: var(--ink-900); background: var(--ink-900); }
+.iq-choice--checkbox .iq-choice-input:checked + .iq-choice-box .iq-choice-check { visibility: visible; }
+.iq-choice-input:focus-visible + .iq-choice-box { outline-offset: 3px; }
+.iq-choice--radio .iq-choice-input:checked:focus-visible + .iq-choice-box {
+  box-shadow: inset 0 0 0 3px var(--white), 0 0 0 3px var(--blue-150);
+}
+.iq-choice-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+}
+.iq-choice-label {
+  font: var(--type-ui);
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.iq-choice-description {
+  font: var(--type-caption);
+  color: var(--text-muted);
+}
+
+/*
+ * Reduced motion: no spin (none of these primitives pulses); the pending text
+ * remains, so state never depends on animation.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .iq-spinner {
+    animation: none;
+  }
+  .iq-button,
+  .iq-icon-button {
+    transition: none;
+  }
+}
