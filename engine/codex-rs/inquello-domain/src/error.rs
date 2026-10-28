@@ -1,0 +1,46 @@
+//! Domain and port errors.
+
+use crate::model::OperationId;
+use crate::model::Revision;
+
+/// Errors a [`crate::WorkingStore`] implementation reports.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum StoreError {
+    /// The store's revision did not equal the change's expected revision.
+    #[error("store revision is {actual}, expected {expected}")]
+    RevisionConflict {
+        expected: Revision,
+        actual: Revision,
+    },
+    /// A receipt for this operation ID already exists.
+    #[error("a receipt for operation {operation_id} already exists")]
+    DuplicateOperation { operation_id: OperationId },
+    /// Stored data could not be read back as domain values.
+    #[error("stored working metadata is invalid: {0}")]
+    Corrupt(String),
+    /// The storage backend failed; nothing from the failed change was persisted.
+    #[error("working store failure: {0}")]
+    Backend(String),
+}
+
+/// Errors returned by domain commands and queries.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum DomainError {
+    /// The command was malformed and was rejected before the store was touched.
+    #[error("invalid command: {0}")]
+    InvalidCommand(String),
+    /// The operation ID was already used for a different command or revision.
+    #[error("operation {operation_id} was already used for a different request")]
+    OperationConflict { operation_id: OperationId },
+    /// The expected revision did not match the store; nothing was written.
+    #[error("revision conflict: expected {expected}, actual {actual}")]
+    RevisionConflict {
+        expected: Revision,
+        actual: Revision,
+    },
+    /// `InitializeStore` was sent to a store that already has its `store_info`.
+    #[error("the working store is already initialized")]
+    AlreadyInitialized,
+    #[error(transparent)]
+    Store(StoreError),
+}

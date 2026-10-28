@@ -1,0 +1,23 @@
+[package]
+name = "inquello-adapters"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# Concrete adapters for the ports `inquello-domain` owns. The SQLite working
+# store lives here, together with its embedded migrations.
+
+[dependencies]
+inquello-domain = { workspace = true }
+sqlx = { workspace = true }
+sqlx-macros = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }
+
+[lints]
+workspace = true

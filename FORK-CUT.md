@@ -76,7 +76,24 @@ git rev-parse FETCH_HEAD^{commit} FETCH_HEAD^{tree}                   # 360319d8
 
 At import, all three tree hashes matched (`307e4fa207fe563a11f3f7af09cee6fccd2d8376`): the squash commit tree, `fork/` in the import merge commit, and the upstream commit's tree. So `fork/` is git tree-identical to upstream at the cut. "Tree-identical" means the committed content: this repository runs with `core.autocrlf=true` (set in the system gitconfig), so the files under `fork/` that the builds below used had CRLF line endings in the working copy.
 
-Later stories may patch `engine/` on purpose. To review those patches against the imported cut, run `git diff 5aceac53db54c6f1a4413a7dc909b38b8dfde345:fork HEAD:engine`.
+Later stories may patch `engine/` on purpose. To review those patches against the imported cut, run `git diff 5aceac53db54c6f1a4413a7dc909b38b8dfde345:fork HEAD:engine`. Since Story 1.4, `HEAD:engine` no longer equals the imported tree hash; see "Inquello patches to `engine/`" below.
+
+## Inquello patches to `engine/`
+
+Each deliberate change to `engine/` is listed here. Upstream crates' code stays unedited unless an entry says otherwise.
+
+### Patch 1: Inquello working-store crates (Story 1.4, 2026-10-28)
+
+The first deliberate engine patch. It adds code beside upstream and changes no upstream crate's code.
+
+- **New crates** in `engine/codex-rs/`:
+  - `inquello-domain`: the rules, commands (`InitializeStore`, `get_store_info`) and ports (`WorkingStore`, `Clock`) for local working metadata. It depends only on `thiserror` and `uuid`; `inquello-domain/tests/dependency_direction.rs` fails if it reaches sqlx, tokio, any `codex-*` crate or `inquello-adapters`.
+  - `inquello-adapters`: `SqliteWorkingStore` (sqlx SQLite, WAL, full sync, busy timeout, embedded migration `0001_store_info_and_receipts.sql`) and `SystemClock`. Its only SQLite connect calls live in `src/sqlite.rs`, which carries the `clippy::disallowed_methods` expectation the same way `state/src/sqlite.rs` does.
+  - Neither crate has a `BUILD.bazel`; Bazel is not used in this repository.
+- **Workspace manifest** `engine/codex-rs/Cargo.toml`: both crates added to `[workspace] members` and as `inquello-domain` / `inquello-adapters` path entries under `[workspace.dependencies]`. No external dependency or version pin changed; the crates use existing workspace pins only (`sqlx`, `sqlx-macros`, `thiserror`, `uuid` with its `v4` feature, and `tokio`, `tempfile`, `pretty_assertions` for tests).
+- **Lockfile** `engine/codex-rs/Cargo.lock`: committed as cargo regenerates it. That adds the two new packages and rewrites the 167 upstream workspace members from `0.0.0` to `0.165.0` (deviation 4). No external package changed. `cargo build --locked` now succeeds, and builds no longer leave `Cargo.lock` dirty, so the `git checkout -- Cargo.lock` step in the setup script is no longer needed.
+
+After a future `git subtree pull`, expect conflicts only in `Cargo.toml` members and `Cargo.lock`; regenerate the lock with cargo rather than merging it by hand.
 
 ## Toolchain setup (Windows, everything on D:)
 

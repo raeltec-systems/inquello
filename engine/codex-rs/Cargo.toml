@@ -162,6 +162,8 @@ members = [
     "codex-experimental-api-macros",
     "plugin",
     "model-provider",
+    "inquello-domain",
+    "inquello-adapters",
 ]
 resolver = "2"
 
@@ -329,6 +331,9 @@ codex-workload-identity = { path = "workload-identity" }
 codex-windows-sandbox = { path = "windows-sandbox-rs" }
 codex-windows-sandbox-test-support = { path = "windows-sandbox-rs/tests/support" }
 core_test_support = { path = "core/tests/common" }
+# Inquello
+inquello-adapters = { path = "inquello-adapters" }
+inquello-domain = { path = "inquello-domain" }
 
 # External
 age = "0.12.1"

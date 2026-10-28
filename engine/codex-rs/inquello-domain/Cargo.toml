@@ -1,0 +1,19 @@
+[package]
+name = "inquello-domain"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# Inquello's domain rules, commands and ports. Keep this crate free of sqlx,
+# tokio, Electron, `codex-*` crates and `inquello-adapters`;
+# tests/dependency_direction.rs enforces that.
+
+[dependencies]
+thiserror = { workspace = true }
+uuid = { workspace = true, features = ["v4"] }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+
+[lints]
+workspace = true

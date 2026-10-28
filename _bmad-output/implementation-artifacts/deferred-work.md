@@ -6,6 +6,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-set-up-initial-inquello-fork.md`
   summary: Decide how to handle `engine/codex-rs/Cargo.lock`, which lists the 167 workspace crates at 0.0.0 while `Cargo.toml` says 0.165.0, so every cargo command rewrites it and `cargo build --locked` fails.
   evidence: Upstream state at `rust-v0.165.0`; editing it is an upstream change Story 1.1 forbids. Until decided, developers must restore the file after each build and CI cannot use `--locked`. Owner: architecture/implementation lead, before the first CI workflow or the first story that patches `engine/`.
+  status: closed by Story 1.4 (`spec-1-4-keep-local-working-metadata-behind-domain-commands.md`), 2026-10-28. The regenerated lock (0.165.0 workspace versions plus the two new Inquello crates) is committed; `cargo build --locked` passes. Recorded in `FORK-CUT.md` under "Inquello patches to `engine/`".
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-set-up-initial-inquello-fork.md`
   summary: Run one clean `cargo build -j 4 -p codex-cli -p codex-app-server` from an empty target directory to prove the fresh-clone build and record its duration.
   evidence: Unverified (maybe-false, medium if it fails). The recorded passing build was incremental on a run that crashed from out-of-memory; a clean build would settle whether fresh clones build as documented.
@@ -18,3 +19,6 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-run-packaged-runtime-over-desktop-transport.md`
   summary: Test the protocol generator's safety guards (dirty `engine/` refusal and generator/runtime version equality).
   evidence: No test runs `scripts/generate-protocol.mjs`; removing either guard would let the stamp misstate provenance unnoticed. Needs a git fixture and two fake `--version` binaries.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-keep-local-working-metadata-behind-domain-commands.md`
+  summary: Extend the domain dependency-direction check beyond the host platform.
+  evidence: `inquello-domain/tests/dependency_direction.rs` reads `cargo tree --offline` for the host only, because offline `cargo metadata` needs every platform's crate manifests (for example `alsa`, `js-sys`) that the local registry cache lacks. A forbidden crate pulled in only under another target's `cfg` would pass on this host. Switch to `cargo metadata` once CI can fetch the full registry.
