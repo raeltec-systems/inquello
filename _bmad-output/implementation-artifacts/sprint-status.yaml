@@ -33,13 +33,13 @@
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 
 generated: 10-27-2026 19:11
-last_updated: 10-27-2026 19:11
+last_updated: 10-28-2026 06:36
 project: inquello
 project_key: INQUELLO
 tracking_system: file-system
 story_location: _bmad-output/implementation-artifacts
 development_status:
-  epic-1: backlog
+  epic-1: in-progress
   epic-1-retrospective: optional
   epic-2: backlog
   epic-2-retrospective: optional
@@ -51,7 +51,7 @@ development_status:
   epic-5-retrospective: optional
   epic-6: backlog
   epic-6-retrospective: optional
-  1-1-set-up-the-initial-inquello-fork-from-the-selected-public-co: backlog
+  1-1-set-up-the-initial-inquello-fork-from-the-selected-public-co: review
   1-2-run-the-packaged-runtime-over-a-bounded-desktop-transport: backlog
   1-3-isolate-desktop-renderers-from-host-privilege: backlog
   1-4-keep-local-working-metadata-behind-domain-owned-commands: backlog
