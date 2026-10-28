@@ -10,12 +10,13 @@
  * The preload repeats the channel strings below literally because a sandboxed
  * preload cannot `require` this file; a test keeps the two in step.
  */
+import { toRendererResult, toRendererStatus, type IdentityActionResult, type IdentityStatus } from '../identity/session';
 import type { Logger } from '../runtime/logger';
 import type { RuntimeState } from '../runtime/process';
 import { describeSender, isTrustedSender, type InvokeEventLike } from './sender';
 
 /** Every operation the preload exposes, in `<namespace>.<name>` form. */
-export const OPERATION_NAMES = ['runtime.getStatus'] as const;
+export const OPERATION_NAMES = ['runtime.getStatus', 'identity.getStatus', 'identity.signIn', 'identity.signOut'] as const;
 export type OperationName = (typeof OPERATION_NAMES)[number];
 
 export const CHANNEL_PREFIX = 'inquello:op:';
@@ -82,19 +83,46 @@ export interface RuntimeStatus {
   runtimeVersion: string;
 }
 
+/** The identity session as the operations see it (main-owned; see `identity/session.ts`). */
+export interface IdentityOperations {
+  getStatus(): Promise<IdentityStatus>;
+  signIn(): Promise<IdentityActionResult>;
+  signOut(): Promise<IdentityActionResult>;
+}
+
 export interface OperationDeps {
   runtimeState: () => RuntimeState;
   runtimeVersion: string;
+  identity: IdentityOperations;
 }
 
-/** The full operation set; must cover `OPERATION_NAMES` exactly. */
+/**
+ * The full operation set; must cover `OPERATION_NAMES` exactly. Identity
+ * results are rebuilt field by field (`toRendererStatus`), so nothing beyond
+ * the published status shape, and never a credential, reaches the renderer.
+ */
 export function createOperations(deps: OperationDeps): Operation[] {
   const getStatus: Operation<undefined, RuntimeStatus> = {
     name: 'runtime.getStatus',
     validate: noPayload,
     handle: () => ({ state: deps.runtimeState(), runtimeVersion: deps.runtimeVersion }),
   };
-  return [getStatus as Operation];
+  const identityStatus: Operation<undefined, IdentityStatus> = {
+    name: 'identity.getStatus',
+    validate: noPayload,
+    handle: async () => toRendererStatus(await deps.identity.getStatus()),
+  };
+  const signIn: Operation<undefined, IdentityActionResult> = {
+    name: 'identity.signIn',
+    validate: noPayload,
+    handle: async () => toRendererResult(await deps.identity.signIn()),
+  };
+  const signOut: Operation<undefined, IdentityActionResult> = {
+    name: 'identity.signOut',
+    validate: noPayload,
+    handle: async () => toRendererResult(await deps.identity.signOut()),
+  };
+  return [getStatus, identityStatus, signIn, signOut] as Operation[];
 }
 
 export interface IpcMainLike {

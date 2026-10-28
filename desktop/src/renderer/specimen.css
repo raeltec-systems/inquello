@@ -83,3 +83,50 @@
 .specimen-hook[data-contrast='menu-open'] {
   padding-bottom: var(--console-height);
 }
+
+/* Story 1.10b: the Account block. Identity, shared service and private work are separate rows. */
+.specimen-account {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+}
+.specimen-account-states {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+}
+.specimen-account-state {
+  display: contents;
+}
+.specimen-account-state dt {
+  font: var(--type-label);
+  letter-spacing: var(--tracking-label);
+  color: var(--text-secondary);
+}
+.specimen-account-state dd {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  margin: 0;
+  font: var(--type-ui);
+  color: var(--text-primary);
+}
+.specimen-account-who {
+  display: inline-flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+.specimen-account-issuer,
+.specimen-account-note {
+  font: var(--type-ui);
+  color: var(--text-secondary);
+}
+.specimen-account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: flex-start;
+}

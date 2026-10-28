@@ -17,9 +17,11 @@ import {
   noPayload,
   objectPayload,
   registerOperations,
+  type IdentityOperations,
   type IpcMainLike,
   type Operation,
 } from '../src/main/security/operations';
+import type { IdentityStatus } from '../src/main/identity/session';
 import {
   CONTENT_SECURITY_POLICY,
   applyContentsPolicy,
@@ -164,6 +166,23 @@ class FakeIpcMain implements IpcMainLike {
   }
 }
 
+/** A fake identity session whose results carry extra fields the renderer must never see. */
+function fakeIdentity(): IdentityOperations {
+  const status = (): IdentityStatus =>
+    ({
+      identity: { state: 'signed-in', displayName: 'Alice Synthetic', issuerLabel: 'Synthetic test issuer', accessCredential: 'iqa_LEAK' },
+      sharedService: 'available',
+      credentialStorage: 'os-backed',
+      privateWork: 'local',
+      refreshCredential: 'iqr_LEAK',
+    }) as unknown as IdentityStatus;
+  return {
+    getStatus: async () => status(),
+    signIn: async () => ({ ok: false, reason: 'The identity provider did not complete the sign-in.', status: status(), code: 'LEAK' }) as never,
+    signOut: async () => ({ ok: true, status: status() }),
+  };
+}
+
 describe('operation registry', () => {
   const mainFrame: FrameLike = { url: APP, frameTreeNodeId: 1, parent: null };
   const trustedEvent: InvokeEventLike = { sender: { id: 1, mainFrame }, senderFrame: mainFrame };
@@ -181,12 +200,13 @@ describe('operation registry', () => {
         return 'ready';
       },
       runtimeVersion: '0.165.0',
+      identity: fakeIdentity(),
     });
     registerOperations(ipc, operations, { trustedWebContentsIds: new Set([1]), logger });
   });
 
   it('registers exactly one fixed channel per named operation', () => {
-    expect(OPERATION_NAMES).toEqual(['runtime.getStatus']);
+    expect(OPERATION_NAMES).toEqual(['runtime.getStatus', 'identity.getStatus', 'identity.signIn', 'identity.signOut']);
     expect([...ipc.handlers.keys()]).toEqual(OPERATION_NAMES.map((name) => `${CHANNEL_PREFIX}${name}`));
   });
 
@@ -226,6 +246,27 @@ describe('operation registry', () => {
     expect(logger.messages.some((m) => m.includes('untrusted sender'))).toBe(true);
   });
 
+  it('identity operations return only the published status fields', async () => {
+    const expected: IdentityStatus = {
+      identity: { state: 'signed-in', displayName: 'Alice Synthetic', issuerLabel: 'Synthetic test issuer' },
+      sharedService: 'available',
+      credentialStorage: 'os-backed',
+      privateWork: 'local',
+    };
+    await expect(ipc.invoke(channelFor('identity.getStatus'), trustedEvent)).resolves.toEqual(expected);
+    const signIn = await ipc.invoke(channelFor('identity.signIn'), trustedEvent);
+    expect(signIn).toEqual({ ok: false, reason: 'The identity provider did not complete the sign-in.', status: expected });
+    await expect(ipc.invoke(channelFor('identity.signOut'), trustedEvent)).resolves.toEqual({ ok: true, status: expected });
+    expect(JSON.stringify(signIn)).not.toContain('LEAK');
+  });
+
+  it.each(['identity.getStatus', 'identity.signIn', 'identity.signOut'] as const)('%s takes no arguments and checks the sender', async (name) => {
+    const bad = await ipc.invoke(channelFor(name), trustedEvent, { force: true }).catch((e: Error) => e);
+    expect((bad as Error).message).toBe(`invalid payload for ${name}`);
+    const foreign = await ipc.invoke(channelFor(name), { sender: { id: 2, mainFrame }, senderFrame: mainFrame }).catch((e: Error) => e);
+    expect((foreign as Error).message).toBe('untrusted sender');
+  });
+
   it('treats a sender whose frame accessors throw as untrusted', async () => {
     const disposed = {
       sender: { id: 1, mainFrame },
@@ -252,7 +293,10 @@ describe('operation registry', () => {
         throw new Error('secret internal path /home/x');
       },
     };
-    registerOperations(failing, [op], { trustedWebContentsIds: new Set([1]), logger });
+    const others = createOperations({ runtimeState: () => 'ready', runtimeVersion: '0.165.0', identity: fakeIdentity() }).filter(
+      (operation) => operation.name !== 'runtime.getStatus',
+    );
+    registerOperations(failing, [op, ...others], { trustedWebContentsIds: new Set([1]), logger });
     const error = (await failing.invoke(channelFor('runtime.getStatus'), trustedEvent).catch((e: Error) => e)) as Error;
     expect(error.message).toBe('operation failed: runtime.getStatus');
     expect(error.message).not.toContain('/home/x');
@@ -465,7 +509,7 @@ describe('session policy', () => {
 });
 
 describe('preload', () => {
-  it('exposes exactly a frozen inquello.runtime.getStatus over a fixed channel', async () => {
+  it('exposes exactly the frozen runtime and identity operations over fixed channels', async () => {
     const exposed: Array<[string, unknown]> = [];
     const invoke = vi.fn(async (...args: unknown[]) => ({ args }));
     vi.resetModules();
@@ -486,14 +530,25 @@ describe('preload', () => {
           ? Object.fromEntries(Reflect.ownKeys(value).map((k) => [String(k), describe((value as any)[k])]))
           : typeof value;
     expect(describe(api)).toEqual(EXPECTED_BRIDGE_TREE);
-    const typed = api as { runtime: { getStatus: (...args: unknown[]) => Promise<unknown> } };
+    type Op = (...args: unknown[]) => Promise<unknown>;
+    const typed = api as { runtime: { getStatus: Op }; identity: { getStatus: Op; signIn: Op; signOut: Op } };
     expect(Object.isFrozen(typed)).toBe(true);
     expect(Object.isFrozen(typed.runtime)).toBe(true);
+    expect(Object.isFrozen(typed.identity)).toBe(true);
 
-    // Arguments from the renderer are never forwarded; the channel is fixed.
-    await typed.runtime.getStatus('inquello:op:other', { extra: true });
-    expect(invoke).toHaveBeenCalledTimes(1);
-    expect(invoke).toHaveBeenCalledWith(channelFor('runtime.getStatus'));
+    // Arguments from the renderer are never forwarded; each channel is fixed.
+    const calls: Array<[Op, string]> = [
+      [typed.runtime.getStatus, channelFor('runtime.getStatus')],
+      [typed.identity.getStatus, channelFor('identity.getStatus')],
+      [typed.identity.signIn, channelFor('identity.signIn')],
+      [typed.identity.signOut, channelFor('identity.signOut')],
+    ];
+    for (const [op, channel] of calls) {
+      invoke.mockClear();
+      await op('inquello:op:other', { extra: true });
+      expect(invoke).toHaveBeenCalledTimes(1);
+      expect(invoke).toHaveBeenCalledWith(channel);
+    }
   });
 
   it('uses channel literals that match the registered operation names', () => {
@@ -527,10 +582,18 @@ describe('host privilege source scan', () => {
     for (const rel of users) expect(rel.startsWith('src/main/runtime/')).toBe(true);
   });
 
-  it('never references Electron shell', () => {
-    for (const { rel, text } of files) {
-      expect(/\bshell\s*[,}]/.test(text) && /from 'electron'/.test(text), rel).toBe(false);
-      expect(text.includes('shell.openExternal') || text.includes('shell.openPath'), rel).toBe(false);
+  it('references Electron shell only in the system-browser module', () => {
+    const users = files
+      .filter(({ text }) => (/\bshell\s*[,}]/.test(text) && /from 'electron'/.test(text)) || /\bshell\.\w+/.test(text))
+      .map((f) => f.rel);
+    expect(users).toEqual(['src/main/identity/browser.ts']);
+    const browser = files.find((f) => f.rel === 'src/main/identity/browser.ts')!.text;
+    expect(browser).toMatch(/^import \{ shell \} from 'electron';$/m);
+    expect([...new Set(browser.match(/shell\.\w+/g))]).toEqual(['shell.openExternal']);
+    expect(browser).not.toMatch(/openPath|showItemInFolder|trashItem|writeShortcutLink/);
+    // No embedded login window: identity code never creates a BrowserWindow or webview.
+    for (const { rel, text } of files.filter((f) => f.rel.startsWith('src/main/identity/'))) {
+      expect(text, rel).not.toMatch(/BrowserWindow|webview|loadURL/);
     }
   });
 

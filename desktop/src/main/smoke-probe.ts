@@ -32,9 +32,25 @@
  * (animating) and `reduce` (stopped), and its "Running" text in both.
  * `evaluateDesign` fails when the animation does not stop or the text is not
  * visible.
+ *
+ * Story 1.10b adds the identity probe (`probeIdentity`). Without
+ * `INQUELLO_SERVICE_CONFIG` it checks that the Account block shows the shared
+ * service as not configured, signed out, with private work local. With it, the
+ * probe presses the Account block's Sign in (main signs in through the
+ * headless opener), requires `signed-in` with `os-backed` storage, checks the
+ * encrypted vault file (mode 0600, no secret in plaintext), dumps what the
+ * renderer can see (identity results, the DOM, string globals, web storage,
+ * cookies, URL) and searches it in main for every secret the session handled,
+ * then presses Sign out and requires `signed-out` with the file removed.
+ * Secrets never cross into the renderer for the comparison. `evaluateIdentity`
+ * is pure and decides pass/fail.
  */
+import fs from 'node:fs';
+import path from 'node:path';
+
 import type { WebContents } from 'electron';
 
+import type { IdentityWiring } from './identity';
 import type { BlockedKind } from './security/policy';
 
 const PROBE_TARGET = 'https://example.com/';
@@ -81,7 +97,10 @@ const MOTION_SETTLE_MS = 100;
 const TAB_SETTLE_MS = 50;
 
 /** The tree `window.inquello` must expose, as `describe` renders it. */
-export const EXPECTED_BRIDGE_TREE = { runtime: { getStatus: 'function' } } as const;
+export const EXPECTED_BRIDGE_TREE = {
+  runtime: { getStatus: 'function' },
+  identity: { getStatus: 'function', signIn: 'function', signOut: 'function' },
+} as const;
 
 /** Globals that must not exist in the renderer's main world. */
 export const FORBIDDEN_GLOBALS = ['require', 'process', 'module', 'exports', 'Buffer', 'global', 'ipcRenderer', 'electron'] as const;
@@ -182,7 +201,7 @@ const RENDERER_PROBE = `(async () => {
   const result = { globals: {} };
   for (const name of ${JSON.stringify(FORBIDDEN_GLOBALS)}) result.globals[name] = typeof globalThis[name];
   result.bridge = describe(globalThis.inquello);
-  result.bridgeFrozen = Object.isFrozen(globalThis.inquello) && Object.isFrozen(globalThis.inquello && globalThis.inquello.runtime);
+  result.bridgeFrozen = Object.isFrozen(globalThis.inquello) && Object.isFrozen(globalThis.inquello && globalThis.inquello.runtime) && Object.isFrozen(globalThis.inquello && globalThis.inquello.identity);
   try {
     result.status = await globalThis.inquello.runtime.getStatus();
   } catch (error) {
@@ -619,4 +638,222 @@ export async function probeRenderer(
     .some((entry) => (entry.kind === 'navigation' || entry.kind === 'frame-navigation') && entry.url === PROBE_TARGET);
   const navigation = navigationLogged && contents.getURL() === url ? 'blocked' : 'allowed';
   return { privileges: evaluatePrivileges(probe, navigation, url, runtimeVersion), design: evaluateDesign(probe.design) };
+}
+
+// ---- identity (Story 1.10b) ------------------------------------------------------
+
+/** How long the probe waits for the Account block to reach a state. */
+const ACCOUNT_SETTLE_MS = 30_000;
+
+const ACCOUNT_HELPERS = `
+  const wait = async (predicate, ms) => {
+    const deadline = Date.now() + ms;
+    while (Date.now() < deadline) {
+      if (predicate()) return true;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    return predicate();
+  };
+  const account = () => document.querySelector('[data-account]');
+  const readAccount = () => {
+    const block = account();
+    if (!block) return null;
+    return {
+      identity: block.getAttribute('data-identity-state'),
+      sharedService: block.getAttribute('data-shared-service'),
+      credentialStorage: block.getAttribute('data-credential-storage'),
+      privateWork: block.getAttribute('data-private-work'),
+      text: block.textContent,
+    };
+  };
+  const press = async (action, until) => {
+    const button = document.querySelector('[data-account-action="' + action + '"]');
+    if (!button || button.getAttribute('aria-disabled') === 'true') return { pressed: false, reached: false };
+    button.click();
+    return { pressed: true, reached: await wait(() => account() && account().getAttribute('data-identity-state') === until, ${ACCOUNT_SETTLE_MS}) };
+  };
+`;
+
+/** Reads the Account block and status; when `signIn`, presses Sign in and waits for `signed-in`. */
+function accountProbe(signIn: boolean): string {
+  return `(async () => {
+    ${ACCOUNT_HELPERS}
+    const out = {};
+    out.status = await globalThis.inquello.identity.getStatus();
+    await wait(() => account() && account().getAttribute('data-identity-state') !== 'unknown' && account().getAttribute('data-shared-service') !== 'unknown', 10000);
+    out.dom = readAccount();
+    if (${signIn}) {
+      out.signIn = await press('sign-in', 'signed-in');
+      out.afterSignIn = await globalThis.inquello.identity.getStatus();
+      out.domAfterSignIn = readAccount();
+    }
+    return out;
+  })()`;
+}
+
+const SIGN_OUT_PROBE = `(async () => {
+  ${ACCOUNT_HELPERS}
+  const out = {};
+  out.signOut = await press('sign-out', 'signed-out');
+  out.afterSignOut = await globalThis.inquello.identity.getStatus();
+  out.domAfterSignOut = readAccount();
+  return out;
+})()`;
+
+/** Everything the renderer can see that a secret could hide in, as one string. Main searches it. */
+const RENDERER_DUMP = `(() => {
+  const strings = [];
+  for (const key of Object.getOwnPropertyNames(globalThis)) {
+    try {
+      const value = globalThis[key];
+      if (typeof value === 'string') strings.push(key + '=' + value);
+    } catch {}
+  }
+  const storage = (name) => {
+    try {
+      const area = globalThis[name];
+      const out = {};
+      for (let i = 0; i < area.length; i += 1) out[area.key(i)] = area.getItem(area.key(i));
+      return out;
+    } catch {
+      return null;
+    }
+  };
+  let cookie = null;
+  try { cookie = document.cookie; } catch {}
+  return JSON.stringify({ html: document.documentElement.outerHTML, url: location.href, title: document.title, name: globalThis.name, cookie, strings, local: storage('localStorage'), session: storage('sessionStorage') });
+})()`;
+
+export interface AccountRead {
+  identity: string | null;
+  sharedService: string | null;
+  credentialStorage: string | null;
+  privateWork: string | null;
+  text: string | null;
+}
+
+export interface IdentityProbeRead {
+  configured: boolean;
+  status: unknown;
+  dom: AccountRead | null;
+  signIn?: { pressed: boolean; reached: boolean };
+  afterSignIn?: unknown;
+  domAfterSignIn?: AccountRead | null;
+  /** The vault while signed in. */
+  vault?: { exists: boolean; mode: number | null; dirMode: number | null; plaintextSecrets: number };
+  signOut?: { pressed: boolean; reached: boolean };
+  afterSignOut?: unknown;
+  domAfterSignOut?: AccountRead | null;
+  vaultAfterSignOut?: { exists: boolean };
+  /** How many distinct secrets were searched for; never the secrets. */
+  secretsChecked: number;
+  /** How many of them appeared anywhere in what the renderer saw. */
+  rendererLeaks: number;
+}
+
+export interface IdentityReport {
+  ok: boolean;
+  failures: string[];
+  configured: boolean;
+  before: unknown;
+  afterSignIn: unknown;
+  afterSignOut: unknown;
+  vault: IdentityProbeRead['vault'] | null;
+  secretsChecked: number;
+  rendererLeaks: number;
+}
+
+/** The minimum distinct secrets a sign-in handles: access, refresh, proof, code, verifier, ID token. */
+const MIN_SECRETS = 6;
+
+function statusOf(value: unknown): { identity?: { state?: unknown; displayName?: unknown }; sharedService?: unknown; credentialStorage?: unknown; privateWork?: unknown } {
+  return typeof value === 'object' && value !== null ? (value as never) : {};
+}
+
+/** Pass/fail for the identity probe. */
+export function evaluateIdentity(read: IdentityProbeRead): IdentityReport {
+  const failures: string[] = [];
+  const before = statusOf(read.status);
+  if (before.privateWork !== 'local') failures.push(`private work is ${JSON.stringify(before.privateWork)}, not local`);
+  if (read.dom?.privateWork !== 'local') failures.push('the Account block does not show private work as local');
+  if (!read.configured) {
+    if (before.sharedService !== 'not-configured') failures.push(`shared service is ${JSON.stringify(before.sharedService)} without a configuration`);
+    if (before.identity?.state !== 'signed-out') failures.push(`identity is ${JSON.stringify(before.identity?.state)} without a configuration`);
+    if (read.dom?.sharedService !== 'not-configured') failures.push('the Account block does not show the shared service as not configured');
+  } else {
+    if (before.identity?.state !== 'signed-out') failures.push(`the run did not start signed out (${JSON.stringify(before.identity?.state)})`);
+    if (!read.signIn?.pressed) failures.push('Sign in could not be pressed');
+    else if (!read.signIn.reached) failures.push('the Account block never showed signed-in');
+    const after = statusOf(read.afterSignIn);
+    if (after.identity?.state !== 'signed-in') failures.push(`identity after sign-in is ${JSON.stringify(after.identity?.state)}`);
+    if (after.sharedService !== 'available') failures.push(`shared service after sign-in is ${JSON.stringify(after.sharedService)}`);
+    if (after.credentialStorage !== 'os-backed') failures.push(`credential storage is ${JSON.stringify(after.credentialStorage)}, not os-backed`);
+    if (after.privateWork !== 'local') failures.push('private work is not local after sign-in');
+    if (read.domAfterSignIn?.identity !== 'signed-in' || read.domAfterSignIn.sharedService !== 'available') failures.push('the Account block does not show signed-in with the service available');
+    if (!read.vault?.exists) failures.push('no encrypted credential file was written');
+    else {
+      if (read.vault.mode !== 0o600) failures.push(`the credential file mode is ${read.vault.mode?.toString(8)}, not 600`);
+      if (read.vault.dirMode !== 0o700) failures.push(`the identity directory mode is ${read.vault.dirMode?.toString(8)}, not 700`);
+      if (read.vault.plaintextSecrets !== 0) failures.push(`${read.vault.plaintextSecrets} secret(s) appear in plaintext in the credential file`);
+    }
+    if (read.secretsChecked < MIN_SECRETS) failures.push(`only ${read.secretsChecked} secrets were recorded for the leak check`);
+    if (!read.signOut?.pressed) failures.push('Sign out could not be pressed');
+    else if (!read.signOut.reached) failures.push('the Account block never showed signed-out');
+    const out = statusOf(read.afterSignOut);
+    if (out.identity?.state !== 'signed-out') failures.push(`identity after sign-out is ${JSON.stringify(out.identity?.state)}`);
+    if (read.vaultAfterSignOut?.exists !== false) failures.push('the credential file is still present after sign-out');
+  }
+  if (read.rendererLeaks !== 0) failures.push(`${read.rendererLeaks} secret(s) reached the renderer`);
+  return {
+    ok: failures.length === 0,
+    failures,
+    configured: read.configured,
+    before: read.status,
+    afterSignIn: read.afterSignIn ?? null,
+    afterSignOut: read.afterSignOut ?? null,
+    vault: read.vault ?? null,
+    secretsChecked: read.secretsChecked,
+    rendererLeaks: read.rendererLeaks,
+  };
+}
+
+function modeOf(file: string): number | null {
+  try {
+    return fs.statSync(file).mode & 0o777;
+  } catch {
+    return null;
+  }
+}
+
+/** Runs the identity probe against the live renderer and the main-owned session. */
+export async function probeIdentity(contents: WebContents, identity: IdentityWiring): Promise<IdentityReport> {
+  const configured = identity.config.kind === 'configured';
+  const first = (await contents.executeJavaScript(accountProbe(configured))) as Omit<IdentityProbeRead, 'configured' | 'secretsChecked' | 'rendererLeaks'>;
+  const read: IdentityProbeRead = { configured, ...first, secretsChecked: 0, rendererLeaks: 0 };
+  const seen: string[] = [JSON.stringify(first)];
+  if (configured) {
+    const secrets = identity.session.knownSecrets();
+    const file = identity.vault.filePath;
+    let plaintextSecrets = 0;
+    let exists = false;
+    try {
+      const bytes = fs.readFileSync(file);
+      exists = true;
+      for (const secret of secrets) if (bytes.includes(Buffer.from(secret, 'utf8'))) plaintextSecrets += 1;
+    } catch {
+      exists = false;
+    }
+    read.vault = { exists, mode: modeOf(file), dirMode: modeOf(path.dirname(file)), plaintextSecrets };
+    seen.push((await contents.executeJavaScript(RENDERER_DUMP)) as string);
+    const second = (await contents.executeJavaScript(SIGN_OUT_PROBE)) as Pick<IdentityProbeRead, 'signOut' | 'afterSignOut' | 'domAfterSignOut'>;
+    Object.assign(read, second);
+    seen.push(JSON.stringify(second));
+    read.vaultAfterSignOut = { exists: fs.existsSync(file) };
+  }
+  seen.push((await contents.executeJavaScript(RENDERER_DUMP)) as string);
+  const secrets = identity.session.knownSecrets();
+  const haystack = seen.join('\n');
+  read.secretsChecked = secrets.length;
+  read.rendererLeaks = secrets.filter((secret) => haystack.includes(secret)).length;
+  return evaluateIdentity(read);
 }

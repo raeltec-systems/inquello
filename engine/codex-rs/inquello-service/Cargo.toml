@@ -6,15 +6,16 @@ license.workspace = true
 
 # Inquello's shared service (SC-1 identity and sessions, SC-2 principal-scoped
 # session commands with durable receipts) on axum and sqlx/PostgreSQL. It runs
-# only in the SC-7 synthetic topology for now: loopback plain HTTP, PostgreSQL 18
-# test metadata and, behind the `test-issuer` feature, an in-process OIDC test
-# issuer with ephemeral keys.
+# only in the SC-7 synthetic topology for now: HTTPS (rustls) or loopback plain
+# HTTP, PostgreSQL 18 test metadata and, behind the `test-issuer` feature, an
+# in-process OIDC test issuer with ephemeral keys, a synthetic OIDC provider, an
+# ephemeral test CA and the `inquello-dev-topology` binary.
 
 [features]
 # The synthetic OIDC test issuer and the synthetic-test deployment. Without this
 # feature no test issuer can be configured at all; with it, a production
 # deployment still refuses one.
-test-issuer = ["dep:ring"]
+test-issuer = ["dep:rcgen", "dep:ring", "dep:time", "dep:tracing-subscriber"]
 
 [dependencies]
 axum = { workspace = true, default-features = false, features = [
@@ -28,15 +29,21 @@ inquello-domain = { workspace = true }
 inquello-protocol = { workspace = true }
 jsonwebtoken = { workspace = true }
 rand = { workspace = true }
+rcgen = { workspace = true, optional = true }
 ring = { workspace = true, optional = true }
+rustls = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 sqlx = { workspace = true, features = ["postgres"] }
 sqlx-macros = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "sync", "time"] }
+time = { workspace = true, optional = true }
+tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+tokio-rustls = { workspace = true }
 tracing = { workspace = true }
+tracing-subscriber = { workspace = true, optional = true, features = ["fmt"] }
+url = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
 
 [dev-dependencies]
@@ -44,8 +51,17 @@ pretty_assertions = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
 tracing-subscriber = { workspace = true, features = ["fmt"] }
 
+[[bin]]
+name = "inquello-dev-topology"
+path = "src/bin/inquello-dev-topology.rs"
+required-features = ["test-issuer"]
+
 [[test]]
 name = "identity"
+required-features = ["test-issuer"]
+
+[[test]]
+name = "topology"
 required-features = ["test-issuer"]
 
 [lints]

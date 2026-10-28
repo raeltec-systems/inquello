@@ -17,8 +17,13 @@
 //! - **SC-2 receipts**: session commands carry the SC-2 envelope; the receipt,
 //!   the mutation and the authorization check share one transaction.
 //!
-//! The test OIDC issuer exists only behind the `test-issuer` feature, and a
-//! production deployment refuses one.
+//! - **Transport**: plain HTTP on loopback only, or HTTPS terminated by the
+//!   service itself (rustls) when a [`TlsConfig`] is given, which may then bind
+//!   any address.
+//!
+//! The test OIDC issuer, the synthetic OIDC provider, the ephemeral test CA and
+//! the `inquello-dev-topology` binary exist only behind the `test-issuer`
+//! feature, and a production deployment refuses a test issuer.
 
 mod clock;
 mod commands;
@@ -34,6 +39,11 @@ mod server;
 mod sessions;
 #[cfg(feature = "test-issuer")]
 pub mod test_issuer;
+#[cfg(feature = "test-issuer")]
+pub mod test_provider;
+#[cfg(feature = "test-issuer")]
+pub mod test_tls;
+mod tls;
 
 pub use clock::Clock;
 pub use clock::SystemClock;
@@ -44,7 +54,11 @@ pub use config::Deployment;
 pub use config::IssuerConfig;
 pub use config::Lifetimes;
 pub use config::ServiceConfig;
+pub use config::TlsConfig;
+pub use config::redirect_uri_allowed;
+pub use config::redirect_uri_matches;
 pub use oidc::KeyConfigError;
 pub use server::RunningService;
 pub use server::StartError;
 pub use server::start;
+pub use tls::TlsSetupError;

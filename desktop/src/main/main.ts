@@ -18,14 +18,25 @@
  * right icon semantics, every rendered primitive contrast pair met its
  * threshold, Tab showed the `:focus-visible` indicator on each focus hook, and
  * the runtime exited 0 on its own.
+ *
+ * Identity (Story 1.10b): main owns the Inquello sign-in (`identity/`). It
+ * reads the dev config named by `INQUELLO_SERVICE_CONFIG` (without it the
+ * shared service is `not-configured` and nothing is contacted), keeps
+ * credentials in main only and persists them only through OS-backed
+ * `safeStorage`. The renderer reaches it through the three named
+ * `identity.*` operations. In `--smoke`, the identity probe signs in through
+ * the headless opener when configured and prints an `identity` line; the run
+ * also requires that line to pass.
  */
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { app, BrowserWindow, ipcMain, protocol, session, type WebContents } from 'electron';
+import { app, BrowserWindow, ipcMain, protocol, safeStorage, session, type WebContents } from 'electron';
 
 import schemaStamp from '../protocol/schema-stamp.json';
+import { createIdentity, headlessOpener, identityDir, SERVICE_CONFIG_ENV, type IdentityWiring } from './identity';
+import { openSystemBrowser } from './identity/browser';
 import { AppServerRuntime, consoleLogger, resolveAppServerBinary, type ExitInfo } from './runtime';
 import { APP_SCHEME_PRIVILEGES, handleAppProtocol } from './security/app-protocol';
 import { createOperations, registerOperations } from './security/operations';
@@ -37,7 +48,7 @@ import {
   type BlockedKind,
   type PolicyOptions,
 } from './security/policy';
-import { probeRenderer } from './smoke-probe';
+import { probeIdentity, probeRenderer } from './smoke-probe';
 
 const smoke = process.argv.includes('--smoke');
 const logger = consoleLogger;
@@ -47,6 +58,8 @@ let mainWindow: BrowserWindow | undefined;
 let handshakeOk = false;
 let privilegesOk = false;
 let designOk = false;
+let identityOk = false;
+let identity: IdentityWiring | undefined;
 /** `webContents` ids main created for app windows; the only trusted operation senders. */
 const trustedWebContentsIds = new Set<number>();
 const blocked: Array<{ kind: BlockedKind; url: string }> = [];
@@ -91,6 +104,8 @@ function createWindow(): BrowserWindow {
 function runtimeEnv(): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE;
+  // The runtime has no use for the shared-service config; identity stays in main.
+  delete env[SERVICE_CONFIG_ENV];
   if (smokeCodexHome) env.CODEX_HOME = smokeCodexHome;
   return env;
 }
@@ -137,11 +152,16 @@ async function runSmokeProbe(contents: WebContents): Promise<void> {
   process.stdout.write(`${JSON.stringify({ event: 'design', ...design })}\n`);
   if (!privileges.ok) logger.error(`renderer privilege probe failed: ${privileges.failures.join('; ')}`);
   if (!design.ok) logger.error(`design probe failed: ${design.failures.join('; ')}`);
+  if (!identity) throw new Error('identity was not wired');
+  const report = await probeIdentity(contents, identity);
+  identityOk = report.ok;
+  process.stdout.write(`${JSON.stringify({ event: 'identity', ...report })}\n`);
+  if (!report.ok) logger.error(`identity probe failed: ${report.failures.join('; ')}`);
 }
 
 function exitCodeFor(exit: ExitInfo | undefined): number {
   if (!smoke) return 0;
-  return handshakeOk && privilegesOk && designOk && exit !== undefined && exit.exitCode === 0 && !exit.killed ? 0 : 1;
+  return handshakeOk && privilegesOk && designOk && identityOk && exit !== undefined && exit.exitCode === 0 && !exit.killed ? 0 : 1;
 }
 
 app.on('before-quit', (event) => {
@@ -176,9 +196,30 @@ app.on('window-all-closed', () => app.quit());
 void app.whenReady().then(async () => {
   applySessionPolicy(session.defaultSession, policyOptions);
   handleAppProtocol(protocol, path.join(app.getAppPath(), 'dist', 'renderer'), logger);
+  // The smoke run starts signed out: drop any identity left by an earlier run.
+  if (smoke) fs.rmSync(identityDir(app.getPath('userData')), { recursive: true, force: true });
+  identity = createIdentity({
+    env: process.env,
+    safeStorage,
+    platform: process.platform,
+    userDataDir: app.getPath('userData'),
+    logger,
+    // The smoke run plays the browser's part headlessly; the app always uses the system browser.
+    opener: (transport) => (smoke && transport ? headlessOpener(transport) : openSystemBrowser),
+    recordSecrets: smoke,
+  });
+  const identitySession = identity.session;
   registerOperations(
     ipcMain,
-    createOperations({ runtimeState: () => runtime?.state ?? 'stopped', runtimeVersion: schemaStamp.runtimeVersion }),
+    createOperations({
+      runtimeState: () => runtime?.state ?? 'stopped',
+      runtimeVersion: schemaStamp.runtimeVersion,
+      identity: {
+        getStatus: () => identitySession.getStatus(),
+        signIn: () => identitySession.signIn(),
+        signOut: () => identitySession.signOut(),
+      },
+    }),
     { trustedWebContentsIds, logger },
   );
   mainWindow = createWindow();

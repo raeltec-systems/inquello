@@ -114,6 +114,16 @@ Adds two crates beside upstream; no upstream crate's code changes.
 - **Workspace manifest** `engine/codex-rs/Cargo.toml`: both crates added to `[workspace] members` and as path entries under `[workspace.dependencies]`, plus a new `ring = "0.17.14"` workspace entry for a crate already locked through `jsonwebtoken` and `rustls`. No existing pin changed. The service enables extra features on existing pins only: `sqlx` `postgres`, `axum` `http1`/`json`/`tokio`, `uuid` `serde`, and `reqwest` `json` for tests.
 - **Lockfile** `engine/codex-rs/Cargo.lock`: gains only the two new package entries. No external package or version changed (`sqlx-postgres` and its dependencies were already locked).
 
+### Patch 4: HTTPS synthetic topology (Story 1.10b, 2026-10-28)
+
+Changes only `inquello-service`; no upstream crate's code changes.
+
+- **HTTPS**: `src/tls.rs` terminates TLS with rustls (aws-lc-rs provider, safe default versions, ALPN `http/1.1`) through an axum `Listener` that completes handshakes off the accept loop. `ServiceConfig.tls` (`TlsConfig`: certificate chain and key, key redacted from `Debug`) enables it; with TLS the service may bind a non-loopback address, without it plain HTTP stays loopback-only.
+- **Redirect matching**: `config::redirect_uri_matches` keeps exact matching but lets a registered loopback IP-literal redirect (`http://127.0.0.1/...`, `http://[::1]/...`) match any port with the exact path (RFC 8252 §7.3). Login transactions still bind the exact URI requested.
+- **`test-issuer` feature additions**: `src/test_tls.rs` (an ephemeral P-256 CA and loopback server certificates through `rcgen`), `src/test_provider.rs` (the synthetic OIDC provider: discovery, JWKS, `/authorize` with auto-consent, `/token` with PKCE S256, one-use codes and client/redirect checks) and the `inquello-dev-topology` binary (`src/bin/`), which runs the provider and the service on loopback HTTPS against a fresh PostgreSQL 18 database, prints one JSON config line and writes only the CA certificate. The feature now also enables the optional `rcgen`, `time` and `tracing-subscriber` dependencies. New test target `tests/topology.rs` (requires the feature).
+- **Workspace manifest**: unchanged. The service adds dependency edges on crates already locked and pinned in the workspace: `rustls`, `tokio-rustls`, `url`, and (optional) `rcgen`, `time`, `tracing-subscriber`; `tokio` gains the `signal` feature, which another workspace crate already enables.
+- **Lockfile**: only `inquello-service`'s dependency list gains `rcgen`, `rustls`, `time`, `tokio-rustls` and `url` (`tracing-subscriber` was already listed as a dev-dependency). No package entry, version or checksum changed.
+
 ## Toolchain setup (Windows, everything on D:)
 
 The owner authorized these installs on 2026-10-28. Toolchains, caches and build output stay on D:. The Microsoft C++ build tools were already present and were not installed.

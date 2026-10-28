@@ -793,7 +793,7 @@ async fn a_production_config_naming_the_test_issuer_refuses_to_start() {
         StartError::Config(ConfigError::TestIssuerRefused { .. })
     ));
 
-    // A non-loopback bind is refused (no TLS termination yet).
+    // A non-loopback bind is refused without TLS.
     let mut config = support::synthetic_config(&issuer, h.db.options());
     config.bind = "0.0.0.0:0".parse().expect("addr");
     let error = inquello_service::start(config, clock.clone())

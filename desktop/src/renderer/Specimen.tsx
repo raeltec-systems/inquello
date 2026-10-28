@@ -8,10 +8,13 @@
  * every StatusChip state. Story 1.8: every JudgmentTag kind, FileChip type
  * and state, PlanStep state (the running one is what the probe watches under
  * reduced motion), an ApprovalCard, every DiffLine kind and stage, and a
- * persistent Toast. Nothing here performs an operation.
+ * persistent Toast. Story 1.10b adds the Account block, the one part that
+ * performs operations: sign-in, sign-out and the identity status through the
+ * named `inquello.identity` operations. Nothing else here performs one.
  */
 import type { ReactElement, ReactNode } from 'react';
 
+import { Account } from './Account';
 import { CONTRAST_PAIRS } from './design/contrast';
 import { Icon } from './icons/Icon';
 import {
@@ -105,6 +108,10 @@ export function Specimen(): ReactElement {
     <main className="specimen" data-contrast-pairs={JSON.stringify(RENDERED_PAIRS)}>
       <h1 className="specimen-title">Inquello</h1>
       <p className="specimen-body">Design tokens, IBM Plex, icon semantics and the core primitives. Desktop features arrive in later stories.</p>
+
+      <Section title="Account">
+        <Account />
+      </Section>
 
       <Section title="Button">
         {BUTTON_VARIANTS.map((variant) => (

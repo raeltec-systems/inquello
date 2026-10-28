@@ -291,6 +291,7 @@ pub fn synthetic_config(issuer: &TestIssuer, connect: PgConnectOptions) -> Servi
     ServiceConfig {
         deployment: Deployment::SyntheticTest,
         bind: "127.0.0.1:0".parse().expect("loopback"),
+        tls: None,
         issuers: vec![issuer.issuer_config(CLIENT_ID, &[REDIRECT_URI])],
         lifetimes: lifetimes(),
         database: database_config(connect),
@@ -299,19 +300,29 @@ pub fn synthetic_config(issuer: &TestIssuer, connect: PgConnectOptions) -> Servi
 
 impl Harness {
     pub async fn start() -> Self {
+        Self::start_with(|_| {}, reqwest::Client::new()).await
+    }
+
+    /// Starts with the synthetic config adjusted by `adjust` (for example TLS or
+    /// another issuer), talking to the service through `client`.
+    pub async fn start_with(
+        adjust: impl FnOnce(&mut ServiceConfig),
+        client: reqwest::Client,
+    ) -> Self {
         init_logging();
         let db = TestDatabase::create().await;
         let issuer = TestIssuer::new();
         let clock = Arc::new(ManualClock::new());
-        let service =
-            inquello_service::start(synthetic_config(&issuer, db.options()), clock.clone())
-                .await
-                .expect("service starts");
+        let mut config = synthetic_config(&issuer, db.options());
+        adjust(&mut config);
+        let service = inquello_service::start(config, clock.clone())
+            .await
+            .expect("service starts");
         let pool = postgres::connect(&database_config(db.options()))
             .await
             .expect("test pool");
         Self {
-            client: reqwest::Client::new(),
+            client,
             base: service.base_url(),
             clock,
             issuer,

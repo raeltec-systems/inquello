@@ -1,5 +1,6 @@
 //! SC-1 bootstrap: login transactions, ID-token sign-in and abandon.
 
+use crate::config::redirect_uri_allowed;
 use crate::credentials;
 use crate::credentials::CredentialKind;
 use crate::credentials::MAX_CREDENTIAL_BYTES;
@@ -23,15 +24,20 @@ use uuid::Uuid;
 const MAX_BINDING_BYTES: usize = 2048;
 
 /// `POST /v1/login/transactions`: creates an expiring, one-use transaction bound
-/// to an allowlisted issuer, its client and one of its exact redirect URIs.
+/// to an allowlisted issuer, its client and one of its redirect URIs. A
+/// registered loopback IP-literal redirect accepts any port with the exact path
+/// (RFC 8252 §7.3); the transaction binds the exact URI requested.
 pub(crate) async fn create_transaction(
     state: &AppState,
     request: CreateLoginTransactionRequest,
 ) -> Result<LoginTransaction, ApiError> {
+    if request.redirect_uri.len() > MAX_BINDING_BYTES {
+        return Err(ApiError::denied("redirect URI too long"));
+    }
     let issuer = state
         .issuer(&request.issuer)
         .filter(|issuer| issuer.client_id == request.client_id)
-        .filter(|issuer| issuer.redirect_uris.contains(&request.redirect_uri))
+        .filter(|issuer| redirect_uri_allowed(&issuer.redirect_uris, &request.redirect_uri))
         .ok_or_else(|| ApiError::denied("issuer, client or redirect URI not allowlisted"))?;
     let now = state.clock.now();
     let login_transaction_id = Uuid::new_v4();
