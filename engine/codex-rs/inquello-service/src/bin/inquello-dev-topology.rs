@@ -11,13 +11,18 @@
 //!
 //! It then prints exactly one JSON line on stdout:
 //! `{"service_url", "issuer_url", "issuer_label", "ca_path", "client_id"}`.
-//! That line is also a valid desktop `INQUELLO_SERVICE_CONFIG` file.
+//! That line is also a valid desktop `INQUELLO_SERVICE_CONFIG` file;
+//! `--config-out FILE` writes it there directly (UTF-8, atomically), which
+//! avoids shell redirection quirks such as Windows PowerShell's UTF-16 `>`.
 //!
-//! Only the CA *certificate* is written to disk (`ca.pem`, world-readable, in a
-//! fresh world-readable directory unless `--ca-dir` names one). No key, token or
-//! credential is written anywhere. The topology stops on SIGINT or SIGTERM, or,
-//! with `--exit-on-stdin-eof`, when stdin closes; it then removes the CA file it
-//! wrote and drops its database.
+//! Only the CA *certificate* and that config line are written to disk (`ca.pem`,
+//! world-readable, in a fresh world-readable directory unless `--ca-dir` names
+//! one). No key, token or credential is written anywhere. The topology stops on
+//! SIGINT or SIGTERM (Ctrl+C on Windows), or, with `--exit-on-stdin-eof`, when
+//! stdin closes; it then removes the files it wrote and drops its database. A
+//! run killed outright leaves its database behind; the next run started with
+//! `--drop-stale` removes such leftovers (prefix `inquello_dev_`, owned by the
+//! same role, no open connection).
 //!
 //! The administrative database URL comes from `INQUELLO_DEV_DATABASE_URL` or, if
 //! unset, `INQUELLO_TEST_DATABASE_URL`; its role needs `CREATEDB`.
@@ -53,12 +58,17 @@ const SUBJECT_NAME: &str = "Synthetic Developer";
 const SUBJECT_EMAIL: &str = "developer@synthetic.invalid";
 
 const USAGE: &str = "usage: inquello-dev-topology [--service-bind ADDR] [--issuer-bind ADDR] \
-[--ca-dir DIR] [--access-lifetime-secs N] [--exit-on-stdin-eof]";
+[--ca-dir DIR] [--config-out FILE] [--drop-stale] [--access-lifetime-secs N] [--exit-on-stdin-eof]";
+
+/// Every run database starts with this prefix; `--drop-stale` only touches these.
+const RUN_DATABASE_PREFIX: &str = "inquello_dev_";
 
 struct Options {
     service_bind: SocketAddr,
     issuer_bind: SocketAddr,
     ca_dir: Option<PathBuf>,
+    config_out: Option<PathBuf>,
+    drop_stale: bool,
     access_lifetime: Duration,
     exit_on_stdin_eof: bool,
 }
@@ -69,6 +79,8 @@ fn parse_options() -> Result<Options, String> {
         service_bind: loopback,
         issuer_bind: loopback,
         ca_dir: None,
+        config_out: None,
+        drop_stale: false,
         access_lifetime: Duration::from_secs(15 * 60),
         exit_on_stdin_eof: false,
     };
@@ -87,6 +99,8 @@ fn parse_options() -> Result<Options, String> {
                     .map_err(|_| "--issuer-bind is not a socket address".to_string())?;
             }
             "--ca-dir" => options.ca_dir = Some(PathBuf::from(value("--ca-dir")?)),
+            "--config-out" => options.config_out = Some(PathBuf::from(value("--config-out")?)),
+            "--drop-stale" => options.drop_stale = true,
             "--access-lifetime-secs" => {
                 let secs: u64 = value("--access-lifetime-secs")?
                     .parse()
@@ -140,13 +154,54 @@ impl RunDatabase {
                 "PostgreSQL server_version_num {version} is older than 18"
             ));
         }
-        let name = format!("inquello_dev_{}", uuid::Uuid::new_v4().simple());
+        let name = format!("{RUN_DATABASE_PREFIX}{}", uuid::Uuid::new_v4().simple());
         let created = sqlx::query(AssertSqlSafe(format!("CREATE DATABASE \"{name}\"")))
             .execute(&pool)
             .await;
         pool.close().await;
         created.map_err(|_| "could not create the run database".to_string())?;
         Ok(Self { admin, name })
+    }
+
+    /// Drops run databases left by earlier runs that were killed before cleanup.
+    ///
+    /// Only databases with the run prefix, owned by the connecting role and with
+    /// no open connection are dropped. A running topology always holds a lease
+    /// connection to its own database, and `DROP DATABASE` without `FORCE`
+    /// refuses a database with connections, so a live run is never touched.
+    async fn drop_stale(admin: &PgConnectOptions) -> Result<Vec<String>, String> {
+        let pool = postgres::connect(&database_config(admin.clone()))
+            .await
+            .map_err(|_| "could not connect to the administrative database".to_string())?;
+        let names: Vec<String> = sqlx::query_scalar(
+            "SELECT d.datname FROM pg_database d \
+             WHERE d.datname LIKE $1 \
+               AND pg_get_userbyid(d.datdba) = current_user \
+               AND NOT EXISTS (SELECT 1 FROM pg_stat_activity a WHERE a.datname = d.datname)",
+        )
+        .bind(format!("{RUN_DATABASE_PREFIX}%"))
+        .fetch_all(&pool)
+        .await
+        .map_err(|_| "could not list stale run databases".to_string())?;
+        let mut dropped = Vec::new();
+        for name in names {
+            // Names come from pg_database and match the generated pattern only.
+            if !name
+                .strip_prefix(RUN_DATABASE_PREFIX)
+                .is_some_and(|rest| rest.chars().all(|c| c.is_ascii_hexdigit()))
+            {
+                continue;
+            }
+            if sqlx::query(AssertSqlSafe(format!("DROP DATABASE IF EXISTS \"{name}\"")))
+                .execute(&pool)
+                .await
+                .is_ok()
+            {
+                dropped.push(name);
+            }
+        }
+        pool.close().await;
+        Ok(dropped)
     }
 
     fn options(&self) -> PgConnectOptions {
@@ -245,8 +300,42 @@ async fn stop_requested(exit_on_stdin_eof: bool) {
     }
 }
 
+/// Writes the config line to `path` atomically (temp file, then rename), UTF-8
+/// without a byte-order mark, so shells cannot mangle or truncate it.
+fn write_config_file(path: &std::path::Path, line: &str) -> Result<(), String> {
+    let temp = path.with_extension("tmp");
+    std::fs::write(&temp, format!("{line}\n"))
+        .map_err(|error| format!("could not write the config file: {error}"))?;
+    set_mode(&temp, 0o644)?;
+    std::fs::rename(&temp, path)
+        .map_err(|error| format!("could not write the config file: {error}"))
+}
+
 async fn run(options: Options) -> Result<(), String> {
-    let database = RunDatabase::create(admin_options()?).await?;
+    let admin = admin_options()?;
+    if options.drop_stale {
+        for name in RunDatabase::drop_stale(&admin).await? {
+            tracing::info!(database = %name, "dropped stale run database");
+        }
+    }
+    let database = RunDatabase::create(admin).await?;
+    // Lease: one open connection to the run database for the whole run, so a
+    // concurrent `--drop-stale` never sees it as abandoned.
+    let lease_pool = match postgres::connect(&database_config(database.options())).await {
+        Ok(pool) => pool,
+        Err(_) => {
+            database.drop_now().await;
+            return Err("could not connect to the run database".to_string());
+        }
+    };
+    let lease = match lease_pool.acquire().await {
+        Ok(connection) => connection,
+        Err(_) => {
+            lease_pool.close().await;
+            database.drop_now().await;
+            return Err("could not connect to the run database".to_string());
+        }
+    };
     let ca = TestCertificateAuthority::new("Inquello synthetic dev-topology CA");
     let tls = ca.loopback_server_tls();
     let ca_file = match CaFile::write(options.ca_dir, &ca.ca_pem()) {
@@ -313,6 +402,18 @@ async fn run(options: Options) -> Result<(), String> {
         "ca_path": ca_file.path.to_string_lossy(),
         "client_id": CLIENT_ID,
     });
+    let line = line.to_string();
+    if let Some(path) = &options.config_out
+        && let Err(error) = write_config_file(path, &line)
+    {
+        service.shutdown().await;
+        provider.shutdown().await;
+        ca_file.remove();
+        drop(lease);
+        lease_pool.close().await;
+        database.drop_now().await;
+        return Err(error);
+    }
     {
         let mut stdout = std::io::stdout().lock();
         let _ = writeln!(stdout, "{line}");
@@ -324,6 +425,11 @@ async fn run(options: Options) -> Result<(), String> {
     service.shutdown().await;
     provider.shutdown().await;
     ca_file.remove();
+    if let Some(path) = &options.config_out {
+        let _ = std::fs::remove_file(path);
+    }
+    drop(lease);
+    lease_pool.close().await;
     database.drop_now().await;
     Ok(())
 }

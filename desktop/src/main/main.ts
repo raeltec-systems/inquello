@@ -37,7 +37,7 @@ import { app, BrowserWindow, ipcMain, protocol, safeStorage, session, type WebCo
 import schemaStamp from '../protocol/schema-stamp.json';
 import { createIdentity, headlessOpener, identityDir, SERVICE_CONFIG_ENV, type IdentityWiring } from './identity';
 import { openSystemBrowser } from './identity/browser';
-import { AppServerRuntime, consoleLogger, resolveAppServerBinary, type ExitInfo } from './runtime';
+import { AppServerRuntime, consoleLogger, resolveAppServerBinary, runtimeChildEnv, type ExitInfo } from './runtime';
 import { APP_SCHEME_PRIVILEGES, handleAppProtocol } from './security/app-protocol';
 import { createOperations, registerOperations } from './security/operations';
 import {
@@ -102,12 +102,7 @@ function createWindow(): BrowserWindow {
 }
 
 function runtimeEnv(): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...process.env };
-  delete env.ELECTRON_RUN_AS_NODE;
-  // The runtime has no use for the shared-service config; identity stays in main.
-  delete env[SERVICE_CONFIG_ENV];
-  if (smokeCodexHome) env.CODEX_HOME = smokeCodexHome;
-  return env;
+  return runtimeChildEnv(process.env, { serviceConfigEnv: SERVICE_CONFIG_ENV, codexHome: smokeCodexHome });
 }
 
 async function startRuntime(): Promise<void> {

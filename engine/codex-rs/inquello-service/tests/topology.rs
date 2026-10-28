@@ -643,8 +643,19 @@ async fn authorize_never_redirects_to_an_unregistered_client_and_requires_s256()
 
 // ---- the dev topology binary -------------------------------------------------
 
+/// Tests that spawn the binary run one at a time: `--drop-stale` and the
+/// database listings would otherwise see other tests' runs come and go.
+static TOPOLOGY_BINARY: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn topology_lock() -> std::sync::MutexGuard<'static, ()> {
+    TOPOLOGY_BINARY
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 #[test]
 fn the_dev_topology_prints_one_line_writes_only_the_ca_and_cleans_up() {
+    let _serial = topology_lock();
     let binary = env!("CARGO_BIN_EXE_inquello-dev-topology");
     let mut child = Command::new(binary)
         .arg("--exit-on-stdin-eof")
@@ -750,4 +761,119 @@ fn the_dev_topology_prints_one_line_writes_only_the_ca_and_cleans_up() {
     assert!(status.success(), "{status}");
     assert!(!ca_path.exists(), "the CA file was left behind");
     assert!(!ca_dir.exists(), "the CA directory was left behind");
+}
+
+/// Starts the topology with `args`, waits for its config line, and returns the
+/// child (stdin held open) and the parsed config.
+fn spawn_topology(args: &[&str]) -> (std::process::Child, Value) {
+    let binary = env!("CARGO_BIN_EXE_inquello-dev-topology");
+    let mut child = Command::new(binary)
+        .arg("--exit-on-stdin-eof")
+        .args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .expect("spawn the topology");
+    let mut stdout = BufReader::new(child.stdout.take().expect("stdout"));
+    let mut line = String::new();
+    stdout.read_line(&mut line).expect("read the line");
+    (child, serde_json::from_str(&line).expect("one JSON line"))
+}
+
+fn stop_topology(mut child: std::process::Child) {
+    drop(child.stdin.take());
+    let deadline = std::time::Instant::now() + Duration::from_secs(30);
+    let status = loop {
+        if let Some(status) = child.try_wait().expect("wait") {
+            break status;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the topology did not stop"
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    };
+    assert!(status.success(), "{status}");
+}
+
+async fn run_database_names() -> Vec<String> {
+    let url = std::env::var(support::DATABASE_ENV).expect("test database URL");
+    let pool = inquello_service::postgres::connect(&inquello_service::DatabaseConfig {
+        connect: url.parse().expect("database URL"),
+        max_connections: 1,
+        acquire_timeout: Duration::from_secs(5),
+    })
+    .await
+    .expect("admin connection");
+    let names =
+        sqlx::query_scalar("SELECT datname FROM pg_database WHERE datname LIKE 'inquello_dev_%'")
+            .fetch_all(&pool)
+            .await
+            .expect("list databases");
+    pool.close().await;
+    names
+}
+
+#[test]
+fn config_out_writes_the_line_as_utf8_and_removes_it_on_stop() {
+    let _serial = topology_lock();
+    let dir = tempfile::tempdir().expect("temp dir");
+    let config_path = dir.path().join("config.json");
+    let (child, printed) =
+        spawn_topology(&["--config-out", config_path.to_str().expect("utf-8 path")]);
+    let bytes = std::fs::read(&config_path).expect("config file");
+    assert!(
+        !bytes.starts_with(&[0xEF, 0xBB, 0xBF]),
+        "no byte-order mark"
+    );
+    let text = String::from_utf8(bytes).expect("UTF-8");
+    assert!(text.ends_with('\n'));
+    let written: Value = serde_json::from_str(text.trim_end()).expect("JSON");
+    assert_eq!(written, printed);
+    assert!(!dir.path().join("config.tmp").exists(), "no temp file left");
+    stop_topology(child);
+    assert!(!config_path.exists(), "the config file was left behind");
+}
+
+#[test]
+fn drop_stale_removes_abandoned_run_databases_but_never_a_live_run() {
+    let _serial = topology_lock();
+    let runtime = tokio::runtime::Runtime::new().expect("runtime");
+    // A live run holds its lease connection.
+    let (live, _) = spawn_topology(&[]);
+    let after_live = runtime.block_on(run_database_names());
+
+    // An abandoned run database, as left by a killed topology.
+    let orphan = format!("inquello_dev_{}", Uuid::new_v4().simple());
+    runtime.block_on(async {
+        let url = std::env::var(support::DATABASE_ENV).expect("test database URL");
+        let pool = inquello_service::postgres::connect(&inquello_service::DatabaseConfig {
+            connect: url.parse().expect("database URL"),
+            max_connections: 1,
+            acquire_timeout: Duration::from_secs(5),
+        })
+        .await
+        .expect("admin connection");
+        sqlx::query(sqlx::AssertSqlSafe(format!("CREATE DATABASE \"{orphan}\"")))
+            .execute(&pool)
+            .await
+            .expect("create orphan");
+        pool.close().await;
+    });
+
+    let (second, _) = spawn_topology(&["--drop-stale"]);
+    let names = runtime.block_on(run_database_names());
+    assert!(
+        !names.contains(&orphan),
+        "the abandoned database was not dropped"
+    );
+    for name in &after_live {
+        assert!(
+            names.contains(name),
+            "a live run database {name} was dropped"
+        );
+    }
+    stop_topology(second);
+    stop_topology(live);
 }

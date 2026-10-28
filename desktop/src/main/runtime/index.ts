@@ -6,3 +6,4 @@ export * from './process';
 export * from './rpc';
 export * from './stderr';
 export * from './version';
+export * from './env';

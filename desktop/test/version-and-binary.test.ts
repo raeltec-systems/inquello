@@ -8,6 +8,7 @@ import {
   VersionMismatchError,
   assertRuntimeMatchesSchema,
   parseRuntimeVersion,
+  runtimeChildEnv,
   resolveAppServerBinary,
 } from '../src/main/runtime';
 
@@ -15,6 +16,8 @@ describe('parseRuntimeVersion', () => {
   it('reads the version after the originator', () => {
     expect(parseRuntimeVersion('inquello_desktop/0.165.0 (Windows 10.0.26100; x86_64) xterm-256color (inquello_desktop; 0.0.0)')).toBe('0.165.0');
     expect(parseRuntimeVersion('codex_cli_rs/0.166.0-alpha.2 (Mac OS 15; arm64)')).toBe('0.166.0-alpha.2');
+    // An inherited CODEX_INTERNAL_ORIGINATOR_OVERRIDE puts spaces in the originator.
+    expect(parseRuntimeVersion('Codex Desktop/0.165.0 (Windows 10.0.26100; x86_64) dumb (inquello_desktop; 0.0.0)')).toBe('0.165.0');
   });
 
   it('returns null when unparseable', () => {
@@ -64,5 +67,26 @@ describe('resolveAppServerBinary', () => {
       path.resolve('/repo/engine/codex-rs/target/debug/codex-app-server'),
     );
     expect(() => resolveAppServerBinary({ ...base, exists: () => false })).toThrow(/cargo build/);
+  });
+});
+
+describe('runtimeChildEnv', () => {
+  it('drops CODEX_INTERNAL_* (any case), Electron node mode and the service config', () => {
+    const env = runtimeChildEnv(
+      {
+        PATH: '/bin',
+        CODEX_HOME: '/h',
+        CODEX_INTERNAL_ORIGINATOR_OVERRIDE: 'Codex Desktop',
+        codex_internal_other: 'x',
+        ELECTRON_RUN_AS_NODE: '1',
+        INQUELLO_SERVICE_CONFIG: '/c.json',
+      },
+      { serviceConfigEnv: 'INQUELLO_SERVICE_CONFIG' },
+    );
+    expect(env).toEqual({ PATH: '/bin', CODEX_HOME: '/h' });
+  });
+
+  it('sets CODEX_HOME when given', () => {
+    expect(runtimeChildEnv({ CODEX_HOME: '/a' }, { serviceConfigEnv: 'X', codexHome: '/b' })).toEqual({ CODEX_HOME: '/b' });
   });
 });
