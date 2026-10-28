@@ -1,4 +1,6 @@
-# Inquello fork cut
+# Inquello engine cut
+
+Inquello's engine is our own fork of the public `openai/codex` repository: we modify and extend it. It lives under `engine/`, which was named `fork/` until 2026-10-28 (see "Directory rename" below).
 
 This file records which upstream Codex revision Inquello is built on, how it was imported, how to set up the toolchain, and what the first build verification found. It is the record for Story 1.1 (AC 1.1.1 and AC 1.1.2).
 
@@ -14,13 +16,13 @@ This file records which upstream Codex revision Inquello is built on, how it was
 | Commit date | 2026-10-27T15:19:19-03:00 (2026-10-27T18:19:19Z) |
 | Tag date | 2026-10-27T15:19:20-03:00 (tagger Felipe Coury, message "Release 0.165.0") |
 | Selected on | 2026-10-28 |
-| Licence | Apache-2.0. Upstream `fork/LICENSE` and `fork/NOTICE` are kept unchanged. |
+| Licence | Apache-2.0. Upstream `engine/LICENSE` and `engine/NOTICE` are kept unchanged. |
 
 **Why this cut.** `rust-v0.165.0` was the newest non-prerelease release when we selected it. Its pins match the planned stack: Rust 1.99.1, edition 2024, pnpm 10.34.5 and TypeScript 5.9.2. A release tag also stays fixed, while `main` and the snapshots inspected during planning keep moving. Those planning snapshots are evidence only and were not used as the cut.
 
 ## Import method
 
-The upstream tree sits under `fork/` as a squashed git subtree:
+The upstream tree was imported under `fork/` (now `engine/`) as a squashed git subtree:
 
 ```sh
 git subtree add --prefix=fork --squash https://github.com/openai/codex rust-v0.165.0
@@ -33,15 +35,31 @@ This created two commits on `feat/1-1-codex-fork-setup`:
 
 **Merge rule:** merge this branch into `main` with a true merge commit, never a squash or rebase merge. A squash or rebase merge would drop the subtree squash commit and every SHA cited here, which breaks `git subtree pull`.
 
-We chose a squashed subtree over a submodule for four reasons. It matches the architecture seed layout (`fork/codex-rs/...`, with `desktop/` to come later). It keeps one repository, so we don't host a separate fork. It keeps upstream history out of Inquello history. And it still supports upgrades. A submodule would need a separately hosted fork.
+We chose a squashed subtree over a submodule for four reasons. It matches the architecture seed layout (`fork/codex-rs/...` at the time, now `engine/codex-rs/...`, beside `desktop/`). It keeps one repository, so we don't host a separate fork. It keeps upstream history out of Inquello history. And it still supports upgrades. A submodule would need a separately hosted fork.
 
 **Upgrade command** (for a later, deliberately selected cut):
 
 ```sh
-git subtree pull --prefix=fork --squash https://github.com/openai/codex <new-tag>
+git subtree pull --prefix=engine --squash https://github.com/openai/codex <new-tag>
 ```
 
-### Checking that `fork/` is unmodified upstream
+### Directory rename (`fork/` to `engine/`, 2026-10-28)
+
+The owner renamed `fork/` to `engine/` so the directory says what it holds: Inquello's modified copy of Codex. The rename commit moves the files only; their content and the tree hash `307e4fa207fe563a11f3f7af09cee6fccd2d8376` are unchanged.
+
+`git subtree` finds the previous import by searching commit messages for `git-subtree-dir: <prefix>`, and the original squash commit says `fork`. So a marker commit follows the rename, titled "Rejoin engine/ subtree after rename from fork/". It is an empty merge commit whose second parent is the squash commit `86c177429bbc13bc689650667d2ac9dca5e716cc`, with these trailers:
+
+```text
+git-subtree-dir: engine
+git-subtree-mainline: <the rename commit>
+git-subtree-split: 360319d8dee62d87e2d59fc0c21805d79519cfed
+```
+
+git-subtree reads a commit carrying `git-subtree-mainline` as a rejoin and uses its second parent as the latest squash. So `git subtree pull --prefix=engine --squash` merges against the original squash commit exactly as it would have under `fork/`. The merge rule above keeps both commits in `main`'s history.
+
+Earlier records (the Story 1.1–1.3 specs, the planning documents and "Build verification" below) still say `fork/`. They describe paths as they were at the time.
+
+### Checking that `engine/` matches the imported cut
 
 Run these from a fresh clone of this branch:
 
@@ -49,7 +67,8 @@ Run these from a fresh clone of this branch:
 git log -1 --format=%B 86c177429bbc13bc689650667d2ac9dca5e716cc     # shows git-subtree-split: 360319d8dee62d87e2d59fc0c21805d79519cfed
 git rev-parse 86c177429bbc13bc689650667d2ac9dca5e716cc^{tree}         # 307e4fa207fe563a11f3f7af09cee6fccd2d8376
 git rev-parse 5aceac53db54c6f1a4413a7dc909b38b8dfde345:fork           # must print the same tree hash (fork/ as imported)
-git status --porcelain -- fork                                        # must print nothing (no uncommitted edits, e.g. an un-restored Cargo.lock)
+git rev-parse HEAD:engine                                             # same hash while engine/ is unpatched
+git status --porcelain -- engine                                      # must print nothing (no uncommitted edits, e.g. an un-restored Cargo.lock)
 git fetch https://github.com/openai/codex refs/tags/rust-v0.165.0
 git rev-parse FETCH_HEAD                                              # tag object: e374836b2728d9b7aa981c2902649e640a2edaa8
 git rev-parse FETCH_HEAD^{commit} FETCH_HEAD^{tree}                   # 360319d8dee62d87e2d59fc0c21805d79519cfed and 307e4fa207fe563a11f3f7af09cee6fccd2d8376
@@ -57,7 +76,7 @@ git rev-parse FETCH_HEAD^{commit} FETCH_HEAD^{tree}                   # 360319d8
 
 At import, all three tree hashes matched (`307e4fa207fe563a11f3f7af09cee6fccd2d8376`): the squash commit tree, `fork/` in the import merge commit, and the upstream commit's tree. So `fork/` is git tree-identical to upstream at the cut. "Tree-identical" means the committed content: this repository runs with `core.autocrlf=true` (set in the system gitconfig), so the files under `fork/` that the builds below used had CRLF line endings in the working copy.
 
-Later stories may patch `fork/` on purpose. To review those patches against the imported cut, run `git diff 5aceac53db54c6f1a4413a7dc909b38b8dfde345 HEAD -- fork`.
+Later stories may patch `engine/` on purpose. To review those patches against the imported cut, run `git diff 5aceac53db54c6f1a4413a7dc909b38b8dfde345:fork HEAD:engine`.
 
 ## Toolchain setup (Windows, everything on D:)
 
@@ -88,7 +107,7 @@ if ($Actual -ne $Expected) { throw "rustup-init.exe SHA-256 mismatch: got $Actua
 & "$T\downloads\rustup-init.exe" -y --default-toolchain none --profile minimal
 if ($LASTEXITCODE -ne 0) { throw "rustup-init failed ($LASTEXITCODE)" }
 $env:Path = "$T\cargo\bin;$env:Path"   # rustup-init also adds this to the user PATH for future shells
-Push-Location "$Repo\fork\codex-rs"
+Push-Location "$Repo\engine\codex-rs"
 rustc --version                        # rust-toolchain.toml auto-installs 1.99.1 + clippy, rustfmt, rust-src
 if ($LASTEXITCODE -ne 0) { throw "rustc failed ($LASTEXITCODE)" }
 Pop-Location
@@ -102,7 +121,7 @@ if (-not $PnpmSrc.StartsWith("$T\npm-global", [StringComparison]::OrdinalIgnoreC
 pnpm --version                         # expected 10.34.5
 
 # 3. Rust build (see "Build verification" for results).
-Push-Location "$Repo\fork\codex-rs"
+Push-Location "$Repo\engine\codex-rs"
 cargo build -j 4 -p codex-cli -p codex-app-server
 $code = $LASTEXITCODE
 git checkout -- Cargo.lock             # discard cargo's workspace-version rewrite (deviation 4)
@@ -110,7 +129,7 @@ if ($code -ne 0) { throw "cargo build failed ($code)" }
 Pop-Location
 
 # 4. TypeScript install and SDK build.
-Push-Location "$Repo\fork"
+Push-Location "$Repo\engine"
 pnpm install --frozen-lockfile --store-dir "$T\pnpm-store" --cache-dir "$T\pnpm-cache"
 if ($LASTEXITCODE -ne 0) { throw "pnpm install failed ($LASTEXITCODE)" }
 pnpm --filter @openai/codex-sdk build
@@ -123,7 +142,7 @@ In the original run on 2026-10-28 these steps ran as separate commands rather th
 Recorded installs:
 
 - rustup-init SHA-256 `00f139da614dced87d3c3d4121c43eebdac3c1bf8a5ee86b9d80dfd71c8d70fd`, which matches the official `.sha256`. It installed rustup 1.29.2 (d8c92c676 2026-10-21).
-- The toolchain is `1.99.1-x86_64-pc-windows-msvc`, selected by the override in `fork/codex-rs/rust-toolchain.toml`. Components: cargo, clippy, rust-src, rust-std, rustc, rustfmt.
+- The toolchain is `1.99.1-x86_64-pc-windows-msvc`, selected by the override in `engine/codex-rs/rust-toolchain.toml`. Components: cargo, clippy, rust-src, rust-std, rustc, rustfmt.
 
 ## Observed versions vs planned stack
 

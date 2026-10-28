@@ -57,17 +57,17 @@
       "citedIn": "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/.working/current-docs.md"
     },
     {
-      "source": "fork/codex-rs/cli/src/main.rs:176",
+      "source": "engine/codex-rs/cli/src/main.rs:176",
       "context": "CLI help for the `codex app-server` subcommand at the fork cut.",
       "quote": "[experimental] Run the app server or related tooling."
     },
     {
-      "source": "fork/codex-rs/cli/src/main.rs:647",
+      "source": "engine/codex-rs/cli/src/main.rs:647",
       "context": "CLI help for `codex app-server generate-ts`, which produces desktop/src/protocol/generated.",
       "quote": "[experimental] Generate TypeScript bindings for the app server protocol."
     },
     {
-      "source": "fork/codex-rs/app-server-daemon/README.md:3",
+      "source": "engine/codex-rs/app-server-daemon/README.md:3",
       "context": "App-server daemon used by remote-management clients; not used by the desktop.",
       "quote": "`codex-app-server-daemon` is experimental and its lifecycle contract may change while the remote-management flow is still being developed."
     }

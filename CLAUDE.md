@@ -9,6 +9,6 @@
 
 ## Repository rules
 
-- `fork/` is a squashed git subtree of public `openai/codex` at `rust-v0.165.0` (see `FORK-CUT.md`). Do not edit files under `fork/` unless a story explicitly requires it.
+- `engine/` is Inquello's own fork of public `openai/codex`, imported at `rust-v0.165.0` as a squashed git subtree (see `FORK-CUT.md`; named `fork/` before 2026-10-28). Do not edit files under `engine/` unless a story explicitly requires it.
 - **Merge pull requests with a true merge commit, never squash or rebase.** `git subtree pull` needs the subtree split commit to stay in `main`'s history.
-- `fork/codex-rs/target` is not committed. Rebuild `codex-cli` and `codex-app-server` before running desktop tests or the smoke run.
+- `engine/codex-rs/target` is not committed. Rebuild `codex-cli` and `codex-app-server` before running desktop tests or the smoke run.

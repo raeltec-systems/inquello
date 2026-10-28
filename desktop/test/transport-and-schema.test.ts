@@ -30,7 +30,7 @@ describe('protocol schema stamp', () => {
   it('records the runtime version and fork tree hash', () => {
     expect(stamp.runtimeVersion).toMatch(/^\d+\.\d+\.\d+/);
     expect(stamp.forkTreeHash).toMatch(/^[0-9a-f]{40}$/);
-    const forkTree = execFileSync('git', ['rev-parse', 'HEAD:fork'], { cwd: path.resolve(desktop, '..'), encoding: 'utf8' }).trim();
+    const forkTree = execFileSync('git', ['rev-parse', 'HEAD:engine'], { cwd: path.resolve(desktop, '..'), encoding: 'utf8' }).trim();
     expect(stamp.forkTreeHash).toBe(forkTree);
     expect(stamp.experimentalApi).toBe(false);
   });
@@ -63,7 +63,7 @@ describe('transport evidence', () => {
   it('records the upstream experimental wording with citations', () => {
     const wording = evidence.upstreamWording as Array<{ source: string; quote?: string; summary?: string }>;
     expect(wording.some((entry) => entry.source.startsWith('https://') && /experimental/.test(entry.quote ?? ''))).toBe(true);
-    expect(wording.some((entry) => entry.source === 'fork/codex-rs/cli/src/main.rs:176')).toBe(true);
+    expect(wording.some((entry) => entry.source === 'engine/codex-rs/cli/src/main.rs:176')).toBe(true);
     for (const entry of wording) expect(entry.quote ?? entry.summary).toBeTruthy();
   });
 

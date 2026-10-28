@@ -2,8 +2,8 @@
  * Locates the `codex-app-server` binary.
  *
  * Order: `INQUELLO_APP_SERVER` override, then the packaged copy under
- * `process.resourcesPath/bin`, then (unpackaged) the fork's dev build in
- * `fork/codex-rs/target/debug`. Installer building is out of scope here; the
+ * `process.resourcesPath/bin`, then (unpackaged) the engine's dev build in
+ * `engine/codex-rs/target/debug`. Installer building is out of scope here; the
  * packaged path is what a later packaging step must populate.
  */
 import fs from 'node:fs';
@@ -54,7 +54,7 @@ export function resolveAppServerBinary(options: ResolveBinaryOptions): ResolvedB
     return { path: packaged, source: 'packaged' };
   }
 
-  const dev = path.resolve(options.appPath, '..', 'fork', 'codex-rs', 'target', 'debug', name);
+  const dev = path.resolve(options.appPath, '..', 'engine', 'codex-rs', 'target', 'debug', name);
   if (!exists(dev)) {
     throw new BinaryNotFoundError(
       `dev app-server binary is missing: ${dev} (build it with cargo build -j 4 -p codex-app-server, see FORK-CUT.md, or set ${APP_SERVER_OVERRIDE_ENV})`,

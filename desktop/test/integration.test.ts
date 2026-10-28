@@ -1,5 +1,5 @@
 /**
- * Runs the real `codex-app-server` from the fork build with a temporary
+ * Runs the real `codex-app-server` from the engine build with a temporary
  * CODEX_HOME: handshake, version check against the schema stamp, clean stop.
  * No login, credentials or model calls are involved.
  */

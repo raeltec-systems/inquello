@@ -57,11 +57,11 @@ describe('resolveAppServerBinary', () => {
     expect(() => resolveAppServerBinary({ ...base, isPackaged: true, exists: () => false })).toThrow(BinaryNotFoundError);
   });
 
-  it('uses the fork dev build when unpackaged', () => {
-    const expected = path.resolve('/repo/fork/codex-rs/target/debug/codex-app-server.exe');
+  it('uses the engine dev build when unpackaged', () => {
+    const expected = path.resolve('/repo/engine/codex-rs/target/debug/codex-app-server.exe');
     expect(resolveAppServerBinary({ ...base, exists: (candidate) => candidate === expected })).toEqual({ path: expected, source: 'dev' });
     expect(resolveAppServerBinary({ ...base, platform: 'linux', exists: () => true }).path).toBe(
-      path.resolve('/repo/fork/codex-rs/target/debug/codex-app-server'),
+      path.resolve('/repo/engine/codex-rs/target/debug/codex-app-server'),
     );
     expect(() => resolveAppServerBinary({ ...base, exists: () => false })).toThrow(/cargo build/);
   });

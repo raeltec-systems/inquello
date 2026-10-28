@@ -1,4 +1,4 @@
-// Regenerates the app-server protocol bindings from the fork build and stamps them.
+// Regenerates the app-server protocol bindings from the engine build and stamps them.
 //
 // Output:
 //   src/protocol/generated/   `codex app-server generate-ts` output, unmodified
@@ -8,7 +8,7 @@
 // version during the handshake (it refuses a mismatch). The output is fully
 // deterministic: no timestamps, sorted hashing, LF line endings.
 //
-// Binaries default to the dev build in fork/codex-rs/target/debug. Override with
+// Binaries default to the dev build in engine/codex-rs/target/debug. Override with
 // INQUELLO_CODEX_CLI (the `codex` CLI that has `app-server generate-ts`) and
 // INQUELLO_APP_SERVER (the `codex-app-server` binary the desktop runs).
 import { execFileSync } from 'node:child_process';
@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 const desktopDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const repoRoot = path.resolve(desktopDir, '..');
 const exe = process.platform === 'win32' ? '.exe' : '';
-const devTargetDir = path.join(repoRoot, 'fork', 'codex-rs', 'target', 'debug');
+const devTargetDir = path.join(repoRoot, 'engine', 'codex-rs', 'target', 'debug');
 const codexCli = process.env.INQUELLO_CODEX_CLI || path.join(devTargetDir, `codex${exe}`);
 const appServer = process.env.INQUELLO_APP_SERVER || path.join(devTargetDir, `codex-app-server${exe}`);
 
@@ -39,7 +39,7 @@ function run(file, args, options = {}) {
 }
 
 function binaryVersion(binary, expectedName) {
-  if (!fs.existsSync(binary)) fail(`binary not found: ${binary} (build the fork first, see FORK-CUT.md)`);
+  if (!fs.existsSync(binary)) fail(`binary not found: ${binary} (build engine/codex-rs first, see FORK-CUT.md)`);
   const output = run(binary, ['--version']);
   const match = /^(\S+) (\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)$/.exec(output);
   if (!match || match[1] !== expectedName) fail(`unexpected --version output from ${binary}: ${JSON.stringify(output)}`);
@@ -56,10 +56,10 @@ function listFiles(dir, base = dir) {
   return out.sort();
 }
 
-// 1. Identify the fork tree. A dirty fork/ would make the tree hash lie, so refuse.
-const forkStatus = run('git', ['status', '--porcelain', '--', 'fork'], { cwd: repoRoot });
-if (forkStatus !== '') fail(`fork/ has uncommitted changes; restore them first (e.g. git checkout -- fork/codex-rs/Cargo.lock):\n${forkStatus}`);
-const forkTreeHash = run('git', ['rev-parse', 'HEAD:fork'], { cwd: repoRoot });
+// 1. Identify the engine tree. A dirty engine/ would make the tree hash lie, so refuse.
+const forkStatus = run('git', ['status', '--porcelain', '--', 'engine'], { cwd: repoRoot });
+if (forkStatus !== '') fail(`engine/ has uncommitted changes; restore them first (e.g. git checkout -- engine/codex-rs/Cargo.lock):\n${forkStatus}`);
+const forkTreeHash = run('git', ['rev-parse', 'HEAD:engine'], { cwd: repoRoot });
 
 // 2. The generator and the runtime must come from the same version.
 const cliVersion = binaryVersion(codexCli, 'codex-cli');
