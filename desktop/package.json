@@ -1,0 +1,33 @@
+{
+  "name": "inquello-desktop",
+  "productName": "Inquello",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Inquello desktop: Electron main process that owns the Codex app-server runtime over stdio.",
+  "license": "UNLICENSED",
+  "main": "dist/main/main.js",
+  "packageManager": "pnpm@10.34.5",
+  "engines": {
+    "node": ">=24",
+    "pnpm": ">=10.34.5"
+  },
+  "scripts": {
+    "postinstall": "node scripts/install-electron.mjs",
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run --configLoader runner",
+    "generate:protocol": "node scripts/generate-protocol.mjs",
+    "smoke": "pnpm run build && electron . --smoke"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "electron": "45.0.0",
+    "typescript": "5.9.2",
+    "vite": "8.3.5",
+    "vitest": "5.0.5"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron"
+    ]
+  }
+}

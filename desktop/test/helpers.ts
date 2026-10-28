@@ -1,0 +1,100 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+import { AppServerRuntime, type AppServerRuntimeOptions, type Logger, type RuntimeState } from '../src/main/runtime';
+
+export const FAKE_SERVER = path.join(__dirname, 'fixtures', 'fake-app-server.mjs');
+
+export interface RecordingLogger extends Logger {
+  messages: string[];
+}
+
+export function recordingLogger(): RecordingLogger {
+  const messages: string[] = [];
+  return {
+    messages,
+    info: (message) => messages.push(`info: ${message}`),
+    warn: (message) => messages.push(`warn: ${message}`),
+    error: (message) => messages.push(`error: ${message}`),
+  };
+}
+
+const createdDirs: string[] = [];
+
+export function tempDir(prefix: string): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), `inquello-test-${prefix}-`));
+  createdDirs.push(dir);
+  return dir;
+}
+
+/** Removes temp dirs created so far; call only after their children have exited. */
+export function removeTempDirs(): void {
+  for (const dir of createdDirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+}
+
+export interface FakeRuntime {
+  runtime: AppServerRuntime;
+  logger: RecordingLogger;
+  states: RuntimeState[];
+  recordPath: string;
+  stderrLogPath: string;
+  /** Every stdin line the fake received, parsed. */
+  received(): Array<Record<string, unknown>>;
+  argv(): string[];
+  /** True once the fake recorded stdin EOF. */
+  sawEof(): boolean;
+}
+
+export function fakeRuntime(
+  fakeEnv: Record<string, string>,
+  overrides: Partial<AppServerRuntimeOptions> = {},
+): FakeRuntime {
+  const dir = tempDir('fake');
+  const recordPath = path.join(dir, 'record.jsonl');
+  const stderrLogPath = path.join(dir, 'logs', 'app-server-stderr.log');
+  const logger = recordingLogger();
+  const runtime = new AppServerRuntime({
+    command: process.execPath,
+    commandArgsPrefix: [FAKE_SERVER],
+    env: { ...process.env, FAKE_RECORD: recordPath, ...fakeEnv },
+    clientInfo: { name: 'inquello_desktop', title: 'Inquello', version: '0.0.0-test' },
+    schemaStamp: { runtimeVersion: '0.165.0' },
+    stderrLogPath,
+    stopGraceMs: 2_000,
+    handshakeTimeoutMs: 10_000,
+    logger,
+    ...overrides,
+  });
+  const states: RuntimeState[] = [];
+  runtime.on('state', ({ state }) => states.push(state));
+  const entries = () =>
+    fs.existsSync(recordPath)
+      ? fs
+          .readFileSync(recordPath, 'utf8')
+          .split('\n')
+          .filter(Boolean)
+          .map((line) => JSON.parse(line) as Record<string, unknown>)
+      : [];
+  return {
+    runtime,
+    logger,
+    states,
+    recordPath,
+    stderrLogPath,
+    received: () =>
+      entries()
+        .filter((entry) => typeof entry.line === 'string')
+        .map((entry) => JSON.parse(entry.line as string) as Record<string, unknown>),
+    argv: () => (entries().find((entry) => Array.isArray(entry.argv))?.argv as string[]) ?? [],
+    sawEof: () => entries().some((entry) => entry.eof === true),
+  };
+}
+
+export async function waitFor(predicate: () => boolean, timeoutMs = 5_000, label = 'condition'): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!predicate()) {
+    if (Date.now() > deadline) throw new Error(`timed out waiting for ${label}`);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+}
