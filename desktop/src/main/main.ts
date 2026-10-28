@@ -2,21 +2,39 @@
  * Inquello desktop main process.
  *
  * Owns the `codex-app-server` runtime as a stdio child: starts it once Electron
- * is ready and stops it (stdin EOF, bounded grace) before quitting. Opens one
- * sandboxed, context-isolated window with no preload, IPC or Node access.
+ * is ready and stops it (stdin EOF, bounded grace) before quitting.
+ *
+ * Renderer isolation (AD-5): every window is sandboxed and context-isolated
+ * with no Node integration, loads only `inquello://app/` (served from
+ * `static/`), and reaches main only through the named operations of the
+ * self-contained preload. Navigation, window, webview, permission and request
+ * policies apply to every `webContents` through `web-contents-created`.
  *
  * `--smoke` runs headless: it prints the handshake as one JSON line on stdout,
- * quits, prints the runtime's exit as a second JSON line, and exits 0 only if
- * the handshake and version check passed and the runtime exited 0 on its own.
+ * then probes the live renderer and prints a `renderer-privileges` line, quits,
+ * prints the runtime's exit as a final JSON line, and exits 0 only if the
+ * handshake and version check passed, the renderer showed no unexpected
+ * privilege, and the runtime exited 0 on its own.
  */
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, ipcMain, protocol, session, type WebContents } from 'electron';
 
 import schemaStamp from '../protocol/schema-stamp.json';
 import { AppServerRuntime, consoleLogger, resolveAppServerBinary, type ExitInfo } from './runtime';
+import { APP_SCHEME_PRIVILEGES, handleAppProtocol } from './security/app-protocol';
+import { createOperations, registerOperations } from './security/operations';
+import {
+  APP_ENTRY_URL,
+  applyContentsPolicy,
+  applySessionPolicy,
+  secureWebPreferences,
+  type BlockedKind,
+  type PolicyOptions,
+} from './security/policy';
+import { probeRenderer } from './smoke-probe';
 
 const smoke = process.argv.includes('--smoke');
 const logger = consoleLogger;
@@ -24,6 +42,11 @@ const logger = consoleLogger;
 let runtime: AppServerRuntime | undefined;
 let mainWindow: BrowserWindow | undefined;
 let handshakeOk = false;
+let privilegesOk = false;
+/** `webContents` ids main created for app windows; the only trusted operation senders. */
+const trustedWebContentsIds = new Set<number>();
+const blocked: Array<{ kind: BlockedKind; url: string }> = [];
+const policyOptions: PolicyOptions = { logger, onBlocked: (kind, url) => blocked.push({ kind, url }) };
 let quitting = false;
 let smokeCodexHome: string | undefined;
 
@@ -37,6 +60,14 @@ if (smoke) {
 
 // Every renderer is sandboxed; must be called before `ready`.
 app.enableSandbox();
+// The app scheme must be privileged before `ready`.
+protocol.registerSchemesAsPrivileged([APP_SCHEME_PRIVILEGES]);
+
+// Every webContents, including ones created later, gets the boundary policy.
+app.on('web-contents-created', (_event, contents) => {
+  applyContentsPolicy(contents, policyOptions);
+  applySessionPolicy(contents.session, policyOptions);
+});
 
 function createWindow(): BrowserWindow {
   const window = new BrowserWindow({
@@ -44,17 +75,12 @@ function createWindow(): BrowserWindow {
     height: 800,
     show: !smoke,
     title: 'Inquello',
-    webPreferences: {
-      contextIsolation: true,
-      sandbox: true,
-      nodeIntegration: false,
-      nodeIntegrationInWorker: false,
-      webviewTag: false,
-    },
+    webPreferences: secureWebPreferences(path.join(__dirname, '..', 'preload', 'preload.js')),
   });
-  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  window.webContents.on('will-navigate', (event) => event.preventDefault());
-  void window.loadFile(path.join(app.getAppPath(), 'static', 'index.html'));
+  const id = window.webContents.id;
+  trustedWebContentsIds.add(id);
+  window.webContents.once('destroyed', () => trustedWebContentsIds.delete(id));
+  void window.loadURL(APP_ENTRY_URL);
   return window;
 }
 
@@ -99,9 +125,16 @@ async function startRuntime(): Promise<void> {
   }
 }
 
+async function runSmokeProbe(contents: WebContents): Promise<void> {
+  const report = await probeRenderer(contents, blocked, schemaStamp.runtimeVersion);
+  privilegesOk = report.ok;
+  process.stdout.write(`${JSON.stringify({ event: 'renderer-privileges', ...report })}\n`);
+  if (!report.ok) logger.error(`renderer privilege probe failed: ${report.failures.join('; ')}`);
+}
+
 function exitCodeFor(exit: ExitInfo | undefined): number {
   if (!smoke) return 0;
-  return handshakeOk && exit !== undefined && exit.exitCode === 0 && !exit.killed ? 0 : 1;
+  return handshakeOk && privilegesOk && exit !== undefined && exit.exitCode === 0 && !exit.killed ? 0 : 1;
 }
 
 app.on('before-quit', (event) => {
@@ -134,6 +167,13 @@ app.on('before-quit', (event) => {
 app.on('window-all-closed', () => app.quit());
 
 void app.whenReady().then(async () => {
+  applySessionPolicy(session.defaultSession, policyOptions);
+  handleAppProtocol(protocol, path.join(app.getAppPath(), 'static'), logger);
+  registerOperations(
+    ipcMain,
+    createOperations({ runtimeState: () => runtime?.state ?? 'stopped', runtimeVersion: schemaStamp.runtimeVersion }),
+    { trustedWebContentsIds, logger },
+  );
   mainWindow = createWindow();
   try {
     await startRuntime();
@@ -142,5 +182,12 @@ void app.whenReady().then(async () => {
     if (smoke) app.quit();
     return;
   }
-  if (smoke) app.quit();
+  if (smoke) {
+    try {
+      await runSmokeProbe(mainWindow.webContents);
+    } catch (error) {
+      logger.error(`renderer privilege probe did not run: ${(error as Error).message}`);
+    }
+    app.quit();
+  }
 });
