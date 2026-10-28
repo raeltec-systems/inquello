@@ -3,13 +3,35 @@
  * decorative and one informative icon, and a visually hidden span in each of
  * the five IBM Plex faces. Story 1.6: every primitive in each state, each in
  * a `data-contrast` hook, with the rendered contrast pairs declared on the
- * root in `data-contrast-pairs`. Nothing here performs an operation.
+ * root in `data-contrast-pairs`. Story 1.7: Avatar, Badge, SegmentedControl,
+ * Tabs, Menu (closed for the focus probe, and open for its item pairs) and
+ * every StatusChip state. Nothing here performs an operation.
  */
 import type { ReactElement, ReactNode } from 'react';
 
 import { CONTRAST_PAIRS } from './design/contrast';
 import { Icon } from './icons/Icon';
-import { Button, Checkbox, CheckboxGroup, IconButton, RadioGroup, Switch, TextField, type ButtonVariant } from './primitives';
+import {
+  Avatar,
+  Badge,
+  Button,
+  Checkbox,
+  CheckboxGroup,
+  IconButton,
+  Menu,
+  RadioGroup,
+  SegmentedControl,
+  SOURCE_STATUSES,
+  StatusChip,
+  Switch,
+  Tab,
+  TabList,
+  TabPanel,
+  Tabs,
+  TextField,
+  type ButtonVariant,
+  type MenuEntry,
+} from './primitives';
 
 const FACES = [
   ['sans', 400],
@@ -20,6 +42,21 @@ const FACES = [
 ] as const;
 
 const BUTTON_VARIANTS: readonly ButtonVariant[] = ['primary', 'secondary', 'quiet', 'ghost'];
+
+const MENU_ITEMS: readonly MenuEntry[] = [
+  { label: 'Copy reference', description: 'Copies the item identifier.' },
+  { kind: 'checkbox', label: 'Show sources', checked: true },
+  {
+    kind: 'radio',
+    label: 'Sort by',
+    value: 'amount',
+    options: [
+      { value: 'amount', label: 'Amount' },
+      { value: 'date', label: 'Date' },
+    ],
+  },
+  { label: 'Share link', disabledReason: 'Sharing arrives later' },
+];
 
 /** The pairs the probe re-reads from computed styles. */
 export const RENDERED_PAIRS = CONTRAST_PAIRS.filter((pair) => pair.render !== null).map(({ id, kind, render }) => ({ id, kind, render }));
@@ -160,6 +197,90 @@ export function Specimen(): ReactElement {
             <Checkbox label="Workbook" />
             <Checkbox label="Share link" disabledReason="Sharing arrives later" />
           </CheckboxGroup>
+        </Hook>
+      </Section>
+
+      <Section title="Avatar">
+        <Hook name="avatar-blue">
+          <Avatar name="Dana Osei" initials="DO" />
+        </Hook>
+        <Hook name="avatar-green">
+          <Avatar name="Mia Laine" initials="ML" tone="green" />
+        </Hook>
+        <Hook name="avatar-amber">
+          <Avatar name="Ravi Shah" initials="RS" tone="amber" size={32} />
+        </Hook>
+        <Hook name="avatar-decided">
+          <Avatar name="Dana Osei" initials="DO" decided={{ recordedIdentity: 'Dana Osei' }} />
+        </Hook>
+        <Hook name="avatar-agent">
+          <Avatar kind="agent" size={20} />
+          <Avatar kind="agent" />
+          <Avatar kind="agent" size={32} />
+        </Hook>
+      </Section>
+
+      <Section title="Badge">
+        <Hook name="badge-attention">
+          <Badge count={3} label="items need evidence" />
+        </Hook>
+        <Hook name="badge-neutral">
+          <Badge count={12} label="open items" tone="neutral" />
+        </Hook>
+        <Hook name="badge-accent">
+          <Badge count={2} label="suggestions" tone="accent" />
+        </Hook>
+      </Section>
+
+      <Section title="SegmentedControl">
+        <Hook name="segmented">
+          <SegmentedControl
+            label="Artifact view"
+            defaultValue="summary"
+            options={[
+              { value: 'summary', label: 'Summary' },
+              { value: 'items', label: 'Reconciling items' },
+            ]}
+          />
+        </Hook>
+      </Section>
+
+      <Section title="Tabs">
+        <Hook name="tabs">
+          <Tabs defaultValue="changes">
+            <TabList label="Artifact views">
+              <Tab value="changes" count={3}>
+                Changes
+              </Tab>
+              <Tab value="preview">Preview</Tab>
+              <Tab value="summary" count={12}>
+                Summary
+              </Tab>
+            </TabList>
+            <TabPanel value="changes">Three proposed changes.</TabPanel>
+            <TabPanel value="preview">Preview of the workbook.</TabPanel>
+            <TabPanel value="summary">Twelve reconciling items.</TabPanel>
+          </Tabs>
+        </Hook>
+      </Section>
+
+      <Section title="Menu">
+        <Hook name="menu-trigger">
+          <Menu label="Item actions" items={MENU_ITEMS} />
+        </Hook>
+        <Hook name="menu-open">
+          <Menu label="View options" heading="This item" items={MENU_ITEMS} defaultOpen />
+        </Hook>
+      </Section>
+
+      <Section title="StatusChip">
+        {SOURCE_STATUSES.map((status) => (
+          <Hook key={status} name={`status-${status}`}>
+            <StatusChip status={status} />
+          </Hook>
+        ))}
+        <Hook name="status-other">
+          <StatusChip status="unlinked" label="Thread unlinked" />
         </Hook>
       </Section>
 

@@ -1,5 +1,5 @@
 /**
- * Story 1.6: contrast for every primitive × state, computed from tokens.
+ * Stories 1.6 and 1.7: contrast for every primitive × state, computed from tokens.
  *
  * Fails below 4.5:1 (text) or 3:1 (non-text), naming the pair and state.
  * Writes `evidence/contrast-primitives.json` when it is missing or when
@@ -30,10 +30,10 @@ function evidence(): string {
   const results = computeTokenContrast();
   const document = {
     kind: 'primitive-contrast-evidence',
-    story: '1.6',
+    story: '1.6, 1.7',
     source: 'src/renderer/design/contrast.ts (CONTRAST_PAIRS) over src/renderer/design/tokens.ts',
     method: 'WCAG 2.2 relative luminance; ratios unrounded. Text needs 4.5:1, non-text indicators and boundaries 3:1.',
-    rendered: 'pnpm smoke re-reads every pair whose "rendered" is "static" or "focus" from computed styles in Chromium and prints the ratios in its design report; "token-only" pairs (hover, placeholder, sidebar placements) are recorded here only.',
+    rendered: 'pnpm smoke re-reads every pair whose "rendered" is "static" or "focus" from computed styles in Chromium and prints the ratios in its design report; "token-only" pairs (hover, placeholder, sidebar placements, the agent symbol image, focus inside an open menu) are recorded here only.',
     thresholds: CONTRAST_THRESHOLDS,
     summary: {
       pairs: results.length,
@@ -112,6 +112,29 @@ describe('primitive contrast pairs', () => {
       expect(pairs.length, `${primitive} ${variant} ${state}`).toBeGreaterThan(0);
       for (const entry of pairs) expect(entry.foreground, entry.id).toBe('ink-600');
     }
+  });
+
+  it('covers the Story 1.7 primitives, with focus on every keyboard composite', () => {
+    const states = (primitive: string) => new Set(CONTRAST_PAIRS.filter((entry) => entry.primitive === primitive).map((entry) => entry.state));
+    for (const primitive of ['Avatar', 'Badge', 'SegmentedControl', 'Tabs', 'Menu', 'StatusChip'] as const) {
+      expect(states(primitive).size, primitive).toBeGreaterThan(0);
+    }
+    for (const primitive of ['SegmentedControl', 'Tabs', 'Menu'] as const) {
+      expect([...states(primitive)], primitive).toContain('focus-visible');
+    }
+    expect([...states('Tabs')]).toEqual(expect.arrayContaining(['selected', 'unselected', 'hover']));
+    expect([...states('SegmentedControl')]).toEqual(expect.arrayContaining(['selected', 'unselected', 'hover']));
+    expect([...states('Menu')]).toEqual(expect.arrayContaining(['default', 'open', 'checked', 'disabled', 'focus']));
+    const rendered = (hook: string) => CONTRAST_PAIRS.filter((entry) => entry.render?.when === 'focus' && entry.render.hook === hook);
+    expect(rendered('tabs').length).toBeGreaterThan(0);
+    expect(rendered('menu-trigger').length).toBeGreaterThan(0);
+  });
+
+  it('measures the explicit text of all seven StatusChip source states, accepted and explained in green-800', () => {
+    const chips = CONTRAST_PAIRS.filter((entry) => entry.primitive === 'StatusChip' && entry.part === 'label');
+    expect(chips.map((entry) => entry.variant)).toEqual(['suggested', 'investigating', 'open', 'evidence', 'waiting', 'accepted', 'explained', 'other']);
+    for (const variant of ['accepted', 'explained']) expect(chips.find((entry) => entry.variant === variant)?.foreground).toBe('green-800');
+    for (const entry of chips) expect(entry.render, entry.id).not.toBeNull();
   });
 
   it('meets 4.5:1 for text and 3:1 for non-text on every pair', () => {

@@ -1,10 +1,13 @@
 /*
- * Story 1.6 primitives. Every colour is a tokens.css variable; every size,
+ * Story 1.6 and 1.7 primitives. Every colour is a tokens.css variable; every size,
  * radius and opacity is a DESIGN.md token: spacing/rounded variables, the
  * components.* values (IconButton 28px, TextField 12.5px and 3px ring, Switch
  * 28×16px/12px/8px, Choice 14px/16px, disabled opacity 0.45) and the
  * component table's literals (TextField 7×9px padding, checkbox 4px radius,
- * 9px stop square). test/primitives.test.tsx enforces this.
+ * 9px stop square). Story 1.7 adds the components.Avatar/Badge/Menu values,
+ * the component table's SegmentedControl 4×9px, Tabs 5×10px and Menu 7×9px
+ * paddings, and the popover shadow variable. test/primitives.test.tsx
+ * enforces this.
  */
 
 /* ---------- Shared ---------- */
@@ -23,7 +26,10 @@
 .iq-button:focus-visible,
 .iq-icon-button:focus-visible,
 .iq-switch:focus-visible,
-.iq-choice-input:focus-visible + .iq-choice-box {
+.iq-choice-input:focus-visible + .iq-choice-box,
+.iq-segment:focus-visible,
+.iq-tab:focus-visible,
+.iq-tab-panel:focus-visible {
   outline: 1px solid var(--blue-600);
   outline-offset: 3px;
   box-shadow: 0 0 0 3px var(--blue-150);
@@ -304,6 +310,238 @@ textarea.iq-field-control { resize: vertical; }
   font: var(--type-caption);
   color: var(--text-muted);
 }
+
+/* ---------- Story 1.7: shared ---------- */
+/* Read by assistive technology, not shown: the Badge's named count. */
+.iq-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- Avatar ---------- */
+.iq-avatar {
+  box-sizing: border-box;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--avatar-size);
+  height: var(--avatar-size);
+}
+.iq-avatar--20 { --avatar-size: var(--space-5); }
+.iq-avatar--24 { --avatar-size: var(--space-6); }
+.iq-avatar--32 { --avatar-size: var(--space-8); }
+.iq-avatar--person {
+  border-radius: 50%;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+}
+.iq-avatar--32.iq-avatar--person { font-size: 13px; }
+/* Person tones use existing tokens only; each initials pair is measured. */
+.iq-avatar--blue { background: var(--blue-150); color: var(--blue-600); }
+.iq-avatar--green { background: var(--green-150); color: var(--green-800); }
+.iq-avatar--amber { background: var(--amber-150); color: var(--amber-800); }
+.iq-avatar--decided { background: var(--green-600); color: var(--white); }
+/* The agent: the symbol alone, at components.Avatar.agentScale of the avatar size. */
+.iq-avatar-symbol {
+  display: block;
+  width: auto;
+  height: calc(var(--avatar-size) * 0.8);
+}
+
+/* ---------- Badge ---------- */
+.iq-badge {
+  position: relative;
+  box-sizing: border-box;
+  display: inline-block;
+  min-width: var(--space-4);
+  padding: 0 var(--space-1-5);
+  border-radius: 8px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+  text-align: center;
+  white-space: nowrap;
+}
+.iq-badge--attention { background: var(--amber-500); color: var(--ink-900); }
+.iq-badge--neutral { background: var(--ink-150); color: var(--text-secondary); }
+.iq-badge--accent { background: var(--blue-600); color: var(--white); }
+
+/* ---------- SegmentedControl ---------- */
+.iq-segmented {
+  display: inline-flex;
+  flex: none;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--white);
+  font: var(--type-caption);
+}
+.iq-segment {
+  position: relative;
+  margin: 0;
+  padding: 4px 9px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-weight: 400;
+  white-space: nowrap;
+  cursor: pointer;
+}
+/* Inner corners follow the 6px outer radius inside the 1px border. */
+.iq-segment:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+.iq-segment:last-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+.iq-segment:only-child { border-radius: var(--radius-sm); }
+.iq-segment[aria-checked='true'] { background: var(--ink-900); color: var(--white); font-weight: 500; }
+.iq-segment:hover:not([aria-checked='true']) { background: var(--ink-75); }
+.iq-segment:focus-visible { z-index: 1; }
+
+/* ---------- Tabs ---------- */
+.iq-tab-list {
+  display: flex;
+  gap: var(--space-0-5);
+  align-items: center;
+}
+.iq-tab {
+  position: relative;
+  display: inline-flex;
+  gap: var(--space-1-5);
+  align-items: center;
+  margin: 0;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 400;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.iq-tab[aria-selected='true'] { background: var(--action-quiet-bg); color: var(--text-primary); font-weight: 500; }
+.iq-tab:hover:not([aria-selected='true']) { background: var(--surface-hover); }
+.iq-tab:focus-visible { z-index: 1; }
+.iq-tab-count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+.iq-tab-panel {
+  padding-top: var(--space-2);
+  border-radius: var(--radius-sm);
+  font: var(--type-ui);
+  color: var(--text-secondary);
+}
+
+/* ---------- Menu ---------- */
+.iq-menu-root {
+  position: relative;
+  display: inline-flex;
+}
+/* Simple anchoring: directly below the trigger, aligned to its start. */
+.iq-menu {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 0;
+  z-index: 10;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 300px;
+  padding: var(--space-1);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-card);
+  background: var(--white);
+  box-shadow: var(--shadow-popover);
+  color: var(--text-primary);
+}
+.iq-menu-heading {
+  padding: var(--space-1-5) 9px;
+  font: var(--type-caption);
+  color: var(--text-muted);
+}
+.iq-menu-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.iq-menu-item {
+  display: flex;
+  gap: var(--space-2-5);
+  padding: 7px 9px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  outline: none;
+}
+.iq-menu-item:hover:not([aria-disabled='true']) { background: var(--ink-75); }
+/* Focus is a blue-600 edge, distinct from the checkmark that shows selection. */
+.iq-menu-item:focus {
+  outline: 1px solid var(--blue-600);
+  outline-offset: -1px;
+}
+.iq-menu-item--disabled { cursor: default; }
+.iq-menu-item--disabled .iq-menu-label { opacity: 0.45; }
+.iq-menu-check {
+  display: inline-flex;
+  flex: none;
+  width: var(--space-4);
+  padding-top: var(--space-0-5);
+  color: var(--blue-600);
+}
+.iq-menu-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+  min-width: 0;
+}
+.iq-menu-label {
+  font: var(--type-ui);
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.iq-menu-description {
+  font: var(--type-caption);
+  color: var(--text-muted);
+}
+
+/* ---------- StatusChip ---------- */
+.iq-status-chip {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  padding: 1px var(--space-1-5);
+  border: 1px solid transparent;
+  border-radius: var(--radius-chip);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.iq-status-chip--suggested { border: 1px dashed var(--status-suggested-border); background: var(--white); color: var(--status-suggested-fg); }
+.iq-status-chip--investigating { border-color: var(--status-investigating-bg); background: var(--status-investigating-bg); color: var(--status-investigating-fg); }
+.iq-status-chip--open,
+.iq-status-chip--other { border-color: var(--status-open-border); background: var(--white); color: var(--status-open-fg); }
+.iq-status-chip--evidence { border-color: var(--status-evidence-border); background: var(--status-evidence-bg); color: var(--status-evidence-fg); }
+.iq-status-chip--waiting { border-color: var(--status-evidence-border); background: var(--white); color: var(--status-evidence-fg); }
+/* DESIGN proposed AX: green-800 text (7.78:1), not the 4.47:1 source green-600. */
+.iq-status-chip--accepted,
+.iq-status-chip--explained { border-color: var(--status-accepted-border); background: var(--status-accepted-bg); color: var(--green-800); }
 
 /*
  * Reduced motion: no spin (none of these primitives pulses); the pending text

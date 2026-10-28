@@ -1,17 +1,17 @@
 {
   "kind": "primitive-contrast-evidence",
-  "story": "1.6",
+  "story": "1.6, 1.7",
   "source": "src/renderer/design/contrast.ts (CONTRAST_PAIRS) over src/renderer/design/tokens.ts",
   "method": "WCAG 2.2 relative luminance; ratios unrounded. Text needs 4.5:1, non-text indicators and boundaries 3:1.",
-  "rendered": "pnpm smoke re-reads every pair whose \"rendered\" is \"static\" or \"focus\" from computed styles in Chromium and prints the ratios in its design report; \"token-only\" pairs (hover, placeholder, sidebar placements) are recorded here only.",
+  "rendered": "pnpm smoke re-reads every pair whose \"rendered\" is \"static\" or \"focus\" from computed styles in Chromium and prints the ratios in its design report; \"token-only\" pairs (hover, placeholder, sidebar placements, the agent symbol image, focus inside an open menu) are recorded here only.",
   "thresholds": {
     "text": 4.5,
     "non-text": 3
   },
   "summary": {
-    "pairs": 91,
-    "passing": 91,
-    "rendered": 72,
+    "pairs": 141,
+    "passing": 141,
+    "rendered": 108,
     "minimum": 3.647993864961982
   },
   "pairs": [
@@ -1834,6 +1834,1006 @@
       "threshold": 3,
       "pass": true,
       "rendered": "token-only"
+    },
+    {
+      "id": "avatar.blue.default.initials",
+      "primitive": "Avatar",
+      "variant": "blue",
+      "state": "default",
+      "part": "initials",
+      "kind": "text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "blue-150",
+        "value": "#dfe7f5"
+      },
+      "ratio": 4.953954743132232,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "avatar.green.default.initials",
+      "primitive": "Avatar",
+      "variant": "green",
+      "state": "default",
+      "part": "initials",
+      "kind": "text",
+      "foreground": {
+        "token": "green-800",
+        "value": "#1e5236"
+      },
+      "adjacent": {
+        "token": "green-150",
+        "value": "#e3f1e8"
+      },
+      "ratio": 7.779916128847977,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "avatar.amber.default.initials",
+      "primitive": "Avatar",
+      "variant": "amber",
+      "state": "default",
+      "part": "initials",
+      "kind": "text",
+      "foreground": {
+        "token": "amber-800",
+        "value": "#5c4210"
+      },
+      "adjacent": {
+        "token": "amber-150",
+        "value": "#fbf0d9"
+      },
+      "ratio": 8.282443456918463,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "avatar.decided.default.initials",
+      "primitive": "Avatar",
+      "variant": "decided",
+      "state": "default",
+      "part": "initials",
+      "kind": "text",
+      "foreground": {
+        "token": "white",
+        "value": "#ffffff"
+      },
+      "adjacent": {
+        "token": "green-600",
+        "value": "#2f7a52"
+      },
+      "ratio": 5.215421473892526,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "avatar.agent.default.symbol against surface",
+      "primitive": "Avatar",
+      "variant": "agent",
+      "state": "default",
+      "part": "symbol against surface",
+      "kind": "non-text",
+      "foreground": {
+        "token": "ink-900",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 17.63359508009438,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "token-only"
+    },
+    {
+      "id": "avatar.agent.default.symbol against sidebar",
+      "primitive": "Avatar",
+      "variant": "agent",
+      "state": "default",
+      "part": "symbol against sidebar",
+      "kind": "non-text",
+      "foreground": {
+        "token": "ink-900",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "surface-sidebar",
+        "value": "#f3f4f6"
+      },
+      "ratio": 16.02303901120785,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "token-only"
+    },
+    {
+      "id": "badge.attention.default.count",
+      "primitive": "Badge",
+      "variant": "attention",
+      "state": "default",
+      "part": "count",
+      "kind": "text",
+      "foreground": {
+        "token": "ink-900",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "amber-500",
+        "value": "#c98a1b"
+      },
+      "ratio": 5.990988205183807,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "badge.neutral.default.count",
+      "primitive": "Badge",
+      "variant": "neutral",
+      "state": "default",
+      "part": "count",
+      "kind": "text",
+      "foreground": {
+        "token": "text-secondary",
+        "value": "#3d434b"
+      },
+      "adjacent": {
+        "token": "ink-150",
+        "value": "#e3e6ea"
+      },
+      "ratio": 7.976200408126589,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "badge.accent.default.count",
+      "primitive": "Badge",
+      "variant": "accent",
+      "state": "default",
+      "part": "count",
+      "kind": "text",
+      "foreground": {
+        "token": "white",
+        "value": "#ffffff"
+      },
+      "adjacent": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "ratio": 6.160732132578806,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "segmentedcontrol.segment.selected.label",
+      "primitive": "SegmentedControl",
+      "variant": "segment",
+      "state": "selected",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "white",
+        "value": "#ffffff"
+      },
+      "adjacent": {
+        "token": "ink-900",
+        "value": "#16191d"
+      },
+      "ratio": 17.63359508009438,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "segmentedcontrol.segment.selected.fill against control",
+      "primitive": "SegmentedControl",
+      "variant": "segment",
+      "state": "selected",
+      "part": "fill against control",
+      "kind": "non-text",
+      "foreground": {
+        "token": "ink-900",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "white",
+        "value": "#ffffff"
+      },
+      "ratio": 17.63359508009438,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "segmentedcontrol.segment.unselected.label",
+      "primitive": "SegmentedControl",
+      "variant": "segment",
+      "state": "unselected",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "white",
+        "value": "#ffffff"
+      },
+      "ratio": 6.078634637744844,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "segmentedcontrol.segment.hover.label",
+      "primitive": "SegmentedControl",
+      "variant": "segment",
+      "state": "hover",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "ink-75",
+        "value": "#f3f4f6"
+      },
+      "ratio": 5.523445417288306,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "token-only"
+    },
+    {
+      "id": "segmentedcontrol.any.focus-visible.focus edge against ring",
+      "primitive": "SegmentedControl",
+      "variant": "any",
+      "state": "focus-visible",
+      "part": "focus edge against ring",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "blue-150",
+        "value": "#dfe7f5"
+      },
+      "ratio": 4.953954743132232,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "focus"
+    },
+    {
+      "id": "segmentedcontrol.any.focus-visible.focus edge against surface",
+      "primitive": "SegmentedControl",
+      "variant": "any",
+      "state": "focus-visible",
+      "part": "focus edge against surface",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.160732132578806,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "focus"
+    },
+    {
+      "id": "segmentedcontrol.any.focus-visible.focus edge against sidebar",
+      "primitive": "SegmentedControl",
+      "variant": "any",
+      "state": "focus-visible",
+      "part": "focus edge against sidebar",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "surface-sidebar",
+        "value": "#f3f4f6"
+      },
+      "ratio": 5.598044576250052,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "token-only"
+    },
+    {
+      "id": "tabs.tab.selected.label",
+      "primitive": "Tabs",
+      "variant": "tab",
+      "state": "selected",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "text-primary",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "action-quiet-bg",
+        "value": "#eef0f3"
+      },
+      "ratio": 15.445078501523636,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "tabs.tab.selected.count",
+      "primitive": "Tabs",
+      "variant": "tab",
+      "state": "selected",
+      "part": "count",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "action-quiet-bg",
+        "value": "#eef0f3"
+      },
+      "ratio": 5.3242114688247275,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "tabs.tab.unselected.label",
+      "primitive": "Tabs",
+      "variant": "tab",
+      "state": "unselected",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.078634637744844,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "tabs.tab.unselected.count",
+      "primitive": "Tabs",
+      "variant": "tab",
+      "state": "unselected",
+      "part": "count",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.078634637744844,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "tabs.tab.unselected.label on sidebar",
+      "primitive": "Tabs",
+      "variant": "tab",
+      "state": "unselected",
+      "part": "label on sidebar",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "surface-sidebar",
+        "value": "#f3f4f6"
+      },
+      "ratio": 5.523445417288306,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "token-only"
+    },
+    {
+      "id": "tabs.tab.hover.label",
+      "primitive": "Tabs",
+      "variant": "tab",
+      "state": "hover",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "surface-hover",
+        "value": "#e6e8eb"
+      },
+      "ratio": 4.951735561766299,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "token-only"
+    },
+    {
+      "id": "tabs.panel.selected.panel text",
+      "primitive": "Tabs",
+      "variant": "panel",
+      "state": "selected",
+      "part": "panel text",
+      "kind": "text",
+      "foreground": {
+        "token": "text-secondary",
+        "value": "#3d434b"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 9.986295725725416,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "tabs.any.focus-visible.focus edge against ring",
+      "primitive": "Tabs",
+      "variant": "any",
+      "state": "focus-visible",
+      "part": "focus edge against ring",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "blue-150",
+        "value": "#dfe7f5"
+      },
+      "ratio": 4.953954743132232,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "focus"
+    },
+    {
+      "id": "tabs.any.focus-visible.focus edge against surface",
+      "primitive": "Tabs",
+      "variant": "any",
+      "state": "focus-visible",
+      "part": "focus edge against surface",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.160732132578806,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "focus"
+    },
+    {
+      "id": "tabs.any.focus-visible.focus edge against sidebar",
+      "primitive": "Tabs",
+      "variant": "any",
+      "state": "focus-visible",
+      "part": "focus edge against sidebar",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "surface-sidebar",
+        "value": "#f3f4f6"
+      },
+      "ratio": 5.598044576250052,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "token-only"
+    },
+    {
+      "id": "menu.trigger.default.label",
+      "primitive": "Menu",
+      "variant": "trigger",
+      "state": "default",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "text-primary",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "action-secondary-bg",
+        "value": "#ffffff"
+      },
+      "ratio": 17.63359508009438,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "menu.list.open.heading",
+      "primitive": "Menu",
+      "variant": "list",
+      "state": "open",
+      "part": "heading",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "white",
+        "value": "#ffffff"
+      },
+      "ratio": 6.078634637744844,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "menu.item.default.label",
+      "primitive": "Menu",
+      "variant": "item",
+      "state": "default",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "text-primary",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "white",
+        "value": "#ffffff"
+      },
+      "ratio": 17.63359508009438,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "menu.item.default.description",
+      "primitive": "Menu",
+      "variant": "item",
+      "state": "default",
+      "part": "description",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "white",
+        "value": "#ffffff"
+      },
+      "ratio": 6.078634637744844,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "menu.item.hover.label",
+      "primitive": "Menu",
+      "variant": "item",
+      "state": "hover",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "text-primary",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "ink-75",
+        "value": "#f3f4f6"
+      },
+      "ratio": 16.02303901120785,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "token-only"
+    },
+    {
+      "id": "menu.item.hover.description",
+      "primitive": "Menu",
+      "variant": "item",
+      "state": "hover",
+      "part": "description",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "ink-75",
+        "value": "#f3f4f6"
+      },
+      "ratio": 5.523445417288306,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "token-only"
+    },
+    {
+      "id": "menu.radio.checked.checkmark",
+      "primitive": "Menu",
+      "variant": "radio",
+      "state": "checked",
+      "part": "checkmark",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "white",
+        "value": "#ffffff"
+      },
+      "ratio": 6.160732132578806,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "menu.radio.checked hover.checkmark",
+      "primitive": "Menu",
+      "variant": "radio",
+      "state": "checked hover",
+      "part": "checkmark",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "ink-75",
+        "value": "#f3f4f6"
+      },
+      "ratio": 5.598044576250052,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "token-only"
+    },
+    {
+      "id": "menu.item.focus.focus edge against list",
+      "primitive": "Menu",
+      "variant": "item",
+      "state": "focus",
+      "part": "focus edge against list",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "white",
+        "value": "#ffffff"
+      },
+      "ratio": 6.160732132578806,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "token-only"
+    },
+    {
+      "id": "menu.item.focus.focus edge against hover fill",
+      "primitive": "Menu",
+      "variant": "item",
+      "state": "focus",
+      "part": "focus edge against hover fill",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "ink-75",
+        "value": "#f3f4f6"
+      },
+      "ratio": 5.598044576250052,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "token-only"
+    },
+    {
+      "id": "menu.any.disabled.disabled reason text",
+      "primitive": "Menu",
+      "variant": "any",
+      "state": "disabled",
+      "part": "disabled reason text",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.078634637744844,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "menu.any.focus-visible.focus edge against ring",
+      "primitive": "Menu",
+      "variant": "any",
+      "state": "focus-visible",
+      "part": "focus edge against ring",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "blue-150",
+        "value": "#dfe7f5"
+      },
+      "ratio": 4.953954743132232,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "focus"
+    },
+    {
+      "id": "menu.any.focus-visible.focus edge against surface",
+      "primitive": "Menu",
+      "variant": "any",
+      "state": "focus-visible",
+      "part": "focus edge against surface",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.160732132578806,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "focus"
+    },
+    {
+      "id": "menu.any.focus-visible.focus edge against sidebar",
+      "primitive": "Menu",
+      "variant": "any",
+      "state": "focus-visible",
+      "part": "focus edge against sidebar",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "surface-sidebar",
+        "value": "#f3f4f6"
+      },
+      "ratio": 5.598044576250052,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "token-only"
+    },
+    {
+      "id": "statuschip.suggested.default.label",
+      "primitive": "StatusChip",
+      "variant": "suggested",
+      "state": "default",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "status-suggested-fg",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "white",
+        "value": "#ffffff"
+      },
+      "ratio": 6.160732132578806,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "statuschip.investigating.default.label",
+      "primitive": "StatusChip",
+      "variant": "investigating",
+      "state": "default",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "status-investigating-fg",
+        "value": "#3d434b"
+      },
+      "adjacent": {
+        "token": "status-investigating-bg",
+        "value": "#eef0f2"
+      },
+      "ratio": 8.741159115316185,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "statuschip.open.default.label",
+      "primitive": "StatusChip",
+      "variant": "open",
+      "state": "default",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "status-open-fg",
+        "value": "#3d434b"
+      },
+      "adjacent": {
+        "token": "white",
+        "value": "#ffffff"
+      },
+      "ratio": 9.986295725725416,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "statuschip.evidence.default.label",
+      "primitive": "StatusChip",
+      "variant": "evidence",
+      "state": "default",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "status-evidence-fg",
+        "value": "#8a5a12"
+      },
+      "adjacent": {
+        "token": "status-evidence-bg",
+        "value": "#fbf0d9"
+      },
+      "ratio": 5.227643633770532,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "statuschip.waiting.default.label",
+      "primitive": "StatusChip",
+      "variant": "waiting",
+      "state": "default",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "status-evidence-fg",
+        "value": "#8a5a12"
+      },
+      "adjacent": {
+        "token": "white",
+        "value": "#ffffff"
+      },
+      "ratio": 5.912403568542949,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "statuschip.accepted.default.label",
+      "primitive": "StatusChip",
+      "variant": "accepted",
+      "state": "default",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "green-800",
+        "value": "#1e5236"
+      },
+      "adjacent": {
+        "token": "status-accepted-bg",
+        "value": "#e3f1e8"
+      },
+      "ratio": 7.779916128847977,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "statuschip.explained.default.label",
+      "primitive": "StatusChip",
+      "variant": "explained",
+      "state": "default",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "green-800",
+        "value": "#1e5236"
+      },
+      "adjacent": {
+        "token": "status-accepted-bg",
+        "value": "#e3f1e8"
+      },
+      "ratio": 7.779916128847977,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "statuschip.other.default.label",
+      "primitive": "StatusChip",
+      "variant": "other",
+      "state": "default",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "status-open-fg",
+        "value": "#3d434b"
+      },
+      "adjacent": {
+        "token": "white",
+        "value": "#ffffff"
+      },
+      "ratio": 9.986295725725416,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "statuschip.suggested.default.dashed outline against surface",
+      "primitive": "StatusChip",
+      "variant": "suggested",
+      "state": "default",
+      "part": "dashed outline against surface",
+      "kind": "non-text",
+      "foreground": {
+        "token": "status-suggested-border",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.160732132578806,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "statuschip.suggested.default.dashed outline against sidebar",
+      "primitive": "StatusChip",
+      "variant": "suggested",
+      "state": "default",
+      "part": "dashed outline against sidebar",
+      "kind": "non-text",
+      "foreground": {
+        "token": "status-suggested-border",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "surface-sidebar",
+        "value": "#f3f4f6"
+      },
+      "ratio": 5.598044576250052,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "token-only"
     }
   ],
   "exempt": [
@@ -1875,6 +2875,15 @@
     },
     {
       "primitive": "Choice",
+      "variant": "any",
+      "state": "disabled",
+      "part": "control at the .45 disabled opacity",
+      "foreground": "opacity 0.45",
+      "adjacent": "surface-app",
+      "reason": "Inactive user-interface components are exempt from WCAG 1.4.3 and 1.4.11; the disabled reason beside the control is measured as text instead."
+    },
+    {
+      "primitive": "Menu",
       "variant": "any",
       "state": "disabled",
       "part": "control at the .45 disabled opacity",
@@ -1926,6 +2935,105 @@
       "foreground": "blue-150",
       "adjacent": "surface-app",
       "reason": "DESIGN.md keeps the pale ring supplementary; the blue-600 edge is the measured focus indicator."
+    },
+    {
+      "primitive": "Avatar",
+      "variant": "person",
+      "state": "default",
+      "part": "disc against surface",
+      "foreground": "blue-150",
+      "adjacent": "surface-app",
+      "reason": "The required name is the accessible identity and the initials are measured against the disc; the disc outline itself carries no information."
+    },
+    {
+      "primitive": "Badge",
+      "variant": "attention",
+      "state": "default",
+      "part": "fill against surface",
+      "foreground": "amber-500",
+      "adjacent": "surface-app",
+      "reason": "The count text is measured against its fill and the accessible text names what is counted; the fill edge carries no further information."
+    },
+    {
+      "primitive": "SegmentedControl",
+      "variant": "control",
+      "state": "default",
+      "part": "outline",
+      "foreground": "border-strong",
+      "adjacent": "surface-app",
+      "reason": "Each segment is identified by its measured text label; the outline around the group is decorative."
+    },
+    {
+      "primitive": "Tabs",
+      "variant": "tab",
+      "state": "selected",
+      "part": "quiet fill against surface",
+      "foreground": "action-quiet-bg",
+      "adjacent": "surface-app",
+      "reason": "Selection is carried by aria-selected and by the weight-500 text-primary label against weight-400 muted labels; the pale fill is supplementary, as DESIGN.md specifies it."
+    },
+    {
+      "primitive": "Menu",
+      "variant": "list",
+      "state": "open",
+      "part": "border against surface",
+      "foreground": "border-strong",
+      "adjacent": "surface-app",
+      "reason": "The floating list is identified by its measured item text and the popover shadow; the pale border is decorative."
+    },
+    {
+      "primitive": "StatusChip",
+      "variant": "open",
+      "state": "default",
+      "part": "border and fill against surface",
+      "foreground": "status-open-border",
+      "adjacent": "surface-app",
+      "reason": "The explicit visible text names the state and is measured; the chip border and fill are supplementary."
+    },
+    {
+      "primitive": "StatusChip",
+      "variant": "investigating",
+      "state": "default",
+      "part": "border and fill against surface",
+      "foreground": "status-investigating-bg",
+      "adjacent": "surface-app",
+      "reason": "The explicit visible text names the state and is measured; the chip border and fill are supplementary."
+    },
+    {
+      "primitive": "StatusChip",
+      "variant": "evidence",
+      "state": "default",
+      "part": "border and fill against surface",
+      "foreground": "status-evidence-border",
+      "adjacent": "surface-app",
+      "reason": "The explicit visible text names the state and is measured; the chip border and fill are supplementary."
+    },
+    {
+      "primitive": "StatusChip",
+      "variant": "waiting",
+      "state": "default",
+      "part": "border and fill against surface",
+      "foreground": "status-evidence-border",
+      "adjacent": "surface-app",
+      "reason": "The explicit visible text names the state and is measured; the chip border and fill are supplementary."
+    },
+    {
+      "primitive": "StatusChip",
+      "variant": "accepted",
+      "state": "default",
+      "part": "border and fill against surface",
+      "foreground": "status-accepted-border",
+      "adjacent": "surface-app",
+      "reason": "The explicit visible text names the state and is measured; the chip border and fill are supplementary."
+    },
+    {
+      "primitive": "StatusChip",
+      "variant": "explained",
+      "state": "default",
+      "part": "border and fill against surface",
+      "foreground": "status-accepted-border",
+      "adjacent": "surface-app",
+      "reason": "The explicit visible text names the state and is measured; the chip border and fill are supplementary."
     }
   ]
 }

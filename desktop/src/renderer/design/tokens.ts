@@ -91,7 +91,7 @@ export const colors = {
   'status-evidence-fg': '#8a5a12',
   'status-evidence-border': '#ecd9ae',
   'status-accepted-bg': '#e3f1e8',
-  /** Source alias kept at its source value; StatusChip applies green-800 (Story 1.8). */
+  /** Source alias kept at its source value; StatusChip applies green-800 (Story 1.7). */
   'status-accepted-fg': '#2f7a52',
   'status-accepted-border': '#bfdcc9',
   'row-added-bg': '#f6fbf8',
@@ -176,7 +176,8 @@ export const icon = {
 } as const;
 
 /**
- * DESIGN.md `components.*` for the Story 1.6 action and input primitives, keys
+ * DESIGN.md `components.*` for the Story 1.6 action and input primitives and
+ * the Story 1.7 navigation and identity primitives, keys
  * and values unchanged (references such as `{colors.ink-600}` kept as written;
  * `resolveToken` resolves them). `test/primitives.test.tsx` holds these equal
  * to the frontmatter both ways.
@@ -232,6 +233,57 @@ export const components = {
     radioSize: '14px',
     checkboxSize: '16px',
     cardRadius: '{rounded.md}',
+  },
+  // Story 1.7 navigation and identity primitives.
+  Avatar: {
+    size: '24px',
+    personRadius: '50%',
+    agentScale: '0.8',
+    decidedBackground: '{colors.green-600}',
+    decidedForeground: '{colors.white}',
+  },
+  Badge: {
+    attentionBackground: '{colors.amber-500}',
+    attentionForeground: '{colors.ink-900}',
+    neutralBackground: '{colors.ink-150}',
+    neutralForeground: '{colors.text-secondary}',
+    accentBackground: '{colors.blue-600}',
+    accentForeground: '{colors.white}',
+    radius: '8px',
+    fontSize: '11px',
+    lineHeight: '16px',
+  },
+  SegmentedControl: {
+    background: '{colors.white}',
+    selectedBackground: '{colors.ink-900}',
+    selectedForeground: '{colors.white}',
+    foreground: '{colors.text-muted}',
+    radius: '{rounded.md}',
+  },
+  Tabs: {
+    selectedBackground: '{colors.action-quiet-bg}',
+    selectedForeground: '{colors.text-primary}',
+    foreground: '{colors.text-muted}',
+    countForeground: '{colors.text-muted}',
+    radius: '{rounded.sm}',
+  },
+  Menu: {
+    width: '300px',
+    background: '{colors.white}',
+    foreground: '{colors.text-primary}',
+    headingForeground: '{colors.text-muted}',
+    radius: '{rounded.card}',
+    shadow: '0 12px 32px rgba(16, 24, 40, 0.14)',
+  },
+  StatusChip: {
+    suggestedForeground: '{colors.status-suggested-fg}',
+    suggestedBorder: '{colors.status-suggested-border}',
+    evidenceBackground: '{colors.status-evidence-bg}',
+    evidenceForeground: '{colors.status-evidence-fg}',
+    acceptedBackground: '{colors.status-accepted-bg}',
+    acceptedForeground: '{colors.green-800}',
+    radius: '{rounded.chip}',
+    fontSize: '11px',
   },
 } as const;
 

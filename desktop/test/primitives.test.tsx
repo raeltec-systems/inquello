@@ -440,11 +440,13 @@ describe('primitives.css', () => {
 
 describe('primitive sources', () => {
   const sources = fs.readdirSync(primitivesDir).filter((file) => file.endsWith('.tsx'));
+  // Story 1.7's composites own their keyboard model (roving focus, menu dismissal); no native element provides it.
+  const composites = new Set(['SegmentedControl.tsx', 'Tabs.tsx', 'Menu.tsx']);
 
   it('add no key handling of their own and no business operations', () => {
     for (const file of sources) {
       const source = fs.readFileSync(path.join(primitivesDir, file), 'utf8');
-      expect(source, file).not.toMatch(/onKey(Down|Up|Press)|addEventListener/);
+      if (!composites.has(file)) expect(source, file).not.toMatch(/onKey(Down|Up|Press)|addEventListener/);
       expect(source, file).not.toMatch(/window\.inquello|fetch\(|ipc/);
       expect(source, file).not.toMatch(/dangerouslySetInnerHTML|innerHTML/);
     }

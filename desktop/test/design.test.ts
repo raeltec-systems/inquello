@@ -20,7 +20,14 @@ import { parse as parseYaml } from 'yaml';
 import { cssVariables, FONT_MONO, FONT_SANS, tokens } from '../src/renderer/design/tokens';
 import { Icon, type IconProps } from '../src/renderer/icons/Icon';
 import { ICON_NAMES, ICON_PATHS, type IconName } from '../src/renderer/icons/icon-paths';
-import { evaluateDesign, EXPECTED_FONT_FACES, type ContrastProbe, type DesignProbeResult, type FocusProbe } from '../src/main/smoke-probe';
+import {
+  evaluateDesign,
+  EXPECTED_FONT_FACES,
+  REQUIRED_FOCUS_HOOKS,
+  type ContrastProbe,
+  type DesignProbeResult,
+  type FocusProbe,
+} from '../src/main/smoke-probe';
 
 const desktop = path.resolve(__dirname, '..');
 const renderer = path.join(desktop, 'src', 'renderer');
@@ -278,24 +285,34 @@ describe('smoke design evaluation', () => {
     { id: 'button.any.focus-visible.focus edge against ring', kind: 'non-text', when: 'focus', hook: 'button-primary', foreground: 'rgb(47, 95, 179)', adjacent: 'rgb(223, 231, 245)', error: null },
     { id: 'textfield.any.focus-visible.focus edge against field', kind: 'non-text', when: 'focus', hook: 'text-field', foreground: 'rgb(47, 95, 179)', adjacent: 'rgb(255, 255, 255)', error: null },
   ];
+  /** The remaining required focus hooks (Story 1.7 adds the segmented control, the selected tab and the menu trigger). */
+  const otherHooks = REQUIRED_FOCUS_HOOKS.filter((hook) => hook !== 'button-primary' && hook !== 'text-field');
+  const otherContrast: ContrastProbe[] = otherHooks.map((hook) => ({
+    id: `${hook}.focus edge against ring`, kind: 'non-text', when: 'focus', hook, foreground: 'rgb(47, 95, 179)', adjacent: 'rgb(223, 231, 245)', error: null,
+  }));
   const ring = 'rgb(223, 231, 245) 0px 0px 0px 3px';
+  const outlined = (hook: string): FocusProbe => ({
+    hook, tag: 'button', focusVisible: true, indicator: { outlineStyle: 'solid', outlineWidth: '1px', outlineColor: 'rgb(47, 95, 179)', borderTopColor: 'rgb(22, 25, 29)', boxShadow: ring },
+  });
   const focus: FocusProbe[] = [
-    { hook: 'button-primary', tag: 'button', focusVisible: true, indicator: { outlineStyle: 'solid', outlineWidth: '1px', outlineColor: 'rgb(47, 95, 179)', borderTopColor: 'rgb(22, 25, 29)', boxShadow: ring } },
+    outlined('button-primary'),
     { hook: 'text-field', tag: 'input', focusVisible: true, indicator: { outlineStyle: 'none', outlineWidth: '0px', outlineColor: 'rgb(22, 25, 29)', borderTopColor: 'rgb(47, 95, 179)', boxShadow: ring } },
+    ...otherHooks.map(outlined),
   ];
   const clean: DesignProbeResult = {
     title: 'Inquello',
     fonts: loaded,
     decorativeIcon: { 'aria-hidden': 'true', role: null, 'aria-label': null },
     informativeIcon: { 'aria-hidden': null, role: 'img', 'aria-label': 'Needs evidence' },
-    contrast,
+    contrast: [...contrast, ...otherContrast],
     focus,
   };
 
   it('passes the specimen with five loaded faces, correct icon semantics, rendered contrast and visible focus', () => {
     const report = evaluateDesign(clean);
     expect(report).toMatchObject({ ok: true, failures: [] });
-    expect(report.contrast.measured).toBe(3);
+    expect(report.contrast.measured).toBe(3 + otherHooks.length);
+    expect(report.focus.map((visit) => visit.hook)).toEqual(expect.arrayContaining(['tabs', 'menu-trigger']));
     expect(report.contrast.minimum).toBeCloseTo(4.95, 2);
   });
 
@@ -310,6 +327,8 @@ describe('smoke design evaluation', () => {
     ['the specimen declares no contrast pairs', { contrast: null }],
     ['a pair could not be read', { contrast: [{ ...contrast[0]!, foreground: null, error: 'hook button-primary is not rendered' }] }],
     ['a focus hook was never reached', { focus: focus.slice(0, 1) }],
+    ['the menu trigger was never reached', { focus: focus.filter((visit) => visit.hook !== 'menu-trigger') }],
+    ['the tabs declare no focus pairs', { contrast: [...contrast, ...otherContrast.filter((pair) => pair.hook !== 'tabs')], focus: focus.filter((visit) => visit.hook !== 'tabs') }],
     ['focus is not :focus-visible', { focus: [{ ...focus[0]!, focusVisible: false }, focus[1]!] }],
     ['focus shows no ring', { focus: [{ ...focus[0]!, indicator: { ...focus[0]!.indicator!, boxShadow: 'none' } }, focus[1]!] }],
     ['focus shows no edge', { focus: [focus[0]!, { ...focus[1]!, indicator: { ...focus[1]!.indicator!, borderTopColor: 'rgb(91, 99, 110)' } }] }],
@@ -319,7 +338,7 @@ describe('smoke design evaluation', () => {
 
   it('fails a rendered pair below its threshold, naming the pair and state', () => {
     const faint = { ...contrast[0]!, id: 'button.ghost.default.label', foreground: 'rgb(138, 145, 154)', adjacent: 'rgb(255, 255, 255)' };
-    const report = evaluateDesign({ ...clean, contrast: [...contrast, faint] });
+    const report = evaluateDesign({ ...clean, contrast: [...clean.contrast!, faint] });
     expect(report.ok).toBe(false);
     expect(report.failures).toEqual([
       'contrast button.ghost.default.label (static): rendered rgb(138, 145, 154) on rgb(255, 255, 255) is 3.18:1, below 4.5:1',
@@ -328,7 +347,7 @@ describe('smoke design evaluation', () => {
 
   it('applies the 3:1 non-text threshold itself', () => {
     const boundary: ContrastProbe = { id: 'switch.off.default.track', kind: 'non-text', when: 'static', hook: 'switch-off', foreground: 'rgb(214, 218, 222)', adjacent: 'rgb(255, 255, 255)', error: null };
-    expect(evaluateDesign({ ...clean, contrast: [...contrast, boundary] }).failures[0]).toMatch(/below 3:1$/);
+    expect(evaluateDesign({ ...clean, contrast: [...clean.contrast!, boundary] }).failures[0]).toMatch(/below 3:1$/);
   });
 
   it('fails when the probe returned nothing', () => {

@@ -1,5 +1,6 @@
 /**
- * WCAG 2.2 contrast for the Story 1.6 primitives.
+ * WCAG 2.2 contrast for the Story 1.6 action and input primitives and the
+ * Story 1.7 navigation and identity primitives.
  *
  * - `contrastRatio` is the WCAG relative-luminance ratio, unrounded.
  * - `CONTRAST_PAIRS` lists every adjacent colour pair a primitive shows, per
@@ -45,7 +46,18 @@ export interface ContrastRender {
 
 export interface ContrastPair {
   id: string;
-  primitive: 'Button' | 'IconButton' | 'TextField' | 'Switch' | 'Choice';
+  primitive:
+    | 'Button'
+    | 'IconButton'
+    | 'TextField'
+    | 'Switch'
+    | 'Choice'
+    | 'Avatar'
+    | 'Badge'
+    | 'SegmentedControl'
+    | 'Tabs'
+    | 'Menu'
+    | 'StatusChip';
   variant: string;
   state: string;
   part: string;
@@ -112,6 +124,43 @@ const BUTTON_VARIANTS = [
   { variant: 'quiet', fg: 'text-primary', bg: 'action-quiet-bg', hover: 'surface-hover' },
   { variant: 'ghost', fg: 'text-muted', bg: 'surface-app', hover: 'ink-75' },
 ] as const satisfies ReadonlyArray<{ variant: string; fg: ColorToken; bg: ColorToken; hover: ColorToken }>;
+
+type ToneInput = { variant: string; fg: ColorToken; bg: ColorToken };
+
+/** Avatar person tones (existing colour tokens only) and the decided treatment. */
+const AVATAR_TONES = [
+  { variant: 'blue', fg: 'blue-600', bg: 'blue-150' },
+  { variant: 'green', fg: 'green-800', bg: 'green-150' },
+  { variant: 'amber', fg: 'amber-800', bg: 'amber-150' },
+  { variant: 'decided', fg: 'white', bg: 'green-600' },
+] as const satisfies readonly ToneInput[];
+
+/** DESIGN.md `components.Badge` tones. */
+const BADGE_TONES = [
+  { variant: 'attention', fg: 'ink-900', bg: 'amber-500' },
+  { variant: 'neutral', fg: 'text-secondary', bg: 'ink-150' },
+  { variant: 'accent', fg: 'white', bg: 'blue-600' },
+] as const satisfies readonly ToneInput[];
+
+/** The seven source states plus a caller-labelled state; accepted and explained use green-800 text. */
+const STATUS_CHIPS = [
+  { variant: 'suggested', fg: 'status-suggested-fg', bg: 'white' },
+  { variant: 'investigating', fg: 'status-investigating-fg', bg: 'status-investigating-bg' },
+  { variant: 'open', fg: 'status-open-fg', bg: 'white' },
+  { variant: 'evidence', fg: 'status-evidence-fg', bg: 'status-evidence-bg' },
+  { variant: 'waiting', fg: 'status-evidence-fg', bg: 'white' },
+  { variant: 'accepted', fg: 'green-800', bg: 'status-accepted-bg' },
+  { variant: 'explained', fg: 'green-800', bg: 'status-accepted-bg' },
+  { variant: 'other', fg: 'status-open-fg', bg: 'white' },
+] as const satisfies readonly ToneInput[];
+
+const SEGMENT_ON = '.iq-segment[aria-checked="true"]';
+const SEGMENT_OFF = '.iq-segment[aria-checked="false"]';
+const TAB_ON = '.iq-tab[aria-selected="true"]';
+const TAB_OFF = '.iq-tab[aria-selected="false"]';
+/** In the open specimen menu: available items (the first label or description found), and the checked radio item. */
+const MENU_ITEM = '.iq-menu-item:not(.iq-menu-item--disabled)';
+const MENU_CHECKED = '.iq-menu-item[aria-checked="true"]';
 
 /** The focus indicator: a blue-600 edge outside the 3px blue-150 ring, on the app surface. */
 function focusPairs(primitive: ContrastPair['primitive'], hook: string, target: string): ContrastPair[] {
@@ -373,10 +422,113 @@ export const CONTRAST_PAIRS: readonly ContrastPair[] = [
   }),
   reasonPair('Choice', 'choice-disabled'),
   ...focusPairs('Choice', 'checkbox-unselected', '.iq-choice-box'),
+
+  // ---------- Story 1.7 ----------
+
+  // Avatar: supplementary initials on each person disc; the agent symbol (an image file, so token-only).
+  ...AVATAR_TONES.map(({ variant, fg, bg }) =>
+    pair({
+      primitive: 'Avatar', variant, state: 'default', part: 'initials', foreground: fg, adjacent: bg, kind: 'text',
+      render: { hook: `avatar-${variant}`, when: 'static', foreground: color('.iq-avatar-initials'), adjacent: read('.iq-avatar', 'background-color') },
+    }),
+  ),
+  pair({ primitive: 'Avatar', variant: 'agent', state: 'default', part: 'symbol against surface', foreground: 'ink-900', adjacent: 'surface-app', kind: 'non-text' }),
+  pair({ primitive: 'Avatar', variant: 'agent', state: 'default', part: 'symbol against sidebar', foreground: 'ink-900', adjacent: 'surface-sidebar', kind: 'non-text' }),
+
+  // Badge: the count on each tone's fill.
+  ...BADGE_TONES.map(({ variant, fg, bg }) =>
+    pair({
+      primitive: 'Badge', variant, state: 'default', part: 'count', foreground: fg, adjacent: bg, kind: 'text',
+      render: { hook: `badge-${variant}`, when: 'static', foreground: color('.iq-badge'), adjacent: read('.iq-badge', 'background-color') },
+    }),
+  ),
+
+  // SegmentedControl: selected and unselected labels, the selected fill, focus.
+  pair({
+    primitive: 'SegmentedControl', variant: 'segment', state: 'selected', part: 'label', foreground: 'white', adjacent: 'ink-900', kind: 'text',
+    render: { hook: 'segmented', when: 'static', foreground: color(SEGMENT_ON), adjacent: read(SEGMENT_ON, 'background-color') },
+  }),
+  pair({
+    primitive: 'SegmentedControl', variant: 'segment', state: 'selected', part: 'fill against control', foreground: 'ink-900', adjacent: 'white', kind: 'non-text',
+    render: { hook: 'segmented', when: 'static', foreground: read(SEGMENT_ON, 'background-color'), adjacent: read('.iq-segmented', 'background-color') },
+  }),
+  pair({
+    primitive: 'SegmentedControl', variant: 'segment', state: 'unselected', part: 'label', foreground: 'text-muted', adjacent: 'white', kind: 'text',
+    render: { hook: 'segmented', when: 'static', foreground: color(SEGMENT_OFF), adjacent: background(SEGMENT_OFF) },
+  }),
+  pair({ primitive: 'SegmentedControl', variant: 'segment', state: 'hover', part: 'label', foreground: 'text-muted', adjacent: 'ink-75', kind: 'text' }),
+  ...focusPairs('SegmentedControl', 'segmented', SEGMENT_ON),
+
+  // Tabs: selected and unselected labels and counts, the panel text, focus.
+  pair({
+    primitive: 'Tabs', variant: 'tab', state: 'selected', part: 'label', foreground: 'text-primary', adjacent: 'action-quiet-bg', kind: 'text',
+    render: { hook: 'tabs', when: 'static', foreground: color(`${TAB_ON} .iq-tab-label`), adjacent: background(`${TAB_ON} .iq-tab-label`) },
+  }),
+  pair({
+    primitive: 'Tabs', variant: 'tab', state: 'selected', part: 'count', foreground: 'text-muted', adjacent: 'action-quiet-bg', kind: 'text',
+    render: { hook: 'tabs', when: 'static', foreground: color(`${TAB_ON} .iq-tab-count`), adjacent: background(`${TAB_ON} .iq-tab-count`) },
+  }),
+  pair({
+    primitive: 'Tabs', variant: 'tab', state: 'unselected', part: 'label', foreground: 'text-muted', adjacent: 'surface-app', kind: 'text',
+    render: { hook: 'tabs', when: 'static', foreground: color(`${TAB_OFF} .iq-tab-label`), adjacent: background(`${TAB_OFF} .iq-tab-label`) },
+  }),
+  pair({
+    primitive: 'Tabs', variant: 'tab', state: 'unselected', part: 'count', foreground: 'text-muted', adjacent: 'surface-app', kind: 'text',
+    render: { hook: 'tabs', when: 'static', foreground: color(`${TAB_OFF} .iq-tab-count`), adjacent: background(`${TAB_OFF} .iq-tab-count`) },
+  }),
+  pair({ primitive: 'Tabs', variant: 'tab', state: 'unselected', part: 'label on sidebar', foreground: 'text-muted', adjacent: 'surface-sidebar', kind: 'text' }),
+  pair({ primitive: 'Tabs', variant: 'tab', state: 'hover', part: 'label', foreground: 'text-muted', adjacent: 'surface-hover', kind: 'text' }),
+  pair({
+    primitive: 'Tabs', variant: 'panel', state: 'selected', part: 'panel text', foreground: 'text-secondary', adjacent: 'surface-app', kind: 'text',
+    render: { hook: 'tabs', when: 'static', foreground: color('.iq-tab-panel:not([hidden])'), adjacent: background('.iq-tab-panel:not([hidden])') },
+  }),
+  ...focusPairs('Tabs', 'tabs', TAB_ON),
+
+  // Menu: the trigger, the heading, item label and description, the checkmark, the unavailable reason, focus.
+  pair({
+    primitive: 'Menu', variant: 'trigger', state: 'default', part: 'label', foreground: 'text-primary', adjacent: 'action-secondary-bg', kind: 'text',
+    render: { hook: 'menu-trigger', when: 'static', foreground: color('.iq-menu-trigger'), adjacent: background('.iq-menu-trigger') },
+  }),
+  pair({
+    primitive: 'Menu', variant: 'list', state: 'open', part: 'heading', foreground: 'text-muted', adjacent: 'white', kind: 'text',
+    render: { hook: 'menu-open', when: 'static', foreground: color('.iq-menu-heading'), adjacent: background('.iq-menu-heading') },
+  }),
+  pair({
+    primitive: 'Menu', variant: 'item', state: 'default', part: 'label', foreground: 'text-primary', adjacent: 'white', kind: 'text',
+    render: { hook: 'menu-open', when: 'static', foreground: color(`${MENU_ITEM} .iq-menu-label`), adjacent: background(`${MENU_ITEM} .iq-menu-label`) },
+  }),
+  pair({
+    primitive: 'Menu', variant: 'item', state: 'default', part: 'description', foreground: 'text-muted', adjacent: 'white', kind: 'text',
+    render: { hook: 'menu-open', when: 'static', foreground: color(`${MENU_ITEM} .iq-menu-description`), adjacent: background(`${MENU_ITEM} .iq-menu-description`) },
+  }),
+  pair({ primitive: 'Menu', variant: 'item', state: 'hover', part: 'label', foreground: 'text-primary', adjacent: 'ink-75', kind: 'text' }),
+  pair({ primitive: 'Menu', variant: 'item', state: 'hover', part: 'description', foreground: 'text-muted', adjacent: 'ink-75', kind: 'text' }),
+  pair({
+    primitive: 'Menu', variant: 'radio', state: 'checked', part: 'checkmark', foreground: 'blue-600', adjacent: 'white', kind: 'non-text',
+    render: { hook: 'menu-open', when: 'static', foreground: read(`${MENU_CHECKED} .iq-menu-check svg`, 'stroke'), adjacent: background(`${MENU_CHECKED} .iq-menu-check`) },
+  }),
+  pair({ primitive: 'Menu', variant: 'radio', state: 'checked hover', part: 'checkmark', foreground: 'blue-600', adjacent: 'ink-75', kind: 'non-text' }),
+  pair({ primitive: 'Menu', variant: 'item', state: 'focus', part: 'focus edge against list', foreground: 'blue-600', adjacent: 'white', kind: 'non-text' }),
+  pair({ primitive: 'Menu', variant: 'item', state: 'focus', part: 'focus edge against hover fill', foreground: 'blue-600', adjacent: 'ink-75', kind: 'non-text' }),
+  reasonPair('Menu', 'menu-open'),
+  ...focusPairs('Menu', 'menu-trigger', '.iq-menu-trigger'),
+
+  // StatusChip: the explicit text of every source state, the dashed suggestion outline, and a caller-labelled state.
+  ...STATUS_CHIPS.map(({ variant, fg, bg }) =>
+    pair({
+      primitive: 'StatusChip', variant, state: 'default', part: 'label', foreground: fg, adjacent: bg, kind: 'text',
+      render: { hook: `status-${variant}`, when: 'static', foreground: color('.iq-status-chip'), adjacent: background('.iq-status-chip') },
+    }),
+  ),
+  pair({
+    primitive: 'StatusChip', variant: 'suggested', state: 'default', part: 'dashed outline against surface', foreground: 'status-suggested-border', adjacent: 'surface-app', kind: 'non-text',
+    render: { hook: 'status-suggested', when: 'static', foreground: border('.iq-status-chip'), adjacent: background(':scope') },
+  }),
+  pair({ primitive: 'StatusChip', variant: 'suggested', state: 'default', part: 'dashed outline against sidebar', foreground: 'status-suggested-border', adjacent: 'surface-sidebar', kind: 'non-text' }),
 ];
 
 export const CONTRAST_EXEMPT: readonly ContrastExemption[] = [
-  ...(['Button', 'IconButton', 'TextField', 'Switch', 'Choice'] as const).map((primitive) => ({
+  ...(['Button', 'IconButton', 'TextField', 'Switch', 'Choice', 'Menu'] as const).map((primitive) => ({
     primitive, variant: 'any', state: 'disabled', part: 'control at the .45 disabled opacity', foreground: 'opacity 0.45' as const, adjacent: 'surface-app' as const,
     reason: 'Inactive user-interface components are exempt from WCAG 1.4.3 and 1.4.11; the disabled reason beside the control is measured as text instead.',
   })),
@@ -400,6 +552,33 @@ export const CONTRAST_EXEMPT: readonly ContrastExemption[] = [
     primitive: 'Button', variant: 'any', state: 'focus-visible', part: 'blue-150 ring against surface', foreground: 'blue-150', adjacent: 'surface-app',
     reason: 'DESIGN.md keeps the pale ring supplementary; the blue-600 edge is the measured focus indicator.',
   },
+  // Story 1.7.
+  {
+    primitive: 'Avatar', variant: 'person', state: 'default', part: 'disc against surface', foreground: 'blue-150', adjacent: 'surface-app',
+    reason: 'The required name is the accessible identity and the initials are measured against the disc; the disc outline itself carries no information.',
+  },
+  {
+    primitive: 'Badge', variant: 'attention', state: 'default', part: 'fill against surface', foreground: 'amber-500', adjacent: 'surface-app',
+    reason: 'The count text is measured against its fill and the accessible text names what is counted; the fill edge carries no further information.',
+  },
+  {
+    primitive: 'SegmentedControl', variant: 'control', state: 'default', part: 'outline', foreground: 'border-strong', adjacent: 'surface-app',
+    reason: 'Each segment is identified by its measured text label; the outline around the group is decorative.',
+  },
+  {
+    primitive: 'Tabs', variant: 'tab', state: 'selected', part: 'quiet fill against surface', foreground: 'action-quiet-bg', adjacent: 'surface-app',
+    reason: 'Selection is carried by aria-selected and by the weight-500 text-primary label against weight-400 muted labels; the pale fill is supplementary, as DESIGN.md specifies it.',
+  },
+  {
+    primitive: 'Menu', variant: 'list', state: 'open', part: 'border against surface', foreground: 'border-strong', adjacent: 'surface-app',
+    reason: 'The floating list is identified by its measured item text and the popover shadow; the pale border is decorative.',
+  },
+  ...(['open', 'investigating', 'evidence', 'waiting', 'accepted', 'explained'] as const).map((variant) => ({
+    primitive: 'StatusChip' as const, variant, state: 'default', part: 'border and fill against surface',
+    foreground: ({ open: 'status-open-border', investigating: 'status-investigating-bg', evidence: 'status-evidence-border', waiting: 'status-evidence-border', accepted: 'status-accepted-border', explained: 'status-accepted-border' } as const)[variant],
+    adjacent: 'surface-app' as const,
+    reason: 'The explicit visible text names the state and is measured; the chip border and fill are supplementary.',
+  })),
 ];
 
 export interface ContrastResult {

@@ -43,3 +43,23 @@ export function useBooleanState(
   );
   return [current, set];
 }
+
+/**
+ * Roving focus for the Story 1.7 composites: the index a navigation key moves
+ * to in a wrapping list of `count` items, or `null` for any other key.
+ * `axis` picks the arrow pair; Home and End go to the first and last item.
+ */
+export function rovingIndex(key: string, index: number, count: number, axis: 'horizontal' | 'vertical'): number | null {
+  if (count === 0) return null;
+  const [previous, next] = axis === 'horizontal' ? ['ArrowLeft', 'ArrowRight'] : ['ArrowUp', 'ArrowDown'];
+  if (key === next) return (index + 1) % count;
+  if (key === previous) return (index - 1 + count) % count;
+  if (key === 'Home') return 0;
+  if (key === 'End') return count - 1;
+  return null;
+}
+
+/** A stable DOM id fragment for a caller-supplied value. */
+export function idFragment(value: string): string {
+  return value.replace(/[^\w-]/g, '_');
+}

@@ -70,3 +70,7 @@
 .specimen-400 { font-weight: 400; }
 .specimen-500 { font-weight: 500; }
 .specimen-600 { font-weight: 600; }
+/* Story 1.7: room below the open specimen menu, which floats over the page. */
+.specimen-hook[data-contrast='menu-open'] {
+  padding-bottom: var(--console-height);
+}

@@ -18,6 +18,11 @@
  * reads `:focus-visible` and the focus-indicator colours. `evaluateDesign`
  * computes the rendered ratios and fails below 4.5:1 (text) or 3:1 (non-text)
  * or when a focus hook was not reached with a visible indicator.
+ *
+ * Story 1.7 adds Avatar, Badge, SegmentedControl, Tabs, Menu and StatusChip
+ * pairs through the same declaration. Main does not trust the page to declare
+ * its focus hooks: `REQUIRED_FOCUS_HOOKS` must all be declared and reached,
+ * including the selected tab and the menu trigger.
  */
 import type { WebContents } from 'electron';
 
@@ -42,8 +47,19 @@ export const EXPECTED_ICON_LABEL = 'Needs evidence';
 
 /** WCAG thresholds by pair kind; main applies them itself rather than trusting the page. */
 export const RENDERED_THRESHOLDS = { text: 4.5, 'non-text': 3 } as const;
+/** Focus hooks the specimen must declare and Tab must reach with a visible indicator. */
+export const REQUIRED_FOCUS_HOOKS = [
+  'button-primary',
+  'icon-button-ghost',
+  'text-field',
+  'switch-off',
+  'checkbox-unselected',
+  'segmented',
+  'tabs',
+  'menu-trigger',
+] as const;
 /** Upper bound on Tab presses while looking for the focus hooks. */
-const MAX_TABS = 60;
+const MAX_TABS = 80;
 const TAB_SETTLE_MS = 50;
 
 /** The tree `window.inquello` must expose, as `describe` renders it. */
@@ -371,6 +387,9 @@ function evaluateFocus(probe: DesignProbeResult | undefined, failures: string[])
   const focus = probe?.focus ?? [];
   const hooks = [...new Set((probe?.contrast ?? []).filter((pair) => pair.when === 'focus').map((pair) => pair.hook))];
   if (hooks.length === 0) failures.push('the specimen declared no focus hooks');
+  for (const hook of REQUIRED_FOCUS_HOOKS) {
+    if (!hooks.includes(hook)) failures.push(`the specimen declared no focus pairs for ${hook}`);
+  }
   for (const hook of hooks) {
     const visit = focus.find((entry) => entry.hook === hook);
     if (!visit) {
