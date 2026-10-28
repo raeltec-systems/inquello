@@ -1,6 +1,7 @@
 /**
- * WCAG 2.2 contrast for the Story 1.6 action and input primitives and the
- * Story 1.7 navigation and identity primitives.
+ * WCAG 2.2 contrast for the Story 1.6 action and input primitives, the
+ * Story 1.7 navigation and identity primitives and the Story 1.8 progress and
+ * proposed-action primitives.
  *
  * - `contrastRatio` is the WCAG relative-luminance ratio, unrounded.
  * - `CONTRAST_PAIRS` lists every adjacent colour pair a primitive shows, per
@@ -57,7 +58,13 @@ export interface ContrastPair {
     | 'SegmentedControl'
     | 'Tabs'
     | 'Menu'
-    | 'StatusChip';
+    | 'StatusChip'
+    | 'JudgmentTag'
+    | 'FileChip'
+    | 'PlanStep'
+    | 'ApprovalCard'
+    | 'DiffLine'
+    | 'Toast';
   variant: string;
   state: string;
   part: string;
@@ -161,6 +168,49 @@ const TAB_OFF = '.iq-tab[aria-selected="false"]';
 /** In the open specimen menu: available items (the first label or description found), and the checked radio item. */
 const MENU_ITEM = '.iq-menu-item:not(.iq-menu-item--disabled)';
 const MENU_CHECKED = '.iq-menu-item[aria-checked="true"]';
+
+/** DESIGN.md `components.JudgmentTag` kind colours, all on the app surface. */
+const JUDGMENT_KINDS = [
+  { variant: 'calculation', fg: 'judgment-calculation' },
+  { variant: 'observation', fg: 'judgment-observation' },
+  { variant: 'suggestion', fg: 'judgment-suggestion' },
+  { variant: 'decision', fg: 'judgment-decision' },
+  { variant: 'gap', fg: 'judgment-gap' },
+] as const satisfies ReadonlyArray<{ variant: string; fg: ColorToken }>;
+
+/** FileChip type tags on the ink-50 chip; an unlisted type uses the muted folder colour. */
+const FILE_TAGS = [
+  { variant: 'pdf', fg: 'file-pdf' },
+  { variant: 'xls', fg: 'file-xls' },
+  { variant: 'doc', fg: 'file-doc' },
+  { variant: 'folder', fg: 'file-folder' },
+  { variant: 'other', fg: 'file-folder' },
+] as const satisfies ReadonlyArray<{ variant: string; fg: ColorToken }>;
+
+/** FileChip source states: their own text, red-800 or amber-800, never the PDF red-600. */
+const FILE_STATES = [
+  { variant: 'failed', fg: 'red-800' },
+  { variant: 'unreadable', fg: 'amber-800' },
+  { variant: 'permission-limited', fg: 'amber-800' },
+] as const satisfies ReadonlyArray<{ variant: string; fg: ColorToken }>;
+
+/** PlanStep: each state's indicator boundary and, where visible, its state text. */
+const PLAN_STATES = [
+  { variant: 'pending', boundary: 'ink-600', text: null },
+  { variant: 'running', boundary: 'blue-600', text: 'blue-700' },
+  { variant: 'done', boundary: 'green-600', text: null },
+  { variant: 'blocked', boundary: 'amber-700', text: 'amber-800' },
+  { variant: 'failed', boundary: 'red-600', text: 'red-800' },
+  { variant: 'interrupted', boundary: 'ink-600', text: 'text-muted' },
+] as const satisfies ReadonlyArray<{ variant: string; boundary: ColorToken; text: ColorToken | null }>;
+
+/** DiffLine kinds: body and sign colours on each kind's fill. Context shows no sign. */
+const DIFF_KINDS = [
+  { variant: 'add', fg: 'diff-add-fg', sign: 'diff-add-fg', bg: 'diff-add-bg' },
+  { variant: 'delete', fg: 'diff-del-fg', sign: 'diff-del-fg', bg: 'diff-del-bg' },
+  { variant: 'change', fg: 'text-primary', sign: 'blue-600', bg: 'blue-50' },
+  { variant: 'context', fg: 'text-secondary', sign: null, bg: 'white' },
+] as const satisfies ReadonlyArray<{ variant: string; fg: ColorToken; sign: ColorToken | null; bg: ColorToken }>;
 
 /** The focus indicator: a blue-600 edge outside the 3px blue-150 ring, on the app surface. */
 function focusPairs(primitive: ContrastPair['primitive'], hook: string, target: string): ContrastPair[] {
@@ -530,6 +580,184 @@ export const CONTRAST_PAIRS: readonly ContrastPair[] = [
     primitive: 'StatusChip', variant: 'decision', state: 'default', part: 'decision initials', foreground: 'white', adjacent: 'green-600', kind: 'text',
     render: { hook: 'status-decided', when: 'static', foreground: color('.iq-status-decision'), adjacent: background('.iq-status-decision') },
   }),
+
+  // ---------- Story 1.8 ----------
+
+  // JudgmentTag: each kind's label (and text glyph) on the surface, the shaped marks, the basis and the claim.
+  ...JUDGMENT_KINDS.map(({ variant, fg }) =>
+    pair({
+      primitive: 'JudgmentTag', variant, state: 'default', part: 'kind label', foreground: fg, adjacent: 'surface-app', kind: 'text',
+      render: { hook: `judgment-${variant}`, when: 'static', foreground: color('.iq-judgment-kind'), adjacent: background('.iq-judgment-kind') },
+    }),
+  ),
+  pair({
+    primitive: 'JudgmentTag', variant: 'suggestion', state: 'default', part: 'dashed box against surface', foreground: 'judgment-suggestion', adjacent: 'surface-app', kind: 'non-text',
+    render: { hook: 'judgment-suggestion', when: 'static', foreground: border('.iq-judgment-mark'), adjacent: background('.iq-judgment-mark') },
+  }),
+  pair({
+    primitive: 'JudgmentTag', variant: 'decision', state: 'default', part: 'dot against surface', foreground: 'judgment-decision', adjacent: 'surface-app', kind: 'non-text',
+    render: { hook: 'judgment-decision', when: 'static', foreground: read('.iq-judgment-mark', 'background-color'), adjacent: background(':scope') },
+  }),
+  pair({
+    primitive: 'JudgmentTag', variant: 'decision', state: 'default', part: 'basis', foreground: 'text-muted', adjacent: 'surface-app', kind: 'text',
+    render: { hook: 'judgment-decision', when: 'static', foreground: color('.iq-judgment-basis'), adjacent: background('.iq-judgment-basis') },
+  }),
+  pair({ primitive: 'JudgmentTag', variant: 'decision', state: 'basis missing', part: 'kind label', foreground: 'text-muted', adjacent: 'surface-app', kind: 'text' }),
+  pair({
+    primitive: 'JudgmentTag', variant: 'any', state: 'default', part: 'claim', foreground: 'text-primary', adjacent: 'surface-app', kind: 'text',
+    render: { hook: 'judgment-calculation', when: 'static', foreground: color('.iq-judgment-claim'), adjacent: background('.iq-judgment-claim') },
+  }),
+
+  // FileChip: type tags, the name, the remove glyph, the state texts and the remove button's focus.
+  ...FILE_TAGS.map(({ variant, fg }) =>
+    pair({
+      primitive: 'FileChip', variant, state: 'default', part: 'type tag', foreground: fg, adjacent: 'ink-50', kind: 'text',
+      render: { hook: `file-${variant}`, when: 'static', foreground: color('.iq-file-chip-tag'), adjacent: background('.iq-file-chip-tag') },
+    }),
+  ),
+  pair({
+    primitive: 'FileChip', variant: 'any', state: 'default', part: 'name', foreground: 'text-primary', adjacent: 'ink-50', kind: 'text',
+    render: { hook: 'file-pdf', when: 'static', foreground: color('.iq-file-chip-name'), adjacent: background('.iq-file-chip-name') },
+  }),
+  pair({
+    primitive: 'FileChip', variant: 'removable', state: 'default', part: 'remove glyph', foreground: 'text-muted', adjacent: 'ink-50', kind: 'non-text',
+    render: { hook: 'file-chip-remove', when: 'static', foreground: color('.iq-file-chip-remove'), adjacent: background('.iq-file-chip-remove') },
+  }),
+  pair({ primitive: 'FileChip', variant: 'removable', state: 'hover', part: 'remove glyph', foreground: 'text-muted', adjacent: 'surface-hover', kind: 'non-text' }),
+  ...FILE_STATES.map(({ variant, fg }) =>
+    pair({
+      primitive: 'FileChip', variant, state: variant, part: 'state text', foreground: fg, adjacent: 'ink-50', kind: 'text',
+      render: { hook: `file-${variant}`, when: 'static', foreground: color('.iq-file-chip-state'), adjacent: background('.iq-file-chip-state') },
+    }),
+  ),
+  pair({
+    primitive: 'FileChip', variant: 'removable', state: 'focus-visible', part: 'focus edge against ring', foreground: 'blue-600', adjacent: 'blue-150', kind: 'non-text',
+    render: { hook: 'file-chip-remove', when: 'focus', foreground: read('.iq-file-chip-remove', 'outline-color'), adjacent: read('.iq-file-chip-remove', 'box-shadow') },
+  }),
+  pair({
+    primitive: 'FileChip', variant: 'removable', state: 'focus-visible', part: 'focus edge against chip', foreground: 'blue-600', adjacent: 'ink-50', kind: 'non-text',
+    render: { hook: 'file-chip-remove', when: 'focus', foreground: read('.iq-file-chip-remove', 'outline-color'), adjacent: background('.iq-file-chip') },
+  }),
+  pair({
+    primitive: 'FileChip', variant: 'removable', state: 'focus-visible', part: 'focus edge against surface', foreground: 'blue-600', adjacent: 'surface-app', kind: 'non-text',
+    render: { hook: 'file-chip-remove', when: 'focus', foreground: read('.iq-file-chip-remove', 'outline-color'), adjacent: background(':scope') },
+  }),
+
+  // PlanStep: every state's indicator boundary and text; the running fill, the done check, the done label and the meta.
+  ...PLAN_STATES.flatMap(({ variant, boundary, text }) => {
+    const step = `.iq-plan-step--${variant}`;
+    return [
+      pair({
+        primitive: 'PlanStep', variant: 'step', state: variant, part: 'indicator against surface', foreground: boundary, adjacent: 'surface-app', kind: 'non-text',
+        render: { hook: 'plan-steps', when: 'static', foreground: border(`${step} .iq-plan-step-indicator`), adjacent: background(step) },
+      }),
+      pair({
+        primitive: 'PlanStep', variant: 'step', state: variant, part: 'label', foreground: variant === 'done' ? 'text-muted' : 'text-primary', adjacent: 'surface-app', kind: 'text',
+        render: { hook: 'plan-steps', when: 'static', foreground: color(`${step} .iq-plan-step-label`), adjacent: background(`${step} .iq-plan-step-label`) },
+      }),
+      ...(text === null
+        ? []
+        : [
+            pair({
+              primitive: 'PlanStep', variant: 'step', state: variant, part: 'state text', foreground: text, adjacent: 'surface-app', kind: 'text',
+              render: { hook: 'plan-steps', when: 'static', foreground: color(`${step} .iq-plan-step-state`), adjacent: background(`${step} .iq-plan-step-state`) },
+            }),
+          ]),
+    ];
+  }),
+  pair({
+    primitive: 'PlanStep', variant: 'step', state: 'running', part: 'indicator against its fill', foreground: 'blue-600', adjacent: 'blue-150', kind: 'non-text',
+    render: { hook: 'plan-steps', when: 'static', foreground: border('.iq-plan-step--running .iq-plan-step-indicator'), adjacent: read('.iq-plan-step--running .iq-plan-step-indicator', 'background-color') },
+  }),
+  pair({
+    primitive: 'PlanStep', variant: 'step', state: 'done', part: 'check against marker', foreground: 'white', adjacent: 'green-600', kind: 'non-text',
+    render: { hook: 'plan-steps', when: 'static', foreground: read('.iq-plan-step--done .iq-plan-step-indicator svg', 'stroke'), adjacent: read('.iq-plan-step--done .iq-plan-step-indicator', 'background-color') },
+  }),
+  pair({
+    primitive: 'PlanStep', variant: 'step', state: 'any', part: 'meta', foreground: 'text-muted', adjacent: 'surface-app', kind: 'text',
+    render: { hook: 'plan-steps', when: 'static', foreground: color('.iq-plan-step-meta'), adjacent: background('.iq-plan-step-meta') },
+  }),
+
+  // ApprovalCard: overline, context, action, facts and quote on the amber-50 card; the actions; focus on the card.
+  pair({
+    primitive: 'ApprovalCard', variant: 'card', state: 'default', part: 'overline', foreground: 'amber-700', adjacent: 'approval-bg', kind: 'text',
+    render: { hook: 'approval', when: 'static', foreground: color('.iq-approval-overline'), adjacent: background('.iq-approval-overline') },
+  }),
+  pair({
+    primitive: 'ApprovalCard', variant: 'card', state: 'default', part: 'context', foreground: 'text-muted', adjacent: 'approval-bg', kind: 'text',
+    render: { hook: 'approval', when: 'static', foreground: color('.iq-approval-context'), adjacent: background('.iq-approval-context') },
+  }),
+  pair({
+    primitive: 'ApprovalCard', variant: 'card', state: 'default', part: 'action', foreground: 'text-primary', adjacent: 'approval-bg', kind: 'text',
+    render: { hook: 'approval', when: 'static', foreground: color('.iq-approval-action'), adjacent: background('.iq-approval-action') },
+  }),
+  pair({
+    primitive: 'ApprovalCard', variant: 'card', state: 'default', part: 'fact term', foreground: 'text-muted', adjacent: 'approval-bg', kind: 'text',
+    render: { hook: 'approval', when: 'static', foreground: color('.iq-approval-fact dt'), adjacent: background('.iq-approval-fact dt') },
+  }),
+  pair({
+    primitive: 'ApprovalCard', variant: 'card', state: 'default', part: 'fact value', foreground: 'text-primary', adjacent: 'approval-bg', kind: 'text',
+    render: { hook: 'approval', when: 'static', foreground: color('.iq-approval-fact dd'), adjacent: background('.iq-approval-fact dd') },
+  }),
+  pair({
+    primitive: 'ApprovalCard', variant: 'card', state: 'default', part: 'quoted content', foreground: 'text-muted', adjacent: 'white', kind: 'text',
+    render: { hook: 'approval', when: 'static', foreground: color('.iq-approval-quote'), adjacent: background('.iq-approval-quote') },
+  }),
+  pair({
+    primitive: 'ApprovalCard', variant: 'primary action', state: 'default', part: 'label', foreground: 'action-primary-fg', adjacent: 'action-primary-bg', kind: 'text',
+    render: { hook: 'approval', when: 'static', foreground: color('.iq-button--primary'), adjacent: background('.iq-button--primary') },
+  }),
+  pair({
+    primitive: 'ApprovalCard', variant: 'alternative action', state: 'default', part: 'label', foreground: 'text-primary', adjacent: 'action-secondary-bg', kind: 'text',
+    render: { hook: 'approval', when: 'static', foreground: color('.iq-button--secondary'), adjacent: background('.iq-button--secondary') },
+  }),
+  pair({
+    primitive: 'ApprovalCard', variant: 'primary action', state: 'focus-visible', part: 'focus edge against ring', foreground: 'blue-600', adjacent: 'blue-150', kind: 'non-text',
+    render: { hook: 'approval-primary', when: 'focus', foreground: read('.iq-button--primary', 'outline-color'), adjacent: read('.iq-button--primary', 'box-shadow') },
+  }),
+  pair({
+    primitive: 'ApprovalCard', variant: 'primary action', state: 'focus-visible', part: 'focus edge against card', foreground: 'blue-600', adjacent: 'approval-bg', kind: 'non-text',
+    render: { hook: 'approval-primary', when: 'focus', foreground: read('.iq-button--primary', 'outline-color'), adjacent: background('.iq-approval') },
+  }),
+
+  // DiffLine: body, sign, gutter and stage text on each kind's fill.
+  ...DIFF_KINDS.flatMap(({ variant, fg, sign, bg }) => {
+    const line = `.iq-diff-line--${variant}`;
+    return [
+      pair({
+        primitive: 'DiffLine', variant, state: 'default', part: 'body', foreground: fg, adjacent: bg, kind: 'text',
+        render: { hook: 'diff', when: 'static', foreground: color(`${line} .iq-diff-body`), adjacent: background(`${line} .iq-diff-body`) },
+      }),
+      ...(sign === null
+        ? []
+        : [
+            pair({
+              primitive: 'DiffLine', variant, state: 'default', part: 'sign', foreground: sign, adjacent: bg, kind: 'text',
+              render: { hook: 'diff', when: 'static', foreground: color(`${line} .iq-diff-sign`), adjacent: background(`${line} .iq-diff-sign`) },
+            }),
+          ]),
+      pair({
+        primitive: 'DiffLine', variant, state: 'default', part: 'gutter', foreground: 'text-muted', adjacent: bg, kind: 'text',
+        render: { hook: 'diff', when: 'static', foreground: color(`${line} .iq-diff-gutter`), adjacent: background(`${line} .iq-diff-gutter`) },
+      }),
+      pair({
+        primitive: 'DiffLine', variant, state: 'default', part: 'stage text', foreground: 'text-muted', adjacent: bg, kind: 'text',
+        render: { hook: 'diff', when: 'static', foreground: color(`${line} .iq-diff-stage`), adjacent: background(`${line} .iq-diff-stage`) },
+      }),
+    ];
+  }),
+
+  // Toast: white text on ink-900, and the ink fill against the surface; focus on a transient toast is token-only.
+  pair({
+    primitive: 'Toast', variant: 'toast', state: 'default', part: 'message', foreground: 'white', adjacent: 'ink-900', kind: 'text',
+    render: { hook: 'toast', when: 'static', foreground: color('.iq-toast'), adjacent: background('.iq-toast') },
+  }),
+  pair({
+    primitive: 'Toast', variant: 'toast', state: 'default', part: 'fill against surface', foreground: 'ink-900', adjacent: 'surface-app', kind: 'non-text',
+    render: { hook: 'toast', when: 'static', foreground: read('.iq-toast', 'background-color'), adjacent: background(':scope') },
+  }),
+  pair({ primitive: 'Toast', variant: 'transient', state: 'focus-visible', part: 'focus edge against surface', foreground: 'blue-600', adjacent: 'surface-app', kind: 'non-text' }),
+  pair({ primitive: 'Toast', variant: 'transient', state: 'focus-visible', part: 'focus edge against ring', foreground: 'blue-600', adjacent: 'blue-150', kind: 'non-text' }),
 ];
 
 export const CONTRAST_EXEMPT: readonly ContrastExemption[] = [
@@ -583,6 +811,29 @@ export const CONTRAST_EXEMPT: readonly ContrastExemption[] = [
     foreground: ({ open: 'status-open-border', investigating: 'status-investigating-bg', evidence: 'status-evidence-border', waiting: 'status-evidence-border', accepted: 'status-accepted-border', explained: 'status-accepted-border' } as const)[variant],
     adjacent: 'surface-app' as const,
     reason: 'The explicit visible text names the state and is measured; the chip border and fill are supplementary.',
+  })),
+  // Story 1.8.
+  {
+    primitive: 'FileChip', variant: 'any', state: 'default', part: 'chip border against surface', foreground: 'border-default', adjacent: 'surface-app',
+    reason: 'The chip is identified by its measured name and type tag; its border is decorative. The remove control is a labelled button whose glyph is measured.',
+  },
+  {
+    primitive: 'PlanStep', variant: 'step', state: 'running', part: 'pulsing inner dot', foreground: 'blue-600', adjacent: 'blue-150',
+    reason: 'The dot animates between opacity 1 and 0.3 and is supplementary: the still blue-600 boundary and the visible "Running" text carry the state, and both are measured.',
+  },
+  {
+    primitive: 'ApprovalCard', variant: 'card', state: 'default', part: 'card border against surface', foreground: 'approval-border', adjacent: 'surface-app',
+    reason: 'The card is a labelled region identified by its measured overline and text; the amber-200 border and amber-50 fill are supplementary.',
+  },
+  {
+    primitive: 'ApprovalCard', variant: 'card', state: 'default', part: 'quote border against quote', foreground: 'approval-border', adjacent: 'white',
+    reason: 'The quoted content is measured text; the border around it is decorative.',
+  },
+  ...(['add', 'delete', 'change'] as const).map((variant) => ({
+    primitive: 'DiffLine' as const, variant, state: 'default', part: 'row fill against surface',
+    foreground: ({ add: 'diff-add-bg', delete: 'diff-del-bg', change: 'blue-50' } as const)[variant],
+    adjacent: 'surface-app' as const,
+    reason: 'The kind is carried by the measured sign and the accessible kind text; the pale row fill is supplementary.',
   })),
 ];
 

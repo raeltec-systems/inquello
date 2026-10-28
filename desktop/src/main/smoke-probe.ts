@@ -23,6 +23,15 @@
  * pairs through the same declaration. Main does not trust the page to declare
  * its focus hooks: `REQUIRED_FOCUS_HOOKS` must all be declared and reached,
  * including the selected tab and the menu trigger.
+ *
+ * Story 1.8 adds JudgmentTag, FileChip, PlanStep, ApprovalCard, DiffLine and
+ * Toast pairs, and two required focus hooks: the FileChip remove button and the
+ * ApprovalCard primary action. It also checks motion through
+ * `webContents.debugger`: with `Emulation.setEmulatedMedia` it reads the
+ * running PlanStep's pulse under `prefers-reduced-motion: no-preference`
+ * (animating) and `reduce` (stopped), and its "Running" text in both.
+ * `evaluateDesign` fails when the animation does not stop or the text is not
+ * visible.
  */
 import type { WebContents } from 'electron';
 
@@ -57,9 +66,18 @@ export const REQUIRED_FOCUS_HOOKS = [
   'segmented',
   'tabs',
   'menu-trigger',
+  'file-chip-remove',
+  'approval-primary',
 ] as const;
 /** Upper bound on Tab presses while looking for the focus hooks. */
-const MAX_TABS = 80;
+const MAX_TABS = 120;
+/** The specimen hook holding the running PlanStep whose pulse must stop under reduced motion. */
+export const MOTION_HOOK = 'plan-steps';
+/** The visible text a running step keeps with or without motion. */
+export const RUNNING_TEXT = 'Running';
+/** The keyframes the running step's dot uses while motion is allowed. */
+export const RUNNING_ANIMATION = 'iq-pulse';
+const MOTION_SETTLE_MS = 100;
 const TAB_SETTLE_MS = 50;
 
 /** The tree `window.inquello` must expose, as `describe` renders it. */
@@ -129,6 +147,27 @@ const FOCUS_PROBE = `(() => {
     focusVisible: active.matches(':focus-visible'),
     indicator: style ? { outlineStyle: style.outlineStyle, outlineWidth: style.outlineWidth, outlineColor: style.outlineColor, borderTopColor: style.borderTopColor, boxShadow: style.boxShadow } : null,
     pairs: pairs.filter((pair) => pair.render.hook === hook).map(readPair),
+  };
+})()`;
+
+/** Reads the running PlanStep: its pulse's animation, the media query, and whether "Running" is visible text. */
+const MOTION_PROBE = `(() => {
+  const step = document.querySelector('[data-contrast~="${MOTION_HOOK}"] .iq-plan-step--running');
+  if (!step) return { error: 'no running plan step is rendered in ${MOTION_HOOK}' };
+  const pulse = step.querySelector('.iq-plan-step-pulse');
+  const state = step.querySelector('.iq-plan-step-state');
+  const visible = (element) => {
+    if (!element) return false;
+    const box = element.getBoundingClientRect();
+    const style = getComputedStyle(element);
+    return box.width > 1 && box.height > 1 && style.visibility === 'visible' && style.display !== 'none' && style.clipPath === 'none' && Number(style.opacity) > 0;
+  };
+  return {
+    reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
+    animationName: pulse ? getComputedStyle(pulse).animationName : null,
+    runningAnimations: pulse ? pulse.getAnimations().filter((animation) => animation.playState === 'running').length : 0,
+    stateText: state ? state.textContent : null,
+    stateVisible: visible(state),
   };
 })()`;
 
@@ -244,6 +283,22 @@ export interface FocusProbe {
   pairs?: ContrastProbe[];
 }
 
+/** The running PlanStep under one emulated `prefers-reduced-motion` value. */
+export interface MotionRead {
+  reducedMotion: boolean;
+  animationName: string | null;
+  runningAnimations: number;
+  stateText: string | null;
+  stateVisible: boolean;
+}
+
+/** The running PlanStep with motion allowed (`motion`) and with reduced motion emulated (`reduced`). */
+export interface MotionProbe {
+  motion: MotionRead | null;
+  reduced: MotionRead | null;
+  error: string | null;
+}
+
 export interface DesignProbeResult {
   title: string | null;
   fonts: FontProbe[];
@@ -253,6 +308,8 @@ export interface DesignProbeResult {
   contrast?: ContrastProbe[] | null;
   /** The focus hooks reached by Tab, in order (first visit only). */
   focus?: FocusProbe[];
+  /** The reduced-motion check of the running PlanStep. */
+  motion?: MotionProbe;
 }
 
 export interface ContrastReport {
@@ -281,6 +338,7 @@ export interface DesignReport {
   informativeIcon: IconProbe;
   contrast: ContrastReport;
   focus: FocusProbe[];
+  motion: MotionProbe | null;
 }
 
 export interface RendererReport {
@@ -409,6 +467,36 @@ function evaluateFocus(probe: DesignProbeResult | undefined, failures: string[])
   return focus;
 }
 
+function evaluateMotion(probe: DesignProbeResult | undefined, failures: string[]): MotionProbe | null {
+  const motion = probe?.motion ?? null;
+  if (!motion) {
+    failures.push('the reduced-motion check did not run');
+    return null;
+  }
+  if (motion.error) {
+    failures.push(`reduced-motion check: ${motion.error}`);
+    return motion;
+  }
+  const checks: Array<[string, MotionRead | null, boolean]> = [
+    ['with motion allowed', motion.motion, false],
+    ['under reduced motion', motion.reduced, true],
+  ];
+  for (const [label, read, reduced] of checks) {
+    if (!read) {
+      failures.push(`the running step was not read ${label}`);
+      continue;
+    }
+    if (read.reducedMotion !== reduced) failures.push(`prefers-reduced-motion was ${read.reducedMotion ? 'reduce' : 'no-preference'} ${label}`);
+    if (read.stateText !== RUNNING_TEXT || !read.stateVisible) failures.push(`the running step does not show visible "${RUNNING_TEXT}" text ${label} (${JSON.stringify(read.stateText)})`);
+    if (reduced) {
+      if (read.animationName !== 'none' || read.runningAnimations !== 0) failures.push(`the running step still animates under reduced motion (${read.animationName}, ${read.runningAnimations} running)`);
+    } else if (read.animationName !== RUNNING_ANIMATION || read.runningAnimations === 0) {
+      failures.push(`the running step does not pulse with motion allowed (${read.animationName}, ${read.runningAnimations} running)`);
+    }
+  }
+  return motion;
+}
+
 /** Pass/fail for the design specimen: all five faces loaded, both icons with the right semantics, rendered contrast and focus. */
 export function evaluateDesign(probe: DesignProbeResult | undefined): DesignReport {
   const failures: string[] = [];
@@ -437,6 +525,7 @@ export function evaluateDesign(probe: DesignProbeResult | undefined): DesignRepo
   }
   const focus = evaluateFocus(probe, failures);
   const contrast = evaluateContrast(probe, failures);
+  const motion = evaluateMotion(probe, failures);
   return {
     ok: failures.length === 0,
     failures,
@@ -446,6 +535,7 @@ export function evaluateDesign(probe: DesignProbeResult | undefined): DesignRepo
     informativeIcon: informative,
     contrast,
     focus,
+    motion,
   };
 }
 
@@ -469,6 +559,38 @@ async function probeFocus(contents: WebContents, design: DesignProbeResult): Pro
   design.focus = visits.map(({ pairs: _pairs, ...visit }) => visit);
 }
 
+/**
+ * Emulates `prefers-reduced-motion` through the DevTools protocol and reads the
+ * running PlanStep under `no-preference`, then `reduce`; the emulation is
+ * cleared and the debugger detached afterwards.
+ */
+async function probeMotion(contents: WebContents, design: DesignProbeResult): Promise<void> {
+  const motion: MotionProbe = { motion: null, reduced: null, error: null };
+  const cdp = contents.debugger;
+  const emulate = (value: string | null) =>
+    cdp.sendCommand('Emulation.setEmulatedMedia', { features: value === null ? [] : [{ name: 'prefers-reduced-motion', value }] });
+  const readUnder = async (value: string) => {
+    await emulate(value);
+    await new Promise((resolve) => setTimeout(resolve, MOTION_SETTLE_MS));
+    const read = (await contents.executeJavaScript(MOTION_PROBE)) as MotionRead | { error: string };
+    if ('error' in read) throw new Error(read.error);
+    return read;
+  };
+  try {
+    cdp.attach('1.3');
+    try {
+      motion.motion = await readUnder('no-preference');
+      motion.reduced = await readUnder('reduce');
+    } finally {
+      await emulate(null).catch(() => undefined);
+      cdp.detach();
+    }
+  } catch (error) {
+    motion.error = (error as Error).message;
+  }
+  design.motion = motion;
+}
+
 async function waitForLoad(contents: WebContents): Promise<void> {
   if (!contents.isLoading()) return;
   await new Promise<void>((resolve, reject) => {
@@ -487,6 +609,7 @@ export async function probeRenderer(
   const url = contents.getURL();
   const probe = (await contents.executeJavaScript(RENDERER_PROBE)) as RendererProbeOutput;
   await probeFocus(contents, probe.design);
+  await probeMotion(contents, probe.design);
   const before = blocked.length;
   await contents.executeJavaScript(`location.href = ${JSON.stringify(PROBE_TARGET)}; true`);
   await new Promise((resolve) => setTimeout(resolve, NAVIGATION_SETTLE_MS));

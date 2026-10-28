@@ -1,5 +1,5 @@
 /**
- * Stories 1.6 and 1.7: contrast for every primitive × state, computed from tokens.
+ * Stories 1.6, 1.7 and 1.8: contrast for every primitive × state, computed from tokens.
  *
  * Fails below 4.5:1 (text) or 3:1 (non-text), naming the pair and state.
  * Writes `evidence/contrast-primitives.json` when it is missing or when
@@ -30,10 +30,10 @@ function evidence(): string {
   const results = computeTokenContrast();
   const document = {
     kind: 'primitive-contrast-evidence',
-    story: '1.6, 1.7',
+    story: '1.6, 1.7, 1.8',
     source: 'src/renderer/design/contrast.ts (CONTRAST_PAIRS) over src/renderer/design/tokens.ts',
     method: 'WCAG 2.2 relative luminance; ratios unrounded. Text needs 4.5:1, non-text indicators and boundaries 3:1.',
-    rendered: 'pnpm smoke re-reads every pair whose "rendered" is "static" or "focus" from computed styles in Chromium and prints the ratios in its design report; "token-only" pairs (hover, placeholder, sidebar placements, the agent symbol image, focus inside an open menu) are recorded here only.',
+    rendered: 'pnpm smoke re-reads every pair whose "rendered" is "static" or "focus" from computed styles in Chromium and prints the ratios in its design report; "token-only" pairs (hover, placeholder, sidebar placements, the agent symbol image, focus inside an open menu, a decision without a basis, focus on a transient toast) are recorded here only.',
     thresholds: CONTRAST_THRESHOLDS,
     summary: {
       pairs: results.length,
@@ -128,6 +128,26 @@ describe('primitive contrast pairs', () => {
     const rendered = (hook: string) => CONTRAST_PAIRS.filter((entry) => entry.render?.when === 'focus' && entry.render.hook === hook);
     expect(rendered('tabs').length).toBeGreaterThan(0);
     expect(rendered('menu-trigger').length).toBeGreaterThan(0);
+  });
+
+  it('covers the Story 1.8 primitives: every PlanStep state, every DiffLine kind, both new focus hooks', () => {
+    const of = (primitive: string) => CONTRAST_PAIRS.filter((entry) => entry.primitive === primitive);
+    for (const primitive of ['JudgmentTag', 'FileChip', 'PlanStep', 'ApprovalCard', 'DiffLine', 'Toast'] as const) {
+      expect(of(primitive).length, primitive).toBeGreaterThan(0);
+    }
+    expect(new Set(of('PlanStep').map((entry) => entry.state))).toEqual(new Set(['pending', 'running', 'done', 'blocked', 'failed', 'interrupted', 'any']));
+    expect(new Set(of('DiffLine').map((entry) => entry.variant))).toEqual(new Set(['add', 'delete', 'change', 'context']));
+    expect(new Set(of('JudgmentTag').filter((entry) => entry.part === 'kind label' && entry.render).map((entry) => entry.variant))).toEqual(
+      new Set(['calculation', 'observation', 'suggestion', 'decision', 'gap']),
+    );
+    for (const state of ['failed', 'unreadable', 'permission-limited']) {
+      const pairEntry = of('FileChip').find((entry) => entry.state === state);
+      expect(pairEntry?.foreground, state).not.toBe('file-pdf');
+      expect(pairEntry?.render, state).not.toBeNull();
+    }
+    const rendered = (hook: string) => CONTRAST_PAIRS.filter((entry) => entry.render?.when === 'focus' && entry.render.hook === hook);
+    expect(rendered('file-chip-remove').length).toBeGreaterThan(0);
+    expect(rendered('approval-primary').length).toBeGreaterThan(0);
   });
 
   it('measures the explicit text of all seven StatusChip source states, accepted and explained in green-800', () => {

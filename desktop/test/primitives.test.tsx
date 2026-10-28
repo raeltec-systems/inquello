@@ -400,7 +400,8 @@ describe('primitives.css', () => {
     const tokenSizes = new Set<string>([
       ...Object.values(spacing),
       ...Object.values(rounded),
-      ...Object.values(components).flatMap((group) => Object.values(group).map((value) => resolveToken(value))),
+      // Multi-value tokens (ApprovalCard and Toast paddings) contribute each of their sizes.
+      ...Object.values(components).flatMap((group) => Object.values(group).flatMap((value) => resolveToken(value).split(' '))),
       ...Object.values(typography).map((role) => role.fontSize),
       ...resolveToken(components.TextField.focusRing).split(' '),
       // DESIGN.md component table literals: TextField 7×9px padding, checkbox 4px radius, 9px stop square.
@@ -425,11 +426,15 @@ describe('primitives.css', () => {
     expect(rules).toMatch(/\.iq-choice-box \{[^}]*border: 1px solid var\(--ink-600\);/);
   });
 
-  it('removes the spin under reduced motion and animates nothing else', () => {
+  it('removes the spin and the pulse under reduced motion and animates nothing else', () => {
     const reduced = /@media \(prefers-reduced-motion: reduce\) \{([\s\S]*)\}\s*$/.exec(rules);
-    expect(reduced?.[1]).toMatch(/\.iq-spinner \{\s*animation: none;/);
+    expect(reduced?.[1]).toMatch(/\.iq-spinner,\s*\.iq-plan-step-pulse \{\s*animation: none;/);
     const animations = [...rules.matchAll(/animation:\s*([^;]+);/g)].map((match) => match[1]!.trim());
-    expect(animations).toEqual(['iq-spin var(--spin-duration) linear infinite', 'none']);
+    expect(animations).toEqual([
+      'iq-spin var(--spin-duration) linear infinite',
+      'iq-pulse var(--duration-slow) var(--ease-standard) infinite',
+      'none',
+    ]);
   });
 
   it('keeps the pending text visible: it is a DOM node, not an animation', () => {

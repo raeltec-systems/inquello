@@ -176,8 +176,9 @@ export const icon = {
 } as const;
 
 /**
- * DESIGN.md `components.*` for the Story 1.6 action and input primitives and
- * the Story 1.7 navigation and identity primitives, keys
+ * DESIGN.md `components.*` for the Story 1.6 action and input primitives, the
+ * Story 1.7 navigation and identity primitives and the Story 1.8 progress and
+ * proposed-action primitives, keys
  * and values unchanged (references such as `{colors.ink-600}` kept as written;
  * `resolveToken` resolves them). `test/primitives.test.tsx` holds these equal
  * to the frontmatter both ways.
@@ -284,6 +285,61 @@ export const components = {
     acceptedForeground: '{colors.green-800}',
     radius: '{rounded.chip}',
     fontSize: '11px',
+  },
+  // Story 1.8 progress and proposed-action primitives.
+  JudgmentTag: {
+    calculation: '{colors.judgment-calculation}',
+    observation: '{colors.judgment-observation}',
+    suggestion: '{colors.judgment-suggestion}',
+    decision: '{colors.judgment-decision}',
+    gap: '{colors.judgment-gap}',
+    uppercaseFontSize: '10px',
+    sentenceFontSize: '11px',
+  },
+  FileChip: {
+    background: '{colors.ink-50}',
+    foreground: '{colors.text-primary}',
+    removeForeground: '{colors.text-muted}',
+    radius: '{rounded.md}',
+    tagFontSize: '9px',
+    labelFontSize: '12px',
+  },
+  PlanStep: {
+    foreground: '{colors.text-primary}',
+    doneForeground: '{colors.text-muted}',
+    metaForeground: '{colors.text-muted}',
+    doneMarker: '{colors.green-600}',
+    runningMarker: '{colors.blue-600}',
+    pendingBoundary: '{colors.ink-600}',
+    indicatorSize: '14px',
+    indicatorRadius: '4px',
+  },
+  ApprovalCard: {
+    background: '{colors.approval-bg}',
+    border: '{colors.approval-border}',
+    labelForeground: '{colors.amber-700}',
+    metaForeground: '{colors.text-muted}',
+    radius: '{rounded.card}',
+    padding: '12px 14px',
+    questionFontSize: '13.5px',
+  },
+  DiffLine: {
+    addedBackground: '{colors.diff-add-bg}',
+    addedForeground: '{colors.diff-add-fg}',
+    deletedBackground: '{colors.diff-del-bg}',
+    deletedForeground: '{colors.diff-del-fg}',
+    changedBackground: '{colors.blue-50}',
+    gutterForeground: '{colors.text-muted}',
+    fontSize: '12.5px',
+    gutterWidth: '40px',
+  },
+  Toast: {
+    background: '{colors.ink-900}',
+    foreground: '{colors.white}',
+    radius: '{rounded.md}',
+    padding: '8px 14px',
+    fontSize: '12.5px',
+    shadow: '0 8px 24px rgba(0, 0, 0, 0.2)',
   },
 } as const;
 

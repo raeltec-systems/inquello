@@ -1,17 +1,17 @@
 {
   "kind": "primitive-contrast-evidence",
-  "story": "1.6, 1.7",
+  "story": "1.6, 1.7, 1.8",
   "source": "src/renderer/design/contrast.ts (CONTRAST_PAIRS) over src/renderer/design/tokens.ts",
   "method": "WCAG 2.2 relative luminance; ratios unrounded. Text needs 4.5:1, non-text indicators and boundaries 3:1.",
-  "rendered": "pnpm smoke re-reads every pair whose \"rendered\" is \"static\" or \"focus\" from computed styles in Chromium and prints the ratios in its design report; \"token-only\" pairs (hover, placeholder, sidebar placements, the agent symbol image, focus inside an open menu) are recorded here only.",
+  "rendered": "pnpm smoke re-reads every pair whose \"rendered\" is \"static\" or \"focus\" from computed styles in Chromium and prints the ratios in its design report; \"token-only\" pairs (hover, placeholder, sidebar placements, the agent symbol image, focus inside an open menu, a decision without a basis, focus on a transient toast) are recorded here only.",
   "thresholds": {
     "text": 4.5,
     "non-text": 3
   },
   "summary": {
-    "pairs": 142,
-    "passing": 142,
-    "rendered": 109,
+    "pairs": 214,
+    "passing": 214,
+    "rendered": 177,
     "minimum": 3.647993864961982
   },
   "pairs": [
@@ -2854,6 +2854,1446 @@
       "threshold": 4.5,
       "pass": true,
       "rendered": "static"
+    },
+    {
+      "id": "judgmenttag.calculation.default.kind label",
+      "primitive": "JudgmentTag",
+      "variant": "calculation",
+      "state": "default",
+      "part": "kind label",
+      "kind": "text",
+      "foreground": {
+        "token": "judgment-calculation",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 17.63359508009438,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "judgmenttag.observation.default.kind label",
+      "primitive": "JudgmentTag",
+      "variant": "observation",
+      "state": "default",
+      "part": "kind label",
+      "kind": "text",
+      "foreground": {
+        "token": "judgment-observation",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.078634637744844,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "judgmenttag.suggestion.default.kind label",
+      "primitive": "JudgmentTag",
+      "variant": "suggestion",
+      "state": "default",
+      "part": "kind label",
+      "kind": "text",
+      "foreground": {
+        "token": "judgment-suggestion",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.160732132578806,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "judgmenttag.decision.default.kind label",
+      "primitive": "JudgmentTag",
+      "variant": "decision",
+      "state": "default",
+      "part": "kind label",
+      "kind": "text",
+      "foreground": {
+        "token": "judgment-decision",
+        "value": "#2f7a52"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 5.215421473892526,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "judgmenttag.gap.default.kind label",
+      "primitive": "JudgmentTag",
+      "variant": "gap",
+      "state": "default",
+      "part": "kind label",
+      "kind": "text",
+      "foreground": {
+        "token": "judgment-gap",
+        "value": "#8a5a12"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 5.912403568542949,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "judgmenttag.suggestion.default.dashed box against surface",
+      "primitive": "JudgmentTag",
+      "variant": "suggestion",
+      "state": "default",
+      "part": "dashed box against surface",
+      "kind": "non-text",
+      "foreground": {
+        "token": "judgment-suggestion",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.160732132578806,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "judgmenttag.decision.default.dot against surface",
+      "primitive": "JudgmentTag",
+      "variant": "decision",
+      "state": "default",
+      "part": "dot against surface",
+      "kind": "non-text",
+      "foreground": {
+        "token": "judgment-decision",
+        "value": "#2f7a52"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 5.215421473892526,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "judgmenttag.decision.default.basis",
+      "primitive": "JudgmentTag",
+      "variant": "decision",
+      "state": "default",
+      "part": "basis",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.078634637744844,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "judgmenttag.decision.basis missing.kind label",
+      "primitive": "JudgmentTag",
+      "variant": "decision",
+      "state": "basis missing",
+      "part": "kind label",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.078634637744844,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "token-only"
+    },
+    {
+      "id": "judgmenttag.any.default.claim",
+      "primitive": "JudgmentTag",
+      "variant": "any",
+      "state": "default",
+      "part": "claim",
+      "kind": "text",
+      "foreground": {
+        "token": "text-primary",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 17.63359508009438,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "filechip.pdf.default.type tag",
+      "primitive": "FileChip",
+      "variant": "pdf",
+      "state": "default",
+      "part": "type tag",
+      "kind": "text",
+      "foreground": {
+        "token": "file-pdf",
+        "value": "#b0413e"
+      },
+      "adjacent": {
+        "token": "ink-50",
+        "value": "#fafbfc"
+      },
+      "ratio": 5.520419805430614,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "filechip.xls.default.type tag",
+      "primitive": "FileChip",
+      "variant": "xls",
+      "state": "default",
+      "part": "type tag",
+      "kind": "text",
+      "foreground": {
+        "token": "file-xls",
+        "value": "#2f7a52"
+      },
+      "adjacent": {
+        "token": "ink-50",
+        "value": "#fafbfc"
+      },
+      "ratio": 5.033956046288675,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "filechip.doc.default.type tag",
+      "primitive": "FileChip",
+      "variant": "doc",
+      "state": "default",
+      "part": "type tag",
+      "kind": "text",
+      "foreground": {
+        "token": "file-doc",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "ink-50",
+        "value": "#fafbfc"
+      },
+      "ratio": 5.946375556338993,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "filechip.folder.default.type tag",
+      "primitive": "FileChip",
+      "variant": "folder",
+      "state": "default",
+      "part": "type tag",
+      "kind": "text",
+      "foreground": {
+        "token": "file-folder",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "ink-50",
+        "value": "#fafbfc"
+      },
+      "ratio": 5.8671345625720726,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "filechip.other.default.type tag",
+      "primitive": "FileChip",
+      "variant": "other",
+      "state": "default",
+      "part": "type tag",
+      "kind": "text",
+      "foreground": {
+        "token": "file-folder",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "ink-50",
+        "value": "#fafbfc"
+      },
+      "ratio": 5.8671345625720726,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "filechip.any.default.name",
+      "primitive": "FileChip",
+      "variant": "any",
+      "state": "default",
+      "part": "name",
+      "kind": "text",
+      "foreground": {
+        "token": "text-primary",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "ink-50",
+        "value": "#fafbfc"
+      },
+      "ratio": 17.020051594218778,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "filechip.removable.default.remove glyph",
+      "primitive": "FileChip",
+      "variant": "removable",
+      "state": "default",
+      "part": "remove glyph",
+      "kind": "non-text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "ink-50",
+        "value": "#fafbfc"
+      },
+      "ratio": 5.8671345625720726,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "filechip.removable.hover.remove glyph",
+      "primitive": "FileChip",
+      "variant": "removable",
+      "state": "hover",
+      "part": "remove glyph",
+      "kind": "non-text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "surface-hover",
+        "value": "#e6e8eb"
+      },
+      "ratio": 4.951735561766299,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "token-only"
+    },
+    {
+      "id": "filechip.failed.failed.state text",
+      "primitive": "FileChip",
+      "variant": "failed",
+      "state": "failed",
+      "part": "state text",
+      "kind": "text",
+      "foreground": {
+        "token": "red-800",
+        "value": "#7a2e2b"
+      },
+      "adjacent": {
+        "token": "ink-50",
+        "value": "#fafbfc"
+      },
+      "ratio": 8.995808512600018,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "filechip.unreadable.unreadable.state text",
+      "primitive": "FileChip",
+      "variant": "unreadable",
+      "state": "unreadable",
+      "part": "state text",
+      "kind": "text",
+      "foreground": {
+        "token": "amber-800",
+        "value": "#5c4210"
+      },
+      "adjacent": {
+        "token": "ink-50",
+        "value": "#fafbfc"
+      },
+      "ratio": 9.041418758008115,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "filechip.permission-limited.permission-limited.state text",
+      "primitive": "FileChip",
+      "variant": "permission-limited",
+      "state": "permission-limited",
+      "part": "state text",
+      "kind": "text",
+      "foreground": {
+        "token": "amber-800",
+        "value": "#5c4210"
+      },
+      "adjacent": {
+        "token": "ink-50",
+        "value": "#fafbfc"
+      },
+      "ratio": 9.041418758008115,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "filechip.removable.focus-visible.focus edge against ring",
+      "primitive": "FileChip",
+      "variant": "removable",
+      "state": "focus-visible",
+      "part": "focus edge against ring",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "blue-150",
+        "value": "#dfe7f5"
+      },
+      "ratio": 4.953954743132232,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "focus"
+    },
+    {
+      "id": "filechip.removable.focus-visible.focus edge against chip",
+      "primitive": "FileChip",
+      "variant": "removable",
+      "state": "focus-visible",
+      "part": "focus edge against chip",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "ink-50",
+        "value": "#fafbfc"
+      },
+      "ratio": 5.946375556338993,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "focus"
+    },
+    {
+      "id": "filechip.removable.focus-visible.focus edge against surface",
+      "primitive": "FileChip",
+      "variant": "removable",
+      "state": "focus-visible",
+      "part": "focus edge against surface",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.160732132578806,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "focus"
+    },
+    {
+      "id": "planstep.step.pending.indicator against surface",
+      "primitive": "PlanStep",
+      "variant": "step",
+      "state": "pending",
+      "part": "indicator against surface",
+      "kind": "non-text",
+      "foreground": {
+        "token": "ink-600",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.078634637744844,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "planstep.step.pending.label",
+      "primitive": "PlanStep",
+      "variant": "step",
+      "state": "pending",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "text-primary",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 17.63359508009438,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "planstep.step.running.indicator against surface",
+      "primitive": "PlanStep",
+      "variant": "step",
+      "state": "running",
+      "part": "indicator against surface",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.160732132578806,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "planstep.step.running.label",
+      "primitive": "PlanStep",
+      "variant": "step",
+      "state": "running",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "text-primary",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 17.63359508009438,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "planstep.step.running.state text",
+      "primitive": "PlanStep",
+      "variant": "step",
+      "state": "running",
+      "part": "state text",
+      "kind": "text",
+      "foreground": {
+        "token": "blue-700",
+        "value": "#244a8f"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 8.567374383026257,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "planstep.step.done.indicator against surface",
+      "primitive": "PlanStep",
+      "variant": "step",
+      "state": "done",
+      "part": "indicator against surface",
+      "kind": "non-text",
+      "foreground": {
+        "token": "green-600",
+        "value": "#2f7a52"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 5.215421473892526,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "planstep.step.done.label",
+      "primitive": "PlanStep",
+      "variant": "step",
+      "state": "done",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.078634637744844,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "planstep.step.blocked.indicator against surface",
+      "primitive": "PlanStep",
+      "variant": "step",
+      "state": "blocked",
+      "part": "indicator against surface",
+      "kind": "non-text",
+      "foreground": {
+        "token": "amber-700",
+        "value": "#8a5a12"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 5.912403568542949,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "planstep.step.blocked.label",
+      "primitive": "PlanStep",
+      "variant": "step",
+      "state": "blocked",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "text-primary",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 17.63359508009438,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "planstep.step.blocked.state text",
+      "primitive": "PlanStep",
+      "variant": "step",
+      "state": "blocked",
+      "part": "state text",
+      "kind": "text",
+      "foreground": {
+        "token": "amber-800",
+        "value": "#5c4210"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 9.367346300080527,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "planstep.step.failed.indicator against surface",
+      "primitive": "PlanStep",
+      "variant": "step",
+      "state": "failed",
+      "part": "indicator against surface",
+      "kind": "non-text",
+      "foreground": {
+        "token": "red-600",
+        "value": "#b0413e"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 5.719421411986913,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "planstep.step.failed.label",
+      "primitive": "PlanStep",
+      "variant": "step",
+      "state": "failed",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "text-primary",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 17.63359508009438,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "planstep.step.failed.state text",
+      "primitive": "PlanStep",
+      "variant": "step",
+      "state": "failed",
+      "part": "state text",
+      "kind": "text",
+      "foreground": {
+        "token": "red-800",
+        "value": "#7a2e2b"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 9.320091884042018,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "planstep.step.interrupted.indicator against surface",
+      "primitive": "PlanStep",
+      "variant": "step",
+      "state": "interrupted",
+      "part": "indicator against surface",
+      "kind": "non-text",
+      "foreground": {
+        "token": "ink-600",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.078634637744844,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "planstep.step.interrupted.label",
+      "primitive": "PlanStep",
+      "variant": "step",
+      "state": "interrupted",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "text-primary",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 17.63359508009438,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "planstep.step.interrupted.state text",
+      "primitive": "PlanStep",
+      "variant": "step",
+      "state": "interrupted",
+      "part": "state text",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.078634637744844,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "planstep.step.running.indicator against its fill",
+      "primitive": "PlanStep",
+      "variant": "step",
+      "state": "running",
+      "part": "indicator against its fill",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "blue-150",
+        "value": "#dfe7f5"
+      },
+      "ratio": 4.953954743132232,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "planstep.step.done.check against marker",
+      "primitive": "PlanStep",
+      "variant": "step",
+      "state": "done",
+      "part": "check against marker",
+      "kind": "non-text",
+      "foreground": {
+        "token": "white",
+        "value": "#ffffff"
+      },
+      "adjacent": {
+        "token": "green-600",
+        "value": "#2f7a52"
+      },
+      "ratio": 5.215421473892526,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "planstep.step.any.meta",
+      "primitive": "PlanStep",
+      "variant": "step",
+      "state": "any",
+      "part": "meta",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.078634637744844,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "approvalcard.card.default.overline",
+      "primitive": "ApprovalCard",
+      "variant": "card",
+      "state": "default",
+      "part": "overline",
+      "kind": "text",
+      "foreground": {
+        "token": "amber-700",
+        "value": "#8a5a12"
+      },
+      "adjacent": {
+        "token": "approval-bg",
+        "value": "#fffaf0"
+      },
+      "ratio": 5.682804375481683,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "approvalcard.card.default.context",
+      "primitive": "ApprovalCard",
+      "variant": "card",
+      "state": "default",
+      "part": "context",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "approval-bg",
+        "value": "#fffaf0"
+      },
+      "ratio": 5.842580114138563,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "approvalcard.card.default.action",
+      "primitive": "ApprovalCard",
+      "variant": "card",
+      "state": "default",
+      "part": "action",
+      "kind": "text",
+      "foreground": {
+        "token": "text-primary",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "approval-bg",
+        "value": "#fffaf0"
+      },
+      "ratio": 16.948821256010426,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "approvalcard.card.default.fact term",
+      "primitive": "ApprovalCard",
+      "variant": "card",
+      "state": "default",
+      "part": "fact term",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "approval-bg",
+        "value": "#fffaf0"
+      },
+      "ratio": 5.842580114138563,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "approvalcard.card.default.fact value",
+      "primitive": "ApprovalCard",
+      "variant": "card",
+      "state": "default",
+      "part": "fact value",
+      "kind": "text",
+      "foreground": {
+        "token": "text-primary",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "approval-bg",
+        "value": "#fffaf0"
+      },
+      "ratio": 16.948821256010426,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "approvalcard.card.default.quoted content",
+      "primitive": "ApprovalCard",
+      "variant": "card",
+      "state": "default",
+      "part": "quoted content",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "white",
+        "value": "#ffffff"
+      },
+      "ratio": 6.078634637744844,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "approvalcard.primary action.default.label",
+      "primitive": "ApprovalCard",
+      "variant": "primary action",
+      "state": "default",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "action-primary-fg",
+        "value": "#ffffff"
+      },
+      "adjacent": {
+        "token": "action-primary-bg",
+        "value": "#16191d"
+      },
+      "ratio": 17.63359508009438,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "approvalcard.alternative action.default.label",
+      "primitive": "ApprovalCard",
+      "variant": "alternative action",
+      "state": "default",
+      "part": "label",
+      "kind": "text",
+      "foreground": {
+        "token": "text-primary",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "action-secondary-bg",
+        "value": "#ffffff"
+      },
+      "ratio": 17.63359508009438,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "approvalcard.primary action.focus-visible.focus edge against ring",
+      "primitive": "ApprovalCard",
+      "variant": "primary action",
+      "state": "focus-visible",
+      "part": "focus edge against ring",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "blue-150",
+        "value": "#dfe7f5"
+      },
+      "ratio": 4.953954743132232,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "focus"
+    },
+    {
+      "id": "approvalcard.primary action.focus-visible.focus edge against card",
+      "primitive": "ApprovalCard",
+      "variant": "primary action",
+      "state": "focus-visible",
+      "part": "focus edge against card",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "approval-bg",
+        "value": "#fffaf0"
+      },
+      "ratio": 5.9214894777247675,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "focus"
+    },
+    {
+      "id": "diffline.add.default.body",
+      "primitive": "DiffLine",
+      "variant": "add",
+      "state": "default",
+      "part": "body",
+      "kind": "text",
+      "foreground": {
+        "token": "diff-add-fg",
+        "value": "#1e5236"
+      },
+      "adjacent": {
+        "token": "diff-add-bg",
+        "value": "#f0f8f3"
+      },
+      "ratio": 8.39004676272745,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "diffline.add.default.sign",
+      "primitive": "DiffLine",
+      "variant": "add",
+      "state": "default",
+      "part": "sign",
+      "kind": "text",
+      "foreground": {
+        "token": "diff-add-fg",
+        "value": "#1e5236"
+      },
+      "adjacent": {
+        "token": "diff-add-bg",
+        "value": "#f0f8f3"
+      },
+      "ratio": 8.39004676272745,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "diffline.add.default.gutter",
+      "primitive": "DiffLine",
+      "variant": "add",
+      "state": "default",
+      "part": "gutter",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "diff-add-bg",
+        "value": "#f0f8f3"
+      },
+      "ratio": 5.623092089190757,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "diffline.add.default.stage text",
+      "primitive": "DiffLine",
+      "variant": "add",
+      "state": "default",
+      "part": "stage text",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "diff-add-bg",
+        "value": "#f0f8f3"
+      },
+      "ratio": 5.623092089190757,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "diffline.delete.default.body",
+      "primitive": "DiffLine",
+      "variant": "delete",
+      "state": "default",
+      "part": "body",
+      "kind": "text",
+      "foreground": {
+        "token": "diff-del-fg",
+        "value": "#7a2e2b"
+      },
+      "adjacent": {
+        "token": "diff-del-bg",
+        "value": "#fdf3f2"
+      },
+      "ratio": 8.556255832895857,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "diffline.delete.default.sign",
+      "primitive": "DiffLine",
+      "variant": "delete",
+      "state": "default",
+      "part": "sign",
+      "kind": "text",
+      "foreground": {
+        "token": "diff-del-fg",
+        "value": "#7a2e2b"
+      },
+      "adjacent": {
+        "token": "diff-del-bg",
+        "value": "#fdf3f2"
+      },
+      "ratio": 8.556255832895857,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "diffline.delete.default.gutter",
+      "primitive": "DiffLine",
+      "variant": "delete",
+      "state": "default",
+      "part": "gutter",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "diff-del-bg",
+        "value": "#fdf3f2"
+      },
+      "ratio": 5.58045497000946,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "diffline.delete.default.stage text",
+      "primitive": "DiffLine",
+      "variant": "delete",
+      "state": "default",
+      "part": "stage text",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "diff-del-bg",
+        "value": "#fdf3f2"
+      },
+      "ratio": 5.58045497000946,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "diffline.change.default.body",
+      "primitive": "DiffLine",
+      "variant": "change",
+      "state": "default",
+      "part": "body",
+      "kind": "text",
+      "foreground": {
+        "token": "text-primary",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "blue-50",
+        "value": "#f2f6fc"
+      },
+      "ratio": 16.2593594472652,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "diffline.change.default.sign",
+      "primitive": "DiffLine",
+      "variant": "change",
+      "state": "default",
+      "part": "sign",
+      "kind": "text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "blue-50",
+        "value": "#f2f6fc"
+      },
+      "ratio": 5.680608959598462,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "diffline.change.default.gutter",
+      "primitive": "DiffLine",
+      "variant": "change",
+      "state": "default",
+      "part": "gutter",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "blue-50",
+        "value": "#f2f6fc"
+      },
+      "ratio": 5.604909553313908,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "diffline.change.default.stage text",
+      "primitive": "DiffLine",
+      "variant": "change",
+      "state": "default",
+      "part": "stage text",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "blue-50",
+        "value": "#f2f6fc"
+      },
+      "ratio": 5.604909553313908,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "diffline.context.default.body",
+      "primitive": "DiffLine",
+      "variant": "context",
+      "state": "default",
+      "part": "body",
+      "kind": "text",
+      "foreground": {
+        "token": "text-secondary",
+        "value": "#3d434b"
+      },
+      "adjacent": {
+        "token": "white",
+        "value": "#ffffff"
+      },
+      "ratio": 9.986295725725416,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "diffline.context.default.gutter",
+      "primitive": "DiffLine",
+      "variant": "context",
+      "state": "default",
+      "part": "gutter",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "white",
+        "value": "#ffffff"
+      },
+      "ratio": 6.078634637744844,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "diffline.context.default.stage text",
+      "primitive": "DiffLine",
+      "variant": "context",
+      "state": "default",
+      "part": "stage text",
+      "kind": "text",
+      "foreground": {
+        "token": "text-muted",
+        "value": "#5b636e"
+      },
+      "adjacent": {
+        "token": "white",
+        "value": "#ffffff"
+      },
+      "ratio": 6.078634637744844,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "toast.toast.default.message",
+      "primitive": "Toast",
+      "variant": "toast",
+      "state": "default",
+      "part": "message",
+      "kind": "text",
+      "foreground": {
+        "token": "white",
+        "value": "#ffffff"
+      },
+      "adjacent": {
+        "token": "ink-900",
+        "value": "#16191d"
+      },
+      "ratio": 17.63359508009438,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "toast.toast.default.fill against surface",
+      "primitive": "Toast",
+      "variant": "toast",
+      "state": "default",
+      "part": "fill against surface",
+      "kind": "non-text",
+      "foreground": {
+        "token": "ink-900",
+        "value": "#16191d"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 17.63359508009438,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "static"
+    },
+    {
+      "id": "toast.transient.focus-visible.focus edge against surface",
+      "primitive": "Toast",
+      "variant": "transient",
+      "state": "focus-visible",
+      "part": "focus edge against surface",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "surface-app",
+        "value": "#ffffff"
+      },
+      "ratio": 6.160732132578806,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "token-only"
+    },
+    {
+      "id": "toast.transient.focus-visible.focus edge against ring",
+      "primitive": "Toast",
+      "variant": "transient",
+      "state": "focus-visible",
+      "part": "focus edge against ring",
+      "kind": "non-text",
+      "foreground": {
+        "token": "blue-600",
+        "value": "#2f5fb3"
+      },
+      "adjacent": {
+        "token": "blue-150",
+        "value": "#dfe7f5"
+      },
+      "ratio": 4.953954743132232,
+      "threshold": 3,
+      "pass": true,
+      "rendered": "token-only"
     }
   ],
   "exempt": [
@@ -3054,6 +4494,69 @@
       "foreground": "status-accepted-border",
       "adjacent": "surface-app",
       "reason": "The explicit visible text names the state and is measured; the chip border and fill are supplementary."
+    },
+    {
+      "primitive": "FileChip",
+      "variant": "any",
+      "state": "default",
+      "part": "chip border against surface",
+      "foreground": "border-default",
+      "adjacent": "surface-app",
+      "reason": "The chip is identified by its measured name and type tag; its border is decorative. The remove control is a labelled button whose glyph is measured."
+    },
+    {
+      "primitive": "PlanStep",
+      "variant": "step",
+      "state": "running",
+      "part": "pulsing inner dot",
+      "foreground": "blue-600",
+      "adjacent": "blue-150",
+      "reason": "The dot animates between opacity 1 and 0.3 and is supplementary: the still blue-600 boundary and the visible \"Running\" text carry the state, and both are measured."
+    },
+    {
+      "primitive": "ApprovalCard",
+      "variant": "card",
+      "state": "default",
+      "part": "card border against surface",
+      "foreground": "approval-border",
+      "adjacent": "surface-app",
+      "reason": "The card is a labelled region identified by its measured overline and text; the amber-200 border and amber-50 fill are supplementary."
+    },
+    {
+      "primitive": "ApprovalCard",
+      "variant": "card",
+      "state": "default",
+      "part": "quote border against quote",
+      "foreground": "approval-border",
+      "adjacent": "white",
+      "reason": "The quoted content is measured text; the border around it is decorative."
+    },
+    {
+      "primitive": "DiffLine",
+      "variant": "add",
+      "state": "default",
+      "part": "row fill against surface",
+      "foreground": "diff-add-bg",
+      "adjacent": "surface-app",
+      "reason": "The kind is carried by the measured sign and the accessible kind text; the pale row fill is supplementary."
+    },
+    {
+      "primitive": "DiffLine",
+      "variant": "delete",
+      "state": "default",
+      "part": "row fill against surface",
+      "foreground": "diff-del-bg",
+      "adjacent": "surface-app",
+      "reason": "The kind is carried by the measured sign and the accessible kind text; the pale row fill is supplementary."
+    },
+    {
+      "primitive": "DiffLine",
+      "variant": "change",
+      "state": "default",
+      "part": "row fill against surface",
+      "foreground": "blue-50",
+      "adjacent": "surface-app",
+      "reason": "The kind is carried by the measured sign and the accessible kind text; the pale row fill is supplementary."
     }
   ]
 }

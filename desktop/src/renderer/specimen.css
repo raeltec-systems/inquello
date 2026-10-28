@@ -25,6 +25,15 @@
 .specimen-hook:has(.iq-field, .iq-choice-group) {
   flex: 1 1 var(--panel-min-width);
 }
+/* Story 1.8: the plan, approval and diff specimens take the full row. */
+.specimen-hook:has(.iq-plan, .iq-approval, .specimen-diff) {
+  flex: 1 1 100%;
+}
+.specimen-diff {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
 .specimen {
   max-width: var(--thread-max-width);
   margin: 0 auto;

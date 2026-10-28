@@ -6,8 +6,9 @@
  * component table's literals (TextField 7×9px padding, checkbox 4px radius,
  * 9px stop square). Story 1.7 adds the components.Avatar/Badge/Menu values,
  * the component table's SegmentedControl 4×9px, Tabs 5×10px and Menu 7×9px
- * paddings, and the popover shadow variable. test/primitives.test.tsx
- * enforces this.
+ * paddings, and the popover shadow variable. Story 1.8 adds the
+ * components.JudgmentTag/FileChip/PlanStep/ApprovalCard/DiffLine/Toast values
+ * and the toast shadow variable. test/primitives.test.tsx enforces this.
  */
 
 /* ---------- Shared ---------- */
@@ -29,7 +30,9 @@
 .iq-choice-input:focus-visible + .iq-choice-box,
 .iq-segment:focus-visible,
 .iq-tab:focus-visible,
-.iq-tab-panel:focus-visible {
+.iq-tab-panel:focus-visible,
+.iq-file-chip-remove:focus-visible,
+.iq-toast:focus-visible {
   outline: 1px solid var(--blue-600);
   outline-offset: 3px;
   box-shadow: 0 0 0 3px var(--blue-150);
@@ -563,12 +566,323 @@ textarea.iq-field-control { resize: vertical; }
   text-align: center;
 }
 
+/* ---------- Story 1.8: JudgmentTag ---------- */
+.iq-judgment {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1-5);
+}
+/* The 10px mono uppercase label (default) or the 11px sentence-case legend style. */
+.iq-judgment-tag {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-1);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+.iq-judgment--sentence .iq-judgment-tag {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.iq-judgment-mark {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+.iq-judgment--calculation .iq-judgment-mark { font-family: var(--font-mono); font-size: 11px; font-weight: 500; }
+.iq-judgment--calculation .iq-judgment-tag { color: var(--judgment-calculation); }
+.iq-judgment--observation .iq-judgment-tag { color: var(--judgment-observation); }
+.iq-judgment--suggestion .iq-judgment-tag { color: var(--judgment-suggestion); }
+.iq-judgment--decision .iq-judgment-tag { color: var(--judgment-decision); }
+.iq-judgment--gap .iq-judgment-tag { color: var(--judgment-gap); }
+/* A decision without a basis: muted, no green dot. */
+.iq-judgment--unbased .iq-judgment-tag { color: var(--text-muted); }
+.iq-judgment--suggestion .iq-judgment-mark--shape {
+  box-sizing: border-box;
+  width: 10px;
+  height: 8px;
+  border: 1px dashed var(--judgment-suggestion);
+}
+.iq-judgment--decision .iq-judgment-mark--shape {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--judgment-decision);
+}
+.iq-judgment-basis {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.iq-judgment-claim { color: var(--text-primary); }
+
+/* ---------- FileChip ---------- */
+.iq-file-chip {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  max-width: 100%;
+  padding: var(--space-0-5) var(--space-2);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--ink-50);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.iq-file-chip--removable { padding-right: var(--space-0-5); }
+/* The type tag colour is a file-type cue, not an error. */
+.iq-file-chip-tag {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 1;
+}
+.iq-file-chip-tag--pdf { color: var(--file-pdf); }
+.iq-file-chip-tag--xls { color: var(--file-xls); }
+.iq-file-chip-tag--doc { color: var(--file-doc); }
+.iq-file-chip-tag--folder,
+.iq-file-chip-tag--other { color: var(--file-folder); }
+.iq-file-chip-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-weight: 500;
+}
+.iq-file-chip--failed .iq-file-chip-state { color: var(--red-800); }
+.iq-file-chip--unreadable .iq-file-chip-state,
+.iq-file-chip--permission-limited .iq-file-chip-state { color: var(--amber-800); }
+/* A 24px labelled hit target that does not grow the chip. */
+.iq-file-chip-remove {
+  box-sizing: border-box;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--space-6);
+  height: var(--space-6);
+  margin: calc(-1 * var(--space-1)) 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.iq-file-chip-remove:hover { background: var(--surface-hover); }
+
+/* ---------- PlanStep ---------- */
+.iq-plan-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.iq-plan-step {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font: var(--type-ui);
+  color: var(--text-primary);
+}
+.iq-plan-step-indicator {
+  box-sizing: border-box;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--ink-600);
+  border-radius: 4px;
+  background: var(--white);
+  color: var(--white);
+}
+.iq-plan-step--running .iq-plan-step-indicator { border-color: var(--blue-600); background: var(--blue-150); }
+.iq-plan-step--done .iq-plan-step-indicator { border-color: var(--green-600); background: var(--green-600); }
+.iq-plan-step--blocked .iq-plan-step-indicator { border-color: var(--amber-700); background: var(--amber-150); }
+.iq-plan-step--failed .iq-plan-step-indicator { border-color: var(--red-600); background: var(--red-50); }
+.iq-plan-step--interrupted .iq-plan-step-indicator { background: var(--surface-subtle); }
+/* The running dot pulses (DESIGN.md motion: opacity 1 to 0.3 and back); the boundary stays still. */
+.iq-plan-step-pulse {
+  width: var(--space-1-5);
+  height: var(--space-1-5);
+  border-radius: 50%;
+  background: var(--blue-600);
+  animation: iq-pulse var(--duration-slow) var(--ease-standard) infinite;
+}
+.iq-plan-step-label {
+  flex: 1;
+  min-width: 0;
+}
+.iq-plan-step--running .iq-plan-step-label { font-weight: 500; }
+.iq-plan-step--done .iq-plan-step-label { color: var(--text-muted); }
+.iq-plan-step-state {
+  flex: none;
+  font: var(--type-caption);
+  font-weight: 500;
+  color: var(--text-muted);
+}
+.iq-plan-step--running .iq-plan-step-state { color: var(--blue-700); }
+.iq-plan-step--blocked .iq-plan-step-state { color: var(--amber-800); }
+.iq-plan-step--failed .iq-plan-step-state { color: var(--red-800); }
+.iq-plan-step-meta {
+  flex: none;
+  font: var(--type-caption);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* ---------- ApprovalCard ---------- */
+.iq-approval {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: 12px 14px;
+  border: 1px solid var(--approval-border);
+  border-radius: var(--radius-card);
+  background: var(--approval-bg);
+  color: var(--text-primary);
+}
+.iq-approval-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+.iq-approval-overline {
+  font: var(--type-label);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--amber-700);
+}
+.iq-approval-context {
+  font: var(--type-caption);
+  color: var(--text-muted);
+}
+.iq-approval-action {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+.iq-approval-quote {
+  margin: 0;
+  padding: var(--space-2) var(--space-2-5);
+  border: 1px solid var(--approval-border);
+  border-radius: var(--radius-md);
+  background: var(--white);
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+.iq-approval-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  font: var(--type-caption);
+}
+.iq-approval-fact { display: contents; }
+.iq-approval-fact dt { color: var(--text-muted); }
+.iq-approval-fact dd {
+  margin: 0;
+  color: var(--text-primary);
+}
+.iq-approval-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1-5);
+  align-items: center;
+}
+
+/* ---------- DiffLine ---------- */
+.iq-diff-line {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto;
+  align-items: baseline;
+  padding: var(--space-1) var(--space-2-5);
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+.iq-diff-line--gutter {
+  grid-template-columns: 40px 14px minmax(0, 1fr) auto;
+  padding-left: 0;
+}
+.iq-diff-line--add { background: var(--diff-add-bg); color: var(--diff-add-fg); }
+.iq-diff-line--delete { background: var(--diff-del-bg); color: var(--diff-del-fg); }
+.iq-diff-line--change { background: var(--blue-50); color: var(--text-primary); }
+.iq-diff-line--context { background: var(--white); color: var(--text-secondary); }
+.iq-diff-gutter {
+  padding-right: var(--space-1-5);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: right;
+}
+.iq-diff-sign {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+}
+.iq-diff-line--change .iq-diff-sign { color: var(--blue-600); }
+.iq-diff-body {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.iq-diff-stage {
+  padding-left: var(--space-2);
+  font: var(--type-caption);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* ---------- Toast ---------- */
+.iq-toast {
+  box-sizing: border-box;
+  display: inline-block;
+  max-width: 100%;
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  background: var(--ink-900);
+  color: var(--white);
+  box-shadow: var(--shadow-toast);
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
 /*
- * Reduced motion: no spin (none of these primitives pulses); the pending text
- * remains, so state never depends on animation.
+ * Reduced motion: no spin and no pulse; the pending and "Running" texts
+ * remain, so state never depends on animation.
  */
 @media (prefers-reduced-motion: reduce) {
-  .iq-spinner {
+  .iq-spinner,
+  .iq-plan-step-pulse {
     animation: none;
   }
   .iq-button,

@@ -27,6 +27,8 @@ import {
   type ContrastProbe,
   type DesignProbeResult,
   type FocusProbe,
+  type MotionProbe,
+  type MotionRead,
 } from '../src/main/smoke-probe';
 
 const desktop = path.resolve(__dirname, '..');
@@ -285,7 +287,7 @@ describe('smoke design evaluation', () => {
     { id: 'button.any.focus-visible.focus edge against ring', kind: 'non-text', when: 'focus', hook: 'button-primary', foreground: 'rgb(47, 95, 179)', adjacent: 'rgb(223, 231, 245)', error: null },
     { id: 'textfield.any.focus-visible.focus edge against field', kind: 'non-text', when: 'focus', hook: 'text-field', foreground: 'rgb(47, 95, 179)', adjacent: 'rgb(255, 255, 255)', error: null },
   ];
-  /** The remaining required focus hooks (Story 1.7 adds the segmented control, the selected tab and the menu trigger). */
+  /** The remaining required focus hooks (Story 1.7 adds the segmented control, the selected tab and the menu trigger; Story 1.8 the FileChip remove button and the ApprovalCard primary action). */
   const otherHooks = REQUIRED_FOCUS_HOOKS.filter((hook) => hook !== 'button-primary' && hook !== 'text-field');
   const otherContrast: ContrastProbe[] = otherHooks.map((hook) => ({
     id: `${hook}.focus edge against ring`, kind: 'non-text', when: 'focus', hook, foreground: 'rgb(47, 95, 179)', adjacent: 'rgb(223, 231, 245)', error: null,
@@ -299,6 +301,9 @@ describe('smoke design evaluation', () => {
     { hook: 'text-field', tag: 'input', focusVisible: true, indicator: { outlineStyle: 'none', outlineWidth: '0px', outlineColor: 'rgb(22, 25, 29)', borderTopColor: 'rgb(47, 95, 179)', boxShadow: ring } },
     ...otherHooks.map(outlined),
   ];
+  const motionRead: MotionRead = { reducedMotion: false, animationName: 'iq-pulse', runningAnimations: 1, stateText: 'Running', stateVisible: true };
+  const reducedRead: MotionRead = { reducedMotion: true, animationName: 'none', runningAnimations: 0, stateText: 'Running', stateVisible: true };
+  const motion: MotionProbe = { motion: motionRead, reduced: reducedRead, error: null };
   const clean: DesignProbeResult = {
     title: 'Inquello',
     fonts: loaded,
@@ -306,13 +311,15 @@ describe('smoke design evaluation', () => {
     informativeIcon: { 'aria-hidden': null, role: 'img', 'aria-label': 'Needs evidence' },
     contrast: [...contrast, ...otherContrast],
     focus,
+    motion,
   };
 
   it('passes the specimen with five loaded faces, correct icon semantics, rendered contrast and visible focus', () => {
     const report = evaluateDesign(clean);
     expect(report).toMatchObject({ ok: true, failures: [] });
     expect(report.contrast.measured).toBe(3 + otherHooks.length);
-    expect(report.focus.map((visit) => visit.hook)).toEqual(expect.arrayContaining(['tabs', 'menu-trigger']));
+    expect(report.focus.map((visit) => visit.hook)).toEqual(expect.arrayContaining(['tabs', 'menu-trigger', 'file-chip-remove', 'approval-primary']));
+    expect(report.motion).toEqual(motion);
     expect(report.contrast.minimum).toBeCloseTo(4.95, 2);
   });
 
@@ -332,6 +339,16 @@ describe('smoke design evaluation', () => {
     ['focus is not :focus-visible', { focus: [{ ...focus[0]!, focusVisible: false }, focus[1]!] }],
     ['focus shows no ring', { focus: [{ ...focus[0]!, indicator: { ...focus[0]!.indicator!, boxShadow: 'none' } }, focus[1]!] }],
     ['focus shows no edge', { focus: [focus[0]!, { ...focus[1]!, indicator: { ...focus[1]!.indicator!, borderTopColor: 'rgb(91, 99, 110)' } }] }],
+    ['the FileChip remove button was never reached', { focus: focus.filter((visit) => visit.hook !== 'file-chip-remove') }],
+    ['the ApprovalCard primary action was never reached', { focus: focus.filter((visit) => visit.hook !== 'approval-primary') }],
+    ['the reduced-motion check did not run', { motion: undefined }],
+    ['the reduced-motion check failed', { motion: { motion: null, reduced: null, error: 'no running plan step is rendered in plan-steps' } }],
+    ['the running step still pulses under reduced motion', { motion: { ...motion, reduced: { ...reducedRead, animationName: 'iq-pulse', runningAnimations: 1 } } }],
+    ['an animation keeps running under reduced motion', { motion: { ...motion, reduced: { ...reducedRead, runningAnimations: 1 } } }],
+    ['reduced motion was not emulated', { motion: { ...motion, reduced: { ...reducedRead, reducedMotion: false } } }],
+    ['the running step does not pulse with motion allowed', { motion: { ...motion, motion: { ...motionRead, animationName: 'none', runningAnimations: 0 } } }],
+    ['"Running" is hidden under reduced motion', { motion: { ...motion, reduced: { ...reducedRead, stateVisible: false } } }],
+    ['"Running" is missing under reduced motion', { motion: { ...motion, reduced: { ...reducedRead, stateText: null } } }],
   ])('fails when %s', (_label, change) => {
     expect(evaluateDesign({ ...clean, ...change }).ok).toBe(false);
   });
