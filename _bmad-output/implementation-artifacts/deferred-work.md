@@ -46,6 +46,14 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-10b-desktop-sign-in-and-https-topology.md`
   summary: Verify the OS credential store's process and sandbox boundaries on macOS (Keychain) and Windows (DPAPI), and decide whether same-user subprocess access to the stored session is acceptable per host.
   evidence: Story 1.10b exercised only Linux libsecret (gnome-keyring) in the smoke run; macOS and Windows take the `os-backed` path from `safeStorage.isEncryptionAvailable()` without a run on those hosts. SC-1 says encryption or OS storage alone does not prove isolation from arbitrary same-user subprocesses and unsupported hosts stay gated. Belongs with the packaging/route-eligibility work for each host.
+  progress (2026-10-28): the owner ran the 1.10b manual checks on Windows 11 (build 26100) against the HTTPS dev topology, and all passed:
+  - real system-browser sign-in through `shell.openExternal`, PKCE and the loopback redirect, with the test CA trusted in the user root store only;
+  - the DPAPI `os-backed` path detected, and sign-in surviving an app restart;
+  - `%APPDATA%\Inquello\identity\session.bin` holding no readable credential;
+  - sign-out writing the durable logout receipt;
+  - shared service unavailable after the topology stopped, while private work stayed local.
+
+  Still open: macOS Keychain has not been run, and the same-user subprocess isolation decision is still to be made on every host.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-10b-desktop-sign-in-and-https-topology.md`
   summary: Load real deployment TLS material (certificate chain and key from protected storage, rotation) for the shared service.
   evidence: `TlsConfig` takes in-memory DER material; only the ephemeral test CA (`test_tls.rs`, `test-issuer` feature) produces it today. A real deployment's key handling and rotation are OQ-16B decisions and must fail closed until supplied.
