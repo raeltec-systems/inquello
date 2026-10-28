@@ -96,6 +96,11 @@ context:
 - **Smoke probe:** `REQUIRED_FOCUS_HOOKS` (the five Story 1.6 hooks plus `segmented`, `tabs` and `menu-trigger`) must be declared and reached; `MAX_TABS` rose from 60 to 80 for the longer page. Token-only Story 1.7 pairs: hovers, sidebar placements, the agent symbol (inside an image file) and focus inside an open menu.
 - **Results (2026-10-28):** both type checks are clean; 327 tests pass (43 new); the evidence holds 141 pairs, all passing (minimum 3.65:1, the Story 1.6 non-text pair), 108 of them rendered. The smoke `design` report is ok with 108 rendered pairs measured (36 new, minimum 4.95:1), all eight focus hooks reached with `:focus-visible`, and exit 0. Step-04 review was skipped by owner rule.
 
+- **Owner follow-up (2026-10-28):**
+  - **Avatar tones:** these now use the approved brand foregrounds the source tones intended: green-600 `#2F7A52` on green-100 (4.74:1) and amber-700 `#8A5A12` on amber-150 (5.23:1); blue-600 on blue-150 is unchanged. green-600 on green-150 would be 4.47:1, so green-100 is the nearest passing palette background.
+  - **Decision disc:** no later story builds StatusChip's optional 16px decision disc (UX-DR20), so it is added here. It is green-600 with white 8px initials (5.22:1), and its accessible name is "Decided by <name>". It needs the decision's recorded identity, and without one it is not shown and a warning is logged.
+  - **Results:** 329 tests pass; contrast evidence has 142 pairs, all passing; the smoke measures all three new pairs and exits 0.
+
 ## Verification
 
 **Commands (in `desktop/`):**

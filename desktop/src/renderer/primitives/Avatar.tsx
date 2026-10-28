@@ -21,7 +21,11 @@ import { components, spacing } from '../design/tokens';
 
 /** Rendered sizes, each a DESIGN spacing token (20, 24 and 32px). */
 export type AvatarSize = 20 | 24 | 32;
-/** Person tones, drawn from existing colour tokens only. */
+/**
+ * Person tones. Each keeps the brand foreground of the source tone (blue-600,
+ * green-600, amber-700) on the nearest approved pale palette colour that keeps
+ * 4.5:1 text contrast.
+ */
 export type AvatarTone = 'blue' | 'green' | 'amber';
 
 export const AVATAR_DEFAULT_SIZE = Number.parseFloat(components.Avatar.size) as AvatarSize;

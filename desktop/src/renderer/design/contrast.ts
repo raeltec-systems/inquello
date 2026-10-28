@@ -130,8 +130,8 @@ type ToneInput = { variant: string; fg: ColorToken; bg: ColorToken };
 /** Avatar person tones (existing colour tokens only) and the decided treatment. */
 const AVATAR_TONES = [
   { variant: 'blue', fg: 'blue-600', bg: 'blue-150' },
-  { variant: 'green', fg: 'green-800', bg: 'green-150' },
-  { variant: 'amber', fg: 'amber-800', bg: 'amber-150' },
+  { variant: 'green', fg: 'green-600', bg: 'green-100' },
+  { variant: 'amber', fg: 'amber-700', bg: 'amber-150' },
   { variant: 'decided', fg: 'white', bg: 'green-600' },
 ] as const satisfies readonly ToneInput[];
 
@@ -525,6 +525,11 @@ export const CONTRAST_PAIRS: readonly ContrastPair[] = [
     render: { hook: 'status-suggested', when: 'static', foreground: border('.iq-status-chip'), adjacent: background(':scope') },
   }),
   pair({ primitive: 'StatusChip', variant: 'suggested', state: 'default', part: 'dashed outline against sidebar', foreground: 'status-suggested-border', adjacent: 'surface-sidebar', kind: 'non-text' }),
+  // The optional decision disc: white initials on green-600.
+  pair({
+    primitive: 'StatusChip', variant: 'decision', state: 'default', part: 'decision initials', foreground: 'white', adjacent: 'green-600', kind: 'text',
+    render: { hook: 'status-decided', when: 'static', foreground: color('.iq-status-decision'), adjacent: background('.iq-status-decision') },
+  }),
 ];
 
 export const CONTRAST_EXEMPT: readonly ContrastExemption[] = [

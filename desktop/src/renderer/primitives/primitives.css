@@ -348,8 +348,8 @@ textarea.iq-field-control { resize: vertical; }
 .iq-avatar--32.iq-avatar--person { font-size: 13px; }
 /* Person tones use existing tokens only; each initials pair is measured. */
 .iq-avatar--blue { background: var(--blue-150); color: var(--blue-600); }
-.iq-avatar--green { background: var(--green-150); color: var(--green-800); }
-.iq-avatar--amber { background: var(--amber-150); color: var(--amber-800); }
+.iq-avatar--green { background: var(--green-100); color: var(--green-600); }
+.iq-avatar--amber { background: var(--amber-150); color: var(--amber-700); }
 .iq-avatar--decided { background: var(--green-600); color: var(--white); }
 /* The agent: the symbol alone, at components.Avatar.agentScale of the avatar size. */
 .iq-avatar-symbol {
@@ -542,6 +542,26 @@ textarea.iq-field-control { resize: vertical; }
 /* DESIGN proposed AX: green-800 text (7.78:1), not the 4.47:1 source green-600. */
 .iq-status-chip--accepted,
 .iq-status-chip--explained { border-color: var(--status-accepted-border); background: var(--status-accepted-bg); color: var(--green-800); }
+/* DESIGN optional 16px decision disc: a person's call on the item, green-600 with white 8px initials. */
+.iq-status-chip-group {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.iq-status-decision {
+  display: inline-block;
+  flex: none;
+  width: var(--space-4);
+  height: var(--space-4);
+  border-radius: 50%;
+  background: var(--green-600);
+  color: var(--white);
+  font-family: var(--font-sans);
+  font-size: 8px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+}
 
 /*
  * Reduced motion: no spin (none of these primitives pulses); the pending text

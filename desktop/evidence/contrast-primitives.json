@@ -9,9 +9,9 @@
     "non-text": 3
   },
   "summary": {
-    "pairs": 141,
-    "passing": 141,
-    "rendered": 108,
+    "pairs": 142,
+    "passing": 142,
+    "rendered": 109,
     "minimum": 3.647993864961982
   },
   "pairs": [
@@ -1863,14 +1863,14 @@
       "part": "initials",
       "kind": "text",
       "foreground": {
-        "token": "green-800",
-        "value": "#1e5236"
+        "token": "green-600",
+        "value": "#2f7a52"
       },
       "adjacent": {
-        "token": "green-150",
-        "value": "#e3f1e8"
+        "token": "green-100",
+        "value": "#eef6f0"
       },
-      "ratio": 7.779916128847977,
+      "ratio": 4.737586933224074,
       "threshold": 4.5,
       "pass": true,
       "rendered": "static"
@@ -1883,14 +1883,14 @@
       "part": "initials",
       "kind": "text",
       "foreground": {
-        "token": "amber-800",
-        "value": "#5c4210"
+        "token": "amber-700",
+        "value": "#8a5a12"
       },
       "adjacent": {
         "token": "amber-150",
         "value": "#fbf0d9"
       },
-      "ratio": 8.282443456918463,
+      "ratio": 5.227643633770532,
       "threshold": 4.5,
       "pass": true,
       "rendered": "static"
@@ -2834,6 +2834,26 @@
       "threshold": 3,
       "pass": true,
       "rendered": "token-only"
+    },
+    {
+      "id": "statuschip.decision.default.decision initials",
+      "primitive": "StatusChip",
+      "variant": "decision",
+      "state": "default",
+      "part": "decision initials",
+      "kind": "text",
+      "foreground": {
+        "token": "white",
+        "value": "#ffffff"
+      },
+      "adjacent": {
+        "token": "green-600",
+        "value": "#2f7a52"
+      },
+      "ratio": 5.215421473892526,
+      "threshold": 4.5,
+      "pass": true,
+      "rendered": "static"
     }
   ],
   "exempt": [

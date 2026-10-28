@@ -282,6 +282,9 @@ export function Specimen(): ReactElement {
         <Hook name="status-other">
           <StatusChip status="unlinked" label="Thread unlinked" />
         </Hook>
+        <Hook name="status-decided">
+          <StatusChip status="accepted" decidedBy={{ name: 'Dana Osei', initials: 'DO', recordedIdentity: 'specimen:dana-osei' }} />
+        </Hook>
       </Section>
 
       <div className="specimen-icons">

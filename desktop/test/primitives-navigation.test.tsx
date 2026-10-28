@@ -533,4 +533,21 @@ describe('StatusChip', () => {
     const chip = screen.getByText('Blocked by policy');
     expect(chip.className).toContain('iq-status-chip--other');
   });
+
+  it('adds the decision disc for a recorded decision, named as a decision, not approval', () => {
+    render(<StatusChip status="accepted" decidedBy={{ name: 'Dana Osei', initials: 'DO', recordedIdentity: 'decision:42' }} />);
+    const disc = screen.getByRole('img', { name: 'Decided by Dana Osei' });
+    expect(disc.className).toBe('iq-status-decision');
+    expect(disc.textContent).toBe('DO');
+    expect(disc.querySelector('[aria-hidden="true"]')?.textContent).toBe('DO');
+    expect(screen.getByText('Accepted')).toBeTruthy();
+  });
+
+  it('omits the decision disc without a recorded identity and warns', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { container } = render(<StatusChip status="accepted" decidedBy={{ name: 'Dana Osei', initials: 'DO', recordedIdentity: ' ' }} />);
+    expect(container.querySelector('.iq-status-decision')).toBeNull();
+    expect(screen.getByText('Accepted')).toBeTruthy();
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
 });
