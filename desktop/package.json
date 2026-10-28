@@ -13,7 +13,7 @@
   },
   "scripts": {
     "postinstall": "node scripts/install-electron.mjs",
-    "build": "tsc -p tsconfig.build.json && vite build",
+    "build": "tsc -p tsconfig.build.json && node scripts/check-data-policy.cjs && vite build",
     "test": "vitest run --configLoader runner",
     "generate:protocol": "node scripts/generate-protocol.mjs",
     "smoke": "pnpm run build && electron . --smoke"

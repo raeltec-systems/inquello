@@ -1,0 +1,323 @@
+{
+  "schema_version": 1,
+  "policy_owner": "Organisation data-policy owner (OQ-2)",
+  "notice": "This export is a copy of local data for its owner. It transfers no permissions and is not an accepted audit record.",
+  "categories": [
+    {
+      "id": "task-history",
+      "label": "Task history",
+      "location": {
+        "root": "runtime-home",
+        "globs": ["sessions/**", "archived_sessions/**", "session_index.jsonl", "history.jsonl"]
+      },
+      "enabled": true,
+      "credentials": false,
+      "owner": "The signed-in creator, on this device",
+      "rule_owner": "Organisation data-policy owner (OQ-2)",
+      "retention": "until-owner-deletes",
+      "access": "runtime",
+      "export": { "mode": "included" },
+      "deletion": "Delete Task history in Local data (the runtime is stopped, the files are removed, then the runtime restarts)",
+      "recovery": "Reimport an earlier export into an empty runtime home; nothing else restores it"
+    },
+    {
+      "id": "runtime-logs",
+      "label": "Runtime logs",
+      "location": {
+        "root": "runtime-home",
+        "globs": ["logs_*.sqlite", "logs_*.sqlite-*", "log/**"]
+      },
+      "enabled": true,
+      "credentials": false,
+      "owner": "The signed-in creator, on this device",
+      "rule_owner": "Organisation data-policy owner (OQ-2)",
+      "retention": "until-owner-deletes",
+      "access": "runtime",
+      "export": {
+        "mode": "excluded",
+        "reason": "The runtime writes its log database while it runs, so a copy taken without stopping it is not consistent"
+      },
+      "deletion": "Delete Runtime logs in Local data (the runtime is stopped, the files are removed, then the runtime restarts)",
+      "recovery": "Not recoverable once deleted; the runtime starts a new log on its next start"
+    },
+    {
+      "id": "runtime-state",
+      "label": "Runtime state and indexes",
+      "location": {
+        "root": "runtime-home",
+        "globs": [
+          "*.sqlite",
+          "*.sqlite-*",
+          "installation_id",
+          "*.lock",
+          "models_cache.json",
+          ".tmp/**",
+          "tmp/**",
+          "skills/.system/**",
+          "shell_snapshots/**"
+        ]
+      },
+      "enabled": true,
+      "credentials": false,
+      "owner": "The signed-in creator, on this device",
+      "rule_owner": "Organisation data-policy owner (OQ-2)",
+      "retention": "until-owner-deletes",
+      "access": "runtime",
+      "export": {
+        "mode": "excluded",
+        "reason": "Rebuildable: the runtime recreates its state, indexes and bundled files on start and rebuilds thread indexes from task history"
+      },
+      "deletion": "Delete Runtime state in Local data (the runtime is stopped, the files are removed, then the runtime restarts and recreates them)",
+      "recovery": "Rebuilt by the runtime on its next start"
+    },
+    {
+      "id": "desktop-stderr-log",
+      "label": "Desktop runtime error log",
+      "location": {
+        "root": "logs",
+        "globs": ["app-server-stderr.log"]
+      },
+      "enabled": true,
+      "credentials": false,
+      "owner": "The signed-in creator, on this device",
+      "rule_owner": "Organisation data-policy owner (OQ-2)",
+      "retention": "until-owner-deletes",
+      "access": "main-process-only",
+      "export": { "mode": "included" },
+      "deletion": "Delete the Desktop runtime error log in Local data (the runtime is stopped so the log is closed, the file is removed, then the runtime restarts)",
+      "recovery": "Reimport an earlier export while no current log exists; otherwise not recoverable"
+    },
+    {
+      "id": "identity-session",
+      "label": "Identity session",
+      "location": {
+        "root": "user-data",
+        "globs": ["identity/session.bin", "identity/session.bin.*.tmp"]
+      },
+      "enabled": true,
+      "credentials": true,
+      "owner": "The signed-in creator, on this device",
+      "rule_owner": "Organisation data-policy owner (OQ-2)",
+      "retention": "until-owner-deletes",
+      "access": "main-process-only",
+      "export": {
+        "mode": "excluded",
+        "reason": "Holds Inquello session credentials, which are never exported"
+      },
+      "deletion": "Sign out, or delete the Identity session in Local data: it signs out through the shared service first (revocation attempted), then removes the file",
+      "recovery": "Not recoverable; sign in again"
+    },
+    {
+      "id": "device-id",
+      "label": "Device ID",
+      "location": {
+        "root": "user-data",
+        "globs": ["identity/device-id", "identity/device-id.*.tmp"]
+      },
+      "enabled": true,
+      "credentials": false,
+      "owner": "The signed-in creator, on this device",
+      "rule_owner": "Organisation data-policy owner (OQ-2)",
+      "retention": "until-owner-deletes",
+      "access": "main-process-only",
+      "export": {
+        "mode": "excluded",
+        "reason": "Identifies this installation; restoring it on another device would clone the installation identity"
+      },
+      "deletion": "Delete the Device ID in Local data; a new one is created at the next sign-in",
+      "recovery": "Not recoverable; a new device ID is created at the next sign-in"
+    },
+    {
+      "id": "chromium-profile",
+      "label": "Chromium profile",
+      "location": {
+        "root": "user-data",
+        "globs": [
+          "Cache/**",
+          "Code Cache/**",
+          "GPUCache/**",
+          "GPUPersistentCache/**",
+          "DawnCache/**",
+          "DawnGraphiteCache/**",
+          "DawnWebGPUCache/**",
+          "GrShaderCache/**",
+          "GraphiteDawnCache/**",
+          "ShaderCache/**",
+          "Crashpad/**",
+          "Dictionaries/**",
+          "Local Storage/**",
+          "Session Storage/**",
+          "IndexedDB/**",
+          "WebStorage/**",
+          "Service Worker/**",
+          "Shared Dictionary/**",
+          "SharedStorage",
+          "SharedStorage-*",
+          "blob_storage/**",
+          "databases/**",
+          "File System/**",
+          "Network/**",
+          "Partitions/**",
+          "VideoDecodeStats/**",
+          "shared_proto_db/**",
+          "Cookies",
+          "Cookies-journal",
+          "DIPS",
+          "DIPS-*",
+          "Trust Tokens",
+          "Trust Tokens-journal",
+          "Network Persistent State",
+          "TransportSecurity",
+          "Preferences",
+          "Local State",
+          "Secure Preferences",
+          "QuotaManager",
+          "QuotaManager-journal",
+          "Reporting and NEL",
+          "Reporting and NEL-journal",
+          "declarative_performance_observer.db",
+          "declarative_performance_observer.db-journal",
+          "first_party_sets.db",
+          "first_party_sets.db-journal",
+          "PrivateAggregation",
+          "PrivateAggregation-journal",
+          "Singleton*",
+          "BrowserMetrics/**",
+          "BrowserMetrics-spare.pma"
+        ]
+      },
+      "enabled": true,
+      "credentials": false,
+      "owner": "The signed-in creator, on this device",
+      "rule_owner": "Organisation data-policy owner (OQ-2)",
+      "retention": "until-owner-deletes",
+      "access": "main-process-only",
+      "export": {
+        "mode": "excluded",
+        "reason": "Browser-engine caches and storage for the app's own pages; it holds no Task content and is recreated by the app"
+      },
+      "deletion": "Delete the Chromium profile in Local data: storage and caches are cleared through Electron, and files it holds open are recreated while the app runs",
+      "recovery": "Recreated by the app; nothing to restore"
+    },
+    {
+      "id": "export-journal",
+      "label": "Export journal",
+      "location": {
+        "root": "user-data",
+        "globs": ["data/export-journal.json", "data/export-journal.json.*.tmp"]
+      },
+      "enabled": true,
+      "credentials": false,
+      "owner": "The signed-in creator, on this device",
+      "rule_owner": "Organisation data-policy owner (OQ-2)",
+      "retention": "until-owner-deletes",
+      "access": "main-process-only",
+      "export": {
+        "mode": "excluded",
+        "reason": "Records this device's exports; each export carries its own manifest"
+      },
+      "deletion": "Delete the Export journal in Local data; exported copies are not deleted and leave Inquello's view once it is gone",
+      "recovery": "Not recoverable; exported copies keep their own manifests"
+    },
+    {
+      "id": "provider-credentials",
+      "label": "Provider credentials",
+      "location": {
+        "root": "runtime-home",
+        "globs": ["auth.json", ".credentials.json", "secrets/**"]
+      },
+      "enabled": false,
+      "credentials": true,
+      "owner": "Not held",
+      "rule_owner": "Organisation data-policy owner (OQ-2)",
+      "retention": "unknown",
+      "access": "runtime",
+      "export": {
+        "mode": "excluded",
+        "reason": "Provider credentials and secrets are never exported"
+      },
+      "deletion": "Not held: the desktop never writes it (Story 1.13 governs provider credentials)",
+      "recovery": "Not applicable"
+    },
+    {
+      "id": "source-extracts",
+      "label": "Source extracts",
+      "location": {
+        "root": "user-data",
+        "globs": ["sources/**"]
+      },
+      "enabled": false,
+      "credentials": false,
+      "owner": "Not held",
+      "rule_owner": "Organisation data-policy owner (OQ-2)",
+      "retention": "unknown",
+      "access": "main-process-only",
+      "export": {
+        "mode": "excluded",
+        "reason": "Not held: files and Methods arrive in Epic 2"
+      },
+      "deletion": "Not held: the desktop never writes it",
+      "recovery": "Not applicable"
+    },
+    {
+      "id": "artifacts",
+      "label": "Artifacts",
+      "location": {
+        "root": "user-data",
+        "globs": ["artifacts/**"]
+      },
+      "enabled": false,
+      "credentials": false,
+      "owner": "Not held",
+      "rule_owner": "Organisation data-policy owner (OQ-2)",
+      "retention": "unknown",
+      "access": "main-process-only",
+      "export": {
+        "mode": "excluded",
+        "reason": "Not held: artifacts arrive in Epic 3"
+      },
+      "deletion": "Not held: the desktop never writes it",
+      "recovery": "Not applicable"
+    },
+    {
+      "id": "shared-caches",
+      "label": "Shared caches",
+      "location": {
+        "root": "user-data",
+        "globs": ["shared-cache/**"]
+      },
+      "enabled": false,
+      "credentials": false,
+      "owner": "Not held",
+      "rule_owner": "Organisation data-policy owner (OQ-2)",
+      "retention": "unknown",
+      "access": "main-process-only",
+      "export": {
+        "mode": "excluded",
+        "reason": "Not held: shared-service data is governed service-side later"
+      },
+      "deletion": "Not held: the desktop never writes it",
+      "recovery": "Not applicable"
+    },
+    {
+      "id": "unattended-work",
+      "label": "Unattended work",
+      "location": {
+        "root": "user-data",
+        "globs": ["unattended/**"]
+      },
+      "enabled": false,
+      "credentials": false,
+      "owner": "Not held",
+      "rule_owner": "Organisation data-policy owner (OQ-2)",
+      "retention": "unknown",
+      "access": "main-process-only",
+      "export": {
+        "mode": "excluded",
+        "reason": "Not held: unattended work is not enabled"
+      },
+      "deletion": "Not held: the desktop never writes it",
+      "recovery": "Not applicable"
+    }
+  ]
+}

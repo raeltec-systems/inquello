@@ -27,14 +27,25 @@
  * `identity.*` operations. In `--smoke`, the identity probe signs in through
  * the headless opener when configured and prints an `identity` line; the run
  * also requires that line to pass.
+ *
+ * Local data (Story 1.12): the runtime has its own home,
+ * `CODEX_HOME = <userData>/runtime-home`, so a personal `~/.codex` is never
+ * read or written. Every category the desktop can hold is governed by the
+ * shipped register (`data/policy.ts`); the renderer reaches inspect, export,
+ * import and delete through the four `data.*` operations, and main shows every
+ * folder dialog. Import and delete stop the runtime and restart it afterwards.
+ * In `--smoke` the data probe prints a `data` line (policy loaded, every held
+ * file classified, the runtime home under userData, and an export plus
+ * reimport round trip in temp dirs); the run also requires it to pass.
  */
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { app, BrowserWindow, ipcMain, protocol, safeStorage, session, type WebContents } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, protocol, safeStorage, session, type WebContents } from 'electron';
 
 import schemaStamp from '../protocol/schema-stamp.json';
+import { DataService, ExportJournal, governedRoots, JOURNAL_DIR, loadShippedPolicy, type GovernedRoots } from './data';
 import { createIdentity, headlessOpener, identityDir, SERVICE_CONFIG_ENV, type IdentityWiring } from './identity';
 import { openSystemBrowser } from './identity/browser';
 import { AppServerRuntime, consoleLogger, resolveAppServerBinary, runtimeChildEnv, type ExitInfo } from './runtime';
@@ -48,7 +59,7 @@ import {
   type BlockedKind,
   type PolicyOptions,
 } from './security/policy';
-import { probeIdentity, probeRenderer } from './smoke-probe';
+import { probeData, probeIdentity, probeRenderer } from './smoke-probe';
 
 const smoke = process.argv.includes('--smoke');
 const logger = consoleLogger;
@@ -59,20 +70,22 @@ let handshakeOk = false;
 let privilegesOk = false;
 let designOk = false;
 let identityOk = false;
+let dataOk = false;
 let identity: IdentityWiring | undefined;
+let dataService: DataService | undefined;
+let roots: GovernedRoots | undefined;
 /** `webContents` ids main created for app windows; the only trusted operation senders. */
 const trustedWebContentsIds = new Set<number>();
 const blocked: Array<{ kind: BlockedKind; url: string }> = [];
 const policyOptions: PolicyOptions = { logger, onBlocked: (kind, url) => blocked.push({ kind, url }) };
 let quitting = false;
-let smokeCodexHome: string | undefined;
 
 if (smoke) {
-  // Keep the smoke run's Electron profile and Codex home out of the user's real ones.
-  // Chromium holds the profile open until the process ends, so it lives at a fixed,
-  // reused path; the Codex home is fresh per run and removed once the runtime exits.
+  // Keep the smoke run's Electron profile, and with it the runtime home, out of
+  // the user's real ones. Chromium holds the profile open until the process
+  // ends, so it lives at a fixed, reused path; the runtime home inside it is
+  // cleared at the start of every smoke run.
   app.setPath('userData', path.join(os.tmpdir(), 'inquello-smoke-user-data'));
-  smokeCodexHome = fs.mkdtempSync(path.join(os.tmpdir(), 'inquello-smoke-codex-home-'));
 }
 
 // Every renderer is sandboxed; must be called before `ready`.
@@ -101,11 +114,15 @@ function createWindow(): BrowserWindow {
   return window;
 }
 
-function runtimeEnv(): NodeJS.ProcessEnv {
-  return runtimeChildEnv(process.env, { serviceConfigEnv: SERVICE_CONFIG_ENV, codexHome: smokeCodexHome });
+function runtimeEnv(runtimeHome: string): NodeJS.ProcessEnv {
+  return runtimeChildEnv(process.env, { serviceConfigEnv: SERVICE_CONFIG_ENV, codexHome: runtimeHome });
 }
 
+/** Starts a new runtime child in Inquello's own runtime home; also used to restart after import and delete. */
 async function startRuntime(): Promise<void> {
+  if (!roots) throw new Error('local data roots were not set up');
+  const runtimeHome = roots['runtime-home'];
+  fs.mkdirSync(runtimeHome, { recursive: true, mode: 0o700 });
   const binary = resolveAppServerBinary({
     env: process.env,
     isPackaged: app.isPackaged,
@@ -115,7 +132,7 @@ async function startRuntime(): Promise<void> {
   logger.info(`starting app-server (${binary.source}): ${binary.path}`);
   runtime = new AppServerRuntime({
     command: binary.path,
-    env: runtimeEnv(),
+    env: runtimeEnv(runtimeHome),
     clientInfo: { name: 'inquello_desktop', title: 'Inquello', version: app.getVersion() },
     schemaStamp,
     stderrLogPath: path.join(app.getPath('logs'), 'app-server-stderr.log'),
@@ -125,8 +142,7 @@ async function startRuntime(): Promise<void> {
     if (state === 'disconnected' && error) logger.error(`runtime disconnected; not restarting. ${error.message}`);
   });
   const handshake = await runtime.start();
-  handshakeOk = true;
-  if (smoke) {
+  if (smoke && !handshakeOk) {
     process.stdout.write(
       `${JSON.stringify({
         event: 'handshake',
@@ -137,6 +153,35 @@ async function startRuntime(): Promise<void> {
       })}\n`,
     );
   }
+  handshakeOk = true;
+}
+
+async function stopRuntime(): Promise<void> {
+  const current = runtime;
+  if (!current) return;
+  const exit = await current.stop();
+  logger.info(`app-server stopped (code ${exit.exitCode}, signal ${exit.signal}, killed ${exit.killed})`);
+}
+
+function exportStamp(): string {
+  return new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+}
+
+async function chooseExportDestination(): Promise<string | null> {
+  const options: Electron.SaveDialogOptions = {
+    title: 'Export local data',
+    buttonLabel: 'Export',
+    defaultPath: path.join(app.getPath('documents'), `inquello-export-${exportStamp()}`),
+    properties: ['createDirectory', 'showOverwriteConfirmation'],
+  };
+  const result = mainWindow ? await dialog.showSaveDialog(mainWindow, options) : await dialog.showSaveDialog(options);
+  return result.canceled || !result.filePath ? null : result.filePath;
+}
+
+async function chooseImportSource(): Promise<string | null> {
+  const options: Electron.OpenDialogOptions = { title: 'Import local data', buttonLabel: 'Import', properties: ['openDirectory'] };
+  const result = mainWindow ? await dialog.showOpenDialog(mainWindow, options) : await dialog.showOpenDialog(options);
+  return result.canceled || result.filePaths.length !== 1 ? null : result.filePaths[0]!;
 }
 
 async function runSmokeProbe(contents: WebContents): Promise<void> {
@@ -152,11 +197,16 @@ async function runSmokeProbe(contents: WebContents): Promise<void> {
   identityOk = report.ok;
   process.stdout.write(`${JSON.stringify({ event: 'identity', ...report })}\n`);
   if (!report.ok) logger.error(`identity probe failed: ${report.failures.join('; ')}`);
+  if (!dataService || !roots) throw new Error('local data was not wired');
+  const data = await probeData(contents, { service: dataService, roots, codexHome: runtime?.handshake?.codexHome ?? null, tempBase: os.tmpdir() });
+  dataOk = data.ok;
+  process.stdout.write(`${JSON.stringify({ event: 'data', ...data })}\n`);
+  if (!data.ok) logger.error(`data probe failed: ${data.failures.join('; ')}`);
 }
 
 function exitCodeFor(exit: ExitInfo | undefined): number {
   if (!smoke) return 0;
-  return handshakeOk && privilegesOk && designOk && identityOk && exit !== undefined && exit.exitCode === 0 && !exit.killed ? 0 : 1;
+  return handshakeOk && privilegesOk && designOk && identityOk && dataOk && exit !== undefined && exit.exitCode === 0 && !exit.killed ? 0 : 1;
 }
 
 app.on('before-quit', (event) => {
@@ -177,7 +227,6 @@ app.on('before-quit', (event) => {
           logger.info(`app-server exited (code ${exit.exitCode}, signal ${exit.signal}, killed ${exit.killed})`);
         }
         mainWindow?.destroy();
-        if (smokeCodexHome) fs.rmSync(smokeCodexHome, { recursive: true, force: true, maxRetries: 3 });
       } catch (error) {
         logger.warn(`cleanup after runtime stop failed: ${(error as Error).message}`);
       } finally {
@@ -191,8 +240,14 @@ app.on('window-all-closed', () => app.quit());
 void app.whenReady().then(async () => {
   applySessionPolicy(session.defaultSession, policyOptions);
   handleAppProtocol(protocol, path.join(app.getAppPath(), 'dist', 'renderer'), logger);
-  // The smoke run starts signed out: drop any identity left by an earlier run.
-  if (smoke) fs.rmSync(identityDir(app.getPath('userData')), { recursive: true, force: true });
+  const userData = app.getPath('userData');
+  roots = governedRoots(userData, app.getPath('logs'));
+  if (smoke) {
+    // The smoke run starts signed out, with an empty runtime home and no export journal.
+    fs.rmSync(identityDir(userData), { recursive: true, force: true });
+    fs.rmSync(roots['runtime-home'], { recursive: true, force: true, maxRetries: 3 });
+    fs.rmSync(path.join(userData, JOURNAL_DIR), { recursive: true, force: true });
+  }
   identity = createIdentity({
     env: process.env,
     safeStorage,
@@ -204,6 +259,41 @@ void app.whenReady().then(async () => {
     recordSecrets: smoke,
   });
   const identitySession = identity.session;
+  const policyLoad = loadShippedPolicy();
+  if (!policyLoad.ok) logger.error(`local data policy did not load; local data actions are blocked: ${policyLoad.error}`);
+  const service = new DataService({
+    load: policyLoad,
+    roots,
+    journal: new ExportJournal(userData),
+    runtime: {
+      stop: stopRuntime,
+      start: startRuntime,
+      // No Task can run before Story 1.25 adds them; this is where their count will come from.
+      activeTasks: () => 0,
+    },
+    identity: {
+      principal: async () => {
+        const state = identitySession.snapshot().identity;
+        return state.state === 'signed-in' ? { displayName: state.displayName, issuerLabel: state.issuerLabel } : null;
+      },
+      holdsSession: () => identitySession.holdsSession(),
+      signOut: async () => ({ ok: (await identitySession.signOut()).ok }),
+      forgetLocally: () => identitySession.forgetLocally(),
+    },
+    // The smoke run plays the user's part in the save dialog with a fresh temp folder.
+    chooseExportDestination: smoke
+      ? async () => path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'inquello-smoke-export-')), 'export')
+      : chooseExportDestination,
+    chooseImportSource: smoke ? async () => null : chooseImportSource,
+    clearBrowserProfile: async () => {
+      await session.defaultSession.clearStorageData();
+      await session.defaultSession.clearCache();
+    },
+    appVersion: app.getVersion(),
+    runtimeVersion: schemaStamp.runtimeVersion,
+    logger,
+  });
+  dataService = service;
   registerOperations(
     ipcMain,
     createOperations({
@@ -213,6 +303,13 @@ void app.whenReady().then(async () => {
         getStatus: () => identitySession.getStatus(),
         signIn: () => identitySession.signIn(),
         signOut: () => identitySession.signOut(),
+      },
+      data: {
+        getPolicy: () => service.getPolicy(),
+        exportData: () => service.exportData(),
+        importData: () => service.importData(),
+        deleteData: (categories) => service.deleteData(categories),
+        deletableCategories: () => service.policy?.categories.filter((category) => category.enabled).map((category) => category.id) ?? [],
       },
     }),
     { trustedWebContentsIds, logger },

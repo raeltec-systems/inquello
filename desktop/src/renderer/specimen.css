@@ -130,3 +130,64 @@
   gap: var(--space-3);
   align-items: flex-start;
 }
+
+/* Story 1.12: the Local data block. One row per data-policy category. */
+.specimen-local-data {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+}
+.specimen-local-data-blockers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+.specimen-local-data-list,
+.specimen-local-data-categories {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font: var(--type-ui);
+  color: var(--text-primary);
+}
+.specimen-local-data-category {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.specimen-local-data-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+}
+.specimen-local-data-label {
+  font: var(--type-ui);
+  color: var(--text-primary);
+}
+.specimen-local-data-rules {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-1) var(--space-4);
+  margin: 0;
+}
+.specimen-local-data-rules dt {
+  font: var(--type-label);
+  letter-spacing: var(--tracking-label);
+  color: var(--text-secondary);
+}
+.specimen-local-data-rules dd {
+  margin: 0;
+  font: var(--type-ui);
+  color: var(--text-primary);
+}
+.specimen-local-data-report {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}

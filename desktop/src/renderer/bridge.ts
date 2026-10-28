@@ -74,3 +74,148 @@ export function parseIdentityAction(value: unknown): IdentityActionView | null {
   const reason = text(record.reason);
   return { ok: record.ok, ...(reason ? { reason } : {}), status: parseIdentityStatus(record.status) };
 }
+
+// ---- local data (Story 1.12) ---------------------------------------------------
+
+export interface DataCategoryView {
+  id: string;
+  label: string;
+  enabled: boolean;
+  owner: string;
+  ruleOwner: string;
+  retention: 'until-owner-deletes' | 'unknown';
+  access: 'main-process-only' | 'runtime';
+  export: { mode: 'included' | 'excluded' | 'unknown'; reason?: string };
+  deletion: string;
+  recovery: string;
+  held: { files: number; bytes: number };
+}
+
+export interface DataBlockerView {
+  kind: string;
+  category?: string;
+  path?: string;
+  detail: string;
+}
+
+export interface DataPolicyView {
+  loaded: boolean;
+  policyOwner: string | null;
+  notice: string | null;
+  categories: DataCategoryView[];
+  blockers: DataBlockerView[];
+}
+
+export interface DataBridge {
+  getPolicy(): Promise<unknown>;
+  export(): Promise<unknown>;
+  import(): Promise<unknown>;
+  delete(categories: string[]): Promise<unknown>;
+}
+
+/** The local data operations, or null outside the desktop. */
+export function dataBridge(): DataBridge | null {
+  const bridge = (globalThis as { inquello?: { data?: DataBridge } }).inquello;
+  return bridge?.data ?? null;
+}
+
+const count = (value: unknown): number => (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : 0);
+const record = (value: unknown): Record<string, unknown> | null =>
+  typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+const list = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
+
+function parseCategory(value: unknown): DataCategoryView | null {
+  const r = record(value);
+  if (!r) return null;
+  const id = text(r.id);
+  const label = text(r.label);
+  const owner = text(r.owner);
+  const ruleOwner = text(r.ruleOwner);
+  const deletion = text(r.deletion);
+  const recovery = text(r.recovery);
+  const exportRule = record(r.export);
+  const held = record(r.held);
+  if (!id || !label || !owner || !ruleOwner || !deletion || !recovery || !exportRule || typeof r.enabled !== 'boolean') return null;
+  if (r.retention !== 'until-owner-deletes' && r.retention !== 'unknown') return null;
+  if (r.access !== 'main-process-only' && r.access !== 'runtime') return null;
+  const mode = exportRule.mode;
+  if (mode !== 'included' && mode !== 'excluded' && mode !== 'unknown') return null;
+  const reason = text(exportRule.reason);
+  return {
+    id,
+    label,
+    enabled: r.enabled,
+    owner,
+    ruleOwner,
+    retention: r.retention,
+    access: r.access,
+    export: reason ? { mode, reason } : { mode },
+    deletion,
+    recovery,
+    held: { files: count(held?.files), bytes: count(held?.bytes) },
+  };
+}
+
+export function parseDataPolicy(value: unknown): DataPolicyView | null {
+  const r = record(value);
+  if (!r || typeof r.loaded !== 'boolean') return null;
+  const categories = list(r.categories).map(parseCategory);
+  if (categories.some((category) => category === null)) return null;
+  const blockers: DataBlockerView[] = [];
+  for (const item of list(r.blockers)) {
+    const b = record(item);
+    const kind = text(b?.kind);
+    const detail = text(b?.detail);
+    if (!b || !kind || !detail) return null;
+    const blocker: DataBlockerView = { kind, detail };
+    const category = text(b.category);
+    const path = text(b.path);
+    if (category) blocker.category = category;
+    if (path) blocker.path = path;
+    blockers.push(blocker);
+  }
+  return { loaded: r.loaded, policyOwner: text(r.policyOwner), notice: text(r.notice), categories: categories as DataCategoryView[], blockers };
+}
+
+export interface DataActionView {
+  ok: boolean;
+  reason?: string;
+  /** Plain-text lines that report what happened. */
+  lines: string[];
+}
+
+const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+/** Turns an export, import or delete result into report lines; null when the result is malformed. */
+export function parseDataAction(value: unknown, action: 'export' | 'import' | 'delete'): DataActionView | null {
+  const r = record(value);
+  if (!r || typeof r.ok !== 'boolean') return null;
+  if (!r.ok) return { ok: false, reason: text(r.reason) ?? 'The request did not complete.', lines: [] };
+  const report = record(r[action]);
+  if (!report) return null;
+  const lines: string[] = [];
+  const omissions = list(report.omissions).map(record).filter((o): o is Record<string, unknown> => o !== null);
+  if (action === 'export') {
+    lines.push(`Exported to ${text(report.path) ?? 'the chosen folder'}.`);
+    for (const entry of list(report.included).map(record)) if (entry) lines.push(`Included: ${text(entry.label) ?? '?'} (${plural(count(entry.files), 'file')}).`);
+    for (const o of omissions) lines.push(`Omitted: ${text(o.label) ?? '?'}: ${text(o.reason) ?? ''}`);
+    const notice = text(report.notice);
+    if (notice) lines.push(notice);
+  } else if (action === 'import') {
+    for (const entry of list(report.restored).map(record)) if (entry) lines.push(`Restored: ${text(entry.label) ?? '?'} (${plural(count(entry.files), 'file')}).`);
+    for (const entry of list(report.notRestored).map(record)) if (entry) lines.push(`Not restored: ${text(entry.path) ?? '?'}: ${text(entry.reason) ?? ''}`);
+    for (const o of omissions) lines.push(`Not in the export: ${text(o.label) ?? '?'}: ${text(o.reason) ?? ''}`);
+  } else {
+    for (const entry of list(report.removed).map(record)) {
+      if (!entry) continue;
+      const remaining = count(entry.filesRemaining);
+      const note = text(entry.note);
+      lines.push(`Removed: ${text(entry.label) ?? '?'} (${plural(count(entry.filesRemoved), 'file')}${remaining > 0 ? `, ${remaining} remaining` : ''}).${note ? ` ${note}` : ''}`);
+    }
+    for (const entry of list(report.retained).map(record)) if (entry) lines.push(`Retained: ${text(entry.label) ?? '?'} (${plural(count(entry.files), 'file')}).`);
+    for (const entry of list(report.survivingExports).map(record)) {
+      if (entry) lines.push(`Exported copy outside Inquello's control, not deleted: ${text(entry.path) ?? '?'} (${text(entry.exportedAt) ?? ''}).`);
+    }
+  }
+  return { ok: true, lines };
+}

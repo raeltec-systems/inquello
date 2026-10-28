@@ -17,10 +17,12 @@ import {
   noPayload,
   objectPayload,
   registerOperations,
+  type DataOperations,
   type IdentityOperations,
   type IpcMainLike,
   type Operation,
 } from '../src/main/security/operations';
+import type { PolicyView } from '../src/main/data/service';
 import type { IdentityStatus } from '../src/main/identity/session';
 import {
   CONTENT_SECURITY_POLICY,
@@ -183,16 +185,29 @@ function fakeIdentity(): IdentityOperations {
   };
 }
 
+function fakeData(calls: string[] = []): DataOperations {
+  const policy: PolicyView = { loaded: true, policyOwner: 'Owner', notice: 'Notice', categories: [], blockers: [] };
+  return {
+    getPolicy: () => (calls.push('getPolicy'), policy),
+    exportData: async () => (calls.push('export'), { ok: false, reason: 'No folder was chosen.' }),
+    importData: async () => (calls.push('import'), { ok: false, reason: 'No folder was chosen.' }),
+    deleteData: async (categories) => (calls.push(`delete:${categories.join(',')}`), { ok: false, reason: 'test' }),
+    deletableCategories: () => ['task-history', 'runtime-logs'],
+  };
+}
+
 describe('operation registry', () => {
   const mainFrame: FrameLike = { url: APP, frameTreeNodeId: 1, parent: null };
   const trustedEvent: InvokeEventLike = { sender: { id: 1, mainFrame }, senderFrame: mainFrame };
   let ipc: FakeIpcMain;
   let calls: number;
+  let dataCalls: string[];
   let logger: ReturnType<typeof recordingLogger>;
 
   beforeEach(() => {
     ipc = new FakeIpcMain();
     calls = 0;
+    dataCalls = [];
     logger = recordingLogger();
     const operations = createOperations({
       runtimeState: () => {
@@ -201,12 +216,22 @@ describe('operation registry', () => {
       },
       runtimeVersion: '0.165.0',
       identity: fakeIdentity(),
+      data: fakeData(dataCalls),
     });
     registerOperations(ipc, operations, { trustedWebContentsIds: new Set([1]), logger });
   });
 
   it('registers exactly one fixed channel per named operation', () => {
-    expect(OPERATION_NAMES).toEqual(['runtime.getStatus', 'identity.getStatus', 'identity.signIn', 'identity.signOut']);
+    expect(OPERATION_NAMES).toEqual([
+      'runtime.getStatus',
+      'identity.getStatus',
+      'identity.signIn',
+      'identity.signOut',
+      'data.getPolicy',
+      'data.export',
+      'data.import',
+      'data.delete',
+    ]);
     expect([...ipc.handlers.keys()]).toEqual(OPERATION_NAMES.map((name) => `${CHANNEL_PREFIX}${name}`));
   });
 
@@ -267,6 +292,41 @@ describe('operation registry', () => {
     expect((foreign as Error).message).toBe('untrusted sender');
   });
 
+  it.each(['data.getPolicy', 'data.export', 'data.import'] as const)('%s takes no arguments, so a renderer path is an invalid payload', async (name) => {
+    for (const args of [['/tmp/chosen-by-renderer'], [{ path: '/tmp/x' }], [undefined]]) {
+      const bad = await ipc.invoke(channelFor(name), trustedEvent, ...args).catch((e: Error) => e);
+      expect((bad as Error).message).toBe(`invalid payload for ${name}`);
+    }
+    const foreign = await ipc.invoke(channelFor(name), { sender: { id: 2, mainFrame }, senderFrame: mainFrame }).catch((e: Error) => e);
+    expect((foreign as Error).message).toBe('untrusted sender');
+    expect(dataCalls).toEqual([]);
+    await ipc.invoke(channelFor(name), trustedEvent);
+    expect(dataCalls).toHaveLength(1);
+  });
+
+  it.each([
+    ['no argument', []],
+    ['a path', ['/home/user/.codex']],
+    ['an empty list', [[]]],
+    ['an unknown category', [['task-history', 'everything']]],
+    ['a disabled or credential category', [['provider-credentials']]],
+    ['a repeated category', [['task-history', 'task-history']]],
+    ['a non-string entry', [[1]]],
+    ['a sparse list', [[, 'task-history']]],
+    ['a list with extra properties', [Object.assign(['task-history'], { path: '/tmp' })]],
+    ['extra arguments', [['task-history'], '/tmp']],
+    ['an object', [{ categories: ['task-history'] }]],
+  ])('data.delete rejects %s', async (_label, args) => {
+    const bad = await ipc.invoke(channelFor('data.delete'), trustedEvent, ...(args as unknown[])).catch((e: Error) => e);
+    expect((bad as Error).message).toBe('invalid payload for data.delete');
+    expect(dataCalls).toEqual([]);
+  });
+
+  it('data.delete passes known category ids through', async () => {
+    await ipc.invoke(channelFor('data.delete'), trustedEvent, ['runtime-logs', 'task-history']);
+    expect(dataCalls).toEqual(['delete:runtime-logs,task-history']);
+  });
+
   it('treats a sender whose frame accessors throw as untrusted', async () => {
     const disposed = {
       sender: { id: 1, mainFrame },
@@ -293,7 +353,7 @@ describe('operation registry', () => {
         throw new Error('secret internal path /home/x');
       },
     };
-    const others = createOperations({ runtimeState: () => 'ready', runtimeVersion: '0.165.0', identity: fakeIdentity() }).filter(
+    const others = createOperations({ runtimeState: () => 'ready', runtimeVersion: '0.165.0', identity: fakeIdentity(), data: fakeData() }).filter(
       (operation) => operation.name !== 'runtime.getStatus',
     );
     registerOperations(failing, [op, ...others], { trustedWebContentsIds: new Set([1]), logger });
@@ -509,7 +569,7 @@ describe('session policy', () => {
 });
 
 describe('preload', () => {
-  it('exposes exactly the frozen runtime and identity operations over fixed channels', async () => {
+  it('exposes exactly the frozen runtime, identity and data operations over fixed channels', async () => {
     const exposed: Array<[string, unknown]> = [];
     const invoke = vi.fn(async (...args: unknown[]) => ({ args }));
     vi.resetModules();
@@ -531,10 +591,15 @@ describe('preload', () => {
           : typeof value;
     expect(describe(api)).toEqual(EXPECTED_BRIDGE_TREE);
     type Op = (...args: unknown[]) => Promise<unknown>;
-    const typed = api as { runtime: { getStatus: Op }; identity: { getStatus: Op; signIn: Op; signOut: Op } };
+    const typed = api as {
+      runtime: { getStatus: Op };
+      identity: { getStatus: Op; signIn: Op; signOut: Op };
+      data: { getPolicy: Op; export: Op; import: Op; delete: Op };
+    };
     expect(Object.isFrozen(typed)).toBe(true);
     expect(Object.isFrozen(typed.runtime)).toBe(true);
     expect(Object.isFrozen(typed.identity)).toBe(true);
+    expect(Object.isFrozen(typed.data)).toBe(true);
 
     // Arguments from the renderer are never forwarded; each channel is fixed.
     const calls: Array<[Op, string]> = [
@@ -547,6 +612,24 @@ describe('preload', () => {
       invoke.mockClear();
       await op('inquello:op:other', { extra: true });
       expect(invoke).toHaveBeenCalledTimes(1);
+      expect(invoke).toHaveBeenCalledWith(channel);
+    }
+
+    // Data operations forward the renderer's arguments to main's validators,
+    // and only to their own fixed channel.
+    const dataCalls: Array<[Op, string]> = [
+      [typed.data.getPolicy, channelFor('data.getPolicy')],
+      [typed.data.export, channelFor('data.export')],
+      [typed.data.import, channelFor('data.import')],
+      [typed.data.delete, channelFor('data.delete')],
+    ];
+    for (const [op, channel] of dataCalls) {
+      invoke.mockClear();
+      await op(['task-history']);
+      expect(invoke).toHaveBeenCalledTimes(1);
+      expect(invoke).toHaveBeenCalledWith(channel, ['task-history']);
+      invoke.mockClear();
+      await op();
       expect(invoke).toHaveBeenCalledWith(channel);
     }
   });
@@ -614,7 +697,10 @@ describe('host privilege source scan', () => {
     const body = preload.replace(/^import .* from 'electron';$/m, '');
     const uses = body.match(/ipcRenderer[^\n]*/g) ?? [];
     expect(uses.length).toBeGreaterThan(0);
-    for (const use of uses) expect(use).toMatch(/^ipcRenderer\.invoke\([A-Z_]+_CHANNEL\)/);
+    for (const use of uses) expect(use).toMatch(/^ipcRenderer\.invoke\([A-Z_]+_CHANNEL(?:, \.\.\.args)?\)/);
+    // Only the data operations forward arguments.
+    expect((body.match(/_CHANNEL, \.\.\.args\)/g) ?? []).length).toBe(4);
+    expect(body.match(/[A-Z_]+_CHANNEL, \.\.\.args\)/g)?.every((use) => use.startsWith('DATA_'))).toBe(true);
     expect(preload).not.toMatch(/\.on\(|\.send\(|sendSync|postMessage/);
   });
 });

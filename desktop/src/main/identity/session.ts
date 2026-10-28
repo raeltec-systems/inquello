@@ -576,6 +576,22 @@ export class IdentitySession {
     }
   }
 
+  /** Whether this device holds a session (signed in, or with a sign-out pending). */
+  holdsSession(): boolean {
+    return this.record !== null;
+  }
+
+  /**
+   * Drops the session on this device only: memory and the vault file. Used by
+   * the local data deletion (Story 1.12) after `signOut` could not get the
+   * shared service to confirm; the server session then lapses on its own.
+   */
+  forgetLocally(): void {
+    this.record = null;
+    this.options.vault.clear();
+    this.options.logger.info('identity: the session was removed locally without server confirmation');
+  }
+
   private finishLogout(): void {
     this.record = null;
     this.options.vault.clear();

@@ -44,12 +44,26 @@
  * then presses Sign out and requires `signed-out` with the file removed.
  * Secrets never cross into the renderer for the comparison. `evaluateIdentity`
  * is pure and decides pass/fail.
+ *
+ * Story 1.12 adds the data probe (`probeData`). It checks that the register
+ * loaded with no unknown rule, that the runtime home sits under userData and
+ * is the home the runtime reported in its handshake, and that every held file
+ * is classified (after adding a synthetic session file). It reads the Local
+ * data block and `data.getPolicy` from the renderer and checks that a path
+ * passed to `data.export` is rejected. It then exports through the data
+ * service (into a temp folder), reimports into fresh temp roots, and requires
+ * every included file to come back byte-identical with the identity session
+ * and the Chromium profile declared as omissions. `evaluateData` is pure and
+ * decides pass/fail.
  */
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 import type { WebContents } from 'electron';
 
+import { digestFile, exportedFilePath, governedRoots, importData, isInside, readManifest, ruleBlockers, takeInventory, type DataService, type GovernedRoots } from './data';
 import type { IdentityWiring } from './identity';
 import type { BlockedKind } from './security/policy';
 
@@ -100,6 +114,7 @@ const TAB_SETTLE_MS = 50;
 export const EXPECTED_BRIDGE_TREE = {
   runtime: { getStatus: 'function' },
   identity: { getStatus: 'function', signIn: 'function', signOut: 'function' },
+  data: { getPolicy: 'function', export: 'function', import: 'function', delete: 'function' },
 } as const;
 
 /** Globals that must not exist in the renderer's main world. */
@@ -856,4 +871,166 @@ export async function probeIdentity(contents: WebContents, identity: IdentityWir
   read.secretsChecked = secrets.length;
   read.rendererLeaks = secrets.filter((secret) => haystack.includes(secret)).length;
   return evaluateIdentity(read);
+}
+
+// ---- local data (Story 1.12) ---------------------------------------------------
+
+/** Omissions every export must declare. */
+export const REQUIRED_OMISSIONS = ['identity-session', 'chromium-profile'] as const;
+
+export interface DataProbeRead {
+  policyLoaded: boolean;
+  ruleBlockers: number;
+  categories: number;
+  runtimeHome: { underUserData: boolean; matchesHandshake: boolean };
+  unclassified: string[];
+  disabledHeld: string[];
+  renderer: { policyLoaded: boolean; categories: number; blockShown: boolean; pathRejected: boolean };
+  export: { ok: boolean; reason?: string; included: Record<string, number>; omissions: string[] };
+  import: { ok: boolean; reason?: string; restored: number; notRestored: number; byteIdentical: boolean; syntheticRestored: boolean };
+}
+
+export interface DataReport extends DataProbeRead {
+  ok: boolean;
+  failures: string[];
+}
+
+/** Pass/fail for the data probe. */
+export function evaluateData(read: DataProbeRead): DataReport {
+  const failures: string[] = [];
+  if (!read.policyLoaded) failures.push('the local data policy did not load');
+  if (read.ruleBlockers > 0) failures.push(`${read.ruleBlockers} enabled categories have an unknown rule`);
+  if (!read.runtimeHome.underUserData) failures.push('the runtime home is not under userData');
+  if (!read.runtimeHome.matchesHandshake) failures.push('the runtime did not report the runtime home as its CODEX_HOME');
+  if (read.unclassified.length > 0) failures.push(`unclassified files: ${read.unclassified.join(', ')}`);
+  if (read.disabledHeld.length > 0) failures.push(`files in disabled categories: ${read.disabledHeld.join(', ')}`);
+  if (!read.renderer.policyLoaded || read.renderer.categories !== read.categories) failures.push('the renderer did not receive the full policy');
+  if (!read.renderer.blockShown) failures.push('the Local data block did not list the categories');
+  if (!read.renderer.pathRejected) failures.push('a renderer-supplied path to data.export was not rejected');
+  if (!read.export.ok) failures.push(`the export failed: ${read.export.reason ?? 'no reason'}`);
+  if (!read.export.included['task-history']) failures.push('the export did not include task history');
+  for (const id of REQUIRED_OMISSIONS) if (!read.export.omissions.includes(id)) failures.push(`the export did not declare ${id} as omitted`);
+  if (!read.import.ok) failures.push(`the reimport failed: ${read.import.reason ?? 'no reason'}`);
+  const exported = Object.values(read.export.included).reduce((sum, count) => sum + count, 0);
+  if (read.import.restored !== exported || read.import.notRestored !== 0) failures.push(`reimport restored ${read.import.restored} of ${exported} files`);
+  if (!read.import.byteIdentical) failures.push('reimported files differ from the export');
+  if (!read.import.syntheticRestored) failures.push('the synthetic session file did not come back byte-identical');
+  return { ok: failures.length === 0, failures, ...read };
+}
+
+const DATA_RENDERER_PROBE = `(async () => {
+  const out = {};
+  const policy = await globalThis.inquello.data.getPolicy();
+  out.policyLoaded = policy && policy.loaded === true;
+  out.categories = policy && Array.isArray(policy.categories) ? policy.categories.length : 0;
+  const deadline = Date.now() + 10000;
+  while (Date.now() < deadline && document.querySelectorAll('[data-local-data-category]').length === 0) await new Promise((r) => setTimeout(r, 100));
+  out.blockCategories = document.querySelectorAll('[data-local-data-category]').length;
+  try {
+    await globalThis.inquello.data.export('/tmp/renderer-chosen-path');
+    out.pathRejected = false;
+  } catch (error) {
+    out.pathRejected = String(error && error.message).includes('invalid payload for data.export');
+  }
+  return out;
+})()`;
+
+function realpathOrNull(file: string | null): string | null {
+  if (!file) return null;
+  try {
+    return fs.realpathSync.native(file);
+  } catch {
+    return null;
+  }
+}
+
+export interface DataProbeOptions {
+  service: DataService;
+  roots: GovernedRoots;
+  /** `codexHome` from the runtime's handshake. */
+  codexHome: string | null;
+  tempBase?: string;
+}
+
+/** Runs the data probe against the live roots, the renderer and the data service. */
+export async function probeData(contents: WebContents, options: DataProbeOptions): Promise<DataReport> {
+  const { service, roots } = options;
+  const policy = service.policy;
+  const read: DataProbeRead = {
+    policyLoaded: policy !== null,
+    ruleBlockers: policy ? ruleBlockers(policy).length : 0,
+    categories: policy?.categories.length ?? 0,
+    runtimeHome: {
+      underUserData: isInside(roots['user-data'], roots['runtime-home']) && path.resolve(roots['user-data']) !== path.resolve(roots['runtime-home']),
+      matchesHandshake: realpathOrNull(options.codexHome) !== null && realpathOrNull(options.codexHome) === realpathOrNull(roots['runtime-home']),
+    },
+    unclassified: [],
+    disabledHeld: [],
+    renderer: { policyLoaded: false, categories: 0, blockShown: false, pathRejected: false },
+    export: { ok: false, included: {}, omissions: [] },
+    import: { ok: false, restored: 0, notRestored: 0, byteIdentical: false, syntheticRestored: false },
+  };
+  if (!policy) return evaluateData(read);
+
+  // A synthetic session file, so the round trip carries task history.
+  const sessionRel = `sessions/2026/10/28/rollout-smoke-${randomUUID()}.jsonl`;
+  const sessionFile = path.join(roots['runtime-home'], ...sessionRel.split('/'));
+  const sessionBytes = `${JSON.stringify({ type: 'session_meta', payload: { id: randomUUID(), source: 'inquello-smoke', synthetic: true } })}\n`;
+  fs.mkdirSync(path.dirname(sessionFile), { recursive: true });
+  fs.writeFileSync(sessionFile, sessionBytes, { mode: 0o600 });
+
+  const inventory = takeInventory(policy, roots);
+  read.unclassified = [...inventory.unclassified];
+  read.disabledHeld = inventory.disabledHeld.map((entry) => entry.path);
+
+  const renderer = (await contents.executeJavaScript(DATA_RENDERER_PROBE)) as { policyLoaded: boolean; categories: number; blockCategories: number; pathRejected: boolean };
+  read.renderer = { policyLoaded: renderer.policyLoaded === true, categories: renderer.categories, blockShown: renderer.blockCategories === read.categories, pathRejected: renderer.pathRejected === true };
+
+  const temps: string[] = [];
+  try {
+    const exported = await service.exportData();
+    if (!exported.ok) {
+      read.export = { ok: false, reason: exported.reason, included: {}, omissions: [] };
+      return evaluateData(read);
+    }
+    temps.push(path.dirname(exported.export.path));
+    read.export = {
+      ok: true,
+      included: Object.fromEntries(exported.export.included.map((entry) => [entry.category, entry.files])),
+      omissions: exported.export.omissions.map((entry) => entry.category ?? 'unclassified'),
+    };
+
+    const target = fs.mkdtempSync(path.join(options.tempBase ?? os.tmpdir(), 'inquello-smoke-reimport-'));
+    temps.push(target);
+    const targetRoots = governedRoots(path.join(target, 'user-data'), path.join(target, 'user-data', 'logs'));
+    try {
+      const result = await importData({ policy, roots: targetRoots, source: exported.export.path });
+      const manifest = readManifest(exported.export.path);
+      let identical = true;
+      for (const entry of manifest.included) {
+        for (const file of entry.files) {
+          const restored = path.join(targetRoots[file.root], ...file.path.split('/'));
+          const digest = await digestFile(restored).catch(() => null);
+          const original = await digestFile(exportedFilePath(exported.export.path, file.root, file.path)).catch(() => null);
+          if (!digest || digest.sha256 !== file.sha256 || original?.sha256 !== file.sha256) identical = false;
+        }
+      }
+      const syntheticBack = fs.existsSync(path.join(targetRoots['runtime-home'], ...sessionRel.split('/')))
+        ? fs.readFileSync(path.join(targetRoots['runtime-home'], ...sessionRel.split('/')), 'utf8')
+        : null;
+      read.import = {
+        ok: true,
+        restored: result.restored.reduce((sum, entry) => sum + entry.files, 0),
+        notRestored: result.notRestored.length,
+        byteIdentical: identical,
+        syntheticRestored: syntheticBack === sessionBytes,
+      };
+    } catch (error) {
+      read.import = { ok: false, reason: (error as Error).message, restored: 0, notRestored: 0, byteIdentical: false, syntheticRestored: false };
+    }
+  } finally {
+    for (const dir of temps) fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
+    fs.rmSync(sessionFile, { force: true });
+  }
+  return evaluateData(read);
 }

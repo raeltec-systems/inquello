@@ -10,11 +10,15 @@
  * reduced motion), an ApprovalCard, every DiffLine kind and stage, and a
  * persistent Toast. Story 1.10b adds the Account block, the one part that
  * performs operations: sign-in, sign-out and the identity status through the
- * named `inquello.identity` operations. Nothing else here performs one.
+ * named `inquello.identity` operations. Story 1.12 adds the Local data
+ * block at the end of the page: the data-policy categories and the export,
+ * import and delete actions through the named `inquello.data` operations.
+ * Nothing else here performs one.
  */
 import type { ReactElement, ReactNode } from 'react';
 
 import { Account } from './Account';
+import { LocalData } from './LocalData';
 import { CONTRAST_PAIRS } from './design/contrast';
 import { Icon } from './icons/Icon';
 import {
@@ -430,6 +434,10 @@ export function Specimen(): ReactElement {
           </span>
         ))}
       </div>
+
+      <Section title="Local data">
+        <LocalData />
+      </Section>
     </main>
   );
 }

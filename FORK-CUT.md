@@ -133,6 +133,13 @@ Changes only the Inquello crates; no upstream crate's code changes.
 - **`inquello-service`**: migration `0002_workspaces_memberships.sql` (Workspaces, policy revisions, memberships with role bindings, Engagements and their memberships, identity-bound invites, operator receipts, Workspace events, and the fixture-only `resource_registrations` and `grants`; it drops 0001's fixture-only `memberships` table). New routes `GET /v1/workspaces`, `GET /v1/workspaces/{id}/roles`, `POST /v1/invites/{id}/accept`, `POST /v1/workspaces/{id}/commands` and `POST /v1/workspaces/{id}/access-checks`. New `Lifetimes.invite`. New binary `inquello-service` (`admin create-workspace`, `admin update-policy`), which connects to PostgreSQL directly; no HTTP route creates a Workspace. New test target `tests/memberships.rs` (requires `test-issuer`).
 - **Workspace manifest and lockfile**: unchanged. No dependency edge was added.
 
+### Patch 6: Local data-policy cross-check (Story 1.12, 2026-10-28)
+
+Test-only change in `inquello-domain`; no library code and no upstream crate changes.
+
+- **`inquello-domain/tests/capability_register.rs`**: reads the desktop's local data-policy register (`desktop/data-policy.json`) by repository path and fails if any capability-register entry is `RealDataEligible` while an enabled data category has an unknown owner, rule owner, retention or export rule. It also checks that the committed register has no such blocker and that the cross-check trips on a synthetic unknown rule.
+- **Workspace manifest and lockfile**: unchanged.
+
 ## Toolchain setup (Windows, everything on D:)
 
 The owner authorized these installs on 2026-10-28. Toolchains, caches and build output stay on D:. The Microsoft C++ build tools were already present and were not installed.

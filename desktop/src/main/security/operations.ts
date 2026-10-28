@@ -10,13 +10,23 @@
  * The preload repeats the channel strings below literally because a sandboxed
  * preload cannot `require` this file; a test keeps the two in step.
  */
+import type { DeleteActionResult, ExportActionResult, ImportActionResult, PolicyView } from '../data/service';
 import { toRendererResult, toRendererStatus, type IdentityActionResult, type IdentityStatus } from '../identity/session';
 import type { Logger } from '../runtime/logger';
 import type { RuntimeState } from '../runtime/process';
 import { describeSender, isTrustedSender, type InvokeEventLike } from './sender';
 
 /** Every operation the preload exposes, in `<namespace>.<name>` form. */
-export const OPERATION_NAMES = ['runtime.getStatus', 'identity.getStatus', 'identity.signIn', 'identity.signOut'] as const;
+export const OPERATION_NAMES = [
+  'runtime.getStatus',
+  'identity.getStatus',
+  'identity.signIn',
+  'identity.signOut',
+  'data.getPolicy',
+  'data.export',
+  'data.import',
+  'data.delete',
+] as const;
 export type OperationName = (typeof OPERATION_NAMES)[number];
 
 export const CHANNEL_PREFIX = 'inquello:op:';
@@ -78,6 +88,31 @@ export function objectPayload<S extends Record<string, FieldType>>(
   };
 }
 
+/**
+ * Validator for one argument that is a non-empty list of distinct strings,
+ * each one of `allowed()` (read on every call). Anything else rejects: a path,
+ * an object, an unknown or repeated entry, or extra arguments.
+ */
+export function stringListPayload(allowed: () => readonly string[]): PayloadValidator<string[]> {
+  return (args) => {
+    if (args.length !== 1) throw new OperationError('expected one argument');
+    const value = args[0];
+    if (!Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype) throw new OperationError('expected a list');
+    if (value.length === 0) throw new OperationError('expected at least one entry');
+    const known = new Set(allowed());
+    const out: string[] = [];
+    for (let i = 0; i < value.length; i += 1) {
+      if (!Object.hasOwn(value, i)) throw new OperationError('expected a dense list');
+      const entry: unknown = value[i];
+      if (typeof entry !== 'string' || !known.has(entry)) throw new OperationError('unknown entry');
+      if (out.includes(entry)) throw new OperationError('repeated entry');
+      out.push(entry);
+    }
+    if (Object.keys(value).length !== value.length) throw new OperationError('unexpected list properties');
+    return out;
+  };
+}
+
 export interface RuntimeStatus {
   state: RuntimeState;
   runtimeVersion: string;
@@ -90,10 +125,21 @@ export interface IdentityOperations {
   signOut(): Promise<IdentityActionResult>;
 }
 
+/** The local data service as the operations see it (main-owned; see `data/service.ts`). */
+export interface DataOperations {
+  getPolicy(): PolicyView;
+  exportData(): Promise<ExportActionResult>;
+  importData(): Promise<ImportActionResult>;
+  deleteData(categories: readonly string[]): Promise<DeleteActionResult>;
+  /** Category ids `data.delete` accepts: the enabled categories of the register. */
+  deletableCategories(): readonly string[];
+}
+
 export interface OperationDeps {
   runtimeState: () => RuntimeState;
   runtimeVersion: string;
   identity: IdentityOperations;
+  data: DataOperations;
 }
 
 /**
@@ -122,7 +168,29 @@ export function createOperations(deps: OperationDeps): Operation[] {
     validate: noPayload,
     handle: async () => toRendererResult(await deps.identity.signOut()),
   };
-  return [getStatus, identityStatus, signIn, signOut] as Operation[];
+  // Local data (Story 1.12): main shows every folder dialog, so no data
+  // operation takes a path; `data.delete` takes only known category ids.
+  const dataPolicy: Operation<undefined, PolicyView> = {
+    name: 'data.getPolicy',
+    validate: noPayload,
+    handle: () => deps.data.getPolicy(),
+  };
+  const dataExport: Operation<undefined, ExportActionResult> = {
+    name: 'data.export',
+    validate: noPayload,
+    handle: () => deps.data.exportData(),
+  };
+  const dataImport: Operation<undefined, ImportActionResult> = {
+    name: 'data.import',
+    validate: noPayload,
+    handle: () => deps.data.importData(),
+  };
+  const dataDelete: Operation<string[], DeleteActionResult> = {
+    name: 'data.delete',
+    validate: stringListPayload(() => deps.data.deletableCategories()),
+    handle: (categories) => deps.data.deleteData(categories),
+  };
+  return [getStatus, identityStatus, signIn, signOut, dataPolicy, dataExport, dataImport, dataDelete] as Operation[];
 }
 
 export interface IpcMainLike {

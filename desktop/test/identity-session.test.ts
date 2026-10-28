@@ -427,3 +427,23 @@ describe('configuration', () => {
     expect(await session.signIn()).toMatchObject({ ok: false, reason: REASONS.configInvalid });
   });
 });
+
+describe('local data deletion support (Story 1.12)', () => {
+  it('forgetLocally drops the session from memory and the vault without contacting the service', async () => {
+    const w = world();
+    const session = w.make();
+    await session.signIn();
+    expect(session.holdsSession()).toBe(true);
+    expect(fs.existsSync(path.join(w.dir, SESSION_FILE))).toBe(true);
+    w.service.down = true;
+    expect((await session.signOut()).ok).toBe(false);
+    session.forgetLocally();
+    expect(session.holdsSession()).toBe(false);
+    expect(session.snapshot().identity).toEqual({ state: 'signed-out' });
+    expect(fs.existsSync(path.join(w.dir, SESSION_FILE))).toBe(false);
+    // A later status check does not bring it back.
+    w.service.down = false;
+    expect((await session.getStatus()).identity).toEqual({ state: 'signed-out' });
+    expect(fs.existsSync(path.join(w.dir, SESSION_FILE))).toBe(false);
+  });
+});
