@@ -18,6 +18,11 @@
  * - a file held in a disabled category blocks;
  * - a register that does not load blocks everything.
  *
+ * A category may instead be located in an OS credential store (Story 1.13:
+ * the Codex login in the keyring). Such an entry is governed like any other
+ * category but holds no file: it is never inventoried, exported or deleted
+ * through Local data; the provider's own removal deletes it.
+ *
  * Retention is never invented: the only rules are `until-owner-deletes` (the
  * owner decision of 2026-10-28) and `unknown`.
  *
@@ -33,6 +38,16 @@ export const POLICY_FILE = 'data-policy.json';
 export const DATA_ROOTS = ['user-data', 'runtime-home', 'logs'] as const;
 export type DataRoot = (typeof DATA_ROOTS)[number];
 
+/**
+ * Credential stores outside the governed roots. A category located in one
+ * holds an entry the OS keeps, not a file: it is never listed in the
+ * inventory, exported or removed by Local data deletion.
+ */
+export const DATA_STORES = ['os-credential-store'] as const;
+export type DataStore = (typeof DATA_STORES)[number];
+
+export type DataLocation = { root: DataRoot; globs: readonly string[] } | { store: DataStore; entry: string };
+
 export const RETENTION_RULES = ['until-owner-deletes', 'unknown'] as const;
 export type Retention = (typeof RETENTION_RULES)[number];
 
@@ -44,7 +59,7 @@ export type ExportRule = { mode: 'included' } | { mode: 'excluded'; reason: stri
 export interface DataCategory {
   id: string;
   label: string;
-  location: { root: DataRoot; globs: readonly string[] };
+  location: DataLocation;
   enabled: boolean;
   /** Holds credentials or provider secrets: never exported. */
   credentials: boolean;
@@ -112,6 +127,23 @@ function parseExport(value: unknown, where: string): ExportRule {
   return { mode };
 }
 
+function parseLocation(value: unknown, where: string): DataLocation {
+  if (typeof value === 'object' && value !== null && Object.hasOwn(value, 'store')) {
+    const location = exactKeys(value, where, ['store', 'entry']);
+    return { store: oneOf(location.store, DATA_STORES, `${where}.store`), entry: text(location.entry, `${where}.entry`) };
+  }
+  const location = exactKeys(value, where, ['root', 'globs']);
+  const root = oneOf(location.root, DATA_ROOTS, `${where}.root`);
+  if (!Array.isArray(location.globs) || location.globs.length === 0) fail(`${where}.globs`, 'expected a non-empty list');
+  const globs = location.globs.map((glob, i) => validGlob(text(glob, `${where}.globs[${i}]`), where));
+  return { root, globs };
+}
+
+/** True for a category whose data lives in an OS credential store rather than in files. */
+export function isStoreCategory(category: DataCategory): category is DataCategory & { location: { store: DataStore; entry: string } } {
+  return 'store' in category.location;
+}
+
 function parseCategory(value: unknown, index: number): DataCategory {
   const where = `categories[${index}]`;
   const record = exactKeys(value, where, [
@@ -131,16 +163,13 @@ function parseCategory(value: unknown, index: number): DataCategory {
   const id = text(record.id, `${where}.id`);
   if (!ID_PATTERN.test(id)) fail(where, `id ${JSON.stringify(id)} is not lower-case kebab`);
   const at = `category ${id}`;
-  const location = exactKeys(record.location, `${at}.location`, ['root', 'globs']);
-  const root = oneOf(location.root, DATA_ROOTS, `${at}.location.root`);
-  if (!Array.isArray(location.globs) || location.globs.length === 0) fail(`${at}.location.globs`, 'expected a non-empty list');
-  const globs = location.globs.map((glob, i) => validGlob(text(glob, `${at}.location.globs[${i}]`), `${at}.location`));
+  const location = parseLocation(record.location, `${at}.location`);
   if (typeof record.enabled !== 'boolean') fail(`${at}.enabled`, 'expected a boolean');
   if (typeof record.credentials !== 'boolean') fail(`${at}.credentials`, 'expected a boolean');
   const category: DataCategory = {
     id,
     label: text(record.label, `${at}.label`),
-    location: { root, globs },
+    location,
     enabled: record.enabled,
     credentials: record.credentials,
     owner: text(record.owner, `${at}.owner`),
@@ -254,7 +283,10 @@ export function globToRegExp(glob: string): RegExp {
  * too, so a file held in one is visible (and blocks).
  */
 export function classify(policy: DataPolicy, root: DataRoot, relPath: string): DataCategory | undefined {
-  return policy.categories.find((category) => category.location.root === root && category.location.globs.some((glob) => globToRegExp(glob).test(relPath)));
+  return policy.categories.find((category) => {
+    const location = category.location;
+    return 'root' in location && location.root === root && location.globs.some((glob) => globToRegExp(glob).test(relPath));
+  });
 }
 
 export function categoryById(policy: DataPolicy, id: string): DataCategory | undefined {

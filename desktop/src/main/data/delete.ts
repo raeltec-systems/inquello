@@ -19,7 +19,7 @@ import path from 'node:path';
 
 import { takeInventory, type GovernedRoots } from './inventory';
 import type { JournalEntry } from './journal';
-import { categoryById, type DataPolicy } from './policy';
+import { categoryById, isStoreCategory, type DataPolicy } from './policy';
 
 export const CHROMIUM_PROFILE = 'chromium-profile';
 
@@ -84,6 +84,7 @@ export function validateDeletion(policy: DataPolicy, categories: readonly string
     const category = categoryById(policy, id);
     if (!category) throw new DeleteError(`unknown category ${JSON.stringify(id)}`);
     if (!category.enabled) throw new DeleteError(`${category.label} is disabled and holds nothing to delete`);
+    if (isStoreCategory(category)) throw new DeleteError(`${category.label} is held in the OS credential store; remove it in Providers`);
   }
 }
 

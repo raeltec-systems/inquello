@@ -148,7 +148,7 @@ describe('a real runtime home', () => {
     expect(exported.export.attribution).toEqual({ principal: null, appVersion: '0.0.0-test', runtimeVersion: schemaStamp.runtimeVersion });
     expect(exported.export.omissions.map((omission) => omission.category)).toEqual(expect.arrayContaining(['identity-session', 'chromium-profile', 'runtime-state']));
 
-    const deleted = await service.deleteData(policy.categories.filter((category) => category.enabled).map((category) => category.id));
+    const deleted = await service.deleteData(service.deletableCategories());
     if (!deleted.ok) throw new Error(deleted.reason);
     expect(events).toEqual(['stop', 'start']);
     expect(runtime.state).toBe('ready');

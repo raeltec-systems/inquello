@@ -23,7 +23,7 @@ import { exportData, ExportError, type Attribution, type ManifestOmission } from
 import { importData, ImportError } from './import';
 import { takeInventory, type GovernedRoots, type Inventory } from './inventory';
 import type { ExportJournal } from './journal';
-import { realDataBlockers, type BlockerKind, type DataPolicy, type PolicyLoad } from './policy';
+import { isStoreCategory, realDataBlockers, type BlockerKind, type DataPolicy, type PolicyLoad } from './policy';
 
 export const IDENTITY_SESSION = 'identity-session';
 
@@ -63,6 +63,8 @@ export interface CategoryView {
   id: string;
   label: string;
   enabled: boolean;
+  /** Files in a governed root, or an entry the OS credential store keeps (never deleted here). */
+  location: 'files' | 'os-credential-store';
   owner: string;
   ruleOwner: string;
   retention: 'until-owner-deletes' | 'unknown';
@@ -132,6 +134,11 @@ export class DataService {
     return this.options.load.ok ? this.options.load.policy : null;
   }
 
+  /** Category ids `data.delete` accepts: enabled categories held in files. */
+  deletableCategories(): string[] {
+    return this.policy?.categories.filter((category) => category.enabled && !isStoreCategory(category)).map((category) => category.id) ?? [];
+  }
+
   inventory(): Inventory | null {
     return this.policy ? takeInventory(this.policy, this.options.roots) : null;
   }
@@ -150,6 +157,7 @@ export class DataService {
         id: category.id,
         label: category.label,
         enabled: category.enabled,
+        location: isStoreCategory(category) ? 'os-credential-store' : 'files',
         owner: category.owner,
         ruleOwner: category.rule_owner,
         retention: category.retention,

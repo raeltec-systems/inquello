@@ -21,7 +21,9 @@ import {
   type IdentityOperations,
   type IpcMainLike,
   type Operation,
+  type ProviderOperations,
 } from '../src/main/security/operations';
+import type { ProviderStatus } from '../src/main/providers/status';
 import type { PolicyView } from '../src/main/data/service';
 import type { IdentityStatus } from '../src/main/identity/session';
 import {
@@ -196,18 +198,41 @@ function fakeData(calls: string[] = []): DataOperations {
   };
 }
 
+/** A provider service whose results carry extra fields (and a key) that must never cross IPC. */
+function fakeProvider(calls: string[] = []): ProviderOperations {
+  const status = (): ProviderStatus =>
+    ({
+      claude: { state: 'stored-unverified', storage: 'os-backed', key: 'sk-ant-LEAK' },
+      codex: { state: 'connected', account: { type: 'chatgpt', planType: 'plus', email: 'leak@example.com' }, credentialStore: 'os-keyring', apiKey: 'LEAK' },
+    }) as unknown as ProviderStatus;
+  const result = (name: string, detail = '') => {
+    calls.push(`${name}${detail}`);
+    return { ok: true, status: status(), key: 'LEAK' } as never;
+  };
+  return {
+    getStatus: async () => (calls.push('getStatus'), status()),
+    setClaudeKey: async (key) => result('setClaudeKey', `:${key.length}`),
+    verifyClaudeKey: async () => result('verifyClaudeKey'),
+    removeClaudeKey: async () => result('removeClaudeKey'),
+    codexLogin: async (request) => result('codexLogin', `:${request.type}`),
+    codexLogout: async () => result('codexLogout'),
+  };
+}
+
 describe('operation registry', () => {
   const mainFrame: FrameLike = { url: APP, frameTreeNodeId: 1, parent: null };
   const trustedEvent: InvokeEventLike = { sender: { id: 1, mainFrame }, senderFrame: mainFrame };
   let ipc: FakeIpcMain;
   let calls: number;
   let dataCalls: string[];
+  let providerCalls: string[];
   let logger: ReturnType<typeof recordingLogger>;
 
   beforeEach(() => {
     ipc = new FakeIpcMain();
     calls = 0;
     dataCalls = [];
+    providerCalls = [];
     logger = recordingLogger();
     const operations = createOperations({
       runtimeState: () => {
@@ -217,6 +242,7 @@ describe('operation registry', () => {
       runtimeVersion: '0.165.0',
       identity: fakeIdentity(),
       data: fakeData(dataCalls),
+      provider: fakeProvider(providerCalls),
     });
     registerOperations(ipc, operations, { trustedWebContentsIds: new Set([1]), logger });
   });
@@ -231,6 +257,12 @@ describe('operation registry', () => {
       'data.export',
       'data.import',
       'data.delete',
+      'provider.getStatus',
+      'provider.setClaudeKey',
+      'provider.verifyClaudeKey',
+      'provider.removeClaudeKey',
+      'provider.codexLogin',
+      'provider.codexLogout',
     ]);
     expect([...ipc.handlers.keys()]).toEqual(OPERATION_NAMES.map((name) => `${CHANNEL_PREFIX}${name}`));
   });
@@ -327,6 +359,68 @@ describe('operation registry', () => {
     expect(dataCalls).toEqual(['delete:runtime-logs,task-history']);
   });
 
+  it('provider operations return only the published status fields, never a key', async () => {
+    const expected = {
+      claude: { state: 'stored-unverified', storage: 'os-backed' },
+      codex: { state: 'connected', account: { type: 'chatgpt', planType: 'plus' }, credentialStore: 'os-keyring' },
+      routes: {
+        'claude-api-key': { authorized: true, reason: 'A Claude API key is stored and has not been checked.' },
+        'codex-inherited': { authorized: true, reason: 'A Codex login is held in the OS keyring.' },
+      },
+    };
+    await expect(ipc.invoke(channelFor('provider.getStatus'), trustedEvent)).resolves.toEqual(expected);
+    const results = [
+      await ipc.invoke(channelFor('provider.setClaudeKey'), trustedEvent, 'sk-ant-api03-SECRETSECRETSECRET'),
+      await ipc.invoke(channelFor('provider.verifyClaudeKey'), trustedEvent),
+      await ipc.invoke(channelFor('provider.removeClaudeKey'), trustedEvent),
+      await ipc.invoke(channelFor('provider.codexLogin'), trustedEvent, { type: 'apiKey', apiKey: 'sk-SECRETSECRET' }),
+      await ipc.invoke(channelFor('provider.codexLogin'), trustedEvent, { type: 'chatgpt' }),
+      await ipc.invoke(channelFor('provider.codexLogout'), trustedEvent),
+    ];
+    for (const result of results) {
+      expect(result).toEqual({ ok: true, status: expected });
+      expect(JSON.stringify(result)).not.toMatch(/LEAK|SECRET|leak@/);
+    }
+    expect(providerCalls).toEqual(['getStatus', 'setClaudeKey:31', 'verifyClaudeKey', 'removeClaudeKey', 'codexLogin:apiKey', 'codexLogin:chatgpt', 'codexLogout']);
+  });
+
+  it.each(['provider.getStatus', 'provider.verifyClaudeKey', 'provider.removeClaudeKey', 'provider.codexLogout'] as const)('%s takes no arguments and checks the sender', async (name) => {
+    const bad = await ipc.invoke(channelFor(name), trustedEvent, 'sk-ant-x').catch((e: Error) => e);
+    expect((bad as Error).message).toBe(`invalid payload for ${name}`);
+    const foreign = await ipc.invoke(channelFor(name), { sender: { id: 2, mainFrame }, senderFrame: mainFrame }).catch((e: Error) => e);
+    expect((foreign as Error).message).toBe('untrusted sender');
+    expect(providerCalls).toEqual([]);
+  });
+
+  it.each([
+    ['no argument', []],
+    ['a number', [42]],
+    ['an object', [{ key: 'sk-ant-x' }]],
+    ['two arguments', ['sk-ant-api03-SECRETSECRETSECRET', 'extra']],
+    ['an oversized string', ['sk-ant-'.padEnd(5000, 'x')]],
+  ])('provider.setClaudeKey rejects %s without logging the value', async (_label, args) => {
+    const bad = await ipc.invoke(channelFor('provider.setClaudeKey'), trustedEvent, ...(args as unknown[])).catch((e: Error) => e);
+    expect((bad as Error).message).toBe('invalid payload for provider.setClaudeKey');
+    expect(providerCalls).toEqual([]);
+    expect(logger.messages.join('\n')).not.toMatch(/SECRET|sk-ant/);
+  });
+
+  it.each([
+    ['no argument', []],
+    ['a string', ['sk-SECRET']],
+    ['an unknown type', [{ type: 'chatgptAuthTokens', accessToken: 'SECRET' }]],
+    ['an api key login without a key', [{ type: 'apiKey' }]],
+    ['an api key that is not a string', [{ type: 'apiKey', apiKey: 7 }]],
+    ['extra fields', [{ type: 'apiKey', apiKey: 'sk-SECRET', base: 'x' }]],
+    ['a chatgpt login with extra fields', [{ type: 'chatgpt', useHostedLoginSuccessPage: true }]],
+    ['two arguments', [{ type: 'chatgpt' }, 'x']],
+  ])('provider.codexLogin rejects %s', async (_label, args) => {
+    const bad = await ipc.invoke(channelFor('provider.codexLogin'), trustedEvent, ...(args as unknown[])).catch((e: Error) => e);
+    expect((bad as Error).message).toBe('invalid payload for provider.codexLogin');
+    expect(providerCalls).toEqual([]);
+    expect(logger.messages.join('\n')).not.toContain('SECRET');
+  });
+
   it('treats a sender whose frame accessors throw as untrusted', async () => {
     const disposed = {
       sender: { id: 1, mainFrame },
@@ -353,7 +447,7 @@ describe('operation registry', () => {
         throw new Error('secret internal path /home/x');
       },
     };
-    const others = createOperations({ runtimeState: () => 'ready', runtimeVersion: '0.165.0', identity: fakeIdentity(), data: fakeData() }).filter(
+    const others = createOperations({ runtimeState: () => 'ready', runtimeVersion: '0.165.0', identity: fakeIdentity(), data: fakeData(), provider: fakeProvider() }).filter(
       (operation) => operation.name !== 'runtime.getStatus',
     );
     registerOperations(failing, [op, ...others], { trustedWebContentsIds: new Set([1]), logger });
@@ -569,7 +663,7 @@ describe('session policy', () => {
 });
 
 describe('preload', () => {
-  it('exposes exactly the frozen runtime, identity and data operations over fixed channels', async () => {
+  it('exposes exactly the frozen runtime, identity, data and provider operations over fixed channels', async () => {
     const exposed: Array<[string, unknown]> = [];
     const invoke = vi.fn(async (...args: unknown[]) => ({ args }));
     vi.resetModules();
@@ -595,11 +689,13 @@ describe('preload', () => {
       runtime: { getStatus: Op };
       identity: { getStatus: Op; signIn: Op; signOut: Op };
       data: { getPolicy: Op; export: Op; import: Op; delete: Op };
+      provider: { getStatus: Op; setClaudeKey: Op; verifyClaudeKey: Op; removeClaudeKey: Op; codexLogin: Op; codexLogout: Op };
     };
     expect(Object.isFrozen(typed)).toBe(true);
     expect(Object.isFrozen(typed.runtime)).toBe(true);
     expect(Object.isFrozen(typed.identity)).toBe(true);
     expect(Object.isFrozen(typed.data)).toBe(true);
+    expect(Object.isFrozen(typed.provider)).toBe(true);
 
     // Arguments from the renderer are never forwarded; each channel is fixed.
     const calls: Array<[Op, string]> = [
@@ -607,6 +703,10 @@ describe('preload', () => {
       [typed.identity.getStatus, channelFor('identity.getStatus')],
       [typed.identity.signIn, channelFor('identity.signIn')],
       [typed.identity.signOut, channelFor('identity.signOut')],
+      [typed.provider.getStatus, channelFor('provider.getStatus')],
+      [typed.provider.verifyClaudeKey, channelFor('provider.verifyClaudeKey')],
+      [typed.provider.removeClaudeKey, channelFor('provider.removeClaudeKey')],
+      [typed.provider.codexLogout, channelFor('provider.codexLogout')],
     ];
     for (const [op, channel] of calls) {
       invoke.mockClear();
@@ -622,6 +722,8 @@ describe('preload', () => {
       [typed.data.export, channelFor('data.export')],
       [typed.data.import, channelFor('data.import')],
       [typed.data.delete, channelFor('data.delete')],
+      [typed.provider.setClaudeKey, channelFor('provider.setClaudeKey')],
+      [typed.provider.codexLogin, channelFor('provider.codexLogin')],
     ];
     for (const [op, channel] of dataCalls) {
       invoke.mockClear();
@@ -698,9 +800,13 @@ describe('host privilege source scan', () => {
     const uses = body.match(/ipcRenderer[^\n]*/g) ?? [];
     expect(uses.length).toBeGreaterThan(0);
     for (const use of uses) expect(use).toMatch(/^ipcRenderer\.invoke\([A-Z_]+_CHANNEL(?:, \.\.\.args)?\)/);
-    // Only the data operations forward arguments.
-    expect((body.match(/_CHANNEL, \.\.\.args\)/g) ?? []).length).toBe(4);
-    expect(body.match(/[A-Z_]+_CHANNEL, \.\.\.args\)/g)?.every((use) => use.startsWith('DATA_'))).toBe(true);
+    // Only the data operations and the two provider operations that take what the user entered forward arguments.
+    expect((body.match(/_CHANNEL, \.\.\.args\)/g) ?? []).length).toBe(6);
+    expect(
+      body
+        .match(/[A-Z_]+_CHANNEL, \.\.\.args\)/g)
+        ?.every((use) => use.startsWith('DATA_') || use.startsWith('PROVIDER_SET_CLAUDE_KEY_') || use.startsWith('PROVIDER_CODEX_LOGIN_')),
+    ).toBe(true);
     expect(preload).not.toMatch(/\.on\(|\.send\(|sendSync|postMessage/);
   });
 });

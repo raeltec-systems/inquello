@@ -38,7 +38,7 @@ interface FieldProps {
 
 type SingleProps = FieldProps & {
   multiline?: false;
-  type?: 'text' | 'search' | 'email' | 'url' | 'tel';
+  type?: 'text' | 'search' | 'email' | 'url' | 'tel' | 'password';
   autoComplete?: InputHTMLAttributes<HTMLInputElement>['autoComplete'];
 };
 type MultilineProps = FieldProps & {

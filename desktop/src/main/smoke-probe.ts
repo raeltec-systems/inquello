@@ -55,6 +55,21 @@
  * every included file to come back byte-identical with the identity session
  * and the Chromium profile declared as omissions. `evaluateData` is pure and
  * decides pass/fail.
+ *
+ * Story 1.13 adds the providers probe (`probeProviders`). It types one
+ * sentinel key into the Providers block for both routes (the Claude API key
+ * and a Codex API-key login), requires `stored-unverified` with an OS-backed
+ * encrypted vault file and a connected Codex login held in the OS keyring
+ * (no `auth.json`), checks that both password fields were cleared, signs out
+ * of Inquello and requires both routes unchanged, then removes both routes
+ * and requires the identity unchanged. While the sentinel is held it exports
+ * local data and searches, in main, every file under userData and the logs
+ * directory (the encrypted vault excepted only as ciphertext), the export,
+ * the app-server stderr log, main's own log, `/proc/<app-server pid>/environ`
+ * (Linux) and everything the renderer can see, for the sentinel and every
+ * 8-character fragment of its random part. It also requires that no provider
+ * credential variable of the desktop's environment reached the runtime.
+ * `evaluateProviders` is pure and decides pass/fail.
  */
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
@@ -65,6 +80,8 @@ import type { WebContents } from 'electron';
 
 import { digestFile, exportedFilePath, governedRoots, importData, isInside, readManifest, ruleBlockers, takeInventory, type DataService, type GovernedRoots } from './data';
 import type { IdentityWiring } from './identity';
+import type { ProviderService } from './providers';
+import { isProviderCredentialVar } from './runtime/env';
 import type { BlockedKind } from './security/policy';
 
 const PROBE_TARGET = 'https://example.com/';
@@ -115,6 +132,14 @@ export const EXPECTED_BRIDGE_TREE = {
   runtime: { getStatus: 'function' },
   identity: { getStatus: 'function', signIn: 'function', signOut: 'function' },
   data: { getPolicy: 'function', export: 'function', import: 'function', delete: 'function' },
+  provider: {
+    getStatus: 'function',
+    setClaudeKey: 'function',
+    verifyClaudeKey: 'function',
+    removeClaudeKey: 'function',
+    codexLogin: 'function',
+    codexLogout: 'function',
+  },
 } as const;
 
 /** Globals that must not exist in the renderer's main world. */
@@ -1033,4 +1058,352 @@ export async function probeData(contents: WebContents, options: DataProbeOptions
     fs.rmSync(sessionFile, { force: true });
   }
   return evaluateData(read);
+}
+
+// ---- provider credentials (Story 1.13) -------------------------------------------
+
+const PROVIDER_SETTLE_MS = 30_000;
+
+const PROVIDER_HELPERS = `
+  const wait = async (predicate, ms) => {
+    const deadline = Date.now() + ms;
+    while (Date.now() < deadline) {
+      if (predicate()) return true;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    return predicate();
+  };
+  const block = () => document.querySelector('[data-providers]');
+  const attr = (name) => (block() ? block().getAttribute(name) : null);
+  const read = () => ({ claude: attr('data-claude-state'), storage: attr('data-claude-storage'), codex: attr('data-codex-state'), account: attr('data-codex-account') });
+  const type = (id, value) => {
+    const input = document.getElementById(id);
+    if (!input) return false;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+    setter.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    return input.type === 'password';
+  };
+  const fieldValue = (id) => (document.getElementById(id) ? document.getElementById(id).value : null);
+  const press = async (action, until) => {
+    await wait(() => {
+      const button = document.querySelector('[data-provider-action="' + action + '"]');
+      return button && button.getAttribute('aria-disabled') !== 'true';
+    }, 5000);
+    const button = document.querySelector('[data-provider-action="' + action + '"]');
+    if (!button || button.getAttribute('aria-disabled') === 'true') return { pressed: false, reached: false };
+    button.click();
+    return { pressed: true, reached: await wait(until, ${PROVIDER_SETTLE_MS}) };
+  };
+`;
+
+/** Types the sentinel into both password fields and connects both routes through the Providers block. */
+function providerConnectProbe(sentinel: string): string {
+  return `(async () => {
+    ${PROVIDER_HELPERS}
+    const out = {};
+    await wait(() => block() && attr('data-claude-state') !== 'unknown' && attr('data-codex-state') !== 'unknown', 10000);
+    out.before = read();
+    out.claudePassword = type('provider-claude-key', ${JSON.stringify(sentinel)});
+    out.claudeStore = await press('claude-store', () => attr('data-claude-state') === 'stored-unverified');
+    out.claudeFieldCleared = fieldValue('provider-claude-key') === '';
+    out.codexPassword = type('provider-codex-key', ${JSON.stringify(sentinel)});
+    out.codexLogin = await press('codex-api-key', () => attr('data-codex-state') === 'connected');
+    out.codexFieldCleared = fieldValue('provider-codex-key') === '';
+    out.connected = read();
+    out.status = await globalThis.inquello.provider.getStatus();
+    try {
+      await globalThis.inquello.provider.setClaudeKey('/tmp/x', 'extra');
+      out.extraRejected = false;
+    } catch (error) {
+      out.extraRejected = String(error && error.message).includes('invalid payload for provider.setClaudeKey');
+    }
+    return out;
+  })()`;
+}
+
+const PROVIDER_DISCONNECT_PROBE = `(async () => {
+  ${PROVIDER_HELPERS}
+  const out = {};
+  out.claudeRemove = await press('claude-remove', () => attr('data-claude-state') === 'not-configured');
+  out.codexLogout = await press('codex-logout', () => attr('data-codex-state') === 'not-connected');
+  out.disconnected = read();
+  out.status = await globalThis.inquello.provider.getStatus();
+  return out;
+})()`;
+
+interface ProviderBlockRead {
+  claude: string | null;
+  storage: string | null;
+  codex: string | null;
+  account: string | null;
+}
+
+export interface ProviderProbeRead {
+  /** Provider credential variables in the desktop's environment (names only). */
+  inheritedVars: string[];
+  /** Whether `/proc/<pid>/environ` of the app-server was read (Linux only). */
+  childEnvChecked: boolean;
+  /** Inherited provider variable names or values found in the app-server's environment. */
+  childEnvLeaks: string[];
+  /** A Codex login left in the keyring by an earlier run, removed before the probe. */
+  preexistingCodexLogin: boolean;
+  initial: { claude: string; codex: string } | null;
+  connect: {
+    before: ProviderBlockRead | null;
+    claudePassword: boolean;
+    claudeStore: { pressed: boolean; reached: boolean };
+    claudeFieldCleared: boolean;
+    codexPassword: boolean;
+    codexLogin: { pressed: boolean; reached: boolean };
+    codexFieldCleared: boolean;
+    connected: ProviderBlockRead | null;
+    extraRejected: boolean;
+  } | null;
+  connectedStatus: { claude: string; storage: string; codex: string; account: string | null } | null;
+  vault: { exists: boolean; mode: number | null; dirMode: number | null; plaintext: boolean };
+  authJson: boolean;
+  /** Provider status before and after Inquello sign-out (both routes connected). */
+  identitySignOut: { identityBefore: string; identityAfter: string; providersUnchanged: boolean } | null;
+  /** Identity status before connecting and after removing both routes. */
+  identityUnchanged: boolean;
+  disconnect: { claudeRemove: { pressed: boolean; reached: boolean }; codexLogout: { pressed: boolean; reached: boolean }; disconnected: ProviderBlockRead | null } | null;
+  finalStatus: { claude: string; codex: string } | null;
+  vaultAfterRemove: boolean;
+  exportOk: boolean;
+  /** Where the sentinel (or a fragment) was found; empty when nowhere. */
+  leaks: string[];
+  /** How many files and texts were searched. */
+  searched: number;
+}
+
+export interface ProvidersReport extends ProviderProbeRead {
+  ok: boolean;
+  failures: string[];
+}
+
+/** Pass/fail for the providers probe. */
+export function evaluateProviders(read: ProviderProbeRead): ProvidersReport {
+  const failures: string[] = [];
+  if (read.inheritedVars.length === 0) failures.push('no inherited provider variable was set, so the environment check did not run');
+  if (process.platform === 'linux' && !read.childEnvChecked) failures.push('the app-server environment could not be read');
+  if (read.childEnvLeaks.length > 0) failures.push(`provider variables reached the app-server: ${read.childEnvLeaks.join(', ')}`);
+  if (!read.initial) failures.push('the provider status could not be read');
+  else {
+    if (read.initial.claude !== 'not-configured') failures.push(`the Claude key did not start not-configured (${read.initial.claude})`);
+    if (read.initial.codex !== 'not-connected') failures.push(`the Codex login did not start not connected despite the inherited key (${read.initial.codex})`);
+  }
+  const c = read.connect;
+  if (!c) failures.push('the Providers block could not be driven');
+  else {
+    if (!c.claudePassword || !c.codexPassword) failures.push('a provider key field is not a password field');
+    if (!c.claudeStore.pressed || !c.claudeStore.reached) failures.push('the Claude key did not reach stored-unverified');
+    if (!c.codexLogin.pressed || !c.codexLogin.reached) failures.push('the Codex API key login did not connect');
+    if (!c.claudeFieldCleared || !c.codexFieldCleared) failures.push('a provider key field was not cleared after submit');
+    if (!c.extraRejected) failures.push('provider.setClaudeKey accepted extra arguments');
+  }
+  const s = read.connectedStatus;
+  if (!s || s.claude !== 'stored-unverified' || s.codex !== 'connected' || s.account !== 'apiKey') failures.push(`the connected status is ${JSON.stringify(s)}`);
+  if (s && s.storage !== 'os-backed') failures.push(`the Claude key storage is ${s.storage}, not os-backed`);
+  if (!read.vault.exists) failures.push('the Claude key vault file was not written');
+  else {
+    if (read.vault.mode !== 0o600) failures.push(`the Claude key vault mode is ${read.vault.mode?.toString(8)}, not 600`);
+    if (read.vault.dirMode !== 0o700) failures.push(`the providers directory mode is ${read.vault.dirMode?.toString(8)}, not 700`);
+    if (read.vault.plaintext) failures.push('the Claude key appears in plaintext in the vault file');
+  }
+  if (read.authJson) failures.push('the runtime wrote auth.json');
+  if (!read.identitySignOut?.providersUnchanged) failures.push('Inquello sign-out changed a provider route');
+  if (!read.identityUnchanged) failures.push('connecting or removing a provider route changed the Inquello identity');
+  const d = read.disconnect;
+  if (!d || !d.claudeRemove.reached || !d.codexLogout.reached) failures.push('the provider routes did not disconnect');
+  if (!read.finalStatus || read.finalStatus.claude !== 'not-configured' || read.finalStatus.codex !== 'not-connected') failures.push(`the final status is ${JSON.stringify(read.finalStatus)}`);
+  if (read.vaultAfterRemove) failures.push('the Claude key vault file is still present after removal');
+  if (!read.exportOk) failures.push('the export for the sentinel scan failed');
+  if (read.leaks.length > 0) failures.push(`the sentinel was found in: ${read.leaks.join(', ')}`);
+  if (read.searched === 0) failures.push('nothing was searched for the sentinel');
+  return { ok: failures.length === 0, failures, ...read };
+}
+
+export interface ProviderProbeOptions {
+  providers: ProviderService;
+  identity: IdentityWiring;
+  data: DataService;
+  roots: GovernedRoots;
+  runtimePid: () => number | undefined;
+  stderrLogPath: string;
+  /** Everything main logged so far. */
+  mainLog: () => readonly string[];
+  tempBase?: string;
+}
+
+/** Every regular file under `dir` (symbolic links are not followed). */
+function filesUnder(dir: string): string[] {
+  const out: string[] = [];
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return out;
+  }
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...filesUnder(full));
+    else if (entry.isFile()) out.push(full);
+  }
+  return out;
+}
+
+/** The sentinel and every 8-character window of its random part. */
+export function sentinelNeedles(sentinel: string, random: string): string[] {
+  const compact = random.replace(/-/g, '');
+  const needles = new Set([sentinel, random, compact]);
+  for (let i = 0; i + 8 <= compact.length; i += 1) needles.add(compact.slice(i, i + 8));
+  return [...needles];
+}
+
+function statusSummary(status: Awaited<ReturnType<ProviderService['getStatus']>>) {
+  return { claude: status.claude.state, storage: status.claude.storage, codex: status.codex.state, account: status.codex.account?.type ?? null };
+}
+
+/** Runs the providers probe against the live renderer, the provider service and the runtime. */
+export async function probeProviders(contents: WebContents, options: ProviderProbeOptions): Promise<ProvidersReport> {
+  const { providers, identity, roots } = options;
+  const random = randomUUID();
+  const sentinel = `sk-ant-api03-inquello-smoke-${random}`;
+  const needles = sentinelNeedles(sentinel, random);
+  const inherited = Object.entries(process.env).filter(([name, value]) => isProviderCredentialVar(name) && typeof value === 'string' && value !== '');
+  const read: ProviderProbeRead = {
+    inheritedVars: inherited.map(([name]) => name),
+    childEnvChecked: false,
+    childEnvLeaks: [],
+    preexistingCodexLogin: false,
+    initial: null,
+    connect: null,
+    connectedStatus: null,
+    vault: { exists: false, mode: null, dirMode: null, plaintext: false },
+    authJson: false,
+    identitySignOut: null,
+    identityUnchanged: false,
+    disconnect: null,
+    finalStatus: null,
+    vaultAfterRemove: true,
+    exportOk: false,
+    leaks: [],
+    searched: 0,
+  };
+  const leaks = new Set<string>();
+  const search = (where: string, haystack: string | Buffer) => {
+    read.searched += 1;
+    const text = typeof haystack === 'string' ? haystack : haystack.toString('latin1');
+    if (needles.some((needle) => text.includes(needle))) leaks.add(where);
+  };
+  const readEnviron = (): string | null => {
+    const pid = options.runtimePid();
+    if (process.platform !== 'linux' || pid === undefined) return null;
+    try {
+      return fs.readFileSync(`/proc/${pid}/environ`, 'latin1');
+    } catch {
+      return null;
+    }
+  };
+
+  // Inherited provider variables never reach the runtime.
+  const environ = readEnviron();
+  if (environ !== null) {
+    read.childEnvChecked = true;
+    const entries = environ.split('\0').filter(Boolean);
+    for (const entry of entries) {
+      const name = entry.slice(0, entry.indexOf('='));
+      if (isProviderCredentialVar(name)) read.childEnvLeaks.push(name);
+    }
+    for (const [name, value] of inherited) if (value && environ.includes(value)) read.childEnvLeaks.push(`value of ${name}`);
+  }
+
+  let initial = await providers.getStatus();
+  if (initial.codex.state === 'connected') {
+    read.preexistingCodexLogin = true;
+    await providers.codexLogout();
+    initial = await providers.getStatus();
+  }
+  read.initial = { claude: initial.claude.state, codex: initial.codex.state };
+  // With the shared service configured, be signed in, so the sign-out below is a real one.
+  if (identity.config.kind === 'configured') await identity.session.signIn();
+  const identityBefore = JSON.stringify(await identity.session.getStatus());
+
+  const temps: string[] = [];
+  try {
+    const connect = (await contents.executeJavaScript(providerConnectProbe(sentinel))) as ProviderProbeRead['connect'] & { status: unknown };
+    read.connect = connect;
+    search('renderer provider results', JSON.stringify(connect));
+    const connected = await providers.getStatus();
+    read.connectedStatus = statusSummary(connected);
+
+    const vaultFile = providers.vault.filePath;
+    try {
+      const bytes = fs.readFileSync(vaultFile);
+      read.vault = { exists: true, mode: modeOf(vaultFile), dirMode: modeOf(path.dirname(vaultFile)), plaintext: needles.some((needle) => bytes.includes(Buffer.from(needle, 'utf8'))) };
+    } catch {
+      read.vault = { exists: false, mode: null, dirMode: null, plaintext: false };
+    }
+    read.authJson = fs.existsSync(path.join(roots['runtime-home'], 'auth.json'));
+    read.identityUnchanged = JSON.stringify(await identity.session.getStatus()) === identityBefore;
+
+    // Sign out of Inquello while both routes are connected: provider states stay.
+    const beforeSignOut = JSON.stringify(statusSummary(await providers.getStatus()));
+    const identityStateBefore = (await identity.session.getStatus()).identity.state;
+    await identity.session.signOut();
+    const identityStateAfter = (await identity.session.getStatus()).identity.state;
+    read.identitySignOut = {
+      identityBefore: identityStateBefore,
+      identityAfter: identityStateAfter,
+      providersUnchanged: JSON.stringify(statusSummary(await providers.getStatus())) === beforeSignOut,
+    };
+    const identityAfterSignOut = JSON.stringify(await identity.session.getStatus());
+
+    // Everything the sentinel could leak into while it is held.
+    const exported = await options.data.exportData();
+    read.exportOk = exported.ok;
+    if (exported.ok) {
+      temps.push(path.dirname(exported.export.path));
+      for (const file of filesUnder(exported.export.path)) search(`export:${path.relative(exported.export.path, file)}`, fs.readFileSync(file));
+    }
+    for (const root of [roots['user-data'], roots.logs]) {
+      for (const file of filesUnder(root)) {
+        try {
+          search(`file:${file}`, fs.readFileSync(file));
+        } catch {
+          // Removed or unreadable while walking (Chromium holds some open).
+        }
+      }
+    }
+    try {
+      search('app-server stderr log', fs.readFileSync(options.stderrLogPath));
+    } catch {
+      // No log yet.
+    }
+    const environNow = readEnviron();
+    if (environNow !== null) search(`/proc/<app-server pid>/environ`, environNow);
+    search('renderer', (await contents.executeJavaScript(RENDERER_DUMP)) as string);
+
+    const disconnect = (await contents.executeJavaScript(PROVIDER_DISCONNECT_PROBE)) as ProviderProbeRead['disconnect'] & { status: unknown };
+    read.disconnect = disconnect;
+    search('renderer provider results', JSON.stringify(disconnect));
+    const final = await providers.getStatus();
+    read.finalStatus = { claude: final.claude.state, codex: final.codex.state };
+    read.vaultAfterRemove = fs.existsSync(vaultFile);
+    // Removing both routes left the identity as it was.
+    read.identityUnchanged = read.identityUnchanged && JSON.stringify(await identity.session.getStatus()) === identityAfterSignOut;
+    for (const file of filesUnder(roots['runtime-home'])) {
+      try {
+        search(`file:${file}`, fs.readFileSync(file));
+      } catch {
+        // Removed while walking.
+      }
+    }
+  } finally {
+    for (const dir of temps) fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
+  }
+  search('main log', options.mainLog().join('\n'));
+  read.leaks = [...leaks];
+  return evaluateProviders(read);
 }

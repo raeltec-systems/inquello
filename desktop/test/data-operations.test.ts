@@ -108,7 +108,7 @@ describe('export (matrix: Export)', () => {
 
   it('declares unclassified files as omissions without copying them', async () => {
     const { roots, journal } = device();
-    write(roots['runtime-home'], 'config.toml', 'model = "x"');
+    write(roots['runtime-home'], 'profile.toml', 'model = "x"');
     const destination = path.join(tempDir('data-export-unclassified'), 'export');
     const { manifest } = await exportData({ policy, roots, destination, attribution: ATTRIBUTION, journal });
     expect(manifest.omissions.at(-1)).toMatchObject({ category: null, label: 'Unclassified files', files: 1 });
@@ -369,6 +369,7 @@ describe('data service', () => {
       id: 'task-history',
       label: 'Task history',
       enabled: true,
+      location: 'files',
       owner: 'The signed-in creator, on this device',
       ruleOwner: 'Organisation data-policy owner (OQ-2)',
       retention: 'until-owner-deletes',
@@ -410,12 +411,13 @@ describe('data service', () => {
     const before = fs.readFileSync(path.join(h.roots['runtime-home'], 'sessions/2026/10/28/rollout-2026-10-28-a.jsonl'));
     const exportedResult = await h.service.exportData();
     if (!exportedResult.ok) throw new Error(exportedResult.reason);
-    const enabled = policy.categories.filter((category) => category.enabled).map((category) => category.id);
+    const enabled = h.service.deletableCategories();
     const deleted = await h.service.deleteData(enabled);
     if (!deleted.ok) throw new Error(deleted.reason);
     expect(h.events).toEqual(['identity:signOut', 'runtime:stop', 'browser:clear', 'runtime:start']);
     expect(deleted.delete.serverRevocation).toBe('confirmed');
-    expect(deleted.delete.retained).toEqual([]);
+    // Only the keyring entry stays: Local data never deletes from the OS credential store.
+    expect(deleted.delete.retained).toEqual([{ category: 'codex-keyring-entry', label: 'Codex login (OS keyring)', files: 0 }]);
     expect(deleted.delete.survivingExports).toEqual([expect.objectContaining({ path: exportedResult.export.path, outsideInquelloControl: true })]);
     expect(deleted.delete.removed.find((entry) => entry.category === 'identity-session')!.note).toMatch(/confirmed/);
     expect(fs.existsSync(h.journal.file)).toBe(false);

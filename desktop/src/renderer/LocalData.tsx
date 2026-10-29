@@ -31,6 +31,7 @@ function exportText(category: DataCategoryView): string {
 
 function heldText(category: DataCategoryView): string {
   if (!category.enabled) return 'Disabled; never written';
+  if (category.location === 'os-credential-store') return 'Held in the OS credential store';
   return category.held.files === 0 ? 'Nothing held' : `${category.held.files} file${category.held.files === 1 ? '' : 's'} held`;
 }
 
@@ -111,7 +112,7 @@ export function LocalData(): ReactElement {
         {(policy?.categories ?? []).map((category) => (
           <li key={category.id} className="specimen-local-data-category" data-local-data-category={category.id} data-enabled={String(category.enabled)}>
             <div className="specimen-local-data-head">
-              {category.enabled ? (
+              {category.enabled && category.location === 'files' ? (
                 <Checkbox
                   label={category.label}
                   checked={selected.includes(category.id)}

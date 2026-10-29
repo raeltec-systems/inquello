@@ -37,7 +37,19 @@
  * In `--smoke` the data probe prints a `data` line (policy loaded, every held
  * file classified, the runtime home under userData, and an export plus
  * reimport round trip in temp dirs); the run also requires it to pass.
+ *
+ * Provider credentials (Story 1.13): main owns two provider routes, separate
+ * from the Inquello identity (`providers/`). The Claude API key lives in the
+ * provider vault (`<userData>/providers/claude.bin`, OS-backed `safeStorage`
+ * or memory-only); the inherited Codex login lives in the OS keyring, which
+ * the runtime uses because main writes `config.toml` with
+ * `cli_auth_credentials_store = "keyring"` before every start. The runtime
+ * child gets no inherited provider credential variable. The renderer reaches
+ * both routes through the six `provider.*` operations. In `--smoke` the
+ * providers probe connects and disconnects both routes with a sentinel key
+ * and prints a `providers` line; the run also requires it to pass.
  */
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -48,7 +60,7 @@ import schemaStamp from '../protocol/schema-stamp.json';
 import { DataService, ExportJournal, governedRoots, JOURNAL_DIR, loadShippedPolicy, type GovernedRoots } from './data';
 import { createIdentity, headlessOpener, identityDir, SERVICE_CONFIG_ENV, type IdentityWiring } from './identity';
 import { openSystemBrowser } from './identity/browser';
-import { AppServerRuntime, consoleLogger, resolveAppServerBinary, runtimeChildEnv, type ExitInfo } from './runtime';
+import { AppServerRuntime, consoleLogger, isProviderCredentialVar, recordingConsoleLogger, resolveAppServerBinary, runtimeChildEnv, writeRuntimeConfig, type ExitInfo } from './runtime';
 import { APP_SCHEME_PRIVILEGES, handleAppProtocol } from './security/app-protocol';
 import { createOperations, registerOperations } from './security/operations';
 import {
@@ -59,10 +71,13 @@ import {
   type BlockedKind,
   type PolicyOptions,
 } from './security/policy';
-import { probeData, probeIdentity, probeRenderer } from './smoke-probe';
+import { createProviders, loadProviderDevConfig, PROVIDER_DEV_CONFIG_ENV, providersDir, type ProviderService } from './providers';
+import { probeData, probeIdentity, probeProviders, probeRenderer } from './smoke-probe';
 
 const smoke = process.argv.includes('--smoke');
-const logger = consoleLogger;
+// The smoke run keeps what main logs, so the providers probe can scan it for a leaked key.
+const recordedLogger = smoke ? recordingConsoleLogger() : undefined;
+const logger = recordedLogger ?? consoleLogger;
 
 let runtime: AppServerRuntime | undefined;
 let mainWindow: BrowserWindow | undefined;
@@ -71,7 +86,9 @@ let privilegesOk = false;
 let designOk = false;
 let identityOk = false;
 let dataOk = false;
+let providersOk = false;
 let identity: IdentityWiring | undefined;
+let providers: ProviderService | undefined;
 let dataService: DataService | undefined;
 let roots: GovernedRoots | undefined;
 /** `webContents` ids main created for app windows; the only trusted operation senders. */
@@ -115,7 +132,7 @@ function createWindow(): BrowserWindow {
 }
 
 function runtimeEnv(runtimeHome: string): NodeJS.ProcessEnv {
-  return runtimeChildEnv(process.env, { serviceConfigEnv: SERVICE_CONFIG_ENV, codexHome: runtimeHome });
+  return runtimeChildEnv(process.env, { serviceConfigEnv: SERVICE_CONFIG_ENV, codexHome: runtimeHome, blocked: [PROVIDER_DEV_CONFIG_ENV] });
 }
 
 /** Starts a new runtime child in Inquello's own runtime home; also used to restart after import and delete. */
@@ -123,6 +140,9 @@ async function startRuntime(): Promise<void> {
   if (!roots) throw new Error('local data roots were not set up');
   const runtimeHome = roots['runtime-home'];
   fs.mkdirSync(runtimeHome, { recursive: true, mode: 0o700 });
+  // The Codex login lives in the OS keyring only; written before every start.
+  writeRuntimeConfig(runtimeHome);
+  providers?.codex.runtimeReset();
   const binary = resolveAppServerBinary({
     env: process.env,
     isPackaged: app.isPackaged,
@@ -137,6 +157,7 @@ async function startRuntime(): Promise<void> {
     schemaStamp,
     stderrLogPath: path.join(app.getPath('logs'), 'app-server-stderr.log'),
     logger,
+    onNotification: ({ method, params }) => providers?.codex.handleNotification(method, params),
   });
   runtime.on('state', ({ state, error }) => {
     if (state === 'disconnected' && error) logger.error(`runtime disconnected; not restarting. ${error.message}`);
@@ -202,11 +223,25 @@ async function runSmokeProbe(contents: WebContents): Promise<void> {
   dataOk = data.ok;
   process.stdout.write(`${JSON.stringify({ event: 'data', ...data })}\n`);
   if (!data.ok) logger.error(`data probe failed: ${data.failures.join('; ')}`);
+  if (!providers) throw new Error('providers were not wired');
+  const providerReport = await probeProviders(contents, {
+    providers,
+    identity,
+    data: dataService,
+    roots,
+    runtimePid: () => runtime?.pid,
+    stderrLogPath: path.join(app.getPath('logs'), 'app-server-stderr.log'),
+    mainLog: () => recordedLogger?.messages() ?? [],
+    tempBase: os.tmpdir(),
+  });
+  providersOk = providerReport.ok;
+  process.stdout.write(`${JSON.stringify({ event: 'providers', ...providerReport })}\n`);
+  if (!providerReport.ok) logger.error(`providers probe failed: ${providerReport.failures.join('; ')}`);
 }
 
 function exitCodeFor(exit: ExitInfo | undefined): number {
   if (!smoke) return 0;
-  return handshakeOk && privilegesOk && designOk && identityOk && dataOk && exit !== undefined && exit.exitCode === 0 && !exit.killed ? 0 : 1;
+  return handshakeOk && privilegesOk && designOk && identityOk && dataOk && providersOk && exit !== undefined && exit.exitCode === 0 && !exit.killed ? 0 : 1;
 }
 
 app.on('before-quit', (event) => {
@@ -247,6 +282,12 @@ void app.whenReady().then(async () => {
     fs.rmSync(identityDir(userData), { recursive: true, force: true });
     fs.rmSync(roots['runtime-home'], { recursive: true, force: true, maxRetries: 3 });
     fs.rmSync(path.join(userData, JOURNAL_DIR), { recursive: true, force: true });
+    // No Claude API key from an earlier run.
+    fs.rmSync(providersDir(userData), { recursive: true, force: true });
+    // The providers probe checks that an inherited provider key never reaches the runtime.
+    if (!Object.keys(process.env).some((name) => isProviderCredentialVar(name))) {
+      process.env.OPENAI_API_KEY = `sk-inherited-smoke-${randomUUID()}`;
+    }
   }
   identity = createIdentity({
     env: process.env,
@@ -259,6 +300,20 @@ void app.whenReady().then(async () => {
     recordSecrets: smoke,
   });
   const identitySession = identity.session;
+  providers = createProviders({
+    safeStorage,
+    platform: process.platform,
+    userDataDir: userData,
+    runtime: {
+      ready: () => runtime?.state === 'ready',
+      request: <T,>(method: string, params?: unknown) => (runtime ? runtime.request<T>(method, params) : Promise.reject(new Error('the runtime is not running'))),
+    },
+    openBrowser: openSystemBrowser,
+    devConfig: loadProviderDevConfig(process.env, !app.isPackaged),
+    logger,
+    recordSecrets: smoke,
+  });
+  const providerService = providers;
   const policyLoad = loadShippedPolicy();
   if (!policyLoad.ok) logger.error(`local data policy did not load; local data actions are blocked: ${policyLoad.error}`);
   const service = new DataService({
@@ -309,7 +364,15 @@ void app.whenReady().then(async () => {
         exportData: () => service.exportData(),
         importData: () => service.importData(),
         deleteData: (categories) => service.deleteData(categories),
-        deletableCategories: () => service.policy?.categories.filter((category) => category.enabled).map((category) => category.id) ?? [],
+        deletableCategories: () => service.deletableCategories(),
+      },
+      provider: {
+        getStatus: () => providerService.getStatus(),
+        setClaudeKey: (key) => providerService.setClaudeKey(key),
+        verifyClaudeKey: () => providerService.verifyClaudeKey(),
+        removeClaudeKey: () => providerService.removeClaudeKey(),
+        codexLogin: (request) => providerService.codexLogin(request),
+        codexLogout: () => providerService.codexLogout(),
       },
     }),
     { trustedWebContentsIds, logger },

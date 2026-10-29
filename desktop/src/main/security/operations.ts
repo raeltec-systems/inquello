@@ -12,6 +12,8 @@
  */
 import type { DeleteActionResult, ExportActionResult, ImportActionResult, PolicyView } from '../data/service';
 import { toRendererResult, toRendererStatus, type IdentityActionResult, type IdentityStatus } from '../identity/session';
+import type { CodexLoginRequest } from '../providers/codex-account';
+import { toRendererProviderResult, toRendererProviderStatus, type ProviderActionResult, type ProviderActionView, type ProviderStatus, type ProviderStatusView } from '../providers/status';
 import type { Logger } from '../runtime/logger';
 import type { RuntimeState } from '../runtime/process';
 import { describeSender, isTrustedSender, type InvokeEventLike } from './sender';
@@ -26,6 +28,12 @@ export const OPERATION_NAMES = [
   'data.export',
   'data.import',
   'data.delete',
+  'provider.getStatus',
+  'provider.setClaudeKey',
+  'provider.verifyClaudeKey',
+  'provider.removeClaudeKey',
+  'provider.codexLogin',
+  'provider.codexLogout',
 ] as const;
 export type OperationName = (typeof OPERATION_NAMES)[number];
 
@@ -113,6 +121,38 @@ export function stringListPayload(allowed: () => readonly string[]): PayloadVali
   };
 }
 
+/** The most characters a submitted credential may have before it is refused as a payload. */
+export const MAX_CREDENTIAL_PAYLOAD = 4096;
+
+/**
+ * Validator for one string argument holding a credential. Only the type and
+ * an outer size bound are checked here; main checks the form and answers
+ * with a reason. No message names or quotes the value.
+ */
+export const credentialPayload: PayloadValidator<string> = (args) => {
+  if (args.length !== 1) throw new OperationError('expected one argument');
+  const value = args[0];
+  if (typeof value !== 'string') throw new OperationError('expected a string');
+  if (value.length > MAX_CREDENTIAL_PAYLOAD) throw new OperationError('value too long');
+  return value;
+};
+
+/** Validator for `provider.codexLogin`: `{ type: 'apiKey', apiKey }` or `{ type: 'chatgpt' }`, exactly. */
+export const codexLoginPayload: PayloadValidator<CodexLoginRequest> = (args) => {
+  if (args.length !== 1) throw new OperationError('expected one argument');
+  const value = args[0];
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new OperationError('expected an object');
+  const proto = Object.getPrototypeOf(value);
+  if (proto !== Object.prototype && proto !== null) throw new OperationError('expected a plain object');
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record).sort();
+  if (record.type === 'chatgpt' && keys.length === 1) return { type: 'chatgpt' };
+  if (record.type === 'apiKey' && JSON.stringify(keys) === JSON.stringify(['apiKey', 'type'])) {
+    return { type: 'apiKey', apiKey: credentialPayload([record.apiKey]) };
+  }
+  throw new OperationError('expected an apiKey or chatgpt login');
+};
+
 export interface RuntimeStatus {
   state: RuntimeState;
   runtimeVersion: string;
@@ -135,11 +175,22 @@ export interface DataOperations {
   deletableCategories(): readonly string[];
 }
 
+/** The provider service as the operations see it (main-owned; see `providers/index.ts`). */
+export interface ProviderOperations {
+  getStatus(): Promise<ProviderStatus>;
+  setClaudeKey(key: string): Promise<ProviderActionResult>;
+  verifyClaudeKey(): Promise<ProviderActionResult>;
+  removeClaudeKey(): Promise<ProviderActionResult>;
+  codexLogin(request: CodexLoginRequest): Promise<ProviderActionResult>;
+  codexLogout(): Promise<ProviderActionResult>;
+}
+
 export interface OperationDeps {
   runtimeState: () => RuntimeState;
   runtimeVersion: string;
   identity: IdentityOperations;
   data: DataOperations;
+  provider: ProviderOperations;
 }
 
 /**
@@ -190,7 +241,55 @@ export function createOperations(deps: OperationDeps): Operation[] {
     validate: stringListPayload(() => deps.data.deletableCategories()),
     handle: (categories) => deps.data.deleteData(categories),
   };
-  return [getStatus, identityStatus, signIn, signOut, dataPolicy, dataExport, dataImport, dataDelete] as Operation[];
+  // Provider credentials (Story 1.13): a key crosses IPC once, into main, on
+  // `provider.setClaudeKey` or `provider.codexLogin`; every result is the
+  // provider status rebuilt field by field, never a key or a fragment of one.
+  const providerStatus: Operation<undefined, ProviderStatusView> = {
+    name: 'provider.getStatus',
+    validate: noPayload,
+    handle: async () => toRendererProviderStatus(await deps.provider.getStatus()),
+  };
+  const setClaudeKey: Operation<string, ProviderActionView> = {
+    name: 'provider.setClaudeKey',
+    validate: credentialPayload,
+    handle: async (key) => toRendererProviderResult(await deps.provider.setClaudeKey(key)),
+  };
+  const verifyClaudeKey: Operation<undefined, ProviderActionView> = {
+    name: 'provider.verifyClaudeKey',
+    validate: noPayload,
+    handle: async () => toRendererProviderResult(await deps.provider.verifyClaudeKey()),
+  };
+  const removeClaudeKey: Operation<undefined, ProviderActionView> = {
+    name: 'provider.removeClaudeKey',
+    validate: noPayload,
+    handle: async () => toRendererProviderResult(await deps.provider.removeClaudeKey()),
+  };
+  const codexLogin: Operation<CodexLoginRequest, ProviderActionView> = {
+    name: 'provider.codexLogin',
+    validate: codexLoginPayload,
+    handle: async (request) => toRendererProviderResult(await deps.provider.codexLogin(request)),
+  };
+  const codexLogout: Operation<undefined, ProviderActionView> = {
+    name: 'provider.codexLogout',
+    validate: noPayload,
+    handle: async () => toRendererProviderResult(await deps.provider.codexLogout()),
+  };
+  return [
+    getStatus,
+    identityStatus,
+    signIn,
+    signOut,
+    dataPolicy,
+    dataExport,
+    dataImport,
+    dataDelete,
+    providerStatus,
+    setClaudeKey,
+    verifyClaudeKey,
+    removeClaudeKey,
+    codexLogin,
+    codexLogout,
+  ] as Operation[];
 }
 
 export interface IpcMainLike {

@@ -7,3 +7,4 @@ export * from './rpc';
 export * from './stderr';
 export * from './version';
 export * from './env';
+export * from './config';

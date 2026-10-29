@@ -13,12 +13,15 @@
  * named `inquello.identity` operations. Story 1.12 adds the Local data
  * block at the end of the page: the data-policy categories and the export,
  * import and delete actions through the named `inquello.data` operations.
- * Nothing else here performs one.
+ * Story 1.13 adds the Providers block after it: the Claude API key and the
+ * inherited Codex login, apart from the identity, through the named
+ * `inquello.provider` operations. Nothing else here performs one.
  */
 import type { ReactElement, ReactNode } from 'react';
 
 import { Account } from './Account';
 import { LocalData } from './LocalData';
+import { Providers } from './Providers';
 import { CONTRAST_PAIRS } from './design/contrast';
 import { Icon } from './icons/Icon';
 import {
@@ -437,6 +440,10 @@ export function Specimen(): ReactElement {
 
       <Section title="Local data">
         <LocalData />
+      </Section>
+
+      <Section title="Providers">
+        <Providers />
       </Section>
     </main>
   );

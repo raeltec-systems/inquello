@@ -12,3 +12,27 @@ export const consoleLogger: Logger = {
 };
 
 export const silentLogger: Logger = { info: () => {}, warn: () => {}, error: () => {} };
+
+/** A logger that also keeps every message it writes (the smoke run scans them for leaked secrets). */
+export interface RecordingLogger extends Logger {
+  messages(): readonly string[];
+}
+
+export function recordingConsoleLogger(base: Logger = consoleLogger): RecordingLogger {
+  const kept: string[] = [];
+  return {
+    info: (message) => {
+      kept.push(message);
+      base.info(message);
+    },
+    warn: (message) => {
+      kept.push(message);
+      base.warn(message);
+    },
+    error: (message) => {
+      kept.push(message);
+      base.error(message);
+    },
+    messages: () => kept,
+  };
+}

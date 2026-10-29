@@ -220,8 +220,68 @@
       "recovery": "Not recoverable; exported copies keep their own manifests"
     },
     {
+      "id": "claude-key-vault",
+      "label": "Claude API key",
+      "location": {
+        "root": "user-data",
+        "globs": ["providers/claude.bin", "providers/claude.bin.*.tmp"]
+      },
+      "enabled": true,
+      "credentials": true,
+      "owner": "The signed-in creator, on this device",
+      "rule_owner": "Organisation data-policy owner (OQ-2)",
+      "retention": "until-owner-deletes",
+      "access": "main-process-only",
+      "export": {
+        "mode": "excluded",
+        "reason": "Holds the Claude API key, which is never exported"
+      },
+      "deletion": "Remove the Claude API key in Providers (or delete the Claude API key in Local data); either removes the encrypted file. Inquello sign-out does not remove it",
+      "recovery": "Not recoverable; enter the key again"
+    },
+    {
+      "id": "runtime-config",
+      "label": "Runtime configuration",
+      "location": {
+        "root": "runtime-home",
+        "globs": ["config.toml", "config.toml.*.tmp"]
+      },
+      "enabled": true,
+      "credentials": false,
+      "owner": "The signed-in creator, on this device",
+      "rule_owner": "Organisation data-policy owner (OQ-2)",
+      "retention": "until-owner-deletes",
+      "access": "runtime",
+      "export": {
+        "mode": "excluded",
+        "reason": "Written by Inquello before every runtime start; it holds only the credential-store setting and no credential"
+      },
+      "deletion": "Delete Runtime configuration in Local data (the runtime is stopped, the file is removed, then Inquello rewrites it before the runtime restarts)",
+      "recovery": "Rewritten by Inquello before every runtime start"
+    },
+    {
+      "id": "codex-keyring-entry",
+      "label": "Codex login (OS keyring)",
+      "location": {
+        "store": "os-credential-store",
+        "entry": "Service \"Codex Auth\", account cli|<hash of the runtime home>, written by the runtime"
+      },
+      "enabled": true,
+      "credentials": true,
+      "owner": "The signed-in creator, on this device",
+      "rule_owner": "Organisation data-policy owner (OQ-2)",
+      "retention": "until-owner-deletes",
+      "access": "runtime",
+      "export": {
+        "mode": "excluded",
+        "reason": "Holds the Codex login (API key or ChatGPT tokens) in the OS keyring; credentials are never exported"
+      },
+      "deletion": "Disconnect the Codex login in Providers: the runtime's logout removes the keyring entry. Inquello sign-out does not remove it",
+      "recovery": "Not recoverable; log in to Codex again"
+    },
+    {
       "id": "provider-credentials",
-      "label": "Provider credentials",
+      "label": "Runtime auth file (auth.json)",
       "location": {
         "root": "runtime-home",
         "globs": ["auth.json", ".credentials.json", "secrets/**"]
@@ -236,7 +296,7 @@
         "mode": "excluded",
         "reason": "Provider credentials and secrets are never exported"
       },
-      "deletion": "Not held: the desktop never writes it (Story 1.13 governs provider credentials)",
+      "deletion": "Not held: the runtime stores Codex logins in the OS keyring only (cli_auth_credentials_store = \"keyring\"), so a file here is unexpected and blocks real data",
       "recovery": "Not applicable"
     },
     {

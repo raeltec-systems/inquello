@@ -81,6 +81,7 @@ export interface DataCategoryView {
   id: string;
   label: string;
   enabled: boolean;
+  location: 'files' | 'os-credential-store';
   owner: string;
   ruleOwner: string;
   retention: 'until-owner-deletes' | 'unknown';
@@ -138,6 +139,7 @@ function parseCategory(value: unknown): DataCategoryView | null {
   if (!id || !label || !owner || !ruleOwner || !deletion || !recovery || !exportRule || typeof r.enabled !== 'boolean') return null;
   if (r.retention !== 'until-owner-deletes' && r.retention !== 'unknown') return null;
   if (r.access !== 'main-process-only' && r.access !== 'runtime') return null;
+  const location = r.location === 'os-credential-store' ? 'os-credential-store' : 'files';
   const mode = exportRule.mode;
   if (mode !== 'included' && mode !== 'excluded' && mode !== 'unknown') return null;
   const reason = text(exportRule.reason);
@@ -145,6 +147,7 @@ function parseCategory(value: unknown): DataCategoryView | null {
     id,
     label,
     enabled: r.enabled,
+    location,
     owner,
     ruleOwner,
     retention: r.retention,
@@ -218,4 +221,84 @@ export function parseDataAction(value: unknown, action: 'export' | 'import' | 'd
     }
   }
   return { ok: true, lines };
+}
+
+// ---- provider credentials (Story 1.13) -------------------------------------------
+
+export type ClaudeKeyStateView = 'not-configured' | 'stored-unverified' | 'verified' | 'rejected' | 'unreachable';
+export type CodexStateView = 'unavailable' | 'not-connected' | 'connecting' | 'connected';
+export type CodexAccountKind = { type: 'apiKey' } | { type: 'chatgpt'; planType: string | null } | { type: 'other' };
+
+export interface RouteAuthorizationView {
+  authorized: boolean;
+  reason: string;
+}
+
+export interface ProviderStatusView {
+  claude: { state: ClaudeKeyStateView; storage: 'os-backed' | 'memory-only' };
+  codex: { state: CodexStateView; account: CodexAccountKind | null; credentialStore: 'os-keyring'; reason?: string };
+  routes: { 'claude-api-key': RouteAuthorizationView; 'codex-inherited': RouteAuthorizationView };
+}
+
+export interface ProviderActionView {
+  ok: boolean;
+  reason?: string;
+  status: ProviderStatusView | null;
+}
+
+export interface ProviderBridge {
+  getStatus(): Promise<unknown>;
+  setClaudeKey(key: string): Promise<unknown>;
+  verifyClaudeKey(): Promise<unknown>;
+  removeClaudeKey(): Promise<unknown>;
+  codexLogin(request: { type: 'apiKey'; apiKey: string } | { type: 'chatgpt' }): Promise<unknown>;
+  codexLogout(): Promise<unknown>;
+}
+
+/** The provider operations, or null outside the desktop. */
+export function providerBridge(): ProviderBridge | null {
+  const bridge = (globalThis as { inquello?: { provider?: ProviderBridge } }).inquello;
+  return bridge?.provider ?? null;
+}
+
+const CLAUDE_STATES: readonly ClaudeKeyStateView[] = ['not-configured', 'stored-unverified', 'verified', 'rejected', 'unreachable'];
+const CODEX_STATES: readonly CodexStateView[] = ['unavailable', 'not-connected', 'connecting', 'connected'];
+
+function parseRoute(value: unknown): RouteAuthorizationView | null {
+  const r = record(value);
+  const reason = text(r?.reason);
+  if (!r || typeof r.authorized !== 'boolean' || !reason) return null;
+  return { authorized: r.authorized, reason };
+}
+
+export function parseProviderStatus(value: unknown): ProviderStatusView | null {
+  const r = record(value);
+  const claude = record(r?.claude);
+  const codex = record(r?.codex);
+  const routes = record(r?.routes);
+  if (!r || !claude || !codex || !routes) return null;
+  if (!CLAUDE_STATES.includes(claude.state as ClaudeKeyStateView)) return null;
+  if (claude.storage !== 'os-backed' && claude.storage !== 'memory-only') return null;
+  if (!CODEX_STATES.includes(codex.state as CodexStateView) || codex.credentialStore !== 'os-keyring') return null;
+  let account: CodexAccountKind | null = null;
+  const rawAccount = record(codex.account);
+  if (rawAccount?.type === 'apiKey') account = { type: 'apiKey' };
+  else if (rawAccount?.type === 'chatgpt') account = { type: 'chatgpt', planType: text(rawAccount.planType) };
+  else if (rawAccount) account = { type: 'other' };
+  const claudeRoute = parseRoute(routes['claude-api-key']);
+  const codexRoute = parseRoute(routes['codex-inherited']);
+  if (!claudeRoute || !codexRoute) return null;
+  const reason = text(codex.reason);
+  return {
+    claude: { state: claude.state as ClaudeKeyStateView, storage: claude.storage },
+    codex: { state: codex.state as CodexStateView, account, credentialStore: 'os-keyring', ...(reason ? { reason } : {}) },
+    routes: { 'claude-api-key': claudeRoute, 'codex-inherited': codexRoute },
+  };
+}
+
+export function parseProviderAction(value: unknown): ProviderActionView | null {
+  const r = record(value);
+  if (!r || typeof r.ok !== 'boolean') return null;
+  const reason = text(r.reason);
+  return { ok: r.ok, ...(reason ? { reason } : {}), status: parseProviderStatus(r.status) };
 }

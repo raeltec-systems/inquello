@@ -70,6 +70,9 @@ describe('shipped register', () => {
       'device-id',
       'chromium-profile',
       'export-journal',
+      'claude-key-vault',
+      'runtime-config',
+      'codex-keyring-entry',
     ]);
     const disabled = policy.categories.filter((category) => !category.enabled).map((category) => category.id);
     expect(disabled).toEqual(expect.arrayContaining(['source-extracts', 'artifacts', 'shared-caches', 'unattended-work']));
@@ -232,13 +235,13 @@ describe('inventory (matrix: Inspect, Unclassified file)', () => {
     const userData = tempDir('data-unclassified');
     const roots = governedRoots(userData, path.join(userData, 'logs'));
     write(roots['runtime-home'], 'notes/unexpected.txt');
-    write(roots['runtime-home'], 'config.toml');
+    write(roots['runtime-home'], 'profile.toml');
     const inventory = takeInventory(shipped(), roots);
-    expect(inventory.unclassified).toEqual(['runtime-home:config.toml', 'runtime-home:notes/unexpected.txt']);
+    expect(inventory.unclassified).toEqual(['runtime-home:notes/unexpected.txt', 'runtime-home:profile.toml']);
     const blockers = realDataBlockers(loadShippedPolicy(), inventory);
     expect(blockers.map((blocker) => [blocker.kind, blocker.path])).toEqual([
-      ['unclassified', 'runtime-home:config.toml'],
       ['unclassified', 'runtime-home:notes/unexpected.txt'],
+      ['unclassified', 'runtime-home:profile.toml'],
     ]);
   });
 
