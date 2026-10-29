@@ -2,7 +2,7 @@
 title: 'Story 1.10b: Sign in from the desktop over the HTTPS synthetic topology'
 type: 'feature'
 created: '2026-10-28'
-status: 'done'
+status: 'in-progress'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'd2714b697603458018acd332f631b09530567e42'
@@ -100,6 +100,19 @@ context:
 
 **Acceptance Criteria:**
 - Given the dev topology running and an unlocked gnome-keyring, when the smoke runs, then sign-in completes over HTTPS with scoped trust, the status shows `signed-in` and `os-backed`, no secret reaches the renderer, and the run exits 0.
+
+### Review Findings
+
+Review pass 2026-10-29, HEAD `ace1ca2`, using `bmad-code-review`. Full evidence, ranking and limitations: [completed-story review](reviews/2026-10-29-epic-1/report.md). Owner selected “Leave as action items” on 2026-10-29. All patch findings remain open; no implementation fixes applied. Review status and sprint tracking synchronized.
+
+- [ ] [Review][Patch] R02: Failed refresh during logout is reported as confirmed server revocation [desktop/src/main/identity/session.ts:549] — BMAD high; likelihood Low; impact High; change risk Moderate — recommendation: Fix now.
+- [ ] [Review][Patch] R04: A pending sign-in can recreate credentials after local removal [desktop/src/main/identity/session.ts:239] — BMAD medium; likelihood Low; impact Medium; change risk Moderate — recommendation: Fix now.
+- [ ] [Review][Patch] R05: Vault write failure leaves rotated credentials stale on disk [desktop/src/main/identity/session.ts:613] — BMAD medium; likelihood Low; impact Medium; change risk Moderate — recommendation: Fix now.
+- [ ] [Review][Patch] R09: Default refresh tests do not detect lost credential persistence [desktop/test/identity-session.test.ts:215] — BMAD medium; likelihood Medium; impact Medium; change risk Low — recommendation: Fix alongside R05.
+
+#### Rejected
+
+No formal findings rejected for this story in this pass. Exploratory limits and inherited deferrals are documented in the full report.
 
 ## Implementation Notes
 

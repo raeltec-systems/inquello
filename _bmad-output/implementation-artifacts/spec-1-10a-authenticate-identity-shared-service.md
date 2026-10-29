@@ -2,7 +2,7 @@
 title: 'Story 1.10a: Authenticate an Inquello identity independently of inference (shared service)'
 type: 'feature'
 created: '2026-10-28'
-status: 'done'
+status: 'in-progress'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '9b8753c8efa276ae634401aea18dac0e0ecc34fe'
@@ -94,6 +94,16 @@ context:
 
 **Acceptance Criteria:**
 - Given PostgreSQL 18 and the test issuer, when `cargo test -p inquello-service --features test-issuer` runs, then every matrix row passes and no credential appears in any receipt, log line or error body (asserted).
+
+### Review Findings
+
+Review pass 2026-10-29, HEAD `ace1ca2`, using `bmad-code-review`. Full evidence, ranking and limitations: [completed-story review](reviews/2026-10-29-epic-1/report.md). Owner selected “Leave as action items” on 2026-10-29. All patch findings remain open; no implementation fixes applied. Review status and sprint tracking synchronized.
+
+- [ ] [Review][Patch] R11: Expiry checks use time captured before database lock waits [engine/codex-rs/inquello-service/src/sessions.rs:303] — BMAD medium; likelihood Low; impact Medium; change risk Low–moderate — recommendation: Schedule before shared-service production use.
+
+#### Rejected
+
+No formal findings rejected for this story in this pass. Exploratory limits and inherited deferrals are documented in the full report.
 
 ## Design Notes
 

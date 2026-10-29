@@ -1,0 +1,22 @@
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { DataService, ExportJournal, governedRoots, loadShippedPolicy } = require('/workspace/inquello/desktop/dist/main/data');
+const { ClaudeKeyVault, CodexAccount, ProviderService, providersDir } = require('/workspace/inquello/desktop/dist/main/providers');
+(async () => {
+ const root = fs.mkdtempSync(path.join(os.tmpdir(), 'inquello-review-memory-delete-'));
+ const roots = governedRoots(root, path.join(root,'logs'));
+ const logger = { info(){}, warn(){}, error(){} };
+ const vault = new ClaudeKeyVault({safeStorage:{isEncryptionAvailable:()=>true,getSelectedStorageBackend:()=> 'basic_text',encryptString:()=>{throw new Error('must not write')},decryptString:()=>{throw new Error('must not read')}},platform:'linux',dir:providersDir(root)});
+ const codex = new CodexAccount({runtime:{ready:()=>true,request: async()=> ({account:null,requiresOpenaiAuth:true})},openBrowser:async()=>{},logger});
+ let verified = 0;
+ const providers = new ProviderService({vault,codex,devConfig:{kind:'default',target:{baseUrl:'https://api.anthropic.com'}},verify:async()=>{verified++;return 'verified'},logger});
+ const data = new DataService({load:loadShippedPolicy(),roots,journal:new ExportJournal(root),runtime:{stop:async()=>{},start:async()=>{},activeTasks:()=>0},identity:{principal:async()=>null,holdsSession:()=>false,signOut:async()=>({ok:true}),forgetLocally(){}},chooseExportDestination:async()=>null,chooseImportSource:async()=>null,clearBrowserProfile:async()=>{},appVersion:'review',runtimeVersion:'review',logger});
+ await providers.setClaudeKey('sk-ant-review-synthetic-key-0123456789');
+ console.log(JSON.stringify({before:providers.snapshot().claude}));
+ console.log(JSON.stringify({delete:await data.deleteData(['claude-key-vault'])}));
+ console.log(JSON.stringify({after:providers.snapshot().claude,stillHeld:vault.load()!==null}));
+ const check=await providers.verifyClaudeKey();
+ console.log(JSON.stringify({verifyAfterDelete:check.ok,checkCalls:verified}));
+ fs.rmSync(root,{recursive:true,force:true});
+})().catch(error=>{console.error(error);process.exitCode=1});

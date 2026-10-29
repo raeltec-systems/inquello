@@ -83,6 +83,16 @@ context:
 **Acceptance Criteria:**
 - Given the committed register and map, when `cargo test -p inquello-domain` runs, then every C/E item is accounted for, only the seed entry is non-disabled (and only `SyntheticOnly`), and the deferred-unmet list is printed.
 
+### Review Findings
+
+Review pass 2026-10-29, HEAD `ace1ca2`, using `bmad-code-review`. Full evidence, ranking and limitations: [completed-story review](reviews/2026-10-29-epic-1/report.md). Owner selected “Leave as action items” on 2026-10-29. All patch findings remain open; no implementation fixes applied. Review status and sprint tracking synchronized.
+
+No new actionable finding assigned to this story in this pass. This is not exhaustive correctness or platform certification.
+
+#### Rejected
+
+No formal findings rejected for this story in this pass. Exploratory limits and inherited deferrals are documented in the full report.
+
 ## Implementation Notes
 
 - **Cloud machine (Linux, root):** the engine is built under `engine/codex-rs/target`, so use `-j 4`. `Cargo.lock` is committed: `cargo build --locked` must leave it unchanged.

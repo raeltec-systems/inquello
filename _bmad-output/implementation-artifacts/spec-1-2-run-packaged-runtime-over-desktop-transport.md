@@ -70,6 +70,16 @@ All under `fork/codex-rs/` unless noted; read-only.
 - Given the built fork, when `pnpm smoke` runs, then Electron starts, the handshake completes, the version check passes and the runtime exits 0 after quit.
 - Given a fresh `generate:protocol`, when compared with the committed schema, then nothing differs.
 
+### Review Findings
+
+Review pass 2026-10-29, HEAD `ace1ca2`, using `bmad-code-review`. Full evidence, ranking and limitations: [completed-story review](reviews/2026-10-29-epic-1/report.md). Owner selected “Leave as action items” on 2026-10-29. All patch findings remain open; no implementation fixes applied. Review status and sprint tracking synchronized.
+
+No new actionable finding assigned to this story in this pass. This is not exhaustive correctness or platform certification.
+
+#### Rejected
+
+- #1 Unbounded stderr file — `low`; likelihood Low, impact Low. Real append-only file, but default logging is quiet; rotation adds machinery. Explicitly rejected in prior Story 1.2 triage. No everyday growth failure demonstrated.
+
 ## Implementation Notes
 
 - **Extra pinned dev dependency:** `vite 8.3.5`, a required (non-optional) peer of `vitest 5.0.5`, so it is pinned explicitly instead of auto-installed.

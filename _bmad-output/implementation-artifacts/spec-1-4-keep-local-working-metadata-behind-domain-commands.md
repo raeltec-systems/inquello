@@ -2,7 +2,7 @@
 title: 'Story 1.4: Keep local working metadata behind domain-owned commands'
 type: 'feature'
 created: '2026-10-28'
-status: 'done'
+status: 'in-progress'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '559c7bccbc0b59b671fea105a212b6a37113ef8d'
@@ -66,6 +66,16 @@ context:
 **Acceptance Criteria:**
 - Given the engine workspace, when `cargo build --locked -p inquello-adapters` runs, then it succeeds with no lockfile rewrite.
 - Given the adapter, when it reports `sqlite_version()`, then the value is 3.51.3 or later, and a test asserts it.
+
+### Review Findings
+
+Review pass 2026-10-29, HEAD `ace1ca2`, using `bmad-code-review`. Full evidence, ranking and limitations: [completed-story review](reviews/2026-10-29-epic-1/report.md). Owner selected “Leave as action items” on 2026-10-29. All patch findings remain open; no implementation fixes applied. Review status and sprint tracking synchronized.
+
+- [ ] [Review][Patch] R10: Concurrent identical local commands return a false revision conflict [engine/codex-rs/inquello-adapters/src/store.rs:127] — BMAD medium; likelihood Low; impact Medium; change risk Moderate — recommendation: Schedule before the first concurrent command consumer.
+
+#### Rejected
+
+- #5 Database symlink to directory can change permissions — `low`; likelihood Low, impact Low. Canonicalization accepts the directory target; on Unix ensure_owner_only_file can tighten it from 0755 to 0700 before open fails. Requires an invalid configured database path, has no present production caller, and the owner keeps access. Additional special-file guard complexity is not justified for this low present risk.
 
 ## Implementation Notes
 

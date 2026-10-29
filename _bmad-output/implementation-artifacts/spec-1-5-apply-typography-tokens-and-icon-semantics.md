@@ -2,7 +2,7 @@
 title: 'Story 1.5: Apply the selected typography, tokens and icon semantics'
 type: 'feature'
 created: '2026-10-28'
-status: 'done'
+status: 'in-progress'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '744d854a6bcba3bf1df7c1f4acf3ca73369bd8b5'
@@ -86,6 +86,16 @@ context:
 
 **Acceptance Criteria:**
 - Given `pnpm smoke`, when the renderer loads, then `renderer-privileges` still passes. A `design` report shows all five fonts loaded, the decorative icon `aria-hidden`, and the informative icon labelled, and the run exits 0.
+
+### Review Findings
+
+Review pass 2026-10-29, HEAD `ace1ca2`, using `bmad-code-review`. Full evidence, ranking and limitations: [completed-story review](reviews/2026-10-29-epic-1/report.md). Owner selected “Leave as action items” on 2026-10-29. All patch findings remain open; no implementation fixes applied. Review status and sprint tracking synchronized.
+
+- [ ] [Review][Patch] R13: Production build omits the renderer type check [desktop/package.json:16] — BMAD low; likelihood Low; impact Low; change risk Low — recommendation: Optional small cleanup.
+
+#### Rejected
+
+No formal findings rejected for this story in this pass. Exploratory limits and inherited deferrals are documented in the full report.
 
 ## Implementation Notes
 

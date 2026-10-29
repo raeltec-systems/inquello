@@ -2,7 +2,7 @@
 title: 'Story 1.12: Govern the local data actually held by the first private route'
 type: 'feature'
 created: '2026-10-28'
-status: 'done'
+status: 'in-progress'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'b4e9f3b660ce663528a1580ca5be2c75ee0fece7'
@@ -104,6 +104,21 @@ context:
 
 **Acceptance Criteria:**
 - Given the smoke, when it runs, then the runtime home is under userData, every held file is classified, and an export and reimport round trip reproduces the included categories with omissions declared. It exits 0.
+
+### Review Findings
+
+Review pass 2026-10-29, HEAD `ace1ca2`, using `bmad-code-review`. Full evidence, ranking and limitations: [completed-story review](reviews/2026-10-29-epic-1/report.md). Owner selected “Leave as action items” on 2026-10-29. All patch findings remain open; no implementation fixes applied. Review status and sprint tracking synchronized.
+
+- [ ] [Review][Patch] R01: Export follows allowed history symlinks into excluded or outside files [desktop/src/main/data/export.ts:93] — BMAD high; likelihood Low; impact High; change risk Moderate — recommendation: Fix now.
+- [ ] [Review][Patch] R07: Short writes can silently truncate exports and restored files [desktop/src/main/data/export.ts:104] — BMAD high; likelihood Low; impact High; change risk Low — recommendation: Fix now.
+- [ ] [Review][Patch] R15: Containment check mistakes a ..backup child for an outside path [desktop/src/main/data/export.ts:165] — BMAD low; likelihood Low; impact Low; change risk Low — recommendation: Optional small cleanup.
+
+Cross-story consequences: R02/R04 in Story 1.10b affect truthful identity deletion/cancellation; R03 in Story 1.13 affects memory-only provider-key deletion. These are counted at their origin story.
+
+#### Rejected
+
+- #21 Restart failure discards data result detail — `low`; likelihood Low, impact Low. Detailed result is lost, but the existing explicit message says the local data action ran and asks to restart Inquello (service.ts:123). It does not say nothing changed. Rare restart failure plus extra public result/recovery branching is not worth changing now.
+- #37 Runtime JSON differs from compiled-in policy wording — `low`; likelihood Low, impact Low. Mismatch is real, but strict validation/freeze remains and an actor modifying this unpackaged app can also modify its JS. No separate security boundary demonstrated. Reject a fix consisting of changing frozen intent; revisit embedding with already-deferred packaging.
 
 ## Implementation Notes
 
