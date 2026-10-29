@@ -20,7 +20,9 @@ import {
   importData,
   loadShippedPolicy,
   MANIFEST_FILE,
+  isInside,
   readManifest,
+  takeInventory,
   type DataPolicy,
   type DataServiceOptions,
   type ExportManifest,
@@ -151,6 +153,166 @@ describe('export (matrix: Export)', () => {
     // An existing empty folder is accepted.
     const empty = tempDir('data-export-empty');
     await expect(exportData({ policy, roots, destination: empty, attribution: ATTRIBUTION, journal })).resolves.toMatchObject({ path: empty });
+  });
+});
+
+describe('export sources (review R01)', () => {
+  const SECRET = 'SYNTHETIC_PRIVATE_CREDENTIAL_SENTINEL';
+
+  function exportedBytes(destination: string): string {
+    return allFiles(destination)
+      .map((file) => fs.readFileSync(file, 'latin1'))
+      .join('\n');
+  }
+
+  it.skipIf(process.platform === 'win32')('never follows a link to an excluded credential, an outside file or a directory, and still copies normal files', async () => {
+    const { roots, journal, userData } = device();
+    const outsideDir = tempDir('data-export-outside');
+    const outside = write(outsideDir, 'private-credential.txt', SECRET);
+    write(outsideDir, 'nested/also-private.jsonl', SECRET);
+    const auth = write(roots['runtime-home'], 'auth.json', `{"OPENAI_API_KEY":"${SECRET}"}`);
+    const sessions = path.join(roots['runtime-home'], 'sessions');
+    // Leaf links inside an included category: to an excluded credential, to an outside marker.
+    fs.symlinkSync(auth, path.join(sessions, 'linked-auth.jsonl'));
+    fs.symlinkSync(outside, path.join(sessions, 'linked-secret.jsonl'));
+    // Directory aliases inside an included category: to an outside folder and to the identity folder.
+    fs.symlinkSync(outsideDir, path.join(sessions, 'alias'));
+    fs.symlinkSync(path.join(userData, 'identity'), path.join(sessions, 'identity-alias'));
+    // A hard link to the identity session is a regular file, but not a safe source.
+    fs.linkSync(path.join(userData, 'identity', 'session.bin'), path.join(sessions, 'hard-linked.jsonl'));
+
+    const destination = path.join(tempDir('data-export-links'), 'export');
+    const { manifest } = await exportData({ policy, roots, destination, attribution: ATTRIBUTION, journal });
+    const history = manifest.included.find((entry) => entry.category === 'task-history')!;
+    // The normal session files are exported byte for byte.
+    expect(history.files.map((file) => file.path).sort()).toEqual(['archived_sessions/rollout-2026-10-27-b.jsonl', 'session_index.jsonl', 'sessions/2026/10/28/rollout-2026-10-28-a.jsonl']);
+    for (const file of history.files) expect(fs.readFileSync(exportedFilePath(destination, file.root, file.path))).toEqual(fs.readFileSync(path.join(roots[file.root], file.path)));
+    expect(manifest.omissions).toContainEqual({ category: 'task-history', label: 'Task history: links and special files', reason: expect.stringMatching(/never exported/), files: 5 });
+    // No secret byte reaches the destination, under any name.
+    const bytes = exportedBytes(destination);
+    expect(bytes).not.toContain(SECRET);
+    expect(bytes).not.toContain(SESSION_SECRET);
+    for (const name of ['linked-auth.jsonl', 'linked-secret.jsonl', 'alias', 'identity-alias', 'hard-linked.jsonl']) {
+      expect(fs.existsSync(exportedFilePath(destination, 'runtime-home', `sessions/${name}`))).toBe(false);
+    }
+    // The export still round-trips.
+    await expect(importData({ policy, roots: emptyRoots(), source: destination })).resolves.toMatchObject({ notRestored: [] });
+  });
+
+  it.skipIf(process.platform === 'win32')('refuses a file swapped for a link between the check and the open', async () => {
+    const { roots, journal } = device();
+    const outside = write(tempDir('data-export-swap'), 'secret.txt', SECRET);
+    const file = path.join(roots['runtime-home'], 'session_index.jsonl');
+    const realLstat = fs.promises.lstat;
+    // The check sees the regular file; the open then meets the replacing link (O_NOFOLLOW).
+    vi.spyOn(fs.promises, 'lstat').mockImplementation(async (...args: Parameters<typeof realLstat>) => {
+      const stat = await realLstat(...args);
+      if (args[0] === file) {
+        fs.rmSync(file);
+        fs.symlinkSync(outside, file);
+      }
+      return stat;
+    });
+    const destination = path.join(tempDir('data-export-swap-dest'), 'export');
+    const { manifest } = await exportData({ policy, roots, destination, attribution: ATTRIBUTION, journal });
+    expect(manifest.included.find((entry) => entry.category === 'task-history')!.files.map((f) => f.path)).not.toContain('session_index.jsonl');
+    expect(manifest.omissions).toContainEqual(expect.objectContaining({ category: 'task-history', files: 1 }));
+    expect(exportedBytes(destination)).not.toContain(SECRET);
+  });
+});
+
+describe('short writes (review R07)', () => {
+  /** Every write to a file whose path matches `target` writes at most half of what it was asked, or nothing when `stall`. */
+  function shortWrites(target: RegExp, stall = false): void {
+    const realOpen = fs.promises.open;
+    vi.spyOn(fs.promises, 'open').mockImplementation(async (...args: Parameters<typeof realOpen>) => {
+      const handle = await realOpen(...args);
+      if (target.test(String(args[0]))) {
+        const realWrite = handle.write.bind(handle) as (buffer: Buffer, offset: number, length: number, position: number | null) => Promise<{ bytesWritten: number; buffer: Buffer }>;
+        (handle as unknown as { write: unknown }).write = async (buffer: Buffer, offset = 0, length = buffer.length - offset, position: number | null = null) => {
+          if (stall) return { bytesWritten: 0, buffer };
+          return realWrite(buffer, offset, Math.max(1, Math.floor(length / 2)), position);
+        };
+      }
+      return handle;
+    });
+  }
+
+  it('export writes every byte despite short writes', async () => {
+    const { roots, journal } = device();
+    write(roots['runtime-home'], 'sessions/2026/10/28/rollout-big.jsonl', Buffer.alloc(2 * 1024 * 1024 + 17, 7));
+    const destination = path.join(tempDir('data-export-short'), 'export');
+    shortWrites(/data-export-short.*files/);
+    const { manifest } = await exportData({ policy, roots, destination, attribution: ATTRIBUTION, journal });
+    vi.restoreAllMocks();
+    for (const entry of manifest.included) {
+      for (const file of entry.files) {
+        const copy = fs.readFileSync(exportedFilePath(destination, file.root, file.path));
+        expect(copy.equals(fs.readFileSync(path.join(roots[file.root], file.path)))).toBe(true);
+        expect(copy.length).toBe(file.size);
+      }
+    }
+    await expect(importData({ policy, roots: emptyRoots(), source: destination })).resolves.toMatchObject({ notRestored: [] });
+  });
+
+  it('export fails explicitly, keeping nothing, when a write makes no progress', async () => {
+    const { roots, journal } = device();
+    const destination = path.join(tempDir('data-export-stall'), 'export');
+    shortWrites(/data-export-stall.*files/, true);
+    await expect(exportData({ policy, roots, destination, attribution: ATTRIBUTION, journal })).rejects.toThrow(/could not be written: EIO/);
+    expect(fs.existsSync(destination)).toBe(false);
+    expect(journal.read()).toEqual([]);
+  });
+
+  it('import restores complete files despite short writes', async () => {
+    const { roots, destination, manifest } = await exported();
+    const target = emptyRoots();
+    shortWrites(/\.import-\d+\.tmp$/);
+    const result = await importData({ policy, roots: target, source: destination });
+    vi.restoreAllMocks();
+    expect(result.notRestored).toEqual([]);
+    for (const entry of manifest.included) {
+      for (const file of entry.files) expect(fs.readFileSync(path.join(target[file.root], file.path))).toEqual(fs.readFileSync(path.join(roots[file.root], file.path)));
+    }
+  });
+
+  it('import never restores a truncated file when a write makes no progress', async () => {
+    const { destination } = await exported();
+    const target = emptyRoots();
+    shortWrites(/\.import-\d+\.tmp$/, true);
+    const result = await importData({ policy, roots: target, source: destination });
+    vi.restoreAllMocks();
+    expect(result.restored.every((entry) => entry.files === 0)).toBe(true);
+    expect(result.notRestored).toHaveLength(4);
+    for (const entry of result.notRestored) expect(entry.reason).toBe('It could not be written (EIO)');
+    // Nothing restored, and no temporary file left behind.
+    for (const dir of [target['runtime-home'], target.logs]) expect(fs.existsSync(dir) ? allFiles(dir) : []).toEqual([]);
+  });
+});
+
+describe('containment (review R15)', () => {
+  it('treats only a real parent segment as outside', () => {
+    const root = path.resolve(tempDir('data-contain'));
+    expect(isInside(root, root)).toBe(true);
+    expect(isInside(root, path.join(root, 'child'))).toBe(true);
+    expect(isInside(root, path.join(root, '..backup', 'export'))).toBe(true);
+    expect(isInside(root, path.join(root, '..', 'sibling'))).toBe(false);
+    expect(isInside(root, path.dirname(root))).toBe(false);
+    if (process.platform === 'win32') expect(isInside('C:\\inquello', 'D:\\export')).toBe(false);
+  });
+
+  it('export refuses a ..backup folder inside the data folder and the root itself, and accepts a true sibling', async () => {
+    const { roots, journal, userData } = device();
+    await expect(exportData({ policy, roots, destination: path.join(userData, '..backup', 'export'), attribution: ATTRIBUTION, journal })).rejects.toThrow(/outside/);
+    await expect(exportData({ policy, roots, destination: userData, attribution: ATTRIBUTION, journal })).rejects.toThrow(/outside/);
+    const sibling = path.join(tempDir('data-contain-parent'), 'export');
+    await expect(exportData({ policy, roots, destination: sibling, attribution: ATTRIBUTION, journal })).resolves.toMatchObject({ path: sibling });
+  });
+
+  it('the inventory walks a ..backup child of the user data folder', () => {
+    const { roots } = device();
+    write(roots['user-data'], '..backup/notes.txt', 'x');
+    expect(takeInventory(policy, roots).unclassified).toContain('user-data:..backup/notes.txt');
   });
 });
 
