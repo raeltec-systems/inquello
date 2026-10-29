@@ -520,11 +520,11 @@ describe('Shell layout', () => {
     expect((screen.getByLabelText('Test composer') as HTMLTextAreaElement).value).toBe('For bank');
   });
 
-  it('the Composer slot is reserved and empty without a Composer', async () => {
+  it('the Composer slot holds the Story 1.17 Composer when no other is supplied', async () => {
     await renderReady();
     const slot = document.querySelector<HTMLElement>('[data-composer-slot]')!;
-    expect(slot.dataset.composerSlot).toBe('empty');
-    expect(slot.childElementCount).toBe(0);
+    expect(slot.dataset.composerSlot).toBe('filled');
+    expect(slot.querySelector('[data-composer]')).not.toBeNull();
   });
 
   it('closing the artifact removes the complementary region', async () => {

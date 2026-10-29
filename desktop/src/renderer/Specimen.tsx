@@ -110,14 +110,19 @@ function Section({ title, children }: { title: string; children: ReactNode }): R
   );
 }
 
-export function Specimen(): ReactElement {
+export interface SpecimenProps {
+  /** Passed to the Account block: runs after a sign-in or sign-out attempt. */
+  onIdentityChanged?: () => void;
+}
+
+export function Specimen({ onIdentityChanged }: SpecimenProps = {}): ReactElement {
   return (
     <main className="specimen" data-contrast-pairs={JSON.stringify(RENDERED_PAIRS)}>
       <h1 className="specimen-title">Inquello</h1>
       <p className="specimen-body">Design tokens, IBM Plex, icon semantics and the core primitives. Desktop features arrive in later stories.</p>
 
       <Section title="Account">
-        <Account />
+        <Account onIdentityChanged={onIdentityChanged} />
       </Section>
 
       <Section title="Button">

@@ -8,6 +8,9 @@
  * holds a display name, an issuer label, availability and storage kind only.
  * Private work is always labelled local; a shared-service outage blocks shared
  * work only. Data attributes expose the rendered state to the smoke probe.
+ *
+ * `onIdentityChanged` runs after a sign-in or sign-out attempt; the App uses
+ * it to drop the Composer's in-memory drafts (Story 1.17).
  */
 import { useCallback, useEffect, useState, type ReactElement } from 'react';
 
@@ -41,7 +44,12 @@ function initials(name: string): string {
   return letters.toUpperCase();
 }
 
-export function Account(): ReactElement {
+export interface AccountProps {
+  /** Called after a sign-in or sign-out attempt completes, whatever its outcome. */
+  onIdentityChanged?: () => void;
+}
+
+export function Account({ onIdentityChanged }: AccountProps = {}): ReactElement {
   const bridge = identityBridge();
   const [status, setStatus] = useState<IdentityStatusView | null>(null);
   const [busy, setBusy] = useState<'sign-in' | 'sign-out' | null>(null);
@@ -77,6 +85,7 @@ export function Account(): ReactElement {
       setNotice('The request did not complete.');
     } finally {
       setBusy(null);
+      onIdentityChanged?.();
     }
   };
 

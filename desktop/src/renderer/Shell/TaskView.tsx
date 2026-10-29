@@ -10,7 +10,7 @@
  *   changes who can see it.
  * - The States section (Story 1.15) lists every state dimension separately,
  *   each with its value or "Not recorded".
- * - The Composer arrives with Story 1.17 and runtime threads with Story 1.25:
+ * - The Composer (Story 1.17) sits below in the Shell; runtime threads come with Story 1.25:
  *   nothing here starts work.
  */
 import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
@@ -128,7 +128,7 @@ export function TaskView({ task, engagements, folders, onRename, onMove, newOper
       <div className="iq-thread-placeholder" data-thread-placeholder>
         <p className="iq-thread-placeholder-title">This Task has no thread yet.</p>
         <p className="iq-thread-placeholder-body">
-          Requests and replies will appear here once the Composer and runtime threads arrive. Only you can see this Task; moving it never shares it.
+          Requests and replies will appear here once runtime threads arrive. Only you can see this Task; moving it never shares it.
         </p>
       </div>
     </section>

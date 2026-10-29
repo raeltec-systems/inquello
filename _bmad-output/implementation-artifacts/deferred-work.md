@@ -90,3 +90,10 @@
 ## Deferred from: code review of spec-1-13-keep-provider-credentials-separate.md (2026-10-29)
 
 - **D03: Claude action completion waits for an unrelated Codex status request** — maybe-false; likelihood Unknown, impact Medium (unverified). Every completed Claude action awaits getStatus, including Codex account/read. A never-resolving fake request would leave the UI waiting even after the key operation completed. The coupling is confirmed, but no indefinite account/read stall was demonstrated with the pinned shipped runtime; generic absent RPC deadlines were already rejected in Story 1.2 under its trust model. No actual provider key loss was shown. Deferred because: Leave unless a shipped-runtime stall is reproduced. Evidence to settle/resume: Reproduce with the shipped runtime and a real keyring failure, recording request completion/termination behavior; a deliberately hung fake alone does not establish production likelihood. See [review](reviews/2026-10-29-epic-1/report.md).
+
+
+## Deferred from: spec-1-17-compose-plain-private-request.md (2026-10-29)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-17-compose-plain-private-request.md`
+  summary: Detect a change of principal for Composer draft clearing from a stable principal reference, not display name and issuer.
+  evidence: The renderer is never given a principal ID, so the draft store detects a principal change from display name plus issuer, and clears all drafts on every sign-in or sign-out seen in the window. The gap is a session switch made in main between two principals with the same display name and issuer that the window does not observe. Resolve when main exposes an opaque per-principal fingerprint to the renderer (at latest when drafts gain real sends in Story 1.25).

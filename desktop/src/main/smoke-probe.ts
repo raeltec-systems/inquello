@@ -110,6 +110,19 @@
  * width it requires the Shell to report that the artifact would not fit beside
  * the thread (single mode would apply) with the area closed. `evaluateShellLayout`
  * is pure and decides pass/fail.
+ *
+ * Story 1.17 adds the composer probe (`probeComposer`). With the dev topology
+ * it signs in, creates two ad hoc Tasks, types a synthetic draft into each
+ * through the Composer and requires each to be kept when the other is opened;
+ * a real Enter keeps the text and a real Shift+Enter adds one newline; Send is
+ * visible, focusable, `aria-disabled` with its linked reason (and the
+ * empty-request reason first while empty) and activating it changes nothing;
+ * no later input (attach, Method, scope, environment, reasoning) is available.
+ * It signs out through the Account block, requires the signed-out Shell to
+ * show no Composer, signs in again and requires both drafts to be gone. Only
+ * draft lengths and comparisons leave the renderer, never the text. Without
+ * the topology it requires the signed-out Shell to show no Composer.
+ * `evaluateComposer` is pure and decides pass/fail.
  */
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
@@ -2327,4 +2340,314 @@ export async function probeShellLayout(contents: WebContents, options: ShellLayo
     }
   }
   return evaluateShellLayout(read);
+}
+
+// ---- composer (Story 1.17) -----------------------------------------------------
+
+/** The synthetic drafts the probe types. Only their lengths and comparisons leave the renderer. */
+const COMPOSER_DRAFT_A = 'Smoke draft for Task A';
+const COMPOSER_DRAFT_B = 'Smoke draft for Task B';
+export const COMPOSER_ROUTE_REASON = 'Sending starts once a processing route is set up.';
+export const COMPOSER_EMPTY_REASON = 'Type a request to send.';
+
+const COMPOSER_HELPERS = `
+  ${SHELL_HELPERS}
+  const composer = () => q('[data-composer]');
+  const field = () => q('[data-composer-input]');
+  const sendButton = () => q('[data-composer-send]');
+  const described = (element) => element ? (element.getAttribute('aria-describedby') || '').split(' ').map((id) => { const el = document.getElementById(id); return el ? el.textContent : ''; }).join(' ') : null;
+  const openTask = async (taskId) => {
+    const row = await wait(() => q('[data-task-id="' + taskId + '"] a'), ${SHELL_SETTLE_MS});
+    if (!row) return false;
+    row.click();
+    return !!(await wait(() => q('[data-task-view="' + taskId + '"]') && field() && composer().getAttribute('data-composer-task') === taskId, 5000));
+  };
+  const readField = (expected) => {
+    const el = field();
+    return el ? { length: el.value.length, matches: el.value === expected, focused: document.activeElement === el } : null;
+  };
+  const readSend = () => {
+    const el = sendButton();
+    return el ? { ariaDisabled: el.getAttribute('aria-disabled'), disabledAttr: el.hasAttribute('disabled'), tabIndex: el.tabIndex, reason: described(el), name: el.getAttribute('aria-label') } : null;
+  };
+  const otherControls = () => {
+    const root = composer();
+    if (!root) return null;
+    const all = [...root.querySelectorAll('button, input, select, textarea, [role="button"], [role="combobox"], [role="listbox"], [role="menu"]')];
+    const others = all.filter((el) => el !== field() && el !== sendButton());
+    return {
+      others: others.length,
+      enabledOthers: others.filter((el) => el.getAttribute('aria-disabled') !== 'true' && !el.hasAttribute('disabled')).length,
+      fileChips: root.querySelectorAll('.iq-file-chip').length,
+      laterWords: /attach|add files|method|scope|environment|reasoning|thorough/i.test(root.textContent || ''),
+    };
+  };
+`;
+
+/** Opens Task A then B (typing a draft in each), returns to A, and focuses its field. */
+function composerTypeProbe(taskA: string, taskB: string): string {
+  return `(async () => {
+    ${COMPOSER_HELPERS}
+    location.hash = '#specimen';
+    await wait(() => !q('[data-shell]'), 5000);
+    const out = { shellOpened: await openShell() };
+    out.openedA = await openTask(${JSON.stringify(taskA)});
+    if (!out.openedA) return out;
+    out.label = q('label[for="' + field().id + '"]') ? q('label[for="' + field().id + '"]').textContent : null;
+    type(field(), ${JSON.stringify(COMPOSER_DRAFT_A)});
+    out.openedB = await openTask(${JSON.stringify(taskB)});
+    if (!out.openedB) return out;
+    out.bBefore = readField('');
+    out.emptySend = readSend();
+    type(field(), ${JSON.stringify(COMPOSER_DRAFT_B)});
+    out.reopenedA = await openTask(${JSON.stringify(taskA)});
+    out.aAfter = readField(${JSON.stringify(COMPOSER_DRAFT_A)});
+    out.reopenedB = await openTask(${JSON.stringify(taskB)});
+    out.bAfter = readField(${JSON.stringify(COMPOSER_DRAFT_B)});
+    await openTask(${JSON.stringify(taskA)});
+    field().focus();
+    const end = field().value.length;
+    field().setSelectionRange(end, end);
+    out.focused = document.activeElement === field();
+    return out;
+  })()`;
+}
+
+const COMPOSER_FIELD_READ = (expected: string) => `(() => {
+  ${COMPOSER_HELPERS}
+  return readField(${JSON.stringify(expected)});
+})()`;
+
+/** Reads Send and the other controls, then activates Send and re-reads the field. */
+const COMPOSER_SEND_PROBE = `(async () => {
+  ${COMPOSER_HELPERS}
+  const out = { send: readSend(), controls: otherControls() };
+  const el = sendButton();
+  if (el) {
+    el.focus();
+    out.sendFocusable = document.activeElement === el;
+    el.click();
+    await new Promise((resolve) => setTimeout(resolve, 300));
+  }
+  out.afterSend = readField(${JSON.stringify(`${COMPOSER_DRAFT_A}\n`)});
+  out.taskStillOpen = !!q('[data-task-view]');
+  return out;
+})()`;
+
+/** Signs out through the Account block in Settings, then reads the signed-out Shell. */
+const COMPOSER_SIGN_OUT_PROBE = `(async () => {
+  ${COMPOSER_HELPERS}
+  const out = {};
+  location.hash = '#specimen';
+  const account = await wait(() => q('[data-account][data-identity-state="signed-in"]'), ${ACCOUNT_SETTLE_MS});
+  const button = q('[data-account-action="sign-out"]');
+  if (!account || !button || button.getAttribute('aria-disabled') === 'true') { out.pressed = false; return out; }
+  button.click();
+  out.pressed = true;
+  out.reached = !!(await wait(() => q('[data-account][data-identity-state="signed-out"]'), ${ACCOUNT_SETTLE_MS}));
+  out.shellOpened = await openShell();
+  out.signedOutShown = !!(await wait(() => q('[data-sidebar][data-sidebar-state="signed-out"]'), ${SHELL_SETTLE_MS}));
+  out.composerShown = !!composer();
+  return out;
+})()`;
+
+/** After signing in again: both Tasks' drafts are empty. */
+function composerAfterProbe(taskA: string, taskB: string): string {
+  return `(async () => {
+    ${COMPOSER_HELPERS}
+    location.hash = '#specimen';
+    await wait(() => !q('[data-shell]'), 5000);
+    const out = { shellOpened: await openShell() };
+    out.openedA = await openTask(${JSON.stringify(taskA)});
+    out.a = readField('');
+    out.openedB = await openTask(${JSON.stringify(taskB)});
+    out.b = readField('');
+    return out;
+  })()`;
+}
+
+/** Unconfigured: the signed-out Shell shows no Composer. */
+const COMPOSER_SIGNED_OUT_READ = `(async () => {
+  ${COMPOSER_HELPERS}
+  location.hash = '#specimen';
+  await wait(() => !q('[data-shell]'), 5000);
+  const out = { shellOpened: await openShell() };
+  out.signedOutShown = !!(await wait(() => q('[data-sidebar][data-sidebar-state="signed-out"]'), ${SHELL_SETTLE_MS}));
+  out.composerShown = !!composer();
+  return out;
+})()`;
+
+interface ComposerFieldRead {
+  length: number;
+  matches: boolean;
+  focused: boolean;
+}
+
+interface ComposerSendRead {
+  ariaDisabled: string | null;
+  disabledAttr: boolean;
+  tabIndex: number;
+  reason: string | null;
+  name: string | null;
+}
+
+export interface ComposerProbeRead {
+  configured: boolean;
+  signedIn?: boolean;
+  tasks?: { a: string | null; b: string | null };
+  typed?: {
+    shellOpened: boolean;
+    openedA?: boolean;
+    openedB?: boolean;
+    reopenedA?: boolean;
+    reopenedB?: boolean;
+    label?: string | null;
+    bBefore?: ComposerFieldRead | null;
+    emptySend?: ComposerSendRead | null;
+    aAfter?: ComposerFieldRead | null;
+    bAfter?: ComposerFieldRead | null;
+    focused?: boolean;
+  };
+  /** Task A's field after a real Enter keypress. */
+  afterEnter?: ComposerFieldRead | null;
+  /** Task A's field after a real Shift+Enter keypress (one newline added). */
+  afterShiftEnter?: ComposerFieldRead | null;
+  send?: {
+    send: ComposerSendRead | null;
+    controls: { others: number; enabledOthers: number; fileChips: number; laterWords: boolean } | null;
+    sendFocusable?: boolean;
+    afterSend: ComposerFieldRead | null;
+    taskStillOpen: boolean;
+  };
+  signOut?: { pressed: boolean; reached?: boolean; shellOpened?: boolean; signedOutShown?: boolean; composerShown?: boolean };
+  signedInAgain?: boolean;
+  after?: { shellOpened: boolean; openedA?: boolean; a?: ComposerFieldRead | null; openedB?: boolean; b?: ComposerFieldRead | null };
+  signedOutShell?: { shellOpened: boolean; signedOutShown: boolean; composerShown: boolean };
+  signedOutAtEnd?: boolean;
+  error?: string;
+}
+
+export interface ComposerReport extends ComposerProbeRead {
+  ok: boolean;
+  failures: string[];
+}
+
+/** Pass/fail for the composer probe. */
+export function evaluateComposer(read: ComposerProbeRead): ComposerReport {
+  const failures: string[] = [];
+  if (read.error) failures.push(`the probe stopped: ${read.error}`);
+  if (!read.configured) {
+    const signedOut = read.signedOutShell;
+    if (!signedOut?.shellOpened || !signedOut.signedOutShown) failures.push('the signed-out Shell did not show');
+    else if (signedOut.composerShown) failures.push('a Composer is shown while signed out');
+    return { ok: failures.length === 0, failures, ...read };
+  }
+  if (!read.signedIn) failures.push('the synthetic user did not sign in');
+  if (!read.tasks?.a || !read.tasks.b) failures.push('the two synthetic Tasks were not created');
+  const typed = read.typed;
+  if (!typed?.shellOpened) failures.push('the Shell did not open');
+  else if (!typed.openedA || !typed.openedB || !typed.reopenedA || !typed.reopenedB) failures.push('a synthetic Task did not open with its Composer');
+  else {
+    if (typed.label !== 'Request for this Task') failures.push(`the Composer field is labelled ${JSON.stringify(typed.label)}`);
+    if (typed.bBefore?.length !== 0) failures.push("Task B's Composer did not start empty");
+    const empty = typed.emptySend;
+    if (!empty || empty.ariaDisabled !== 'true' || empty.reason !== `${COMPOSER_EMPTY_REASON} ${COMPOSER_ROUTE_REASON}`) failures.push(`with no text, Send is not unavailable with the empty-request reason (${JSON.stringify(empty)})`);
+    if (!typed.aAfter?.matches) failures.push("returning to Task A did not keep its draft");
+    if (!typed.bAfter?.matches) failures.push("returning to Task B did not keep its draft");
+    if (!typed.focused) failures.push("Task A's Composer field could not be focused");
+  }
+  if (!read.afterEnter?.matches) failures.push(`Enter changed or cleared the draft (${JSON.stringify(read.afterEnter)})`);
+  if (!read.afterShiftEnter?.matches) failures.push(`Shift+Enter did not insert one newline (${JSON.stringify(read.afterShiftEnter)})`);
+  const send = read.send;
+  if (!send?.send) failures.push('Send was not found');
+  else {
+    const s = send.send;
+    if (s.name !== 'Send' || s.ariaDisabled !== 'true' || s.disabledAttr || s.tabIndex < 0) failures.push(`Send is not a visible, focusable, unavailable control (${JSON.stringify(s)})`);
+    if (s.reason !== COMPOSER_ROUTE_REASON) failures.push(`Send's linked reason is ${JSON.stringify(s.reason)}`);
+    if (!send.sendFocusable) failures.push('Send could not take focus');
+    if (!send.afterSend?.matches || !send.taskStillOpen) failures.push('activating Send changed the draft or the open Task');
+    const c = send.controls;
+    if (!c) failures.push('the Composer was not found');
+    else if (c.enabledOthers > 0 || c.fileChips > 0 || c.laterWords) failures.push(`the Composer shows a later input as available (${JSON.stringify(c)})`);
+  }
+  const out = read.signOut;
+  if (!out?.pressed || !out.reached) failures.push('sign-out through the Account block did not complete');
+  else if (!out.signedOutShown || out.composerShown) failures.push('after sign-out the Shell still shows a Composer');
+  if (!read.signedInAgain) failures.push('the synthetic user could not sign in again');
+  const after = read.after;
+  if (!after?.openedA || !after.openedB) failures.push('the synthetic Tasks did not reopen after signing in again');
+  else if (after.a?.length !== 0 || after.b?.length !== 0) failures.push(`drafts survived sign-out (lengths ${after.a?.length}, ${after.b?.length})`);
+  if (!read.signedOutAtEnd) failures.push('the probe could not sign out at the end');
+  return { ok: failures.length === 0, failures, ...read };
+}
+
+/** Presses Return in the renderer through real input events, with or without Shift. */
+async function pressReturn(contents: WebContents, shift: boolean): Promise<void> {
+  const modifiers: Array<'shift'> = shift ? ['shift'] : [];
+  contents.sendInputEvent({ type: 'keyDown', keyCode: 'Return', modifiers });
+  contents.sendInputEvent({ type: 'char', keyCode: '\r', modifiers });
+  contents.sendInputEvent({ type: 'keyUp', keyCode: 'Return', modifiers });
+  await new Promise((resolve) => setTimeout(resolve, 300));
+}
+
+/**
+ * Runs the composer probe. With the dev topology it signs in, creates two ad
+ * hoc Tasks, types a synthetic draft in each through the Composer, checks each
+ * is kept, presses real Enter and Shift+Enter, reads Send and the absence of
+ * later inputs, signs out through the Account block and, signed in again,
+ * requires both drafts to be gone. Draft text never leaves the renderer: only
+ * lengths and comparisons are reported. Without it, it requires the signed-out
+ * Shell to show no Composer.
+ */
+export async function probeComposer(contents: WebContents, options: Omit<OrganiseProbeOptions, 'runtimeRequest'>): Promise<ComposerReport> {
+  const { identity, organise } = options;
+  const configured = identity.config.kind === 'configured';
+  const read: ComposerProbeRead = { configured };
+  try {
+    if (!configured) {
+      read.signedOutShell = (await contents.executeJavaScript(COMPOSER_SIGNED_OUT_READ)) as ComposerProbeRead['signedOutShell'];
+      return evaluateComposer(read);
+    }
+    let seed: { workspace_id?: unknown } = {};
+    try {
+      seed = JSON.parse(fs.readFileSync(options.seedFile ?? '', 'utf8')) as typeof seed;
+    } catch {
+      seed = {};
+    }
+    const workspaceId = typeof seed.workspace_id === 'string' ? seed.workspace_id : null;
+    read.signedIn = (await identity.session.signIn()).ok;
+    await organise.syncPrincipal();
+    await organise.getWorkspaces();
+    const create = async (title: string) => {
+      if (!workspaceId) return null;
+      const created = await organise.createTask({ operationId: randomUUID(), workspaceId, engagementId: null, folderId: null, title });
+      return created.ok ? created.value.taskId : null;
+    };
+    read.tasks = { a: await create('Smoke composer A'), b: await create('Smoke composer B') };
+    const { a, b } = read.tasks;
+    if (!a || !b) return evaluateComposer(read);
+
+    read.typed = (await contents.executeJavaScript(composerTypeProbe(a, b))) as ComposerProbeRead['typed'];
+    contents.focus();
+    await pressReturn(contents, false);
+    read.afterEnter = (await contents.executeJavaScript(COMPOSER_FIELD_READ(COMPOSER_DRAFT_A))) as ComposerFieldRead | null;
+    await pressReturn(contents, true);
+    read.afterShiftEnter = (await contents.executeJavaScript(COMPOSER_FIELD_READ(`${COMPOSER_DRAFT_A}\n`))) as ComposerFieldRead | null;
+    read.send = (await contents.executeJavaScript(COMPOSER_SEND_PROBE)) as ComposerProbeRead['send'];
+
+    read.signOut = (await contents.executeJavaScript(COMPOSER_SIGN_OUT_PROBE)) as ComposerProbeRead['signOut'];
+    await organise.syncPrincipal().catch(() => undefined);
+    read.signedInAgain = (await identity.session.signIn()).ok;
+    await organise.syncPrincipal();
+    read.after = (await contents.executeJavaScript(composerAfterProbe(a, b))) as ComposerProbeRead['after'];
+  } catch (error) {
+    read.error = (error as Error).message;
+  } finally {
+    if (configured) {
+      const signOut = await identity.session.signOut().catch(() => ({ ok: false }));
+      await organise.syncPrincipal().catch(() => undefined);
+      read.signedOutAtEnd = signOut.ok;
+    }
+  }
+  return evaluateComposer(read);
 }

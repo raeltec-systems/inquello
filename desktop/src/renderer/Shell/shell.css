@@ -453,6 +453,69 @@ a.iq-nav-row:hover {
   padding-bottom: var(--space-4);
 }
 
+/*
+ * The Composer (Story 1.17, DESIGN.md components.Composer): a white 14px-radius
+ * surface with the composer shadow and an ink-600 boundary, body typography,
+ * a muted placeholder and the 30px round Send. The focus indicator is the
+ * blue-600 edge outside the pale ring, drawn on the whole surface.
+ */
+.iq-composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2-5) var(--space-2-5) var(--space-2) var(--space-3);
+  background: var(--white);
+  color: var(--text-primary);
+  border: 1px solid var(--ink-600);
+  border-radius: var(--radius-composer);
+  box-shadow: var(--shadow-composer);
+  box-sizing: border-box;
+}
+
+.iq-composer:has(.iq-composer-input:focus) {
+  outline: 1px solid var(--blue-600);
+  outline-offset: 3px;
+  box-shadow: var(--shadow-composer), 0 0 0 3px var(--blue-150);
+}
+
+.iq-composer-input {
+  width: 100%;
+  min-height: calc(2 * 1.55em);
+  max-height: 40vh;
+  padding: 0;
+  border: none;
+  outline: none;
+  resize: none;
+  overflow-y: auto;
+  background: transparent;
+  color: var(--text-primary);
+  font: var(--type-body);
+  box-sizing: border-box;
+}
+
+.iq-composer-input::placeholder {
+  color: var(--text-muted);
+  opacity: 1;
+}
+
+.iq-composer-actions {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+/* The reason reads before Send, beside it; the DOM keeps Send first so it stays the next stop. */
+.iq-composer-actions > .iq-action {
+  flex-direction: row-reverse;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.iq-composer-actions .iq-note {
+  min-width: 0;
+  text-align: right;
+}
+
 .iq-artifact {
   grid-area: artifact;
   display: flex;

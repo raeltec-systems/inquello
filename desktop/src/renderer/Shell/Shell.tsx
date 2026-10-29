@@ -25,13 +25,21 @@
  *   and never acts on a Task (`keyboard.ts`).
  * - The artifact area stays closed: nothing in the app opens one yet. The
  *   `artifact` and `renderComposer` props are for tests and later stories.
+ *
+ * Story 1.17 fills the Composer slot with the plain Composer (`Composer.tsx`)
+ * while signed in. Its drafts live in memory only (`drafts.ts`): in the App's
+ * store when one is passed, so a visit to Settings keeps them, else in the
+ * Shell's own. Every draft is cleared when the Shell sees no one signed in, a
+ * different principal, or a sign-in from the Sidebar; a Task's draft goes when
+ * the Task is no longer in its Workspace.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 
 import { identityBridge, parseIdentityStatus } from '../bridge';
 import { SegmentedControl } from '../primitives';
 import { ArtifactArea, type ShellArtifact } from './ArtifactArea';
-import { useDraftBinding, type DraftBinding } from './drafts';
+import { Composer } from './Composer';
+import { createDraftStore, useDraftBinding, type DraftBinding, type DraftStore } from './drafts';
 import { Header } from './Header';
 import { EscapeStack, isNewThreadShortcut, isTextEntry } from './keyboard';
 import { artifactFits, layoutMode, THREAD_MIN_WIDTH } from './layout';
@@ -71,6 +79,8 @@ export interface ShellProps {
   artifact?: ShellArtifact | null;
   /** The Composer (Story 1.17), bound to the open Task's preserved draft. Until then the slot stays empty. */
   renderComposer?: (draft: DraftBinding) => ReactNode;
+  /** The window's in-memory draft store; the Shell keeps its own when none is passed. */
+  drafts?: DraftStore;
 }
 
 export type WorkView = 'conversation' | 'artifact';
@@ -89,7 +99,10 @@ async function readPerson(): Promise<PersonView | null> {
   }
 }
 
-export function Shell({ onShowSpecimen, operationIds = newOperationId, artifact = null, renderComposer }: ShellProps): ReactElement {
+/** The principal the identity status names, as a draft-ownership key; null when unknown. */
+const ownerKey = (person: PersonView | null): string | null => (person ? `${person.name}\n${person.detail}` : null);
+
+export function Shell({ onShowSpecimen, operationIds = newOperationId, artifact = null, renderComposer, drafts }: ShellProps): ReactElement {
   const bridge = organiseBridge();
   const [state, setState] = useState<WorkspacesState | null>(null);
   const [workspaceId, setWorkspaceIdState] = useState<string | null>(null);
@@ -119,7 +132,8 @@ export function Shell({ onShowSpecimen, operationIds = newOperationId, artifact 
   const [announcement, setAnnouncement] = useState({ text: '', count: 0 });
   const shellRef = useRef<HTMLDivElement>(null);
   const escapeStack = useRef(new EscapeStack());
-  const draft = useDraftBinding(openTaskId);
+  const [ownDrafts] = useState(createDraftStore);
+  const draftStore = drafts ?? ownDrafts;
 
   const openArtifact = artifact && artifact.artifactId !== dismissedArtifact ? artifact : null;
   const mode = layoutMode(width, openArtifact !== null);
@@ -235,11 +249,14 @@ export function Shell({ onShowSpecimen, operationIds = newOperationId, artifact 
         return;
       }
       const result = parseOutcome(await bridge.getTree({ workspaceId: id }), parseTree);
-      if (result.ok) setTree(result.value);
-      else setNotice(result.reason);
+      if (result.ok) {
+        // A Task that is gone (deleted) takes its draft with it.
+        draftStore.retain(result.value.workspaceId, result.value.tasks.map((item) => item.taskId));
+        setTree(result.value);
+      } else setNotice(result.reason);
       if (openTask.current) await loadStates(openTask.current);
     },
-    [bridge, loadStates],
+    [bridge, loadStates, draftStore],
   );
 
   const load = useCallback(async () => {
@@ -250,8 +267,12 @@ export function Shell({ onShowSpecimen, operationIds = newOperationId, artifact 
         setNotice('Your Workspaces could not be read.');
         return;
       }
+      // Drafts belong to one signed-in principal: none signed in, or a different one, clears them all.
+      const nextPerson = next.signedIn ? await readPerson() : null;
+      if (next.signedIn) draftStore.claim(ownerKey(nextPerson));
+      else draftStore.clear();
       setState(next);
-      void readPerson().then(setPerson);
+      setPerson(nextPerson);
       const ids = next.workspaces.map((workspace) => workspace.workspaceId);
       const current = chosenWorkspace.current;
       const chosen = current && ids.includes(current) ? current : (ids[0] ?? null);
@@ -261,7 +282,7 @@ export function Shell({ onShowSpecimen, operationIds = newOperationId, artifact 
     } catch {
       setNotice('Your Workspaces could not be read.');
     }
-  }, [bridge, loadTree]);
+  }, [bridge, loadTree, draftStore]);
 
   useEffect(() => {
     void load();
@@ -360,6 +381,7 @@ export function Shell({ onShowSpecimen, operationIds = newOperationId, artifact 
     try {
       await identity.signIn();
     } finally {
+      draftStore.clear();
       await load();
     }
   };
@@ -391,7 +413,9 @@ export function Shell({ onShowSpecimen, operationIds = newOperationId, artifact 
   const workspace = state?.workspaces.find((item) => item.workspaceId === workspaceId) ?? null;
 
   const selectedItemId = openArtifact && selectedItem?.artifactId === openArtifact.artifactId ? selectedItem.itemId : null;
-  const composer = renderComposer ? renderComposer(draft) : null;
+  // The draft follows the Task actually shown; a Task that vanished falls back to the no-Task draft.
+  const draft = useDraftBinding(task?.taskId ?? null, draftStore, task?.workspaceId ?? null);
+  const composer = !state?.signedIn ? null : renderComposer ? renderComposer(draft) : <Composer draft={draft} />;
 
   return (
     <div

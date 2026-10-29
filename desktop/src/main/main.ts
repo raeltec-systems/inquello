@@ -69,6 +69,10 @@
  * `--smoke` then runs the shell-layout probe, which resizes this window to
  * each layout width through the smoke-only `resize` it is given, and prints a
  * `shell-layout` line that the run also requires to pass.
+ *
+ * `--smoke` then runs the composer probe (Story 1.17) and prints a `composer`
+ * line, which the run also requires to pass. It reports draft lengths and
+ * comparisons only, never draft text.
  */
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
@@ -94,7 +98,7 @@ import {
 } from './security/policy';
 import { OrganiseService } from './organise';
 import { createProviders, loadProviderDevConfig, PROVIDER_DEV_CONFIG_ENV, providersDir, type ProviderService } from './providers';
-import { probeData, probeIdentity, probeOrganise, probeProviders, probeRenderer, probeShellLayout, probeStates, SHELL_LAYOUT } from './smoke-probe';
+import { probeComposer, probeData, probeIdentity, probeOrganise, probeProviders, probeRenderer, probeShellLayout, probeStates, SHELL_LAYOUT } from './smoke-probe';
 
 const smoke = process.argv.includes('--smoke');
 // The smoke run keeps what main logs, so the providers probe can scan it for a leaked key.
@@ -112,6 +116,7 @@ let providersOk = false;
 let organiseOk = false;
 let statesOk = false;
 let shellLayoutOk = false;
+let composerOk = false;
 let organise: OrganiseService | undefined;
 let identity: IdentityWiring | undefined;
 let providers: ProviderService | undefined;
@@ -311,11 +316,15 @@ async function runSmokeProbe(contents: WebContents): Promise<void> {
   shellLayoutOk = layoutReport.ok;
   process.stdout.write(`${JSON.stringify({ event: 'shell-layout', ...layoutReport })}\n`);
   if (!layoutReport.ok) logger.error(`shell-layout probe failed: ${layoutReport.failures.join('; ')}`);
+  const composerReport = await probeComposer(contents, { identity, organise, seedFile: process.env.INQUELLO_SMOKE_SEED ?? null });
+  composerOk = composerReport.ok;
+  process.stdout.write(`${JSON.stringify({ event: 'composer', ...composerReport })}\n`);
+  if (!composerReport.ok) logger.error(`composer probe failed: ${composerReport.failures.join('; ')}`);
 }
 
 function exitCodeFor(exit: ExitInfo | undefined): number {
   if (!smoke) return 0;
-  return handshakeOk && privilegesOk && designOk && identityOk && dataOk && providersOk && organiseOk && statesOk && shellLayoutOk && exit !== undefined && exit.exitCode === 0 && !exit.killed ? 0 : 1;
+  return handshakeOk && privilegesOk && designOk && identityOk && dataOk && providersOk && organiseOk && statesOk && shellLayoutOk && composerOk && exit !== undefined && exit.exitCode === 0 && !exit.killed ? 0 : 1;
 }
 
 app.on('before-quit', (event) => {
