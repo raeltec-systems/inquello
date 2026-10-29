@@ -582,6 +582,44 @@ export class IdentitySession {
   }
 
   /**
+   * The signed-in principal (Story 1.14), or null when signed out, blocked or
+   * signing out. Read from the stored session, so it stays known while the
+   * shared service is down and private work stays readable.
+   */
+  principalId(): string | null {
+    const state = this.identityState();
+    return state.state === 'signed-in' && this.record ? this.record.principalId : null;
+  }
+
+  /**
+   * Runs one shared-service request with a fresh access credential, serialized
+   * with every other session operation. An `unauthenticated` answer triggers
+   * one refresh and one retry. Resolves null when not signed in. Errors are
+   * the request's own (`ServiceError`); the shared-service state follows them.
+   */
+  async withAccess<T>(request: (accessCredential: string) => Promise<T>): Promise<T | null> {
+    if (!this.config || this.principalId() === null) return null;
+    return this.exclusive(async () => {
+      const access = await this.freshAccess();
+      if (!access) return null;
+      try {
+        const result = await request(access);
+        this.shared = 'available';
+        return result;
+      } catch (error) {
+        if (error instanceof ServiceError && error.kind === 'unauthenticated' && (await this.refresh()) && this.record) {
+          const result = await request(this.record.accessCredential);
+          this.shared = 'available';
+          return result;
+        }
+        this.noteServiceError(error);
+        if (error instanceof ServiceError && error.kind !== 'transport' && error.kind !== 'dependency_unavailable') this.shared = 'available';
+        throw error;
+      }
+    });
+  }
+
+  /**
    * Drops the session on this device only: memory and the vault file. Used by
    * the local data deletion (Story 1.12) after `signOut` could not get the
    * shared service to confirm; the server session then lapses on its own.

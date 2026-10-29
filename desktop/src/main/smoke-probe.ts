@@ -70,6 +70,18 @@
  * 8-character fragment of its random part. It also requires that no provider
  * credential variable of the desktop's environment reached the runtime.
  * `evaluateProviders` is pure and decides pass/fail.
+ *
+ * Story 1.14 adds the organise probe (`probeOrganise`). Without a shared
+ * service it opens the Shell and requires the signed-out Sidebar with no
+ * Workspace. With the dev topology (started with `--seed-workspace` and its
+ * seed file named by `INQUELLO_SMOKE_SEED`) it signs the synthetic user in,
+ * accepts the seeded first-administrator invite, opens the Shell, and through
+ * the UI creates an Engagement (client and period), a folder and a Task in it.
+ * It reads the Header (title, client, period, Workspace), records a synthetic
+ * thread ref on the Task in main, moves the Task through the Move menu, and
+ * requires the same Task ID, thread ref and references, private visibility,
+ * and that a second principal bound to the runtime lists none of the Tasks.
+ * It signs out at the end. `evaluateOrganise` is pure and decides pass/fail.
  */
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
@@ -80,6 +92,7 @@ import type { WebContents } from 'electron';
 
 import { digestFile, exportedFilePath, governedRoots, importData, isInside, readManifest, ruleBlockers, takeInventory, type DataService, type GovernedRoots } from './data';
 import type { IdentityWiring } from './identity';
+import type { OrganiseService, TaskView } from './organise';
 import type { ProviderService } from './providers';
 import { isProviderCredentialVar } from './runtime/env';
 import type { BlockedKind } from './security/policy';
@@ -139,6 +152,16 @@ export const EXPECTED_BRIDGE_TREE = {
     removeClaudeKey: 'function',
     codexLogin: 'function',
     codexLogout: 'function',
+  },
+  organise: {
+    getWorkspaces: 'function',
+    getTree: 'function',
+    createEngagement: 'function',
+    updateEngagement: 'function',
+    createFolder: 'function',
+    createTask: 'function',
+    renameTask: 'function',
+    moveTask: 'function',
   },
 } as const;
 
@@ -1406,4 +1429,282 @@ export async function probeProviders(contents: WebContents, options: ProviderPro
   search('main log', options.mainLog().join('\n'));
   read.leaks = [...leaks];
   return evaluateProviders(read);
+}
+
+// ---- organise (Story 1.14) ---------------------------------------------------
+
+/** How long a Shell step may take to show up in the renderer. */
+const SHELL_SETTLE_MS = 20_000;
+const SMOKE_THREAD_REF = 'smoke-thread-1';
+const OTHER_SMOKE_PRINCIPAL = '00000000-0000-4000-8000-00000000beef';
+
+const SHELL_HELPERS = `
+  const wait = async (predicate, ms) => {
+    const deadline = Date.now() + ms;
+    while (Date.now() < deadline) {
+      const value = predicate();
+      if (value) return value;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    return predicate();
+  };
+  const q = (selector, root) => (root || document).querySelector(selector);
+  const press = (selector) => {
+    const element = q(selector);
+    if (!element || element.getAttribute('aria-disabled') === 'true') return false;
+    element.click();
+    return true;
+  };
+  const type = (element, value) => {
+    const proto = element.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+    Object.getOwnPropertyDescriptor(proto, 'value').set.call(element, value);
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  const text = (selector) => { const element = q(selector); return element ? element.textContent : null; };
+  const readHeader = () => ({
+    title: text('[data-header-title]'),
+    client: text('[data-header-client]'),
+    period: text('[data-header-period]'),
+    workspace: text('[data-header-workspace]'),
+    visibility: q('[data-header-visibility]') ? q('[data-header-visibility]').getAttribute('data-header-visibility') : null,
+  });
+  const openShell = async () => {
+    location.hash = '#shell';
+    return !!(await wait(() => q('[data-sidebar]'), ${SHELL_SETTLE_MS}));
+  };
+`;
+
+/** Unconfigured: the Shell shows the signed-out Sidebar and main lists nothing. */
+const SHELL_SIGNED_OUT_PROBE = `(async () => {
+  ${SHELL_HELPERS}
+  const out = { shellOpened: await openShell() };
+  out.signedOutShown = !!(await wait(() => q('[data-sidebar][data-sidebar-state="signed-out"]'), ${SHELL_SETTLE_MS}));
+  out.workspaces = await globalThis.inquello.organise.getWorkspaces();
+  out.shareControls = document.querySelectorAll('[data-shell] button[aria-label*="Share" i]').length;
+  return out;
+})()`;
+
+/** Creates an Engagement, a folder and a Task in it through the Shell, then reads the Header. */
+function shellCreateProbe(workspaceId: string): string {
+  return `(async () => {
+    ${SHELL_HELPERS}
+    const out = { shellOpened: await openShell() };
+    out.ready = !!(await wait(() => q('[data-sidebar][data-sidebar-state="ready"]') && q('[data-workspace-selector][data-workspace-id=${JSON.stringify(workspaceId)}]'), ${SHELL_SETTLE_MS}));
+    out.newEngagementPressed = press('[data-action="new-engagement"]');
+    const form = await wait(() => q('[data-engagement-form]'), 5000);
+    if (form) {
+      type(q('input[name="name"]', form), 'Smoke FY26 audit');
+      type(q('textarea[name="objectives"]', form), 'Opinion on the FY26 statements');
+      type(q('textarea[name="scope"]', form), 'Group entities');
+      type(q('input[name="clientEntity"]', form), 'Synthetic Client Ltd');
+      type(q('input[name="periodStart"]', form), '2026-01-01');
+      type(q('input[name="periodEnd"]', form), '2026-12-31');
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      press('[data-engagement-form] [data-action="submit-engagement"]');
+    }
+    const engagement = await wait(() => q('[data-engagement-id]'), ${SHELL_SETTLE_MS});
+    out.engagementId = engagement ? engagement.getAttribute('data-engagement-id') : null;
+    out.engagementNotice = text('[data-engagement-notice]');
+    out.newFolderPressed = press('[data-engagement-id] [data-action="new-folder"]');
+    const folderForm = await wait(() => q('[data-folder-form]'), 5000);
+    if (folderForm) {
+      type(q('input[name="folderName"]', folderForm), 'Planning');
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      press('[data-folder-form] [data-action="submit-folder"]');
+    }
+    const folder = await wait(() => q('[data-folder-id]'), ${SHELL_SETTLE_MS});
+    out.folderId = folder ? folder.getAttribute('data-folder-id') : null;
+    out.newTaskPressed = press('[data-folder-id] [data-action="new-folder-task"]');
+    const task = await wait(() => q('[data-folder-id] [data-task-id]'), ${SHELL_SETTLE_MS});
+    out.taskId = task ? task.getAttribute('data-task-id') : null;
+    await wait(() => text('[data-header-client]'), 5000);
+    out.header = readHeader();
+    out.openTaskShown = !!q('[data-task-view] [data-thread-placeholder]');
+    out.shareControls = document.querySelectorAll('[data-shell] button[aria-label*="Share" i]').length;
+    return out;
+  })()`;
+}
+
+/** Reopens the Shell (re-reading the tree), opens the Task and moves it to no Engagement. */
+function shellMoveProbe(taskId: string): string {
+  return `(async () => {
+    ${SHELL_HELPERS}
+    location.hash = '#specimen';
+    await wait(() => !q('[data-shell]'), 5000);
+    const out = { shellOpened: await openShell() };
+    const row = await wait(() => q('[data-task-id=${JSON.stringify(taskId)}] button'), ${SHELL_SETTLE_MS});
+    if (row) row.click();
+    out.opened = !!(await wait(() => q('[data-task-view=${JSON.stringify(taskId)}]'), 5000));
+    out.headerBefore = readHeader();
+    out.movePressed = press('[data-task-move] button');
+    const target = await wait(() => [...document.querySelectorAll('[role="menuitemradio"]')].find((item) => item.textContent.includes('No Engagement')), 5000);
+    if (target) target.click();
+    out.moved = !!(await wait(() => q('[data-ad-hoc-tasks] [data-task-id=${JSON.stringify(taskId)}]'), ${SHELL_SETTLE_MS}));
+    out.notice = text('[data-task-notice]');
+    out.headerAfter = readHeader();
+    return out;
+  })()`;
+}
+
+export interface HeaderRead {
+  title: string | null;
+  client: string | null;
+  period: string | null;
+  workspace: string | null;
+  visibility: string | null;
+}
+
+export interface OrganiseProbeRead {
+  configured: boolean;
+  signedOut?: { shellOpened: boolean; signedOutShown: boolean; workspaces: unknown; shareControls: number };
+  seedRead?: boolean;
+  signedIn?: boolean;
+  inviteAccepted?: boolean;
+  create?: {
+    shellOpened: boolean;
+    ready: boolean;
+    newEngagementPressed: boolean;
+    engagementId: string | null;
+    engagementNotice: string | null;
+    newFolderPressed: boolean;
+    folderId: string | null;
+    newTaskPressed: boolean;
+    taskId: string | null;
+    header: HeaderRead;
+    openTaskShown: boolean;
+    shareControls: number;
+  };
+  attached?: boolean;
+  before?: TaskView | null;
+  move?: { shellOpened: boolean; opened: boolean; headerBefore: HeaderRead; movePressed: boolean; moved: boolean; notice: string | null; headerAfter: HeaderRead };
+  after?: TaskView | null;
+  listedForCreator?: boolean;
+  listedForOtherPrincipal?: number;
+  signedOutAtEnd?: boolean;
+  error?: string;
+}
+
+export interface OrganiseReport extends OrganiseProbeRead {
+  ok: boolean;
+  failures: string[];
+}
+
+/** Pass/fail for the organise probe. */
+export function evaluateOrganise(read: OrganiseProbeRead): OrganiseReport {
+  const failures: string[] = [];
+  if (read.error) failures.push(`the probe stopped: ${read.error}`);
+  if (!read.configured) {
+    const view = read.signedOut?.workspaces as { signedIn?: unknown; workspaces?: unknown[] } | undefined;
+    if (!read.signedOut?.shellOpened) failures.push('the Shell did not open');
+    if (!read.signedOut?.signedOutShown) failures.push('the Sidebar did not show the signed-out state');
+    if (view?.signedIn !== false || (view.workspaces ?? []).length !== 0) failures.push('main listed Workspaces while signed out');
+    if (read.signedOut?.shareControls !== 0) failures.push('a Share control is shown');
+    return { ok: failures.length === 0, failures, ...read };
+  }
+  if (!read.seedRead) failures.push('the dev topology seed file (INQUELLO_SMOKE_SEED) could not be read');
+  if (!read.signedIn) failures.push('the synthetic user did not sign in');
+  if (!read.inviteAccepted) failures.push('the seeded Workspace invite was not accepted');
+  const create = read.create;
+  if (!create?.shellOpened || !create.ready) failures.push('the Shell did not show the seeded Workspace');
+  if (!create?.engagementId) failures.push(`no Engagement was created through the Sidebar${create?.engagementNotice ? ` (${create.engagementNotice})` : ''}`);
+  if (!create?.folderId) failures.push('no folder was created through the Sidebar');
+  if (!create?.taskId) failures.push('no Task was created in the folder through the Sidebar');
+  if (create?.header.title !== 'Untitled thread') failures.push(`the Header title is ${JSON.stringify(create?.header.title)}`);
+  if (create?.header.client !== 'Synthetic Client Ltd') failures.push(`the Header client is ${JSON.stringify(create?.header.client)}`);
+  if (create?.header.period !== '2026-01-01 – 2026-12-31') failures.push(`the Header period is ${JSON.stringify(create?.header.period)}`);
+  if (create?.header.workspace !== 'Synthetic Audit Co') failures.push(`the Header Workspace is ${JSON.stringify(create?.header.workspace)}`);
+  if (create?.header.visibility !== 'private') failures.push('the Header does not show the Task as private');
+  if (!create?.openTaskShown) failures.push('the opened Task did not show its placeholder thread area');
+  if (create?.shareControls !== 0) failures.push('a Share control is shown');
+  if (!read.attached) failures.push('the synthetic thread ref could not be attached');
+  const before = read.before;
+  const after = read.after;
+  if (!read.move?.moved) failures.push(`the Task was not moved through the Move menu${read.move?.notice ? ` (${read.move.notice})` : ''}`);
+  if (!before || !after) failures.push('the Task could not be read before and after the move');
+  else {
+    if (after.taskId !== before.taskId) failures.push('the move changed the Task ID');
+    if (after.runtimeThreadId !== SMOKE_THREAD_REF || before.runtimeThreadId !== SMOKE_THREAD_REF) failures.push('the move changed the thread ref');
+    if (JSON.stringify(after.sourceRefs) !== JSON.stringify(before.sourceRefs) || JSON.stringify(after.artifactRefs) !== JSON.stringify(before.artifactRefs)) {
+      failures.push('the move changed the references');
+    }
+    if (after.visibility !== 'private') failures.push('the Task is not private after the move');
+    if (after.engagementId !== null || after.folderId !== null) failures.push('the Task did not move to no Engagement');
+  }
+  if (read.move && (read.move.headerAfter.client !== null || read.move.headerAfter.period !== null)) failures.push('an ad hoc Task still shows a client or period');
+  if (!read.listedForCreator) failures.push('the Task is not listed for its creator');
+  if (read.listedForOtherPrincipal !== 0) failures.push(`another principal sees ${read.listedForOtherPrincipal} Task(s)`);
+  if (!read.signedOutAtEnd) failures.push('the probe could not sign out at the end');
+  return { ok: failures.length === 0, failures, ...read };
+}
+
+export interface OrganiseProbeOptions {
+  identity: IdentityWiring;
+  organise: OrganiseService;
+  /** The dev topology's `--seed-out` file; required when the shared service is configured. */
+  seedFile: string | null;
+  /** A raw runtime request, for binding a second principal. */
+  runtimeRequest: <T>(method: string, params?: unknown) => Promise<T>;
+}
+
+/** Runs the organise probe against the live renderer, main's organise service and the runtime. */
+export async function probeOrganise(contents: WebContents, options: OrganiseProbeOptions): Promise<OrganiseReport> {
+  const { identity, organise, runtimeRequest } = options;
+  const configured = identity.config.kind === 'configured';
+  const read: OrganiseProbeRead = { configured };
+  if (!configured) {
+    read.signedOut = (await contents.executeJavaScript(SHELL_SIGNED_OUT_PROBE)) as OrganiseProbeRead['signedOut'];
+    return evaluateOrganise(read);
+  }
+  try {
+    let seed: { workspace_id?: unknown; invite_id?: unknown } = {};
+    try {
+      seed = JSON.parse(fs.readFileSync(options.seedFile ?? '', 'utf8')) as typeof seed;
+    } catch {
+      seed = {};
+    }
+    const workspaceId = typeof seed.workspace_id === 'string' ? seed.workspace_id : null;
+    const inviteId = typeof seed.invite_id === 'string' ? seed.invite_id : null;
+    read.seedRead = workspaceId !== null && inviteId !== null;
+    if (!workspaceId || !inviteId) return evaluateOrganise(read);
+
+    read.signedIn = (await identity.session.signIn()).ok;
+    await organise.syncPrincipal();
+    const service = identity.service;
+    const accepted = service ? await identity.session.withAccess((access) => service.acceptInvite(access, inviteId)) : null;
+    read.inviteAccepted = accepted?.workspace_id === workspaceId;
+
+    read.create = (await contents.executeJavaScript(shellCreateProbe(workspaceId))) as OrganiseProbeRead['create'];
+    const taskId = read.create?.taskId ?? null;
+    if (!taskId) return evaluateOrganise(read);
+
+    const findTask = async (): Promise<TaskView | null> => {
+      const tree = await organise.getTree(workspaceId);
+      return tree.ok ? (tree.value.tasks.find((task) => task.taskId === taskId) ?? null) : null;
+    };
+    const created = await findTask();
+    const attached = created
+      ? await organise.attachThread({ operationId: randomUUID(), workspaceId, taskId, expectedRevision: created.revision, runtimeThreadId: SMOKE_THREAD_REF })
+      : null;
+    read.attached = attached?.ok === true;
+    read.before = await findTask();
+    read.move = (await contents.executeJavaScript(shellMoveProbe(taskId))) as OrganiseProbeRead['move'];
+    read.after = await findTask();
+    read.listedForCreator = read.after !== null;
+
+    // A second principal bound to the same runtime lists none of these Tasks.
+    await runtimeRequest('inquello/session/setPrincipal', { principalId: OTHER_SMOKE_PRINCIPAL });
+    try {
+      const other = await runtimeRequest<{ tasks: unknown[] }>('inquello/workspace/tree', { workspaceId });
+      read.listedForOtherPrincipal = other.tasks.length;
+    } finally {
+      await runtimeRequest('inquello/session/setPrincipal', { principalId: identity.session.principalId() });
+    }
+  } catch (error) {
+    read.error = (error as Error).message;
+  } finally {
+    const signOut = await identity.session.signOut().catch(() => ({ ok: false }));
+    await organise.syncPrincipal().catch(() => undefined);
+    read.signedOutAtEnd = signOut.ok;
+  }
+  return evaluateOrganise(read);
 }

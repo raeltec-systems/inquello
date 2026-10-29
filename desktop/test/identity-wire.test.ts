@@ -25,6 +25,13 @@ import {
   parseSessionCommandEnvelope,
   parseSessionCredentials,
   parseSessionView,
+  parseAcceptInviteResponse,
+  parseAccessCheckRequest,
+  parseAccessCheckResponse,
+  parseRolesView,
+  parseWorkspaceCommandEnvelope,
+  parseWorkspacePolicy,
+  parseWorkspacesView,
 } from '../src/main/identity/wire';
 
 const fixtures = path.resolve(__dirname, '..', '..', 'engine', 'codex-rs', 'inquello-protocol', 'fixtures');
@@ -100,5 +107,54 @@ describe('wire mirrors', () => {
       expect(() => parseCapabilities({ ...capabilities, command_epoch: epoch }, '')).toThrow(WireError);
     }
     expect(() => parseErrorBody({ error: { kind: 'teapot', message: 'x' } }, '')).toThrow(WireError);
+  });
+});
+
+// ---- Story 1.11 Workspace fixtures (mirrored by Story 1.14) ----------------------
+
+const workspaceFixtures = path.join(fixtures, 'workspace');
+const listOf =
+  (parse: (value: unknown, path: string) => unknown) =>
+  (value: unknown, at: string): unknown => {
+    if (!Array.isArray(value)) throw new WireError(`${at} is not an array`);
+    return value.map((item, index) => parse(item, `${at}[${index}]`));
+  };
+
+const WORKSPACE_PARSERS: Record<string, (value: unknown, path: string) => unknown> = {
+  'accept_invite_response.json': parseAcceptInviteResponse,
+  'access_check_requests.json': listOf(parseAccessCheckRequest),
+  'access_check_response.json': parseAccessCheckResponse,
+  'command_envelopes.json': listOf(parseWorkspaceCommandEnvelope),
+  'command_response.json': parseCommandResponse,
+  'policy.json': parseWorkspacePolicy,
+  'refusals.json': listOf(parseErrorBody),
+  'roles_view.json': parseRolesView,
+  'workspaces_view.json': parseWorkspacesView,
+};
+
+const readWorkspace = (name: string): unknown => JSON.parse(fs.readFileSync(path.join(workspaceFixtures, name), 'utf8'));
+
+describe('Workspace wire mirrors', () => {
+  it('cover every Workspace fixture', () => {
+    const files = fs.readdirSync(workspaceFixtures).filter((name) => name.endsWith('.json')).sort();
+    expect(files).toEqual(Object.keys(WORKSPACE_PARSERS).sort());
+  });
+
+  it.each(Object.keys(WORKSPACE_PARSERS))('%s parses and round-trips unchanged', (name) => {
+    const value = readWorkspace(name);
+    expect(JSON.parse(JSON.stringify(WORKSPACE_PARSERS[name]!(value, '')))).toEqual(value);
+  });
+
+  it('accepts a refusal reason only from the fixed set', () => {
+    expect(parseErrorBody({ error: { kind: 'denied', message: 'x', reason: 'role_lacks_action' } }, '').error.reason).toBe('role_lacks_action');
+    expect(parseErrorBody({ error: { kind: 'denied', message: 'x' } }, '').error.reason).toBeUndefined();
+    expect(() => parseErrorBody({ error: { kind: 'denied', message: 'x', reason: 'guest' } }, '')).toThrow(WireError);
+  });
+
+  it('refuses an unknown Workspace command and a guest role kind', () => {
+    const [envelope] = readWorkspace('command_envelopes.json') as Array<Record<string, unknown>>;
+    expect(() => parseWorkspaceCommandEnvelope({ ...envelope, payload: { command: 'create_workspace' } }, '')).toThrow(WireError);
+    const roles = readWorkspace('roles_view.json') as { roles: Array<Record<string, unknown>> };
+    expect(() => parseRolesView({ ...roles, roles: [{ ...roles.roles[0], kind: 'guest' }] }, '')).toThrow(WireError);
   });
 });

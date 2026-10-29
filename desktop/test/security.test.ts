@@ -36,7 +36,7 @@ import {
 } from '../src/main/security/policy';
 import { describeSender, isTrustedSender, type FrameLike, type InvokeEventLike } from '../src/main/security/sender';
 import { EXPECTED_BRIDGE_TREE, evaluatePrivileges, type RendererProbeResult } from '../src/main/smoke-probe';
-import { recordingLogger, removeTempDirs, tempDir } from './helpers';
+import { fakeOrganise, recordingLogger, removeTempDirs, tempDir } from './helpers';
 
 const desktop = path.resolve(__dirname, '..');
 const APP = 'inquello://app/index.html';
@@ -226,6 +226,7 @@ describe('operation registry', () => {
   let calls: number;
   let dataCalls: string[];
   let providerCalls: string[];
+  let organiseCalls: string[];
   let logger: ReturnType<typeof recordingLogger>;
 
   beforeEach(() => {
@@ -233,6 +234,7 @@ describe('operation registry', () => {
     calls = 0;
     dataCalls = [];
     providerCalls = [];
+    organiseCalls = [];
     logger = recordingLogger();
     const operations = createOperations({
       runtimeState: () => {
@@ -243,8 +245,26 @@ describe('operation registry', () => {
       identity: fakeIdentity(),
       data: fakeData(dataCalls),
       provider: fakeProvider(providerCalls),
+      organise: fakeOrganise(organiseCalls),
     });
     registerOperations(ipc, operations, { trustedWebContentsIds: new Set([1]), logger });
+  });
+
+  it('validates organise payloads in main: no principal, path or extra key gets through (Story 1.14)', async () => {
+    const workspaceId = '5d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e';
+    const operationId = '0a1b2c3d-4e5f-4a6b-8c7d-8e9f0a1b2c3d';
+    await expect(ipc.invoke(channelFor('organise.getTree'), trustedEvent, { workspaceId })).resolves.toMatchObject({ ok: false, code: 'signed-out' });
+    for (const bad of [
+      { workspaceId, principalId: workspaceId },
+      { workspaceId: '/home/user/.ssh' },
+      { workspaceId: 7 },
+    ]) {
+      await expect(ipc.invoke(channelFor('organise.getTree'), trustedEvent, bad)).rejects.toThrow('invalid payload for organise.getTree');
+    }
+    const task = { operationId, workspaceId, engagementId: null, folderId: null, title: 'Untitled thread' };
+    await expect(ipc.invoke(channelFor('organise.createTask'), trustedEvent, { ...task, creatorPrincipalId: workspaceId })).rejects.toThrow('invalid payload');
+    await expect(ipc.invoke(channelFor('organise.createTask'), trustedEvent, task)).resolves.toMatchObject({ ok: false });
+    expect(organiseCalls).toEqual([`getTree:${JSON.stringify([workspaceId])}`, `createTask:${JSON.stringify([task])}`]);
   });
 
   it('registers exactly one fixed channel per named operation', () => {
@@ -263,6 +283,14 @@ describe('operation registry', () => {
       'provider.removeClaudeKey',
       'provider.codexLogin',
       'provider.codexLogout',
+      'organise.getWorkspaces',
+      'organise.getTree',
+      'organise.createEngagement',
+      'organise.updateEngagement',
+      'organise.createFolder',
+      'organise.createTask',
+      'organise.renameTask',
+      'organise.moveTask',
     ]);
     expect([...ipc.handlers.keys()]).toEqual(OPERATION_NAMES.map((name) => `${CHANNEL_PREFIX}${name}`));
   });
@@ -447,7 +475,7 @@ describe('operation registry', () => {
         throw new Error('secret internal path /home/x');
       },
     };
-    const others = createOperations({ runtimeState: () => 'ready', runtimeVersion: '0.165.0', identity: fakeIdentity(), data: fakeData(), provider: fakeProvider() }).filter(
+    const others = createOperations({ runtimeState: () => 'ready', runtimeVersion: '0.165.0', identity: fakeIdentity(), data: fakeData(), provider: fakeProvider(), organise: fakeOrganise() }).filter(
       (operation) => operation.name !== 'runtime.getStatus',
     );
     registerOperations(failing, [op, ...others], { trustedWebContentsIds: new Set([1]), logger });
@@ -800,12 +828,12 @@ describe('host privilege source scan', () => {
     const uses = body.match(/ipcRenderer[^\n]*/g) ?? [];
     expect(uses.length).toBeGreaterThan(0);
     for (const use of uses) expect(use).toMatch(/^ipcRenderer\.invoke\([A-Z_]+_CHANNEL(?:, \.\.\.args)?\)/);
-    // Only the data operations and the two provider operations that take what the user entered forward arguments.
-    expect((body.match(/_CHANNEL, \.\.\.args\)/g) ?? []).length).toBe(6);
+    // Only the data operations, the two provider operations that take what the user entered and the organise operations forward arguments.
+    expect((body.match(/_CHANNEL, \.\.\.args\)/g) ?? []).length).toBe(14);
     expect(
       body
         .match(/[A-Z_]+_CHANNEL, \.\.\.args\)/g)
-        ?.every((use) => use.startsWith('DATA_') || use.startsWith('PROVIDER_SET_CLAUDE_KEY_') || use.startsWith('PROVIDER_CODEX_LOGIN_')),
+        ?.every((use) => use.startsWith('DATA_') || use.startsWith('PROVIDER_SET_CLAUDE_KEY_') || use.startsWith('PROVIDER_CODEX_LOGIN_') || use.startsWith('ORGANISE_')),
     ).toBe(true);
     expect(preload).not.toMatch(/\.on\(|\.send\(|sendSync|postMessage/);
   });

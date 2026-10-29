@@ -35,6 +35,7 @@ use crate::request_processors::FeedbackRequestProcessor;
 use crate::request_processors::FsRequestProcessor;
 use crate::request_processors::GitRequestProcessor;
 use crate::request_processors::InitializeRequestProcessor;
+use crate::request_processors::InquelloRequestProcessor;
 use crate::request_processors::MarketplaceRequestProcessor;
 use crate::request_processors::McpEventStreamReady;
 use crate::request_processors::McpEventStreams;
@@ -160,6 +161,7 @@ pub(crate) struct MessageProcessor {
     fs_processor: FsRequestProcessor,
     git_processor: GitRequestProcessor,
     initialize_processor: InitializeRequestProcessor,
+    inquello_processor: Arc<InquelloRequestProcessor>,
     marketplace_processor: MarketplaceRequestProcessor,
     mcp_processor: McpRequestProcessor,
     plugin_processor: PluginRequestProcessor,
@@ -473,6 +475,11 @@ impl MessageProcessor {
             state_db.clone(),
         );
         let git_processor = GitRequestProcessor::new();
+        // Inquello (Story 1.14): the runtime home is agent-writable, so the
+        // working store may never live inside it.
+        let inquello_processor = Arc::new(InquelloRequestProcessor::new(vec![
+            config.codex_home.to_path_buf(),
+        ]));
         let initialize_processor = InitializeRequestProcessor::new(
             gateway_login_control,
             outgoing.clone(),
@@ -619,6 +626,7 @@ impl MessageProcessor {
             fs_processor,
             git_processor,
             initialize_processor,
+            inquello_processor,
             marketplace_processor,
             mcp_processor,
             plugin_processor,
@@ -915,6 +923,7 @@ impl MessageProcessor {
             .connection_closed(connection_id)
             .await;
         self.thread_processor.connection_closed(connection_id).await;
+        self.inquello_processor.connection_closed(connection_id);
     }
 
     pub(crate) fn subscribe_running_assistant_turn_count(&self) -> watch::Receiver<usize> {
@@ -1863,6 +1872,57 @@ impl MessageProcessor {
             }
             ClientRequest::GitDiffToRemote { params, .. } => {
                 self.git_processor.git_diff_to_remote(params).await
+            }
+            ClientRequest::InquelloSessionSetPrincipal { params, .. } => {
+                self.inquello_processor.set_principal(connection_id, params)
+            }
+            ClientRequest::InquelloWorkspaceList { .. } => {
+                self.inquello_processor.workspace_list(connection_id).await
+            }
+            ClientRequest::InquelloWorkspaceRemember { params, .. } => {
+                self.inquello_processor
+                    .workspace_remember(connection_id, params)
+                    .await
+            }
+            ClientRequest::InquelloWorkspaceTree { params, .. } => {
+                self.inquello_processor
+                    .workspace_tree(connection_id, params)
+                    .await
+            }
+            ClientRequest::InquelloEngagementCreate { params, .. } => {
+                self.inquello_processor
+                    .engagement_create(connection_id, params)
+                    .await
+            }
+            ClientRequest::InquelloEngagementUpdate { params, .. } => {
+                self.inquello_processor
+                    .engagement_update(connection_id, params)
+                    .await
+            }
+            ClientRequest::InquelloFolderCreate { params, .. } => {
+                self.inquello_processor
+                    .folder_create(connection_id, params)
+                    .await
+            }
+            ClientRequest::InquelloTaskCreate { params, .. } => {
+                self.inquello_processor
+                    .task_create(connection_id, params)
+                    .await
+            }
+            ClientRequest::InquelloTaskRename { params, .. } => {
+                self.inquello_processor
+                    .task_rename(connection_id, params)
+                    .await
+            }
+            ClientRequest::InquelloTaskMove { params, .. } => {
+                self.inquello_processor
+                    .task_move(connection_id, params)
+                    .await
+            }
+            ClientRequest::InquelloTaskAttachThread { params, .. } => {
+                self.inquello_processor
+                    .task_attach_thread(connection_id, params)
+                    .await
             }
             ClientRequest::FuzzyFileSearch { params, .. } => self
                 .search_processor

@@ -73,6 +73,7 @@ describe('shipped register', () => {
       'claude-key-vault',
       'runtime-config',
       'codex-keyring-entry',
+      'working-store',
     ]);
     const disabled = policy.categories.filter((category) => !category.enabled).map((category) => category.id);
     expect(disabled).toEqual(expect.arrayContaining(['source-extracts', 'artifacts', 'shared-caches', 'unattended-work']));
@@ -101,6 +102,7 @@ describe('shipped register', () => {
     expect(byId('chromium-profile').export.mode).toBe('excluded');
     expect(byId('provider-credentials')).toMatchObject({ enabled: false, credentials: true });
     expect(byId('task-history').export.mode).toBe('included');
+    expect(byId('working-store')).toMatchObject({ enabled: true, credentials: false, access: 'runtime', export: { mode: 'included' } });
     expect(byId('runtime-state').export).toMatchObject({ mode: 'excluded', reason: expect.stringMatching(/rebuil/i) });
   });
 
@@ -188,6 +190,10 @@ describe('globs and classification', () => {
     expect(classify(policy, 'user-data', 'identity/device-id')?.id).toBe('device-id');
     expect(classify(policy, 'user-data', 'Local Storage/leveldb/000003.log')?.id).toBe('chromium-profile');
     expect(classify(policy, 'user-data', 'data/export-journal.json')?.id).toBe('export-journal');
+    for (const file of ['working/working.sqlite', 'working/working.sqlite-wal', 'working/working.sqlite-shm']) {
+      expect(classify(policy, 'user-data', file)?.id).toBe('working-store');
+    }
+    expect(classify(policy, 'user-data', 'working/notes.txt')).toBeUndefined();
     expect(classify(policy, 'logs', 'app-server-stderr.log')?.id).toBe('desktop-stderr-log');
     // A runtime-home name under userData is not the runtime home.
     expect(classify(policy, 'user-data', 'state_5.sqlite')).toBeUndefined();

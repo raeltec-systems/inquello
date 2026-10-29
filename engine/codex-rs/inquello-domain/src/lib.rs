@@ -14,12 +14,16 @@
 //!
 //! The [`capability`] module holds the protected capability register: reviewed
 //! entries compiled into the binary and a fail-closed enablement query.
+//!
+//! The [`organise`] module holds Engagements, folders and private Tasks and
+//! their commands (Story 1.14).
 
 pub mod authorization;
 pub mod capability;
 mod commands;
 mod error;
 mod model;
+pub mod organise;
 mod ports;
 
 pub use commands::InitializeStore;

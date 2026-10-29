@@ -22,6 +22,7 @@ import {
   ERROR_KINDS,
   PROTOCOL_MAJOR,
   parseAbandonLoginResponse,
+  parseAcceptInviteResponse,
   parseCapabilities,
   parseCommandResponse,
   parseErrorBody,
@@ -29,8 +30,12 @@ import {
   parseRevokeFamilyResponse,
   parseSessionCredentials,
   parseSessionView,
+  parseWorkspacesView,
   type AbandonLoginRequest,
   type AbandonLoginResponse,
+  type AcceptInviteResponse,
+  type CreateEngagementEnvelope,
+  type DenyReason,
   type BootstrapRequest,
   type Capabilities,
   type CommandResponse,
@@ -41,6 +46,7 @@ import {
   type SessionCommandEnvelope,
   type SessionCredentials,
   type SessionView,
+  type WorkspacesView,
 } from './wire';
 
 export const REQUEST_TIMEOUT_MS = 10_000;
@@ -55,6 +61,8 @@ export class ServiceError extends Error {
     /** For `transport`: whether the whole request had been sent before it failed. */
     readonly delivered = false,
     readonly status?: number,
+    /** For a refusal: the Story 1.11 deny reason, when the service gave one. */
+    readonly reason?: DenyReason,
   ) {
     super(kind === 'transport' ? `shared-service request failed (${delivered ? 'response lost' : 'not sent'})` : `shared-service error: ${kind}`);
   }
@@ -172,6 +180,12 @@ export interface SharedService {
   revokeFamily(credential: { refreshCredential: string } | { accessCredential: string }): Promise<RevokeFamilyResponse>;
   session(accessCredential: string): Promise<SessionView>;
   sessionCommand(accessCredential: string, envelope: SessionCommandEnvelope): Promise<CommandResponse>;
+  /** `GET /v1/workspaces`: the caller's active `internal_company` memberships (Story 1.11). */
+  workspaces(accessCredential: string): Promise<WorkspacesView>;
+  /** `POST /v1/workspaces/{id}/commands` with a `create_engagement` envelope. */
+  workspaceCommand(accessCredential: string, envelope: CreateEngagementEnvelope): Promise<CommandResponse>;
+  /** `POST /v1/invites/{id}/accept`: accepts an invite bound to the caller. */
+  acceptInvite(accessCredential: string, inviteId: string): Promise<AcceptInviteResponse>;
 }
 
 export class SharedServiceClient implements SharedService {
@@ -204,13 +218,15 @@ export class SharedServiceClient implements SharedService {
       }
     }
     let kind: ServiceErrorKind = 'protocol';
+    let reason: DenyReason | undefined;
     try {
       const parsed = parseErrorBody(body, '');
       if ((ERROR_KINDS as readonly string[]).includes(parsed.error.kind)) kind = parsed.error.kind;
+      reason = parsed.error.reason;
     } catch {
       kind = 'protocol';
     }
-    throw new ServiceError(kind, true, response.status);
+    throw new ServiceError(kind, true, response.status, reason);
   }
 
   async capabilities(): Promise<Capabilities> {
@@ -247,6 +263,21 @@ export class SharedServiceClient implements SharedService {
 
   sessionCommand(accessCredential: string, envelope: SessionCommandEnvelope): Promise<CommandResponse> {
     return this.call('POST', '/v1/session/commands', parseCommandResponse, { body: envelope, bearer: accessCredential });
+  }
+
+  workspaces(accessCredential: string): Promise<WorkspacesView> {
+    return this.call('GET', '/v1/workspaces', parseWorkspacesView, { bearer: accessCredential });
+  }
+
+  workspaceCommand(accessCredential: string, envelope: CreateEngagementEnvelope): Promise<CommandResponse> {
+    return this.call('POST', `/v1/workspaces/${encodeURIComponent(envelope.workspace_id)}/commands`, parseCommandResponse, {
+      body: envelope,
+      bearer: accessCredential,
+    });
+  }
+
+  acceptInvite(accessCredential: string, inviteId: string): Promise<AcceptInviteResponse> {
+    return this.call('POST', `/v1/invites/${encodeURIComponent(inviteId)}/accept`, parseAcceptInviteResponse, { body: {}, bearer: accessCredential });
   }
 }
 

@@ -1,7 +1,7 @@
 /**
- * Renderer entry. Renders the design specimen (`Specimen.tsx`): the Story 1.5
- * type and icon samples and the Story 1.6 primitives in each state. The
- * `--smoke` probe reads it.
+ * Renderer entry. Renders `App`: the Story 1.14 Shell (Sidebar, Header, Task),
+ * or the design specimen (`Specimen.tsx`) at `#specimen`, which the `--smoke`
+ * probes read.
  */
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -9,12 +9,13 @@ import { createRoot } from 'react-dom/client';
 import './design/index.css';
 import './primitives/primitives.css';
 import './specimen.css';
-import { Specimen } from './Specimen';
+import './Shell/shell.css';
+import { App } from './App';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('renderer root element is missing');
 createRoot(root).render(
   <StrictMode>
-    <Specimen />
+    <App />
   </StrictMode>,
 );

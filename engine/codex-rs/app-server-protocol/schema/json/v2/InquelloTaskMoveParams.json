@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "properties": {
+    "engagementId": {
+      "description": "The target Engagement, or null for an ad hoc Task.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "expectedRevision": {
+      "format": "uint64",
+      "minimum": 0.0,
+      "type": "integer"
+    },
+    "folderId": {
+      "description": "A folder of the target Engagement, or null.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "operationId": {
+      "type": "string"
+    },
+    "taskId": {
+      "type": "string"
+    },
+    "workspaceId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "expectedRevision",
+    "operationId",
+    "taskId",
+    "workspaceId"
+  ],
+  "title": "InquelloTaskMoveParams",
+  "type": "object"
+}

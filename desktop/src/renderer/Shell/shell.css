@@ -1,0 +1,248 @@
+/*
+ * Story 1.14 Shell: the 264px Sidebar, the 48px Header and the Task area.
+ * Tokens only. Story 1.16 adds the rail, collapse, keyboard model and
+ * responsive layout.
+ */
+.iq-shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  min-height: 100vh;
+  color: var(--text-primary);
+  background: var(--surface-app);
+}
+
+.iq-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: var(--sidebar-width);
+  min-height: 100vh;
+  padding: var(--space-3);
+  box-sizing: border-box;
+  overflow-y: auto;
+  background: var(--surface-sidebar);
+  border-right: 1px solid var(--border-default);
+}
+
+.iq-sidebar-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1-5);
+}
+
+.iq-sidebar-heading {
+  margin: 0;
+  font: var(--type-label);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.iq-sidebar-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.iq-sidebar-list--nested {
+  padding-left: var(--space-3);
+}
+
+.iq-sidebar-engagement-row,
+.iq-sidebar-folder-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--space-7);
+}
+
+.iq-sidebar-engagement-name,
+.iq-sidebar-folder-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--type-ui);
+}
+
+.iq-sidebar-engagement-name {
+  font-weight: 600;
+}
+
+.iq-sidebar-row {
+  display: block;
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  font: var(--type-ui);
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.iq-sidebar-row:hover {
+  background: var(--surface-hover);
+}
+
+.iq-sidebar-row[aria-current='page'] {
+  background: var(--surface-selected);
+  color: var(--text-primary);
+}
+
+.iq-sidebar-row:focus-visible {
+  outline: 2px solid var(--blue-600);
+  outline-offset: 1px;
+}
+
+.iq-sidebar-empty,
+.iq-sidebar-notice {
+  margin: 0;
+  font: var(--type-caption);
+  color: var(--text-muted);
+}
+
+.iq-sidebar-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+}
+
+.iq-sidebar-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.iq-sidebar-footer {
+  margin-top: auto;
+}
+
+.iq-shell-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.iq-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  height: var(--header-height);
+  padding: 0 var(--space-4);
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--border-default);
+  background: var(--surface-app);
+}
+
+.iq-header-main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.iq-header-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--type-title);
+}
+
+.iq-header-private {
+  font: var(--type-caption);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.iq-header-context {
+  display: flex;
+  gap: var(--space-4);
+  margin: 0;
+  min-width: 0;
+}
+
+.iq-header-item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1-5);
+  min-width: 0;
+}
+
+.iq-header-item dt {
+  font: var(--type-label);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.iq-header-item dd {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--type-ui);
+  color: var(--text-secondary);
+}
+
+.iq-shell-content {
+  width: 100%;
+  max-width: var(--thread-max-width);
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-4);
+  box-sizing: border-box;
+}
+
+.iq-shell-notice,
+.iq-task-notice {
+  margin: 0 0 var(--space-3);
+  font: var(--type-ui);
+  color: var(--text-secondary);
+}
+
+.iq-task-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.iq-task-rename {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  flex: 1 1 auto;
+}
+
+.iq-thread-placeholder {
+  padding: var(--space-6);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-card);
+  background: var(--surface-panel);
+}
+
+.iq-thread-placeholder-title {
+  margin: 0 0 var(--space-2);
+  font: var(--type-title);
+}
+
+.iq-thread-placeholder-body {
+  margin: 0;
+  font: var(--type-body);
+  color: var(--text-secondary);
+}
+
+.specimen-back {
+  padding-top: 0;
+}

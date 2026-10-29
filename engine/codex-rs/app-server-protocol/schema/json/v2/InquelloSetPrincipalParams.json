@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "properties": {
+    "principalId": {
+      "description": "The signed-in shared-service principal, or null when signed out.",
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "title": "InquelloSetPrincipalParams",
+  "type": "object"
+}

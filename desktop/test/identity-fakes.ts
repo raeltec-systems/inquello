@@ -23,6 +23,9 @@ import type {
   SessionCommandEnvelope,
   SessionCredentials,
   SessionView,
+  AcceptInviteResponse,
+  CreateEngagementEnvelope,
+  WorkspacesView,
 } from '../src/main/identity/wire';
 
 export const ISSUER = 'https://issuer.synthetic.test';
@@ -227,6 +230,22 @@ export class FakeService implements SharedService {
       revision: String(session.revision),
       principal: { principal_id: session.principalId, revision: '1', email: 'alice@synthetic.invalid', display_name: this.displayName },
     };
+  }
+
+  // Story 1.14 Workspace routes: identity tests never call them.
+  async workspaces(accessCredential: string): Promise<WorkspacesView> {
+    this.enter('workspaces');
+    return { principal_id: this.byAccess(accessCredential).principalId, workspaces: [] };
+  }
+
+  async workspaceCommand(_accessCredential: string, _envelope: CreateEngagementEnvelope): Promise<CommandResponse> {
+    this.enter('workspaceCommand');
+    throw new ServiceError('denied', true, 403, 'not_a_member');
+  }
+
+  async acceptInvite(_accessCredential: string, _inviteId: string): Promise<AcceptInviteResponse> {
+    this.enter('acceptInvite');
+    throw new ServiceError('denied', true, 403);
   }
 
   async sessionCommand(accessCredential: string, envelope: SessionCommandEnvelope): Promise<CommandResponse> {

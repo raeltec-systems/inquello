@@ -2138,6 +2138,8 @@ dependencies = [
  "futures",
  "hmac 0.12.1",
  "http 1.4.0",
+ "inquello-adapters",
+ "inquello-domain",
  "insta",
  "keyring",
  "libc",
@@ -9513,6 +9515,7 @@ version = "0.165.0"
 dependencies = [
  "inquello-domain",
  "pretty_assertions",
+ "serde_json",
  "sqlx",
  "sqlx-macros",
  "tempfile",

@@ -60,9 +60,23 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-11-enforce-internal-company-memberships.md`
   summary: Mirror the Story 1.11 Workspace wire types in the desktop (Story 1.14), including the optional `reason` on refusal bodies.
   evidence: The Workspace fixtures live in `engine/codex-rs/inquello-protocol/fixtures/workspace/` so the desktop's top-level fixture-coverage test is unchanged ("no desktop changes"). The desktop's `parseErrorBody` rejects unknown keys, so it would refuse a Workspace refusal body that carries `reason`; no desktop code calls a Workspace route yet. `GET /v1/memberships` keeps its shape but now lists one row per role binding of an active `internal_company` membership.
+  status: closed by Story 1.14 (`spec-1-14-organise-workspaces-engagements-folders-tasks.md`), 2026-10-29. `desktop/src/main/identity/wire.ts` mirrors every Workspace type (views, roles, policy, invite acceptance, command envelopes, access checks) and `parseErrorBody` accepts the optional `reason` from the fixed deny-reason set; `test/identity-wire.test.ts` round-trips every fixture in `fixtures/workspace/`.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-11-enforce-internal-company-memberships.md`
   summary: Replace the fixture-only `resource_registrations` and `grants` tables with Epic 4's registration and grant-issuing commands, and decide where the authority learns a private Task's creator.
   evidence: Story 1.11 forbids a grant-issuing API, so access checks read seeded rows only. Private Tasks are local (desktop SQLite); the service knows a private Task's creator only through a registration row. Epic 4 (sharing) owns registration, grants and the SC-5 per-use rechecks.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-11-enforce-internal-company-memberships.md`
   summary: Add an expiry and retention policy for closed invites, operator receipts and Workspace events, and decide whether `update-policy` should also rebind members whose roles the new policy drops.
   evidence: Rows are kept forever for now (a data-retention decision under SC-6). A binding to a role the current policy no longer defines grants nothing (fail closed) but stays stored until an administrator changes that member's roles.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-14-organise-workspaces-engagements-folders-tasks.md`
+  summary: Regenerate the Python SDK's protocol types (`engine/sdk/python`) for the new `inquello/*` methods.
+  evidence: `app-server-protocol/scripts/write_schema_fixtures.py` ends with an `uv run ... update_sdk_artifacts.py` step. Story 1.14 regenerated the vendored schema fixtures and precomputed exports directly through `write_schema_fixtures_from_env`, without `uv` (not installed here, and the step is outside Inquello's build). The Python SDK is not used by Inquello; regenerate it if it ever is.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-14-organise-workspaces-engagements-folders-tasks.md`
+  summary: Export the working store as a consistent snapshot.
+  evidence: The `working-store` category is `included` in exports (owner decision), but `data.export` copies `working.sqlite` and its `-wal`/`-shm` files while the runtime holds them open. With no write during the copy the three files are consistent (the smoke round trip passes), but a write landing mid-copy could produce a torn snapshot. A runtime-side checkpoint or an `inquello/store/backup` method (SQLite `VACUUM INTO`) before copying would close this.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-14-organise-workspaces-engagements-folders-tasks.md`
+  summary: Extend the working store's agent-writable roots beyond `CODEX_HOME` once Tasks run threads.
+  evidence: The app-server opens the store refusing a path inside `CODEX_HOME` only. Before Story 1.25 no thread runs, so no other writable root exists; when threads start, their sandbox writable roots (cwd and extra roots) must also be passed, or the store location re-checked per thread.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-14-organise-workspaces-engagements-folders-tasks.md`
+  summary: Decide what happens to local Engagements and private Tasks of a Workspace the principal no longer belongs to.
+  evidence: While the shared service answers, the Sidebar lists only the Workspaces it returns, so a removed member's local Tasks for that Workspace are hidden but kept on the device (they remain in the working store and in exports). While the service is down, remembered Workspaces are listed. A retention or hand-back rule for these records is a data-policy decision (OQ-2), not one the code should invent.
+

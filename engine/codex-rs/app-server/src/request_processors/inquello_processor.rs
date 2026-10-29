@@ -1,0 +1,624 @@
+//! Inquello private Workspace organisation (Story 1.14): the `inquello/*`
+//! methods over the Inquello working store.
+//!
+//! - The store path comes from `INQUELLO_WORKING_STORE`, which the desktop sets
+//!   to `<userData>/working/working.sqlite`. `codex-app-server` takes the
+//!   variable out of its own environment at startup
+//!   ([`take_inquello_working_store_env`]), so no tool or child process the
+//!   runtime starts inherits it. Without it every method answers
+//!   `store_not_configured`.
+//! - The store opens on the first call that needs it (and initializes its
+//!   `store_info`), never at startup.
+//! - The acting principal is bound per connection by
+//!   `inquello/session/setPrincipal`, which only the desktop main process sends.
+//!   No other payload names a principal. A call before a principal is bound is
+//!   `unauthenticated`.
+//! - Every mutation is an `inquello-domain` command with an operation ID and an
+//!   expected revision; this module only translates the wire shapes.
+
+use crate::error_code::INTERNAL_ERROR_CODE;
+use crate::error_code::INVALID_REQUEST_ERROR_CODE;
+use crate::outgoing_message::ConnectionId;
+use codex_app_server_protocol::ClientResponsePayload;
+use codex_app_server_protocol::InquelloEngagement;
+use codex_app_server_protocol::InquelloEngagementCreateParams;
+use codex_app_server_protocol::InquelloEngagementResponse;
+use codex_app_server_protocol::InquelloEngagementUpdateParams;
+use codex_app_server_protocol::InquelloFolder;
+use codex_app_server_protocol::InquelloFolderCreateParams;
+use codex_app_server_protocol::InquelloFolderResponse;
+use codex_app_server_protocol::InquelloKnownWorkspace;
+use codex_app_server_protocol::InquelloReceipt;
+use codex_app_server_protocol::InquelloSetPrincipalParams;
+use codex_app_server_protocol::InquelloSetPrincipalResponse;
+use codex_app_server_protocol::InquelloTask;
+use codex_app_server_protocol::InquelloTaskAttachThreadParams;
+use codex_app_server_protocol::InquelloTaskCreateParams;
+use codex_app_server_protocol::InquelloTaskMoveParams;
+use codex_app_server_protocol::InquelloTaskRenameParams;
+use codex_app_server_protocol::InquelloTaskResponse;
+use codex_app_server_protocol::InquelloTaskVisibility;
+use codex_app_server_protocol::InquelloWorkspaceListResponse;
+use codex_app_server_protocol::InquelloWorkspaceRememberParams;
+use codex_app_server_protocol::InquelloWorkspaceRememberResponse;
+use codex_app_server_protocol::InquelloWorkspaceTreeParams;
+use codex_app_server_protocol::InquelloWorkspaceTreeResponse;
+use codex_app_server_protocol::JSONRPCErrorError;
+use inquello_adapters::SqliteWorkingStore;
+use inquello_adapters::SystemClock;
+use inquello_domain::DomainError;
+use inquello_domain::InitializeStore;
+use inquello_domain::Revision;
+use inquello_domain::organise;
+use inquello_domain::organise::Actor;
+use inquello_domain::organise::OrganiseOutcome;
+use inquello_domain::organise::OrganiseRecord;
+use inquello_domain::organise::PrincipalId;
+use serde_json::json;
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::sync::Mutex;
+use std::sync::OnceLock;
+
+/// The environment variable naming the working-store file.
+pub const INQUELLO_WORKING_STORE_ENV_VAR: &str = "INQUELLO_WORKING_STORE";
+
+static TAKEN_WORKING_STORE: OnceLock<Option<PathBuf>> = OnceLock::new();
+
+/// Reads and removes `INQUELLO_WORKING_STORE` before worker threads start, so
+/// nothing the runtime spawns (shells, tools, MCP servers) inherits the path.
+pub fn take_inquello_working_store_env() {
+    let path = std::env::var_os(INQUELLO_WORKING_STORE_ENV_VAR)
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from);
+    // SAFETY: app-server calls this synchronously at process startup, before spawning threads.
+    unsafe { std::env::remove_var(INQUELLO_WORKING_STORE_ENV_VAR) };
+    let _ = TAKEN_WORKING_STORE.set(path);
+}
+
+/// The configured store path: the value taken at startup or, for hosts that did
+/// not take it (tests, other embedders), the current environment.
+fn configured_store_path() -> Option<PathBuf> {
+    match TAKEN_WORKING_STORE.get() {
+        Some(taken) => taken.clone(),
+        None => std::env::var_os(INQUELLO_WORKING_STORE_ENV_VAR)
+            .filter(|value| !value.is_empty())
+            .map(PathBuf::from),
+    }
+}
+
+pub(crate) struct InquelloRequestProcessor {
+    store_path: Option<PathBuf>,
+    /// Roots the agent can write; the store may not live inside one.
+    agent_writable_roots: Vec<PathBuf>,
+    store: tokio::sync::OnceCell<SqliteWorkingStore>,
+    principals: Mutex<HashMap<ConnectionId, PrincipalId>>,
+}
+
+impl InquelloRequestProcessor {
+    pub(crate) fn new(agent_writable_roots: Vec<PathBuf>) -> Self {
+        Self::with_store_path(configured_store_path(), agent_writable_roots)
+    }
+
+    pub(crate) fn with_store_path(
+        store_path: Option<PathBuf>,
+        agent_writable_roots: Vec<PathBuf>,
+    ) -> Self {
+        Self {
+            store_path,
+            agent_writable_roots,
+            store: tokio::sync::OnceCell::new(),
+            principals: Mutex::new(HashMap::new()),
+        }
+    }
+
+    pub(crate) fn connection_closed(&self, connection_id: ConnectionId) {
+        self.principals_guard().remove(&connection_id);
+    }
+
+    fn principals_guard(&self) -> std::sync::MutexGuard<'_, HashMap<ConnectionId, PrincipalId>> {
+        self.principals
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    // ---- session -------------------------------------------------------------
+
+    pub(crate) fn set_principal(
+        &self,
+        connection_id: ConnectionId,
+        params: InquelloSetPrincipalParams,
+    ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        let mut principals = self.principals_guard();
+        match params.principal_id {
+            Some(value) => {
+                let principal = PrincipalId::parse(&value).map_err(domain_error)?;
+                principals.insert(connection_id, principal);
+            }
+            None => {
+                principals.remove(&connection_id);
+            }
+        }
+        let bound = principals.get(&connection_id).map(ToString::to_string);
+        Ok(Some(
+            InquelloSetPrincipalResponse {
+                principal_id: bound,
+            }
+            .into(),
+        ))
+    }
+
+    fn actor(&self, connection_id: ConnectionId) -> Result<Actor, JSONRPCErrorError> {
+        self.principals_guard()
+            .get(&connection_id)
+            .copied()
+            .map(|principal_id| Actor { principal_id })
+            .ok_or_else(|| refusal("unauthenticated", "no Inquello principal is signed in"))
+    }
+
+    /// Opens (once) and returns the working store. A failed open is retried on
+    /// the next call.
+    async fn store(&self) -> Result<SqliteWorkingStore, JSONRPCErrorError> {
+        let Some(path) = &self.store_path else {
+            return Err(refusal(
+                "store_not_configured",
+                "the Inquello working store is not configured",
+            ));
+        };
+        self.store
+            .get_or_try_init(|| open_store(path, &self.agent_writable_roots))
+            .await
+            .cloned()
+    }
+
+    async fn context(
+        &self,
+        connection_id: ConnectionId,
+    ) -> Result<(SqliteWorkingStore, Actor), JSONRPCErrorError> {
+        let actor = self.actor(connection_id)?;
+        Ok((self.store().await?, actor))
+    }
+
+    // ---- queries -------------------------------------------------------------
+
+    pub(crate) async fn workspace_list(
+        &self,
+        connection_id: ConnectionId,
+    ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        let (store, actor) = self.context(connection_id).await?;
+        let known = organise::known_workspaces(&store, actor)
+            .await
+            .map_err(domain_error)?;
+        Ok(Some(
+            InquelloWorkspaceListResponse {
+                workspaces: known
+                    .into_iter()
+                    .map(|known| InquelloKnownWorkspace {
+                        workspace_id: known.workspace_id.to_string(),
+                        name: known.label.as_ref().map(|label| label.name.clone()),
+                        label_revision: known.label.map_or(0, |label| label.revision.get()),
+                    })
+                    .collect(),
+            }
+            .into(),
+        ))
+    }
+
+    pub(crate) async fn workspace_tree(
+        &self,
+        connection_id: ConnectionId,
+        params: InquelloWorkspaceTreeParams,
+    ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        let (store, actor) = self.context(connection_id).await?;
+        let tree = organise::workspace_tree(&store, actor, &params.workspace_id)
+            .await
+            .map_err(domain_error)?;
+        Ok(Some(
+            InquelloWorkspaceTreeResponse {
+                workspace_id: params.workspace_id,
+                engagements: tree.engagements.iter().map(engagement_view).collect(),
+                folders: tree.folders.iter().map(folder_view).collect(),
+                tasks: tree.tasks.iter().map(task_view).collect(),
+            }
+            .into(),
+        ))
+    }
+
+    // ---- commands ------------------------------------------------------------
+
+    pub(crate) async fn workspace_remember(
+        &self,
+        connection_id: ConnectionId,
+        params: InquelloWorkspaceRememberParams,
+    ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        let (store, actor) = self.context(connection_id).await?;
+        let outcome = organise::remember_workspace(
+            &store,
+            &SystemClock,
+            actor,
+            organise::RememberWorkspace {
+                operation_id: params.operation_id,
+                expected_revision: Revision::new(params.expected_revision),
+                workspace_id: params.workspace_id,
+                name: params.name,
+            },
+        )
+        .await
+        .map_err(domain_error)?;
+        let receipt = receipt_view(&outcome);
+        let OrganiseRecord::WorkspaceLabel(label) = outcome.record else {
+            return Err(unexpected_record());
+        };
+        Ok(Some(
+            InquelloWorkspaceRememberResponse {
+                workspace: InquelloKnownWorkspace {
+                    workspace_id: label.workspace_id.to_string(),
+                    name: Some(label.name),
+                    label_revision: label.revision.get(),
+                },
+                receipt,
+            }
+            .into(),
+        ))
+    }
+
+    pub(crate) async fn engagement_create(
+        &self,
+        connection_id: ConnectionId,
+        params: InquelloEngagementCreateParams,
+    ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        let (store, actor) = self.context(connection_id).await?;
+        let outcome = organise::create_engagement(
+            &store,
+            &SystemClock,
+            actor,
+            organise::CreateEngagement {
+                operation_id: params.operation_id,
+                expected_revision: Revision::new(params.expected_revision),
+                workspace_id: params.workspace_id,
+                service_engagement_id: params.service_engagement_id,
+                name: params.name,
+                objectives: params.objectives,
+                scope: params.scope,
+                client_entity: params.client_entity,
+                period_start: params.period_start,
+                period_end: params.period_end,
+            },
+        )
+        .await
+        .map_err(domain_error)?;
+        engagement_response(&outcome).map(|response| Some(response.into()))
+    }
+
+    pub(crate) async fn engagement_update(
+        &self,
+        connection_id: ConnectionId,
+        params: InquelloEngagementUpdateParams,
+    ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        let (store, actor) = self.context(connection_id).await?;
+        let outcome = organise::update_engagement(
+            &store,
+            &SystemClock,
+            actor,
+            organise::UpdateEngagement {
+                operation_id: params.operation_id,
+                expected_revision: Revision::new(params.expected_revision),
+                workspace_id: params.workspace_id,
+                engagement_id: params.engagement_id,
+                name: params.name,
+                objectives: params.objectives,
+                scope: params.scope,
+                client_entity: params.client_entity,
+                period_start: params.period_start,
+                period_end: params.period_end,
+            },
+        )
+        .await
+        .map_err(domain_error)?;
+        engagement_response(&outcome)
+            .map(|response| Some(ClientResponsePayload::InquelloEngagementUpdate(response)))
+    }
+
+    pub(crate) async fn folder_create(
+        &self,
+        connection_id: ConnectionId,
+        params: InquelloFolderCreateParams,
+    ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        let (store, actor) = self.context(connection_id).await?;
+        let outcome = organise::create_folder(
+            &store,
+            &SystemClock,
+            actor,
+            organise::CreateFolder {
+                operation_id: params.operation_id,
+                expected_revision: Revision::new(params.expected_revision),
+                workspace_id: params.workspace_id,
+                engagement_id: params.engagement_id,
+                name: params.name,
+            },
+        )
+        .await
+        .map_err(domain_error)?;
+        let receipt = receipt_view(&outcome);
+        let OrganiseRecord::Folder(folder) = &outcome.record else {
+            return Err(unexpected_record());
+        };
+        Ok(Some(
+            InquelloFolderResponse {
+                folder: folder_view(folder),
+                receipt,
+            }
+            .into(),
+        ))
+    }
+
+    pub(crate) async fn task_create(
+        &self,
+        connection_id: ConnectionId,
+        params: InquelloTaskCreateParams,
+    ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        let (store, actor) = self.context(connection_id).await?;
+        let outcome = organise::create_task(
+            &store,
+            &SystemClock,
+            actor,
+            organise::CreateTask {
+                operation_id: params.operation_id,
+                expected_revision: Revision::new(params.expected_revision),
+                workspace_id: params.workspace_id,
+                engagement_id: params.engagement_id,
+                folder_id: params.folder_id,
+                title: params.title,
+            },
+        )
+        .await
+        .map_err(domain_error)?;
+        task_response(&outcome).map(|response| Some(response.into()))
+    }
+
+    pub(crate) async fn task_rename(
+        &self,
+        connection_id: ConnectionId,
+        params: InquelloTaskRenameParams,
+    ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        let (store, actor) = self.context(connection_id).await?;
+        let outcome = organise::rename_task(
+            &store,
+            &SystemClock,
+            actor,
+            organise::RenameTask {
+                operation_id: params.operation_id,
+                expected_revision: Revision::new(params.expected_revision),
+                workspace_id: params.workspace_id,
+                task_id: params.task_id,
+                title: params.title,
+            },
+        )
+        .await
+        .map_err(domain_error)?;
+        task_response(&outcome)
+            .map(|response| Some(ClientResponsePayload::InquelloTaskRename(response)))
+    }
+
+    pub(crate) async fn task_move(
+        &self,
+        connection_id: ConnectionId,
+        params: InquelloTaskMoveParams,
+    ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        let (store, actor) = self.context(connection_id).await?;
+        let outcome = organise::move_task(
+            &store,
+            &SystemClock,
+            actor,
+            organise::MoveTask {
+                operation_id: params.operation_id,
+                expected_revision: Revision::new(params.expected_revision),
+                workspace_id: params.workspace_id,
+                task_id: params.task_id,
+                engagement_id: params.engagement_id,
+                folder_id: params.folder_id,
+            },
+        )
+        .await
+        .map_err(domain_error)?;
+        task_response(&outcome)
+            .map(|response| Some(ClientResponsePayload::InquelloTaskMove(response)))
+    }
+
+    pub(crate) async fn task_attach_thread(
+        &self,
+        connection_id: ConnectionId,
+        params: InquelloTaskAttachThreadParams,
+    ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        let (store, actor) = self.context(connection_id).await?;
+        let outcome = organise::attach_thread(
+            &store,
+            &SystemClock,
+            actor,
+            organise::AttachThread {
+                operation_id: params.operation_id,
+                expected_revision: Revision::new(params.expected_revision),
+                workspace_id: params.workspace_id,
+                task_id: params.task_id,
+                runtime_thread_id: params.runtime_thread_id,
+            },
+        )
+        .await
+        .map_err(domain_error)?;
+        task_response(&outcome)
+            .map(|response| Some(ClientResponsePayload::InquelloTaskAttachThread(response)))
+    }
+}
+
+/// Opens the store and initializes its `store_info` on first use.
+async fn open_store(
+    path: &std::path::Path,
+    agent_writable_roots: &[PathBuf],
+) -> Result<SqliteWorkingStore, JSONRPCErrorError> {
+    let store = SqliteWorkingStore::open(path, agent_writable_roots)
+        .await
+        .map_err(|error| {
+            tracing::error!("inquello working store did not open: {error}");
+            refusal(
+                "store_unavailable",
+                "the Inquello working store could not be opened",
+            )
+        })?;
+    let info = inquello_domain::get_store_info(&store)
+        .await
+        .map_err(domain_error)?;
+    if info.is_none() {
+        inquello_domain::initialize_store(
+            &store,
+            &SystemClock,
+            InitializeStore {
+                operation_id: format!("initialize-{}", uuid::Uuid::new_v4()),
+                expected_revision: Revision::ZERO,
+            },
+        )
+        .await
+        .map_err(domain_error)?;
+    }
+    Ok(store)
+}
+
+fn engagement_view(engagement: &organise::Engagement) -> InquelloEngagement {
+    InquelloEngagement {
+        engagement_id: engagement.engagement_id.to_string(),
+        workspace_id: engagement.workspace_id.to_string(),
+        service_engagement_id: engagement.service_engagement_id.to_string(),
+        name: engagement.name.clone(),
+        objectives: engagement.objectives.clone(),
+        scope: engagement.scope.clone(),
+        client_entity: engagement.client_entity.clone(),
+        period_start: engagement
+            .period_start
+            .as_ref()
+            .map(|date| date.as_str().to_string()),
+        period_end: engagement
+            .period_end
+            .as_ref()
+            .map(|date| date.as_str().to_string()),
+        revision: engagement.revision.get(),
+    }
+}
+
+fn folder_view(folder: &organise::Folder) -> InquelloFolder {
+    InquelloFolder {
+        folder_id: folder.folder_id.to_string(),
+        engagement_id: folder.engagement_id.to_string(),
+        workspace_id: folder.workspace_id.to_string(),
+        name: folder.name.clone(),
+        revision: folder.revision.get(),
+    }
+}
+
+fn task_view(task: &organise::Task) -> InquelloTask {
+    InquelloTask {
+        task_id: task.task_id.to_string(),
+        workspace_id: task.workspace_id.to_string(),
+        creator_principal_id: task.creator_principal_id.to_string(),
+        engagement_id: task.engagement_id.map(|id| id.to_string()),
+        folder_id: task.folder_id.map(|id| id.to_string()),
+        title: task.title.clone(),
+        runtime_thread_id: task.runtime_thread_id.clone(),
+        source_refs: task.source_refs.clone(),
+        artifact_refs: task.artifact_refs.clone(),
+        visibility: match task.visibility {
+            organise::Visibility::Private => InquelloTaskVisibility::Private,
+        },
+        revision: task.revision.get(),
+    }
+}
+
+fn receipt_view(outcome: &OrganiseOutcome) -> InquelloReceipt {
+    InquelloReceipt {
+        operation_id: outcome.receipt.operation_id.to_string(),
+        command: outcome.receipt.command.as_str().to_string(),
+        expected_revision: outcome.receipt.expected_revision.get(),
+        resulting_revision: outcome.receipt.resulting_revision.get(),
+        replayed: outcome.replayed,
+    }
+}
+
+fn engagement_response(
+    outcome: &OrganiseOutcome,
+) -> Result<InquelloEngagementResponse, JSONRPCErrorError> {
+    let OrganiseRecord::Engagement(engagement) = &outcome.record else {
+        return Err(unexpected_record());
+    };
+    Ok(InquelloEngagementResponse {
+        engagement: engagement_view(engagement),
+        receipt: receipt_view(outcome),
+    })
+}
+
+fn task_response(outcome: &OrganiseOutcome) -> Result<InquelloTaskResponse, JSONRPCErrorError> {
+    let OrganiseRecord::Task(task) = &outcome.record else {
+        return Err(unexpected_record());
+    };
+    Ok(InquelloTaskResponse {
+        task: task_view(task),
+        receipt: receipt_view(outcome),
+    })
+}
+
+fn unexpected_record() -> JSONRPCErrorError {
+    failure(
+        "store_failure",
+        "the working store returned an unexpected record",
+    )
+}
+
+fn refusal(kind: &str, message: &str) -> JSONRPCErrorError {
+    JSONRPCErrorError {
+        code: INVALID_REQUEST_ERROR_CODE,
+        message: message.to_string(),
+        data: Some(json!({ "inquello": { "kind": kind } })),
+    }
+}
+
+fn failure(kind: &str, message: &str) -> JSONRPCErrorError {
+    JSONRPCErrorError {
+        code: INTERNAL_ERROR_CODE,
+        message: message.to_string(),
+        data: Some(json!({ "inquello": { "kind": kind } })),
+    }
+}
+
+/// Maps a domain refusal to a JSON-RPC error. Messages carry no record content.
+fn domain_error(error: DomainError) -> JSONRPCErrorError {
+    match error {
+        DomainError::InvalidCommand(message) => refusal("invalid", &message),
+        DomainError::NotFound => {
+            refusal("not_found", "no such record is visible to this principal")
+        }
+        DomainError::WorkspaceMismatch => refusal(
+            "workspace_mismatch",
+            "the target belongs to another Workspace",
+        ),
+        DomainError::RevisionConflict { expected, actual } => JSONRPCErrorError {
+            code: INVALID_REQUEST_ERROR_CODE,
+            message: format!("revision conflict: expected {expected}, actual {actual}"),
+            data: Some(json!({
+                "inquello": {
+                    "kind": "revision_conflict",
+                    "expected": expected.get(),
+                    "actual": actual.get(),
+                }
+            })),
+        },
+        DomainError::OperationConflict { .. } => refusal(
+            "operation_conflict",
+            "the operation ID was already used for a different request",
+        ),
+        DomainError::AlreadyInitialized | DomainError::Store(_) => {
+            tracing::error!("inquello working store failure: {error}");
+            failure("store_failure", "the Inquello working store failed")
+        }
+    }
+}
+
+#[cfg(test)]
+#[path = "inquello_processor_tests.rs"]
+mod tests;

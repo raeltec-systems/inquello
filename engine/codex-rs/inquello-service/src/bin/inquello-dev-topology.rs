@@ -26,6 +26,15 @@
 //!
 //! The administrative database URL comes from `INQUELLO_DEV_DATABASE_URL` or, if
 //! unset, `INQUELLO_TEST_DATABASE_URL`; its role needs `CREATEDB`.
+//!
+//! `--seed-workspace NAME --seed-out FILE` (Story 1.14) also creates an
+//! `internal_company` Workspace on the run database with the sample policy
+//! (`inquello-protocol/fixtures/workspace/policy.json`) and a pending
+//! first-administrator invite bound to the synthetic subject, exactly as the
+//! operator CLI `inquello-service admin create-workspace` would. It writes
+//! `{"workspace_id", "invite_id"}` to FILE (removed when the topology stops); the
+//! synthetic user accepts the invite after signing in. The invite ID is not a
+//! credential: only the bound `(issuer, subject)` can accept it.
 
 use chrono::TimeDelta;
 use inquello_service::DatabaseConfig;
@@ -58,7 +67,11 @@ const SUBJECT_NAME: &str = "Synthetic Developer";
 const SUBJECT_EMAIL: &str = "developer@synthetic.invalid";
 
 const USAGE: &str = "usage: inquello-dev-topology [--service-bind ADDR] [--issuer-bind ADDR] \
-[--ca-dir DIR] [--config-out FILE] [--drop-stale] [--access-lifetime-secs N] [--exit-on-stdin-eof]";
+[--ca-dir DIR] [--config-out FILE] [--drop-stale] [--access-lifetime-secs N] [--exit-on-stdin-eof] \
+[--seed-workspace NAME --seed-out FILE]";
+
+/// The sample Workspace policy the seed uses: one role holds `manage_membership`.
+const SEED_POLICY: &str = include_str!("../../../inquello-protocol/fixtures/workspace/policy.json");
 
 /// Every run database starts with this prefix; `--drop-stale` only touches these.
 const RUN_DATABASE_PREFIX: &str = "inquello_dev_";
@@ -71,6 +84,8 @@ struct Options {
     drop_stale: bool,
     access_lifetime: Duration,
     exit_on_stdin_eof: bool,
+    seed_workspace: Option<String>,
+    seed_out: Option<PathBuf>,
 }
 
 fn parse_options() -> Result<Options, String> {
@@ -83,6 +98,8 @@ fn parse_options() -> Result<Options, String> {
         drop_stale: false,
         access_lifetime: Duration::from_secs(15 * 60),
         exit_on_stdin_eof: false,
+        seed_workspace: None,
+        seed_out: None,
     };
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -108,9 +125,16 @@ fn parse_options() -> Result<Options, String> {
                 options.access_lifetime = Duration::from_secs(secs);
             }
             "--exit-on-stdin-eof" => options.exit_on_stdin_eof = true,
+            "--seed-workspace" => options.seed_workspace = Some(value("--seed-workspace")?),
+            "--seed-out" => options.seed_out = Some(PathBuf::from(value("--seed-out")?)),
             "-h" | "--help" => return Err(USAGE.to_string()),
             other => return Err(format!("unknown argument {other}\n{USAGE}")),
         }
+    }
+    if options.seed_workspace.is_some() != options.seed_out.is_some() {
+        return Err(format!(
+            "--seed-workspace and --seed-out go together\n{USAGE}"
+        ));
     }
     Ok(options)
 }
@@ -396,6 +420,24 @@ async fn run(options: Options) -> Result<(), String> {
         }
     };
 
+    let seeded = match (&options.seed_workspace, &options.seed_out) {
+        (Some(name), Some(path)) => {
+            match seed_workspace(&database, name, provider.issuer_url(), path).await {
+                Ok(()) => Some(path.clone()),
+                Err(error) => {
+                    service.shutdown().await;
+                    provider.shutdown().await;
+                    ca_file.remove();
+                    drop(lease);
+                    lease_pool.close().await;
+                    database.drop_now().await;
+                    return Err(error);
+                }
+            }
+        }
+        _ => None,
+    };
+
     let line = json!({
         "service_url": service.base_url(),
         "issuer_url": provider.issuer_url(),
@@ -429,10 +471,50 @@ async fn run(options: Options) -> Result<(), String> {
     if let Some(path) = &options.config_out {
         let _ = std::fs::remove_file(path);
     }
+    if let Some(path) = &seeded {
+        let _ = std::fs::remove_file(path);
+    }
     drop(lease);
     lease_pool.close().await;
     database.drop_now().await;
     Ok(())
+}
+
+/// Creates the seeded Workspace and its first-administrator invite for the
+/// synthetic subject through the operator path, then writes the seed file.
+async fn seed_workspace(
+    database: &RunDatabase,
+    name: &str,
+    issuer_url: &str,
+    path: &std::path::Path,
+) -> Result<(), String> {
+    let pool = inquello_service::admin::open(&database_config(database.options()))
+        .await
+        .map_err(|error| format!("could not open the run database to seed: {error}"))?;
+    let outcome = inquello_service::admin::create_workspace(
+        &pool,
+        inquello_service::admin::CreateWorkspace {
+            name: name.to_string(),
+            kind: "internal_company".to_string(),
+            policy: SEED_POLICY.to_string(),
+            first_admin_issuer: issuer_url.to_string(),
+            first_admin_subject: SUBJECT.to_string(),
+            invite_lifetime: Duration::from_secs(24 * 60 * 60),
+            operator: "inquello-dev-topology".to_string(),
+        },
+        {
+            use inquello_service::Clock as _;
+            SystemClock.now()
+        },
+    )
+    .await;
+    pool.close().await;
+    let outcome = outcome.map_err(|error| format!("could not seed the Workspace: {error}"))?;
+    let seed = json!({
+        "workspace_id": outcome.workspace_id,
+        "invite_id": outcome.first_admin_invite_id,
+    });
+    write_config_file(path, &seed.to_string())
 }
 
 fn main() -> ExitCode {

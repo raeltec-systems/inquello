@@ -1,0 +1,81 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "InquelloFolder": {
+      "properties": {
+        "engagementId": {
+          "type": "string"
+        },
+        "folderId": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "engagementId",
+        "folderId",
+        "name",
+        "revision",
+        "workspaceId"
+      ],
+      "type": "object"
+    },
+    "InquelloReceipt": {
+      "description": "What a mutation's receipt recorded.",
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "replayed": {
+          "description": "True when this answer came from an earlier application of the operation.",
+          "type": "boolean"
+        },
+        "resultingRevision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "command",
+        "expectedRevision",
+        "operationId",
+        "replayed",
+        "resultingRevision"
+      ],
+      "type": "object"
+    }
+  },
+  "properties": {
+    "folder": {
+      "$ref": "#/definitions/InquelloFolder"
+    },
+    "receipt": {
+      "$ref": "#/definitions/InquelloReceipt"
+    }
+  },
+  "required": [
+    "folder",
+    "receipt"
+  ],
+  "title": "InquelloFolderResponse",
+  "type": "object"
+}

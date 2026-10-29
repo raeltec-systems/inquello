@@ -41,6 +41,14 @@ pub enum DomainError {
     /// `InitializeStore` was sent to a store that already has its `store_info`.
     #[error("the working store is already initialized")]
     AlreadyInitialized,
+    /// The record does not exist, is in another Workspace, or (for a Task) was
+    /// created by another principal. The three cases are indistinguishable, so a
+    /// refusal never confirms another creator's private Task.
+    #[error("no such record is visible to this principal")]
+    NotFound,
+    /// A move or create targeted an Engagement or folder of another Workspace.
+    #[error("the target belongs to another Workspace")]
+    WorkspaceMismatch,
     #[error(transparent)]
     Store(StoreError),
 }

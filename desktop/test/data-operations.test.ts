@@ -84,6 +84,7 @@ describe('export (matrix: Export)', () => {
     expect(manifest.included.map((entry) => [entry.category, entry.files.length])).toEqual([
       ['task-history', 3],
       ['desktop-stderr-log', 1],
+      ['working-store', 0],
     ]);
     for (const entry of manifest.included) {
       for (const file of entry.files) {
@@ -101,7 +102,7 @@ describe('export (matrix: Export)', () => {
     // No credential anywhere in the export.
     for (const file of allFiles(destination)) expect(fs.readFileSync(file, 'utf8')).not.toContain(SESSION_SECRET);
     expect(fs.existsSync(path.join(destination, MANIFEST_FILE))).toBe(true);
-    expect(journal.read()).toEqual([{ path: destination, exportedAt: '2026-10-28T12:00:00.000Z', categories: ['task-history', 'desktop-stderr-log'] }]);
+    expect(journal.read()).toEqual([{ path: destination, exportedAt: '2026-10-28T12:00:00.000Z', categories: ['task-history', 'desktop-stderr-log', 'working-store'] }]);
     expect(fs.statSync(journal.file).mode & 0o777).toBe(0o600);
     expect(journal.file).toBe(path.join(userData, 'data', 'export-journal.json'));
   });
@@ -174,6 +175,7 @@ describe('reimport (matrix: Round trip, Import into non-empty)', () => {
     expect(result.restored).toEqual([
       { category: 'task-history', label: 'Task history', files: 3 },
       { category: 'desktop-stderr-log', label: 'Desktop runtime error log', files: 1 },
+      { category: 'working-store', label: 'Private work organisation', files: 0 },
     ]);
     expect(result.notRestored).toEqual([]);
     expect(result.omissions.map((omission) => omission.category)).toEqual(expect.arrayContaining(['identity-session', 'chromium-profile']));
@@ -264,7 +266,7 @@ describe('delete (matrix: Delete)', () => {
         { category: 'export-journal', label: 'Export journal', files: 1 },
       ]),
     );
-    expect(report.survivingExports).toEqual([{ path: destination, exportedAt: expect.any(String), categories: ['task-history', 'desktop-stderr-log'], outsideInquelloControl: true }]);
+    expect(report.survivingExports).toEqual([{ path: destination, exportedAt: expect.any(String), categories: ['task-history', 'desktop-stderr-log', 'working-store'], outsideInquelloControl: true }]);
     expect(clearBrowserProfile).not.toHaveBeenCalled();
     // Emptied directories are pruned; the export itself is untouched.
     expect(fs.existsSync(path.join(roots['runtime-home'], 'sessions'))).toBe(false);
@@ -400,6 +402,7 @@ describe('data service', () => {
     expect(result.export.included).toEqual([
       { category: 'task-history', label: 'Task history', files: 3 },
       { category: 'desktop-stderr-log', label: 'Desktop runtime error log', files: 1 },
+      { category: 'working-store', label: 'Private work organisation', files: 0 },
     ]);
     expect(h.events).toEqual([]); // Export never stops the runtime.
     h.setExport(null);
@@ -430,6 +433,7 @@ describe('data service', () => {
     expect(imported.import.restored).toEqual([
       { category: 'task-history', label: 'Task history', files: 3 },
       { category: 'desktop-stderr-log', label: 'Desktop runtime error log', files: 1 },
+      { category: 'working-store', label: 'Private work organisation', files: 0 },
     ]);
     expect(imported.import.notRestored).toEqual([]);
     expect(imported.import.omissions.map((omission) => omission.category)).toEqual(expect.arrayContaining(['identity-session', 'chromium-profile']));

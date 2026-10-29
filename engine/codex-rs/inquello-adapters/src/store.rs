@@ -47,6 +47,10 @@ impl SqliteWorkingStore {
         Ok(Self { pool, path })
     }
 
+    pub(crate) fn pool(&self) -> &SqlitePool {
+        &self.pool
+    }
+
     /// The canonical path of the store file.
     pub fn path(&self) -> &Path {
         &self.path

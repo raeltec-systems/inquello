@@ -48,6 +48,16 @@
  * both routes through the six `provider.*` operations. In `--smoke` the
  * providers probe connects and disconnects both routes with a sentinel key
  * and prints a `providers` line; the run also requires it to pass.
+ *
+ * Private Workspace organisation (Story 1.14): the runtime hosts the Inquello
+ * working store (`INQUELLO_WORKING_STORE = <userData>/working/working.sqlite`)
+ * behind its `inquello/*` methods. Main binds the signed-in principal to the
+ * runtime connection, creates Engagements at the shared service first, and is
+ * the only caller (`organise/`); the renderer reaches it through the named
+ * `organise.*` operations. The app opens on the Shell (Sidebar, Header, Task
+ * placeholder); `--smoke` opens the design specimen (`#specimen`) for the
+ * earlier probes, then the organise probe drives the Shell and prints an
+ * `organise` line; the run also requires it to pass.
  */
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
@@ -71,8 +81,9 @@ import {
   type BlockedKind,
   type PolicyOptions,
 } from './security/policy';
+import { OrganiseService } from './organise';
 import { createProviders, loadProviderDevConfig, PROVIDER_DEV_CONFIG_ENV, providersDir, type ProviderService } from './providers';
-import { probeData, probeIdentity, probeProviders, probeRenderer } from './smoke-probe';
+import { probeData, probeIdentity, probeOrganise, probeProviders, probeRenderer } from './smoke-probe';
 
 const smoke = process.argv.includes('--smoke');
 // The smoke run keeps what main logs, so the providers probe can scan it for a leaked key.
@@ -87,6 +98,8 @@ let designOk = false;
 let identityOk = false;
 let dataOk = false;
 let providersOk = false;
+let organiseOk = false;
+let organise: OrganiseService | undefined;
 let identity: IdentityWiring | undefined;
 let providers: ProviderService | undefined;
 let dataService: DataService | undefined;
@@ -127,12 +140,18 @@ function createWindow(): BrowserWindow {
   const id = window.webContents.id;
   trustedWebContentsIds.add(id);
   window.webContents.once('destroyed', () => trustedWebContentsIds.delete(id));
-  void window.loadURL(APP_ENTRY_URL);
+  // The smoke run's earlier probes read the design specimen; the app opens on the Shell.
+  void window.loadURL(smoke ? `${APP_ENTRY_URL}#specimen` : APP_ENTRY_URL);
   return window;
 }
 
-function runtimeEnv(runtimeHome: string): NodeJS.ProcessEnv {
-  return runtimeChildEnv(process.env, { serviceConfigEnv: SERVICE_CONFIG_ENV, codexHome: runtimeHome, blocked: [PROVIDER_DEV_CONFIG_ENV] });
+/** The Inquello working store (Story 1.14): outside the runtime home, owner-only. */
+function workingStorePath(userData: string): string {
+  return path.join(userData, 'working', 'working.sqlite');
+}
+
+function runtimeEnv(runtimeHome: string, workingStore: string): NodeJS.ProcessEnv {
+  return runtimeChildEnv(process.env, { serviceConfigEnv: SERVICE_CONFIG_ENV, codexHome: runtimeHome, workingStore, blocked: [PROVIDER_DEV_CONFIG_ENV, 'INQUELLO_SMOKE_SEED'] });
 }
 
 /** Starts a new runtime child in Inquello's own runtime home; also used to restart after import and delete. */
@@ -140,6 +159,8 @@ async function startRuntime(): Promise<void> {
   if (!roots) throw new Error('local data roots were not set up');
   const runtimeHome = roots['runtime-home'];
   fs.mkdirSync(runtimeHome, { recursive: true, mode: 0o700 });
+  const workingStore = workingStorePath(app.getPath('userData'));
+  fs.mkdirSync(path.dirname(workingStore), { recursive: true, mode: 0o700 });
   // The Codex login lives in the OS keyring only; written before every start.
   writeRuntimeConfig(runtimeHome);
   providers?.codex.runtimeReset();
@@ -152,7 +173,7 @@ async function startRuntime(): Promise<void> {
   logger.info(`starting app-server (${binary.source}): ${binary.path}`);
   runtime = new AppServerRuntime({
     command: binary.path,
-    env: runtimeEnv(runtimeHome),
+    env: runtimeEnv(runtimeHome, workingStore),
     clientInfo: { name: 'inquello_desktop', title: 'Inquello', version: app.getVersion() },
     schemaStamp,
     stderrLogPath: path.join(app.getPath('logs'), 'app-server-stderr.log'),
@@ -175,6 +196,8 @@ async function startRuntime(): Promise<void> {
     );
   }
   handshakeOk = true;
+  // A new runtime process has no principal bound yet.
+  await organise?.syncPrincipal().catch((error: unknown) => logger.warn(`organise: principal not bound after start (${(error as Error).message})`));
 }
 
 async function stopRuntime(): Promise<void> {
@@ -237,11 +260,21 @@ async function runSmokeProbe(contents: WebContents): Promise<void> {
   providersOk = providerReport.ok;
   process.stdout.write(`${JSON.stringify({ event: 'providers', ...providerReport })}\n`);
   if (!providerReport.ok) logger.error(`providers probe failed: ${providerReport.failures.join('; ')}`);
+  if (!organise) throw new Error('organise was not wired');
+  const organiseReport = await probeOrganise(contents, {
+    identity,
+    organise,
+    seedFile: process.env.INQUELLO_SMOKE_SEED ?? null,
+    runtimeRequest: <T,>(method: string, params?: unknown) => (runtime ? runtime.request<T>(method, params) : Promise.reject(new Error('the runtime is not running'))),
+  });
+  organiseOk = organiseReport.ok;
+  process.stdout.write(`${JSON.stringify({ event: 'organise', ...organiseReport })}\n`);
+  if (!organiseReport.ok) logger.error(`organise probe failed: ${organiseReport.failures.join('; ')}`);
 }
 
 function exitCodeFor(exit: ExitInfo | undefined): number {
   if (!smoke) return 0;
-  return handshakeOk && privilegesOk && designOk && identityOk && dataOk && providersOk && exit !== undefined && exit.exitCode === 0 && !exit.killed ? 0 : 1;
+  return handshakeOk && privilegesOk && designOk && identityOk && dataOk && providersOk && organiseOk && exit !== undefined && exit.exitCode === 0 && !exit.killed ? 0 : 1;
 }
 
 app.on('before-quit', (event) => {
@@ -282,6 +315,8 @@ void app.whenReady().then(async () => {
     fs.rmSync(identityDir(userData), { recursive: true, force: true });
     fs.rmSync(roots['runtime-home'], { recursive: true, force: true, maxRetries: 3 });
     fs.rmSync(path.join(userData, JOURNAL_DIR), { recursive: true, force: true });
+    // No working store from an earlier run: the organise probe starts empty.
+    fs.rmSync(path.dirname(workingStorePath(userData)), { recursive: true, force: true });
     // No Claude API key from an earlier run.
     fs.rmSync(providersDir(userData), { recursive: true, force: true });
     // The providers probe checks that an inherited provider key never reaches the runtime.
@@ -300,6 +335,22 @@ void app.whenReady().then(async () => {
     recordSecrets: smoke,
   });
   const identitySession = identity.session;
+  const organiseService = new OrganiseService({
+    runtime: {
+      ready: () => runtime?.state === 'ready',
+      instance: () => runtime,
+      request: <T,>(method: string, params?: unknown) => (runtime ? runtime.request<T>(method, params) : Promise.reject(new Error('the runtime is not running'))),
+    },
+    identity: identitySession,
+    service: identity.service,
+    logger,
+  });
+  organise = organiseService;
+  /** Rebinds the runtime's principal after a sign-in change. */
+  const afterIdentityChange = async <T,>(result: T): Promise<T> => {
+    await organiseService.syncPrincipal().catch((error: unknown) => logger.warn(`organise: principal not rebound (${(error as Error).message})`));
+    return result;
+  };
   providers = createProviders({
     safeStorage,
     platform: process.platform,
@@ -356,8 +407,8 @@ void app.whenReady().then(async () => {
       runtimeVersion: schemaStamp.runtimeVersion,
       identity: {
         getStatus: () => identitySession.getStatus(),
-        signIn: () => identitySession.signIn(),
-        signOut: () => identitySession.signOut(),
+        signIn: async () => afterIdentityChange(await identitySession.signIn()),
+        signOut: async () => afterIdentityChange(await identitySession.signOut()),
       },
       data: {
         getPolicy: () => service.getPolicy(),
@@ -373,6 +424,16 @@ void app.whenReady().then(async () => {
         removeClaudeKey: () => providerService.removeClaudeKey(),
         codexLogin: (request) => providerService.codexLogin(request),
         codexLogout: () => providerService.codexLogout(),
+      },
+      organise: {
+        getWorkspaces: () => organiseService.getWorkspaces(),
+        getTree: (workspaceId) => organiseService.getTree(workspaceId),
+        createEngagement: (input) => organiseService.createEngagement(input),
+        updateEngagement: (input) => organiseService.updateEngagement(input),
+        createFolder: (input) => organiseService.createFolder(input),
+        createTask: (input) => organiseService.createTask(input),
+        renameTask: (input) => organiseService.renameTask(input),
+        moveTask: (input) => organiseService.moveTask(input),
       },
     }),
     { trustedWebContentsIds, logger },

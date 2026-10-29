@@ -19,6 +19,9 @@
  *
  * Windows environment names are case-insensitive, so names are compared
  * upper-cased.
+ *
+ * Only main names the working store (`INQUELLO_WORKING_STORE`, Story 1.14):
+ * an inherited value is dropped and replaced by `workingStore` when given.
  */
 
 /** Provider names: a credential variable naming one of them never reaches the runtime (`AZURE_OPENAI` contains `OPENAI`). */
@@ -38,17 +41,21 @@ export function isProviderCredentialVar(name: string): boolean {
   return PROVIDER_ENV_NAMES.some((provider) => parts.includes(provider));
 }
 
+/** Names the Inquello working store for the runtime (Story 1.14); the runtime takes it out of its own environment at startup. */
+export const WORKING_STORE_ENV = 'INQUELLO_WORKING_STORE';
+
 export function runtimeChildEnv(
   base: NodeJS.ProcessEnv,
-  options: { serviceConfigEnv: string; codexHome?: string; blocked?: readonly string[] },
+  options: { serviceConfigEnv: string; codexHome?: string; workingStore?: string; blocked?: readonly string[] },
 ): NodeJS.ProcessEnv {
   const blocked = new Set(['ELECTRON_RUN_AS_NODE', options.serviceConfigEnv.toUpperCase(), ...(options.blocked ?? []).map((name) => name.toUpperCase())]);
   const env: NodeJS.ProcessEnv = {};
   for (const [key, value] of Object.entries(base)) {
     const upper = key.toUpperCase();
-    if (blocked.has(upper) || upper.startsWith('CODEX_INTERNAL_') || isProviderCredentialVar(upper)) continue;
+    if (blocked.has(upper) || upper.startsWith('CODEX_INTERNAL_') || isProviderCredentialVar(upper) || upper === WORKING_STORE_ENV) continue;
     env[key] = value;
   }
   if (options.codexHome !== undefined) env.CODEX_HOME = options.codexHome;
+  if (options.workingStore !== undefined) env[WORKING_STORE_ENV] = options.workingStore;
   return env;
 }

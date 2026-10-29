@@ -1,0 +1,109 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "InquelloEngagement": {
+      "properties": {
+        "clientEntity": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "engagementId": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "objectives": {
+          "type": "string"
+        },
+        "periodEnd": {
+          "description": "`YYYY-MM-DD`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "periodStart": {
+          "description": "`YYYY-MM-DD`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "scope": {
+          "type": "string"
+        },
+        "serviceEngagementId": {
+          "type": "string"
+        },
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "engagementId",
+        "name",
+        "objectives",
+        "revision",
+        "scope",
+        "serviceEngagementId",
+        "workspaceId"
+      ],
+      "type": "object"
+    },
+    "InquelloReceipt": {
+      "description": "What a mutation's receipt recorded.",
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "replayed": {
+          "description": "True when this answer came from an earlier application of the operation.",
+          "type": "boolean"
+        },
+        "resultingRevision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "command",
+        "expectedRevision",
+        "operationId",
+        "replayed",
+        "resultingRevision"
+      ],
+      "type": "object"
+    }
+  },
+  "properties": {
+    "engagement": {
+      "$ref": "#/definitions/InquelloEngagement"
+    },
+    "receipt": {
+      "$ref": "#/definitions/InquelloReceipt"
+    }
+  },
+  "required": [
+    "engagement",
+    "receipt"
+  ],
+  "title": "InquelloEngagementResponse",
+  "type": "object"
+}

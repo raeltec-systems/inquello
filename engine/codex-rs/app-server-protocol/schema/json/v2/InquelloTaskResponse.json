@@ -1,0 +1,123 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "InquelloReceipt": {
+      "description": "What a mutation's receipt recorded.",
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "replayed": {
+          "description": "True when this answer came from an earlier application of the operation.",
+          "type": "boolean"
+        },
+        "resultingRevision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "command",
+        "expectedRevision",
+        "operationId",
+        "replayed",
+        "resultingRevision"
+      ],
+      "type": "object"
+    },
+    "InquelloTask": {
+      "properties": {
+        "artifactRefs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "creatorPrincipalId": {
+          "type": "string"
+        },
+        "engagementId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "folderId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "runtimeThreadId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sourceRefs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "taskId": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "visibility": {
+          "$ref": "#/definitions/InquelloTaskVisibility"
+        },
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifactRefs",
+        "creatorPrincipalId",
+        "revision",
+        "sourceRefs",
+        "taskId",
+        "title",
+        "visibility",
+        "workspaceId"
+      ],
+      "type": "object"
+    },
+    "InquelloTaskVisibility": {
+      "enum": [
+        "private"
+      ],
+      "type": "string"
+    }
+  },
+  "properties": {
+    "receipt": {
+      "$ref": "#/definitions/InquelloReceipt"
+    },
+    "task": {
+      "$ref": "#/definitions/InquelloTask"
+    }
+  },
+  "required": [
+    "receipt",
+    "task"
+  ],
+  "title": "InquelloTaskResponse",
+  "type": "object"
+}

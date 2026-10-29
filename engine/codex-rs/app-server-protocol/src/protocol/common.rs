@@ -1503,6 +1503,68 @@ client_request_definitions! {
         response: v2::GetAccountResponse,
     },
 
+    // Inquello private Workspace organisation (Story 1.14), serialized in one queue.
+    /// Inquello (Story 1.14): binds the signed-in principal to this connection.
+    InquelloSessionSetPrincipal => "inquello/session/setPrincipal" {
+        params: v2::InquelloSetPrincipalParams,
+        serialization: global("inquello"),
+        response: v2::InquelloSetPrincipalResponse,
+    },
+    InquelloWorkspaceList => "inquello/workspace/list" {
+        params: v2::InquelloWorkspaceListParams,
+        serialization: global("inquello"),
+        response: v2::InquelloWorkspaceListResponse,
+    },
+    InquelloWorkspaceRemember => "inquello/workspace/remember" {
+        params: v2::InquelloWorkspaceRememberParams,
+        serialization: global("inquello"),
+        response: v2::InquelloWorkspaceRememberResponse,
+    },
+    InquelloWorkspaceTree => "inquello/workspace/tree" {
+        params: v2::InquelloWorkspaceTreeParams,
+        serialization: global("inquello"),
+        response: v2::InquelloWorkspaceTreeResponse,
+    },
+    InquelloEngagementCreate => "inquello/engagement/create" {
+        params: v2::InquelloEngagementCreateParams,
+        serialization: global("inquello"),
+        response: v2::InquelloEngagementResponse,
+    },
+    InquelloEngagementUpdate => "inquello/engagement/update" {
+        params: v2::InquelloEngagementUpdateParams,
+        serialization: global("inquello"),
+        manual_payload_conversion: manual,
+        response: v2::InquelloEngagementResponse,
+    },
+    InquelloFolderCreate => "inquello/folder/create" {
+        params: v2::InquelloFolderCreateParams,
+        serialization: global("inquello"),
+        response: v2::InquelloFolderResponse,
+    },
+    InquelloTaskCreate => "inquello/task/create" {
+        params: v2::InquelloTaskCreateParams,
+        serialization: global("inquello"),
+        response: v2::InquelloTaskResponse,
+    },
+    InquelloTaskRename => "inquello/task/rename" {
+        params: v2::InquelloTaskRenameParams,
+        serialization: global("inquello"),
+        manual_payload_conversion: manual,
+        response: v2::InquelloTaskResponse,
+    },
+    InquelloTaskMove => "inquello/task/move" {
+        params: v2::InquelloTaskMoveParams,
+        serialization: global("inquello"),
+        manual_payload_conversion: manual,
+        response: v2::InquelloTaskResponse,
+    },
+    InquelloTaskAttachThread => "inquello/task/attachThread" {
+        params: v2::InquelloTaskAttachThreadParams,
+        serialization: global("inquello"),
+        manual_payload_conversion: manual,
+        response: v2::InquelloTaskResponse,
+    },
+
     /// DEPRECATED APIs below
     GetConversationSummary => "getConversationSummary" {
         params: v1::GetConversationSummaryParams,

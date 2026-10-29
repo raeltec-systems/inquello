@@ -12,6 +12,27 @@
  */
 import type { DeleteActionResult, ExportActionResult, ImportActionResult, PolicyView } from '../data/service';
 import { toRendererResult, toRendererStatus, type IdentityActionResult, type IdentityStatus } from '../identity/session';
+import {
+  engagementPayload,
+  engagementUpdatePayload,
+  folderPayload,
+  taskMovePayload,
+  taskPayload,
+  taskRenamePayload,
+  treePayload,
+  type EngagementInput,
+  type EngagementUpdateInput,
+  type EngagementView,
+  type FolderInput,
+  type FolderView,
+  type OrganiseResult,
+  type TaskInput,
+  type TaskMoveInput,
+  type TaskRenameInput,
+  type TaskView,
+  type WorkspacesView,
+  type WorkspaceTreeView,
+} from '../organise';
 import type { CodexLoginRequest } from '../providers/codex-account';
 import { toRendererProviderResult, toRendererProviderStatus, type ProviderActionResult, type ProviderActionView, type ProviderStatus, type ProviderStatusView } from '../providers/status';
 import type { Logger } from '../runtime/logger';
@@ -34,6 +55,14 @@ export const OPERATION_NAMES = [
   'provider.removeClaudeKey',
   'provider.codexLogin',
   'provider.codexLogout',
+  'organise.getWorkspaces',
+  'organise.getTree',
+  'organise.createEngagement',
+  'organise.updateEngagement',
+  'organise.createFolder',
+  'organise.createTask',
+  'organise.renameTask',
+  'organise.moveTask',
 ] as const;
 export type OperationName = (typeof OPERATION_NAMES)[number];
 
@@ -185,12 +214,25 @@ export interface ProviderOperations {
   codexLogout(): Promise<ProviderActionResult>;
 }
 
+/** Private Workspace organisation as the operations see it (main-owned; see `organise/service.ts`). */
+export interface OrganiseOperations {
+  getWorkspaces(): Promise<WorkspacesView>;
+  getTree(workspaceId: string): Promise<OrganiseResult<WorkspaceTreeView>>;
+  createEngagement(input: EngagementInput): Promise<OrganiseResult<EngagementView>>;
+  updateEngagement(input: EngagementUpdateInput): Promise<OrganiseResult<EngagementView>>;
+  createFolder(input: FolderInput): Promise<OrganiseResult<FolderView>>;
+  createTask(input: TaskInput): Promise<OrganiseResult<TaskView>>;
+  renameTask(input: TaskRenameInput): Promise<OrganiseResult<TaskView>>;
+  moveTask(input: TaskMoveInput): Promise<OrganiseResult<TaskView>>;
+}
+
 export interface OperationDeps {
   runtimeState: () => RuntimeState;
   runtimeVersion: string;
   identity: IdentityOperations;
   data: DataOperations;
   provider: ProviderOperations;
+  organise: OrganiseOperations;
 }
 
 /**
@@ -274,6 +316,48 @@ export function createOperations(deps: OperationDeps): Operation[] {
     validate: noPayload,
     handle: async () => toRendererProviderResult(await deps.provider.codexLogout()),
   };
+  // Private Workspace organisation (Story 1.14): main binds the principal and
+  // mediates every call; no payload names a principal, a path or a share.
+  const organiseWorkspaces: Operation<undefined, WorkspacesView> = {
+    name: 'organise.getWorkspaces',
+    validate: noPayload,
+    handle: () => deps.organise.getWorkspaces(),
+  };
+  const organiseTree: Operation<{ workspaceId: string }, OrganiseResult<WorkspaceTreeView>> = {
+    name: 'organise.getTree',
+    validate: treePayload,
+    handle: ({ workspaceId }) => deps.organise.getTree(workspaceId),
+  };
+  const organiseCreateEngagement: Operation<EngagementInput, OrganiseResult<EngagementView>> = {
+    name: 'organise.createEngagement',
+    validate: engagementPayload,
+    handle: (input) => deps.organise.createEngagement(input),
+  };
+  const organiseUpdateEngagement: Operation<EngagementUpdateInput, OrganiseResult<EngagementView>> = {
+    name: 'organise.updateEngagement',
+    validate: engagementUpdatePayload,
+    handle: (input) => deps.organise.updateEngagement(input),
+  };
+  const organiseCreateFolder: Operation<FolderInput, OrganiseResult<FolderView>> = {
+    name: 'organise.createFolder',
+    validate: folderPayload,
+    handle: (input) => deps.organise.createFolder(input),
+  };
+  const organiseCreateTask: Operation<TaskInput, OrganiseResult<TaskView>> = {
+    name: 'organise.createTask',
+    validate: taskPayload,
+    handle: (input) => deps.organise.createTask(input),
+  };
+  const organiseRenameTask: Operation<TaskRenameInput, OrganiseResult<TaskView>> = {
+    name: 'organise.renameTask',
+    validate: taskRenamePayload,
+    handle: (input) => deps.organise.renameTask(input),
+  };
+  const organiseMoveTask: Operation<TaskMoveInput, OrganiseResult<TaskView>> = {
+    name: 'organise.moveTask',
+    validate: taskMovePayload,
+    handle: (input) => deps.organise.moveTask(input),
+  };
   return [
     getStatus,
     identityStatus,
@@ -289,6 +373,14 @@ export function createOperations(deps: OperationDeps): Operation[] {
     removeClaudeKey,
     codexLogin,
     codexLogout,
+    organiseWorkspaces,
+    organiseTree,
+    organiseCreateEngagement,
+    organiseUpdateEngagement,
+    organiseCreateFolder,
+    organiseCreateTask,
+    organiseRenameTask,
+    organiseMoveTask,
   ] as Operation[];
 }
 

@@ -1771,6 +1771,331 @@
       ],
       "type": "object"
     },
+    "InquelloEngagementCreateParams": {
+      "properties": {
+        "clientEntity": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "objectives": {
+          "type": "string"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "periodEnd": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "periodStart": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scope": {
+          "type": "string"
+        },
+        "serviceEngagementId": {
+          "description": "The shared-service Engagement main created first (Story 1.11).",
+          "type": "string"
+        },
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "expectedRevision",
+        "name",
+        "objectives",
+        "operationId",
+        "scope",
+        "serviceEngagementId",
+        "workspaceId"
+      ],
+      "type": "object"
+    },
+    "InquelloEngagementUpdateParams": {
+      "properties": {
+        "clientEntity": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "engagementId": {
+          "type": "string"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "objectives": {
+          "type": "string"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "periodEnd": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "periodStart": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scope": {
+          "type": "string"
+        },
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "engagementId",
+        "expectedRevision",
+        "name",
+        "objectives",
+        "operationId",
+        "scope",
+        "workspaceId"
+      ],
+      "type": "object"
+    },
+    "InquelloFolderCreateParams": {
+      "properties": {
+        "engagementId": {
+          "type": "string"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "engagementId",
+        "expectedRevision",
+        "name",
+        "operationId",
+        "workspaceId"
+      ],
+      "type": "object"
+    },
+    "InquelloSetPrincipalParams": {
+      "properties": {
+        "principalId": {
+          "description": "The signed-in shared-service principal, or null when signed out.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "InquelloTaskAttachThreadParams": {
+      "properties": {
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "runtimeThreadId": {
+          "type": "string"
+        },
+        "taskId": {
+          "type": "string"
+        },
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "expectedRevision",
+        "operationId",
+        "runtimeThreadId",
+        "taskId",
+        "workspaceId"
+      ],
+      "type": "object"
+    },
+    "InquelloTaskCreateParams": {
+      "properties": {
+        "engagementId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "folderId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "expectedRevision",
+        "operationId",
+        "title",
+        "workspaceId"
+      ],
+      "type": "object"
+    },
+    "InquelloTaskMoveParams": {
+      "properties": {
+        "engagementId": {
+          "description": "The target Engagement, or null for an ad hoc Task.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "folderId": {
+          "description": "A folder of the target Engagement, or null.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "taskId": {
+          "type": "string"
+        },
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "expectedRevision",
+        "operationId",
+        "taskId",
+        "workspaceId"
+      ],
+      "type": "object"
+    },
+    "InquelloTaskRenameParams": {
+      "properties": {
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "taskId": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "expectedRevision",
+        "operationId",
+        "taskId",
+        "title",
+        "workspaceId"
+      ],
+      "type": "object"
+    },
+    "InquelloWorkspaceListParams": {
+      "type": "object"
+    },
+    "InquelloWorkspaceRememberParams": {
+      "properties": {
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "expectedRevision",
+        "name",
+        "operationId",
+        "workspaceId"
+      ],
+      "type": "object"
+    },
+    "InquelloWorkspaceTreeParams": {
+      "properties": {
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "workspaceId"
+      ],
+      "type": "object"
+    },
     "InternalChatMessageMetadataPassthrough": {
       "description": "Internal Responses API passthrough metadata copied into underlying chat messages.\n\nResponses API strongly types this payload. Do not modify it without first getting API approval and making the corresponding Responses API change.",
       "properties": {
@@ -8823,6 +9148,271 @@
         "params"
       ],
       "title": "Account/readRequest",
+      "type": "object"
+    },
+    {
+      "description": "Inquello (Story 1.14): binds the signed-in principal to this connection.",
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "enum": [
+            "inquello/session/setPrincipal"
+          ],
+          "title": "Inquello/session/setPrincipalRequestMethod",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/definitions/InquelloSetPrincipalParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "title": "Inquello/session/setPrincipalRequest",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "enum": [
+            "inquello/workspace/list"
+          ],
+          "title": "Inquello/workspace/listRequestMethod",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/definitions/InquelloWorkspaceListParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "title": "Inquello/workspace/listRequest",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "enum": [
+            "inquello/workspace/remember"
+          ],
+          "title": "Inquello/workspace/rememberRequestMethod",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/definitions/InquelloWorkspaceRememberParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "title": "Inquello/workspace/rememberRequest",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "enum": [
+            "inquello/workspace/tree"
+          ],
+          "title": "Inquello/workspace/treeRequestMethod",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/definitions/InquelloWorkspaceTreeParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "title": "Inquello/workspace/treeRequest",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "enum": [
+            "inquello/engagement/create"
+          ],
+          "title": "Inquello/engagement/createRequestMethod",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/definitions/InquelloEngagementCreateParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "title": "Inquello/engagement/createRequest",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "enum": [
+            "inquello/engagement/update"
+          ],
+          "title": "Inquello/engagement/updateRequestMethod",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/definitions/InquelloEngagementUpdateParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "title": "Inquello/engagement/updateRequest",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "enum": [
+            "inquello/folder/create"
+          ],
+          "title": "Inquello/folder/createRequestMethod",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/definitions/InquelloFolderCreateParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "title": "Inquello/folder/createRequest",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "enum": [
+            "inquello/task/create"
+          ],
+          "title": "Inquello/task/createRequestMethod",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/definitions/InquelloTaskCreateParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "title": "Inquello/task/createRequest",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "enum": [
+            "inquello/task/rename"
+          ],
+          "title": "Inquello/task/renameRequestMethod",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/definitions/InquelloTaskRenameParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "title": "Inquello/task/renameRequest",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "enum": [
+            "inquello/task/move"
+          ],
+          "title": "Inquello/task/moveRequestMethod",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/definitions/InquelloTaskMoveParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "title": "Inquello/task/moveRequest",
+      "type": "object"
+    },
+    {
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "enum": [
+            "inquello/task/attachThread"
+          ],
+          "title": "Inquello/task/attachThreadRequestMethod",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/definitions/InquelloTaskAttachThreadParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "title": "Inquello/task/attachThreadRequest",
       "type": "object"
     },
     {

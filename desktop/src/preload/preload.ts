@@ -14,6 +14,9 @@
  * the renderer's arguments: the key (or login choice) the user entered, which
  * main validates. Nothing main returns ever holds a key.
  *
+ * The `organise` operations (Story 1.14) forward the renderer's arguments so
+ * main's validators judge them; main binds the signed-in principal itself.
+ *
  * Self-contained by design: a sandboxed preload can `require` only `electron`,
  * so the channel strings are literals that a test checks against
  * `OPERATION_NAMES` in `src/main/security/operations.ts`.
@@ -34,6 +37,14 @@ const PROVIDER_VERIFY_CLAUDE_KEY_CHANNEL = 'inquello:op:provider.verifyClaudeKey
 const PROVIDER_REMOVE_CLAUDE_KEY_CHANNEL = 'inquello:op:provider.removeClaudeKey';
 const PROVIDER_CODEX_LOGIN_CHANNEL = 'inquello:op:provider.codexLogin';
 const PROVIDER_CODEX_LOGOUT_CHANNEL = 'inquello:op:provider.codexLogout';
+const ORGANISE_WORKSPACES_CHANNEL = 'inquello:op:organise.getWorkspaces';
+const ORGANISE_TREE_CHANNEL = 'inquello:op:organise.getTree';
+const ORGANISE_CREATE_ENGAGEMENT_CHANNEL = 'inquello:op:organise.createEngagement';
+const ORGANISE_UPDATE_ENGAGEMENT_CHANNEL = 'inquello:op:organise.updateEngagement';
+const ORGANISE_CREATE_FOLDER_CHANNEL = 'inquello:op:organise.createFolder';
+const ORGANISE_CREATE_TASK_CHANNEL = 'inquello:op:organise.createTask';
+const ORGANISE_RENAME_TASK_CHANNEL = 'inquello:op:organise.renameTask';
+const ORGANISE_MOVE_TASK_CHANNEL = 'inquello:op:organise.moveTask';
 
 const api = Object.freeze({
   runtime: Object.freeze({
@@ -71,6 +82,24 @@ const api = Object.freeze({
     codexLogin: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(PROVIDER_CODEX_LOGIN_CHANNEL, ...args),
     /** Removes the Codex login from the OS keyring; resolves with `{ ok, reason?, status }`. */
     codexLogout: (): Promise<unknown> => ipcRenderer.invoke(PROVIDER_CODEX_LOGOUT_CHANNEL),
+  }),
+  organise: Object.freeze({
+    /** Resolves with `{ signedIn, sharedService, workspaces, engagementCreation }`. Takes no arguments. */
+    getWorkspaces: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ORGANISE_WORKSPACES_CHANNEL, ...args),
+    /** `{ workspaceId }`; resolves with `{ ok, value: { engagements, folders, tasks } }` (own Tasks only) or `{ ok: false, reason }`. */
+    getTree: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ORGANISE_TREE_CHANNEL, ...args),
+    /** Creates the shared-service Engagement, then the local record; resolves with `{ ok, value? , reason? }`. */
+    createEngagement: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ORGANISE_CREATE_ENGAGEMENT_CHANNEL, ...args),
+    /** Renames or edits an Engagement at an expected revision. */
+    updateEngagement: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ORGANISE_UPDATE_ENGAGEMENT_CHANNEL, ...args),
+    /** Creates a folder in an Engagement. */
+    createFolder: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ORGANISE_CREATE_FOLDER_CHANNEL, ...args),
+    /** Creates a private Task (ad hoc, in an Engagement or in a folder). */
+    createTask: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ORGANISE_CREATE_TASK_CHANNEL, ...args),
+    /** Renames a Task at an expected revision. */
+    renameTask: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ORGANISE_RENAME_TASK_CHANNEL, ...args),
+    /** Moves a Task to another Engagement and folder, or to none; it stays private. */
+    moveTask: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ORGANISE_MOVE_TASK_CHANNEL, ...args),
   }),
 });
 

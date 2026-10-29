@@ -8,7 +8,7 @@ import path from 'node:path';
 import type { Logger } from '../runtime/logger';
 import type { BrowserOpener } from './browser';
 import { loadServiceConfig, type ConfigResult } from './config';
-import { IssuerClient, SharedServiceClient, httpsTransport, type HttpsTransport } from './service-client';
+import { IssuerClient, SharedServiceClient, httpsTransport, type HttpsTransport, type SharedService } from './service-client';
 import { IdentitySession } from './session';
 import { CredentialVault, type SafeStorageLike } from './vault';
 
@@ -23,6 +23,8 @@ export interface IdentityWiring {
   config: ConfigResult;
   /** The scoped-trust HTTPS transport, when configured. */
   transport: HttpsTransport | null;
+  /** The shared-service client the session uses, when configured (Story 1.14 also uses its Workspace routes). */
+  service: SharedService | null;
 }
 
 export interface IdentityWiringOptions {
@@ -45,15 +47,16 @@ export function createIdentity(options: IdentityWiringOptions): IdentityWiring {
   if (config.kind === 'invalid') options.logger.error(`identity: ${config.reason}`);
   const vault = new CredentialVault({ safeStorage: options.safeStorage, platform: options.platform, dir: identityDir(options.userDataDir) });
   const transport = config.kind === 'configured' ? httpsTransport(config.config.ca) : null;
+  const service = config.kind === 'configured' && transport ? new SharedServiceClient(config.config.serviceUrl, transport) : null;
   const session = new IdentitySession({
     config,
     vault,
-    service: config.kind === 'configured' && transport ? new SharedServiceClient(config.config.serviceUrl, transport) : undefined,
+    service: service ?? undefined,
     issuer: config.kind === 'configured' && transport ? new IssuerClient(config.config.issuerUrl, transport) : undefined,
     openBrowser: options.opener(transport),
     logger: options.logger,
     recordSecrets: options.recordSecrets,
   });
   options.logger.info(`identity: shared service ${config.kind}; credential storage ${vault.storage}`);
-  return { session, vault, config, transport };
+  return { session, vault, config, transport, service };
 }

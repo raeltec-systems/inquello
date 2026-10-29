@@ -2733,6 +2733,271 @@
           "type": "object"
         },
         {
+          "description": "Inquello (Story 1.14): binds the signed-in principal to this connection.",
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/v2/RequestId"
+            },
+            "method": {
+              "enum": [
+                "inquello/session/setPrincipal"
+              ],
+              "title": "Inquello/session/setPrincipalRequestMethod",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/definitions/v2/InquelloSetPrincipalParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "title": "Inquello/session/setPrincipalRequest",
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/v2/RequestId"
+            },
+            "method": {
+              "enum": [
+                "inquello/workspace/list"
+              ],
+              "title": "Inquello/workspace/listRequestMethod",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/definitions/v2/InquelloWorkspaceListParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "title": "Inquello/workspace/listRequest",
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/v2/RequestId"
+            },
+            "method": {
+              "enum": [
+                "inquello/workspace/remember"
+              ],
+              "title": "Inquello/workspace/rememberRequestMethod",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/definitions/v2/InquelloWorkspaceRememberParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "title": "Inquello/workspace/rememberRequest",
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/v2/RequestId"
+            },
+            "method": {
+              "enum": [
+                "inquello/workspace/tree"
+              ],
+              "title": "Inquello/workspace/treeRequestMethod",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/definitions/v2/InquelloWorkspaceTreeParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "title": "Inquello/workspace/treeRequest",
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/v2/RequestId"
+            },
+            "method": {
+              "enum": [
+                "inquello/engagement/create"
+              ],
+              "title": "Inquello/engagement/createRequestMethod",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/definitions/v2/InquelloEngagementCreateParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "title": "Inquello/engagement/createRequest",
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/v2/RequestId"
+            },
+            "method": {
+              "enum": [
+                "inquello/engagement/update"
+              ],
+              "title": "Inquello/engagement/updateRequestMethod",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/definitions/v2/InquelloEngagementUpdateParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "title": "Inquello/engagement/updateRequest",
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/v2/RequestId"
+            },
+            "method": {
+              "enum": [
+                "inquello/folder/create"
+              ],
+              "title": "Inquello/folder/createRequestMethod",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/definitions/v2/InquelloFolderCreateParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "title": "Inquello/folder/createRequest",
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/v2/RequestId"
+            },
+            "method": {
+              "enum": [
+                "inquello/task/create"
+              ],
+              "title": "Inquello/task/createRequestMethod",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/definitions/v2/InquelloTaskCreateParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "title": "Inquello/task/createRequest",
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/v2/RequestId"
+            },
+            "method": {
+              "enum": [
+                "inquello/task/rename"
+              ],
+              "title": "Inquello/task/renameRequestMethod",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/definitions/v2/InquelloTaskRenameParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "title": "Inquello/task/renameRequest",
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/v2/RequestId"
+            },
+            "method": {
+              "enum": [
+                "inquello/task/move"
+              ],
+              "title": "Inquello/task/moveRequestMethod",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/definitions/v2/InquelloTaskMoveParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "title": "Inquello/task/moveRequest",
+          "type": "object"
+        },
+        {
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/v2/RequestId"
+            },
+            "method": {
+              "enum": [
+                "inquello/task/attachThread"
+              ],
+              "title": "Inquello/task/attachThreadRequestMethod",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/definitions/v2/InquelloTaskAttachThreadParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "title": "Inquello/task/attachThreadRequest",
+          "type": "object"
+        },
+        {
           "properties": {
             "id": {
               "$ref": "#/definitions/v2/RequestId"
@@ -14019,6 +14284,702 @@
             "type": "string"
           }
         ]
+      },
+      "InquelloEngagement": {
+        "properties": {
+          "clientEntity": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "engagementId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "objectives": {
+            "type": "string"
+          },
+          "periodEnd": {
+            "description": "`YYYY-MM-DD`.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "periodStart": {
+            "description": "`YYYY-MM-DD`.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "revision": {
+            "format": "uint64",
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "scope": {
+            "type": "string"
+          },
+          "serviceEngagementId": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "engagementId",
+          "name",
+          "objectives",
+          "revision",
+          "scope",
+          "serviceEngagementId",
+          "workspaceId"
+        ],
+        "type": "object"
+      },
+      "InquelloEngagementCreateParams": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+          "clientEntity": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "expectedRevision": {
+            "format": "uint64",
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "objectives": {
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "periodEnd": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "periodStart": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "scope": {
+            "type": "string"
+          },
+          "serviceEngagementId": {
+            "description": "The shared-service Engagement main created first (Story 1.11).",
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "expectedRevision",
+          "name",
+          "objectives",
+          "operationId",
+          "scope",
+          "serviceEngagementId",
+          "workspaceId"
+        ],
+        "title": "InquelloEngagementCreateParams",
+        "type": "object"
+      },
+      "InquelloEngagementResponse": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+          "engagement": {
+            "$ref": "#/definitions/v2/InquelloEngagement"
+          },
+          "receipt": {
+            "$ref": "#/definitions/v2/InquelloReceipt"
+          }
+        },
+        "required": [
+          "engagement",
+          "receipt"
+        ],
+        "title": "InquelloEngagementResponse",
+        "type": "object"
+      },
+      "InquelloEngagementUpdateParams": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+          "clientEntity": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "engagementId": {
+            "type": "string"
+          },
+          "expectedRevision": {
+            "format": "uint64",
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "objectives": {
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "periodEnd": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "periodStart": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "scope": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "engagementId",
+          "expectedRevision",
+          "name",
+          "objectives",
+          "operationId",
+          "scope",
+          "workspaceId"
+        ],
+        "title": "InquelloEngagementUpdateParams",
+        "type": "object"
+      },
+      "InquelloFolder": {
+        "properties": {
+          "engagementId": {
+            "type": "string"
+          },
+          "folderId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "revision": {
+            "format": "uint64",
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "engagementId",
+          "folderId",
+          "name",
+          "revision",
+          "workspaceId"
+        ],
+        "type": "object"
+      },
+      "InquelloFolderCreateParams": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+          "engagementId": {
+            "type": "string"
+          },
+          "expectedRevision": {
+            "format": "uint64",
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "engagementId",
+          "expectedRevision",
+          "name",
+          "operationId",
+          "workspaceId"
+        ],
+        "title": "InquelloFolderCreateParams",
+        "type": "object"
+      },
+      "InquelloFolderResponse": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+          "folder": {
+            "$ref": "#/definitions/v2/InquelloFolder"
+          },
+          "receipt": {
+            "$ref": "#/definitions/v2/InquelloReceipt"
+          }
+        },
+        "required": [
+          "folder",
+          "receipt"
+        ],
+        "title": "InquelloFolderResponse",
+        "type": "object"
+      },
+      "InquelloKnownWorkspace": {
+        "description": "A Workspace this device knows for the bound principal.",
+        "properties": {
+          "labelRevision": {
+            "description": "The label's revision; 0 when no label is stored.",
+            "format": "uint64",
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "name": {
+            "description": "The last name the principal saw for it; null when only a Task names it.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "labelRevision",
+          "workspaceId"
+        ],
+        "type": "object"
+      },
+      "InquelloReceipt": {
+        "description": "What a mutation's receipt recorded.",
+        "properties": {
+          "command": {
+            "type": "string"
+          },
+          "expectedRevision": {
+            "format": "uint64",
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "replayed": {
+            "description": "True when this answer came from an earlier application of the operation.",
+            "type": "boolean"
+          },
+          "resultingRevision": {
+            "format": "uint64",
+            "minimum": 0.0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "command",
+          "expectedRevision",
+          "operationId",
+          "replayed",
+          "resultingRevision"
+        ],
+        "type": "object"
+      },
+      "InquelloSetPrincipalParams": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+          "principalId": {
+            "description": "The signed-in shared-service principal, or null when signed out.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "InquelloSetPrincipalParams",
+        "type": "object"
+      },
+      "InquelloSetPrincipalResponse": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+          "principalId": {
+            "description": "The principal now bound to this connection, if any.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "title": "InquelloSetPrincipalResponse",
+        "type": "object"
+      },
+      "InquelloTask": {
+        "properties": {
+          "artifactRefs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "creatorPrincipalId": {
+            "type": "string"
+          },
+          "engagementId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "folderId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "revision": {
+            "format": "uint64",
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "runtimeThreadId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sourceRefs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "taskId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "visibility": {
+            "$ref": "#/definitions/v2/InquelloTaskVisibility"
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "artifactRefs",
+          "creatorPrincipalId",
+          "revision",
+          "sourceRefs",
+          "taskId",
+          "title",
+          "visibility",
+          "workspaceId"
+        ],
+        "type": "object"
+      },
+      "InquelloTaskAttachThreadParams": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+          "expectedRevision": {
+            "format": "uint64",
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "runtimeThreadId": {
+            "type": "string"
+          },
+          "taskId": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "expectedRevision",
+          "operationId",
+          "runtimeThreadId",
+          "taskId",
+          "workspaceId"
+        ],
+        "title": "InquelloTaskAttachThreadParams",
+        "type": "object"
+      },
+      "InquelloTaskCreateParams": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+          "engagementId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "expectedRevision": {
+            "format": "uint64",
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "folderId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "expectedRevision",
+          "operationId",
+          "title",
+          "workspaceId"
+        ],
+        "title": "InquelloTaskCreateParams",
+        "type": "object"
+      },
+      "InquelloTaskMoveParams": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+          "engagementId": {
+            "description": "The target Engagement, or null for an ad hoc Task.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "expectedRevision": {
+            "format": "uint64",
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "folderId": {
+            "description": "A folder of the target Engagement, or null.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "taskId": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "expectedRevision",
+          "operationId",
+          "taskId",
+          "workspaceId"
+        ],
+        "title": "InquelloTaskMoveParams",
+        "type": "object"
+      },
+      "InquelloTaskRenameParams": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+          "expectedRevision": {
+            "format": "uint64",
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "taskId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "expectedRevision",
+          "operationId",
+          "taskId",
+          "title",
+          "workspaceId"
+        ],
+        "title": "InquelloTaskRenameParams",
+        "type": "object"
+      },
+      "InquelloTaskResponse": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+          "receipt": {
+            "$ref": "#/definitions/v2/InquelloReceipt"
+          },
+          "task": {
+            "$ref": "#/definitions/v2/InquelloTask"
+          }
+        },
+        "required": [
+          "receipt",
+          "task"
+        ],
+        "title": "InquelloTaskResponse",
+        "type": "object"
+      },
+      "InquelloTaskVisibility": {
+        "enum": [
+          "private"
+        ],
+        "type": "string"
+      },
+      "InquelloWorkspaceListParams": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "InquelloWorkspaceListParams",
+        "type": "object"
+      },
+      "InquelloWorkspaceListResponse": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+          "workspaces": {
+            "items": {
+              "$ref": "#/definitions/v2/InquelloKnownWorkspace"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "workspaces"
+        ],
+        "title": "InquelloWorkspaceListResponse",
+        "type": "object"
+      },
+      "InquelloWorkspaceRememberParams": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+          "expectedRevision": {
+            "format": "uint64",
+            "minimum": 0.0,
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "operationId": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "expectedRevision",
+          "name",
+          "operationId",
+          "workspaceId"
+        ],
+        "title": "InquelloWorkspaceRememberParams",
+        "type": "object"
+      },
+      "InquelloWorkspaceRememberResponse": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+          "receipt": {
+            "$ref": "#/definitions/v2/InquelloReceipt"
+          },
+          "workspace": {
+            "$ref": "#/definitions/v2/InquelloKnownWorkspace"
+          }
+        },
+        "required": [
+          "receipt",
+          "workspace"
+        ],
+        "title": "InquelloWorkspaceRememberResponse",
+        "type": "object"
+      },
+      "InquelloWorkspaceTreeParams": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+          "workspaceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspaceId"
+        ],
+        "title": "InquelloWorkspaceTreeParams",
+        "type": "object"
+      },
+      "InquelloWorkspaceTreeResponse": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "description": "A Workspace's Engagements and folders, and only the bound principal's Tasks.",
+        "properties": {
+          "engagements": {
+            "items": {
+              "$ref": "#/definitions/v2/InquelloEngagement"
+            },
+            "type": "array"
+          },
+          "folders": {
+            "items": {
+              "$ref": "#/definitions/v2/InquelloFolder"
+            },
+            "type": "array"
+          },
+          "tasks": {
+            "items": {
+              "$ref": "#/definitions/v2/InquelloTask"
+            },
+            "type": "array"
+          },
+          "workspaceId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "engagements",
+          "folders",
+          "tasks",
+          "workspaceId"
+        ],
+        "title": "InquelloWorkspaceTreeResponse",
+        "type": "object"
       },
       "InstalledApp": {
         "description": "Installed connector runtime state.",

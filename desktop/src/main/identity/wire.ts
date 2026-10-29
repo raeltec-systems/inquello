@@ -202,8 +202,94 @@ export const parseCommandResponse = object({
 });
 export type CommandResponse = ReturnType<typeof parseCommandResponse>;
 
-export const parseErrorBody = object({ error: object({ kind: oneOf(ERROR_KINDS), message: str }) });
+/** Why a `denied` (or `unauthenticated`) refusal was made; never names a resource (Story 1.11). */
+export const DENY_REASONS = ['not_signed_in', 'not_a_member', 'role_lacks_action', 'no_grant', 'not_the_creator', 'route_not_available'] as const;
+export type DenyReason = (typeof DENY_REASONS)[number];
+
+export const parseErrorBody = object({ error: object({ kind: oneOf(ERROR_KINDS), message: str, reason: optional(oneOf(DENY_REASONS)) }) });
 export type ErrorBody = ReturnType<typeof parseErrorBody>;
+
+// ---- Workspaces, memberships and invites (Story 1.11) ----------------------------
+
+export const ROLE_KINDS = ['audit_team', 'reviewer'] as const;
+export const ACTIONS = ['read', 'derive', 'comment', 'submit_review', 'issue_notes', 'share', 'export', 'manage_membership'] as const;
+
+export const parseEngagementView = object({ engagement_id: uuid, name: str, revision: decimal });
+export const parseMembershipBindingView = object({ status: oneOf(['active', 'removed'] as const), roles: array(str), policy_revision: decimal, revision: decimal });
+export const parseWorkspaceView = object({
+  workspace_id: uuid,
+  name: str,
+  kind: str,
+  revision: decimal,
+  authorization_epoch: decimal,
+  policy_revision: decimal,
+  membership: parseMembershipBindingView,
+  engagements: array(parseEngagementView),
+});
+export type WorkspaceView = ReturnType<typeof parseWorkspaceView>;
+export const parseWorkspacesView = object({ principal_id: uuid, workspaces: array(parseWorkspaceView) });
+export type WorkspacesView = ReturnType<typeof parseWorkspacesView>;
+
+export const parseRoleView = object({ role_id: str, kind: oneOf(ROLE_KINDS), label: str, actions: array(oneOf(ACTIONS)) });
+export const parseRolesView = object({ workspace_id: uuid, policy_revision: decimal, roles: array(parseRoleView) });
+export type RolesView = ReturnType<typeof parseRolesView>;
+
+export const parsePolicyRole = object({ id: str, kind: oneOf(ROLE_KINDS), label: str, actions: array(oneOf(ACTIONS)) });
+export const parseWorkspacePolicy = object({ policy_version: u32, roles: array(parsePolicyRole) });
+
+export const parseAcceptInviteResponse = object({
+  invite_id: uuid,
+  workspace_id: uuid,
+  principal_id: uuid,
+  roles: array(str),
+  membership_revision: decimal,
+  authorization_epoch: decimal,
+});
+export type AcceptInviteResponse = ReturnType<typeof parseAcceptInviteResponse>;
+
+/** One Workspace command payload; only `create_engagement` is sent by the desktop today. */
+export const parseWorkspaceCommand: (value: unknown, path: string) => Record<string, unknown> = (value, path) => {
+  const command = (value as { command?: unknown } | null)?.command;
+  switch (command) {
+    case 'issue_invite':
+      return object({ command: literal('issue_invite'), issuer: str, subject: str, roles: array(str) })(value, path);
+    case 'revoke_invite':
+      return object({ command: literal('revoke_invite'), invite_id: uuid })(value, path);
+    case 'change_roles':
+      return object({ command: literal('change_roles'), principal_id: uuid, roles: array(str) })(value, path);
+    case 'remove_member':
+      return object({ command: literal('remove_member'), principal_id: uuid })(value, path);
+    case 'create_engagement':
+      return object({ command: literal('create_engagement'), name: str })(value, path);
+    case 'add_engagement_member':
+      return object({ command: literal('add_engagement_member'), engagement_id: uuid, principal_id: uuid })(value, path);
+    case 'remove_engagement_member':
+      return object({ command: literal('remove_engagement_member'), engagement_id: uuid, principal_id: uuid })(value, path);
+    default:
+      return fail(`${path}.command`, 'unknown command');
+  }
+};
+
+export const parseWorkspaceCommandEnvelope = object({
+  command_epoch: decimal,
+  operation_id: str,
+  workspace_id: uuid,
+  expected_revision: decimal,
+  schema_version: u32,
+  payload: parseWorkspaceCommand,
+});
+export interface CreateEngagementEnvelope {
+  command_epoch: string;
+  operation_id: string;
+  workspace_id: string;
+  expected_revision: string;
+  schema_version: number;
+  payload: { command: 'create_engagement'; name: string };
+}
+
+export const parseResourceRef = object({ kind: oneOf(['private_task', 'shared_resource'] as const), resource_id: uuid });
+export const parseAccessCheckRequest = object({ action: oneOf(ACTIONS), resource: optional(parseResourceRef) });
+export const parseAccessCheckResponse = object({ decision: literal('allowed'), authorization_epoch: decimal });
 
 /** The protocol major and envelope schema version this desktop speaks. */
 export const PROTOCOL_MAJOR = 1;

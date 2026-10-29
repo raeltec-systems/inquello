@@ -1,0 +1,194 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "InquelloEngagement": {
+      "properties": {
+        "clientEntity": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "engagementId": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "objectives": {
+          "type": "string"
+        },
+        "periodEnd": {
+          "description": "`YYYY-MM-DD`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "periodStart": {
+          "description": "`YYYY-MM-DD`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "scope": {
+          "type": "string"
+        },
+        "serviceEngagementId": {
+          "type": "string"
+        },
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "engagementId",
+        "name",
+        "objectives",
+        "revision",
+        "scope",
+        "serviceEngagementId",
+        "workspaceId"
+      ],
+      "type": "object"
+    },
+    "InquelloFolder": {
+      "properties": {
+        "engagementId": {
+          "type": "string"
+        },
+        "folderId": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "engagementId",
+        "folderId",
+        "name",
+        "revision",
+        "workspaceId"
+      ],
+      "type": "object"
+    },
+    "InquelloTask": {
+      "properties": {
+        "artifactRefs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "creatorPrincipalId": {
+          "type": "string"
+        },
+        "engagementId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "folderId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "runtimeThreadId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sourceRefs": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "taskId": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "visibility": {
+          "$ref": "#/definitions/InquelloTaskVisibility"
+        },
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifactRefs",
+        "creatorPrincipalId",
+        "revision",
+        "sourceRefs",
+        "taskId",
+        "title",
+        "visibility",
+        "workspaceId"
+      ],
+      "type": "object"
+    },
+    "InquelloTaskVisibility": {
+      "enum": [
+        "private"
+      ],
+      "type": "string"
+    }
+  },
+  "description": "A Workspace's Engagements and folders, and only the bound principal's Tasks.",
+  "properties": {
+    "engagements": {
+      "items": {
+        "$ref": "#/definitions/InquelloEngagement"
+      },
+      "type": "array"
+    },
+    "folders": {
+      "items": {
+        "$ref": "#/definitions/InquelloFolder"
+      },
+      "type": "array"
+    },
+    "tasks": {
+      "items": {
+        "$ref": "#/definitions/InquelloTask"
+      },
+      "type": "array"
+    },
+    "workspaceId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "engagements",
+    "folders",
+    "tasks",
+    "workspaceId"
+  ],
+  "title": "InquelloWorkspaceTreeResponse",
+  "type": "object"
+}

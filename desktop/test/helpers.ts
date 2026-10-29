@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { AppServerRuntime, type AppServerRuntimeOptions, type Logger, type RuntimeState } from '../src/main/runtime';
+import type { OrganiseOperations } from '../src/main/security/operations';
 
 export const FAKE_SERVER = path.join(__dirname, 'fixtures', 'fake-app-server.mjs');
 
@@ -97,4 +98,28 @@ export async function waitFor(predicate: () => boolean, timeoutMs = 5_000, label
     if (Date.now() > deadline) throw new Error(`timed out waiting for ${label}`);
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
+}
+
+/** Organise operations for registry tests: each records its call and answers signed out (Story 1.14). */
+export function fakeOrganise(calls: string[] = []): OrganiseOperations {
+  const signedOut = { ok: false as const, code: 'signed-out' as const, reason: 'Sign in to see your Workspaces and private Tasks.' };
+  const record =
+    (name: string) =>
+    async (...args: unknown[]) => {
+      calls.push(`${name}:${JSON.stringify(args)}`);
+      return signedOut;
+    };
+  return {
+    getWorkspaces: async () => {
+      calls.push('getWorkspaces');
+      return { signedIn: false, sharedService: 'not-configured', workspaces: [], engagementCreation: { enabled: false, reason: signedOut.reason } };
+    },
+    getTree: record('getTree'),
+    createEngagement: record('createEngagement'),
+    updateEngagement: record('updateEngagement'),
+    createFolder: record('createFolder'),
+    createTask: record('createTask'),
+    renameTask: record('renameTask'),
+    moveTask: record('moveTask'),
+  };
 }
