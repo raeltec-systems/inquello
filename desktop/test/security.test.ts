@@ -267,6 +267,25 @@ describe('operation registry', () => {
     expect(organiseCalls).toEqual([`getTree:${JSON.stringify([workspaceId])}`, `createTask:${JSON.stringify([task])}`]);
   });
 
+  it('validates state payloads in main: only Task and run states, and no actor, scope or principal (Story 1.15)', async () => {
+    const taskId = '3a1b2c3d-4e5f-4a6b-8c7d-8e9f0a1b2c3d';
+    const operationId = '0a1b2c3d-4e5f-4a6b-8c7d-8e9f0a1b2c3d';
+    const write = { operationId, taskId, expectedRevision: 0, dimension: 'task', value: 'planned', runId: null };
+    for (const bad of [
+      { ...write, dimension: 'review', value: 'requested' },
+      { ...write, dimension: 'approval_marker', value: 'noted_locally' },
+      { ...write, dimension: 'delivery_marker', value: 'attempted' },
+      { ...write, actorKind: 'human' },
+      { ...write, scopeKind: 'output' },
+    ]) {
+      await expect(ipc.invoke(channelFor('state.recordTaskState'), trustedEvent, bad)).rejects.toThrow('invalid payload for state.recordTaskState');
+    }
+    await expect(ipc.invoke(channelFor('state.list'), trustedEvent, { taskId, principalId: taskId })).rejects.toThrow('invalid payload for state.list');
+    await expect(ipc.invoke(channelFor('state.recordTaskState'), trustedEvent, write)).resolves.toMatchObject({ ok: false });
+    await expect(ipc.invoke(channelFor('state.list'), trustedEvent, { taskId })).resolves.toMatchObject({ ok: false });
+    expect(organiseCalls).toEqual([`recordTaskState:${JSON.stringify([write])}`, `listStates:${JSON.stringify([taskId])}`]);
+  });
+
   it('registers exactly one fixed channel per named operation', () => {
     expect(OPERATION_NAMES).toEqual([
       'runtime.getStatus',
@@ -291,6 +310,8 @@ describe('operation registry', () => {
       'organise.createTask',
       'organise.renameTask',
       'organise.moveTask',
+      'state.list',
+      'state.recordTaskState',
     ]);
     expect([...ipc.handlers.keys()]).toEqual(OPERATION_NAMES.map((name) => `${CHANNEL_PREFIX}${name}`));
   });
@@ -828,12 +849,12 @@ describe('host privilege source scan', () => {
     const uses = body.match(/ipcRenderer[^\n]*/g) ?? [];
     expect(uses.length).toBeGreaterThan(0);
     for (const use of uses) expect(use).toMatch(/^ipcRenderer\.invoke\([A-Z_]+_CHANNEL(?:, \.\.\.args)?\)/);
-    // Only the data operations, the two provider operations that take what the user entered and the organise operations forward arguments.
-    expect((body.match(/_CHANNEL, \.\.\.args\)/g) ?? []).length).toBe(14);
+    // Only the data operations, the two provider operations that take what the user entered, and the organise and state operations forward arguments.
+    expect((body.match(/_CHANNEL, \.\.\.args\)/g) ?? []).length).toBe(16);
     expect(
       body
         .match(/[A-Z_]+_CHANNEL, \.\.\.args\)/g)
-        ?.every((use) => use.startsWith('DATA_') || use.startsWith('PROVIDER_SET_CLAUDE_KEY_') || use.startsWith('PROVIDER_CODEX_LOGIN_') || use.startsWith('ORGANISE_')),
+        ?.every((use) => use.startsWith('DATA_') || use.startsWith('PROVIDER_SET_CLAUDE_KEY_') || use.startsWith('PROVIDER_CODEX_LOGIN_') || use.startsWith('ORGANISE_') || use.startsWith('STATE_')),
     ).toBe(true);
     expect(preload).not.toMatch(/\.on\(|\.send\(|sendSync|postMessage/);
   });

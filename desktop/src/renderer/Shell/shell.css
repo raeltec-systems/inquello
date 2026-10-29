@@ -246,3 +246,52 @@
 .specimen-back {
   padding-top: 0;
 }
+
+/* Story 1.15: the open Task's States. Every value uses StatusChip's neutral custom-label style. */
+.iq-task-states {
+  margin-bottom: var(--space-4);
+}
+
+.iq-task-states-heading {
+  margin: 0 0 var(--space-2);
+  font: var(--type-label);
+}
+
+.iq-task-states-list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-1) var(--space-4);
+  margin: 0;
+}
+
+.iq-task-state {
+  display: contents;
+}
+
+.iq-task-state-name {
+  font: var(--type-ui);
+  color: var(--text-secondary);
+}
+
+.iq-task-state-value {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font: var(--type-ui);
+}
+
+.iq-task-state-none,
+.iq-task-state-meta {
+  font: var(--type-caption);
+  color: var(--text-secondary);
+}
+
+.iq-task-state-history {
+  flex-basis: 100%;
+  margin: 0;
+  padding-left: var(--space-4);
+  font: var(--type-caption);
+  color: var(--text-secondary);
+}

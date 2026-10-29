@@ -162,6 +162,16 @@ Changes only the Inquello crates; no upstream crate's code changes.
 - **`inquello-service`**: expiry is checked against the clock read after the relevant row locks (refresh, bootstrap, `authenticate` and its callers, invite acceptance); `Authenticated` carries that time (R11). New lock-wait tests in `tests/identity.rs`.
 - **Workspace manifest and lockfile**: unchanged.
 
+### Patch 9: Task states (Story 1.15, 2026-10-29)
+
+Changes the Inquello crates and the same upstream points as Patch 7 (protocol entries, the Inquello processor and its dispatch).
+
+- **`inquello-domain/src/state/`**: seven state dimensions (`task`, `run`, `output`, `checks`, `review`, `approval_marker`, `delivery_marker`), each with its exact vocabulary and allowed scope kinds (`task`, `run`, `output`); immutable `StateRecord`s with a per-(dimension, scope) `version`, actor kind (`human`, `runtime`, `system`) and reference, and the Task-state `revision` they created; the `record_task_state` command (operation ID, expected Task-state revision, state receipt, R10 re-lookup) and the creator-only `task_states` query; the `TaskStateStore` port. Writer rules: `review` and `approval_marker` need a human writer (the session's own principal); only `task` and `run` are enabled (`ENABLED_DIMENSIONS`). No transition table spans dimensions. `DomainError` gains `HumanActorRequired`, `DimensionNotEnabled` and `InvalidValue`. No new dependency.
+- **`inquello-adapters`**: migration `0003_task_states.sql` (`task_states`, `state_receipts`; the schema also refuses a non-human `review` or `approval_marker` row and any value outside its dimension's vocabulary) and `src/states.rs`, the SQLite `TaskStateStore` (one `BEGIN IMMEDIATE` transaction per write: receipt check first, Task-state revision compare-and-set, record, receipt). New test target `tests/task_states.rs`; `tests/concurrent_operations.rs` gains the state-write races.
+- **`app-server-protocol`** (upstream crate): `InquelloStateList*` and `InquelloStateRecord*` types in `src/protocol/v2/inquello.rs`, and two `ClientRequest` entries in `src/protocol/common.rs` (`inquello/state/list`, `inquello/state/record`), stable and in the `global("inquello")` queue. New refusal kinds `human_actor_required`, `dimension_not_enabled` and `invalid_value`. The vendored schema fixtures and precomputed exports were regenerated as in Patch 7 (stable and experimental; the Python SDK step was not run).
+- **`app-server`** (upstream crate): `state_list` and `state_record` in `src/request_processors/inquello_processor.rs` (a `human` actor is always the bound principal and takes no reference; `runtime` and `system` need one) and their tests; two dispatch arms in `src/message_processor.rs`.
+- **Workspace manifest and lockfile**: unchanged.
+
 ## Toolchain setup (Windows, everything on D:)
 
 The owner authorized these installs on 2026-10-28. Toolchains, caches and build output stay on D:. The Microsoft C++ build tools were already present and were not installed.

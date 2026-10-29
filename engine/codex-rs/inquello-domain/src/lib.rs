@@ -17,6 +17,9 @@
 //!
 //! The [`organise`] module holds Engagements, folders and private Tasks and
 //! their commands (Story 1.14).
+//!
+//! The [`state`] module holds the separate Task, run, output, checks, review,
+//! approval-marker and delivery-marker states (Story 1.15).
 
 pub mod authorization;
 pub mod capability;
@@ -25,6 +28,7 @@ mod error;
 mod model;
 pub mod organise;
 mod ports;
+pub mod state;
 
 pub use commands::InitializeStore;
 pub use commands::get_store_info;

@@ -1,5 +1,5 @@
-//! Inquello private Workspace organisation (Story 1.14): the `inquello/*`
-//! methods over the Inquello working store.
+//! Inquello private Workspace organisation (Story 1.14) and Task states
+//! (Story 1.15): the `inquello/*` methods over the Inquello working store.
 //!
 //! - The store path comes from `INQUELLO_WORKING_STORE`, which the desktop sets
 //!   to `<userData>/working/working.sqlite`. `codex-app-server` takes the
@@ -15,6 +15,10 @@
 //!   `unauthenticated`.
 //! - Every mutation is an `inquello-domain` command with an operation ID and an
 //!   expected revision; this module only translates the wire shapes.
+//! - `inquello/state/record` takes its actor kind from the desktop main
+//!   process. A `human` actor is always the bound principal; the payload never
+//!   names one. The domain refuses `review` and `approval_marker` from any
+//!   other actor and every dimension except `task` and `run` (Story 1.15).
 
 use crate::error_code::INTERNAL_ERROR_CODE;
 use crate::error_code::INVALID_REQUEST_ERROR_CODE;
@@ -31,6 +35,12 @@ use codex_app_server_protocol::InquelloKnownWorkspace;
 use codex_app_server_protocol::InquelloReceipt;
 use codex_app_server_protocol::InquelloSetPrincipalParams;
 use codex_app_server_protocol::InquelloSetPrincipalResponse;
+use codex_app_server_protocol::InquelloStateDimension;
+use codex_app_server_protocol::InquelloStateListParams;
+use codex_app_server_protocol::InquelloStateListResponse;
+use codex_app_server_protocol::InquelloStateRecord;
+use codex_app_server_protocol::InquelloStateRecordParams;
+use codex_app_server_protocol::InquelloStateRecordResponse;
 use codex_app_server_protocol::InquelloTask;
 use codex_app_server_protocol::InquelloTaskAttachThreadParams;
 use codex_app_server_protocol::InquelloTaskCreateParams;
@@ -54,6 +64,9 @@ use inquello_domain::organise::Actor;
 use inquello_domain::organise::OrganiseOutcome;
 use inquello_domain::organise::OrganiseRecord;
 use inquello_domain::organise::PrincipalId;
+use inquello_domain::state;
+use inquello_domain::state::StateDimension;
+use inquello_domain::state::StateWriter;
 use serde_json::json;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -448,6 +461,110 @@ impl InquelloRequestProcessor {
         task_response(&outcome)
             .map(|response| Some(ClientResponsePayload::InquelloTaskAttachThread(response)))
     }
+
+    // ---- Task states (Story 1.15) ------------------------------------------------
+
+    pub(crate) async fn state_list(
+        &self,
+        connection_id: ConnectionId,
+        params: InquelloStateListParams,
+    ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        let (store, actor) = self.context(connection_id).await?;
+        let states = state::task_states(&store, actor, &params.task_id)
+            .await
+            .map_err(domain_error)?;
+        Ok(Some(
+            InquelloStateListResponse {
+                task_id: states.task_id.to_string(),
+                revision: states.revision.get(),
+                dimensions: StateDimension::ALL
+                    .into_iter()
+                    .map(|dimension| InquelloStateDimension {
+                        dimension: dimension.as_str().to_string(),
+                        records: states.history(dimension).map(state_record_view).collect(),
+                    })
+                    .collect(),
+            }
+            .into(),
+        ))
+    }
+
+    pub(crate) async fn state_record(
+        &self,
+        connection_id: ConnectionId,
+        params: InquelloStateRecordParams,
+    ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        let (store, actor) = self.context(connection_id).await?;
+        let writer = state_writer(&params.actor_kind, params.actor_ref)?;
+        let outcome = state::record_task_state(
+            &store,
+            &SystemClock,
+            actor,
+            state::RecordTaskState {
+                operation_id: params.operation_id,
+                expected_revision: Revision::new(params.expected_revision),
+                task_id: params.task_id,
+                dimension: params.dimension,
+                scope_kind: params.scope_kind,
+                scope_id: params.scope_id,
+                value: params.value,
+                writer,
+            },
+        )
+        .await
+        .map_err(domain_error)?;
+        Ok(Some(
+            InquelloStateRecordResponse {
+                task_id: outcome.record.task_id.to_string(),
+                record: state_record_view(&outcome.record),
+                receipt: InquelloReceipt {
+                    operation_id: outcome.receipt.operation_id.to_string(),
+                    command: state::RECORD_STATE_COMMAND.to_string(),
+                    expected_revision: outcome.receipt.expected_revision.get(),
+                    resulting_revision: outcome.receipt.resulting_revision.get(),
+                    replayed: outcome.replayed,
+                },
+            }
+            .into(),
+        ))
+    }
+}
+
+/// The writer the host attests. A human writer is the bound principal, so a
+/// human actor may not carry a reference of its own.
+fn state_writer(
+    actor_kind: &str,
+    actor_ref: Option<String>,
+) -> Result<StateWriter, JSONRPCErrorError> {
+    let invalid = |message: &str| refusal("invalid", message);
+    match (state::ActorKind::parse(actor_kind), actor_ref) {
+        (Some(state::ActorKind::Human), None) => Ok(StateWriter::Human),
+        (Some(state::ActorKind::Human), Some(_)) => Err(invalid(
+            "a human actor is the signed-in principal and takes no actor reference",
+        )),
+        (Some(state::ActorKind::Runtime), Some(reference)) => {
+            Ok(StateWriter::Runtime { reference })
+        }
+        (Some(state::ActorKind::System), Some(reference)) => Ok(StateWriter::System { reference }),
+        (Some(_), None) => Err(invalid(
+            "a runtime or system actor needs an actor reference",
+        )),
+        (None, _) => Err(invalid("actor_kind must be human, runtime or system")),
+    }
+}
+
+fn state_record_view(record: &state::StateRecord) -> InquelloStateRecord {
+    InquelloStateRecord {
+        dimension: record.dimension.as_str().to_string(),
+        scope_kind: record.scope_kind.as_str().to_string(),
+        scope_id: record.scope_id.clone(),
+        value: record.value.to_string(),
+        version: record.version,
+        actor_kind: record.actor_kind.as_str().to_string(),
+        actor_ref: record.actor_ref.clone(),
+        recorded_at: record.recorded_at.unix_millis(),
+        revision: record.revision.get(),
+    }
 }
 
 /// Opens the store and initializes its `store_info` on first use.
@@ -611,6 +728,18 @@ fn domain_error(error: DomainError) -> JSONRPCErrorError {
         DomainError::OperationConflict { .. } => refusal(
             "operation_conflict",
             "the operation ID was already used for a different request",
+        ),
+        DomainError::HumanActorRequired => refusal(
+            "human_actor_required",
+            "this state can only be recorded by a person",
+        ),
+        DomainError::DimensionNotEnabled => refusal(
+            "dimension_not_enabled",
+            "this state dimension cannot be written yet",
+        ),
+        DomainError::InvalidValue => refusal(
+            "invalid_value",
+            "the value is not a state of this dimension",
         ),
         DomainError::AlreadyInitialized | DomainError::Store(_) => {
             tracing::error!("inquello working store failure: {error}");

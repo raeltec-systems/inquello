@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "description": "Records one state of a Task. Only `task` and `run` have writers yet; the other dimensions answer `dimension_not_enabled`, and `review` or `approval_marker` from a runtime or system actor answer `human_actor_required`.",
+  "properties": {
+    "actorKind": {
+      "description": "Supplied by the desktop main process, never by the renderer: `human` (the bound principal), `runtime` or `system`.",
+      "type": "string"
+    },
+    "actorRef": {
+      "description": "The runtime or host name for a `runtime` or `system` actor; must be absent for `human`, whose reference is the bound principal.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "dimension": {
+      "type": "string"
+    },
+    "expectedRevision": {
+      "description": "The Task's state revision as last read (0 before the first record).",
+      "format": "uint64",
+      "minimum": 0.0,
+      "type": "integer"
+    },
+    "operationId": {
+      "type": "string"
+    },
+    "scopeId": {
+      "type": "string"
+    },
+    "scopeKind": {
+      "type": "string"
+    },
+    "taskId": {
+      "type": "string"
+    },
+    "value": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "actorKind",
+    "dimension",
+    "expectedRevision",
+    "operationId",
+    "scopeId",
+    "scopeKind",
+    "taskId",
+    "value"
+  ],
+  "title": "InquelloStateRecordParams",
+  "type": "object"
+}

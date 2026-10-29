@@ -369,3 +369,270 @@ async fn tasks_are_listed_only_for_their_creator() {
     processor.connection_closed(OTHER);
     assert_eq!(kind(tree(OTHER).await), "unauthenticated");
 }
+
+// ---- Task states (Story 1.15) ----------------------------------------------------
+
+fn state_params(
+    op: &str,
+    expected: u64,
+    task_id: &str,
+    dimension: &str,
+    value: &str,
+    actor_kind: &str,
+) -> InquelloStateRecordParams {
+    let (scope_kind, scope_id) = match dimension {
+        "task" => ("task", task_id.to_string()),
+        "run" => ("run", "run-1".to_string()),
+        _ => ("task", task_id.to_string()),
+    };
+    InquelloStateRecordParams {
+        operation_id: op.to_string(),
+        expected_revision: expected,
+        task_id: task_id.to_string(),
+        dimension: dimension.to_string(),
+        scope_kind: scope_kind.to_string(),
+        scope_id,
+        value: value.to_string(),
+        actor_kind: actor_kind.to_string(),
+        actor_ref: (actor_kind != "human").then(|| "inquello-desktop".to_string()),
+    }
+}
+
+async fn new_task(
+    processor: &InquelloRequestProcessor,
+    connection: ConnectionId,
+    op: &str,
+) -> String {
+    let created: InquelloTaskResponse = decode(
+        processor
+            .task_create(connection, task_params(op, None, None))
+            .await,
+    );
+    created.task.task_id
+}
+
+#[tokio::test]
+async fn task_states_are_recorded_and_listed_by_dimension() {
+    let Fixture {
+        dir: _dir,
+        processor,
+    } = fixture();
+    sign_in(&processor, DESKTOP, ALICE);
+    let task_id = new_task(&processor, DESKTOP, "op-t").await;
+    let list = || {
+        processor.state_list(
+            DESKTOP,
+            InquelloStateListParams {
+                task_id: task_id.clone(),
+            },
+        )
+    };
+    let empty: InquelloStateListResponse = decode(list().await);
+    assert_eq!(empty.revision, 0);
+    assert_eq!(
+        empty
+            .dimensions
+            .iter()
+            .map(|d| (d.dimension.as_str(), d.records.len()))
+            .collect::<Vec<_>>(),
+        vec![
+            ("task", 0),
+            ("run", 0),
+            ("output", 0),
+            ("checks", 0),
+            ("review", 0),
+            ("approval_marker", 0),
+            ("delivery_marker", 0),
+        ]
+    );
+
+    for (op, expected, dimension, value) in [
+        ("op-1", 0, "task", "planned"),
+        ("op-2", 1, "task", "running"),
+        ("op-3", 2, "run", "execution_finished"),
+    ] {
+        let recorded: InquelloStateRecordResponse = decode(
+            processor
+                .state_record(
+                    DESKTOP,
+                    state_params(op, expected, &task_id, dimension, value, "system"),
+                )
+                .await,
+        );
+        assert_eq!(
+            (
+                recorded.record.value.as_str(),
+                recorded.record.revision,
+                recorded.record.actor_kind.as_str(),
+                recorded.receipt.command.as_str(),
+                recorded.receipt.replayed,
+            ),
+            (value, expected + 1, "system", "record_state", false)
+        );
+    }
+    let listed: InquelloStateListResponse = decode(list().await);
+    assert_eq!(listed.revision, 3);
+    let task_history: Vec<_> = listed.dimensions[0]
+        .records
+        .iter()
+        .map(|r| (r.value.as_str(), r.version, r.actor_ref.as_str()))
+        .collect();
+    assert_eq!(
+        task_history,
+        vec![
+            ("running", 2, "inquello-desktop"),
+            ("planned", 1, "inquello-desktop")
+        ]
+    );
+    assert_eq!(listed.dimensions[1].records[0].value, "execution_finished");
+    assert!(listed.dimensions[2..].iter().all(|d| d.records.is_empty()));
+
+    // A replay answers from the receipt.
+    let replay: InquelloStateRecordResponse = decode(
+        processor
+            .state_record(
+                DESKTOP,
+                state_params("op-3", 2, &task_id, "run", "execution_finished", "system"),
+            )
+            .await,
+    );
+    assert!(replay.receipt.replayed);
+}
+
+#[tokio::test]
+async fn state_refusals_carry_their_kinds() {
+    let Fixture {
+        dir: _dir,
+        processor,
+    } = fixture();
+    sign_in(&processor, DESKTOP, ALICE);
+    sign_in(&processor, OTHER, BOB);
+    let task_id = new_task(&processor, DESKTOP, "op-t").await;
+    let refused = |params| processor.state_record(DESKTOP, params);
+    assert_eq!(
+        kind(
+            refused(state_params(
+                "op",
+                0,
+                &task_id,
+                "review",
+                "requested",
+                "system"
+            ))
+            .await
+        ),
+        "human_actor_required"
+    );
+    assert_eq!(
+        kind(
+            refused(state_params(
+                "op",
+                0,
+                &task_id,
+                "approval_marker",
+                "noted_locally",
+                "runtime"
+            ))
+            .await
+        ),
+        "human_actor_required"
+    );
+    assert_eq!(
+        kind(
+            refused(state_params(
+                "op",
+                0,
+                &task_id,
+                "review",
+                "requested",
+                "human"
+            ))
+            .await
+        ),
+        "dimension_not_enabled"
+    );
+    assert_eq!(
+        kind(
+            refused(state_params(
+                "op",
+                0,
+                &task_id,
+                "delivery_marker",
+                "attempted",
+                "system"
+            ))
+            .await
+        ),
+        "dimension_not_enabled"
+    );
+    assert_eq!(
+        kind(refused(state_params("op", 0, &task_id, "run", "done", "system")).await),
+        "invalid_value"
+    );
+    let mut forged = state_params("op", 0, &task_id, "task", "planned", "human");
+    forged.actor_ref = Some(BOB.to_string());
+    assert_eq!(kind(refused(forged).await), "invalid");
+    let mut nameless = state_params("op", 0, &task_id, "task", "planned", "system");
+    nameless.actor_ref = None;
+    assert_eq!(kind(refused(nameless).await), "invalid");
+    assert_eq!(
+        kind(refused(state_params("op", 0, &task_id, "task", "planned", "model")).await),
+        "invalid"
+    );
+
+    let _: InquelloStateRecordResponse = decode(
+        refused(state_params(
+            "op-1", 0, &task_id, "task", "planned", "system",
+        ))
+        .await,
+    );
+    let stale = refused(state_params(
+        "op-2", 0, &task_id, "task", "running", "system",
+    ))
+    .await;
+    let data = stale
+        .as_ref()
+        .err()
+        .and_then(|error| error.data.clone())
+        .unwrap_or_default();
+    assert_eq!(data["inquello"]["kind"], "revision_conflict");
+    assert_eq!(data["inquello"]["actual"], 1);
+    assert_eq!(
+        kind(
+            refused(state_params(
+                "op-1", 0, &task_id, "task", "blocked", "system"
+            ))
+            .await
+        ),
+        "operation_conflict"
+    );
+
+    // Another principal: refused like an unknown Task, for reads and writes.
+    let unknown = uuid::Uuid::new_v4().to_string();
+    for id in [&task_id, &unknown] {
+        assert_eq!(
+            kind(
+                processor
+                    .state_list(
+                        OTHER,
+                        InquelloStateListParams {
+                            task_id: id.clone()
+                        }
+                    )
+                    .await
+            ),
+            "not_found"
+        );
+        assert_eq!(
+            kind(
+                processor
+                    .state_record(
+                        OTHER,
+                        state_params("op-b", 1, id, "task", "running", "system")
+                    )
+                    .await
+            ),
+            "not_found"
+        );
+    }
+}

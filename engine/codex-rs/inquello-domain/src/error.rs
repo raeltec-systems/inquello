@@ -49,6 +49,17 @@ pub enum DomainError {
     /// A move or create targeted an Engagement or folder of another Workspace.
     #[error("the target belongs to another Workspace")]
     WorkspaceMismatch,
+    /// A `review` or `approval_marker` state was written by a runtime or
+    /// system actor: only a human may record it (Story 1.15).
+    #[error("this state can only be recorded by a person")]
+    HumanActorRequired,
+    /// The state dimension has no writer yet (Story 1.15 writes only Task and
+    /// run states).
+    #[error("this state dimension cannot be written yet")]
+    DimensionNotEnabled,
+    /// The value is not in the state dimension's vocabulary.
+    #[error("the value is not a state of this dimension")]
+    InvalidValue,
     #[error(transparent)]
     Store(StoreError),
 }

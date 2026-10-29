@@ -1,4 +1,5 @@
-//! Inquello private Workspace organisation (Story 1.14): `inquello/*` methods.
+//! Inquello private Workspace organisation (Story 1.14) and Task states
+//! (Story 1.15): `inquello/*` methods.
 //!
 //! These methods reach the Inquello working store (`inquello-domain` commands
 //! over the `inquello-adapters` SQLite store). Only the desktop main process
@@ -11,7 +12,8 @@
 //! `{ "inquello": { "kind": ..., "expected"?, "actual"? } }`, with `kind` one of
 //! `unauthenticated`, `store_not_configured`, `store_unavailable`, `invalid`,
 //! `not_found`, `workspace_mismatch`, `revision_conflict`,
-//! `operation_conflict` or `store_failure`.
+//! `operation_conflict`, `human_actor_required`, `dimension_not_enabled`,
+//! `invalid_value` or `store_failure`.
 
 use crate::JsonSchema;
 use crate::TS;
@@ -298,5 +300,99 @@ pub struct InquelloTaskAttachThreadParams {
 #[ts(export_to = "v2/")]
 pub struct InquelloTaskResponse {
     pub task: InquelloTask,
+    pub receipt: InquelloReceipt,
+}
+
+/// Every recorded state of one Task (Story 1.15). Only the Task's creator may
+/// read them; anyone else gets `not_found`, as for an unknown Task.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloStateListParams {
+    pub task_id: String,
+}
+
+/// One immutable state record.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloStateRecord {
+    /// `task`, `run`, `output`, `checks`, `review`, `approval_marker` or
+    /// `delivery_marker`.
+    pub dimension: String,
+    /// `task`, `run` or `output`.
+    pub scope_kind: String,
+    /// The Task ID, a run reference or an output/version reference.
+    pub scope_id: String,
+    /// A value of the dimension's own vocabulary.
+    pub value: String,
+    /// 1 for the first record of this dimension and scope, then one more per record.
+    #[ts(type = "number")]
+    pub version: u64,
+    /// `human`, `runtime` or `system`.
+    pub actor_kind: String,
+    /// The principal ID for a human; the runtime or host name otherwise.
+    pub actor_ref: String,
+    /// Milliseconds since the Unix epoch.
+    #[ts(type = "number")]
+    pub recorded_at: i64,
+    /// The Task-state revision this record created.
+    #[ts(type = "number")]
+    pub revision: u64,
+}
+
+/// One dimension and its records, latest first; empty when not recorded.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloStateDimension {
+    pub dimension: String,
+    pub records: Vec<InquelloStateRecord>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloStateListResponse {
+    pub task_id: String,
+    /// The Task's state revision: 0 before the first record.
+    #[ts(type = "number")]
+    pub revision: u64,
+    /// All seven dimensions, in a fixed order.
+    pub dimensions: Vec<InquelloStateDimension>,
+}
+
+/// Records one state of a Task. Only `task` and `run` have writers yet; the
+/// other dimensions answer `dimension_not_enabled`, and `review` or
+/// `approval_marker` from a runtime or system actor answer
+/// `human_actor_required`.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloStateRecordParams {
+    pub operation_id: String,
+    /// The Task's state revision as last read (0 before the first record).
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+    pub task_id: String,
+    pub dimension: String,
+    pub scope_kind: String,
+    pub scope_id: String,
+    pub value: String,
+    /// Supplied by the desktop main process, never by the renderer:
+    /// `human` (the bound principal), `runtime` or `system`.
+    pub actor_kind: String,
+    /// The runtime or host name for a `runtime` or `system` actor; must be
+    /// absent for `human`, whose reference is the bound principal.
+    #[ts(optional = nullable)]
+    pub actor_ref: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloStateRecordResponse {
+    pub task_id: String,
+    pub record: InquelloStateRecord,
     pub receipt: InquelloReceipt,
 }

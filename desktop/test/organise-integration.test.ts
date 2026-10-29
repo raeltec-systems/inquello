@@ -230,6 +230,38 @@ describe.skipIf(!databaseConfigured)('organise against the real runtime and the 
     }
   });
 
+  it('records Task and run states separately and refuses review from a non-human writer (Story 1.15)', async () => {
+    const task = ok(await organise.createTask({ operationId: randomUUID(), workspaceId: seed.workspace_id, engagementId: null, folderId: null, title: 'States' }));
+    const record = (expectedRevision: number, dimension: 'task' | 'run', value: string, runId: string | null = null) =>
+      organise.recordTaskState({ operationId: randomUUID(), taskId: task.taskId, expectedRevision, dimension, value, runId });
+    expect(ok(await record(0, 'task', 'planned'))).toMatchObject({ dimension: 'task', value: 'planned', version: 1, actorKind: 'system', revision: 1 });
+    ok(await record(1, 'task', 'running'));
+    expect(ok(await record(2, 'run', 'execution_finished', 'run-1'))).toMatchObject({ scopeKind: 'run', scopeId: 'run-1', version: 1, revision: 3 });
+    expect(await record(1, 'task', 'blocked')).toMatchObject({ ok: false, code: 'conflict', actualRevision: 3 });
+    expect(await record(3, 'run', 'done', 'run-1')).toMatchObject({ ok: false, code: 'invalid-value' });
+    const listed = ok(await organise.listStates(task.taskId));
+    expect(listed.revision).toBe(3);
+    expect(listed.dimensions.map((entry) => [entry.dimension, entry.records.map((r) => r.value)])).toEqual([
+      ['task', ['running', 'planned']],
+      ['run', ['execution_finished']],
+      ['output', []],
+      ['checks', []],
+      ['review', []],
+      ['approval_marker', []],
+      ['delivery_marker', []],
+    ]);
+    const kindOf = async (call: Promise<unknown>) => call.then(() => null, (error: unknown) => (error as RpcResponseError).data as { inquello: { kind: string } });
+    const review = { operationId: randomUUID(), expectedRevision: 3, taskId: task.taskId, dimension: 'review', scopeKind: 'task', scopeId: task.taskId, value: 'requested' };
+    expect(await kindOf(runtime.request('inquello/state/record', { ...review, actorKind: 'system', actorRef: 'inquello-desktop' }))).toEqual({ inquello: { kind: 'human_actor_required' } });
+    expect(await kindOf(runtime.request('inquello/state/record', { ...review, actorKind: 'human' }))).toEqual({ inquello: { kind: 'dimension_not_enabled' } });
+    await runtime.request('inquello/session/setPrincipal', { principalId: OTHER_PRINCIPAL });
+    try {
+      expect(await kindOf(runtime.request('inquello/state/list', { taskId: task.taskId }))).toEqual({ inquello: { kind: 'not_found' } });
+    } finally {
+      await runtime.request('inquello/session/setPrincipal', { principalId: identity.principalId() });
+    }
+  });
+
   it('with the shared service stopped, Tasks still list and Engagement creation is disabled with its reason', async () => {
     const before = ok(await organise.getTree(seed.workspace_id));
     await stopTopology();

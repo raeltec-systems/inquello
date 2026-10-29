@@ -21,6 +21,9 @@
  *   service failure creates nothing locally. A local failure after the service
  *   step is retried with the same operation ID: the service replays its
  *   receipt (same Engagement), so no duplicate is made.
+ * - **Task states (Story 1.15)** are listed for the Task's creator only and
+ *   recorded for the `task` and `run` dimensions only, with the actor kind
+ *   `system` (this desktop) supplied here, never by the renderer.
  */
 import { randomUUID } from 'node:crypto';
 
@@ -30,6 +33,8 @@ import { ServiceError } from '../identity/service-client';
 import { SCHEMA_VERSION, type AcceptInviteResponse, type Capabilities, type CommandResponse, type CreateEngagementEnvelope, type WorkspacesView as ServiceWorkspacesView } from '../identity/wire';
 import type { InquelloEngagementResponse } from '../../protocol/generated/v2/InquelloEngagementResponse';
 import type { InquelloFolderResponse } from '../../protocol/generated/v2/InquelloFolderResponse';
+import type { InquelloStateListResponse } from '../../protocol/generated/v2/InquelloStateListResponse';
+import type { InquelloStateRecordResponse } from '../../protocol/generated/v2/InquelloStateRecordResponse';
 import type { InquelloTaskResponse } from '../../protocol/generated/v2/InquelloTaskResponse';
 import type { InquelloWorkspaceListResponse } from '../../protocol/generated/v2/InquelloWorkspaceListResponse';
 import type { InquelloWorkspaceTreeResponse } from '../../protocol/generated/v2/InquelloWorkspaceTreeResponse';
@@ -46,6 +51,7 @@ import {
   type WorkspaceTreeView,
   type WorkspacesView,
 } from './views';
+import { DESKTOP_STATE_ACTOR, DESKTOP_STATE_DIMENSIONS, stateRecordView, taskStatesView, type RecordTaskStateInput, type StateRecordView, type TaskStatesView } from './states';
 
 /** Every reason the renderer shows. Fixed text: never a server message or a record value. */
 export const ORGANISE_REASONS = {
@@ -66,6 +72,9 @@ export const ORGANISE_REASONS = {
   invalid: 'Some of the details are not valid.',
   runtimeUnavailable: 'The local runtime is not running, so private work cannot be reached right now.',
   storeUnavailable: 'Private work on this device could not be opened.',
+  humanActorRequired: 'Only a person can record this state.',
+  dimensionNotEnabled: 'This state cannot be recorded yet.',
+  invalidValue: 'That is not a state this item can have.',
   failed: 'The request did not complete.',
 } as const;
 
@@ -215,6 +224,12 @@ export class OrganiseService {
         return fail('conflict', ORGANISE_REASONS.operationReused);
       case 'invalid':
         return fail('invalid', ORGANISE_REASONS.invalid);
+      case 'human_actor_required':
+        return fail('human-actor-required', ORGANISE_REASONS.humanActorRequired);
+      case 'dimension_not_enabled':
+        return fail('dimension-not-enabled', ORGANISE_REASONS.dimensionNotEnabled);
+      case 'invalid_value':
+        return fail('invalid-value', ORGANISE_REASONS.invalidValue);
       case 'store_not_configured':
       case 'store_unavailable':
         return fail('failed', ORGANISE_REASONS.storeUnavailable);
@@ -462,6 +477,39 @@ export class OrganiseService {
         folderId: input.folderId,
       },
       (response) => taskView(response.task),
+    );
+  }
+
+  // ---- Task states (Story 1.15) ----------------------------------------------
+
+  /** Every state of one of the principal's Tasks; another creator's Task is `not-found`. */
+  async listStates(taskId: string): Promise<OrganiseResult<TaskStatesView>> {
+    return this.call<InquelloStateListResponse, TaskStatesView>('inquello/state/list', { taskId }, taskStatesView);
+  }
+
+  /**
+   * Records a Task or run state as this desktop (actor kind `system`). A Task
+   * state is scoped to the Task itself, a run state to its run reference.
+   * Every other dimension is refused here, before the runtime is reached.
+   */
+  async recordTaskState(input: RecordTaskStateInput): Promise<OrganiseResult<StateRecordView>> {
+    if (!(DESKTOP_STATE_DIMENSIONS as readonly string[]).includes(input.dimension)) return fail('dimension-not-enabled', ORGANISE_REASONS.dimensionNotEnabled);
+    const scope = input.dimension === 'task' ? { scopeKind: 'task', scopeId: input.taskId } : { scopeKind: 'run', scopeId: input.runId };
+    if (scope.scopeId === null) return fail('invalid', ORGANISE_REASONS.invalid);
+    return this.call<InquelloStateRecordResponse, StateRecordView>(
+      'inquello/state/record',
+      {
+        operationId: input.operationId,
+        expectedRevision: input.expectedRevision,
+        taskId: input.taskId,
+        dimension: input.dimension,
+        scopeKind: scope.scopeKind,
+        scopeId: scope.scopeId,
+        value: input.value,
+        actorKind: 'system',
+        actorRef: DESKTOP_STATE_ACTOR,
+      },
+      (response) => stateRecordView(response.record),
     );
   }
 

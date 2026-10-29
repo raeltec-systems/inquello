@@ -6,6 +6,8 @@
  * signed-in principal, so nothing here names one. Every mutation carries a
  * fresh operation ID per user action; a retry of the same action reuses it.
  * The Workspace list and tree are re-read after each change and every 30s.
+ * The open Task's states (Story 1.15) are read through `inquello.state.list`
+ * when it opens and with every refresh; the Shell never records one.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 
@@ -28,6 +30,7 @@ import {
   type WorkspaceTree,
 } from './organise-bridge';
 import { Sidebar, type EngagementDraft } from './Sidebar';
+import { parseTaskStates, stateBridge, type TaskStatesItem } from './state-bridge';
 import { TaskView, type MoveTarget } from './TaskView';
 
 const REFRESH_MS = 30_000;
@@ -55,6 +58,39 @@ export function Shell({ onShowSpecimen, operationIds = newOperationId }: ShellPr
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [creatingTask, setCreatingTask] = useState(false);
+  const [states, setStates] = useState<TaskStatesItem | null>(null);
+  const [statesNotice, setStatesNotice] = useState<string | null>(null);
+  const openTask = useRef<string | null>(null);
+  openTask.current = openTaskId;
+
+  /** Reads one Task's states; a malformed or refused answer is shown as unread, never half-read. */
+  const loadStates = useCallback(async (taskId: string | null) => {
+    const api = stateBridge();
+    if (!api || !taskId) {
+      setStates(null);
+      setStatesNotice(null);
+      return;
+    }
+    let result: Outcome<TaskStatesItem>;
+    try {
+      result = parseOutcome(await api.list({ taskId }), parseTaskStates);
+    } catch {
+      result = { ok: false, code: 'failed', reason: 'The request did not complete.' };
+    }
+    // Another Task opened meanwhile: its own read wins.
+    if (openTask.current !== taskId) return;
+    if (result.ok) {
+      setStates(result.value);
+      setStatesNotice(null);
+    } else {
+      setStates(null);
+      setStatesNotice(`States could not be read. ${result.reason}`);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadStates(openTaskId);
+  }, [openTaskId, loadStates]);
 
   const loadTree = useCallback(
     async (id: string | null) => {
@@ -65,8 +101,9 @@ export function Shell({ onShowSpecimen, operationIds = newOperationId }: ShellPr
       const result = parseOutcome(await bridge.getTree({ workspaceId: id }), parseTree);
       if (result.ok) setTree(result.value);
       else setNotice(result.reason);
+      if (openTask.current) await loadStates(openTask.current);
     },
-    [bridge],
+    [bridge, loadStates],
   );
 
   const load = useCallback(async () => {
@@ -209,7 +246,16 @@ export function Shell({ onShowSpecimen, operationIds = newOperationId }: ShellPr
             </p>
           ) : null}
           {task && tree ? (
-            <TaskView task={task} engagements={tree.engagements} folders={tree.folders} onRename={renameTask} onMove={moveTask} newOperationId={operationIds} />
+            <TaskView
+              task={task}
+              engagements={tree.engagements}
+              folders={tree.folders}
+              onRename={renameTask}
+              onMove={moveTask}
+              newOperationId={operationIds}
+              states={states}
+              statesNotice={statesNotice}
+            />
           ) : (
             <div className="iq-thread-placeholder" data-thread-placeholder="none">
               <p className="iq-thread-placeholder-title">No Task open.</p>

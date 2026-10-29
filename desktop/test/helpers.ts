@@ -121,5 +121,7 @@ export function fakeOrganise(calls: string[] = []): OrganiseOperations {
     createTask: record('createTask'),
     renameTask: record('renameTask'),
     moveTask: record('moveTask'),
+    listStates: record('listStates'),
+    recordTaskState: record('recordTaskState'),
   };
 }

@@ -1923,6 +1923,69 @@
       },
       "type": "object"
     },
+    "InquelloStateListParams": {
+      "description": "Every recorded state of one Task (Story 1.15). Only the Task's creator may read them; anyone else gets `not_found`, as for an unknown Task.",
+      "properties": {
+        "taskId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "taskId"
+      ],
+      "type": "object"
+    },
+    "InquelloStateRecordParams": {
+      "description": "Records one state of a Task. Only `task` and `run` have writers yet; the other dimensions answer `dimension_not_enabled`, and `review` or `approval_marker` from a runtime or system actor answer `human_actor_required`.",
+      "properties": {
+        "actorKind": {
+          "description": "Supplied by the desktop main process, never by the renderer: `human` (the bound principal), `runtime` or `system`.",
+          "type": "string"
+        },
+        "actorRef": {
+          "description": "The runtime or host name for a `runtime` or `system` actor; must be absent for `human`, whose reference is the bound principal.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dimension": {
+          "type": "string"
+        },
+        "expectedRevision": {
+          "description": "The Task's state revision as last read (0 before the first record).",
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "scopeId": {
+          "type": "string"
+        },
+        "scopeKind": {
+          "type": "string"
+        },
+        "taskId": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "actorKind",
+        "dimension",
+        "expectedRevision",
+        "operationId",
+        "scopeId",
+        "scopeKind",
+        "taskId",
+        "value"
+      ],
+      "type": "object"
+    },
     "InquelloTaskAttachThreadParams": {
       "properties": {
         "expectedRevision": {
@@ -9413,6 +9476,56 @@
         "params"
       ],
       "title": "Inquello/task/attachThreadRequest",
+      "type": "object"
+    },
+    {
+      "description": "Inquello (Story 1.15): every recorded state of one of the principal's Tasks.",
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "enum": [
+            "inquello/state/list"
+          ],
+          "title": "Inquello/state/listRequestMethod",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/definitions/InquelloStateListParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "title": "Inquello/state/listRequest",
+      "type": "object"
+    },
+    {
+      "description": "Inquello (Story 1.15): records one Task or run state.",
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "enum": [
+            "inquello/state/record"
+          ],
+          "title": "Inquello/state/recordRequestMethod",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/definitions/InquelloStateRecordParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "title": "Inquello/state/recordRequest",
       "type": "object"
     },
     {

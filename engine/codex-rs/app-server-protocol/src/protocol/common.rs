@@ -1564,6 +1564,18 @@ client_request_definitions! {
         manual_payload_conversion: manual,
         response: v2::InquelloTaskResponse,
     },
+    /// Inquello (Story 1.15): every recorded state of one of the principal's Tasks.
+    InquelloStateList => "inquello/state/list" {
+        params: v2::InquelloStateListParams,
+        serialization: global("inquello"),
+        response: v2::InquelloStateListResponse,
+    },
+    /// Inquello (Story 1.15): records one Task or run state.
+    InquelloStateRecord => "inquello/state/record" {
+        params: v2::InquelloStateRecordParams,
+        serialization: global("inquello"),
+        response: v2::InquelloStateRecordResponse,
+    },
 
     /// DEPRECATED APIs below
     GetConversationSummary => "getConversationSummary" {

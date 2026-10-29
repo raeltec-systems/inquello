@@ -1924,6 +1924,16 @@ impl MessageProcessor {
                     .task_attach_thread(connection_id, params)
                     .await
             }
+            ClientRequest::InquelloStateList { params, .. } => {
+                self.inquello_processor
+                    .state_list(connection_id, params)
+                    .await
+            }
+            ClientRequest::InquelloStateRecord { params, .. } => {
+                self.inquello_processor
+                    .state_record(connection_id, params)
+                    .await
+            }
             ClientRequest::FuzzyFileSearch { params, .. } => self
                 .search_processor
                 .fuzzy_file_search(params)

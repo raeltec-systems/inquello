@@ -58,6 +58,11 @@
  * placeholder); `--smoke` opens the design specimen (`#specimen`) for the
  * earlier probes, then the organise probe drives the Shell and prints an
  * `organise` line; the run also requires it to pass.
+ *
+ * Task states (Story 1.15) go through the same service: `state.list` and
+ * `state.recordTaskState` (Task and run states only, recorded as `system`).
+ * `--smoke` then runs the states probe and prints a `states` line, which the
+ * run also requires to pass.
  */
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
@@ -83,7 +88,7 @@ import {
 } from './security/policy';
 import { OrganiseService } from './organise';
 import { createProviders, loadProviderDevConfig, PROVIDER_DEV_CONFIG_ENV, providersDir, type ProviderService } from './providers';
-import { probeData, probeIdentity, probeOrganise, probeProviders, probeRenderer } from './smoke-probe';
+import { probeData, probeIdentity, probeOrganise, probeProviders, probeRenderer, probeStates } from './smoke-probe';
 
 const smoke = process.argv.includes('--smoke');
 // The smoke run keeps what main logs, so the providers probe can scan it for a leaked key.
@@ -99,6 +104,7 @@ let identityOk = false;
 let dataOk = false;
 let providersOk = false;
 let organiseOk = false;
+let statesOk = false;
 let organise: OrganiseService | undefined;
 let identity: IdentityWiring | undefined;
 let providers: ProviderService | undefined;
@@ -270,11 +276,20 @@ async function runSmokeProbe(contents: WebContents): Promise<void> {
   organiseOk = organiseReport.ok;
   process.stdout.write(`${JSON.stringify({ event: 'organise', ...organiseReport })}\n`);
   if (!organiseReport.ok) logger.error(`organise probe failed: ${organiseReport.failures.join('; ')}`);
+  const statesReport = await probeStates(contents, {
+    identity,
+    organise,
+    seedFile: process.env.INQUELLO_SMOKE_SEED ?? null,
+    runtimeRequest: <T,>(method: string, params?: unknown) => (runtime ? runtime.request<T>(method, params) : Promise.reject(new Error('the runtime is not running'))),
+  });
+  statesOk = statesReport.ok;
+  process.stdout.write(`${JSON.stringify({ event: 'states', ...statesReport })}\n`);
+  if (!statesReport.ok) logger.error(`states probe failed: ${statesReport.failures.join('; ')}`);
 }
 
 function exitCodeFor(exit: ExitInfo | undefined): number {
   if (!smoke) return 0;
-  return handshakeOk && privilegesOk && designOk && identityOk && dataOk && providersOk && organiseOk && exit !== undefined && exit.exitCode === 0 && !exit.killed ? 0 : 1;
+  return handshakeOk && privilegesOk && designOk && identityOk && dataOk && providersOk && organiseOk && statesOk && exit !== undefined && exit.exitCode === 0 && !exit.killed ? 0 : 1;
 }
 
 app.on('before-quit', (event) => {
@@ -438,6 +453,8 @@ void app.whenReady().then(async () => {
         createTask: (input) => organiseService.createTask(input),
         renameTask: (input) => organiseService.renameTask(input),
         moveTask: (input) => organiseService.moveTask(input),
+        listStates: (taskId) => organiseService.listStates(taskId),
+        recordTaskState: (input) => organiseService.recordTaskState(input),
       },
     }),
     { trustedWebContentsIds, logger },

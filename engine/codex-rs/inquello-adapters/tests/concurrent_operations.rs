@@ -42,6 +42,16 @@ use inquello_domain::organise::WorkspaceTree;
 use inquello_domain::organise::create_engagement;
 use inquello_domain::organise::create_task;
 use inquello_domain::organise::rename_task;
+use inquello_domain::state::RecordTaskState;
+use inquello_domain::state::StateOutcome;
+use inquello_domain::state::StateReceipt;
+use inquello_domain::state::StateRecord;
+use inquello_domain::state::StateWriter;
+use inquello_domain::state::TaskStateChange;
+use inquello_domain::state::TaskStateStore;
+use inquello_domain::state::TaskStates;
+use inquello_domain::state::record_task_state;
+use inquello_domain::state::task_states;
 use pretty_assertions::assert_eq;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
@@ -63,6 +73,8 @@ enum Pause {
     EngagementByService,
     /// After the Task read (Task updates).
     TaskLoad,
+    /// After the Task-state history read (state writes).
+    StatesLoad,
 }
 
 /// The real store, with a two-party barrier at `pause` and, optionally, a
@@ -195,6 +207,42 @@ impl OrganiseStore for Gate {
         principal_id: PrincipalId,
     ) -> Result<Vec<KnownWorkspace>, StoreError> {
         self.store.load_known_workspaces(principal_id).await
+    }
+}
+
+impl TaskStateStore for Gate {
+    async fn find_state_receipt(
+        &self,
+        id: &OperationId,
+    ) -> Result<Option<StateReceipt>, StoreError> {
+        if self.hide_lookup() {
+            return Ok(None);
+        }
+        let result = self.store.find_state_receipt(id).await;
+        self.arrive(Pause::ReceiptLookup).await;
+        result
+    }
+
+    async fn load_task_creator(&self, id: TaskId) -> Result<Option<PrincipalId>, StoreError> {
+        self.store.load_task_creator(id).await
+    }
+
+    async fn load_task_states(&self, id: TaskId) -> Result<TaskStates, StoreError> {
+        let result = self.store.load_task_states(id).await;
+        self.arrive(Pause::StatesLoad).await;
+        result
+    }
+
+    async fn load_state_record(
+        &self,
+        id: TaskId,
+        revision: Revision,
+    ) -> Result<Option<StateRecord>, StoreError> {
+        self.store.load_state_record(id, revision).await
+    }
+
+    async fn commit_state(&self, change: TaskStateChange) -> Result<(), StoreError> {
+        self.store.commit_state(change).await
     }
 }
 
@@ -586,4 +634,141 @@ async fn independent_renames_racing_at_the_same_revision_still_conflict() {
         other => panic!("expected one applied and one revision conflict, got {other:?}"),
     }
     assert_eq!(stored_task(&store, &task).await.revision, Revision::new(2));
+}
+
+// ---- Task states (Story 1.15) ----------------------------------------------------
+
+fn state(task: &Task, id: &str, expected: u64, value: &str) -> RecordTaskState {
+    RecordTaskState {
+        operation_id: id.to_string(),
+        expected_revision: Revision::new(expected),
+        task_id: task.task_id.to_string(),
+        dimension: "task".to_string(),
+        scope_kind: "task".to_string(),
+        scope_id: task.task_id.to_string(),
+        value: value.to_string(),
+        writer: StateWriter::System {
+            reference: "inquello-desktop".to_string(),
+        },
+    }
+}
+
+async fn state_count(store: &SqliteWorkingStore, task: &Task) -> usize {
+    task_states(store, actor(), &task.task_id.to_string())
+        .await
+        .unwrap_or_else(|error| panic!("{error}"))
+        .records
+        .len()
+}
+
+#[tokio::test]
+async fn identical_state_writes_racing_record_one_state() {
+    let (_dir, store) = open().await;
+    let task = new_task(&store).await;
+    let gate = Gate::racing(&store, Pause::StatesLoad);
+    let (first, second) = tokio::join!(
+        record_task_state(
+            &gate,
+            &SystemClock,
+            actor(),
+            state(&task, "op-s", 0, "planned")
+        ),
+        record_task_state(
+            &gate,
+            &SystemClock,
+            actor(),
+            state(&task, "op-s", 0, "planned")
+        ),
+    );
+    let (applied, replay) = applied_once(first, second, |o: &StateOutcome| o.replayed);
+    assert_eq!(replay.receipt, applied.receipt);
+    assert_eq!(replay.record, applied.record);
+    assert_eq!(state_count(&store, &task).await, 1);
+}
+
+#[tokio::test]
+async fn a_state_write_whose_lookup_missed_a_committed_receipt_replays_it() {
+    let (_dir, store) = open().await;
+    let task = new_task(&store).await;
+    let applied = ok(record_task_state(
+        &store,
+        &SystemClock,
+        actor(),
+        state(&task, "op-s", 0, "planned"),
+    )
+    .await);
+    let gate = Gate::stale_lookup(&store);
+    let replay = ok(record_task_state(
+        &gate,
+        &SystemClock,
+        actor(),
+        state(&task, "op-s", 0, "planned"),
+    )
+    .await);
+    assert!(replay.replayed);
+    assert_eq!(replay.receipt, applied.receipt);
+    assert_eq!(state_count(&store, &task).await, 1);
+}
+
+#[tokio::test]
+async fn a_different_state_write_racing_under_the_same_operation_id_conflicts() {
+    let (_dir, store) = open().await;
+    let task = new_task(&store).await;
+    let gate = Gate::racing(&store, Pause::StatesLoad);
+    let (first, second) = tokio::join!(
+        record_task_state(
+            &gate,
+            &SystemClock,
+            actor(),
+            state(&task, "op-s", 0, "planned")
+        ),
+        record_task_state(
+            &gate,
+            &SystemClock,
+            actor(),
+            state(&task, "op-s", 0, "running")
+        ),
+    );
+    let conflict = DomainError::OperationConflict {
+        operation_id: op("op-s"),
+    };
+    let winner = match (first, second) {
+        (Ok(outcome), Err(error)) | (Err(error), Ok(outcome)) => {
+            assert_eq!(error, conflict);
+            outcome
+        }
+        other => panic!("expected one applied and one operation conflict, got {other:?}"),
+    };
+    assert!(!winner.replayed);
+    assert_eq!(state_count(&store, &task).await, 1);
+}
+
+#[tokio::test]
+async fn independent_state_writes_racing_at_the_same_revision_still_conflict() {
+    let (_dir, store) = open().await;
+    let task = new_task(&store).await;
+    let gate = Gate::racing(&store, Pause::StatesLoad);
+    let (first, second) = tokio::join!(
+        record_task_state(
+            &gate,
+            &SystemClock,
+            actor(),
+            state(&task, "op-a", 0, "planned")
+        ),
+        record_task_state(
+            &gate,
+            &SystemClock,
+            actor(),
+            state(&task, "op-b", 0, "running")
+        ),
+    );
+    let conflict = DomainError::RevisionConflict {
+        expected: Revision::ZERO,
+        actual: Revision::new(1),
+    };
+    match (first, second) {
+        (Ok(_), Err(error)) | (Err(error), Ok(_)) => assert_eq!(error, conflict),
+        other => panic!("expected one applied and one revision conflict, got {other:?}"),
+    }
+    assert_eq!(state_count(&store, &task).await, 1);
 }

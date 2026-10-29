@@ -77,6 +77,9 @@ export type OrganiseFailureCode =
   | 'invalid'
   | 'runtime-unavailable'
   | 'incomplete'
+  | 'human-actor-required'
+  | 'dimension-not-enabled'
+  | 'invalid-value'
   | 'failed';
 
 export type OrganiseResult<T> = { ok: true; value: T } | { ok: false; code: OrganiseFailureCode; reason: string; actualRevision?: number };

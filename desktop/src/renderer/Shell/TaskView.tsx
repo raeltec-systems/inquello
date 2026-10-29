@@ -8,6 +8,8 @@
  * - Move offers no Engagement (ad hoc), each Engagement, and each of its
  *   folders. A move keeps the Task's ID, thread and references; it never
  *   changes who can see it.
+ * - The States section (Story 1.15) lists every state dimension separately,
+ *   each with its value or "Not recorded".
  * - The Composer arrives with Story 1.17 and runtime threads with Story 1.25:
  *   nothing here starts work.
  */
@@ -15,6 +17,8 @@ import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
 
 import { Button, Menu, TextField, type MenuEntry } from '../primitives';
 import type { EngagementItem, FolderItem, Outcome, TaskItem } from './organise-bridge';
+import type { TaskStatesItem } from './state-bridge';
+import { TaskStates } from './TaskStates';
 
 export interface MoveTarget {
   engagementId: string | null;
@@ -28,6 +32,10 @@ export interface TaskViewProps {
   onRename: (task: TaskItem, title: string, operationId: string) => Promise<Outcome<TaskItem>>;
   onMove: (task: TaskItem, target: MoveTarget) => Promise<Outcome<TaskItem>>;
   newOperationId: () => string;
+  /** The Task's states (Story 1.15); null until read. */
+  states?: TaskStatesItem | null;
+  /** Why the states could not be read, if they could not. */
+  statesNotice?: string | null;
 }
 
 const AD_HOC = 'ad-hoc';
@@ -37,7 +45,7 @@ export function targetKey(target: MoveTarget): string {
   return target.folderId ? `folder:${target.folderId}` : `engagement:${target.engagementId}`;
 }
 
-export function TaskView({ task, engagements, folders, onRename, onMove, newOperationId }: TaskViewProps): ReactElement {
+export function TaskView({ task, engagements, folders, onRename, onMove, newOperationId, states = null, statesNotice = null }: TaskViewProps): ReactElement {
   const [draft, setDraft] = useState(task.title);
   const [renameOp, setRenameOp] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -116,6 +124,7 @@ export function TaskView({ task, engagements, folders, onRename, onMove, newOper
           {notice}
         </p>
       ) : null}
+      <TaskStates states={states && states.taskId === task.taskId ? states : null} notice={statesNotice} />
       <div className="iq-thread-placeholder" data-thread-placeholder>
         <p className="iq-thread-placeholder-title">This Task has no thread yet.</p>
         <p className="iq-thread-placeholder-body">

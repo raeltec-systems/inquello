@@ -16,6 +16,8 @@
  *
  * The `organise` operations (Story 1.14) forward the renderer's arguments so
  * main's validators judge them; main binds the signed-in principal itself.
+ * So do the `state` operations (Story 1.15); main supplies the actor of a
+ * recorded state, and only Task and run states can be recorded.
  *
  * Self-contained by design: a sandboxed preload can `require` only `electron`,
  * so the channel strings are literals that a test checks against
@@ -45,6 +47,8 @@ const ORGANISE_CREATE_FOLDER_CHANNEL = 'inquello:op:organise.createFolder';
 const ORGANISE_CREATE_TASK_CHANNEL = 'inquello:op:organise.createTask';
 const ORGANISE_RENAME_TASK_CHANNEL = 'inquello:op:organise.renameTask';
 const ORGANISE_MOVE_TASK_CHANNEL = 'inquello:op:organise.moveTask';
+const STATE_LIST_CHANNEL = 'inquello:op:state.list';
+const STATE_RECORD_TASK_STATE_CHANNEL = 'inquello:op:state.recordTaskState';
 
 const api = Object.freeze({
   runtime: Object.freeze({
@@ -100,6 +104,12 @@ const api = Object.freeze({
     renameTask: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ORGANISE_RENAME_TASK_CHANNEL, ...args),
     /** Moves a Task to another Engagement and folder, or to none; it stays private. */
     moveTask: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ORGANISE_MOVE_TASK_CHANNEL, ...args),
+  }),
+  state: Object.freeze({
+    /** `{ taskId }`; resolves with `{ ok, value: { revision, dimensions } }` (all seven, latest first) or `{ ok: false, reason }`. */
+    list: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(STATE_LIST_CHANNEL, ...args),
+    /** `{ operationId, taskId, expectedRevision, dimension: 'task' | 'run', value, runId }`; main records it as this desktop. */
+    recordTaskState: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(STATE_RECORD_TASK_STATE_CHANNEL, ...args),
   }),
 });
 

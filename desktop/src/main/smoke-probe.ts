@@ -82,6 +82,19 @@
  * requires the same Task ID, thread ref and references, private visibility,
  * and that a second principal bound to the runtime lists none of the Tasks.
  * It signs out at the end. `evaluateOrganise` is pure and decides pass/fail.
+ *
+ * Story 1.15 adds the states probe (`probeStates`). Without a shared service it
+ * requires `state.list` to answer signed-out and a review write to be refused
+ * by main's validator. With the dev topology it signs in again, creates an ad
+ * hoc Task in main, and through the renderer's `state.recordTaskState` records
+ * task planned, then running, then run execution_finished. It opens the Task
+ * in the Shell and requires the States section to show "Execution finished"
+ * in the neutral custom-label chip (not the accepted style, not green), every
+ * other dimension "Not recorded", no accepted or explained chip and no text
+ * claiming acceptance. A review write is refused by main's validator and, sent
+ * straight to the runtime as a system actor, with `human_actor_required`. A
+ * second principal is refused the Task's states as `not_found`.
+ * `evaluateStates` is pure and decides pass/fail.
  */
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
@@ -163,6 +176,7 @@ export const EXPECTED_BRIDGE_TREE = {
     renameTask: 'function',
     moveTask: 'function',
   },
+  state: { list: 'function', recordTaskState: 'function' },
 } as const;
 
 /** Globals that must not exist in the renderer's main world. */
@@ -1712,4 +1726,255 @@ export async function probeOrganise(contents: WebContents, options: OrganiseProb
     read.signedOutAtEnd = signOut.ok;
   }
   return evaluateOrganise(read);
+}
+
+// ---- states (Story 1.15) ------------------------------------------------------
+
+const SMOKE_RUN_REF = 'smoke-run-1';
+const STATE_DIMENSION_NAMES = ['task', 'run', 'output', 'checks', 'review', 'approval_marker', 'delivery_marker'] as const;
+
+/** Signed out: listing is refused by main and a review write never passes the validator. */
+const STATES_SIGNED_OUT_PROBE = `(async () => {
+  const out = {};
+  out.list = await globalThis.inquello.state.list({ taskId: '00000000-0000-4000-8000-000000000001' });
+  out.reviewWrite = await globalThis.inquello.state
+    .recordTaskState({ operationId: '00000000-0000-4000-8000-000000000002', taskId: '00000000-0000-4000-8000-000000000001', expectedRevision: 0, dimension: 'review', value: 'requested', runId: null })
+    .then(() => 'accepted', (error) => String(error && error.message));
+  return out;
+})()`;
+
+/** Records task planned → running and run execution_finished through the renderer bridge, then tries a review write. */
+function statesRecordProbe(taskId: string, operationIds: readonly string[]): string {
+  return `(async () => {
+    const taskId = ${JSON.stringify(taskId)};
+    const ops = ${JSON.stringify(operationIds)};
+    const record = (operationId, expectedRevision, dimension, value, runId) =>
+      globalThis.inquello.state.recordTaskState({ operationId, taskId, expectedRevision, dimension, value, runId });
+    const out = { writes: [] };
+    out.writes.push(await record(ops[0], 0, 'task', 'planned', null));
+    out.writes.push(await record(ops[1], 1, 'task', 'running', null));
+    out.writes.push(await record(ops[2], 2, 'run', 'execution_finished', ${JSON.stringify(SMOKE_RUN_REF)}));
+    out.reviewWrite = await record(ops[3], 3, 'review', 'requested', null).then(() => 'accepted', (error) => String(error && error.message));
+    return out;
+  })()`;
+}
+
+/** Opens the Task in the Shell and reads its States section. */
+function statesViewProbe(taskId: string): string {
+  return `(async () => {
+    ${SHELL_HELPERS}
+    location.hash = '#specimen';
+    await wait(() => !q('[data-shell]'), 5000);
+    const out = { shellOpened: await openShell() };
+    const row = await wait(() => q('[data-task-id=${JSON.stringify(taskId)}] button'), ${SHELL_SETTLE_MS});
+    if (row) row.click();
+    out.opened = !!(await wait(() => q('[data-task-view=${JSON.stringify(taskId)}]'), 5000));
+    out.shown = !!(await wait(() => q('[data-task-states] [data-state-dimension="run"][data-state-value="execution_finished"]'), ${SHELL_SETTLE_MS}));
+    out.dimensions = [...document.querySelectorAll('[data-task-states] [data-state-dimension]')].map((row) => ({
+      dimension: row.getAttribute('data-state-dimension'),
+      value: row.getAttribute('data-state-value'),
+      text: (q('dd', row) || row).textContent,
+    }));
+    const chip = q('[data-task-states] [data-state-dimension="run"] .iq-status-chip');
+    if (chip) {
+      const reference = document.createElement('span');
+      reference.className = 'iq-status-chip iq-status-chip--accepted';
+      document.body.appendChild(reference);
+      const style = getComputedStyle(chip);
+      const accepted = getComputedStyle(reference);
+      out.runChip = {
+        text: chip.textContent,
+        className: chip.className,
+        color: style.color,
+        background: style.backgroundColor,
+        border: style.borderTopColor,
+        acceptedColor: accepted.color,
+        acceptedBackground: accepted.backgroundColor,
+        acceptedBorder: accepted.borderTopColor,
+      };
+      reference.remove();
+    }
+    const shellRoot = q('[data-shell]');
+    out.acceptedChips = shellRoot ? shellRoot.querySelectorAll('.iq-status-chip--accepted, .iq-status-chip--explained').length : -1;
+    out.acceptanceText = shellRoot ? /\\baccept|\\bapproved\\b/i.test(shellRoot.textContent) : true;
+    out.toasts = [...document.querySelectorAll('.iq-toast')].map((toast) => toast.textContent);
+    return out;
+  })()`;
+}
+
+export interface StatesProbeRead {
+  configured: boolean;
+  signedOut?: { list: unknown; reviewWrite: string };
+  seedRead?: boolean;
+  signedIn?: boolean;
+  taskCreated?: boolean;
+  record?: { writes: unknown[]; reviewWrite: string };
+  runtimeReviewRefusal?: string | null;
+  view?: {
+    shellOpened: boolean;
+    opened: boolean;
+    shown: boolean;
+    dimensions: Array<{ dimension: string | null; value: string | null; text: string | null }>;
+    runChip?: { text: string | null; className: string; color: string; background: string; border: string; acceptedColor: string; acceptedBackground: string; acceptedBorder: string };
+    acceptedChips: number;
+    acceptanceText: boolean;
+    toasts: string[];
+  };
+  listed?: { revision: number; task: string[]; run: string[]; others: number } | null;
+  otherPrincipalRefusal?: string | null;
+  signedOutAtEnd?: boolean;
+  error?: string;
+}
+
+export interface StatesReport extends StatesProbeRead {
+  ok: boolean;
+  failures: string[];
+}
+
+/** True when an `rgb(...)`/`rgba(...)` colour is visibly green-dominant. */
+export function isGreenish(color: string): boolean {
+  const parts = color.match(/[\d.]+/g)?.map(Number) ?? [];
+  if (parts.length < 3) return false;
+  const [r, g, b, a = 1] = parts as [number, number, number, number?];
+  return a > 0 && g > r + 24 && g > b + 24;
+}
+
+/** Pass/fail for the states probe. */
+export function evaluateStates(read: StatesProbeRead): StatesReport {
+  const failures: string[] = [];
+  if (read.error) failures.push(`the probe stopped: ${read.error}`);
+  if (!read.configured) {
+    const list = read.signedOut?.list as { ok?: unknown; code?: unknown } | undefined;
+    if (list?.ok !== false || list.code !== 'signed-out') failures.push('main listed Task states while signed out');
+    if (!read.signedOut?.reviewWrite.includes('invalid payload')) failures.push(`a review write was not refused by main (${read.signedOut?.reviewWrite})`);
+    return { ok: failures.length === 0, failures, ...read };
+  }
+  if (!read.seedRead) failures.push('the dev topology seed file (INQUELLO_SMOKE_SEED) could not be read');
+  if (!read.signedIn) failures.push('the synthetic user did not sign in');
+  if (!read.taskCreated) failures.push('no Task was created for the states probe');
+  const writes = read.record?.writes ?? [];
+  if (writes.length !== 3 || !writes.every((write) => (write as { ok?: unknown }).ok === true)) {
+    failures.push(`task planned → running and run execution_finished were not all recorded (${JSON.stringify(writes)})`);
+  }
+  if (!read.record?.reviewWrite.includes('invalid payload')) failures.push(`a review write through the renderer was not refused (${read.record?.reviewWrite})`);
+  if (read.runtimeReviewRefusal !== 'human_actor_required') failures.push(`a system review write reached the runtime and answered ${JSON.stringify(read.runtimeReviewRefusal)}`);
+  const view = read.view;
+  if (!view?.shellOpened || !view.opened) failures.push('the Task did not open in the Shell');
+  if (!view?.shown) failures.push('the States section did not show the finished run');
+  const rows = new Map((view?.dimensions ?? []).map((row) => [row.dimension, row]));
+  if (JSON.stringify([...rows.keys()]) !== JSON.stringify(STATE_DIMENSION_NAMES)) failures.push(`the States section lists ${JSON.stringify([...rows.keys()])}`);
+  const run = rows.get('run');
+  if (!run?.text?.includes('Execution finished')) failures.push(`the run state reads ${JSON.stringify(run?.text)}`);
+  const task = rows.get('task');
+  if (task?.value !== 'running' || !task.text?.includes('Running') || !task.text.includes('Planned')) failures.push(`the Task state reads ${JSON.stringify(task?.text)}`);
+  for (const dimension of STATE_DIMENSION_NAMES.slice(2)) {
+    const row = rows.get(dimension);
+    if (row?.value !== 'not-recorded' || row.text?.trim() !== 'Not recorded') failures.push(`${dimension} is not shown as "Not recorded" (${JSON.stringify(row?.text)})`);
+  }
+  const chip = view?.runChip;
+  if (!chip) failures.push('the run state has no chip');
+  else {
+    if (chip.text !== 'Execution finished') failures.push(`the run chip reads ${JSON.stringify(chip.text)}`);
+    if (!chip.className.includes('iq-status-chip--other') || /--accepted|--explained/.test(chip.className)) failures.push(`the run chip is styled ${chip.className}`);
+    if (chip.color === chip.acceptedColor || chip.background === chip.acceptedBackground || chip.border === chip.acceptedBorder) failures.push('the run chip shares the accepted style');
+    if (isGreenish(chip.color) || isGreenish(chip.background) || isGreenish(chip.border)) failures.push('the run chip is green');
+  }
+  if (view?.acceptedChips !== 0) failures.push('an accepted or explained chip is shown');
+  if (view?.acceptanceText !== false) failures.push('the Shell states acceptance or approval');
+  if ((view?.toasts ?? []).some((toast) => /accept|approv/i.test(toast))) failures.push('a toast states acceptance');
+  const listed = read.listed;
+  if (!listed) failures.push('main could not list the Task states');
+  else {
+    if (listed.revision !== 3) failures.push(`the Task state revision is ${listed.revision}`);
+    if (JSON.stringify(listed.task) !== JSON.stringify(['running', 'planned'])) failures.push(`the Task state history is ${JSON.stringify(listed.task)}`);
+    if (JSON.stringify(listed.run) !== JSON.stringify(['execution_finished'])) failures.push(`the run state history is ${JSON.stringify(listed.run)}`);
+    if (listed.others !== 0) failures.push('a dimension other than task and run has a record');
+  }
+  if (read.otherPrincipalRefusal !== 'not_found') failures.push(`another principal listing the states got ${JSON.stringify(read.otherPrincipalRefusal)}`);
+  if (!read.signedOutAtEnd) failures.push('the probe could not sign out at the end');
+  return { ok: failures.length === 0, failures, ...read };
+}
+
+/** The `data.inquello.kind` of a runtime refusal, or null. */
+function refusalKind(error: unknown): string | null {
+  const data = (error as { data?: { inquello?: { kind?: unknown } } } | null)?.data?.inquello;
+  return typeof data?.kind === 'string' ? data.kind : null;
+}
+
+/** Runs the states probe against the live renderer, main's organise service and the runtime. */
+export async function probeStates(contents: WebContents, options: OrganiseProbeOptions): Promise<StatesReport> {
+  const { identity, organise, runtimeRequest } = options;
+  const configured = identity.config.kind === 'configured';
+  const read: StatesProbeRead = { configured };
+  if (!configured) {
+    read.signedOut = (await contents.executeJavaScript(STATES_SIGNED_OUT_PROBE)) as StatesProbeRead['signedOut'];
+    return evaluateStates(read);
+  }
+  try {
+    let seed: { workspace_id?: unknown } = {};
+    try {
+      seed = JSON.parse(fs.readFileSync(options.seedFile ?? '', 'utf8')) as typeof seed;
+    } catch {
+      seed = {};
+    }
+    const workspaceId = typeof seed.workspace_id === 'string' ? seed.workspace_id : null;
+    read.seedRead = workspaceId !== null;
+    if (!workspaceId) return evaluateStates(read);
+
+    read.signedIn = (await identity.session.signIn()).ok;
+    await organise.syncPrincipal();
+    // The Shell lists only Workspaces the service names; this also remembers them.
+    await organise.getWorkspaces();
+    const created = await organise.createTask({ operationId: randomUUID(), workspaceId, engagementId: null, folderId: null, title: 'Smoke states' });
+    read.taskCreated = created.ok;
+    if (!created.ok) return evaluateStates(read);
+    const taskId = created.value.taskId;
+
+    read.record = (await contents.executeJavaScript(statesRecordProbe(taskId, [randomUUID(), randomUUID(), randomUUID(), randomUUID()]))) as StatesProbeRead['record'];
+    try {
+      await runtimeRequest('inquello/state/record', {
+        operationId: randomUUID(),
+        expectedRevision: 3,
+        taskId,
+        dimension: 'review',
+        scopeKind: 'task',
+        scopeId: taskId,
+        value: 'requested',
+        actorKind: 'system',
+        actorRef: 'inquello-desktop',
+      });
+      read.runtimeReviewRefusal = null;
+    } catch (error) {
+      read.runtimeReviewRefusal = refusalKind(error) ?? (error as Error).message;
+    }
+
+    read.view = (await contents.executeJavaScript(statesViewProbe(taskId))) as StatesProbeRead['view'];
+    const listed = await organise.listStates(taskId);
+    read.listed = listed.ok
+      ? {
+          revision: listed.value.revision,
+          task: listed.value.dimensions.find((entry) => entry.dimension === 'task')?.records.map((record) => record.value) ?? [],
+          run: listed.value.dimensions.find((entry) => entry.dimension === 'run')?.records.map((record) => record.value) ?? [],
+          others: listed.value.dimensions.filter((entry) => entry.dimension !== 'task' && entry.dimension !== 'run').reduce((sum, entry) => sum + entry.records.length, 0),
+        }
+      : null;
+
+    // A second principal bound to the same runtime is refused like an unknown Task.
+    await runtimeRequest('inquello/session/setPrincipal', { principalId: OTHER_SMOKE_PRINCIPAL });
+    try {
+      await runtimeRequest('inquello/state/list', { taskId });
+      read.otherPrincipalRefusal = null;
+    } catch (error) {
+      read.otherPrincipalRefusal = refusalKind(error) ?? (error as Error).message;
+    } finally {
+      await runtimeRequest('inquello/session/setPrincipal', { principalId: identity.session.principalId() });
+    }
+  } catch (error) {
+    read.error = (error as Error).message;
+  } finally {
+    const signOut = await identity.session.signOut().catch(() => ({ ok: false }));
+    await organise.syncPrincipal().catch(() => undefined);
+    read.signedOutAtEnd = signOut.ok;
+  }
+  return evaluateStates(read);
 }

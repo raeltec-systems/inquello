@@ -16,6 +16,8 @@ import {
   engagementPayload,
   engagementUpdatePayload,
   folderPayload,
+  recordTaskStatePayload,
+  stateListPayload,
   taskMovePayload,
   taskPayload,
   taskRenamePayload,
@@ -26,9 +28,12 @@ import {
   type FolderInput,
   type FolderView,
   type OrganiseResult,
+  type RecordTaskStateInput,
+  type StateRecordView,
   type TaskInput,
   type TaskMoveInput,
   type TaskRenameInput,
+  type TaskStatesView,
   type TaskView,
   type WorkspacesView,
   type WorkspaceTreeView,
@@ -63,6 +68,8 @@ export const OPERATION_NAMES = [
   'organise.createTask',
   'organise.renameTask',
   'organise.moveTask',
+  'state.list',
+  'state.recordTaskState',
 ] as const;
 export type OperationName = (typeof OPERATION_NAMES)[number];
 
@@ -224,6 +231,10 @@ export interface OrganiseOperations {
   createTask(input: TaskInput): Promise<OrganiseResult<TaskView>>;
   renameTask(input: TaskRenameInput): Promise<OrganiseResult<TaskView>>;
   moveTask(input: TaskMoveInput): Promise<OrganiseResult<TaskView>>;
+  /** Story 1.15: a Task's states, for its creator only. */
+  listStates(taskId: string): Promise<OrganiseResult<TaskStatesView>>;
+  /** Story 1.15: a Task or run state, recorded by main as `system`. */
+  recordTaskState(input: RecordTaskStateInput): Promise<OrganiseResult<StateRecordView>>;
 }
 
 export interface OperationDeps {
@@ -358,6 +369,18 @@ export function createOperations(deps: OperationDeps): Operation[] {
     validate: taskMovePayload,
     handle: (input) => deps.organise.moveTask(input),
   };
+  // Task states (Story 1.15): any Task state may be read by its creator; only
+  // Task and run states may be recorded, and main supplies the actor.
+  const stateList: Operation<{ taskId: string }, OrganiseResult<TaskStatesView>> = {
+    name: 'state.list',
+    validate: stateListPayload,
+    handle: ({ taskId }) => deps.organise.listStates(taskId),
+  };
+  const stateRecordTaskState: Operation<RecordTaskStateInput, OrganiseResult<StateRecordView>> = {
+    name: 'state.recordTaskState',
+    validate: recordTaskStatePayload,
+    handle: (input) => deps.organise.recordTaskState(input),
+  };
   return [
     getStatus,
     identityStatus,
@@ -381,6 +404,8 @@ export function createOperations(deps: OperationDeps): Operation[] {
     organiseCreateTask,
     organiseRenameTask,
     organiseMoveTask,
+    stateList,
+    stateRecordTaskState,
   ] as Operation[];
 }
 
