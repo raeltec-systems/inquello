@@ -1558,6 +1558,8 @@ export interface OrganiseProbeRead {
   configured: boolean;
   signedOut?: { shellOpened: boolean; signedOutShown: boolean; workspaces: unknown; shareControls: number };
   seedRead?: boolean;
+  /** The Workspace name the topology seeded; the Header must show it. */
+  seedWorkspaceName?: string;
   signedIn?: boolean;
   inviteAccepted?: boolean;
   create?: {
@@ -1612,7 +1614,9 @@ export function evaluateOrganise(read: OrganiseProbeRead): OrganiseReport {
   if (create?.header.title !== 'Untitled thread') failures.push(`the Header title is ${JSON.stringify(create?.header.title)}`);
   if (create?.header.client !== 'Synthetic Client Ltd') failures.push(`the Header client is ${JSON.stringify(create?.header.client)}`);
   if (create?.header.period !== '2026-01-01 – 2026-12-31') failures.push(`the Header period is ${JSON.stringify(create?.header.period)}`);
-  if (create?.header.workspace !== 'Synthetic Audit Co') failures.push(`the Header Workspace is ${JSON.stringify(create?.header.workspace)}`);
+  if (!read.seedWorkspaceName || create?.header.workspace !== read.seedWorkspaceName) {
+    failures.push(`the Header Workspace is ${JSON.stringify(create?.header.workspace)}, expected ${JSON.stringify(read.seedWorkspaceName)}`);
+  }
   if (create?.header.visibility !== 'private') failures.push('the Header does not show the Task as private');
   if (!create?.openTaskShown) failures.push('the opened Task did not show its placeholder thread area');
   if (create?.shareControls !== 0) failures.push('a Share control is shown');
@@ -1656,7 +1660,7 @@ export async function probeOrganise(contents: WebContents, options: OrganiseProb
     return evaluateOrganise(read);
   }
   try {
-    let seed: { workspace_id?: unknown; invite_id?: unknown } = {};
+    let seed: { workspace_id?: unknown; invite_id?: unknown; workspace_name?: unknown } = {};
     try {
       seed = JSON.parse(fs.readFileSync(options.seedFile ?? '', 'utf8')) as typeof seed;
     } catch {
@@ -1664,6 +1668,7 @@ export async function probeOrganise(contents: WebContents, options: OrganiseProb
     }
     const workspaceId = typeof seed.workspace_id === 'string' ? seed.workspace_id : null;
     const inviteId = typeof seed.invite_id === 'string' ? seed.invite_id : null;
+    if (typeof seed.workspace_name === 'string') read.seedWorkspaceName = seed.workspace_name;
     read.seedRead = workspaceId !== null && inviteId !== null;
     if (!workspaceId || !inviteId) return evaluateOrganise(read);
 

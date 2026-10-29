@@ -128,6 +128,21 @@ function filesUnder(dir: string): string[] {
     .map((entry) => path.join(entry.parentPath, entry.name));
 }
 
+/**
+ * A file's bytes, or null if it vanished between listing and reading. The
+ * runtime's background plugin sync creates and deletes files under the runtime
+ * home (`.tmp/plugins-clone-*`) while a scan walks it; a vanished file cannot
+ * hold a leak, so it is skipped rather than failing the scan. Other errors throw.
+ */
+function readIfPresent(file: string): string | null {
+  try {
+    return fs.readFileSync(file).toString('latin1');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw error;
+  }
+}
+
 /** `pid` and every process below it (Linux `/proc`). */
 function processTree(pid: number): number[] {
   const out = [pid];
@@ -285,7 +300,8 @@ describe.skipIf(!keyringTools)('Codex login in the OS keyring (real app-server, 
     };
     check('operation results', JSON.stringify(seen));
     for (const file of [...filesUnder(h.roots['user-data']), ...filesUnder(h.roots.logs), ...filesUnder(exported.export.path)]) {
-      check(path.relative(h.roots['user-data'], file), fs.readFileSync(file).toString('latin1'));
+      const content = readIfPresent(file);
+      if (content !== null) check(path.relative(h.roots['user-data'], file), content);
     }
     check('app-server stderr log', fs.readFileSync(h.stderrLogPath, 'latin1'));
     check('desktop log', h.logger.messages.join('\n'));
@@ -305,7 +321,10 @@ describe.skipIf(!keyringTools)('Codex login in the OS keyring (real app-server, 
 
     await providers.removeClaudeKey();
     await providers.codexLogout();
-    for (const file of filesUnder(h.roots['user-data'])) check(`after removal: ${file}`, fs.readFileSync(file).toString('latin1'));
+    for (const file of filesUnder(h.roots['user-data'])) {
+      const content = readIfPresent(file);
+      if (content !== null) check(`after removal: ${file}`, content);
+    }
     expect(found).toEqual([]);
     expect(keyringEntries(h.home)).not.toContain(sentinel);
   }, 60_000);
@@ -320,7 +339,7 @@ describe('Codex login without an OS keyring (real app-server)', () => {
     expect(result).toMatchObject({ ok: false, reason: CODEX_REASONS.keyringUnavailable, status: { codex: { state: 'not-connected' } } });
     expect(await h.runtime.request('account/read', {})).toMatchObject({ account: null });
     expect(fs.existsSync(path.join(h.roots['runtime-home'], 'auth.json'))).toBe(false);
-    for (const file of filesUnder(h.roots['user-data'])) expect(fs.readFileSync(file).toString('latin1'), file).not.toContain(apiKey);
+    for (const file of filesUnder(h.roots['user-data'])) expect(readIfPresent(file) ?? '', file).not.toContain(apiKey);
     expect(h.logger.messages.join('\n')).not.toContain(apiKey);
     await h.runtime.stop();
   }, 60_000);

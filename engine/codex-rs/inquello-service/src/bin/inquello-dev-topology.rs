@@ -32,7 +32,7 @@
 //! (`inquello-protocol/fixtures/workspace/policy.json`) and a pending
 //! first-administrator invite bound to the synthetic subject, exactly as the
 //! operator CLI `inquello-service admin create-workspace` would. It writes
-//! `{"workspace_id", "invite_id"}` to FILE (removed when the topology stops); the
+//! `{"workspace_id", "invite_id", "workspace_name"}` to FILE (removed when the topology stops); the
 //! synthetic user accepts the invite after signing in. The invite ID is not a
 //! credential: only the bound `(issuer, subject)` can accept it.
 
@@ -513,6 +513,7 @@ async fn seed_workspace(
     let seed = json!({
         "workspace_id": outcome.workspace_id,
         "invite_id": outcome.first_admin_invite_id,
+        "workspace_name": name,
     });
     write_config_file(path, &seed.to_string())
 }
