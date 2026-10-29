@@ -59,7 +59,14 @@ export function rovingIndex(key: string, index: number, count: number, axis: 'ho
   return null;
 }
 
-/** A stable DOM id fragment for a caller-supplied value. */
+/**
+ * A stable DOM id fragment for a caller-supplied value, distinct for distinct
+ * values: ASCII letters, digits and `-` stay as they are, and every other
+ * character (including `_`) becomes `_<hex code point>_`. So `a.b` and `a b`
+ * give `a_2e_b` and `a_20_b`, and no two values share an id.
+ */
 export function idFragment(value: string): string {
-  return value.replace(/[^\w-]/g, '_');
+  let out = '';
+  for (const char of value) out += /^[A-Za-z0-9-]$/.test(char) ? char : `_${char.codePointAt(0)!.toString(16)}_`;
+  return out;
 }
