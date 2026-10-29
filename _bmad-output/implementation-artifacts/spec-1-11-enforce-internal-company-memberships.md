@@ -2,7 +2,7 @@
 title: 'Story 1.11: Enforce internal-company memberships without disclosing private Tasks'
 type: 'feature'
 created: '2026-10-28'
-status: 'in-progress'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'e84d2646600cb9e91634fa5f340929ca6b922d84'

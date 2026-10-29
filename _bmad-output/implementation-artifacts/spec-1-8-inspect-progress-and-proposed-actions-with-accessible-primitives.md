@@ -2,7 +2,7 @@
 title: 'Story 1.8: Inspect progress and proposed actions with accessible primitives'
 type: 'feature'
 created: '2026-10-28'
-status: 'in-progress'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '30506d91b74f14ae78a20a8b356a854acda54e59'

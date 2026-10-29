@@ -2,7 +2,7 @@
 title: 'Story 1.12: Govern the local data actually held by the first private route'
 type: 'feature'
 created: '2026-10-28'
-status: 'in-progress'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'b4e9f3b660ce663528a1580ca5be2c75ee0fece7'

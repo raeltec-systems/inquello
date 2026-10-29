@@ -2,7 +2,7 @@
 title: 'Story 1.6: Operate core action and input primitives'
 type: 'feature'
 created: '2026-10-28'
-status: 'in-progress'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '3dfa5c522e20e1fe303cb49435899cce5b694fdb'

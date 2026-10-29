@@ -2,7 +2,7 @@
 title: 'Story 1.10b: Sign in from the desktop over the HTTPS synthetic topology'
 type: 'feature'
 created: '2026-10-28'
-status: 'in-progress'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'd2714b697603458018acd332f631b09530567e42'

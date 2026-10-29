@@ -2,7 +2,7 @@
 title: 'Story 1.5: Apply the selected typography, tokens and icon semantics'
 type: 'feature'
 created: '2026-10-28'
-status: 'in-progress'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '744d854a6bcba3bf1df7c1f4acf3ca73369bd8b5'

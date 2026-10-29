@@ -2,7 +2,7 @@
 title: 'Story 1.10a: Authenticate an Inquello identity independently of inference (shared service)'
 type: 'feature'
 created: '2026-10-28'
-status: 'in-progress'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '9b8753c8efa276ae634401aea18dac0e0ecc34fe'

@@ -2,7 +2,7 @@
 title: 'Story 1.7: Navigate and identify work with accessible primitives'
 type: 'feature'
 created: '2026-10-28'
-status: 'in-progress'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '509a8a5c6abf7d34c02265af7c034708ca1319a7'

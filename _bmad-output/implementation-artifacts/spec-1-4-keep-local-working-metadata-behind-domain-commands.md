@@ -2,7 +2,7 @@
 title: 'Story 1.4: Keep local working metadata behind domain-owned commands'
 type: 'feature'
 created: '2026-10-28'
-status: 'in-progress'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '559c7bccbc0b59b671fea105a212b6a37113ef8d'
