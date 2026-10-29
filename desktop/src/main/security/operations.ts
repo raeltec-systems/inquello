@@ -38,6 +38,7 @@ import {
   type WorkspacesView,
   type WorkspaceTreeView,
 } from '../organise';
+import { setBroadModePayload, taskPolicyPayload, type PolicyResult, type SetBroadModeInput, type SettingsPolicyView, type TaskPolicyView } from '../policy/views';
 import type { CodexLoginRequest } from '../providers/codex-account';
 import { toRendererProviderResult, toRendererProviderStatus, type ProviderActionResult, type ProviderActionView, type ProviderStatus, type ProviderStatusView } from '../providers/status';
 import type { Logger } from '../runtime/logger';
@@ -70,6 +71,9 @@ export const OPERATION_NAMES = [
   'organise.moveTask',
   'state.list',
   'state.recordTaskState',
+  'policy.getSettings',
+  'policy.forTask',
+  'policy.setBroadMode',
 ] as const;
 export type OperationName = (typeof OPERATION_NAMES)[number];
 
@@ -237,6 +241,16 @@ export interface OrganiseOperations {
   recordTaskState(input: RecordTaskStateInput): Promise<OrganiseResult<StateRecordView>>;
 }
 
+/** The effective managed policy as the operations see it (main-owned; see `policy/service.ts`). */
+export interface PolicyOperations {
+  /** Story 1.18 S07: each Workspace's effective policy and the Capability Contract. */
+  settings(): Promise<SettingsPolicyView>;
+  /** Story 1.18: a Task's effective policy and broader mode, for its creator only. */
+  forTask(taskId: string): Promise<PolicyResult<TaskPolicyView>>;
+  /** Story 1.18: sets a Task's broader mode as the signed-in person. */
+  setBroadMode(input: SetBroadModeInput): Promise<PolicyResult<TaskPolicyView>>;
+}
+
 export interface OperationDeps {
   runtimeState: () => RuntimeState;
   runtimeVersion: string;
@@ -244,6 +258,7 @@ export interface OperationDeps {
   data: DataOperations;
   provider: ProviderOperations;
   organise: OrganiseOperations;
+  policy: PolicyOperations;
 }
 
 /**
@@ -381,6 +396,24 @@ export function createOperations(deps: OperationDeps): Operation[] {
     validate: recordTaskStatePayload,
     handle: (input) => deps.organise.recordTaskState(input),
   };
+  // Effective managed policy (Story 1.18): main fetches the Workspace policy,
+  // supplies the actor and the policy itself; the renderer names only the
+  // Task, the mode and the reach it showed. Thread settings have no operation.
+  const policySettings: Operation<undefined, SettingsPolicyView> = {
+    name: 'policy.getSettings',
+    validate: noPayload,
+    handle: () => deps.policy.settings(),
+  };
+  const policyForTask: Operation<{ taskId: string }, PolicyResult<TaskPolicyView>> = {
+    name: 'policy.forTask',
+    validate: taskPolicyPayload,
+    handle: ({ taskId }) => deps.policy.forTask(taskId),
+  };
+  const policySetBroadMode: Operation<SetBroadModeInput, PolicyResult<TaskPolicyView>> = {
+    name: 'policy.setBroadMode',
+    validate: setBroadModePayload,
+    handle: (input) => deps.policy.setBroadMode(input),
+  };
   return [
     getStatus,
     identityStatus,
@@ -406,6 +439,9 @@ export function createOperations(deps: OperationDeps): Operation[] {
     organiseMoveTask,
     stateList,
     stateRecordTaskState,
+    policySettings,
+    policyForTask,
+    policySetBroadMode,
   ] as Operation[];
 }
 

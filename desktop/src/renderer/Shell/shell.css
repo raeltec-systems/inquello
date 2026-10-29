@@ -661,3 +661,46 @@ a.iq-nav-row:hover {
   font: var(--type-caption);
   color: var(--text-secondary);
 }
+
+/* The open Task's policy and execution mode (Story 1.18). */
+.iq-task-policy {
+  margin-bottom: var(--space-4);
+}
+.iq-task-mode {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+.iq-task-mode-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  margin: 0;
+}
+.iq-task-mode-reach {
+  margin: 0;
+  font: var(--type-ui);
+  color: var(--text-primary);
+}
+.iq-task-mode-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.iq-task-mode-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--ink-600);
+  border-radius: var(--radius-composer);
+}
+.iq-task-mode-confirm-title {
+  margin: 0;
+  font: var(--type-ui);
+  font-weight: 600;
+  color: var(--text-primary);
+}

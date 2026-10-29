@@ -34,7 +34,7 @@ import { channelFor, createOperations, registerOperations, type IpcMainLike } fr
 import type { InvokeEventLike } from '../src/main/security/sender';
 import { sentinelNeedles } from '../src/main/smoke-probe';
 import { CONFIG, FakeIssuer, FakeService, fakeOpener, fakeSafeStorage } from './identity-fakes';
-import { fakeOrganise, recordingLogger, removeTempDirs, tempDir } from './helpers';
+import { fakeOrganise, fakePolicy, recordingLogger, removeTempDirs, tempDir } from './helpers';
 
 const desktop = path.resolve(__dirname, '..');
 const binary = resolveAppServerBinary({ env: process.env, isPackaged: false, resourcesPath: '', appPath: desktop });
@@ -277,6 +277,7 @@ describe.skipIf(!keyringTools)('Codex login in the OS keyring (real app-server, 
         },
         provider: providers,
         organise: fakeOrganise(),
+        policy: fakePolicy(),
       }),
       { trustedWebContentsIds: new Set([1]), logger: h.logger },
     );

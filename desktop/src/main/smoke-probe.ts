@@ -134,6 +134,7 @@ import type { WebContents } from 'electron';
 import { digestFile, exportedFilePath, governedRoots, importData, isInside, readManifest, ruleBlockers, takeInventory, type DataService, type GovernedRoots } from './data';
 import type { IdentityWiring } from './identity';
 import type { OrganiseService, TaskView } from './organise';
+import type { PolicyService } from './policy';
 import type { ProviderService } from './providers';
 import { isProviderCredentialVar } from './runtime/env';
 import type { BlockedKind } from './security/policy';
@@ -205,6 +206,7 @@ export const EXPECTED_BRIDGE_TREE = {
     moveTask: 'function',
   },
   state: { list: 'function', recordTaskState: 'function' },
+  policy: { getSettings: 'function', forTask: 'function', setBroadMode: 'function' },
 } as const;
 
 /** Globals that must not exist in the renderer's main world. */
@@ -2650,4 +2652,260 @@ export async function probeComposer(contents: WebContents, options: Omit<Organis
     }
   }
   return evaluateComposer(read);
+}
+
+// ---- effective managed policy (Story 1.18) -----------------------------------------
+
+const POLICY_SETTLE_MS = 20_000;
+const POLICY_SETTING_NAMES = ['sandbox', 'approval', 'network', 'mcp_tools', 'extensions', 'full_access', 'no_prompt'] as const;
+const NOT_ENABLED = 'Not enabled — eligibility verification required';
+/** Wording a broader mode or the policy must never use. */
+const APPROVAL_WORDING = /approv|review|accept|professional/i;
+const FULL_ACCESS_REACH = 'Full access: commands on this Task run without sandbox limits on this device, and you will not be asked before actions.';
+
+/** Reads S07 in Settings: every setting with its source, the device layer and the Capability Contract. */
+function policySettingsProbe(workspaceId: string | null): string {
+  return `(async () => {
+    ${SHELL_HELPERS}
+    location.hash = '#specimen';
+    await wait(() => !q('[data-shell]'), 5000);
+    const loaded = await wait(() => {
+      const section = q('[data-policy-section][data-policy-loaded="true"]');
+      if (!section) return null;
+      return ${JSON.stringify(workspaceId)} ? q('[data-policy-workspace=${JSON.stringify(workspaceId ?? '')}] [data-policy-setting]') && section : section;
+    }, ${POLICY_SETTLE_MS});
+    const section = q('[data-policy-section]');
+    const out = { loaded: !!loaded, signedIn: section ? section.getAttribute('data-signed-in') : null };
+    const workspace = ${JSON.stringify(workspaceId)} ? q('[data-policy-workspace=${JSON.stringify(workspaceId ?? '')}]') : null;
+    out.settings = workspace
+      ? [...workspace.querySelectorAll('[data-policy-setting]')].map((row) => ({
+          name: row.getAttribute('data-policy-setting'),
+          value: (q('.iq-status-chip', row) || row).textContent,
+          source: (q('[data-policy-source]', row) || row).textContent,
+        }))
+      : [];
+    out.device = workspace && q('[data-policy-device]', workspace) ? q('[data-policy-device]', workspace).textContent : null;
+    out.environment = text('[data-policy-environment]');
+    out.reason = text('[data-policy-section] [data-policy-reason]');
+    out.capabilities = [...document.querySelectorAll('[data-capability-contract] [data-capability]')].map((row) => ({
+      id: row.getAttribute('data-capability'),
+      text: row.textContent,
+    }));
+    out.wording = section ? ${APPROVAL_WORDING.toString()}.test(section.textContent) : true;
+    out.chips = section ? [...section.querySelectorAll('.iq-status-chip')].map((chip) => {
+      const style = getComputedStyle(chip);
+      return { className: chip.className, color: style.color, background: style.backgroundColor, border: style.borderTopColor };
+    }) : [];
+    return out;
+  })()`;
+}
+
+/** Opens the Task, reads its policy section, then tries Full access through the renderer bridge. */
+function policyTaskProbe(taskId: string, operationId: string): string {
+  return `(async () => {
+    ${SHELL_HELPERS}
+    location.hash = '#specimen';
+    await wait(() => !q('[data-shell]'), 5000);
+    const out = { shellOpened: await openShell() };
+    const row = await wait(() => q('[data-task-id=${JSON.stringify(taskId)}] a'), ${SHELL_SETTLE_MS});
+    if (row) row.click();
+    out.opened = !!(await wait(() => q('[data-task-view=${JSON.stringify(taskId)}]'), 5000));
+    const mode = await wait(() => q('[data-task-policy=${JSON.stringify(taskId)}] [data-broad-mode]'), ${POLICY_SETTLE_MS});
+    const section = q('[data-task-policy]');
+    out.status = mode ? mode.getAttribute('data-broad-mode-status') : null;
+    out.effective = mode ? mode.getAttribute('data-broad-mode-effective') : null;
+    out.summary = section && q('[data-task-policy-summary]', section) ? q('[data-task-policy-summary]', section).textContent : null;
+    const full = q('[data-broad-mode-option="full_access"]');
+    out.fullDisabled = full ? full.getAttribute('aria-disabled') : null;
+    out.fullReason = full && full.getAttribute('aria-describedby') ? (document.getElementById(full.getAttribute('aria-describedby').split(' ')[0]) || {}).textContent || null : null;
+    out.sectionText = section ? section.textContent : null;
+    out.wording = section ? ${APPROVAL_WORDING.toString()}.test(section.textContent) : true;
+    out.acceptedChips = section ? section.querySelectorAll('.iq-status-chip--accepted, .iq-status-chip--explained').length : -1;
+    out.chips = section ? [...section.querySelectorAll('.iq-status-chip')].map((chip) => {
+      const style = getComputedStyle(chip);
+      return { className: chip.className, color: style.color, background: style.backgroundColor, border: style.borderTopColor };
+    }) : [];
+    // Pressing the unavailable control opens nothing.
+    if (full) full.click();
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    out.confirmOpened = !!q('[data-broad-mode-confirm]');
+    const set = (confirmation) => globalThis.inquello.policy.setBroadMode({ operationId: ${JSON.stringify(operationId)}, taskId: ${JSON.stringify(taskId)}, expectedRevision: 0, mode: 'full_access', confirmation });
+    out.request = await set(${JSON.stringify(FULL_ACCESS_REACH)}).then((value) => value, (error) => String(error && error.message));
+    out.unconfirmed = await set(null).then(() => 'accepted', (error) => String(error && error.message));
+    return out;
+  })()`;
+}
+
+const POLICY_SIGNED_OUT_PROBE = `(async () => {
+  const out = {};
+  out.settings = await globalThis.inquello.policy.getSettings();
+  out.request = await globalThis.inquello.policy.setBroadMode({ operationId: '00000000-0000-4000-8000-000000000003', taskId: '00000000-0000-4000-8000-000000000001', expectedRevision: 0, mode: 'full_access', confirmation: ${JSON.stringify(FULL_ACCESS_REACH)} });
+  return out;
+})()`;
+
+interface PolicyChipRead {
+  className: string;
+  color: string;
+  background: string;
+  border: string;
+}
+
+export interface PolicyProbeRead {
+  configured: boolean;
+  signedOut?: { settings: unknown; request: unknown };
+  seedRead?: boolean;
+  signedIn?: boolean;
+  taskCreated?: boolean;
+  settings?: {
+    loaded: boolean;
+    signedIn: string | null;
+    settings: Array<{ name: string | null; value: string | null; source: string | null }>;
+    device: string | null;
+    environment: string | null;
+    reason: string | null;
+    capabilities: Array<{ id: string | null; text: string | null }>;
+    wording: boolean;
+    chips: PolicyChipRead[];
+  };
+  task?: {
+    shellOpened: boolean;
+    opened: boolean;
+    status: string | null;
+    effective: string | null;
+    summary: string | null;
+    fullDisabled: string | null;
+    fullReason: string | null;
+    sectionText: string | null;
+    wording: boolean;
+    acceptedChips: number;
+    chips: PolicyChipRead[];
+    confirmOpened: boolean;
+    request: unknown;
+    unconfirmed: string;
+  };
+  threadSettings?: unknown;
+  signedOutAtEnd?: boolean;
+  error?: string;
+}
+
+export interface PolicyReport extends PolicyProbeRead {
+  ok: boolean;
+  failures: string[];
+}
+
+function checkChips(chips: readonly PolicyChipRead[] | undefined, where: string, failures: string[]): void {
+  for (const chip of chips ?? []) {
+    if (/--accepted|--explained/.test(chip.className)) failures.push(`${where} shows an accepted or explained chip`);
+    if (isGreenish(chip.color) || isGreenish(chip.background) || isGreenish(chip.border)) failures.push(`${where} shows a green chip`);
+  }
+}
+
+function checkContract(capabilities: ReadonlyArray<{ id: string | null; text: string | null }> | undefined, failures: string[]): void {
+  const byId = new Map((capabilities ?? []).map((entry) => [entry.id, entry.text ?? '']));
+  for (const [id, label] of [
+    ['prompt_inspection', 'Prompt inspection'],
+    ['specialist_cyber_access', 'Specialist cyber access'],
+  ] as const) {
+    const textOf = byId.get(id);
+    if (!textOf?.includes(label) || !textOf.includes(NOT_ENABLED)) failures.push(`${label} is not listed as not enabled (${JSON.stringify(textOf)})`);
+  }
+}
+
+/** Pass/fail for the policy probe with the default seed (no `execution` section). */
+export function evaluatePolicy(read: PolicyProbeRead): PolicyReport {
+  const failures: string[] = [];
+  if (read.error) failures.push(`the probe stopped: ${read.error}`);
+  if (!read.configured) {
+    const settings = read.signedOut?.settings as { signedIn?: unknown; capabilities?: Array<{ id?: unknown; enabled?: unknown }> } | undefined;
+    if (settings?.signedIn !== false) failures.push('main showed a policy while signed out');
+    const request = read.signedOut?.request as { ok?: unknown; code?: unknown } | undefined;
+    if (request?.ok !== false || request.code !== 'signed-out') failures.push('a broader mode was not refused while signed out');
+    return { ok: failures.length === 0, failures, ...read };
+  }
+  if (!read.seedRead) failures.push('the dev topology seed file (INQUELLO_SMOKE_SEED) could not be read');
+  if (!read.signedIn) failures.push('the synthetic user did not sign in');
+  if (!read.taskCreated) failures.push('no Task was created for the policy probe');
+  const s = read.settings;
+  if (!s?.loaded || s.signedIn !== 'true') failures.push('S07 did not load the policy');
+  const names = (s?.settings ?? []).map((row) => row.name);
+  if (JSON.stringify(names) !== JSON.stringify(POLICY_SETTING_NAMES)) failures.push(`S07 lists ${JSON.stringify(names)}`);
+  for (const row of s?.settings ?? []) {
+    if (row.source !== 'Inquello default') failures.push(`S07 ${row.name} is governed by ${JSON.stringify(row.source)}, not the Inquello default`);
+  }
+  const value = (name: string) => s?.settings.find((row) => row.name === name)?.value;
+  if (value('sandbox') !== 'Workspace write') failures.push(`S07 sandbox reads ${JSON.stringify(value('sandbox'))}`);
+  if (value('approval') !== 'Asks when the agent requests it') failures.push(`S07 asking reads ${JSON.stringify(value('approval'))}`);
+  for (const name of ['network', 'mcp_tools', 'extensions']) if (value(name) !== 'Denied') failures.push(`S07 ${name} reads ${JSON.stringify(value(name))}`);
+  for (const name of ['full_access', 'no_prompt']) if (value(name) !== 'Not available') failures.push(`S07 ${name} reads ${JSON.stringify(value(name))}`);
+  if (s?.device !== 'Device-managed requirements: None configured on this device') failures.push(`S07 device layer reads ${JSON.stringify(s?.device)}`);
+  if (!s?.environment?.includes('Local device')) failures.push(`S07 environment reads ${JSON.stringify(s?.environment)}`);
+  checkContract(s?.capabilities, failures);
+  if (s?.wording !== false) failures.push('S07 uses review or approval wording');
+  checkChips(s?.chips, 'S07', failures);
+
+  const t = read.task;
+  if (!t?.shellOpened || !t.opened) failures.push('the Task did not open in the Shell');
+  if (t?.status !== 'standard' || t.effective !== 'standard') failures.push(`the Task mode is ${JSON.stringify(t?.status)} / ${JSON.stringify(t?.effective)}`);
+  if (!t?.summary?.includes('Sandbox ceiling') || !t.summary.includes('Inquello default')) failures.push(`the Task policy summary reads ${JSON.stringify(t?.summary)}`);
+  if (!t?.sectionText?.includes('Broader execution mode')) failures.push('the Task does not label its execution mode');
+  const ruleText = 'Full access is not available: not permitted by the Inquello default.';
+  if (t?.fullDisabled !== 'true' || !t.fullReason?.includes(ruleText)) failures.push(`the Full access control is not unavailable with its rule (${JSON.stringify(t?.fullDisabled)}, ${JSON.stringify(t?.fullReason)})`);
+  if (t?.confirmOpened !== false) failures.push('an unavailable broader mode opened its confirmation');
+  const request = t?.request as { ok?: unknown; code?: unknown; reason?: unknown } | undefined;
+  if (request?.ok !== false || request.code !== 'broad-mode-not-permitted' || request.reason !== ruleText) {
+    failures.push(`a Full access request was not refused with its governing rule (${JSON.stringify(request)})`);
+  }
+  if (!t?.unconfirmed.includes('invalid payload')) failures.push(`a Full access request without its confirmation passed main (${t?.unconfirmed})`);
+  if (t?.wording !== false) failures.push('the Task policy uses review or approval wording');
+  if (t?.acceptedChips !== 0) failures.push('the Task policy shows an accepted or explained chip');
+  checkChips(t?.chips, 'the Task policy', failures);
+  const thread = read.threadSettings as { ok?: unknown; value?: { sandbox?: unknown; approvalPolicy?: unknown; mode?: unknown } } | undefined;
+  if (thread?.ok !== true || thread.value?.sandbox !== 'workspace-write' || thread.value.approvalPolicy !== 'on-request' || thread.value.mode !== 'standard') {
+    failures.push(`effectiveThreadSettings answered ${JSON.stringify(thread)}`);
+  }
+  if (!read.signedOutAtEnd) failures.push('the probe could not sign out at the end');
+  return { ok: failures.length === 0, failures, ...read };
+}
+
+export interface PolicyProbeOptions extends Omit<OrganiseProbeOptions, 'runtimeRequest'> {
+  policy: PolicyService;
+}
+
+/** Runs the policy probe against the live renderer, main's policy service and the runtime. */
+export async function probePolicy(contents: WebContents, options: PolicyProbeOptions): Promise<PolicyReport> {
+  const { identity, organise, policy } = options;
+  const configured = identity.config.kind === 'configured';
+  const read: PolicyProbeRead = { configured };
+  if (!configured) {
+    read.signedOut = (await contents.executeJavaScript(POLICY_SIGNED_OUT_PROBE)) as PolicyProbeRead['signedOut'];
+    return evaluatePolicy(read);
+  }
+  try {
+    let seed: { workspace_id?: unknown } = {};
+    try {
+      seed = JSON.parse(fs.readFileSync(options.seedFile ?? '', 'utf8')) as typeof seed;
+    } catch {
+      seed = {};
+    }
+    const workspaceId = typeof seed.workspace_id === 'string' ? seed.workspace_id : null;
+    read.seedRead = workspaceId !== null;
+    if (!workspaceId) return evaluatePolicy(read);
+    read.signedIn = (await identity.session.signIn()).ok;
+    await organise.syncPrincipal();
+    await organise.getWorkspaces();
+    const created = await organise.createTask({ operationId: randomUUID(), workspaceId, engagementId: null, folderId: null, title: 'Smoke policy' });
+    read.taskCreated = created.ok;
+    if (!created.ok) return evaluatePolicy(read);
+    const taskId = created.value.taskId;
+    read.settings = (await contents.executeJavaScript(policySettingsProbe(workspaceId))) as PolicyProbeRead['settings'];
+    read.task = (await contents.executeJavaScript(policyTaskProbe(taskId, randomUUID()))) as PolicyProbeRead['task'];
+    read.threadSettings = await policy.effectiveThreadSettings(taskId);
+  } catch (error) {
+    read.error = (error as Error).message;
+  } finally {
+    const signOut = await identity.session.signOut().catch(() => ({ ok: false }));
+    await organise.syncPrincipal().catch(() => undefined);
+    read.signedOutAtEnd = signOut.ok;
+  }
+  return evaluatePolicy(read);
 }

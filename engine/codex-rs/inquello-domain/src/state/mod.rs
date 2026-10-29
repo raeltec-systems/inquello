@@ -32,5 +32,6 @@ pub use model::StateReceipt;
 pub use model::StateRecord;
 pub use model::StateWriter;
 pub use model::TaskStates;
+pub(crate) use model::parse_state_ref;
 pub use ports::TaskStateChange;
 pub use ports::TaskStateStore;

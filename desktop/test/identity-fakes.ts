@@ -24,6 +24,7 @@ import type {
   SessionCredentials,
   SessionView,
   AcceptInviteResponse,
+  ExecutionPolicyView,
   CreateEngagementEnvelope,
   WorkspacesView,
 } from '../src/main/identity/wire';
@@ -245,6 +246,11 @@ export class FakeService implements SharedService {
 
   async acceptInvite(_accessCredential: string, _inviteId: string): Promise<AcceptInviteResponse> {
     this.enter('acceptInvite');
+    throw new ServiceError('denied', true, 403);
+  }
+
+  async executionPolicy(_accessCredential: string, _workspaceId: string): Promise<ExecutionPolicyView> {
+    this.enter('executionPolicy');
     throw new ServiceError('denied', true, 403);
   }
 

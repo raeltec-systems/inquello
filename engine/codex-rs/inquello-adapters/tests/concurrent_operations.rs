@@ -17,6 +17,20 @@ use inquello_domain::StateChange;
 use inquello_domain::StoreError;
 use inquello_domain::StoreInfo;
 use inquello_domain::WorkingStore;
+use inquello_domain::execution_policy::BroadModeChange;
+use inquello_domain::execution_policy::BroadModeOutcome;
+use inquello_domain::execution_policy::BroadModeReceipt;
+use inquello_domain::execution_policy::BroadModeRecord;
+use inquello_domain::execution_policy::BroadModeStore;
+use inquello_domain::execution_policy::BroadModeTask;
+use inquello_domain::execution_policy::DeviceRequirements;
+use inquello_domain::execution_policy::EffectivePolicy;
+use inquello_domain::execution_policy::ExecutionPolicy;
+use inquello_domain::execution_policy::SetBroadMode;
+use inquello_domain::execution_policy::UserConfig;
+use inquello_domain::execution_policy::WorkspaceLayer;
+use inquello_domain::execution_policy::effective_policy;
+use inquello_domain::execution_policy::set_broad_mode;
 use inquello_domain::initialize_store;
 use inquello_domain::organise::Actor;
 use inquello_domain::organise::CreateEngagement;
@@ -75,6 +89,8 @@ enum Pause {
     TaskLoad,
     /// After the Task-state history read (state writes).
     StatesLoad,
+    /// After the broad-mode read (broad-mode writes, Story 1.18).
+    BroadModeLoad,
 }
 
 /// The real store, with a two-party barrier at `pause` and, optionally, a
@@ -243,6 +259,45 @@ impl TaskStateStore for Gate {
 
     async fn commit_state(&self, change: TaskStateChange) -> Result<(), StoreError> {
         self.store.commit_state(change).await
+    }
+}
+
+impl BroadModeStore for Gate {
+    async fn find_broad_mode_receipt(
+        &self,
+        id: &OperationId,
+    ) -> Result<Option<BroadModeReceipt>, StoreError> {
+        if self.hide_lookup() {
+            return Ok(None);
+        }
+        let result = self.store.find_broad_mode_receipt(id).await;
+        self.arrive(Pause::ReceiptLookup).await;
+        result
+    }
+
+    async fn load_broad_mode_task(&self, id: TaskId) -> Result<Option<BroadModeTask>, StoreError> {
+        self.store.load_broad_mode_task(id).await
+    }
+
+    async fn load_broad_mode(
+        &self,
+        id: TaskId,
+    ) -> Result<(Revision, Option<BroadModeRecord>), StoreError> {
+        let result = self.store.load_broad_mode(id).await;
+        self.arrive(Pause::BroadModeLoad).await;
+        result
+    }
+
+    async fn load_broad_mode_record(
+        &self,
+        id: TaskId,
+        revision: Revision,
+    ) -> Result<Option<BroadModeRecord>, StoreError> {
+        self.store.load_broad_mode_record(id, revision).await
+    }
+
+    async fn commit_broad_mode(&self, change: BroadModeChange) -> Result<(), StoreError> {
+        self.store.commit_broad_mode(change).await
     }
 }
 
@@ -771,4 +826,173 @@ async fn independent_state_writes_racing_at_the_same_revision_still_conflict() {
         other => panic!("expected one applied and one revision conflict, got {other:?}"),
     }
     assert_eq!(state_count(&store, &task).await, 1);
+}
+
+// ---- Task broad modes (Story 1.18) -------------------------------------------------
+
+/// A policy that permits both broad modes for the test Workspace.
+fn open_policy() -> EffectivePolicy {
+    let execution = ExecutionPolicy::from_value(&serde_json::json!({
+        "sandbox": "full_access",
+        "approvals": ["on_request", "never"],
+        "network": "allowed",
+        "allow_full_access": true,
+        "allow_no_prompt": true,
+    }))
+    .unwrap_or_else(|error| panic!("{error}"));
+    effective_policy(
+        &WorkspaceLayer {
+            workspace_id: WorkspaceId::parse(WORKSPACE).unwrap_or_else(|error| panic!("{error}")),
+            policy_revision: Revision::new(2),
+            authorization_epoch: Revision::new(2),
+            execution: Some(execution),
+        },
+        &DeviceRequirements::default(),
+        &UserConfig::default(),
+    )
+}
+
+fn broad(task: &Task, id: &str, expected: u64, mode: &str, reach: &str) -> SetBroadMode {
+    SetBroadMode {
+        operation_id: id.to_string(),
+        expected_revision: Revision::new(expected),
+        task_id: task.task_id.to_string(),
+        mode: mode.to_string(),
+        confirmation: Some(reach.to_string()),
+        writer: StateWriter::Human,
+    }
+}
+
+const NO_PROMPT: &str = "No prompt: commands on this Task run inside the sandbox on this device, and you will not be asked before actions.";
+const FULL_ACCESS: &str = "Full access: commands on this Task run without sandbox limits on this device, and you will not be asked before actions.";
+
+async fn broad_revision(store: &SqliteWorkingStore, task: &Task) -> Revision {
+    store
+        .load_broad_mode(task.task_id)
+        .await
+        .unwrap_or_else(|error| panic!("{error}"))
+        .0
+}
+
+#[tokio::test]
+async fn identical_broad_mode_writes_racing_record_one_mode() {
+    let (_dir, store) = open().await;
+    let task = new_task(&store).await;
+    let policy = open_policy();
+    let gate = Gate::racing(&store, Pause::BroadModeLoad);
+    let (first, second) = tokio::join!(
+        set_broad_mode(
+            &gate,
+            &SystemClock,
+            actor(),
+            &policy,
+            broad(&task, "op-b", 0, "no_prompt", NO_PROMPT)
+        ),
+        set_broad_mode(
+            &gate,
+            &SystemClock,
+            actor(),
+            &policy,
+            broad(&task, "op-b", 0, "no_prompt", NO_PROMPT)
+        ),
+    );
+    let (applied, replay) = applied_once(first, second, |o: &BroadModeOutcome| o.replayed);
+    assert_eq!(replay.receipt, applied.receipt);
+    assert_eq!(replay.record, applied.record);
+    assert_eq!(broad_revision(&store, &task).await, Revision::new(1));
+}
+
+#[tokio::test]
+async fn a_broad_mode_write_whose_lookup_missed_a_committed_receipt_replays_it() {
+    let (_dir, store) = open().await;
+    let task = new_task(&store).await;
+    let policy = open_policy();
+    let applied = ok(set_broad_mode(
+        &store,
+        &SystemClock,
+        actor(),
+        &policy,
+        broad(&task, "op-b", 0, "no_prompt", NO_PROMPT),
+    )
+    .await);
+    let gate = Gate::stale_lookup(&store);
+    let replay = ok(set_broad_mode(
+        &gate,
+        &SystemClock,
+        actor(),
+        &policy,
+        broad(&task, "op-b", 0, "no_prompt", NO_PROMPT),
+    )
+    .await);
+    assert!(replay.replayed);
+    assert_eq!(replay.receipt, applied.receipt);
+    assert_eq!(broad_revision(&store, &task).await, Revision::new(1));
+}
+
+#[tokio::test]
+async fn a_different_broad_mode_write_racing_under_the_same_operation_id_conflicts() {
+    let (_dir, store) = open().await;
+    let task = new_task(&store).await;
+    let policy = open_policy();
+    let gate = Gate::racing(&store, Pause::BroadModeLoad);
+    let (first, second) = tokio::join!(
+        set_broad_mode(
+            &gate,
+            &SystemClock,
+            actor(),
+            &policy,
+            broad(&task, "op-b", 0, "no_prompt", NO_PROMPT)
+        ),
+        set_broad_mode(
+            &gate,
+            &SystemClock,
+            actor(),
+            &policy,
+            broad(&task, "op-b", 0, "full_access", FULL_ACCESS)
+        ),
+    );
+    let conflict = DomainError::OperationConflict {
+        operation_id: op("op-b"),
+    };
+    match (first, second) {
+        (Ok(outcome), Err(error)) | (Err(error), Ok(outcome)) => {
+            assert_eq!(error, conflict);
+            assert!(!outcome.replayed);
+        }
+        other => panic!("expected one applied and one operation conflict, got {other:?}"),
+    }
+    assert_eq!(broad_revision(&store, &task).await, Revision::new(1));
+}
+
+#[tokio::test]
+async fn independent_broad_mode_writes_racing_at_the_same_revision_still_conflict() {
+    let (_dir, store) = open().await;
+    let task = new_task(&store).await;
+    let policy = open_policy();
+    let gate = Gate::racing(&store, Pause::BroadModeLoad);
+    let (first, second) = tokio::join!(
+        set_broad_mode(
+            &gate,
+            &SystemClock,
+            actor(),
+            &policy,
+            broad(&task, "op-x", 0, "no_prompt", NO_PROMPT)
+        ),
+        set_broad_mode(
+            &gate,
+            &SystemClock,
+            actor(),
+            &policy,
+            broad(&task, "op-y", 0, "full_access", FULL_ACCESS)
+        ),
+    );
+    let conflict = DomainError::RevisionConflict {
+        expected: Revision::ZERO,
+        actual: Revision::new(1),
+    };
+    match (first, second) {
+        (Ok(_), Err(error)) | (Err(error), Ok(_)) => assert_eq!(error, conflict),
+        other => panic!("expected one applied and one revision conflict, got {other:?}"),
+    }
+    assert_eq!(broad_revision(&store, &task).await, Revision::new(1));
 }

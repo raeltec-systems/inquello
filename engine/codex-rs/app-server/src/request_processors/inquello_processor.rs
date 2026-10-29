@@ -19,11 +19,31 @@
 //!   process. A `human` actor is always the bound principal; the payload never
 //!   names one. The domain refuses `review` and `approval_marker` from any
 //!   other actor and every dimension except `task` and `run` (Story 1.15).
+//! - `inquello/policy/effective` (Story 1.18) combines the Workspace execution
+//!   policy that main fetched from the shared service with this runtime's own
+//!   managed requirements (`configRequirements/read`) and user configuration
+//!   layer (`config/read`), which the dispatch reads and passes in. The domain
+//!   computes the result; this module only translates shapes.
+//! - `inquello/broadMode/read` and `inquello/broadMode/set` read and set a
+//!   Task's broader execution mode for its creator. Setting re-validates the
+//!   Workspace policy, checks it is the Task's own Workspace, and refuses a
+//!   broader mode the effective policy does not permit
+//!   (`broad_mode_not_permitted`, with the governing rule).
 
 use crate::error_code::INTERNAL_ERROR_CODE;
 use crate::error_code::INVALID_REQUEST_ERROR_CODE;
 use crate::outgoing_message::ConnectionId;
+use codex_app_server_protocol::AskForApproval;
 use codex_app_server_protocol::ClientResponsePayload;
+use codex_app_server_protocol::ConfigLayerSource;
+use codex_app_server_protocol::ConfigReadResponse;
+use codex_app_server_protocol::ConfigRequirementsReadResponse;
+use codex_app_server_protocol::InquelloBroadModeReadParams;
+use codex_app_server_protocol::InquelloBroadModeReadResponse;
+use codex_app_server_protocol::InquelloBroadModeSetParams;
+use codex_app_server_protocol::InquelloBroadModeSetResponse;
+use codex_app_server_protocol::InquelloCapabilityContractEntry;
+use codex_app_server_protocol::InquelloDeviceRequirements;
 use codex_app_server_protocol::InquelloEngagement;
 use codex_app_server_protocol::InquelloEngagementCreateParams;
 use codex_app_server_protocol::InquelloEngagementResponse;
@@ -32,6 +52,10 @@ use codex_app_server_protocol::InquelloFolder;
 use codex_app_server_protocol::InquelloFolderCreateParams;
 use codex_app_server_protocol::InquelloFolderResponse;
 use codex_app_server_protocol::InquelloKnownWorkspace;
+use codex_app_server_protocol::InquelloPolicyEffectiveParams;
+use codex_app_server_protocol::InquelloPolicyEffectiveResponse;
+use codex_app_server_protocol::InquelloPolicySetting;
+use codex_app_server_protocol::InquelloPolicySource;
 use codex_app_server_protocol::InquelloReceipt;
 use codex_app_server_protocol::InquelloSetPrincipalParams;
 use codex_app_server_protocol::InquelloSetPrincipalResponse;
@@ -43,27 +67,44 @@ use codex_app_server_protocol::InquelloStateRecordParams;
 use codex_app_server_protocol::InquelloStateRecordResponse;
 use codex_app_server_protocol::InquelloTask;
 use codex_app_server_protocol::InquelloTaskAttachThreadParams;
+use codex_app_server_protocol::InquelloTaskBroadMode;
 use codex_app_server_protocol::InquelloTaskCreateParams;
 use codex_app_server_protocol::InquelloTaskMoveParams;
+use codex_app_server_protocol::InquelloTaskPolicy;
 use codex_app_server_protocol::InquelloTaskRenameParams;
 use codex_app_server_protocol::InquelloTaskResponse;
 use codex_app_server_protocol::InquelloTaskVisibility;
+use codex_app_server_protocol::InquelloThreadSettings;
+use codex_app_server_protocol::InquelloWorkspaceExecutionPolicy;
 use codex_app_server_protocol::InquelloWorkspaceListResponse;
 use codex_app_server_protocol::InquelloWorkspaceRememberParams;
 use codex_app_server_protocol::InquelloWorkspaceRememberResponse;
 use codex_app_server_protocol::InquelloWorkspaceTreeParams;
 use codex_app_server_protocol::InquelloWorkspaceTreeResponse;
 use codex_app_server_protocol::JSONRPCErrorError;
+use codex_app_server_protocol::SandboxMode;
 use inquello_adapters::SqliteWorkingStore;
 use inquello_adapters::SystemClock;
 use inquello_domain::DomainError;
 use inquello_domain::InitializeStore;
 use inquello_domain::Revision;
+use inquello_domain::execution_policy;
+use inquello_domain::execution_policy::ApprovalBehaviour;
+use inquello_domain::execution_policy::BroadModeStatus;
+use inquello_domain::execution_policy::DeviceRequirements;
+use inquello_domain::execution_policy::EffectivePolicy;
+use inquello_domain::execution_policy::ExecutionPolicy;
+use inquello_domain::execution_policy::SandboxLevel;
+use inquello_domain::execution_policy::Setting;
+use inquello_domain::execution_policy::SettingSource;
+use inquello_domain::execution_policy::UserConfig;
+use inquello_domain::execution_policy::WorkspaceLayer;
 use inquello_domain::organise;
 use inquello_domain::organise::Actor;
 use inquello_domain::organise::OrganiseOutcome;
 use inquello_domain::organise::OrganiseRecord;
 use inquello_domain::organise::PrincipalId;
+use inquello_domain::organise::WorkspaceId;
 use inquello_domain::state;
 use inquello_domain::state::StateDimension;
 use inquello_domain::state::StateWriter;
@@ -530,6 +571,350 @@ impl InquelloRequestProcessor {
     }
 }
 
+impl InquelloRequestProcessor {
+    // ---- Effective policy and broader modes (Story 1.18) -------------------------
+
+    pub(crate) async fn policy_effective(
+        &self,
+        connection_id: ConnectionId,
+        params: InquelloPolicyEffectiveParams,
+        device: DeviceRequirements,
+        user: UserConfig,
+    ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        let actor = self.actor(connection_id)?;
+        let layer = workspace_layer(&params.workspace_policy)?;
+        let policy = execution_policy::effective_policy(&layer, &device, &user);
+        let task = match params.task_id {
+            Some(task_id) => {
+                let store = self.store().await?;
+                let broad = execution_policy::task_broad_mode(&store, actor, &task_id)
+                    .await
+                    .map_err(domain_error)?;
+                if broad.workspace_id != layer.workspace_id {
+                    return Err(domain_error(DomainError::WorkspaceMismatch));
+                }
+                Some(task_policy(&policy, &broad))
+            }
+            None => None,
+        };
+        Ok(Some(
+            InquelloPolicyEffectiveResponse {
+                environment: policy.environment.as_str().to_string(),
+                workspace_id: policy.workspace_id.to_string(),
+                policy_revision: policy.policy_revision.get(),
+                authorization_epoch: policy.authorization_epoch.get(),
+                settings: settings_view(&policy),
+                device: device_view(&device),
+                capabilities: capability_contract(),
+                task,
+            }
+            .into(),
+        ))
+    }
+
+    pub(crate) async fn broad_mode_read(
+        &self,
+        connection_id: ConnectionId,
+        params: InquelloBroadModeReadParams,
+    ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        let (store, actor) = self.context(connection_id).await?;
+        let broad = execution_policy::task_broad_mode(&store, actor, &params.task_id)
+            .await
+            .map_err(domain_error)?;
+        Ok(Some(
+            InquelloBroadModeReadResponse {
+                task_id: broad.task_id.to_string(),
+                workspace_id: broad.workspace_id.to_string(),
+                revision: broad.revision.get(),
+                mode: broad.recorded().as_str().to_string(),
+            }
+            .into(),
+        ))
+    }
+
+    pub(crate) async fn broad_mode_set(
+        &self,
+        connection_id: ConnectionId,
+        params: InquelloBroadModeSetParams,
+        device: DeviceRequirements,
+        user: UserConfig,
+    ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        let (store, actor) = self.context(connection_id).await?;
+        let writer = state_writer(&params.actor_kind, params.actor_ref)?;
+        let layer = workspace_layer(&params.workspace_policy)?;
+        let policy = execution_policy::effective_policy(&layer, &device, &user);
+        let outcome = execution_policy::set_broad_mode(
+            &store,
+            &SystemClock,
+            actor,
+            &policy,
+            execution_policy::SetBroadMode {
+                operation_id: params.operation_id,
+                expected_revision: Revision::new(params.expected_revision),
+                task_id: params.task_id,
+                mode: params.mode,
+                confirmation: params.confirmation,
+                writer,
+            },
+        )
+        .await
+        .map_err(domain_error)?;
+        let broad =
+            execution_policy::task_broad_mode(&store, actor, &outcome.record.task_id.to_string())
+                .await
+                .map_err(domain_error)?;
+        Ok(Some(
+            InquelloBroadModeSetResponse {
+                task: task_policy(&policy, &broad),
+                receipt: InquelloReceipt {
+                    operation_id: outcome.receipt.operation_id.to_string(),
+                    command: execution_policy::SET_BROAD_MODE_COMMAND.to_string(),
+                    expected_revision: outcome.receipt.expected_revision.get(),
+                    resulting_revision: outcome.receipt.resulting_revision.get(),
+                    replayed: outcome.replayed,
+                },
+            }
+            .into(),
+        ))
+    }
+}
+
+/// The Workspace layer from main's payload, validated by the domain.
+fn workspace_layer(
+    policy: &InquelloWorkspaceExecutionPolicy,
+) -> Result<WorkspaceLayer, JSONRPCErrorError> {
+    let workspace_id = WorkspaceId::parse(&policy.workspace_id).map_err(domain_error)?;
+    let execution = match &policy.execution {
+        None | Some(serde_json::Value::Null) => None,
+        Some(value) => Some(ExecutionPolicy::from_value(value).map_err(|error| {
+            refusal(
+                "invalid",
+                &format!("the Workspace policy is invalid: {error}"),
+            )
+        })?),
+    };
+    Ok(WorkspaceLayer {
+        workspace_id,
+        policy_revision: Revision::new(policy.policy_revision),
+        authorization_epoch: Revision::new(policy.authorization_epoch),
+        execution,
+    })
+}
+
+impl InquelloRequestProcessor {
+    /// The device layer of the effective policy (see [`read_device_requirements`]).
+    pub(crate) fn device_requirements(
+        response: &ConfigRequirementsReadResponse,
+    ) -> DeviceRequirements {
+        read_device_requirements(response)
+    }
+
+    /// The user layer of the effective policy (see [`read_user_config`]).
+    pub(crate) fn user_config(response: &ConfigReadResponse) -> UserConfig {
+        read_user_config(response)
+    }
+}
+
+/// The device layer from `configRequirements/read`: allowed sandbox modes and
+/// approval policies. A granular approval policy is none of Inquello's
+/// behaviours, so it allows none of them.
+fn read_device_requirements(response: &ConfigRequirementsReadResponse) -> DeviceRequirements {
+    let Some(requirements) = &response.requirements else {
+        return DeviceRequirements::default();
+    };
+    DeviceRequirements {
+        sandbox_modes: requirements.allowed_sandbox_modes.as_ref().map(|modes| {
+            modes
+                .iter()
+                .map(|mode| match mode {
+                    SandboxMode::ReadOnly => SandboxLevel::ReadOnly,
+                    SandboxMode::WorkspaceWrite => SandboxLevel::WorkspaceWrite,
+                    SandboxMode::DangerFullAccess => SandboxLevel::FullAccess,
+                })
+                .collect()
+        }),
+        approvals: requirements
+            .allowed_approval_policies
+            .as_ref()
+            .map(|policies| {
+                policies
+                    .iter()
+                    .filter_map(|policy| match policy {
+                        AskForApproval::UnlessTrusted => Some(ApprovalBehaviour::Untrusted),
+                        AskForApproval::OnRequest => Some(ApprovalBehaviour::OnRequest),
+                        AskForApproval::Never => Some(ApprovalBehaviour::Never),
+                        AskForApproval::Granular { .. } => None,
+                    })
+                    .collect()
+            }),
+    }
+}
+
+/// The user layer: the `User` layers of `config/read` (with layers), later
+/// layers overriding earlier ones. Unknown or unset values constrain nothing.
+fn read_user_config(response: &ConfigReadResponse) -> UserConfig {
+    let mut user = UserConfig::default();
+    for layer in response.layers.iter().flatten() {
+        if !matches!(layer.name, ConfigLayerSource::User { .. }) || layer.disabled_reason.is_some()
+        {
+            continue;
+        }
+        let config = &layer.config;
+        if let Some(level) = config["sandbox_mode"].as_str().and_then(|mode| match mode {
+            "read-only" => Some(SandboxLevel::ReadOnly),
+            "workspace-write" => Some(SandboxLevel::WorkspaceWrite),
+            "danger-full-access" => Some(SandboxLevel::FullAccess),
+            _ => None,
+        }) {
+            user.sandbox = Some(level);
+        }
+        if let Some(behaviour) =
+            config["approval_policy"]
+                .as_str()
+                .and_then(|policy| match policy {
+                    "untrusted" => Some(ApprovalBehaviour::Untrusted),
+                    "on-request" => Some(ApprovalBehaviour::OnRequest),
+                    "never" => Some(ApprovalBehaviour::Never),
+                    _ => None,
+                })
+        {
+            user.approval = Some(behaviour);
+        }
+        if let Some(network) = config["sandbox_workspace_write"]["network_access"].as_bool() {
+            user.network = Some(network);
+        }
+    }
+    user
+}
+
+fn source_view(source: SettingSource) -> InquelloPolicySource {
+    InquelloPolicySource {
+        kind: source.kind().to_string(),
+        revision: source.revision().map(Revision::get),
+    }
+}
+
+fn setting_view<T>(name: &str, setting: Setting<T>, value: &str) -> InquelloPolicySetting {
+    InquelloPolicySetting {
+        name: name.to_string(),
+        value: value.to_string(),
+        source: source_view(setting.source),
+        restricted: setting.restricted,
+    }
+}
+
+fn allowed(value: bool) -> &'static str {
+    if value { "allowed" } else { "denied" }
+}
+
+fn permitted(value: bool) -> &'static str {
+    if value { "permitted" } else { "not_permitted" }
+}
+
+fn settings_view(policy: &EffectivePolicy) -> Vec<InquelloPolicySetting> {
+    vec![
+        setting_view("sandbox", policy.sandbox, policy.sandbox.value.as_str()),
+        setting_view("approval", policy.approval, policy.approval.value.as_str()),
+        setting_view("network", policy.network, allowed(policy.network.value)),
+        setting_view(
+            "mcp_tools",
+            policy.mcp_tools,
+            allowed(policy.mcp_tools.value),
+        ),
+        setting_view(
+            "extensions",
+            policy.extensions,
+            allowed(policy.extensions.value),
+        ),
+        setting_view(
+            "full_access",
+            policy.full_access,
+            permitted(policy.full_access.value),
+        ),
+        setting_view(
+            "no_prompt",
+            policy.no_prompt,
+            permitted(policy.no_prompt.value),
+        ),
+    ]
+}
+
+fn device_view(device: &DeviceRequirements) -> InquelloDeviceRequirements {
+    InquelloDeviceRequirements {
+        configured: device.configured(),
+        sandbox_modes: device
+            .sandbox_modes
+            .as_ref()
+            .map(|modes| modes.iter().map(|mode| mode.as_str().to_string()).collect()),
+        approvals: device.approvals.as_ref().map(|approvals| {
+            approvals
+                .iter()
+                .map(|behaviour| behaviour.as_str().to_string())
+                .collect()
+        }),
+    }
+}
+
+/// The Capability Contract entries Story 1.18 lists as not enabled, from the
+/// compiled register (fail closed: a missing entry is listed as not enabled).
+fn capability_contract() -> Vec<InquelloCapabilityContractEntry> {
+    let register = inquello_domain::capability::CapabilityRegister::load_embedded().ok();
+    ["prompt_inspection", "specialist_cyber_access"]
+        .into_iter()
+        .map(|id| {
+            let entry = register.as_ref().and_then(|register| register.entry(id));
+            InquelloCapabilityContractEntry {
+                id: id.to_string(),
+                enabled: inquello_domain::capability::enablement(id).is_enabled(),
+                limits: entry.map_or_else(
+                    || vec!["Eligibility verification required before enablement".to_string()],
+                    |entry| entry.limits.clone(),
+                ),
+            }
+        })
+        .collect()
+}
+
+fn task_policy(
+    policy: &EffectivePolicy,
+    broad: &execution_policy::TaskBroadMode,
+) -> InquelloTaskPolicy {
+    let recorded = broad.recorded();
+    let status = BroadModeStatus::of(policy, recorded);
+    let settings = execution_policy::thread_settings(policy, status);
+    InquelloTaskPolicy {
+        broad_mode: InquelloTaskBroadMode {
+            task_id: broad.task_id.to_string(),
+            revision: broad.revision.get(),
+            recorded: recorded.as_str().to_string(),
+            status: status.kind().to_string(),
+            effective_mode: status.effective_mode().as_str().to_string(),
+            governing: match status {
+                BroadModeStatus::Suspended { rule, .. } => Some(source_view(rule)),
+                _ => None,
+            },
+            label: execution_policy::BROAD_MODE_LABEL.to_string(),
+            reach: recorded.reach().to_string(),
+        },
+        thread_settings: InquelloThreadSettings {
+            sandbox: match settings.sandbox {
+                SandboxLevel::ReadOnly => "read-only",
+                SandboxLevel::WorkspaceWrite => "workspace-write",
+                SandboxLevel::FullAccess => "danger-full-access",
+            }
+            .to_string(),
+            approval_policy: match settings.approval {
+                ApprovalBehaviour::Untrusted => "untrusted",
+                ApprovalBehaviour::OnRequest => "on-request",
+                ApprovalBehaviour::Never => "never",
+            }
+            .to_string(),
+            network_access: settings.network,
+            mode: settings.mode.as_str().to_string(),
+        },
+    }
+}
+
 /// The writer the host attests. A human writer is the bound principal, so a
 /// human actor may not carry a reference of its own.
 fn state_writer(
@@ -741,6 +1126,17 @@ fn domain_error(error: DomainError) -> JSONRPCErrorError {
             "invalid_value",
             "the value is not a state of this dimension",
         ),
+        DomainError::BroadModeNotPermitted { rule } => JSONRPCErrorError {
+            code: INVALID_REQUEST_ERROR_CODE,
+            message: format!("broad_mode_not_permitted: governed by {rule}"),
+            data: Some(json!({
+                "inquello": {
+                    "kind": "broad_mode_not_permitted",
+                    "rule": rule.kind(),
+                    "revision": rule.revision().map(Revision::get),
+                }
+            })),
+        },
         DomainError::AlreadyInitialized | DomainError::Store(_) => {
             tracing::error!("inquello working store failure: {error}");
             failure("store_failure", "the Inquello working store failed")

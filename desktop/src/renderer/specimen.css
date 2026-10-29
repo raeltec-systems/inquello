@@ -199,3 +199,65 @@
   gap: var(--space-2);
   max-width: 480px;
 }
+
+/* Capabilities and processing, S07 (Story 1.18). */
+.specimen-policy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: 720px;
+}
+.specimen-policy-workspace,
+.specimen-policy-contract {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.specimen-policy-heading {
+  margin: 0;
+  font: var(--type-label);
+  letter-spacing: var(--tracking-label);
+  color: var(--text-primary);
+}
+.specimen-policy-settings {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-1) var(--space-4);
+  margin: 0;
+}
+.specimen-policy-setting {
+  display: contents;
+}
+.specimen-policy-settings dt {
+  font: var(--type-ui);
+  color: var(--text-secondary);
+}
+.specimen-policy-settings dd {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  margin: 0;
+}
+.specimen-policy-source {
+  font: var(--type-ui);
+  color: var(--text-secondary);
+}
+.specimen-policy-capabilities {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.specimen-policy-capabilities li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+.specimen-policy-capability {
+  font: var(--type-ui);
+  color: var(--text-primary);
+}

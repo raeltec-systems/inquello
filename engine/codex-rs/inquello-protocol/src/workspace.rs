@@ -132,6 +132,64 @@ pub struct RoleView {
     pub actions: Vec<Action>,
 }
 
+/// `GET /v1/workspaces/{workspace_id}/execution-policy` (Story 1.18): the
+/// Workspace execution policy a member's desktop combines with its device
+/// requirements and user configuration.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExecutionPolicyView {
+    pub workspace_id: Uuid,
+    pub policy_revision: Revision,
+    pub authorization_epoch: Revision,
+    /// The validated `execution` section; `null` when the policy has none, so
+    /// the conservative Inquello default applies.
+    pub execution: Option<ExecutionSection>,
+}
+
+/// The `execution` section of a Workspace policy, in its canonical form: only
+/// the fields the policy names.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExecutionSection {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sandbox: Option<SandboxCeiling>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approvals: Option<Vec<ApprovalBehaviour>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub network: Option<Access>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mcp_tools: Option<Access>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extensions: Option<Access>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub allow_full_access: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub allow_no_prompt: Option<bool>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SandboxCeiling {
+    ReadOnly,
+    WorkspaceWrite,
+    FullAccess,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ApprovalBehaviour {
+    Untrusted,
+    OnRequest,
+    Never,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Access {
+    Allowed,
+    Denied,
+}
+
 /// `POST /v1/invites/{invite_id}/accept` answer: the caller's new membership.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

@@ -35,6 +35,12 @@
 //! `{"workspace_id", "invite_id", "workspace_name"}` to FILE (removed when the topology stops); the
 //! synthetic user accepts the invite after signing in. The invite ID is not a
 //! credential: only the bound `(issuer, subject)` can accept it.
+//!
+//! `--seed-execution FILE` (Story 1.18, tests only) adds the JSON object in FILE
+//! as the seeded policy's `execution` section, for example a permissive policy
+//! that allows the broad modes. Without it the seeded policy has no `execution`
+//! section and the conservative Inquello default applies. The policy is
+//! validated as the operator CLI would.
 
 use chrono::TimeDelta;
 use inquello_service::DatabaseConfig;
@@ -68,7 +74,7 @@ const SUBJECT_EMAIL: &str = "developer@synthetic.invalid";
 
 const USAGE: &str = "usage: inquello-dev-topology [--service-bind ADDR] [--issuer-bind ADDR] \
 [--ca-dir DIR] [--config-out FILE] [--drop-stale] [--access-lifetime-secs N] [--exit-on-stdin-eof] \
-[--seed-workspace NAME --seed-out FILE]";
+[--seed-workspace NAME --seed-out FILE [--seed-execution FILE]]";
 
 /// The sample Workspace policy the seed uses: one role holds `manage_membership`.
 const SEED_POLICY: &str = include_str!("../../../inquello-protocol/fixtures/workspace/policy.json");
@@ -86,6 +92,7 @@ struct Options {
     exit_on_stdin_eof: bool,
     seed_workspace: Option<String>,
     seed_out: Option<PathBuf>,
+    seed_execution: Option<PathBuf>,
 }
 
 fn parse_options() -> Result<Options, String> {
@@ -100,6 +107,7 @@ fn parse_options() -> Result<Options, String> {
         exit_on_stdin_eof: false,
         seed_workspace: None,
         seed_out: None,
+        seed_execution: None,
     };
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -127,6 +135,9 @@ fn parse_options() -> Result<Options, String> {
             "--exit-on-stdin-eof" => options.exit_on_stdin_eof = true,
             "--seed-workspace" => options.seed_workspace = Some(value("--seed-workspace")?),
             "--seed-out" => options.seed_out = Some(PathBuf::from(value("--seed-out")?)),
+            "--seed-execution" => {
+                options.seed_execution = Some(PathBuf::from(value("--seed-execution")?));
+            }
             "-h" | "--help" => return Err(USAGE.to_string()),
             other => return Err(format!("unknown argument {other}\n{USAGE}")),
         }
@@ -136,7 +147,29 @@ fn parse_options() -> Result<Options, String> {
             "--seed-workspace and --seed-out go together\n{USAGE}"
         ));
     }
+    if options.seed_execution.is_some() && options.seed_workspace.is_none() {
+        return Err(format!("--seed-execution needs --seed-workspace\n{USAGE}"));
+    }
     Ok(options)
+}
+
+/// The seeded policy: the sample policy, plus the `execution` section from
+/// `--seed-execution` when given.
+fn seed_policy(execution: Option<&std::path::Path>) -> Result<String, String> {
+    let Some(path) = execution else {
+        return Ok(SEED_POLICY.to_string());
+    };
+    let text = std::fs::read_to_string(path)
+        .map_err(|error| format!("could not read --seed-execution: {error}"))?;
+    let section: serde_json::Value = serde_json::from_str(&text)
+        .map_err(|_| "--seed-execution is not valid JSON".to_string())?;
+    let mut policy: serde_json::Value =
+        serde_json::from_str(SEED_POLICY).map_err(|error| format!("seed policy: {error}"))?;
+    policy
+        .as_object_mut()
+        .ok_or_else(|| "the seed policy is not an object".to_string())?
+        .insert("execution".to_string(), section);
+    Ok(policy.to_string())
 }
 
 fn database_config(connect: PgConnectOptions) -> DatabaseConfig {
@@ -422,7 +455,13 @@ async fn run(options: Options) -> Result<(), String> {
 
     let seeded = match (&options.seed_workspace, &options.seed_out) {
         (Some(name), Some(path)) => {
-            match seed_workspace(&database, name, provider.issuer_url(), path).await {
+            let seeded = match seed_policy(options.seed_execution.as_deref()) {
+                Ok(policy) => {
+                    seed_workspace(&database, name, &policy, provider.issuer_url(), path).await
+                }
+                Err(error) => Err(error),
+            };
+            match seeded {
                 Ok(()) => Some(path.clone()),
                 Err(error) => {
                     service.shutdown().await;
@@ -485,6 +524,7 @@ async fn run(options: Options) -> Result<(), String> {
 async fn seed_workspace(
     database: &RunDatabase,
     name: &str,
+    policy: &str,
     issuer_url: &str,
     path: &std::path::Path,
 ) -> Result<(), String> {
@@ -496,7 +536,7 @@ async fn seed_workspace(
         inquello_service::admin::CreateWorkspace {
             name: name.to_string(),
             kind: "internal_company".to_string(),
-            policy: SEED_POLICY.to_string(),
+            policy: policy.to_string(),
             first_admin_issuer: issuer_url.to_string(),
             first_admin_subject: SUBJECT.to_string(),
             invite_lifetime: Duration::from_secs(24 * 60 * 60),

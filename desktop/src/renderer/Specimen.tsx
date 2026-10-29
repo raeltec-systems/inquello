@@ -15,11 +15,15 @@
  * import and delete actions through the named `inquello.data` operations.
  * Story 1.13 adds the Providers block after it: the Claude API key and the
  * inherited Codex login, apart from the identity, through the named
- * `inquello.provider` operations. Nothing else here performs one.
+ * `inquello.provider` operations. Story 1.18 adds the Capabilities and
+ * processing block (S07) last: the effective managed policy of each
+ * Workspace and the Capability Contract, read through `inquello.policy`.
+ * Nothing else here performs one.
  */
 import type { ReactElement, ReactNode } from 'react';
 
 import { Account } from './Account';
+import { Capabilities } from './Capabilities';
 import { LocalData } from './LocalData';
 import { Providers } from './Providers';
 import { CONTRAST_PAIRS } from './design/contrast';
@@ -449,6 +453,10 @@ export function Specimen({ onIdentityChanged }: SpecimenProps = {}): ReactElemen
 
       <Section title="Providers">
         <Providers />
+      </Section>
+
+      <Section title="Capabilities and processing">
+        <Capabilities />
       </Section>
     </main>
   );

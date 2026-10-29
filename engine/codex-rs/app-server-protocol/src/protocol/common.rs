@@ -1576,6 +1576,25 @@ client_request_definitions! {
         serialization: global("inquello"),
         response: v2::InquelloStateRecordResponse,
     },
+    /// Inquello (Story 1.18): the effective policy over the Workspace, device
+    /// and user layers, and optionally a Task's broader mode.
+    InquelloPolicyEffective => "inquello/policy/effective" {
+        params: v2::InquelloPolicyEffectiveParams,
+        serialization: global("inquello"),
+        response: v2::InquelloPolicyEffectiveResponse,
+    },
+    /// Inquello (Story 1.18): a Task's recorded broader mode and its Workspace.
+    InquelloBroadModeRead => "inquello/broadMode/read" {
+        params: v2::InquelloBroadModeReadParams,
+        serialization: global("inquello"),
+        response: v2::InquelloBroadModeReadResponse,
+    },
+    /// Inquello (Story 1.18): sets a Task's broader mode.
+    InquelloBroadModeSet => "inquello/broadMode/set" {
+        params: v2::InquelloBroadModeSetParams,
+        serialization: global("inquello"),
+        response: v2::InquelloBroadModeSetResponse,
+    },
 
     /// DEPRECATED APIs below
     GetConversationSummary => "getConversationSummary" {

@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "description": "Reads a Task's recorded broader mode (creator only) and its Workspace.",
+  "properties": {
+    "taskId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "taskId"
+  ],
+  "title": "InquelloBroadModeReadParams",
+  "type": "object"
+}

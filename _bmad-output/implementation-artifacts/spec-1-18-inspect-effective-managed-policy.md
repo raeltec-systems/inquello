@@ -2,7 +2,7 @@
 title: 'Story 1.18: Inspect effective managed policy and explicit broader modes'
 type: 'feature'
 created: '2026-10-29'
-status: 'in-progress'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 context:
@@ -112,20 +112,46 @@ Show the result in S07 ("Capabilities and processing" in Settings) and on the Ta
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] Domain: the policy section, the effective computation, the broad-mode rules and the capability entries, with tests for every matrix row.
-- [ ] Service: policy-update tests for `execution` (administrator only, validation, revision and epoch). Adapters: migration 0004 and race tests.
-- [ ] App-server methods (FORK-CUT Patch 10), the regenerated protocol and stamp, and processor tests.
-- [ ] Desktop main: policy fetch, mediation, `effectiveThreadSettings`, preload operations, the S07 section, the Task summary, the confirmation dialog, and jsdom tests.
-- [ ] Smoke `policy` report, with the default seed:
+- [x] Domain: the policy section, the effective computation, the broad-mode rules and the capability entries, with tests for every matrix row.
+- [x] Service: policy-update tests for `execution` (administrator only, validation, revision and epoch). Adapters: migration 0004 and race tests.
+- [x] App-server methods (FORK-CUT Patch 10), the regenerated protocol and stamp, and processor tests.
+- [x] Desktop main: policy fetch, mediation, `effectiveThreadSettings`, preload operations, the S07 section, the Task summary, the confirmation dialog, and jsdom tests.
+- [x] Smoke `policy` report, with the default seed:
   - S07 shows Inquello defaults with their sources;
   - prompt inspection and cyber access show as not enabled;
   - a full-access request is refused with the governing rule;
   - no approval wording appears.
   The permitted path is covered by integration tests using a seeded permissive policy.
-- [ ] `sprint-status.yaml` (1-18).
+- [x] `sprint-status.yaml` (1-18).
 
 **Acceptance Criteria:**
 - Given the smoke with the seeded topology, when it runs, then `policy` and every earlier report are ok, and it exits 0.
+
+## Implementation Notes
+
+- **As built:**
+  - **Domain (`inquello-domain/src/execution_policy/`):** `ExecutionPolicy` (the optional `execution` section; every field optional, an absent field takes the Inquello default and is attributed to it), `effective_policy` over `WorkspaceLayer`, `DeviceRequirements` and `UserConfig` (strictest value wins, ties name the earlier layer: Workspace, then device, then user), `Setting { value, source, restricted }` with `SettingSource` (`workspace_policy` with revision, `device_requirements`, `user_config`, `inquello_default`), `Environment::LocalDevice`. Broad modes: `BroadMode` with fixed titles and reach statements, `set_broad_mode` and the creator-only `task_broad_mode` (Story 1.15 pattern: validate, replay, creator check, Workspace match, permission, revision, commit, R10 re-lookup), `BroadModeStatus` (`Standard`, `Active`, `Suspended { rule }`) and `thread_settings`. `DomainError::BroadModeNotPermitted { rule }` and `PolicyError::InvalidExecution`. Register entries `prompt_inspection` and `specialist_cyber_access` (`disabled`, no evidence, limit "Eligibility verification required before enablement"); the C67 and C68 inventory rows stay `planned`.
+  - **Section document:** `{"sandbox": "read_only|workspace_write|full_access", "approvals": ["untrusted", "on_request", "never"], "network": "allowed|denied", "mcp_tools": …, "extensions": …, "allow_full_access": bool, "allow_no_prompt": bool}`.
+  - **Adapter:** migration `0004_task_broad_modes.sql` and `src/broad_modes.rs` (schema refuses a non-human broader mode).
+  - **Service:** `GET /v1/workspaces/{id}/execution-policy` (members only) returns `{workspace_id, policy_revision, authorization_epoch, execution | null}` (`inquello-protocol` `ExecutionPolicyView`, fixture `workspace/execution_policy_view.json`). The policy is changed only through the operator `update_policy` (Story 1.11 revision, epoch and receipt). `inquello-dev-topology --seed-execution FILE` adds a section to the seeded policy.
+  - **Host (FORK-CUT Patch 10):** `inquello/policy/effective {workspacePolicy, taskId?}`, `inquello/broadMode/read {taskId}` (also returns the Task's Workspace), `inquello/broadMode/set {operationId, expectedRevision, taskId, mode, confirmation, actorKind, actorRef, workspacePolicy}`. The dispatch reads the device layer from the runtime's own `configRequirements/read` (allowed sandbox modes and approval policies) and the user layer from the `User` layers of `config/read` with layers (`sandbox_mode`, `approval_policy`, `sandbox_workspace_write.network_access`). Refusal `broad_mode_not_permitted` carries `rule` and `revision`. The response also lists the two Capability Contract entries from the compiled register.
+  - **Desktop main (`src/main/policy/`):** `PolicyService.settings` (S07, one entry per Workspace), `forTask`, `setBroadMode` (actor `human`, the bound principal) and the main-only `effectiveThreadSettings(taskId)`, which no preload operation reaches. The Workspace policy is fetched from the service on every read, so a new revision or epoch shows on the next open or refresh; if it cannot be read nothing is computed (fail closed). Operations `policy.getSettings`, `policy.forTask`, `policy.setBroadMode`; the validator accepts exactly `{operationId, taskId, expectedRevision, mode, confirmation}` and a broader mode only with its exact reach statement. Main supplies all text: "Restricted by Workspace policy, revision N", "Set by this device's managed requirements", "Restricted by your runtime configuration", "Inquello default", "None configured on this device", "Full access is not available: not permitted by …", "Suspended by policy: … This Task runs in Standard mode."
+  - **Renderer:** `Capabilities.tsx` (Settings, "Capabilities and processing": environment, each Workspace's settings with their sources, the device layer and the Capability Contract) and `Shell/TaskPolicy.tsx` in the Task view (summary of sandbox, asking and network; "Broader execution mode" with a neutral custom-label StatusChip; unavailable modes stay focusable with their rule as the disabled reason; a permitted mode opens an inline `alertdialog` stating its reach, and only its "Turn on …" button sets it; Escape cancels; "Return to Standard"). `policy-bridge.ts` parses defensively and refuses an enabled contract entry. The Shell reads the Task policy on open and on each refresh.
+  - **Smoke:** a `policy` report after `composer`, with the default seed.
+- **Deviations and interpretations:**
+  - `inquello-protocol` gained a wire type and fixture, and the service a read route; main needs both to fetch the Workspace policy. These are additions only.
+  - Validation couples the broad-mode flags to their prerequisites: `allow_no_prompt` needs `never` among the approvals; `allow_full_access` needs the `full_access` ceiling, `allow_no_prompt` and network allowed (full access follows the spec's reach text: no sandbox limits and no asking). `approvals` must include a prompting behaviour.
+  - The user's own configuration narrows the standard settings but does not forbid a broader mode: the broader mode is that user's explicit per-Task choice. The Workspace policy and the device requirements both govern it.
+  - Standard Tasks never run above `workspace_write`, whatever the ceiling. With no prompting behaviour left after the device layer, the standard behaviour fails closed to `untrusted`.
+  - "Non-admin edit": no HTTP route changes a policy (operator CLI only, Story 1.11). The service test shows a member's and an administrator's `update_policy` command are both refused as an unknown command.
+  - "Policy tightened" is covered in the domain, processor and integration tests by computing against a stricter Workspace layer; desktop tests cannot change a policy revision over HTTP.
+  - The approval setting is labelled "Asking before actions" so that no approval wording appears in the policy UI.
+  - Recomputation is on read (Task open, Shell refresh, S07 every 30 s); there is no push when device requirements change.
+- **Results (2026-10-29):**
+  - Engine: `inquello-domain` 84 lib tests (21 new) and `capability_register` 15 (1 new); `inquello-adapters` 51 (`broad_modes` 3 new, 4 new races in `concurrent_operations`); `inquello-service` with the database: `memberships` 14 (1 new), `identity` 20, `topology` 9, and the lib tests; `inquello-protocol` fixtures (extended with the new view) pass; app-server inquello processor 10 (2 new); `codex-app-server-protocol` 317 lib tests (schema fixtures, 1 ignored). Clippy `-D warnings` clean on `inquello-domain`, `inquello-adapters`, `inquello-protocol` and `inquello-service`; `codex-app-server` shows only the pre-existing upstream `let_and_return`. Both builds pass separately; `Cargo.lock` unchanged.
+  - Desktop: `pnpm generate:protocol` emits the 14 new types (795 files); `pnpm run build` is clean; `pnpm test` with the database passes 898 tests (22 new, including `policy-integration.test.ts` against the real runtime and a topology seeded with a permissive policy: Full access set after confirmation, thread settings `danger-full-access`/`never`, replay, stale revision, suspension under a stricter layer, return to Standard, another principal `not_found`).
+  - Keyring smoke with the seeded topology: exit 0; `renderer-privileges`, `design`, `identity`, `data`, `providers`, `organise`, `states`, `shell-layout`, `composer` and `policy` all ok. The `policy` report: S07 lists all seven settings with "Inquello default", "Device-managed requirements: None configured on this device", environment "Local device", prompt inspection and specialist cyber access "Not enabled — eligibility verification required"; the Task shows Standard, its Full access control is unavailable with "Full access is not available: not permitted by the Inquello default." and opens no confirmation; a confirmed Full access request through the renderer is refused `broad-mode-not-permitted` with that rule, and one without confirmation fails main's validator; `effectiveThreadSettings` gives `workspace-write`/`on-request`; no approval or review wording and no green or accepted chip.
+  - Step-04 review was skipped by owner rule.
 
 ## Verification
 

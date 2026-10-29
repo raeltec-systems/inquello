@@ -10,6 +10,9 @@
  *   changes who can see it.
  * - The States section (Story 1.15) lists every state dimension separately,
  *   each with its value or "Not recorded".
+ * - The policy section (Story 1.18) summarises the effective policy on this
+ *   device and the Task's execution mode, with the explicit confirmation a
+ *   broader mode needs.
  * - The Composer (Story 1.17) sits below in the Shell; runtime threads come with Story 1.25:
  *   nothing here starts work.
  */
@@ -17,7 +20,9 @@ import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
 
 import { Button, Menu, TextField, type MenuEntry } from '../primitives';
 import type { EngagementItem, FolderItem, Outcome, TaskItem } from './organise-bridge';
+import type { TaskPolicyItem } from '../policy-bridge';
 import type { TaskStatesItem } from './state-bridge';
+import { TaskPolicy } from './TaskPolicy';
 import { TaskStates } from './TaskStates';
 
 export interface MoveTarget {
@@ -36,6 +41,12 @@ export interface TaskViewProps {
   states?: TaskStatesItem | null;
   /** Why the states could not be read, if they could not. */
   statesNotice?: string | null;
+  /** The Task's effective policy and execution mode (Story 1.18); null until read. */
+  policy?: TaskPolicyItem | null;
+  /** Why the policy could not be read, if it could not. */
+  policyNotice?: string | null;
+  /** Sets the Task's execution mode; resolves with a reason when refused. */
+  onSetMode?: (mode: 'standard' | 'no_prompt' | 'full_access', confirmation: string | null) => Promise<string | null>;
 }
 
 const AD_HOC = 'ad-hoc';
@@ -45,7 +56,19 @@ export function targetKey(target: MoveTarget): string {
   return target.folderId ? `folder:${target.folderId}` : `engagement:${target.engagementId}`;
 }
 
-export function TaskView({ task, engagements, folders, onRename, onMove, newOperationId, states = null, statesNotice = null }: TaskViewProps): ReactElement {
+export function TaskView({
+  task,
+  engagements,
+  folders,
+  onRename,
+  onMove,
+  newOperationId,
+  states = null,
+  statesNotice = null,
+  policy = null,
+  policyNotice = null,
+  onSetMode,
+}: TaskViewProps): ReactElement {
   const [draft, setDraft] = useState(task.title);
   const [renameOp, setRenameOp] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -125,6 +148,7 @@ export function TaskView({ task, engagements, folders, onRename, onMove, newOper
         </p>
       ) : null}
       <TaskStates states={states && states.taskId === task.taskId ? states : null} notice={statesNotice} />
+      <TaskPolicy policy={policy && policy.taskId === task.taskId ? policy : null} notice={policyNotice} onSetMode={onSetMode} />
       <div className="iq-thread-placeholder" data-thread-placeholder>
         <p className="iq-thread-placeholder-title">This Task has no thread yet.</p>
         <p className="iq-thread-placeholder-body">

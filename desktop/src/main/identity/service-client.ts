@@ -26,6 +26,7 @@ import {
   parseCapabilities,
   parseCommandResponse,
   parseErrorBody,
+  parseExecutionPolicyView,
   parseLoginTransaction,
   parseRevokeFamilyResponse,
   parseSessionCredentials,
@@ -34,6 +35,7 @@ import {
   type AbandonLoginRequest,
   type AbandonLoginResponse,
   type AcceptInviteResponse,
+  type ExecutionPolicyView,
   type CreateEngagementEnvelope,
   type DenyReason,
   type BootstrapRequest,
@@ -186,6 +188,8 @@ export interface SharedService {
   workspaceCommand(accessCredential: string, envelope: CreateEngagementEnvelope): Promise<CommandResponse>;
   /** `POST /v1/invites/{id}/accept`: accepts an invite bound to the caller. */
   acceptInvite(accessCredential: string, inviteId: string): Promise<AcceptInviteResponse>;
+  /** `GET /v1/workspaces/{id}/execution-policy`: the Workspace execution policy (Story 1.18). */
+  executionPolicy(accessCredential: string, workspaceId: string): Promise<ExecutionPolicyView>;
 }
 
 export class SharedServiceClient implements SharedService {
@@ -278,6 +282,10 @@ export class SharedServiceClient implements SharedService {
 
   acceptInvite(accessCredential: string, inviteId: string): Promise<AcceptInviteResponse> {
     return this.call('POST', `/v1/invites/${encodeURIComponent(inviteId)}/accept`, parseAcceptInviteResponse, { body: {}, bearer: accessCredential });
+  }
+
+  executionPolicy(accessCredential: string, workspaceId: string): Promise<ExecutionPolicyView> {
+    return this.call('GET', `/v1/workspaces/${encodeURIComponent(workspaceId)}/execution-policy`, parseExecutionPolicyView, { bearer: accessCredential });
   }
 }
 

@@ -1,5 +1,6 @@
 //! Workspace kinds, actions, role kinds and the versioned role policy.
 
+use crate::execution_policy::ExecutionPolicy;
 use serde_json::Map;
 use serde_json::Value;
 use std::collections::BTreeSet;
@@ -195,6 +196,9 @@ pub enum PolicyError {
     RoleCount,
     #[error("at least one role must permit `manage_membership`")]
     NoAdministrator,
+    /// The optional `execution` section (Story 1.18) is invalid.
+    #[error("the execution policy is invalid: {0}")]
+    InvalidExecution(String),
     /// External-audit client or independence attributes (OQ-15).
     #[error("`{0}` is an external-audit attribute: route_not_available")]
     RouteNotAvailable(String),
@@ -206,6 +210,9 @@ pub enum PolicyError {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct WorkspacePolicy {
     roles: Vec<RoleDefinition>,
+    /// The Workspace execution policy (Story 1.18); `None` when the document
+    /// has no `execution` section, so the conservative Inquello default applies.
+    execution: Option<ExecutionPolicy>,
 }
 
 /// Whether a key names an external-audit client or independence attribute.
@@ -214,7 +221,11 @@ fn is_external_audit_attribute(key: &str) -> bool {
     key.contains("client") || key.contains("independence") || key.contains("external")
 }
 
-fn check_keys(object: &Map<String, Value>, allowed: &[&str], at: &str) -> Result<(), PolicyError> {
+pub(crate) fn check_keys(
+    object: &Map<String, Value>,
+    allowed: &[&str],
+    at: &str,
+) -> Result<(), PolicyError> {
     for key in object.keys() {
         if is_external_audit_attribute(key) {
             return Err(PolicyError::RouteNotAvailable(key.clone()));
@@ -257,7 +268,11 @@ impl WorkspacePolicy {
         let object = value
             .as_object()
             .ok_or_else(|| PolicyError::Malformed("the policy must be an object".to_string()))?;
-        check_keys(object, &["policy_version", "roles"], "the policy")?;
+        check_keys(
+            object,
+            &["policy_version", "roles", "execution"],
+            "the policy",
+        )?;
         let version = required(object, "policy_version", "the policy")?;
         if version.as_u64() != Some(POLICY_FORMAT_VERSION) {
             return Err(PolicyError::UnsupportedVersion(version.to_string()));
@@ -320,7 +335,14 @@ impl WorkspacePolicy {
         {
             return Err(PolicyError::NoAdministrator);
         }
-        Ok(Self { roles: parsed })
+        let execution = object
+            .get("execution")
+            .map(ExecutionPolicy::from_value)
+            .transpose()?;
+        Ok(Self {
+            roles: parsed,
+            execution,
+        })
     }
 
     /// The canonical document: the form the service stores.
@@ -337,7 +359,17 @@ impl WorkspacePolicy {
                 })
             })
             .collect();
-        serde_json::json!({ "policy_version": POLICY_FORMAT_VERSION, "roles": roles })
+        let mut document =
+            serde_json::json!({ "policy_version": POLICY_FORMAT_VERSION, "roles": roles });
+        if let (Some(execution), Some(object)) = (&self.execution, document.as_object_mut()) {
+            object.insert("execution".to_string(), execution.to_value());
+        }
+        document
+    }
+
+    /// The execution section, if the document has one (Story 1.18).
+    pub fn execution(&self) -> Option<&ExecutionPolicy> {
+        self.execution.as_ref()
     }
 
     pub fn roles(&self) -> &[RoleDefinition] {

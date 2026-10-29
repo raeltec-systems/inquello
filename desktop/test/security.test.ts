@@ -36,7 +36,7 @@ import {
 } from '../src/main/security/policy';
 import { describeSender, isTrustedSender, type FrameLike, type InvokeEventLike } from '../src/main/security/sender';
 import { EXPECTED_BRIDGE_TREE, evaluatePrivileges, type RendererProbeResult } from '../src/main/smoke-probe';
-import { fakeOrganise, recordingLogger, removeTempDirs, tempDir } from './helpers';
+import { fakeOrganise, fakePolicy, recordingLogger, removeTempDirs, tempDir } from './helpers';
 
 const desktop = path.resolve(__dirname, '..');
 const APP = 'inquello://app/index.html';
@@ -227,6 +227,7 @@ describe('operation registry', () => {
   let dataCalls: string[];
   let providerCalls: string[];
   let organiseCalls: string[];
+  let policyCalls: string[];
   let logger: ReturnType<typeof recordingLogger>;
 
   beforeEach(() => {
@@ -235,6 +236,7 @@ describe('operation registry', () => {
     dataCalls = [];
     providerCalls = [];
     organiseCalls = [];
+    policyCalls = [];
     logger = recordingLogger();
     const operations = createOperations({
       runtimeState: () => {
@@ -246,6 +248,7 @@ describe('operation registry', () => {
       data: fakeData(dataCalls),
       provider: fakeProvider(providerCalls),
       organise: fakeOrganise(organiseCalls),
+      policy: fakePolicy(policyCalls),
     });
     registerOperations(ipc, operations, { trustedWebContentsIds: new Set([1]), logger });
   });
@@ -286,6 +289,39 @@ describe('operation registry', () => {
     expect(organiseCalls).toEqual([`recordTaskState:${JSON.stringify([write])}`, `listStates:${JSON.stringify([taskId])}`]);
   });
 
+  it('validates policy payloads in main: the reach must be confirmed, and no actor, principal or policy passes (Story 1.18)', async () => {
+    const taskId = '3a1b2c3d-4e5f-4a6b-8c7d-8e9f0a1b2c3d';
+    const operationId = '0a1b2c3d-4e5f-4a6b-8c7d-8e9f0a1b2c3d';
+    const reach = 'Full access: commands on this Task run without sandbox limits on this device, and you will not be asked before actions.';
+    const set = { operationId, taskId, expectedRevision: 0, mode: 'full_access', confirmation: reach };
+    for (const bad of [
+      { ...set, confirmation: null },
+      { ...set, confirmation: 'yes' },
+      { ...set, mode: 'no_prompt' },
+      { ...set, mode: 'standard' },
+      { ...set, mode: 'approved' },
+      { ...set, actorKind: 'human' },
+      { ...set, principalId: taskId },
+      { ...set, workspacePolicy: { execution: { allow_full_access: true } } },
+      { ...set, expectedRevision: -1 },
+    ]) {
+      await expect(ipc.invoke(channelFor('policy.setBroadMode'), trustedEvent, bad)).rejects.toThrow('invalid payload for policy.setBroadMode');
+    }
+    await expect(ipc.invoke(channelFor('policy.forTask'), trustedEvent, { taskId, workspaceId: taskId })).rejects.toThrow('invalid payload for policy.forTask');
+    await expect(ipc.invoke(channelFor('policy.getSettings'), trustedEvent, { workspaceId: taskId })).rejects.toThrow('invalid payload for policy.getSettings');
+    await expect(ipc.invoke(channelFor('policy.setBroadMode'), trustedEvent, set)).resolves.toMatchObject({ ok: false });
+    const standard = { ...set, mode: 'standard', confirmation: null };
+    await expect(ipc.invoke(channelFor('policy.setBroadMode'), trustedEvent, standard)).resolves.toMatchObject({ ok: false });
+    await expect(ipc.invoke(channelFor('policy.forTask'), trustedEvent, { taskId })).resolves.toMatchObject({ ok: false });
+    await expect(ipc.invoke(channelFor('policy.getSettings'), trustedEvent)).resolves.toMatchObject({ signedIn: false });
+    expect(policyCalls).toEqual([
+      `setBroadMode:${JSON.stringify([set])}`,
+      `setBroadMode:${JSON.stringify([standard])}`,
+      `forTask:${JSON.stringify([taskId])}`,
+      'settings',
+    ]);
+  });
+
   it('registers exactly one fixed channel per named operation', () => {
     expect(OPERATION_NAMES).toEqual([
       'runtime.getStatus',
@@ -312,6 +348,9 @@ describe('operation registry', () => {
       'organise.moveTask',
       'state.list',
       'state.recordTaskState',
+      'policy.getSettings',
+      'policy.forTask',
+      'policy.setBroadMode',
     ]);
     expect([...ipc.handlers.keys()]).toEqual(OPERATION_NAMES.map((name) => `${CHANNEL_PREFIX}${name}`));
   });
@@ -496,7 +535,7 @@ describe('operation registry', () => {
         throw new Error('secret internal path /home/x');
       },
     };
-    const others = createOperations({ runtimeState: () => 'ready', runtimeVersion: '0.165.0', identity: fakeIdentity(), data: fakeData(), provider: fakeProvider(), organise: fakeOrganise() }).filter(
+    const others = createOperations({ runtimeState: () => 'ready', runtimeVersion: '0.165.0', identity: fakeIdentity(), data: fakeData(), provider: fakeProvider(), organise: fakeOrganise(), policy: fakePolicy() }).filter(
       (operation) => operation.name !== 'runtime.getStatus',
     );
     registerOperations(failing, [op, ...others], { trustedWebContentsIds: new Set([1]), logger });
@@ -849,12 +888,12 @@ describe('host privilege source scan', () => {
     const uses = body.match(/ipcRenderer[^\n]*/g) ?? [];
     expect(uses.length).toBeGreaterThan(0);
     for (const use of uses) expect(use).toMatch(/^ipcRenderer\.invoke\([A-Z_]+_CHANNEL(?:, \.\.\.args)?\)/);
-    // Only the data operations, the two provider operations that take what the user entered, and the organise and state operations forward arguments.
-    expect((body.match(/_CHANNEL, \.\.\.args\)/g) ?? []).length).toBe(16);
+    // Only the data operations, the two provider operations that take what the user entered, and the organise, state and policy operations forward arguments.
+    expect((body.match(/_CHANNEL, \.\.\.args\)/g) ?? []).length).toBe(19);
     expect(
       body
         .match(/[A-Z_]+_CHANNEL, \.\.\.args\)/g)
-        ?.every((use) => use.startsWith('DATA_') || use.startsWith('PROVIDER_SET_CLAUDE_KEY_') || use.startsWith('PROVIDER_CODEX_LOGIN_') || use.startsWith('ORGANISE_') || use.startsWith('STATE_')),
+        ?.every((use) => use.startsWith('DATA_') || use.startsWith('PROVIDER_SET_CLAUDE_KEY_') || use.startsWith('PROVIDER_CODEX_LOGIN_') || use.startsWith('ORGANISE_') || use.startsWith('STATE_') || use.startsWith('POLICY_')),
     ).toBe(true);
     expect(preload).not.toMatch(/\.on\(|\.send\(|sendSync|postMessage/);
   });

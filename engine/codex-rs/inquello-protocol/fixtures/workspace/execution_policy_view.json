@@ -1,0 +1,14 @@
+{
+  "workspace_id": "5d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e",
+  "policy_revision": "2",
+  "authorization_epoch": "5",
+  "execution": {
+    "sandbox": "full_access",
+    "approvals": ["untrusted", "on_request", "never"],
+    "network": "allowed",
+    "mcp_tools": "denied",
+    "extensions": "denied",
+    "allow_full_access": true,
+    "allow_no_prompt": true
+  }
+}

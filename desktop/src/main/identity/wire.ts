@@ -237,6 +237,30 @@ export type RolesView = ReturnType<typeof parseRolesView>;
 export const parsePolicyRole = object({ id: str, kind: oneOf(ROLE_KINDS), label: str, actions: array(oneOf(ACTIONS)) });
 export const parseWorkspacePolicy = object({ policy_version: u32, roles: array(parsePolicyRole) });
 
+/** Story 1.18: the `execution` section of a Workspace policy, in its canonical form. */
+export const SANDBOX_CEILINGS = ['read_only', 'workspace_write', 'full_access'] as const;
+export const APPROVAL_BEHAVIOURS = ['untrusted', 'on_request', 'never'] as const;
+const access = oneOf(['allowed', 'denied'] as const);
+const bool: Parser<boolean> = (value, path) => (typeof value === 'boolean' ? value : fail(path, 'expected a boolean'));
+export const parseExecutionSection = object({
+  sandbox: optional(oneOf(SANDBOX_CEILINGS)),
+  approvals: optional(array(oneOf(APPROVAL_BEHAVIOURS))),
+  network: optional(access),
+  mcp_tools: optional(access),
+  extensions: optional(access),
+  allow_full_access: optional(bool),
+  allow_no_prompt: optional(bool),
+});
+export type ExecutionSection = ReturnType<typeof parseExecutionSection>;
+/** `GET /v1/workspaces/{id}/execution-policy` (Story 1.18). */
+export const parseExecutionPolicyView = object({
+  workspace_id: uuid,
+  policy_revision: decimal,
+  authorization_epoch: decimal,
+  execution: nullable(parseExecutionSection),
+});
+export type ExecutionPolicyView = ReturnType<typeof parseExecutionPolicyView>;
+
 export const parseAcceptInviteResponse = object({
   invite_id: uuid,
   workspace_id: uuid,

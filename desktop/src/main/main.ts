@@ -61,6 +61,15 @@
  *
  * Task states (Story 1.15) go through the same service: `state.list` and
  * `state.recordTaskState` (Task and run states only, recorded as `system`).
+ *
+ * The effective managed policy (Story 1.18) is computed through `policy/`:
+ * main fetches the Workspace execution policy from the shared service and
+ * the runtime adds its own managed requirements and user configuration. The
+ * renderer reads it through `policy.getSettings` (S07) and `policy.forTask`,
+ * and sets a Task's broader mode through `policy.setBroadMode` with the reach
+ * the person confirmed. `PolicyService.effectiveThreadSettings` is the only
+ * source of a thread's sandbox and approval settings. In `--smoke` a `policy`
+ * line follows `composer`; the run also requires it to pass.
  * `--smoke` then runs the states probe and prints a `states` line, which the
  * run also requires to pass.
  *
@@ -97,8 +106,9 @@ import {
   type PolicyOptions,
 } from './security/policy';
 import { OrganiseService } from './organise';
+import { PolicyService } from './policy';
 import { createProviders, loadProviderDevConfig, PROVIDER_DEV_CONFIG_ENV, providersDir, type ProviderService } from './providers';
-import { probeComposer, probeData, probeIdentity, probeOrganise, probeProviders, probeRenderer, probeShellLayout, probeStates, SHELL_LAYOUT } from './smoke-probe';
+import { probeComposer, probeData, probeIdentity, probeOrganise, probePolicy, probeProviders, probeRenderer, probeShellLayout, probeStates, SHELL_LAYOUT } from './smoke-probe';
 
 const smoke = process.argv.includes('--smoke');
 // The smoke run keeps what main logs, so the providers probe can scan it for a leaked key.
@@ -114,10 +124,12 @@ let identityOk = false;
 let dataOk = false;
 let providersOk = false;
 let organiseOk = false;
+let policyOk = false;
 let statesOk = false;
 let shellLayoutOk = false;
 let composerOk = false;
 let organise: OrganiseService | undefined;
+let policy: PolicyService | undefined;
 let identity: IdentityWiring | undefined;
 let providers: ProviderService | undefined;
 let dataService: DataService | undefined;
@@ -320,11 +332,16 @@ async function runSmokeProbe(contents: WebContents): Promise<void> {
   composerOk = composerReport.ok;
   process.stdout.write(`${JSON.stringify({ event: 'composer', ...composerReport })}\n`);
   if (!composerReport.ok) logger.error(`composer probe failed: ${composerReport.failures.join('; ')}`);
+  if (!policy) throw new Error('policy was not wired');
+  const policyReport = await probePolicy(contents, { identity, organise, policy, seedFile: process.env.INQUELLO_SMOKE_SEED ?? null });
+  policyOk = policyReport.ok;
+  process.stdout.write(`${JSON.stringify({ event: 'policy', ...policyReport })}\n`);
+  if (!policyReport.ok) logger.error(`policy probe failed: ${policyReport.failures.join('; ')}`);
 }
 
 function exitCodeFor(exit: ExitInfo | undefined): number {
   if (!smoke) return 0;
-  return handshakeOk && privilegesOk && designOk && identityOk && dataOk && providersOk && organiseOk && statesOk && shellLayoutOk && composerOk && exit !== undefined && exit.exitCode === 0 && !exit.killed ? 0 : 1;
+  return handshakeOk && privilegesOk && designOk && identityOk && dataOk && providersOk && organiseOk && statesOk && shellLayoutOk && composerOk && policyOk && exit !== undefined && exit.exitCode === 0 && !exit.killed ? 0 : 1;
 }
 
 app.on('before-quit', (event) => {
@@ -396,6 +413,18 @@ void app.whenReady().then(async () => {
     logger,
   });
   organise = organiseService;
+  const policyService = new PolicyService({
+    runtime: {
+      ready: () => runtime?.state === 'ready',
+      instance: () => runtime,
+      request: <T,>(method: string, params?: unknown) => (runtime ? runtime.request<T>(method, params) : Promise.reject(new Error('the runtime is not running'))),
+    },
+    identity: identitySession,
+    organise: organiseService,
+    service: identity.service,
+    logger,
+  });
+  policy = policyService;
   /** Rebinds the runtime's principal after a sign-in change. */
   const afterIdentityChange = async <T,>(result: T): Promise<T> => {
     await organiseService.syncPrincipal().catch((error: unknown) => logger.warn(`organise: principal not rebound (${(error as Error).message})`));
@@ -490,6 +519,11 @@ void app.whenReady().then(async () => {
         moveTask: (input) => organiseService.moveTask(input),
         listStates: (taskId) => organiseService.listStates(taskId),
         recordTaskState: (input) => organiseService.recordTaskState(input),
+      },
+      policy: {
+        settings: () => policyService.settings(),
+        forTask: (taskId) => policyService.forTask(taskId),
+        setBroadMode: (input) => policyService.setBroadMode(input),
       },
     }),
     { trustedWebContentsIds, logger },

@@ -30,6 +30,9 @@ use inquello_domain::authorization::ResourceRef;
 use inquello_domain::authorization::RoleKind;
 use inquello_domain::authorization::WorkspaceKind;
 use inquello_domain::authorization::WorkspacePolicy;
+use inquello_domain::execution_policy::ApprovalBehaviour;
+use inquello_domain::execution_policy::ExecutionPolicy;
+use inquello_domain::execution_policy::SandboxLevel;
 use inquello_protocol::Revision;
 use inquello_protocol::workspace as wire;
 use sqlx::PgConnection;
@@ -399,6 +402,72 @@ pub(crate) async fn roles(
     };
     tx.commit().await?;
     Ok(view)
+}
+
+// ---- GET /v1/workspaces/{id}/execution-policy (Story 1.18) -------------------
+
+/// The Workspace execution policy for a member's desktop: the policy revision,
+/// the authorization epoch and the validated `execution` section (`None` when
+/// the policy has none, so the conservative Inquello default applies).
+pub(crate) async fn execution_policy(
+    state: &AppState,
+    access: &str,
+    workspace_id: Uuid,
+) -> Result<wire::ExecutionPolicyView, ApiError> {
+    let mut tx = state.pool.begin().await?;
+    let auth = sessions::authenticate(
+        &mut tx,
+        access,
+        state.clock.as_ref(),
+        LockMode::Share,
+        LockMode::Share,
+    )
+    .await
+    .map_err(ApiError::on_workspace_route)?;
+    let authority = resolve(&mut tx, &auth, workspace_id, LockMode::Share).await?;
+    authority.require_member()?;
+    let view = wire::ExecutionPolicyView {
+        workspace_id,
+        policy_revision: revision(authority.workspace.policy_revision)?,
+        authorization_epoch: authority.epoch()?,
+        execution: authority.policy.execution().map(execution_view),
+    };
+    tx.commit().await?;
+    Ok(view)
+}
+
+fn execution_view(policy: &ExecutionPolicy) -> wire::ExecutionSection {
+    let access = |value: Option<bool>| {
+        value.map(|allowed| {
+            if allowed {
+                wire::Access::Allowed
+            } else {
+                wire::Access::Denied
+            }
+        })
+    };
+    wire::ExecutionSection {
+        sandbox: policy.sandbox.map(|level| match level {
+            SandboxLevel::ReadOnly => wire::SandboxCeiling::ReadOnly,
+            SandboxLevel::WorkspaceWrite => wire::SandboxCeiling::WorkspaceWrite,
+            SandboxLevel::FullAccess => wire::SandboxCeiling::FullAccess,
+        }),
+        approvals: policy.approvals.as_ref().map(|approvals| {
+            approvals
+                .iter()
+                .map(|behaviour| match behaviour {
+                    ApprovalBehaviour::Untrusted => wire::ApprovalBehaviour::Untrusted,
+                    ApprovalBehaviour::OnRequest => wire::ApprovalBehaviour::OnRequest,
+                    ApprovalBehaviour::Never => wire::ApprovalBehaviour::Never,
+                })
+                .collect()
+        }),
+        network: access(policy.network),
+        mcp_tools: access(policy.mcp_tools),
+        extensions: access(policy.extensions),
+        allow_full_access: policy.allow_full_access,
+        allow_no_prompt: policy.allow_no_prompt,
+    }
 }
 
 // ---- POST /v1/workspaces/{id}/access-checks ------------------------------------

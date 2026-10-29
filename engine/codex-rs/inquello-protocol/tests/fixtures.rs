@@ -30,6 +30,8 @@ use inquello_protocol::workspace::AcceptInviteResponse;
 use inquello_protocol::workspace::AccessCheckRequest;
 use inquello_protocol::workspace::AccessCheckResponse;
 use inquello_protocol::workspace::DenyReason;
+use inquello_protocol::workspace::ExecutionPolicyView;
+use inquello_protocol::workspace::ExecutionSection;
 use inquello_protocol::workspace::RoleKind;
 use inquello_protocol::workspace::RolesView;
 use inquello_protocol::workspace::WorkspaceCommand;
@@ -90,6 +92,7 @@ const WORKSPACE_FIXTURES: &[&str] = &[
     "workspace/access_check_response.json",
     "workspace/command_envelopes.json",
     "workspace/command_response.json",
+    "workspace/execution_policy_view.json",
     "workspace/refusals.json",
     "workspace/policy.json",
     "workspace/roles_view.json",
@@ -161,6 +164,27 @@ fn workspace_fixtures_round_trip() {
         .map(ErrorBody::refused)
         .collect();
     assert_eq!(denied, expected);
+    let execution = round_trip::<ExecutionPolicyView>("workspace/execution_policy_view.json");
+    assert_eq!(execution.authorization_epoch, Revision::new(5));
+    assert!(execution.execution.is_some());
+    // A policy without an `execution` section is `null`, and an empty section
+    // serializes as an empty object.
+    let mut absent = load("workspace/execution_policy_view.json");
+    absent["execution"] = Value::Null;
+    let parsed: ExecutionPolicyView =
+        serde_json::from_value(absent.clone()).expect("null execution");
+    assert_eq!(serde_json::to_value(&parsed).expect("serialize"), absent);
+    assert_eq!(
+        serde_json::to_value(ExecutionSection::default()).expect("serialize"),
+        json!({})
+    );
+    // Unknown fields and values are refused.
+    let mut unknown = load("workspace/execution_policy_view.json");
+    unknown["execution"]["hosted_sandbox"] = json!(true);
+    assert!(serde_json::from_value::<ExecutionPolicyView>(unknown).is_err());
+    let mut bad = load("workspace/execution_policy_view.json");
+    bad["execution"]["sandbox"] = json!("danger");
+    assert!(serde_json::from_value::<ExecutionPolicyView>(bad).is_err());
     // The policy document is validated by the domain; here it is plain JSON.
     let policy = load("workspace/policy.json");
     assert_eq!(policy["policy_version"], json!(1));

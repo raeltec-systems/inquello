@@ -409,3 +409,23 @@ fn an_unreadable_data_policy_blocks() {
         vec!["the data-policy register has no category list".to_string()]
     );
 }
+
+/// Story 1.18: the Capability Contract lists prompt inspection and specialist
+/// cyber access as not enabled until their eligibility is verified.
+#[test]
+fn prompt_inspection_and_specialist_cyber_access_are_registered_not_enabled() {
+    let register = CapabilityRegister::load_embedded().unwrap();
+    for id in ["prompt_inspection", "specialist_cyber_access"] {
+        let entry = register.entry(id).unwrap();
+        assert_eq!(entry.eligibility, Enablement::Disabled);
+        assert_eq!(entry.enablement(), Enablement::Disabled);
+        assert_eq!(enablement(id), Enablement::Disabled);
+        assert!(entry.evidence.is_empty());
+        assert!(
+            entry
+                .limits
+                .iter()
+                .any(|limit| limit == "Eligibility verification required before enablement")
+        );
+    }
+}

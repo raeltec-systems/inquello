@@ -20,6 +20,8 @@
 mod decision;
 mod policy;
 
+pub(crate) use policy::check_keys;
+
 #[cfg(test)]
 mod tests;
 

@@ -34,6 +34,44 @@
           "reference": "desktop/src/main/main.ts#--smoke handshake (pnpm smoke, temporary CODEX_HOME)"
         }
       ]
+    },
+    {
+      "id": "prompt_inspection",
+      "owner": "Inquello capability contract (Story 1.18); enablement belongs to a later story after eligibility verification",
+      "supply": "None: no implementation or service supplies this capability in Inquello yet",
+      "versions": {
+        "capability-contract": "1.18"
+      },
+      "limits": [
+        "Eligibility verification required before enablement",
+        "Prompt inspection (C68): prompts and outputs inspected by an external inspection service before processing is not enabled"
+      ],
+      "identity": "None: no identity is used, because the capability is not enabled",
+      "formats": [
+        "none"
+      ],
+      "processing_scope": "Not enabled. No prompt, output or file leaves this device for inspection",
+      "eligibility": "disabled",
+      "evidence": []
+    },
+    {
+      "id": "specialist_cyber_access",
+      "owner": "Inquello capability contract (Story 1.18); enablement belongs to a later story after eligibility verification",
+      "supply": "None: no implementation or service supplies this capability in Inquello yet",
+      "versions": {
+        "capability-contract": "1.18"
+      },
+      "limits": [
+        "Eligibility verification required before enablement",
+        "Specialist cyber access (C67): approved cyber model access through a trusted-access programme is not enabled"
+      ],
+      "identity": "None: no identity is used, because the capability is not enabled",
+      "formats": [
+        "none"
+      ],
+      "processing_scope": "Not enabled. No specialist cyber model, programme or elevated access is requested or used",
+      "eligibility": "disabled",
+      "evidence": []
     }
   ]
 }

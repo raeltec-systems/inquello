@@ -18,6 +18,10 @@
 //! The [`organise`] module holds Engagements, folders and private Tasks and
 //! their commands (Story 1.14).
 //!
+//! The [`execution_policy`] module holds the Workspace execution policy, the
+//! effective policy over the Workspace, device and user layers, and a Task's
+//! broader execution mode (Story 1.18).
+//!
 //! The [`state`] module holds the separate Task, run, output, checks, review,
 //! approval-marker and delivery-marker states (Story 1.15).
 
@@ -25,6 +29,7 @@ pub mod authorization;
 pub mod capability;
 mod commands;
 mod error;
+pub mod execution_policy;
 mod model;
 pub mod organise;
 mod ports;

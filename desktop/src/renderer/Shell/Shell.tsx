@@ -7,7 +7,10 @@
  * fresh operation ID per user action; a retry of the same action reuses it.
  * The Workspace list and tree are re-read after each change and every 30s.
  * The open Task's states (Story 1.15) are read through `inquello.state.list`
- * when it opens and with every refresh; the Shell never records one.
+ * when it opens and with every refresh; the Shell never records one. Its
+ * effective policy and execution mode (Story 1.18) are read the same way
+ * through `inquello.policy.forTask`, so a new policy revision shows on open
+ * and refresh; a broader mode is set only from the Task's confirmation.
  *
  * Story 1.16 completes the layout and keyboard model:
  * - Layout mode (full, rail, single) follows the window width live
@@ -60,6 +63,7 @@ import {
   type WorkspaceTree,
 } from './organise-bridge';
 import { Sidebar, type EngagementDraft, type PersonView } from './Sidebar';
+import { parseTaskPolicy, policyBridge, type TaskPolicyItem } from '../policy-bridge';
 import { parseTaskStates, stateBridge, type TaskStatesItem } from './state-bridge';
 import { TaskView, type MoveTarget } from './TaskView';
 
@@ -118,6 +122,8 @@ export function Shell({ onShowSpecimen, operationIds = newOperationId, artifact 
   const [creatingTask, setCreatingTask] = useState(false);
   const [states, setStates] = useState<TaskStatesItem | null>(null);
   const [statesNotice, setStatesNotice] = useState<string | null>(null);
+  const [taskPolicy, setTaskPolicy] = useState<TaskPolicyItem | null>(null);
+  const [policyNotice, setPolicyNotice] = useState<string | null>(null);
   const openTask = useRef<string | null>(null);
   openTask.current = openTaskId;
   const [person, setPerson] = useState<PersonView | null>(null);
@@ -238,9 +244,60 @@ export function Shell({ onShowSpecimen, operationIds = newOperationId, artifact 
     }
   }, []);
 
+  /** Reads one Task's effective policy and execution mode, recomputed by main on each read. */
+  const loadPolicy = useCallback(async (taskId: string | null) => {
+    const api = policyBridge();
+    if (!api || !taskId) {
+      setTaskPolicy(null);
+      setPolicyNotice(null);
+      return;
+    }
+    let result: Outcome<TaskPolicyItem>;
+    try {
+      result = parseOutcome(await api.forTask({ taskId }), parseTaskPolicy);
+    } catch {
+      result = { ok: false, code: 'failed', reason: 'The request did not complete.' };
+    }
+    if (openTask.current !== taskId) return;
+    if (result.ok) {
+      setTaskPolicy(result.value);
+      setPolicyNotice(null);
+    } else {
+      setTaskPolicy(null);
+      setPolicyNotice(`The policy could not be read. ${result.reason}`);
+    }
+  }, []);
+
+  /** Sets the open Task's execution mode under one fresh operation ID; resolves with a refusal reason. */
+  const setMode = useCallback(
+    async (mode: 'standard' | 'no_prompt' | 'full_access', confirmation: string | null): Promise<string | null> => {
+      const api = policyBridge();
+      const taskId = openTask.current;
+      if (!api || !taskId || !taskPolicy || taskPolicy.taskId !== taskId) return 'The policy is not loaded.';
+      let result: Outcome<TaskPolicyItem>;
+      try {
+        result = parseOutcome(
+          await api.setBroadMode({ operationId: operationIds(), taskId, expectedRevision: taskPolicy.broadMode.revision, mode, confirmation }),
+          parseTaskPolicy,
+        );
+      } catch {
+        result = { ok: false, code: 'failed', reason: 'The request did not complete.' };
+      }
+      if (openTask.current !== taskId) return null;
+      if (result.ok) {
+        setTaskPolicy(result.value);
+        return null;
+      }
+      await loadPolicy(taskId);
+      return result.reason;
+    },
+    [taskPolicy, operationIds, loadPolicy],
+  );
+
   useEffect(() => {
     void loadStates(openTaskId);
-  }, [openTaskId, loadStates]);
+    void loadPolicy(openTaskId);
+  }, [openTaskId, loadStates, loadPolicy]);
 
   const loadTree = useCallback(
     async (id: string | null) => {
@@ -254,9 +311,9 @@ export function Shell({ onShowSpecimen, operationIds = newOperationId, artifact 
         draftStore.retain(result.value.workspaceId, result.value.tasks.map((item) => item.taskId));
         setTree(result.value);
       } else setNotice(result.reason);
-      if (openTask.current) await loadStates(openTask.current);
+      if (openTask.current) await Promise.all([loadStates(openTask.current), loadPolicy(openTask.current)]);
     },
-    [bridge, loadStates, draftStore],
+    [bridge, loadStates, loadPolicy, draftStore],
   );
 
   const load = useCallback(async () => {
@@ -483,6 +540,9 @@ export function Shell({ onShowSpecimen, operationIds = newOperationId, artifact 
                   newOperationId={operationIds}
                   states={states}
                   statesNotice={statesNotice}
+                  policy={taskPolicy}
+                  policyNotice={policyNotice}
+                  onSetMode={policyBridge() ? setMode : undefined}
                 />
               ) : (
                 <div className="iq-thread-placeholder" data-thread-placeholder="none">

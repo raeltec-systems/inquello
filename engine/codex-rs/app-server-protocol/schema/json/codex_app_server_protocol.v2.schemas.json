@@ -4674,6 +4674,81 @@
           "type": "object"
         },
         {
+          "description": "Inquello (Story 1.18): the effective policy over the Workspace, device and user layers, and optionally a Task's broader mode.",
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/RequestId"
+            },
+            "method": {
+              "enum": [
+                "inquello/policy/effective"
+              ],
+              "title": "Inquello/policy/effectiveRequestMethod",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/definitions/InquelloPolicyEffectiveParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "title": "Inquello/policy/effectiveRequest",
+          "type": "object"
+        },
+        {
+          "description": "Inquello (Story 1.18): a Task's recorded broader mode and its Workspace.",
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/RequestId"
+            },
+            "method": {
+              "enum": [
+                "inquello/broadMode/read"
+              ],
+              "title": "Inquello/broadMode/readRequestMethod",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/definitions/InquelloBroadModeReadParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "title": "Inquello/broadMode/readRequest",
+          "type": "object"
+        },
+        {
+          "description": "Inquello (Story 1.18): sets a Task's broader mode.",
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/RequestId"
+            },
+            "method": {
+              "enum": [
+                "inquello/broadMode/set"
+              ],
+              "title": "Inquello/broadMode/setRequestMethod",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/definitions/InquelloBroadModeSetParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "title": "Inquello/broadMode/setRequest",
+          "type": "object"
+        },
+        {
           "properties": {
             "id": {
               "$ref": "#/definitions/RequestId"
@@ -10327,6 +10402,173 @@
         }
       ]
     },
+    "InquelloBroadModeReadParams": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "description": "Reads a Task's recorded broader mode (creator only) and its Workspace.",
+      "properties": {
+        "taskId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "taskId"
+      ],
+      "title": "InquelloBroadModeReadParams",
+      "type": "object"
+    },
+    "InquelloBroadModeReadResponse": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "mode": {
+          "description": "`standard` when nothing was ever recorded.",
+          "type": "string"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "taskId": {
+          "type": "string"
+        },
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode",
+        "revision",
+        "taskId",
+        "workspaceId"
+      ],
+      "title": "InquelloBroadModeReadResponse",
+      "type": "object"
+    },
+    "InquelloBroadModeSetParams": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "description": "Sets a Task's broader mode. A non-standard mode needs a `human` actor, the confirmation that names its reach exactly, and an effective policy that permits it; otherwise `broad_mode_not_permitted` names the governing rule.",
+      "properties": {
+        "actorKind": {
+          "description": "Supplied by the desktop main process: `human` (the bound principal), `runtime` or `system`.",
+          "type": "string"
+        },
+        "actorRef": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "confirmation": {
+          "description": "The reach statement the person confirmed; null for `standard`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expectedRevision": {
+          "description": "The Task's broad-mode revision as last read (0 before the first record).",
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "mode": {
+          "description": "`standard`, `no_prompt` or `full_access`.",
+          "type": "string"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "taskId": {
+          "type": "string"
+        },
+        "workspacePolicy": {
+          "$ref": "#/definitions/InquelloWorkspaceExecutionPolicy"
+        }
+      },
+      "required": [
+        "actorKind",
+        "expectedRevision",
+        "mode",
+        "operationId",
+        "taskId",
+        "workspacePolicy"
+      ],
+      "title": "InquelloBroadModeSetParams",
+      "type": "object"
+    },
+    "InquelloBroadModeSetResponse": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "receipt": {
+          "$ref": "#/definitions/InquelloReceipt"
+        },
+        "task": {
+          "$ref": "#/definitions/InquelloTaskPolicy"
+        }
+      },
+      "required": [
+        "receipt",
+        "task"
+      ],
+      "title": "InquelloBroadModeSetResponse",
+      "type": "object"
+    },
+    "InquelloCapabilityContractEntry": {
+      "description": "A Capability Contract entry from the compiled capability register.",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        },
+        "limits": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "enabled",
+        "id",
+        "limits"
+      ],
+      "type": "object"
+    },
+    "InquelloDeviceRequirements": {
+      "description": "The device layer as `configRequirements/read` reports it.",
+      "properties": {
+        "approvals": {
+          "description": "Allowed approval behaviours, or null when not configured.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "configured": {
+          "description": "False when no requirement this policy reads is configured.",
+          "type": "boolean"
+        },
+        "sandboxModes": {
+          "description": "Allowed sandbox levels, or null when not configured.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "configured"
+      ],
+      "type": "object"
+    },
     "InquelloEngagement": {
       "properties": {
         "clientEntity": {
@@ -10616,6 +10858,136 @@
       "required": [
         "labelRevision",
         "workspaceId"
+      ],
+      "type": "object"
+    },
+    "InquelloPolicyEffectiveParams": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "description": "Computes the effective policy over the Workspace layer (from the params), this runtime's managed requirements (`configRequirements/read`) and the user's own configuration. With a `taskId`, also the Task's broader mode, its status under this policy and the thread settings it would get; only the Task's creator may name it, and the Task must belong to the Workspace.",
+      "properties": {
+        "taskId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "workspacePolicy": {
+          "$ref": "#/definitions/InquelloWorkspaceExecutionPolicy"
+        }
+      },
+      "required": [
+        "workspacePolicy"
+      ],
+      "title": "InquelloPolicyEffectiveParams",
+      "type": "object"
+    },
+    "InquelloPolicyEffectiveResponse": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "authorizationEpoch": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "capabilities": {
+          "description": "Capability Contract entries that are listed but not enabled.",
+          "items": {
+            "$ref": "#/definitions/InquelloCapabilityContractEntry"
+          },
+          "type": "array"
+        },
+        "device": {
+          "$ref": "#/definitions/InquelloDeviceRequirements"
+        },
+        "environment": {
+          "description": "Always `local_device` in V1.",
+          "type": "string"
+        },
+        "policyRevision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "settings": {
+          "description": "Every setting, in a fixed order.",
+          "items": {
+            "$ref": "#/definitions/InquelloPolicySetting"
+          },
+          "type": "array"
+        },
+        "task": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/InquelloTaskPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Present when the params name a Task."
+        },
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "authorizationEpoch",
+        "capabilities",
+        "device",
+        "environment",
+        "policyRevision",
+        "settings",
+        "workspaceId"
+      ],
+      "title": "InquelloPolicyEffectiveResponse",
+      "type": "object"
+    },
+    "InquelloPolicySetting": {
+      "description": "One effective setting.",
+      "properties": {
+        "name": {
+          "description": "`sandbox`, `approval`, `network`, `mcp_tools`, `extensions`, `full_access` or `no_prompt`.",
+          "type": "string"
+        },
+        "restricted": {
+          "description": "Whether a rule narrows the setting below its most permissive value.",
+          "type": "boolean"
+        },
+        "source": {
+          "$ref": "#/definitions/InquelloPolicySource"
+        },
+        "value": {
+          "description": "`read_only`/`workspace_write`/`full_access` for `sandbox` (the ceiling); `on_request`/`untrusted` for `approval`; `allowed`/`denied` for `network`, `mcp_tools` and `extensions`; `permitted`/`not_permitted` for the broad modes.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "restricted",
+        "source",
+        "value"
+      ],
+      "type": "object"
+    },
+    "InquelloPolicySource": {
+      "description": "The rule that governs a setting.",
+      "properties": {
+        "kind": {
+          "description": "`workspace_policy`, `device_requirements`, `user_config` or `inquello_default`.",
+          "type": "string"
+        },
+        "revision": {
+          "description": "The Workspace policy revision, for `workspace_policy`.",
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind"
       ],
       "type": "object"
     },
@@ -10969,6 +11341,61 @@
       "title": "InquelloTaskAttachThreadParams",
       "type": "object"
     },
+    "InquelloTaskBroadMode": {
+      "description": "A Task's broader execution mode under the current policy.",
+      "properties": {
+        "effectiveMode": {
+          "description": "The mode the Task runs in: `standard` when suspended.",
+          "type": "string"
+        },
+        "governing": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/InquelloPolicySource"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The rule that suspends the recorded mode, when suspended."
+        },
+        "label": {
+          "description": "Always \"Broader execution mode\".",
+          "type": "string"
+        },
+        "reach": {
+          "description": "The reach statement of the recorded mode.",
+          "type": "string"
+        },
+        "recorded": {
+          "description": "The recorded mode: `standard`, `no_prompt` or `full_access`.",
+          "type": "string"
+        },
+        "revision": {
+          "description": "The Task's broad-mode revision: 0 before the first record.",
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "status": {
+          "description": "`standard`, `active` or `suspended` (recorded but no longer permitted).",
+          "type": "string"
+        },
+        "taskId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "effectiveMode",
+        "label",
+        "reach",
+        "recorded",
+        "revision",
+        "status",
+        "taskId"
+      ],
+      "type": "object"
+    },
     "InquelloTaskCreateParams": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "properties": {
@@ -11049,6 +11476,21 @@
       "title": "InquelloTaskMoveParams",
       "type": "object"
     },
+    "InquelloTaskPolicy": {
+      "properties": {
+        "broadMode": {
+          "$ref": "#/definitions/InquelloTaskBroadMode"
+        },
+        "threadSettings": {
+          "$ref": "#/definitions/InquelloThreadSettings"
+        }
+      },
+      "required": [
+        "broadMode",
+        "threadSettings"
+      ],
+      "type": "object"
+    },
     "InquelloTaskRenameParams": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "properties": {
@@ -11102,6 +11544,59 @@
         "private"
       ],
       "type": "string"
+    },
+    "InquelloThreadSettings": {
+      "description": "The thread settings a run of the Task gets, derived only from the effective policy and the Task's broad mode. Values use the runtime's own names.",
+      "properties": {
+        "approvalPolicy": {
+          "description": "`untrusted`, `on-request` or `never`.",
+          "type": "string"
+        },
+        "mode": {
+          "type": "string"
+        },
+        "networkAccess": {
+          "type": "boolean"
+        },
+        "sandbox": {
+          "description": "`read-only`, `workspace-write` or `danger-full-access`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "approvalPolicy",
+        "mode",
+        "networkAccess",
+        "sandbox"
+      ],
+      "type": "object"
+    },
+    "InquelloWorkspaceExecutionPolicy": {
+      "description": "The Workspace execution policy as the desktop main process fetched it from the shared service (`GET /v1/workspaces/{id}/execution-policy`).",
+      "properties": {
+        "authorizationEpoch": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "execution": {
+          "description": "The policy's `execution` section in its canonical snake_case form, or null when the policy has none (the conservative Inquello default applies). Validated again here; an invalid section is `invalid`."
+        },
+        "policyRevision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "authorizationEpoch",
+        "policyRevision",
+        "workspaceId"
+      ],
+      "type": "object"
     },
     "InquelloWorkspaceListParams": {
       "$schema": "http://json-schema.org/draft-07/schema#",

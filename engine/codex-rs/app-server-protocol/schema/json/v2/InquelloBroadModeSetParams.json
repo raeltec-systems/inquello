@@ -1,0 +1,81 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "InquelloWorkspaceExecutionPolicy": {
+      "description": "The Workspace execution policy as the desktop main process fetched it from the shared service (`GET /v1/workspaces/{id}/execution-policy`).",
+      "properties": {
+        "authorizationEpoch": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "execution": {
+          "description": "The policy's `execution` section in its canonical snake_case form, or null when the policy has none (the conservative Inquello default applies). Validated again here; an invalid section is `invalid`."
+        },
+        "policyRevision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "authorizationEpoch",
+        "policyRevision",
+        "workspaceId"
+      ],
+      "type": "object"
+    }
+  },
+  "description": "Sets a Task's broader mode. A non-standard mode needs a `human` actor, the confirmation that names its reach exactly, and an effective policy that permits it; otherwise `broad_mode_not_permitted` names the governing rule.",
+  "properties": {
+    "actorKind": {
+      "description": "Supplied by the desktop main process: `human` (the bound principal), `runtime` or `system`.",
+      "type": "string"
+    },
+    "actorRef": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "confirmation": {
+      "description": "The reach statement the person confirmed; null for `standard`.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "expectedRevision": {
+      "description": "The Task's broad-mode revision as last read (0 before the first record).",
+      "format": "uint64",
+      "minimum": 0.0,
+      "type": "integer"
+    },
+    "mode": {
+      "description": "`standard`, `no_prompt` or `full_access`.",
+      "type": "string"
+    },
+    "operationId": {
+      "type": "string"
+    },
+    "taskId": {
+      "type": "string"
+    },
+    "workspacePolicy": {
+      "$ref": "#/definitions/InquelloWorkspaceExecutionPolicy"
+    }
+  },
+  "required": [
+    "actorKind",
+    "expectedRevision",
+    "mode",
+    "operationId",
+    "taskId",
+    "workspacePolicy"
+  ],
+  "title": "InquelloBroadModeSetParams",
+  "type": "object"
+}

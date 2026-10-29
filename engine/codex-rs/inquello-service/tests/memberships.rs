@@ -26,8 +26,10 @@ use inquello_protocol::session::MembershipsView;
 use inquello_protocol::workspace::AcceptInviteResponse;
 use inquello_protocol::workspace::AccessCheckResponse;
 use inquello_protocol::workspace::DenyReason;
+use inquello_protocol::workspace::ExecutionPolicyView;
 use inquello_protocol::workspace::RoleKind;
 use inquello_protocol::workspace::RolesView;
+use inquello_protocol::workspace::SandboxCeiling;
 use inquello_protocol::workspace::WorkspacesView;
 use inquello_service::admin;
 use inquello_service::admin::AdminError;
@@ -1613,5 +1615,142 @@ async fn the_roles_list_has_only_audit_team_and_reviewer_roles() {
     )
     .await
     .assert_error(ErrorKind::DependencyUnavailable);
+    h.finish().await;
+}
+
+// ---- Story 1.18: the Workspace execution policy ------------------------------------
+
+async fn execution_view(h: &Harness, ws: Uuid, who: &SessionCredentials) -> Response {
+    h.get(
+        &format!("/v1/workspaces/{ws}/execution-policy"),
+        Some(who.access_credential.expose()),
+    )
+    .await
+}
+
+async fn update_policy(
+    h: &Harness,
+    ws: Uuid,
+    policy: String,
+) -> Result<admin::UpdatePolicyOutcome, AdminError> {
+    admin::update_policy(
+        &h.pool,
+        admin::UpdatePolicy {
+            workspace_id: ws,
+            policy,
+            operator: "test-operator".to_string(),
+        },
+        h.now(),
+    )
+    .await
+}
+
+// Matrix: No policy, Workspace restricts, Non-admin edit, Bad policy.
+#[tokio::test(flavor = "multi_thread")]
+async fn the_execution_policy_is_changed_by_the_operator_and_read_by_members() {
+    let h = Harness::start().await;
+    let ws = workspace_with_admin(&h, "Execution Co", "ada").await;
+    let rita = join(&h, &ws, "rita", &["reviewer"]).await;
+
+    // No `execution` section: members read `null`, so the default applies.
+    let view: ExecutionPolicyView = execution_view(&h, ws.id, &rita).await.ok();
+    assert_eq!(view.workspace_id, ws.id);
+    assert_eq!(view.policy_revision.get(), 1);
+    assert_eq!(view.execution, None);
+    let epoch_before = epoch_of(&h, ws.id).await;
+    assert_eq!(
+        i64::try_from(view.authorization_epoch.get()).expect("epoch"),
+        epoch_before
+    );
+
+    // The operator update stores a new revision and increments the epoch.
+    let outcome = update_policy(
+        &h,
+        ws.id,
+        policy_with(|policy| {
+            policy["execution"] = json!({ "sandbox": "read_only", "allow_full_access": false });
+        }),
+    )
+    .await
+    .expect("operator updates the policy");
+    assert_eq!(outcome.policy_revision, "2");
+    let epoch_after = epoch_of(&h, ws.id).await;
+    assert_eq!(epoch_after, epoch_before + 1);
+    assert_eq!(outcome.authorization_epoch, epoch_after.to_string());
+    for who in [&ws.admin, &rita] {
+        let view: ExecutionPolicyView = execution_view(&h, ws.id, who).await.ok();
+        assert_eq!(view.policy_revision.get(), 2);
+        assert_eq!(
+            i64::try_from(view.authorization_epoch.get()).expect("epoch"),
+            epoch_after
+        );
+        let execution = view.execution.expect("an execution section");
+        assert_eq!(execution.sandbox, Some(SandboxCeiling::ReadOnly));
+        assert_eq!(execution.allow_full_access, Some(false));
+        assert_eq!(execution.network, None);
+    }
+
+    // Bad policies are refused and change nothing.
+    for (execution, expected) in [
+        (
+            json!({ "sandbox": "read_only", "hosted_sandbox": true }),
+            "unknown",
+        ),
+        (json!({ "client_reviewer": true }), "route"),
+        (
+            json!({ "sandbox": "workspace_write", "allow_full_access": true }),
+            "execution",
+        ),
+        (json!({ "approvals": ["never"] }), "execution"),
+    ] {
+        let result = update_policy(
+            &h,
+            ws.id,
+            policy_with(|policy| policy["execution"] = execution.clone()),
+        )
+        .await;
+        match (expected, result) {
+            ("unknown", Err(AdminError::Policy(error))) => {
+                assert!(error.to_string().contains("hosted_sandbox"), "{error}");
+            }
+            ("route", Err(AdminError::RouteNotAvailable(_))) => {}
+            ("execution", Err(AdminError::Policy(error))) => {
+                assert!(error.to_string().contains("execution policy"), "{error}");
+            }
+            (expected, other) => panic!("{execution} expected {expected}, got {other:?}"),
+        }
+    }
+    assert_eq!(epoch_of(&h, ws.id).await, epoch_after);
+    let view: ExecutionPolicyView = execution_view(&h, ws.id, &rita).await.ok();
+    assert_eq!(view.policy_revision.get(), 2);
+
+    // No member, administrator or not, can change the policy over HTTP.
+    for (who, op) in [(&rita, "op-policy-member"), (&ws.admin, "op-policy-admin")] {
+        command(
+            &h,
+            ws.id,
+            who,
+            op,
+            0,
+            json!({ "command": "update_policy", "policy": { "execution": { "allow_full_access": true } } }),
+        )
+        .await
+        .assert_error(ErrorKind::UnsupportedContract);
+    }
+    assert_eq!(epoch_of(&h, ws.id).await, epoch_after);
+
+    // Non-members and bad credentials get the Story 1.11 refusals.
+    let other = workspace_with_admin(&h, "Other Execution Co", "otto").await;
+    assert_refused(
+        &execution_view(&h, ws.id, &other.admin).await,
+        DenyReason::NotAMember,
+    );
+    let response = h
+        .get(
+            &format!("/v1/workspaces/{}/execution-policy", ws.id),
+            Some("iqa_not-a-credential"),
+        )
+        .await;
+    assert_refused(&response, DenyReason::NotSignedIn);
     h.finish().await;
 }

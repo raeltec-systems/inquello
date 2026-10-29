@@ -49,6 +49,10 @@ pub(crate) fn router(state: Arc<AppState>) -> Router {
         .route("/v1/workspaces", get(list_workspaces))
         .route("/v1/workspaces/{workspace_id}/roles", get(workspace_roles))
         .route(
+            "/v1/workspaces/{workspace_id}/execution-policy",
+            get(workspace_execution_policy),
+        )
+        .route(
             "/v1/workspaces/{workspace_id}/commands",
             post(workspace_command),
         )
@@ -186,6 +190,21 @@ async fn workspace_roles(
         let access = required_bearer(&headers).map_err(ApiError::on_workspace_route)?;
         let workspace_id = workspaces::path_id(&workspace_id)?;
         workspaces::roles(&state, access, workspace_id).await
+    }
+    .await;
+    respond(result)
+}
+
+/// Story 1.18: the Workspace execution policy, for members only.
+async fn workspace_execution_policy(
+    State(state): SharedState,
+    Path(workspace_id): Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    let result = async {
+        let access = required_bearer(&headers).map_err(ApiError::on_workspace_route)?;
+        let workspace_id = workspaces::path_id(&workspace_id)?;
+        workspaces::execution_policy(&state, access, workspace_id).await
     }
     .await;
     respond(result)

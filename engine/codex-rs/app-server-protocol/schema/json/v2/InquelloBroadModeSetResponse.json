@@ -1,0 +1,170 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "InquelloPolicySource": {
+      "description": "The rule that governs a setting.",
+      "properties": {
+        "kind": {
+          "description": "`workspace_policy`, `device_requirements`, `user_config` or `inquello_default`.",
+          "type": "string"
+        },
+        "revision": {
+          "description": "The Workspace policy revision, for `workspace_policy`.",
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "InquelloReceipt": {
+      "description": "What a mutation's receipt recorded.",
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "replayed": {
+          "description": "True when this answer came from an earlier application of the operation.",
+          "type": "boolean"
+        },
+        "resultingRevision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "command",
+        "expectedRevision",
+        "operationId",
+        "replayed",
+        "resultingRevision"
+      ],
+      "type": "object"
+    },
+    "InquelloTaskBroadMode": {
+      "description": "A Task's broader execution mode under the current policy.",
+      "properties": {
+        "effectiveMode": {
+          "description": "The mode the Task runs in: `standard` when suspended.",
+          "type": "string"
+        },
+        "governing": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/InquelloPolicySource"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The rule that suspends the recorded mode, when suspended."
+        },
+        "label": {
+          "description": "Always \"Broader execution mode\".",
+          "type": "string"
+        },
+        "reach": {
+          "description": "The reach statement of the recorded mode.",
+          "type": "string"
+        },
+        "recorded": {
+          "description": "The recorded mode: `standard`, `no_prompt` or `full_access`.",
+          "type": "string"
+        },
+        "revision": {
+          "description": "The Task's broad-mode revision: 0 before the first record.",
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "status": {
+          "description": "`standard`, `active` or `suspended` (recorded but no longer permitted).",
+          "type": "string"
+        },
+        "taskId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "effectiveMode",
+        "label",
+        "reach",
+        "recorded",
+        "revision",
+        "status",
+        "taskId"
+      ],
+      "type": "object"
+    },
+    "InquelloTaskPolicy": {
+      "properties": {
+        "broadMode": {
+          "$ref": "#/definitions/InquelloTaskBroadMode"
+        },
+        "threadSettings": {
+          "$ref": "#/definitions/InquelloThreadSettings"
+        }
+      },
+      "required": [
+        "broadMode",
+        "threadSettings"
+      ],
+      "type": "object"
+    },
+    "InquelloThreadSettings": {
+      "description": "The thread settings a run of the Task gets, derived only from the effective policy and the Task's broad mode. Values use the runtime's own names.",
+      "properties": {
+        "approvalPolicy": {
+          "description": "`untrusted`, `on-request` or `never`.",
+          "type": "string"
+        },
+        "mode": {
+          "type": "string"
+        },
+        "networkAccess": {
+          "type": "boolean"
+        },
+        "sandbox": {
+          "description": "`read-only`, `workspace-write` or `danger-full-access`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "approvalPolicy",
+        "mode",
+        "networkAccess",
+        "sandbox"
+      ],
+      "type": "object"
+    }
+  },
+  "properties": {
+    "receipt": {
+      "$ref": "#/definitions/InquelloReceipt"
+    },
+    "task": {
+      "$ref": "#/definitions/InquelloTaskPolicy"
+    }
+  },
+  "required": [
+    "receipt",
+    "task"
+  ],
+  "title": "InquelloBroadModeSetResponse",
+  "type": "object"
+}

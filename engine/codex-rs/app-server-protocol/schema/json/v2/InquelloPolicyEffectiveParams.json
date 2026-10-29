@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "InquelloWorkspaceExecutionPolicy": {
+      "description": "The Workspace execution policy as the desktop main process fetched it from the shared service (`GET /v1/workspaces/{id}/execution-policy`).",
+      "properties": {
+        "authorizationEpoch": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "execution": {
+          "description": "The policy's `execution` section in its canonical snake_case form, or null when the policy has none (the conservative Inquello default applies). Validated again here; an invalid section is `invalid`."
+        },
+        "policyRevision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "authorizationEpoch",
+        "policyRevision",
+        "workspaceId"
+      ],
+      "type": "object"
+    }
+  },
+  "description": "Computes the effective policy over the Workspace layer (from the params), this runtime's managed requirements (`configRequirements/read`) and the user's own configuration. With a `taskId`, also the Task's broader mode, its status under this policy and the thread settings it would get; only the Task's creator may name it, and the Task must belong to the Workspace.",
+  "properties": {
+    "taskId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "workspacePolicy": {
+      "$ref": "#/definitions/InquelloWorkspaceExecutionPolicy"
+    }
+  },
+  "required": [
+    "workspacePolicy"
+  ],
+  "title": "InquelloPolicyEffectiveParams",
+  "type": "object"
+}

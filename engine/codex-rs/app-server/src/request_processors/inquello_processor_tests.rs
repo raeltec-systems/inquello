@@ -636,3 +636,464 @@ async fn state_refusals_carry_their_kinds() {
         );
     }
 }
+
+// ---- Effective policy and broader modes (Story 1.18) ---------------------------------
+
+const FULL_ACCESS_REACH: &str = "Full access: commands on this Task run without sandbox limits on this device, and you will not be asked before actions.";
+
+fn workspace_policy(
+    workspace: &str,
+    revision: u64,
+    execution: Option<serde_json::Value>,
+) -> InquelloWorkspaceExecutionPolicy {
+    InquelloWorkspaceExecutionPolicy {
+        workspace_id: workspace.to_string(),
+        policy_revision: revision,
+        authorization_epoch: revision + 10,
+        execution,
+    }
+}
+
+fn permissive() -> serde_json::Value {
+    json!({
+        "sandbox": "full_access",
+        "approvals": ["on_request", "untrusted", "never"],
+        "network": "allowed",
+        "allow_full_access": true,
+        "allow_no_prompt": true,
+    })
+}
+
+async fn effective(
+    processor: &InquelloRequestProcessor,
+    connection: ConnectionId,
+    policy: InquelloWorkspaceExecutionPolicy,
+    task_id: Option<&str>,
+    device: DeviceRequirements,
+    user: UserConfig,
+) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+    processor
+        .policy_effective(
+            connection,
+            InquelloPolicyEffectiveParams {
+                workspace_policy: policy,
+                task_id: task_id.map(str::to_string),
+            },
+            device,
+            user,
+        )
+        .await
+}
+
+fn setting<'a>(
+    response: &'a InquelloPolicyEffectiveResponse,
+    name: &str,
+) -> &'a InquelloPolicySetting {
+    response
+        .settings
+        .iter()
+        .find(|setting| setting.name == name)
+        .unwrap_or_else(|| panic!("no {name} setting"))
+}
+
+fn broad_params(
+    op: &str,
+    expected: u64,
+    task_id: &str,
+    mode: &str,
+    confirmation: Option<&str>,
+    policy: InquelloWorkspaceExecutionPolicy,
+) -> InquelloBroadModeSetParams {
+    InquelloBroadModeSetParams {
+        operation_id: op.to_string(),
+        expected_revision: expected,
+        task_id: task_id.to_string(),
+        mode: mode.to_string(),
+        confirmation: confirmation.map(str::to_string),
+        actor_kind: "human".to_string(),
+        actor_ref: None,
+        workspace_policy: policy,
+    }
+}
+
+#[tokio::test]
+async fn the_effective_policy_names_its_sources_and_the_capability_contract() {
+    let Fixture {
+        dir: _dir,
+        processor,
+    } = fixture();
+    sign_in(&processor, DESKTOP, ALICE);
+
+    // No policy, no device requirements: the Inquello defaults.
+    let response: InquelloPolicyEffectiveResponse = decode(
+        effective(
+            &processor,
+            DESKTOP,
+            workspace_policy(WORKSPACE, 1, None),
+            None,
+            DeviceRequirements::default(),
+            UserConfig::default(),
+        )
+        .await,
+    );
+    assert_eq!(response.environment, "local_device");
+    assert_eq!(response.authorization_epoch, 11);
+    let names: Vec<&str> = response.settings.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(
+        names,
+        [
+            "sandbox",
+            "approval",
+            "network",
+            "mcp_tools",
+            "extensions",
+            "full_access",
+            "no_prompt"
+        ]
+    );
+    assert!(
+        response
+            .settings
+            .iter()
+            .all(|s| s.source.kind == "inquello_default")
+    );
+    assert_eq!(setting(&response, "sandbox").value, "workspace_write");
+    assert_eq!(setting(&response, "approval").value, "on_request");
+    assert_eq!(setting(&response, "full_access").value, "not_permitted");
+    assert!(!response.device.configured);
+    assert_eq!(response.device.sandbox_modes, None);
+    assert!(response.task.is_none());
+    let ids: Vec<&str> = response
+        .capabilities
+        .iter()
+        .map(|c| c.id.as_str())
+        .collect();
+    assert_eq!(ids, ["prompt_inspection", "specialist_cyber_access"]);
+    assert!(response.capabilities.iter().all(|c| {
+        !c.enabled
+            && c.limits
+                .iter()
+                .any(|l| l == "Eligibility verification required before enablement")
+    }));
+
+    // Workspace restricts; device and user layers stricter still.
+    let response: InquelloPolicyEffectiveResponse = decode(
+        effective(
+            &processor,
+            DESKTOP,
+            workspace_policy(WORKSPACE, 4, Some(json!({ "sandbox": "read_only" }))),
+            None,
+            DeviceRequirements::default(),
+            UserConfig::default(),
+        )
+        .await,
+    );
+    let sandbox = setting(&response, "sandbox");
+    assert_eq!(
+        (sandbox.value.as_str(), sandbox.restricted),
+        ("read_only", true)
+    );
+    assert_eq!(
+        sandbox.source,
+        InquelloPolicySource {
+            kind: "workspace_policy".to_string(),
+            revision: Some(4)
+        }
+    );
+
+    let requirements: ConfigRequirementsReadResponse = serde_json::from_value(json!({
+        "requirements": {
+            "allowedSandboxModes": ["read-only", "workspace-write"],
+            "allowedApprovalPolicies": ["on-request", "untrusted"],
+        }
+    }))
+    .unwrap_or_else(|error| panic!("{error}"));
+    let device = InquelloRequestProcessor::device_requirements(&requirements);
+    let response: InquelloPolicyEffectiveResponse = decode(
+        effective(
+            &processor,
+            DESKTOP,
+            workspace_policy(WORKSPACE, 2, Some(permissive())),
+            None,
+            device,
+            UserConfig::default(),
+        )
+        .await,
+    );
+    assert!(response.device.configured);
+    assert_eq!(
+        response.device.sandbox_modes,
+        Some(vec!["read_only".to_string(), "workspace_write".to_string()])
+    );
+    assert_eq!(setting(&response, "sandbox").value, "workspace_write");
+    assert_eq!(
+        setting(&response, "sandbox").source.kind,
+        "device_requirements"
+    );
+    assert_eq!(
+        setting(&response, "full_access").source.kind,
+        "device_requirements"
+    );
+
+    let user = InquelloRequestProcessor::user_config(
+        &serde_json::from_value::<ConfigReadResponse>(json!({
+            "config": {},
+            "origins": {},
+            "layers": [{
+                "name": { "type": "user", "file": "/tmp/runtime-home/config.toml", "profile": null },
+                "version": "1",
+                "config": { "sandbox_mode": "read-only", "approval_policy": "untrusted" },
+            }],
+        }))
+        .unwrap_or_else(|error| panic!("{error}")),
+    );
+    assert_eq!(user.sandbox, Some(SandboxLevel::ReadOnly));
+    assert_eq!(user.approval, Some(ApprovalBehaviour::Untrusted));
+    let response: InquelloPolicyEffectiveResponse = decode(
+        effective(
+            &processor,
+            DESKTOP,
+            workspace_policy(WORKSPACE, 2, Some(permissive())),
+            None,
+            DeviceRequirements::default(),
+            user,
+        )
+        .await,
+    );
+    assert_eq!(setting(&response, "sandbox").value, "read_only");
+    assert_eq!(setting(&response, "sandbox").source.kind, "user_config");
+    assert_eq!(setting(&response, "approval").source.kind, "user_config");
+
+    // A bad section is refused.
+    assert_eq!(
+        kind(
+            effective(
+                &processor,
+                DESKTOP,
+                workspace_policy(WORKSPACE, 2, Some(json!({ "hosted_sandbox": true }))),
+                None,
+                DeviceRequirements::default(),
+                UserConfig::default(),
+            )
+            .await
+        ),
+        "invalid"
+    );
+}
+
+#[tokio::test]
+async fn a_broad_mode_is_explicit_permitted_per_task_and_suspended_by_policy() {
+    let Fixture {
+        dir: _dir,
+        processor,
+    } = fixture();
+    sign_in(&processor, DESKTOP, ALICE);
+    let task_id = new_task(&processor, DESKTOP, "task-1").await;
+    let open = || workspace_policy(WORKSPACE, 2, Some(permissive()));
+    let closed = || workspace_policy(WORKSPACE, 3, Some(json!({ "allow_full_access": false })));
+
+    // Refused without permission, naming the rule; nothing is recorded.
+    let refused = processor
+        .broad_mode_set(
+            DESKTOP,
+            broad_params(
+                "op-1",
+                0,
+                &task_id,
+                "full_access",
+                Some(FULL_ACCESS_REACH),
+                closed(),
+            ),
+            DeviceRequirements::default(),
+            UserConfig::default(),
+        )
+        .await;
+    let error = refused
+        .err()
+        .unwrap_or_else(|| panic!("expected a refusal"));
+    assert_eq!(
+        error.data,
+        Some(
+            json!({ "inquello": { "kind": "broad_mode_not_permitted", "rule": "workspace_policy", "revision": 3 } })
+        )
+    );
+    assert!(error.message.contains("Workspace policy, revision 3"));
+    // Refused without the confirmation.
+    assert_eq!(
+        kind(
+            processor
+                .broad_mode_set(
+                    DESKTOP,
+                    broad_params("op-1", 0, &task_id, "full_access", None, open()),
+                    DeviceRequirements::default(),
+                    UserConfig::default(),
+                )
+                .await
+        ),
+        "invalid"
+    );
+    // Refused for a runtime actor.
+    let mut runtime = broad_params(
+        "op-1",
+        0,
+        &task_id,
+        "full_access",
+        Some(FULL_ACCESS_REACH),
+        open(),
+    );
+    runtime.actor_kind = "runtime".to_string();
+    runtime.actor_ref = Some("codex".to_string());
+    assert_eq!(
+        kind(
+            processor
+                .broad_mode_set(
+                    DESKTOP,
+                    runtime,
+                    DeviceRequirements::default(),
+                    UserConfig::default()
+                )
+                .await
+        ),
+        "human_actor_required"
+    );
+    // Refused with another Workspace's policy.
+    assert_eq!(
+        kind(
+            processor
+                .broad_mode_set(
+                    DESKTOP,
+                    broad_params(
+                        "op-1",
+                        0,
+                        &task_id,
+                        "full_access",
+                        Some(FULL_ACCESS_REACH),
+                        workspace_policy(OTHER_WORKSPACE, 2, Some(permissive())),
+                    ),
+                    DeviceRequirements::default(),
+                    UserConfig::default(),
+                )
+                .await
+        ),
+        "workspace_mismatch"
+    );
+    let read: InquelloBroadModeReadResponse = decode(
+        processor
+            .broad_mode_read(
+                DESKTOP,
+                InquelloBroadModeReadParams {
+                    task_id: task_id.clone(),
+                },
+            )
+            .await,
+    );
+    assert_eq!(
+        (
+            read.revision,
+            read.mode.as_str(),
+            read.workspace_id.as_str()
+        ),
+        (0, "standard", WORKSPACE)
+    );
+
+    // Permitted and confirmed: recorded, labelled with its reach.
+    let set: InquelloBroadModeSetResponse = decode(
+        processor
+            .broad_mode_set(
+                DESKTOP,
+                broad_params(
+                    "op-1",
+                    0,
+                    &task_id,
+                    "full_access",
+                    Some(FULL_ACCESS_REACH),
+                    open(),
+                ),
+                DeviceRequirements::default(),
+                UserConfig::default(),
+            )
+            .await,
+    );
+    assert_eq!(set.receipt.command, "set_broad_mode");
+    assert_eq!(set.task.broad_mode.status, "active");
+    assert_eq!(set.task.broad_mode.label, "Broader execution mode");
+    assert_eq!(set.task.broad_mode.reach, FULL_ACCESS_REACH);
+    assert_eq!(
+        set.task.thread_settings,
+        InquelloThreadSettings {
+            sandbox: "danger-full-access".to_string(),
+            approval_policy: "never".to_string(),
+            network_access: true,
+            mode: "full_access".to_string(),
+        }
+    );
+
+    // A tightened policy suspends it; the Task runs as standard.
+    let response: InquelloPolicyEffectiveResponse = decode(
+        effective(
+            &processor,
+            DESKTOP,
+            closed(),
+            Some(&task_id),
+            DeviceRequirements::default(),
+            UserConfig::default(),
+        )
+        .await,
+    );
+    let task = response.task.unwrap_or_else(|| panic!("a task policy"));
+    assert_eq!(task.broad_mode.recorded, "full_access");
+    assert_eq!(task.broad_mode.status, "suspended");
+    assert_eq!(task.broad_mode.effective_mode, "standard");
+    assert_eq!(
+        task.broad_mode.governing,
+        Some(InquelloPolicySource {
+            kind: "workspace_policy".to_string(),
+            revision: Some(3)
+        })
+    );
+    assert_eq!(task.thread_settings.sandbox, "workspace-write");
+    assert_eq!(task.thread_settings.approval_policy, "on-request");
+
+    // Another creator cannot read or set it; it looks like an unknown Task.
+    sign_in(&processor, OTHER, BOB);
+    assert_eq!(
+        kind(
+            processor
+                .broad_mode_read(
+                    OTHER,
+                    InquelloBroadModeReadParams {
+                        task_id: task_id.clone()
+                    }
+                )
+                .await
+        ),
+        "not_found"
+    );
+    assert_eq!(
+        kind(
+            effective(
+                &processor,
+                OTHER,
+                open(),
+                Some(&task_id),
+                DeviceRequirements::default(),
+                UserConfig::default()
+            )
+            .await
+        ),
+        "not_found"
+    );
+    assert_eq!(
+        kind(
+            processor
+                .broad_mode_set(
+                    OTHER,
+                    broad_params("op-2", 1, &task_id, "standard", None, open()),
+                    DeviceRequirements::default(),
+                    UserConfig::default(),
+                )
+                .await
+        ),
+        "not_found"
+    );
+}

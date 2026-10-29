@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { AppServerRuntime, type AppServerRuntimeOptions, type Logger, type RuntimeState } from '../src/main/runtime';
-import type { OrganiseOperations } from '../src/main/security/operations';
+import type { OrganiseOperations, PolicyOperations } from '../src/main/security/operations';
 
 export const FAKE_SERVER = path.join(__dirname, 'fixtures', 'fake-app-server.mjs');
 
@@ -123,5 +123,24 @@ export function fakeOrganise(calls: string[] = []): OrganiseOperations {
     moveTask: record('moveTask'),
     listStates: record('listStates'),
     recordTaskState: record('recordTaskState'),
+  };
+}
+
+/** A signed-out policy service that records its calls (Story 1.18). */
+export function fakePolicy(calls: string[] = []): PolicyOperations {
+  const signedOut = { ok: false as const, code: 'signed-out' as const, reason: 'Sign in to see the policy that governs your Tasks.' };
+  return {
+    settings: async () => {
+      calls.push('settings');
+      return { signedIn: false, environmentLabel: 'Local device', workspaces: [], capabilities: [], reason: signedOut.reason };
+    },
+    forTask: async (taskId) => {
+      calls.push(`forTask:${JSON.stringify([taskId])}`);
+      return signedOut;
+    },
+    setBroadMode: async (input) => {
+      calls.push(`setBroadMode:${JSON.stringify([input])}`);
+      return signedOut;
+    },
   };
 }

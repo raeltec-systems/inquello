@@ -1,5 +1,6 @@
 //! Domain and port errors.
 
+use crate::execution_policy::SettingSource;
 use crate::model::OperationId;
 use crate::model::Revision;
 
@@ -60,6 +61,10 @@ pub enum DomainError {
     /// The value is not in the state dimension's vocabulary.
     #[error("the value is not a state of this dimension")]
     InvalidValue,
+    /// A broader execution mode the effective policy does not permit; `rule`
+    /// names the governing rule (Story 1.18).
+    #[error("broad_mode_not_permitted: governed by {rule}")]
+    BroadModeNotPermitted { rule: SettingSource },
     #[error(transparent)]
     Store(StoreError),
 }

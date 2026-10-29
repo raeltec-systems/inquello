@@ -932,6 +932,32 @@ impl MessageProcessor {
     }
 
     /// Handle a standalone JSON-RPC response originating from the peer.
+    /// Inquello (Story 1.18): the device and user layers of the effective
+    /// policy, read through this runtime's own `configRequirements/read` and
+    /// `config/read` (with layers).
+    async fn inquello_policy_layers(
+        &self,
+    ) -> Result<
+        (
+            inquello_domain::execution_policy::DeviceRequirements,
+            inquello_domain::execution_policy::UserConfig,
+        ),
+        JSONRPCErrorError,
+    > {
+        let requirements = self.config_processor.config_requirements_read().await?;
+        let config = self
+            .config_processor
+            .read(codex_app_server_protocol::ConfigReadParams {
+                include_layers: true,
+                cwd: None,
+            })
+            .await?;
+        Ok((
+            InquelloRequestProcessor::device_requirements(&requirements),
+            InquelloRequestProcessor::user_config(&config),
+        ))
+    }
+
     pub(crate) async fn process_response(
         &self,
         connection_id: ConnectionId,
@@ -1933,6 +1959,31 @@ impl MessageProcessor {
                 self.inquello_processor
                     .state_record(connection_id, params)
                     .await
+            }
+            ClientRequest::InquelloPolicyEffective { params, .. } => {
+                match self.inquello_policy_layers().await {
+                    Ok((device, user)) => {
+                        self.inquello_processor
+                            .policy_effective(connection_id, params, device, user)
+                            .await
+                    }
+                    Err(error) => Err(error),
+                }
+            }
+            ClientRequest::InquelloBroadModeRead { params, .. } => {
+                self.inquello_processor
+                    .broad_mode_read(connection_id, params)
+                    .await
+            }
+            ClientRequest::InquelloBroadModeSet { params, .. } => {
+                match self.inquello_policy_layers().await {
+                    Ok((device, user)) => {
+                        self.inquello_processor
+                            .broad_mode_set(connection_id, params, device, user)
+                            .await
+                    }
+                    Err(error) => Err(error),
+                }
             }
             ClientRequest::FuzzyFileSearch { params, .. } => self
                 .search_processor

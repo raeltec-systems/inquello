@@ -17,7 +17,9 @@
  * The `organise` operations (Story 1.14) forward the renderer's arguments so
  * main's validators judge them; main binds the signed-in principal itself.
  * So do the `state` operations (Story 1.15); main supplies the actor of a
- * recorded state, and only Task and run states can be recorded.
+ * recorded state, and only Task and run states can be recorded. And so do
+ * the `policy` operations (Story 1.18); main fetches the Workspace policy and
+ * supplies the actor, and a broader mode needs the reach the person confirmed.
  *
  * Self-contained by design: a sandboxed preload can `require` only `electron`,
  * so the channel strings are literals that a test checks against
@@ -49,6 +51,9 @@ const ORGANISE_RENAME_TASK_CHANNEL = 'inquello:op:organise.renameTask';
 const ORGANISE_MOVE_TASK_CHANNEL = 'inquello:op:organise.moveTask';
 const STATE_LIST_CHANNEL = 'inquello:op:state.list';
 const STATE_RECORD_TASK_STATE_CHANNEL = 'inquello:op:state.recordTaskState';
+const POLICY_SETTINGS_CHANNEL = 'inquello:op:policy.getSettings';
+const POLICY_FOR_TASK_CHANNEL = 'inquello:op:policy.forTask';
+const POLICY_SET_BROAD_MODE_CHANNEL = 'inquello:op:policy.setBroadMode';
 
 const api = Object.freeze({
   runtime: Object.freeze({
@@ -110,6 +115,14 @@ const api = Object.freeze({
     list: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(STATE_LIST_CHANNEL, ...args),
     /** `{ operationId, taskId, expectedRevision, dimension: 'task' | 'run', value, runId }`; main records it as this desktop. */
     recordTaskState: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(STATE_RECORD_TASK_STATE_CHANNEL, ...args),
+  }),
+  policy: Object.freeze({
+    /** Resolves with each Workspace's effective policy on this device and the Capability Contract. Takes no arguments. */
+    getSettings: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(POLICY_SETTINGS_CHANNEL, ...args),
+    /** `{ taskId }`; resolves with `{ ok, value }` (the Task's policy and broader mode) or `{ ok: false, reason }`. */
+    forTask: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(POLICY_FOR_TASK_CHANNEL, ...args),
+    /** `{ operationId, taskId, expectedRevision, mode, confirmation }`; a broader mode needs the reach the person confirmed. */
+    setBroadMode: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(POLICY_SET_BROAD_MODE_CHANNEL, ...args),
   }),
 });
 
