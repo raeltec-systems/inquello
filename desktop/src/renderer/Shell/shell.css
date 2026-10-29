@@ -1,27 +1,182 @@
 /*
  * Story 1.14 Shell: the 264px Sidebar, the 48px Header and the Task area.
- * Tokens only. Story 1.16 adds the rail, collapse, keyboard model and
- * responsive layout.
+ * Story 1.16: the 52px rail and its overlay, NavRows, the work-area grid
+ * (thread up to 720px, artifact area at least 380px, Composer slot), and the
+ * three layout modes. Tokens only; light theme only.
  */
 .iq-shell {
   display: grid;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   color: var(--text-primary);
   background: var(--surface-app);
 }
 
+.iq-shell--nav-rail {
+  grid-template-columns: var(--rail-width) minmax(0, 1fr);
+}
+
+/* ---------- Navigation: Sidebar, rail, overlay ---------- */
 .iq-sidebar {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
   width: var(--sidebar-width);
-  min-height: 100vh;
+  height: 100vh;
   padding: var(--space-3);
   box-sizing: border-box;
   overflow-y: auto;
   background: var(--surface-sidebar);
   border-right: 1px solid var(--border-default);
+}
+
+.iq-sidebar--rail {
+  width: var(--rail-width);
+  padding: 0;
+  overflow: visible;
+}
+
+.iq-sidebar-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-1) 0 var(--space-2);
+}
+
+.iq-sidebar-lockup {
+  display: block;
+  height: var(--space-5);
+  width: auto;
+}
+
+.iq-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  height: 100%;
+  padding: var(--space-3) 0 var(--space-2-5);
+  box-sizing: border-box;
+}
+
+.iq-rail-item {
+  position: relative;
+  display: inline-flex;
+}
+
+.iq-rail-tip {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + var(--space-2));
+  z-index: 30;
+  display: none;
+  padding: var(--space-1) var(--space-2);
+  transform: translateY(-50%);
+  border-radius: var(--radius-md);
+  background: var(--surface-console);
+  color: var(--text-inverse);
+  font: var(--type-caption);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* Tooltips appear on hover and on keyboard focus alike. */
+.iq-rail-item:hover > .iq-rail-tip,
+.iq-rail-item:focus-within > .iq-rail-tip {
+  display: block;
+}
+
+.iq-rail-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-md);
+  height: var(--control-md);
+  margin-bottom: var(--space-3);
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  cursor: pointer;
+}
+
+.iq-rail-logo img {
+  display: block;
+  height: var(--space-5);
+  width: auto;
+}
+
+.iq-rail-logo:hover,
+.iq-rail-task:hover {
+  background: var(--surface-hover);
+}
+
+.iq-rail-logo:focus-visible,
+.iq-rail-task:focus-visible,
+.iq-nav-row:focus-visible {
+  outline: 1px solid var(--blue-600);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 3px var(--blue-150);
+}
+
+.iq-rail-count {
+  position: relative;
+  display: inline-flex;
+}
+
+.iq-rail-badge {
+  position: absolute;
+  top: calc(-1 * var(--space-1));
+  right: calc(-1 * var(--space-1-5));
+}
+
+.iq-rail-task {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-md);
+  height: var(--control-md);
+  box-sizing: border-box;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+}
+
+.iq-rail-task[aria-current='page'] {
+  background: var(--surface-selected);
+  color: var(--text-primary);
+}
+
+.iq-rail-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: auto;
+}
+
+.iq-rail-person {
+  display: inline-flex;
+}
+
+.iq-nav-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: var(--sidebar-width);
+  height: 100vh;
+  padding: var(--space-3);
+  box-sizing: border-box;
+  overflow-y: auto;
+  background: var(--surface-sidebar);
+  border-right: 1px solid var(--border-default);
+  box-shadow: var(--shadow-popover);
 }
 
 .iq-sidebar-section {
@@ -44,6 +199,7 @@
   list-style: none;
 }
 
+/* Indentation conveys hierarchy in addition to the disclosure state. */
 .iq-sidebar-list--nested {
   padding-left: var(--space-3);
 }
@@ -56,48 +212,58 @@
   min-height: var(--space-7);
 }
 
-.iq-sidebar-engagement-name,
-.iq-sidebar-folder-name {
+/* NavRow: UI 13px, 6×8px padding, 6px radius, selected ink-150, hover surface-hover. */
+.iq-nav-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-1-5) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-primary);
+  font: var(--type-ui);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+a.iq-nav-row,
+a.iq-nav-row:hover {
+  color: var(--text-primary);
+}
+
+.iq-nav-row:hover {
+  background: var(--surface-hover);
+}
+
+.iq-nav-row[aria-current='page'],
+.iq-nav-row[aria-pressed='true'] {
+  background: var(--surface-selected);
+}
+
+.iq-nav-row-label {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font: var(--type-ui);
+}
+
+.iq-nav-disclosure {
+  flex: 1 1 auto;
 }
 
 .iq-sidebar-engagement-name {
   font-weight: 600;
 }
 
-.iq-sidebar-row {
-  display: block;
-  width: 100%;
-  padding: var(--space-1) var(--space-2);
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
+.iq-nav-disclosure-icon {
+  flex: none;
   color: var(--text-secondary);
-  font: var(--type-ui);
-  text-align: left;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.iq-sidebar-row:hover {
-  background: var(--surface-hover);
-}
-
-.iq-sidebar-row[aria-current='page'] {
-  background: var(--surface-selected);
-  color: var(--text-primary);
-}
-
-.iq-sidebar-row:focus-visible {
-  outline: 2px solid var(--blue-600);
-  outline-offset: 1px;
 }
 
 .iq-sidebar-empty,
@@ -124,17 +290,56 @@
 }
 
 .iq-sidebar-footer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   margin-top: auto;
+  padding: var(--space-2);
 }
 
-.iq-shell-main {
+.iq-sidebar-person {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--space-2-5);
+  min-width: 0;
+}
+
+.iq-sidebar-person-text {
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
 
+.iq-sidebar-person-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--type-ui);
+  font-weight: 500;
+}
+
+.iq-sidebar-person-detail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--type-caption);
+  color: var(--text-muted);
+}
+
+/* ---------- Main column: Header and work area ---------- */
+.iq-shell-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100vh;
+}
+
 .iq-header {
   display: flex;
+  flex: none;
+  overflow: hidden;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
@@ -192,7 +397,39 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font: var(--type-ui);
-  color: var(--text-secondary);
+  color: var(--text-muted);
+}
+
+/*
+ * The work area: the thread (centred, at most 720px) beside the artifact area
+ * (at least 380px, only while open), with the Composer slot under the thread.
+ * In single mode one work area shows at a time under the switch.
+ */
+.iq-work {
+  display: grid;
+  flex: 1 1 auto;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-areas: 'switch' 'thread' 'composer';
+}
+
+.iq-shell:not(.iq-shell--single) .iq-work--artifact {
+  /* The thread keeps its readable minimum (set by the Shell from layout.ts); the artifact grows from 380px towards 560px. */
+  grid-template-columns: minmax(var(--iq-thread-min-width, 0), 1fr) minmax(var(--panel-min-width), var(--panel-default-width));
+  grid-template-areas: 'switch switch' 'thread artifact' 'composer artifact';
+}
+
+.iq-work-switch {
+  grid-area: switch;
+  padding: var(--space-2) var(--space-4) 0;
+}
+
+.iq-thread {
+  grid-area: thread;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .iq-shell-content {
@@ -201,6 +438,72 @@
   margin: 0 auto;
   padding: var(--space-6) var(--space-4);
   box-sizing: border-box;
+}
+
+.iq-composer-slot {
+  grid-area: composer;
+  width: 100%;
+  max-width: var(--thread-max-width);
+  margin: 0 auto;
+  padding: 0 var(--space-4);
+  box-sizing: border-box;
+}
+
+.iq-composer-slot[data-composer-slot='filled'] {
+  padding-bottom: var(--space-4);
+}
+
+.iq-artifact {
+  grid-area: artifact;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  min-height: 0;
+  padding: var(--space-4);
+  box-sizing: border-box;
+  overflow-y: auto;
+  background: var(--surface-panel);
+  border-left: 1px solid var(--border-default);
+}
+
+.iq-shell--single .iq-artifact {
+  grid-area: thread;
+  border-left: 0;
+}
+
+.iq-thread[hidden],
+.iq-artifact[hidden] {
+  display: none;
+}
+
+.iq-artifact-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.iq-artifact-title {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--type-title);
+}
+
+.iq-artifact-items {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.iq-artifact-review {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-default);
 }
 
 .iq-shell-notice,

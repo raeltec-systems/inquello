@@ -10,12 +10,22 @@
  *   disabled with main's reason, and existing Tasks still list and open.
  * - A failed creation keeps the draft and its operation ID, so a retry cannot
  *   create a second Engagement or folder.
- * - Story 1.16 hardens layout, keyboard and responsiveness; this is the
- *   minimal real Sidebar.
+ * - Story 1.16: the 20px lockup with a Collapse control, NavRows (Task rows
+ *   are links with `aria-current`; Engagements and folders are disclosure
+ *   buttons with `aria-expanded`; actions are buttons), the person and
+ *   Settings at the bottom, and the 52px rail: the symbol (Expand
+ *   navigation, a keyboard-operable button), labelled icon actions with
+ *   tooltips on hover and focus, the current Workspace, surface and Task
+ *   marked, and the Task count. When the Sidebar does not fit, the rail's
+ *   Expand opens the full Sidebar as a transient overlay instead. Collapsing
+ *   never closes the open Task.
  */
-import { useState, type FormEvent, type ReactElement } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent, type MouseEvent, type ReactElement, type ReactNode } from 'react';
 
-import { Button, IconButton, Menu, TextField, type MenuEntry } from '../primitives';
+import lockupUrl from '../design/assets/logo/inquello-lockup.svg';
+import symbolUrl from '../design/assets/logo/inquello-symbol.svg';
+import { Icon, type IconName } from '../icons/Icon';
+import { Avatar, Badge, Button, IconButton, Menu, TextField, type MenuEntry } from '../primitives';
 import type { EngagementItem, FolderItem, Outcome, TaskItem, WorkspacesState, WorkspaceTree } from './organise-bridge';
 
 export interface EngagementDraft {
@@ -44,6 +54,30 @@ export interface SidebarProps {
   onShowSpecimen: () => void;
   newOperationId: () => string;
   busy: boolean;
+  /** `sidebar`: the full 264px Sidebar; `rail`: the 52px rail. */
+  presentation?: NavPresentation;
+  /** In the rail, the full Sidebar is open over the work area. */
+  overlayOpen?: boolean;
+  /** Collapse to the rail (or close the overlay). */
+  onCollapse?: () => void;
+  /** Expand from the rail's symbol. */
+  onExpand?: () => void;
+  /** The signed-in person, when known. */
+  person?: PersonView | null;
+}
+
+export type NavPresentation = 'sidebar' | 'rail';
+
+export interface PersonView {
+  name: string;
+  detail: string;
+}
+
+/** Up to two initials of a display name. */
+export function initialsOf(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  const letters = words.length > 1 ? [words[0]![0], words[words.length - 1]![0]] : [...(words[0] ?? '?')].slice(0, 2);
+  return letters.join('').toUpperCase();
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -60,13 +94,57 @@ export function engagementDraftErrors(draft: EngagementDraft): Partial<Record<ke
   return errors;
 }
 
+/** A navigation row: a link to the Task, marked `aria-current` while it is open. */
 function TaskRow({ task, open, onOpen }: { task: TaskItem; open: boolean; onOpen: (task: TaskItem) => void }): ReactElement {
   return (
     <li className="iq-sidebar-task" data-task-id={task.taskId}>
-      <button type="button" className="iq-sidebar-row" aria-current={open ? 'page' : undefined} onClick={() => onOpen(task)}>
-        {task.title}
-      </button>
+      <a
+        href={`#task-${task.taskId}`}
+        className="iq-nav-row iq-sidebar-row"
+        aria-current={open ? 'page' : undefined}
+        data-nav-row="task"
+        onClick={(event: MouseEvent<HTMLAnchorElement>) => {
+          event.preventDefault();
+          onOpen(task);
+        }}
+      >
+        <span className="iq-nav-row-label">{task.title}</span>
+      </a>
     </li>
+  );
+}
+
+/** An Engagement or folder row: a disclosure button that shows or hides its nested rows. */
+function DisclosureRow({
+  label,
+  expanded,
+  controls,
+  onToggle,
+  kind,
+  children,
+}: {
+  label: string;
+  expanded: boolean;
+  controls: string;
+  onToggle: () => void;
+  kind: 'engagement' | 'folder';
+  children?: ReactNode;
+}): ReactElement {
+  return (
+    <div className={`iq-sidebar-${kind}-row`}>
+      <button
+        type="button"
+        className={`iq-nav-row iq-nav-disclosure iq-sidebar-${kind}-name`}
+        aria-expanded={expanded}
+        aria-controls={controls}
+        data-nav-row={kind}
+        onClick={onToggle}
+      >
+        <Icon name={expanded ? 'chevron-down' : 'chevron-right'} size={14} className="iq-nav-disclosure-icon" />
+        <span className="iq-nav-row-label">{label}</span>
+      </button>
+      {children}
+    </div>
   );
 }
 
@@ -172,26 +250,65 @@ function FolderForm({
   );
 }
 
-export function Sidebar(props: SidebarProps): ReactElement {
-  const { state, workspaceId, tree, openTaskId, onSelectWorkspace, onOpenTask, onNewThread, onNewTask, newOperationId, busy } = props;
+
+/** The person and Settings at the bottom of the Sidebar. */
+function SidebarFooter({ person, onShowSpecimen }: { person: PersonView | null; onShowSpecimen: () => void }): ReactElement {
+  return (
+    <div className="iq-sidebar-footer" data-sidebar-footer>
+      <div className="iq-sidebar-person" data-sidebar-person>
+        {person ? (
+          <>
+            <Avatar name={person.name} initials={initialsOf(person.name)} />
+            <span className="iq-sidebar-person-text">
+              <span className="iq-sidebar-person-name">{person.name}</span>
+              <span className="iq-sidebar-person-detail">{person.detail}</span>
+            </span>
+          </>
+        ) : (
+          <span className="iq-sidebar-person-detail">Not signed in</span>
+        )}
+      </div>
+      <IconButton icon="settings" label="Settings" onPress={onShowSpecimen} data-action="settings" />
+    </div>
+  );
+}
+
+/** The full Sidebar's contents, inline or in the rail's overlay. */
+function SidebarContent(props: SidebarProps & { collapseLabel: string }): ReactElement {
+  const { state, workspaceId, tree, openTaskId, onSelectWorkspace, onOpenTask, onNewThread, onNewTask, newOperationId, busy, person = null } = props;
   const [creatingEngagement, setCreatingEngagement] = useState(false);
   const [folderFor, setFolderFor] = useState<string | null>(null);
+  const [collapsedRows, setCollapsedRows] = useState<ReadonlySet<string>>(() => new Set());
+  const baseId = useId();
+  const toggleRow = (id: string) =>
+    setCollapsedRows((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const top = (
+    <div className="iq-sidebar-top">
+      <img className="iq-sidebar-lockup" src={lockupUrl} alt="Inquello" />
+      {props.onCollapse ? (
+        <IconButton icon="panel-left" label={props.collapseLabel} expanded onPress={props.onCollapse} data-action="collapse-nav" />
+      ) : null}
+    </div>
+  );
 
   if (!state || !state.signedIn) {
     return (
-      <nav className="iq-sidebar" aria-label="Workspace navigation" data-sidebar data-sidebar-state={state ? 'signed-out' : 'loading'}>
+      <>
+        {top}
         <p className="iq-sidebar-empty">{state ? 'Sign in to see your Workspaces and private Tasks.' : 'Loading…'}</p>
         {state ? (
           <Button variant="primary" size="sm" onPress={props.onSignIn} data-action="sign-in">
             Sign in
           </Button>
         ) : null}
-        <div className="iq-sidebar-footer">
-          <Button variant="ghost" size="sm" onPress={props.onShowSpecimen}>
-            Design specimen
-          </Button>
-        </div>
-      </nav>
+        <SidebarFooter person={person} onShowSpecimen={props.onShowSpecimen} />
+      </>
     );
   }
 
@@ -215,7 +332,8 @@ export function Sidebar(props: SidebarProps): ReactElement {
   const creationReason = noWorkspace ?? (state.engagementCreation.enabled ? undefined : (state.engagementCreation.reason ?? 'Engagement creation is unavailable.'));
 
   return (
-    <nav className="iq-sidebar" aria-label="Workspace navigation" data-sidebar data-sidebar-state="ready" data-shared-service={state.sharedService}>
+    <>
+      {top}
       <div className="iq-sidebar-workspace" data-workspace-selector data-workspace-id={workspaceId ?? ''}>
         {state.workspaces.length > 0 ? (
           <Menu label={workspace ? workspace.name : 'Choose a Workspace'} heading="Workspace" items={[selector]} triggerVariant="ghost" />
@@ -227,8 +345,8 @@ export function Sidebar(props: SidebarProps): ReactElement {
         New thread
       </Button>
 
-      <section className="iq-sidebar-section" aria-labelledby="iq-sidebar-engagements">
-        <h2 className="iq-sidebar-heading" id="iq-sidebar-engagements">
+      <section className="iq-sidebar-section" aria-labelledby={`${baseId}engagements`}>
+        <h2 className="iq-sidebar-heading" id={`${baseId}engagements`}>
           Engagements
         </h2>
         {creatingEngagement ? (
@@ -242,37 +360,41 @@ export function Sidebar(props: SidebarProps): ReactElement {
           {engagements.map((engagement) => {
             const own = folders.filter((folder) => folder.engagementId === engagement.engagementId);
             const loose = tasks.filter((task) => task.engagementId === engagement.engagementId && task.folderId === null);
+            const listId = `${baseId}engagement-${engagement.engagementId}`;
+            const expanded = !collapsedRows.has(engagement.engagementId);
             return (
               <li key={engagement.engagementId} className="iq-sidebar-engagement" data-engagement-id={engagement.engagementId}>
-                <div className="iq-sidebar-engagement-row">
-                  <span className="iq-sidebar-engagement-name">{engagement.name}</span>
+                <DisclosureRow kind="engagement" label={engagement.name} expanded={expanded} controls={listId} onToggle={() => toggleRow(engagement.engagementId)}>
                   <IconButton icon="folder" label={`New folder in ${engagement.name}`} onPress={() => setFolderFor(engagement.engagementId)} data-action="new-folder" />
                   <IconButton icon="plus" label={`New Task in ${engagement.name}`} onPress={() => onNewTask(engagement.engagementId, null)} data-action="new-engagement-task" />
-                </div>
+                </DisclosureRow>
                 {folderFor === engagement.engagementId ? (
                   <FolderForm engagement={engagement} onSubmit={props.onCreateFolder} onCancel={() => setFolderFor(null)} newOperationId={newOperationId} />
                 ) : null}
-                <ul className="iq-sidebar-list iq-sidebar-list--nested">
-                  {own.map((folder) => (
-                    <li key={folder.folderId} className="iq-sidebar-folder" data-folder-id={folder.folderId}>
-                      <div className="iq-sidebar-folder-row">
-                        <span className="iq-sidebar-folder-name">{folder.name}</span>
-                        <IconButton
-                          icon="plus"
-                          label={`New Task in ${folder.name}`}
-                          onPress={() => onNewTask(engagement.engagementId, folder.folderId)}
-                          data-action="new-folder-task"
-                        />
-                      </div>
-                      <ul className="iq-sidebar-list iq-sidebar-list--nested">
-                        {tasks
-                          .filter((task) => task.folderId === folder.folderId)
-                          .map((task) => (
-                            <TaskRow key={task.taskId} task={task} open={task.taskId === openTaskId} onOpen={onOpenTask} />
-                          ))}
-                      </ul>
-                    </li>
-                  ))}
+                <ul id={listId} className="iq-sidebar-list iq-sidebar-list--nested" hidden={!expanded}>
+                  {own.map((folder) => {
+                    const folderListId = `${baseId}folder-${folder.folderId}`;
+                    const folderExpanded = !collapsedRows.has(folder.folderId);
+                    return (
+                      <li key={folder.folderId} className="iq-sidebar-folder" data-folder-id={folder.folderId}>
+                        <DisclosureRow kind="folder" label={folder.name} expanded={folderExpanded} controls={folderListId} onToggle={() => toggleRow(folder.folderId)}>
+                          <IconButton
+                            icon="plus"
+                            label={`New Task in ${folder.name}`}
+                            onPress={() => onNewTask(engagement.engagementId, folder.folderId)}
+                            data-action="new-folder-task"
+                          />
+                        </DisclosureRow>
+                        <ul id={folderListId} className="iq-sidebar-list iq-sidebar-list--nested" hidden={!folderExpanded}>
+                          {tasks
+                            .filter((task) => task.folderId === folder.folderId)
+                            .map((task) => (
+                              <TaskRow key={task.taskId} task={task} open={task.taskId === openTaskId} onOpen={onOpenTask} />
+                            ))}
+                        </ul>
+                      </li>
+                    );
+                  })}
                   {loose.map((task) => (
                     <TaskRow key={task.taskId} task={task} open={task.taskId === openTaskId} onOpen={onOpenTask} />
                   ))}
@@ -283,8 +405,8 @@ export function Sidebar(props: SidebarProps): ReactElement {
         </ul>
       </section>
 
-      <section className="iq-sidebar-section" aria-labelledby="iq-sidebar-adhoc" data-ad-hoc-tasks>
-        <h2 className="iq-sidebar-heading" id="iq-sidebar-adhoc">
+      <section className="iq-sidebar-section" aria-labelledby={`${baseId}adhoc`} data-ad-hoc-tasks>
+        <h2 className="iq-sidebar-heading" id={`${baseId}adhoc`}>
           Ad hoc Tasks
         </h2>
         {adHoc.length === 0 ? <p className="iq-sidebar-empty">No ad hoc Tasks.</p> : null}
@@ -295,11 +417,142 @@ export function Sidebar(props: SidebarProps): ReactElement {
         </ul>
       </section>
 
-      <div className="iq-sidebar-footer">
-        <Button variant="ghost" size="sm" onPress={props.onShowSpecimen}>
-          Design specimen
-        </Button>
+      <SidebarFooter person={person} onShowSpecimen={props.onShowSpecimen} />
+    </>
+  );
+}
+
+/** One rail action: an icon control with a tooltip shown on hover and on focus. */
+function RailItem({ label, children }: { label: string; children: ReactNode }): ReactElement {
+  return (
+    <span className="iq-rail-item">
+      {children}
+      <span className="iq-rail-tip" aria-hidden="true">
+        {label}
+      </span>
+    </span>
+  );
+}
+
+/** The 52px rail: symbol (Expand navigation), labelled icon actions, counts and the current marks. */
+function Rail(props: SidebarProps): ReactElement {
+  const { state, workspaceId, tree, openTaskId, onNewThread, onOpenTask, overlayOpen = false, person = null } = props;
+  const signedIn = !!state?.signedIn;
+  const workspace = state?.workspaces.find((entry) => entry.workspaceId === workspaceId) ?? null;
+  const tasks = tree?.tasks ?? [];
+  const openTask = tasks.find((task) => task.taskId === openTaskId) ?? null;
+  const expand = () => props.onExpand?.();
+  const railButton = (icon: IconName, label: string, extra: Record<string, unknown> = {}) => (
+    <RailItem label={label}>
+      <IconButton icon={icon} label={label} onPress={expand} {...extra} />
+    </RailItem>
+  );
+  return (
+    <div className="iq-rail" data-rail>
+      <RailItem label={overlayOpen ? 'Close navigation' : 'Expand navigation'}>
+        <button
+          type="button"
+          className="iq-rail-logo"
+          aria-label={overlayOpen ? 'Close navigation' : 'Expand navigation'}
+          aria-expanded={overlayOpen}
+          data-action="expand-nav"
+          onClick={() => (overlayOpen ? props.onCollapse?.() : expand())}
+        >
+          <img src={symbolUrl} alt="" aria-hidden="true" />
+        </button>
+      </RailItem>
+      {signedIn ? (
+        <>
+          <RailItem label="New thread">
+            <IconButton
+              icon="plus"
+              label="New thread"
+              onPress={onNewThread}
+              disabledReason={workspace ? undefined : 'Choose a Workspace first.'}
+              data-action="new-thread"
+            />
+          </RailItem>
+          {railButton('folder', workspace ? `Workspace: ${workspace.name}` : 'Choose a Workspace', { 'data-rail-workspace': workspace?.workspaceId ?? '' })}
+          <RailItem label="Tasks">
+            <span className="iq-rail-count">
+              <IconButton icon="list-checks" label="Tasks" variant="active" aria-current="true" onPress={expand} data-rail-surface="tasks" />
+              {tasks.length > 0 ? <Badge count={tasks.length} label="Tasks in this Workspace" tone="neutral" className="iq-rail-badge" /> : null}
+            </span>
+          </RailItem>
+          {openTask ? (
+            <RailItem label={`Open Task: ${openTask.title}`}>
+              <a
+                href={`#task-${openTask.taskId}`}
+                className="iq-rail-task"
+                aria-label={`Open Task: ${openTask.title}`}
+                aria-current="page"
+                data-rail-task={openTask.taskId}
+                onClick={(event) => {
+                  event.preventDefault();
+                  onOpenTask(openTask);
+                }}
+              >
+                <Icon name="message-square" />
+              </a>
+            </RailItem>
+          ) : null}
+        </>
+      ) : null}
+      <div className="iq-rail-footer">
+        {person ? (
+          <RailItem label={person.name}>
+            <span className="iq-rail-person">
+              <Avatar name={person.name} initials={initialsOf(person.name)} />
+            </span>
+          </RailItem>
+        ) : null}
+        <RailItem label="Settings">
+          <IconButton icon="settings" label="Settings" onPress={props.onShowSpecimen} data-action="settings" />
+        </RailItem>
       </div>
+    </div>
+  );
+}
+
+export function Sidebar(props: SidebarProps): ReactElement {
+  const { state, presentation = 'sidebar', overlayOpen = false } = props;
+  const navRef = useRef<HTMLElement>(null);
+  const previous = useRef(presentation);
+
+  // Toggling between the Sidebar and the rail removes the control that was
+  // pressed; focus moves to its counterpart (Collapse ↔ Expand).
+  useEffect(() => {
+    if (previous.current === presentation) return;
+    previous.current = presentation;
+    const nav = navRef.current;
+    if (!nav || !nav.contains(document.activeElement) && document.activeElement !== document.body) return;
+    const target = presentation === 'rail' ? '[data-action="expand-nav"]' : '[data-action="collapse-nav"]';
+    nav.querySelector<HTMLElement>(target)?.focus();
+  }, [presentation]);
+
+  const sidebarState = !state ? 'loading' : state.signedIn ? 'ready' : 'signed-out';
+  return (
+    <nav
+      ref={navRef}
+      className={`iq-sidebar iq-sidebar--${presentation}`}
+      aria-label="Workspace navigation"
+      data-sidebar
+      data-sidebar-state={sidebarState}
+      data-shared-service={state?.signedIn ? state.sharedService : undefined}
+      data-nav-presentation={presentation}
+    >
+      {presentation === 'sidebar' ? (
+        <SidebarContent {...props} collapseLabel="Collapse navigation" />
+      ) : (
+        <>
+          <Rail {...props} />
+          {overlayOpen ? (
+            <div className="iq-nav-overlay" data-nav-overlay>
+              <SidebarContent {...props} collapseLabel="Close navigation" />
+            </div>
+          ) : null}
+        </>
+      )}
     </nav>
   );
 }

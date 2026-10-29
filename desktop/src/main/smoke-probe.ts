@@ -95,6 +95,21 @@
  * straight to the runtime as a system actor, with `human_actor_required`. A
  * second principal is refused the Task's states as `not_found`.
  * `evaluateStates` is pure and decides pass/fail.
+ *
+ * Story 1.16 adds the shell-layout probe (`probeShellLayout`). With the dev
+ * topology it signs in and opens a synthetic ad hoc Task in the Shell (without
+ * it, it reads the signed-out Shell). Main resizes the real window to a full,
+ * a rail, a single and the minimum width; at each the probe reads the layout
+ * mode, the Sidebar or rail width, the Header height, the thread's maximum and
+ * actual width, that the page has no horizontal overflow
+ * (`scrollWidth <= clientWidth`), the landmarks, that the artifact area is
+ * closed and that the open Task stays open and marked. It checks that a
+ * Ctrl/Cmd+K keydown is left unhandled, that collapsing the rail by keyboard is
+ * announced once, and, under an emulated `prefers-color-scheme: dark`, that the
+ * Shell stays light. Nothing can open the artifact area yet, so at the single
+ * width it requires the Shell to report that the artifact would not fit beside
+ * the thread (single mode would apply) with the area closed. `evaluateShellLayout`
+ * is pure and decides pass/fail.
  */
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
@@ -1546,7 +1561,7 @@ function shellMoveProbe(taskId: string): string {
     location.hash = '#specimen';
     await wait(() => !q('[data-shell]'), 5000);
     const out = { shellOpened: await openShell() };
-    const row = await wait(() => q('[data-task-id=${JSON.stringify(taskId)}] button'), ${SHELL_SETTLE_MS});
+    const row = await wait(() => q('[data-task-id=${JSON.stringify(taskId)}] a'), ${SHELL_SETTLE_MS});
     if (row) row.click();
     out.opened = !!(await wait(() => q('[data-task-view=${JSON.stringify(taskId)}]'), 5000));
     out.headerBefore = readHeader();
@@ -1766,7 +1781,7 @@ function statesViewProbe(taskId: string): string {
     location.hash = '#specimen';
     await wait(() => !q('[data-shell]'), 5000);
     const out = { shellOpened: await openShell() };
-    const row = await wait(() => q('[data-task-id=${JSON.stringify(taskId)}] button'), ${SHELL_SETTLE_MS});
+    const row = await wait(() => q('[data-task-id=${JSON.stringify(taskId)}] a'), ${SHELL_SETTLE_MS});
     if (row) row.click();
     out.opened = !!(await wait(() => q('[data-task-view=${JSON.stringify(taskId)}]'), 5000));
     out.shown = !!(await wait(() => q('[data-task-states] [data-state-dimension="run"][data-state-value="execution_finished"]'), ${SHELL_SETTLE_MS}));
@@ -1977,4 +1992,339 @@ export async function probeStates(contents: WebContents, options: OrganiseProbeO
     read.signedOutAtEnd = signOut.ok;
   }
   return evaluateStates(read);
+}
+
+// ---- shell layout (Story 1.16) ---------------------------------------------------
+
+/**
+ * The renderer's layout numbers (`src/renderer/Shell/layout.ts`), which main
+ * cannot import; `test/shell-layout.test.tsx` holds the two equal.
+ */
+export const SHELL_LAYOUT = {
+  windowMinWidth: 532,
+  sidebarWidth: 264,
+  railWidth: 52,
+  headerHeight: 48,
+  threadMaxWidth: 720,
+  /** The narrowest width that is still full mode without an artifact. */
+  fullWidth: 744,
+  /** The narrowest width where the thread and a 380px artifact fit beside the rail. */
+  artifactFitWidth: 912,
+} as const;
+
+/** The window content widths the probe resizes to. */
+export const SHELL_LAYOUT_WIDTHS = { full: 1200, rail: 700, single: 600, minimum: SHELL_LAYOUT.windowMinWidth } as const;
+const LAYOUT_SETTLE_MS = 5_000;
+
+const SHELL_LAYOUT_READ = `(() => {
+  const q = (selector) => document.querySelector(selector);
+  const frame = q('[data-shell]');
+  const nav = q('nav[data-sidebar]');
+  const header = q('[data-header]');
+  const content = q('main .iq-shell-content');
+  const root = document.documentElement;
+  return {
+    innerWidth: window.innerWidth,
+    mode: frame ? frame.getAttribute('data-layout-mode') : null,
+    presentation: frame ? frame.getAttribute('data-nav-presentation') : null,
+    artifactOpen: frame ? frame.getAttribute('data-artifact-open') : null,
+    artifactFits: frame ? frame.getAttribute('data-artifact-fits') : null,
+    navWidth: nav ? nav.getBoundingClientRect().width : null,
+    headerHeight: header ? header.getBoundingClientRect().height : null,
+    threadMaxWidth: content ? getComputedStyle(content).maxWidth : null,
+    threadWidth: content ? content.getBoundingClientRect().width : null,
+    scroll: { scrollWidth: root.scrollWidth, clientWidth: root.clientWidth, bodyScrollWidth: document.body.scrollWidth, bodyClientWidth: document.body.clientWidth },
+    landmarks: {
+      navigation: document.querySelectorAll('nav[aria-label="Workspace navigation"], [role="navigation"]').length,
+      main: document.querySelectorAll('main, [role="main"]').length,
+      complementary: document.querySelectorAll('aside, [role="complementary"]').length,
+      announcers: document.querySelectorAll('[data-shell-announcer][aria-live="polite"]').length,
+    },
+    artifactArea: !!q('[data-artifact-area]'),
+    taskViewId: q('[data-task-view]') ? q('[data-task-view]').getAttribute('data-task-view') : null,
+    currentMarked: !!q('nav[data-sidebar] [aria-current="page"]'),
+  };
+})()`;
+
+/** Signs in state permitting, opens the given Task (or just the Shell) and waits for it. */
+function shellLayoutOpenProbe(taskId: string | null): string {
+  return `(async () => {
+    ${SHELL_HELPERS}
+    location.hash = '#specimen';
+    await wait(() => !q('[data-shell]'), 5000);
+    const out = { shellOpened: await openShell() };
+    if (${JSON.stringify(taskId)}) {
+      const row = await wait(() => q('[data-task-id=${JSON.stringify(taskId ?? '')}] a'), ${SHELL_SETTLE_MS});
+      if (row) row.click();
+      out.opened = !!(await wait(() => q('[data-task-view=${JSON.stringify(taskId ?? '')}]'), 5000));
+    }
+    return out;
+  })()`;
+}
+
+/** Before the real key presses: records whether each K keydown ends handled, and focuses nothing. */
+const SHELL_KEYS_PREPARE = `(() => {
+  const record = [];
+  Object.defineProperty(document, '__iqSmokeKeys', { value: record, configurable: true });
+  window.addEventListener('keydown', (event) => {
+    if (event.key === 'k' || event.key === 'K') setTimeout(() => record.push(event.defaultPrevented), 0);
+  });
+  if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
+  return document.querySelectorAll('[data-task-id]').length;
+})()`;
+
+const SHELL_KEYS_READ = `(() => ({ handled: [...(document.__iqSmokeKeys || [])], tasks: document.querySelectorAll('[data-task-id]').length }))()`;
+
+const SHELL_RAIL_READ = `(() => {
+  const q = (selector) => document.querySelector(selector);
+  const announcer = q('[data-shell-announcer]');
+  return {
+    presentation: q('[data-shell]') ? q('[data-shell]').getAttribute('data-nav-presentation') : null,
+    count: Number(announcer ? announcer.getAttribute('data-announce-count') : NaN),
+    text: announcer ? announcer.textContent : null,
+    focus: document.activeElement ? document.activeElement.getAttribute('data-action') : null,
+    currentMarked: !!q('nav[data-sidebar] [aria-current="page"]'),
+  };
+})()`;
+
+const focusAction = (action: string) => `(() => { const el = document.querySelector('[data-sidebar] [data-action="${action}"]'); if (el) el.focus(); return !!el && document.activeElement === el; })()`;
+
+interface RailRead {
+  presentation: string | null;
+  count: number;
+  text: string | null;
+  focus: string | null;
+  currentMarked: boolean;
+}
+
+/** Presses a key in the renderer through real input events. */
+async function pressKey(contents: WebContents, keyCode: string, modifiers: Array<'control' | 'meta'> = []): Promise<void> {
+  contents.sendInputEvent({ type: 'keyDown', keyCode, modifiers });
+  if (keyCode === 'Return') contents.sendInputEvent({ type: 'char', keyCode: '\r', modifiers });
+  contents.sendInputEvent({ type: 'keyUp', keyCode, modifiers });
+  await new Promise((resolve) => setTimeout(resolve, 300));
+}
+
+/** Ctrl+K and Cmd+K go unhandled; Enter on Collapse, then on Expand, toggles the rail with one announcement each. */
+async function probeShellKeys(contents: WebContents): Promise<NonNullable<ShellLayoutProbeRead['keys']>> {
+  contents.focus();
+  const tasksBefore = (await contents.executeJavaScript(SHELL_KEYS_PREPARE)) as number;
+  await pressKey(contents, 'K', ['control']);
+  await pressKey(contents, 'K', ['meta']);
+  const keys = (await contents.executeJavaScript(SHELL_KEYS_READ)) as { handled: boolean[]; tasks: number };
+  const out: NonNullable<ShellLayoutProbeRead['keys']> = { ctrlK: keys.handled, ctrlKCreatedTask: keys.tasks !== tasksBefore, rail: null };
+  if (!(await contents.executeJavaScript(focusAction('collapse-nav')))) return out;
+  const before = (await contents.executeJavaScript(SHELL_RAIL_READ)) as RailRead;
+  await pressKey(contents, 'Return');
+  const collapsed = (await contents.executeJavaScript(SHELL_RAIL_READ)) as RailRead;
+  await pressKey(contents, 'Return');
+  const expanded = (await contents.executeJavaScript(SHELL_RAIL_READ)) as RailRead;
+  out.rail = {
+    collapsed: {
+      presentation: collapsed.presentation,
+      announced: collapsed.count - before.count,
+      text: collapsed.text,
+      focusOnExpand: collapsed.focus === 'expand-nav',
+      currentMarked: collapsed.currentMarked,
+    },
+    expandedPresentation: expanded.presentation,
+    expandAnnounced: expanded.count - collapsed.count,
+  };
+  return out;
+}
+
+const SHELL_THEME_READ = `(() => {
+  const frame = document.querySelector('[data-shell]');
+  const main = document.querySelector('main');
+  return {
+    dark: matchMedia('(prefers-color-scheme: dark)').matches,
+    body: getComputedStyle(document.body).backgroundColor,
+    shell: frame ? getComputedStyle(frame).backgroundColor : null,
+    main: main ? getComputedStyle(main.closest('.iq-shell-main') || main).color : null,
+  };
+})()`;
+
+export interface ShellLayoutRead {
+  innerWidth: number;
+  mode: string | null;
+  presentation: string | null;
+  artifactOpen: string | null;
+  artifactFits: string | null;
+  navWidth: number | null;
+  headerHeight: number | null;
+  threadMaxWidth: string | null;
+  threadWidth: number | null;
+  scroll: { scrollWidth: number; clientWidth: number; bodyScrollWidth: number; bodyClientWidth: number };
+  landmarks: { navigation: number; main: number; complementary: number; announcers: number };
+  artifactArea: boolean;
+  taskViewId: string | null;
+  currentMarked: boolean;
+}
+
+export interface ShellLayoutProbeRead {
+  configured: boolean;
+  signedIn?: boolean;
+  taskId?: string | null;
+  open?: { shellOpened: boolean; opened?: boolean };
+  widths?: Partial<Record<keyof typeof SHELL_LAYOUT_WIDTHS, ShellLayoutRead | null>>;
+  keys?: {
+    ctrlK: boolean[];
+    ctrlKCreatedTask: boolean;
+    rail: { collapsed: { presentation: string | null; announced: number; text: string | null; focusOnExpand: boolean; currentMarked: boolean }; expandedPresentation: string | null; expandAnnounced: number } | null;
+  };
+  theme?: { dark: boolean; body: string; shell: string | null; main: string | null } | null;
+  themeError?: string | null;
+  signedOutAtEnd?: boolean;
+  error?: string;
+}
+
+export interface ShellLayoutReport extends ShellLayoutProbeRead {
+  ok: boolean;
+  failures: string[];
+}
+
+const WHITE = 'rgb(255, 255, 255)';
+
+/** Pass/fail for the shell-layout probe. */
+export function evaluateShellLayout(read: ShellLayoutProbeRead): ShellLayoutReport {
+  const failures: string[] = [];
+  if (read.error) failures.push(`the probe stopped: ${read.error}`);
+  if (!read.open?.shellOpened) failures.push('the Shell did not open');
+  if (read.configured) {
+    if (!read.signedIn) failures.push('the synthetic user did not sign in');
+    if (!read.taskId || !read.open?.opened) failures.push('the synthetic Task did not open in the Shell');
+  }
+  const expected: Record<keyof typeof SHELL_LAYOUT_WIDTHS, { mode: string; nav: number }> = {
+    full: { mode: 'full', nav: SHELL_LAYOUT.sidebarWidth },
+    rail: { mode: 'rail', nav: SHELL_LAYOUT.railWidth },
+    single: { mode: 'rail', nav: SHELL_LAYOUT.railWidth },
+    minimum: { mode: 'rail', nav: SHELL_LAYOUT.railWidth },
+  };
+  for (const name of Object.keys(SHELL_LAYOUT_WIDTHS) as Array<keyof typeof SHELL_LAYOUT_WIDTHS>) {
+    const at = read.widths?.[name];
+    const width = SHELL_LAYOUT_WIDTHS[name];
+    if (!at) {
+      failures.push(`the ${name} width (${width}px) was not read`);
+      continue;
+    }
+    const where = `at ${width}px (${name})`;
+    if (at.innerWidth !== width) failures.push(`${where} the window is ${at.innerWidth}px wide`);
+    if (at.mode !== expected[name].mode) failures.push(`${where} the layout mode is ${JSON.stringify(at.mode)}`);
+    if (at.navWidth === null || Math.abs(at.navWidth - expected[name].nav) > 0.5) failures.push(`${where} the navigation is ${at.navWidth}px wide, expected ${expected[name].nav}px`);
+    if (at.headerHeight === null || Math.abs(at.headerHeight - SHELL_LAYOUT.headerHeight) > 0.5) failures.push(`${where} the Header is ${at.headerHeight}px high`);
+    if (at.threadMaxWidth !== `${SHELL_LAYOUT.threadMaxWidth}px`) failures.push(`${where} the thread maximum width is ${JSON.stringify(at.threadMaxWidth)}`);
+    if (at.threadWidth === null || at.threadWidth > SHELL_LAYOUT.threadMaxWidth + 0.5) failures.push(`${where} the thread is ${at.threadWidth}px wide`);
+    if (at.scroll.scrollWidth > at.scroll.clientWidth || at.scroll.bodyScrollWidth > at.scroll.bodyClientWidth) failures.push(`${where} the page overflows horizontally (${JSON.stringify(at.scroll)})`);
+    if (at.landmarks.navigation !== 1 || at.landmarks.main !== 1 || at.landmarks.announcers !== 1) failures.push(`${where} the landmarks are ${JSON.stringify(at.landmarks)}`);
+    if (at.landmarks.complementary !== 0 || at.artifactArea || at.artifactOpen !== 'false') failures.push(`${where} an artifact area is open`);
+    const fits = width >= SHELL_LAYOUT.artifactFitWidth ? 'true' : 'false';
+    if (at.artifactFits !== fits) failures.push(`${where} the Shell reports the artifact ${at.artifactFits === 'true' ? 'fits' : 'does not fit'}; expected ${fits}`);
+    if (read.configured) {
+      if (at.taskViewId !== read.taskId) failures.push(`${where} the open Task changed to ${JSON.stringify(at.taskViewId)}`);
+      if (!at.currentMarked) failures.push(`${where} the open Task is not marked in the navigation`);
+    }
+  }
+  const keys = read.keys;
+  if (!keys) failures.push('the keyboard checks did not run');
+  else {
+    if (keys.ctrlK.length !== 2 || keys.ctrlK.some(Boolean)) failures.push(`Ctrl/Cmd+K was handled (${JSON.stringify(keys.ctrlK)})`);
+    if (keys.ctrlKCreatedTask) failures.push('Ctrl/Cmd+K changed the Task list');
+    const rail = keys.rail;
+    if (!rail) failures.push('the Collapse navigation control was not found');
+    else {
+      if (rail.collapsed.presentation !== 'rail') failures.push('Collapse navigation did not show the rail');
+      if (rail.collapsed.announced !== 1) failures.push(`collapsing was announced ${rail.collapsed.announced} times`);
+      if (!rail.collapsed.focusOnExpand) failures.push('focus did not move to Expand navigation after collapsing');
+      if (read.configured && !rail.collapsed.currentMarked) failures.push('the rail does not mark the open Task');
+      if (rail.expandedPresentation !== 'sidebar' || rail.expandAnnounced !== 1) failures.push('Expand navigation did not restore the Sidebar with one announcement');
+    }
+  }
+  if (read.themeError) failures.push(`the dark-preference check failed: ${read.themeError}`);
+  else if (!read.theme?.dark) failures.push('the dark colour-scheme preference was not emulated');
+  else if (read.theme.body !== WHITE || read.theme.shell !== WHITE) failures.push(`under a dark preference the Shell is not light (${JSON.stringify(read.theme)})`);
+  if (read.configured && !read.signedOutAtEnd) failures.push('the probe could not sign out at the end');
+  return { ok: failures.length === 0, failures, ...read };
+}
+
+export interface ShellLayoutProbeOptions extends Omit<OrganiseProbeOptions, 'runtimeRequest'> {
+  /** Resizes the real window's content area (smoke-only). */
+  resize: (width: number, height: number) => void;
+  /** The content size to restore afterwards. */
+  restore: { width: number; height: number };
+}
+
+/** Runs the shell-layout probe against the live renderer and the real window. */
+export async function probeShellLayout(contents: WebContents, options: ShellLayoutProbeOptions): Promise<ShellLayoutReport> {
+  const { identity, organise } = options;
+  const configured = identity.config.kind === 'configured';
+  const read: ShellLayoutProbeRead = { configured, widths: {} };
+  try {
+    let taskId: string | null = null;
+    if (configured) {
+      let seed: { workspace_id?: unknown } = {};
+      try {
+        seed = JSON.parse(fs.readFileSync(options.seedFile ?? '', 'utf8')) as typeof seed;
+      } catch {
+        seed = {};
+      }
+      const workspaceId = typeof seed.workspace_id === 'string' ? seed.workspace_id : null;
+      read.signedIn = (await identity.session.signIn()).ok;
+      await organise.syncPrincipal();
+      await organise.getWorkspaces();
+      if (workspaceId) {
+        const created = await organise.createTask({ operationId: randomUUID(), workspaceId, engagementId: null, folderId: null, title: 'Smoke layout' });
+        taskId = created.ok ? created.value.taskId : null;
+      }
+    }
+    read.taskId = taskId;
+    read.open = (await contents.executeJavaScript(shellLayoutOpenProbe(taskId))) as ShellLayoutProbeRead['open'];
+
+    for (const name of Object.keys(SHELL_LAYOUT_WIDTHS) as Array<keyof typeof SHELL_LAYOUT_WIDTHS>) {
+      const width = SHELL_LAYOUT_WIDTHS[name];
+      options.resize(width, options.restore.height);
+      const deadline = Date.now() + LAYOUT_SETTLE_MS;
+      let at = (await contents.executeJavaScript(SHELL_LAYOUT_READ)) as ShellLayoutRead;
+      while (at.innerWidth !== width && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        at = (await contents.executeJavaScript(SHELL_LAYOUT_READ)) as ShellLayoutRead;
+      }
+      // One more frame for React to apply the new mode.
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      read.widths![name] = (await contents.executeJavaScript(SHELL_LAYOUT_READ)) as ShellLayoutRead;
+    }
+
+    options.resize(options.restore.width, options.restore.height);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    read.keys = await probeShellKeys(contents);
+
+    const cdp = contents.debugger;
+    try {
+      cdp.attach('1.3');
+      try {
+        await cdp.sendCommand('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'dark' }] });
+        await new Promise((resolve) => setTimeout(resolve, MOTION_SETTLE_MS));
+        read.theme = (await contents.executeJavaScript(SHELL_THEME_READ)) as ShellLayoutProbeRead['theme'];
+      } finally {
+        await cdp.sendCommand('Emulation.setEmulatedMedia', { features: [] }).catch(() => undefined);
+        cdp.detach();
+      }
+      read.themeError = null;
+    } catch (error) {
+      read.themeError = (error as Error).message;
+    }
+  } catch (error) {
+    read.error = (error as Error).message;
+  } finally {
+    try {
+      options.resize(options.restore.width, options.restore.height);
+    } catch {
+      // The window may already be gone.
+    }
+    if (configured) {
+      const signOut = await identity.session.signOut().catch(() => ({ ok: false }));
+      await organise.syncPrincipal().catch(() => undefined);
+      read.signedOutAtEnd = signOut.ok;
+    }
+  }
+  return evaluateShellLayout(read);
 }

@@ -181,7 +181,7 @@ describe('Shell with Task states', () => {
     const state = fakeMain(() => ({ ok: true, value: listing([{ dimension: 'run', value: 'execution_finished', revision: 1 }]) }));
     const user = userEvent.setup();
     render(<Shell onShowSpecimen={() => undefined} operationIds={() => '00000000-0000-4000-8000-000000000999'} />);
-    await user.click(await screen.findByRole('button', { name: 'Bank confirmations' }));
+    await user.click(await screen.findByRole('link', { name: 'Bank confirmations' }));
     await waitFor(() => expect(chipOf('run')?.textContent).toBe('Execution finished'));
     expect(state.list).toHaveBeenCalledWith({ taskId: TASK });
     expect(state.recordTaskState).not.toHaveBeenCalled();
@@ -193,7 +193,7 @@ describe('Shell with Task states', () => {
     fakeMain(() => ({ ok: true, value: { taskId: TASK, revision: 1, dimensions: [{ dimension: 'run', records: [{ value: 'done' }] }] } }));
     const user = userEvent.setup();
     render(<Shell onShowSpecimen={() => undefined} />);
-    await user.click(await screen.findByRole('button', { name: 'Bank confirmations' }));
+    await user.click(await screen.findByRole('link', { name: 'Bank confirmations' }));
     await screen.findByText(/States could not be read/);
     expect(row('run').dataset.stateValue).toBe('not-recorded');
   });

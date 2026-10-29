@@ -1,6 +1,7 @@
 /**
- * The 48px Header (Story 1.14): the open Task's title, its Engagement's client
- * or entity and period, and the effective Workspace. An ad hoc Task has no
+ * The 48px Header (Story 1.14): the open Task's title (14px), its Engagement,
+ * the Engagement's client or entity and period, and the effective Workspace,
+ * the context in muted text (Story 1.16). An ad hoc Task has no
  * Engagement, so client and period are absent rather than invented. Data
  * attributes expose each field to the smoke probe.
  */
@@ -36,6 +37,12 @@ export function Header({ task, engagement, workspace }: HeaderProps): ReactEleme
         ) : null}
       </div>
       <dl className="iq-header-context">
+        {engagement ? (
+          <div className="iq-header-item">
+            <dt>Engagement</dt>
+            <dd data-header-engagement>{engagement.name}</dd>
+          </div>
+        ) : null}
         {engagement?.clientEntity ? (
           <div className="iq-header-item">
             <dt>Client</dt>

@@ -8,11 +8,33 @@
  * The Workspace list and tree are re-read after each change and every 30s.
  * The open Task's states (Story 1.15) are read through `inquello.state.list`
  * when it opens and with every refresh; the Shell never records one.
+ *
+ * Story 1.16 completes the layout and keyboard model:
+ * - Layout mode (full, rail, single) follows the window width live
+ *   (`layout.ts`). The rail never closes the open Task. In single mode one work
+ *   area shows at a time behind a Conversation/Artifact switch; the selected
+ *   item and the unsent draft (`drafts.ts`) are owned here, so switching and
+ *   resizing lose neither, and focus stays on the switch.
+ * - DOM and tab order: navigation, the work area (the single-mode switch, then
+ *   the Task in `main`), the artifact with its contextual review region, then
+ *   the Composer slot last.
+ * - One polite live region announces each surface change once: a Task opened,
+ *   the view switched, navigation collapsed or expanded.
+ * - Ctrl/Cmd+N activates New thread outside text fields; Ctrl/Cmd+K is not
+ *   bound; Escape closes the topmost overlay and returns focus to its opener,
+ *   and never acts on a Task (`keyboard.ts`).
+ * - The artifact area stays closed: nothing in the app opens one yet. The
+ *   `artifact` and `renderComposer` props are for tests and later stories.
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 
-import { identityBridge } from '../bridge';
+import { identityBridge, parseIdentityStatus } from '../bridge';
+import { SegmentedControl } from '../primitives';
+import { ArtifactArea, type ShellArtifact } from './ArtifactArea';
+import { useDraftBinding, type DraftBinding } from './drafts';
 import { Header } from './Header';
+import { EscapeStack, isNewThreadShortcut, isTextEntry } from './keyboard';
+import { artifactFits, layoutMode, THREAD_MIN_WIDTH } from './layout';
 import {
   newOperationId,
   organiseBridge,
@@ -29,7 +51,7 @@ import {
   type WorkspacesState,
   type WorkspaceTree,
 } from './organise-bridge';
-import { Sidebar, type EngagementDraft } from './Sidebar';
+import { Sidebar, type EngagementDraft, type PersonView } from './Sidebar';
 import { parseTaskStates, stateBridge, type TaskStatesItem } from './state-bridge';
 import { TaskView, type MoveTarget } from './TaskView';
 
@@ -42,9 +64,32 @@ export interface ShellProps {
   onShowSpecimen: () => void;
   /** Tests inject a deterministic ID source. */
   operationIds?: () => string;
+  /**
+   * An open artifact. Nothing in the app passes one yet (a later story opens
+   * real artifacts); only tests do, so users never see a fake artifact.
+   */
+  artifact?: ShellArtifact | null;
+  /** The Composer (Story 1.17), bound to the open Task's preserved draft. Until then the slot stays empty. */
+  renderComposer?: (draft: DraftBinding) => ReactNode;
 }
 
-export function Shell({ onShowSpecimen, operationIds = newOperationId }: ShellProps): ReactElement {
+export type WorkView = 'conversation' | 'artifact';
+
+const viewportWidth = (): number => (typeof globalThis.innerWidth === 'number' && globalThis.innerWidth > 0 ? globalThis.innerWidth : 1280);
+
+/** The signed-in person for the Sidebar footer, read from the identity status; null otherwise. */
+async function readPerson(): Promise<PersonView | null> {
+  const identity = identityBridge();
+  if (!identity || typeof identity.getStatus !== 'function') return null;
+  try {
+    const status = parseIdentityStatus(await identity.getStatus());
+    return status?.identity.state === 'signed-in' ? { name: status.identity.displayName, detail: status.identity.issuerLabel } : null;
+  } catch {
+    return null;
+  }
+}
+
+export function Shell({ onShowSpecimen, operationIds = newOperationId, artifact = null, renderComposer }: ShellProps): ReactElement {
   const bridge = organiseBridge();
   const [state, setState] = useState<WorkspacesState | null>(null);
   const [workspaceId, setWorkspaceIdState] = useState<string | null>(null);
@@ -62,6 +107,97 @@ export function Shell({ onShowSpecimen, operationIds = newOperationId }: ShellPr
   const [statesNotice, setStatesNotice] = useState<string | null>(null);
   const openTask = useRef<string | null>(null);
   openTask.current = openTaskId;
+  const [person, setPerson] = useState<PersonView | null>(null);
+
+  // ---- layout (Story 1.16) ----
+  const [width, setWidth] = useState(viewportWidth);
+  const [userCollapsed, setUserCollapsed] = useState(false);
+  const [overlayOpen, setOverlayOpen] = useState(false);
+  const [view, setView] = useState<WorkView>('conversation');
+  const [dismissedArtifact, setDismissedArtifact] = useState<string | null>(null);
+  const [selectedItem, setSelectedItem] = useState<{ artifactId: string; itemId: string } | null>(null);
+  const [announcement, setAnnouncement] = useState({ text: '', count: 0 });
+  const shellRef = useRef<HTMLDivElement>(null);
+  const escapeStack = useRef(new EscapeStack());
+  const draft = useDraftBinding(openTaskId);
+
+  const openArtifact = artifact && artifact.artifactId !== dismissedArtifact ? artifact : null;
+  const mode = layoutMode(width, openArtifact !== null);
+  const presentation = mode === 'full' && !userCollapsed ? 'sidebar' : 'rail';
+  const showOverlay = presentation === 'rail' && mode !== 'full' && overlayOpen;
+  const workView: WorkView = mode === 'single' && openArtifact ? view : 'conversation';
+
+  /** One polite announcement per surface change. */
+  const announce = useCallback((text: string) => setAnnouncement((current) => ({ text, count: current.count + 1 })), []);
+
+  useEffect(() => {
+    const onResize = () => setWidth(viewportWidth());
+    globalThis.addEventListener('resize', onResize);
+    return () => globalThis.removeEventListener('resize', onResize);
+  }, []);
+
+  const expandButton = () => shellRef.current?.querySelector<HTMLElement>('[data-sidebar] [data-action="expand-nav"]') ?? null;
+
+  const closeOverlay = useCallback(
+    (returnFocus: boolean) => {
+      setOverlayOpen(false);
+      announce('Navigation closed');
+      if (returnFocus) shellRef.current?.querySelector<HTMLElement>('[data-sidebar] [data-action="expand-nav"]')?.focus();
+    },
+    [announce],
+  );
+
+  // The overlay is an Escape layer; growing back to full mode closes it silently.
+  useEffect(() => {
+    if (!showOverlay) return undefined;
+    return escapeStack.current.push({ close: () => closeOverlay(false), opener: expandButton });
+  }, [showOverlay, closeOverlay]);
+  useEffect(() => {
+    if (mode === 'full' && overlayOpen) setOverlayOpen(false);
+  }, [mode, overlayOpen]);
+
+  // Focus moves into the overlay when it opens; a click outside it closes it without pulling focus.
+  useEffect(() => {
+    if (!showOverlay) return undefined;
+    shellRef.current?.querySelector<HTMLElement>('[data-nav-overlay] [data-action="collapse-nav"]')?.focus();
+    const onPointer = (event: MouseEvent) => {
+      const nav = shellRef.current?.querySelector('[data-sidebar]');
+      if (nav && event.target instanceof Node && !nav.contains(event.target)) closeOverlay(false);
+    };
+    document.addEventListener('mousedown', onPointer, true);
+    return () => document.removeEventListener('mousedown', onPointer, true);
+  }, [showOverlay, closeOverlay]);
+
+  // A new artifact starts on its own selection; a closed one returns the view to the conversation.
+  useEffect(() => {
+    if (!openArtifact) setView('conversation');
+  }, [openArtifact]);
+
+  const collapseNav = () => {
+    if (showOverlay) {
+      closeOverlay(true);
+      return;
+    }
+    setUserCollapsed(true);
+    announce('Navigation collapsed');
+  };
+
+  const expandNav = () => {
+    if (mode === 'full') {
+      setUserCollapsed(false);
+      announce('Navigation expanded');
+      return;
+    }
+    setOverlayOpen(true);
+    announce('Navigation opened');
+  };
+
+  const switchView = (next: string) => {
+    const target: WorkView = next === 'artifact' ? 'artifact' : 'conversation';
+    if (target === workView) return;
+    setView(target);
+    announce(target === 'artifact' ? 'Showing the Artifact' : 'Showing the Conversation');
+  };
 
   /** Reads one Task's states; a malformed or refused answer is shown as unread, never half-read. */
   const loadStates = useCallback(async (taskId: string | null) => {
@@ -115,6 +251,7 @@ export function Shell({ onShowSpecimen, operationIds = newOperationId }: ShellPr
         return;
       }
       setState(next);
+      void readPerson().then(setPerson);
       const ids = next.workspaces.map((workspace) => workspace.workspaceId);
       const current = chosenWorkspace.current;
       const chosen = current && ids.includes(current) ? current : (ids[0] ?? null);
@@ -135,7 +272,17 @@ export function Shell({ onShowSpecimen, operationIds = newOperationId }: ShellPr
   const selectWorkspace = (id: string) => {
     setWorkspaceId(id);
     setOpenTaskId(null);
+    const name = state?.workspaces.find((item) => item.workspaceId === id)?.name;
+    if (name) announce(`Workspace ${name}`);
     void loadTree(id);
+  };
+
+  /** Opens a Task from navigation; the overlay (if open) closes and focus returns to its opener. */
+  const openTaskFromNav = (item: TaskItem) => {
+    if (showOverlay) closeOverlay(true);
+    if (item.taskId === openTask.current) return;
+    setOpenTaskId(item.taskId);
+    announce(`Opened Task ${item.title}`);
   };
 
   /** Runs one mutation, then re-reads the tree; a refusal is shown, never hidden. */
@@ -157,8 +304,10 @@ export function Shell({ onShowSpecimen, operationIds = newOperationId }: ShellPr
     const operationId = operationIds();
     const result = await mutate(() => bridge.createTask({ operationId, workspaceId, engagementId, folderId, title: UNTITLED_TASK }), parseTask);
     setCreatingTask(false);
-    if (result.ok) setOpenTaskId(result.value.taskId);
-    else setNotice(result.reason);
+    if (result.ok) {
+      setOpenTaskId(result.value.taskId);
+      announce(`Opened Task ${result.value.title}`);
+    } else setNotice(result.reason);
   };
 
   const createEngagement = (draft: EngagementDraft, operationId: string): Promise<Outcome<EngagementItem>> => {
@@ -215,19 +364,54 @@ export function Shell({ onShowSpecimen, operationIds = newOperationId }: ShellPr
     }
   };
 
+  // Ctrl/Cmd+N and Escape, bound in the renderer only. The handler reads the
+  // latest state through a ref, so the listener is added once.
+  const newThreadShortcut = useRef<() => boolean>(() => false);
+  newThreadShortcut.current = () => {
+    if (!bridge || !state?.signedIn || !workspaceId) return false;
+    void createTask(null, null);
+    return true;
+  };
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      if (event.key === 'Escape') {
+        if (escapeStack.current.closeTopmost()) event.preventDefault();
+        return;
+      }
+      if (!isNewThreadShortcut(event) || isTextEntry(event.target) || event.repeat) return;
+      if (newThreadShortcut.current()) event.preventDefault();
+    };
+    globalThis.addEventListener('keydown', onKeyDown);
+    return () => globalThis.removeEventListener('keydown', onKeyDown);
+  }, []);
+
   const task = useMemo(() => tree?.tasks.find((item) => item.taskId === openTaskId) ?? null, [tree, openTaskId]);
   const engagement = useMemo(() => (task?.engagementId ? (tree?.engagements.find((item) => item.engagementId === task.engagementId) ?? null) : null), [tree, task]);
   const workspace = state?.workspaces.find((item) => item.workspaceId === workspaceId) ?? null;
 
+  const selectedItemId = openArtifact && selectedItem?.artifactId === openArtifact.artifactId ? selectedItem.itemId : null;
+  const composer = renderComposer ? renderComposer(draft) : null;
+
   return (
-    <div className="iq-shell" data-shell>
+    <div
+      ref={shellRef}
+      className={`iq-shell iq-shell--${mode} iq-shell--nav-${presentation}`}
+      data-shell
+      data-layout-mode={mode}
+      data-nav-presentation={presentation}
+      data-artifact-open={openArtifact ? 'true' : 'false'}
+      data-artifact-fits={artifactFits(width) ? 'true' : 'false'}
+      data-work-view={workView}
+      style={{ '--iq-thread-min-width': `${THREAD_MIN_WIDTH}px` } as CSSProperties}
+    >
       <Sidebar
         state={state}
         workspaceId={workspaceId}
         tree={tree}
         openTaskId={openTaskId}
         onSelectWorkspace={selectWorkspace}
-        onOpenTask={(item) => setOpenTaskId(item.taskId)}
+        onOpenTask={openTaskFromNav}
         onNewThread={() => void createTask(null, null)}
         onNewTask={(engagementId, folderId) => void createTask(engagementId, folderId)}
         onCreateEngagement={createEngagement}
@@ -236,33 +420,73 @@ export function Shell({ onShowSpecimen, operationIds = newOperationId }: ShellPr
         onShowSpecimen={onShowSpecimen}
         newOperationId={operationIds}
         busy={creatingTask}
+        presentation={presentation}
+        overlayOpen={showOverlay}
+        onCollapse={collapseNav}
+        onExpand={expandNav}
+        person={person}
       />
       <div className="iq-shell-main">
         <Header task={task} engagement={engagement} workspace={workspace} />
-        <main className="iq-shell-content">
-          {notice ? (
-            <p className="iq-shell-notice" role="status" data-shell-notice>
-              {notice}
-            </p>
-          ) : null}
-          {task && tree ? (
-            <TaskView
-              task={task}
-              engagements={tree.engagements}
-              folders={tree.folders}
-              onRename={renameTask}
-              onMove={moveTask}
-              newOperationId={operationIds}
-              states={states}
-              statesNotice={statesNotice}
-            />
-          ) : (
-            <div className="iq-thread-placeholder" data-thread-placeholder="none">
-              <p className="iq-thread-placeholder-title">No Task open.</p>
-              <p className="iq-thread-placeholder-body">Choose a Task in the Sidebar, or start one with New thread.</p>
+        <div className={`iq-work${openArtifact ? ' iq-work--artifact' : ''}`} data-work>
+          {mode === 'single' && openArtifact ? (
+            <div className="iq-work-switch" data-work-switch>
+              <SegmentedControl
+                label="Work area"
+                options={[
+                  { value: 'conversation', label: 'Conversation' },
+                  { value: 'artifact', label: 'Artifact' },
+                ]}
+                value={workView}
+                onChange={switchView}
+              />
             </div>
-          )}
-        </main>
+          ) : null}
+          <main className="iq-thread" aria-label="Task work" hidden={workView === 'artifact'} data-thread>
+            <div className="iq-shell-content">
+              {notice ? (
+                <p className="iq-shell-notice" role="status" data-shell-notice>
+                  {notice}
+                </p>
+              ) : null}
+              {task && tree ? (
+                <TaskView
+                  task={task}
+                  engagements={tree.engagements}
+                  folders={tree.folders}
+                  onRename={renameTask}
+                  onMove={moveTask}
+                  newOperationId={operationIds}
+                  states={states}
+                  statesNotice={statesNotice}
+                />
+              ) : (
+                <div className="iq-thread-placeholder" data-thread-placeholder="none">
+                  <p className="iq-thread-placeholder-title">No Task open.</p>
+                  <p className="iq-thread-placeholder-body">Choose a Task in the Sidebar, or start one with New thread.</p>
+                </div>
+              )}
+            </div>
+          </main>
+          {openArtifact ? (
+            <ArtifactArea
+              artifact={openArtifact}
+              selectedItemId={selectedItemId}
+              onSelectItem={(itemId) => setSelectedItem({ artifactId: openArtifact.artifactId, itemId })}
+              onClose={() => {
+                setDismissedArtifact(openArtifact.artifactId);
+                announce('Artifact closed');
+              }}
+              hidden={workView === 'conversation' && mode === 'single'}
+            />
+          ) : null}
+          <div className="iq-composer-slot" data-composer-slot={composer ? 'filled' : 'empty'}>
+            {composer}
+          </div>
+        </div>
+      </div>
+      <div className="iq-visually-hidden" role="status" aria-live="polite" aria-atomic="true" data-shell-announcer data-announce-count={announcement.count}>
+        {announcement.text ? <span key={announcement.count}>{announcement.text}</span> : null}
       </div>
     </div>
   );

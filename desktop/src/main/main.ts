@@ -63,6 +63,12 @@
  * `state.recordTaskState` (Task and run states only, recorded as `system`).
  * `--smoke` then runs the states probe and prints a `states` line, which the
  * run also requires to pass.
+ *
+ * The window has a minimum content width (Story 1.16: the rail beside a
+ * readable thread), so the Shell's layout modes never overflow horizontally.
+ * `--smoke` then runs the shell-layout probe, which resizes this window to
+ * each layout width through the smoke-only `resize` it is given, and prints a
+ * `shell-layout` line that the run also requires to pass.
  */
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
@@ -88,7 +94,7 @@ import {
 } from './security/policy';
 import { OrganiseService } from './organise';
 import { createProviders, loadProviderDevConfig, PROVIDER_DEV_CONFIG_ENV, providersDir, type ProviderService } from './providers';
-import { probeData, probeIdentity, probeOrganise, probeProviders, probeRenderer, probeStates } from './smoke-probe';
+import { probeData, probeIdentity, probeOrganise, probeProviders, probeRenderer, probeShellLayout, probeStates, SHELL_LAYOUT } from './smoke-probe';
 
 const smoke = process.argv.includes('--smoke');
 // The smoke run keeps what main logs, so the providers probe can scan it for a leaked key.
@@ -105,6 +111,7 @@ let dataOk = false;
 let providersOk = false;
 let organiseOk = false;
 let statesOk = false;
+let shellLayoutOk = false;
 let organise: OrganiseService | undefined;
 let identity: IdentityWiring | undefined;
 let providers: ProviderService | undefined;
@@ -135,10 +142,17 @@ app.on('web-contents-created', (_event, contents) => {
   applySessionPolicy(contents.session, policyOptions);
 });
 
+const WINDOW_WIDTH = 1200;
+const WINDOW_HEIGHT = 800;
+const WINDOW_MIN_HEIGHT = 400;
+
 function createWindow(): BrowserWindow {
   const window = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    width: WINDOW_WIDTH,
+    height: WINDOW_HEIGHT,
+    useContentSize: true,
+    minWidth: SHELL_LAYOUT.windowMinWidth,
+    minHeight: WINDOW_MIN_HEIGHT,
     show: !smoke,
     title: 'Inquello',
     webPreferences: secureWebPreferences(path.join(__dirname, '..', 'preload', 'preload.js')),
@@ -285,11 +299,23 @@ async function runSmokeProbe(contents: WebContents): Promise<void> {
   statesOk = statesReport.ok;
   process.stdout.write(`${JSON.stringify({ event: 'states', ...statesReport })}\n`);
   if (!statesReport.ok) logger.error(`states probe failed: ${statesReport.failures.join('; ')}`);
+  const window = BrowserWindow.fromWebContents(contents);
+  const layoutReport = await probeShellLayout(contents, {
+    identity,
+    organise,
+    seedFile: process.env.INQUELLO_SMOKE_SEED ?? null,
+    // Smoke-only: the probe sizes the real window's content area to each layout width.
+    resize: (width, height) => window?.setContentSize(width, height),
+    restore: { width: WINDOW_WIDTH, height: WINDOW_HEIGHT },
+  });
+  shellLayoutOk = layoutReport.ok;
+  process.stdout.write(`${JSON.stringify({ event: 'shell-layout', ...layoutReport })}\n`);
+  if (!layoutReport.ok) logger.error(`shell-layout probe failed: ${layoutReport.failures.join('; ')}`);
 }
 
 function exitCodeFor(exit: ExitInfo | undefined): number {
   if (!smoke) return 0;
-  return handshakeOk && privilegesOk && designOk && identityOk && dataOk && providersOk && organiseOk && statesOk && exit !== undefined && exit.exitCode === 0 && !exit.killed ? 0 : 1;
+  return handshakeOk && privilegesOk && designOk && identityOk && dataOk && providersOk && organiseOk && statesOk && shellLayoutOk && exit !== undefined && exit.exitCode === 0 && !exit.killed ? 0 : 1;
 }
 
 app.on('before-quit', (event) => {

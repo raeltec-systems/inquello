@@ -131,7 +131,7 @@ describe('Shell', () => {
     expect(header().querySelector('[data-header-period]')).toBeNull();
     expect(header().querySelector('[data-header-workspace]')!.textContent).toBe('Synthetic Audit Co');
     const adHoc = document.querySelector<HTMLElement>('[data-ad-hoc-tasks]')!;
-    expect(within(adHoc).getByRole('button', { name: UNTITLED_TASK }).getAttribute('aria-current')).toBe('page');
+    expect(within(adHoc).getByRole('link', { name: UNTITLED_TASK }).getAttribute('aria-current')).toBe('page');
     expect(document.querySelector('[data-thread-placeholder]')).not.toBeNull();
   });
 
@@ -197,7 +197,7 @@ describe('Shell', () => {
     expect(screen.getByText(/shared service is unavailable/)).toBeTruthy();
     await user.click(create);
     expect(document.querySelector('[data-engagement-form]')).toBeNull();
-    await user.click(screen.getByRole('button', { name: 'Bank confirmations' }));
+    await user.click(screen.getByRole('link', { name: 'Bank confirmations' }));
     expect(header().querySelector('[data-header-title]')!.textContent).toBe('Bank confirmations');
   });
 
@@ -207,7 +207,7 @@ describe('Shell', () => {
     const user = userEvent.setup();
     renderShell();
     await waitFor(() => expect(sidebar().dataset.sidebarState).toBe('ready'));
-    await user.click(await screen.findByRole('button', { name: 'Original' }));
+    await user.click(await screen.findByRole('link', { name: 'Original' }));
     // Someone else's change lands first.
     main.tasks[0]!.revision = 2;
     const title = screen.getByLabelText('Task title') as HTMLInputElement;
@@ -224,7 +224,7 @@ describe('Shell', () => {
     main.tasks.push({ taskId: uuid(4), workspaceId: WORKSPACE, engagementId: null, folderId: null, title: 'Loose', runtimeThreadId: 'thread-1', sourceRefs: [], artifactRefs: [], visibility: 'private', revision: 1 });
     const user = userEvent.setup();
     renderShell();
-    await user.click(await screen.findByRole('button', { name: 'Loose' }));
+    await user.click(await screen.findByRole('link', { name: 'Loose' }));
     await user.click(screen.getByRole('button', { name: 'Move' }));
     await user.click(screen.getByRole('menuitemradio', { name: 'FY26 audit' }));
     await waitFor(() => expect(main.bridge.moveTask).toHaveBeenCalledWith(expect.objectContaining({ taskId: uuid(4), engagementId: uuid(3), folderId: null, expectedRevision: 1 })));
