@@ -422,6 +422,19 @@ describe('DiffLine', () => {
     expect(lines.map((line) => line.querySelector('.iq-diff-gutter')?.textContent ?? null)).toEqual(['R14', '15', null]);
   });
 
+  it('keeps the whitespace of plain-text source, still wrapping long lines (review R14)', () => {
+    const source = '    if (a  &&  b) {\n\treturn  1;';
+    const { container } = render(
+      <DiffLine kind="add" stage="suggested">
+        {source}
+      </DiffLine>,
+    );
+    expect(container.querySelector('.iq-diff-body')!.textContent).toBe(source);
+    const body = /\.iq-diff-body\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
+    expect(body).toMatch(/white-space:\s*pre-wrap;/);
+    expect(body).toMatch(/overflow-wrap:\s*anywhere;/);
+  });
+
   it('requires a stage at the type level', () => {
     // @ts-expect-error -- every line says whether it is suggested, applied locally or delivered.
     void (<DiffLine kind="add">a</DiffLine>);

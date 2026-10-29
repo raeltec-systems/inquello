@@ -851,6 +851,8 @@ textarea.iq-field-control { resize: vertical; }
 .iq-diff-line--change .iq-diff-sign { color: var(--blue-600); }
 .iq-diff-body {
   min-width: 0;
+  /* Keep indentation and repeated spaces of plain-text source; long lines still wrap. */
+  white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 .iq-diff-stage {

@@ -386,6 +386,10 @@ void app.whenReady().then(async () => {
       signOut: async () => ({ ok: (await identitySession.signOut()).ok }),
       forgetLocally: () => identitySession.forgetLocally(),
     },
+    providers: {
+      forgetClaudeKey: () => providerService.forgetClaudeKey(),
+      holdsClaudeKey: () => providerService.holdsClaudeKey(),
+    },
     // The smoke run plays the user's part in the save dialog with a fresh temp folder.
     chooseExportDestination: smoke
       ? async () => path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'inquello-smoke-export-')), 'export')

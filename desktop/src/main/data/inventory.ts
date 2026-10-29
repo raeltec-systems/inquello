@@ -47,10 +47,15 @@ export interface Inventory extends HeldFiles {
   held: Record<string, { files: number; bytes: number }>;
 }
 
-/** `true` when `child` is `parent` or inside it. */
+/**
+ * `true` when `child` is `parent` or inside it. Only a real parent segment
+ * (`..` alone or followed by a separator) leaves `parent`: a child named
+ * `..backup` is inside. A relative path that is absolute (another drive) is
+ * outside.
+ */
 export function isInside(parent: string, child: string): boolean {
   const rel = path.relative(path.resolve(parent), path.resolve(child));
-  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+  return rel === '' || (rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel));
 }
 
 export const toPosix = (rel: string): string => rel.split(path.sep).join('/');

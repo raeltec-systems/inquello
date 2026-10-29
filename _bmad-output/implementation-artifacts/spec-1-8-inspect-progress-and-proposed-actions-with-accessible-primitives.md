@@ -2,7 +2,7 @@
 title: 'Story 1.8: Inspect progress and proposed actions with accessible primitives'
 type: 'feature'
 created: '2026-10-28'
-status: 'done'
+status: 'in-progress'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '30506d91b74f14ae78a20a8b356a854acda54e59'
@@ -86,6 +86,19 @@ context:
 
 **Acceptance Criteria:**
 - Given `pnpm smoke`, when the specimen renders, then every rendered pair meets its threshold, focus is visible, the running step stops animating under emulated reduced motion while still reading "Running", and the run exits 0 with `design.ok: true`.
+
+### Review Findings
+
+Review pass 2026-10-29, HEAD `ace1ca2`, using `bmad-code-review`. Full evidence, ranking and limitations: [completed-story review](reviews/2026-10-29-epic-1/report.md). Owner selected “Leave as action items” on 2026-10-29. All patch findings remain open; no implementation fixes applied. Review status and sprint tracking synchronized.
+
+- [x] [Review][Patch] R14: DiffLine collapses significant whitespace in plain-text source [desktop/src/renderer/primitives/primitives.css:852] — BMAD low; likelihood Low; impact Medium; change risk Low — recommendation: Optional small cleanup before source-code diff use.
+  - Fixed in remediation (2026-10-29): `.iq-diff-body` uses `white-space: pre-wrap` (still `overflow-wrap: anywhere`). Test `keeps the whitespace of plain-text source, still wrapping long lines (review R14)` in desktop/test/primitives-progress.test.tsx. No real-browser check was run.
+
+Related shared verification issue: R08 in Story 1.6 covers this story’s contrast evidence too; count it once.
+
+#### Rejected
+
+- #10 Toast dismissal survives changed content — `low`; likelihood Low, impact Low. A reused dismissed instance remains hidden, but a new keyed/mounted Toast has a fresh lifecycle; no current transient-message replacement consumer exists (specimen is persistent). Adding message-identity semantics now is unnecessary.
 
 ## Implementation Notes
 

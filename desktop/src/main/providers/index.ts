@@ -11,7 +11,13 @@
  *
  * Nothing here reads or changes the identity session: Inquello sign-out leaves
  * provider credentials alone, and removing a provider credential never signs
- * out. Every result carries the provider status only (`status.ts`), which the
+ * out. Local data deletion of the Claude API key goes through
+ * `forgetClaudeKey`, which also clears a memory-only key and stops a check in
+ * flight from restoring it.
+ *
+ * A conclusive rejection is kept until a check verifies the key or the key is
+ * replaced: a later check that cannot reach Anthropic leaves the key
+ * `rejected`, so it never becomes an authorized route again by being offline. Every result carries the provider status only (`status.ts`), which the
  * operations rebuild field by field before it crosses IPC. Actions on a route
  * run one at a time.
  */
@@ -37,6 +43,7 @@ export const CLAUDE_REASONS = {
   rejected: 'Anthropic refused this Claude API key. It stays stored until you remove it.',
   unreachable: 'Anthropic could not be reached to check the Claude API key. Nothing was retried.',
   changed: 'The Claude API key changed while it was being checked; check it again.',
+  unreachableRejected: 'Anthropic could not be reached to check the Claude API key. It stays refused, as Anthropic last answered.',
 } as const;
 
 export interface ProviderServiceOptions {
@@ -53,6 +60,8 @@ export interface ProviderServiceOptions {
 
 export class ProviderService {
   private claudeBusy = false;
+  /** Bumped whenever the key is removed, so a check in flight cannot restore or relabel it. */
+  private claudeGeneration = 0;
   private codexBusy = false;
   private readonly secrets = new Set<string>();
 
@@ -141,11 +150,14 @@ export class ProviderService {
       if (!record) return { ok: false, reason: CLAUDE_REASONS.noKey };
       const config = this.options.devConfig;
       if (config.kind === 'invalid') return { ok: false, reason: CLAUDE_REASONS.devConfig };
+      const generation = this.claudeGeneration;
       const outcome = await (this.options.verify ?? verifyClaudeKey)(record.key, config.target);
       this.options.logger.info(`providers: Claude API key check: ${outcome}`);
       const current = this.options.vault.load();
       // Removed or replaced while the check ran: do not resurrect or relabel it.
-      if (!current || current.key !== record.key) return { ok: false, reason: CLAUDE_REASONS.changed };
+      if (generation !== this.claudeGeneration || !current || current.key !== record.key) return { ok: false, reason: CLAUDE_REASONS.changed };
+      // Not reaching Anthropic says nothing about the key: a known rejection stands.
+      if (outcome === 'unreachable' && current.state === 'rejected') return { ok: false, reason: CLAUDE_REASONS.unreachableRejected };
       this.options.vault.save({ version: 1, key: record.key, state: outcome });
       if (outcome === 'verified') return { ok: true };
       return { ok: false, reason: outcome === 'rejected' ? CLAUDE_REASONS.rejected : CLAUDE_REASONS.unreachable };
@@ -154,10 +166,27 @@ export class ProviderService {
 
   removeClaudeKey(): Promise<ProviderActionResult> {
     return this.claudeAction(async () => {
+      this.claudeGeneration += 1;
       this.options.vault.clear();
       this.options.logger.info('providers: Claude API key removed');
       return { ok: true };
     });
+  }
+
+  /**
+   * Local data deletion (Story 1.12): removes the Claude API key wherever it
+   * is held (memory-only or the encrypted file), even while another Claude
+   * action runs; a check in flight then cannot restore or relabel it.
+   */
+  forgetClaudeKey(): void {
+    this.claudeGeneration += 1;
+    this.options.vault.clear();
+    this.options.logger.info('providers: Claude API key removed by local data deletion');
+  }
+
+  /** Whether a Claude API key is still held (and so usable). */
+  holdsClaudeKey(): boolean {
+    return this.options.vault.load() !== null;
   }
 
   codexLogin(request: CodexLoginRequest): Promise<ProviderActionResult> {

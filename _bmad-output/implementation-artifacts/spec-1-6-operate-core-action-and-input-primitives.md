@@ -2,7 +2,7 @@
 title: 'Story 1.6: Operate core action and input primitives'
 type: 'feature'
 created: '2026-10-28'
-status: 'done'
+status: 'in-progress'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '3dfa5c522e20e1fe303cb49435899cce5b694fdb'
@@ -83,6 +83,17 @@ context:
 
 **Acceptance Criteria:**
 - Given `pnpm smoke`, when the specimen renders, then every rendered pair meets its threshold, focus is visible, and the run exits 0.
+
+### Review Findings
+
+Review pass 2026-10-29, HEAD `ace1ca2`, using `bmad-code-review`. Full evidence, ranking and limitations: [completed-story review](reviews/2026-10-29-epic-1/report.md). Owner selected “Leave as action items” on 2026-10-29. All patch findings remain open; no implementation fixes applied. Review status and sprint tracking synchronized.
+
+- [x] [Review][Patch] R08: Contrast evidence rejects harmless floating-point serialization differences [desktop/test/contrast.test.ts:194] — BMAD medium; likelihood High; impact Medium; change risk Low — recommendation: Fix now.
+  - Fixed in remediation (2026-10-29): the evidence check compares parsed documents (keys, every pair and token, strings exactly; numbers within a relative 1e-9) and separately requires every recorded ratio to meet its threshold. Thresholds unchanged. Tests `contrast evidence` in desktop/test/contrast.test.ts, including float noise accepted and a changed ratio, a missing pair, a changed token and a ratio below threshold rejected.
+
+#### Rejected
+
+No formal findings rejected for this story in this pass. Exploratory limits and inherited deferrals are documented in the full report.
 
 ## Implementation Notes
 

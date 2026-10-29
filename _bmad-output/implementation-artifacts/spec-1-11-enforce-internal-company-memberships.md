@@ -2,7 +2,7 @@
 title: 'Story 1.11: Enforce internal-company memberships without disclosing private Tasks'
 type: 'feature'
 created: '2026-10-28'
-status: 'done'
+status: 'in-progress'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'e84d2646600cb9e91634fa5f340929ca6b922d84'
@@ -95,6 +95,17 @@ context:
 
 **Acceptance Criteria:**
 - Given PostgreSQL 18 and the test issuer, when the membership suite runs, then every matrix row passes. No error body names a resource the caller cannot access, and only `audit_team` and `reviewer` roles can exist.
+
+### Review Findings
+
+Review pass 2026-10-29, HEAD `ace1ca2`, using `bmad-code-review`. Full evidence, ranking and limitations: [completed-story review](reviews/2026-10-29-epic-1/report.md). Owner selected “Leave as action items” on 2026-10-29. All patch findings remain open; no implementation fixes applied. Review status and sprint tracking synchronized.
+
+- [x] [Review][Defer] D01: Administrator preservation counts disabled principals [engine/codex-rs/inquello-service/src/workspace_commands.rs:110] — BMAD medium; likelihood Low; impact Medium; change risk Moderate — deferred: Leave until the principal-disable lifecycle is implemented; Add a PostgreSQL fixture with one active and one disabled admin, then test removal, demotion, policy update, disable and reenable concurrently. No database-backed reproduction was run here.
+- [x] [Review][Defer] D02: Invite redemption checks grantor membership but not principal status [engine/codex-rs/inquello-service/src/workspaces.rs:590] — BMAD medium; likelihood Low; impact High; change risk Moderate — deferred: Leave until the principal-disable lifecycle is implemented; Exercise redemption before/after grantor disable, removal and reenable, including a racing disable. Decide the lifecycle contract at that feature checkpoint; this review does not require a new account-disable feature.
+
+#### Rejected
+
+- #38 Disabled Workspace kind reveals existence — `low`; likelihood Low, impact Low. Conditional seeded external_audit row returns route_not_available, unlike a missing row. Normal creation forbids that kind; the spec explicitly selects this precedence and also asks for nondisclosure. Do not edit the frozen spec or add future-route branches now; reconcile when unsupported kinds become reachable.
 
 ## Implementation Notes
 

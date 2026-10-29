@@ -11,8 +11,12 @@
  *   the runtime.
  * - `deleteData` refuses while a Task runs, signs out first when the identity
  *   session is chosen (falling back to local removal when the service cannot
- *   confirm), stops the runtime, removes the chosen categories and restarts
- *   the runtime. Exported copies are never touched; the report lists them.
+ *   confirm, and cancelling a sign-in in progress either way), stops the
+ *   runtime, removes the chosen categories and restarts the runtime. Deleting
+ *   the Claude API key also clears it from the provider service (a
+ *   memory-only key, or one a check in flight would restore); the deletion
+ *   fails rather than report success while the key is still held. Exported
+ *   copies are never touched; the report lists them.
  *
  * One action runs at a time. Every result is a fresh plain object holding
  * only the fields below, so nothing else crosses IPC.
@@ -26,6 +30,7 @@ import type { ExportJournal } from './journal';
 import { isStoreCategory, realDataBlockers, type BlockerKind, type DataPolicy, type PolicyLoad } from './policy';
 
 export const IDENTITY_SESSION = 'identity-session';
+export const CLAUDE_KEY_VAULT = 'claude-key-vault';
 
 export interface RuntimeControl {
   stop(): Promise<void>;
@@ -41,8 +46,15 @@ export interface IdentityControl {
   holdsSession(): boolean;
   /** The Story 1.10 sign-out; `ok` means the shared service confirmed it. */
   signOut(): Promise<{ ok: boolean }>;
-  /** Drops the session locally (memory and file) without the service. */
+  /** Drops the session locally (memory and file) without the service, and cancels a sign-in in progress. */
   forgetLocally(): void;
+}
+
+export interface ProviderControl {
+  /** Removes the Claude API key from memory and disk; a check in flight cannot restore it. */
+  forgetClaudeKey(): void;
+  /** Whether a Claude API key is still held. */
+  holdsClaudeKey(): boolean;
 }
 
 export interface DataServiceOptions {
@@ -51,6 +63,7 @@ export interface DataServiceOptions {
   journal: ExportJournal;
   runtime: RuntimeControl;
   identity: IdentityControl;
+  providers: ProviderControl;
   chooseExportDestination(): Promise<string | null>;
   chooseImportSource(): Promise<string | null>;
   clearBrowserProfile(): Promise<void>;
@@ -263,6 +276,8 @@ export class DataService {
       let serverRevocation: ServerRevocation | undefined;
       if (categories.includes(IDENTITY_SESSION)) {
         if (!this.options.identity.holdsSession()) {
+          // Nothing to revoke, but a sign-in in progress must not recreate it.
+          this.options.identity.forgetLocally();
           serverRevocation = 'not-signed-in';
         } else {
           let confirmed = false;
@@ -284,6 +299,14 @@ export class DataService {
 
       return this.withRuntimeStopped(async () => {
         try {
+          if (categories.includes(CLAUDE_KEY_VAULT)) {
+            try {
+              this.options.providers.forgetClaudeKey();
+            } catch (error) {
+              // The file deletion below retries; the check after it decides.
+              this.options.logger.warn(`data: the Claude API key could not be cleared (${(error as NodeJS.ErrnoException).code ?? 'error'})`);
+            }
+          }
           const report = await deleteCategories({
             policy,
             roots: this.options.roots,
@@ -292,6 +315,9 @@ export class DataService {
             clearBrowserProfile: this.options.clearBrowserProfile,
             notes,
           });
+          if (categories.includes(CLAUDE_KEY_VAULT) && this.options.providers.holdsClaudeKey()) {
+            return { ok: false as const, reason: 'The Claude API key could not be removed and is still stored. Remove it in Providers.' };
+          }
           this.options.logger.info(`data: deleted ${categories.join(', ')}`);
           const view: DeleteReportView = {
             removed: report.removed.map((entry) => ({ ...entry })),

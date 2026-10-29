@@ -636,6 +636,7 @@ describe('data policy: provider categories', () => {
       journal: new ExportJournal(userData),
       runtime: { stop: async () => undefined, start: async () => undefined, activeTasks: () => 0 },
       identity: { principal: async () => null, holdsSession: () => false, signOut: async () => ({ ok: true }), forgetLocally: () => undefined },
+      providers: { forgetClaudeKey: () => undefined, holdsClaudeKey: () => false },
       chooseExportDestination: async () => null,
       chooseImportSource: async () => null,
       clearBrowserProfile: async () => undefined,
@@ -655,5 +656,118 @@ describe('data policy: provider categories', () => {
     expect(() => parsePolicy(JSON.stringify(raw))).toThrow(/unknown field globs/);
     entry.location = { store: 'cloud', entry: 'x' };
     expect(() => parsePolicy(JSON.stringify(raw))).toThrow(/store/);
+  });
+});
+
+describe('a known rejection survives an offline check (review R06)', () => {
+  it.each([['os-backed', 'gnome_libsecret'], ['memory-only', 'basic_text']])('%s: rejected then unreachable stays rejected and unauthorized; verified then unreachable stays authorized', async (_storage, backend) => {
+    const outcomes: VerifyOutcome[] = ['rejected', 'unreachable', 'verified', 'unreachable'];
+    const { service: s } = service({ vault: vault(backend), verify: async () => outcomes.shift()! });
+    await s.setClaudeKey(KEY);
+    const rejected = await s.verifyClaudeKey();
+    expect(rejected).toMatchObject({ ok: false, reason: CLAUDE_REASONS.rejected, status: { claude: { state: 'rejected' } } });
+    // Rejected → unreachable: the rejection stands.
+    const offline = await s.verifyClaudeKey();
+    expect(offline).toMatchObject({ ok: false, reason: CLAUDE_REASONS.unreachableRejected, status: { claude: { state: 'rejected' } } });
+    expect(inferenceRoutes(offline.status)['claude-api-key'].authorized).toBe(false);
+    expect(s.vault.load()?.state).toBe('rejected');
+    // A successful check clears it.
+    const verified = await s.verifyClaudeKey();
+    expect(verified).toMatchObject({ ok: true, status: { claude: { state: 'verified' } } });
+    expect(inferenceRoutes(verified.status)['claude-api-key'].authorized).toBe(true);
+    // Verified → unreachable: a never-rejected key keeps its route.
+    const offlineAgain = await s.verifyClaudeKey();
+    expect(offlineAgain).toMatchObject({ ok: false, reason: CLAUDE_REASONS.unreachable, status: { claude: { state: 'unreachable' } } });
+    expect(inferenceRoutes(offlineAgain.status)['claude-api-key'].authorized).toBe(true);
+  });
+
+  it('replacing a rejected key gives a new unverified key, and an offline check of it stays authorized', async () => {
+    const outcomes: VerifyOutcome[] = ['rejected', 'unreachable'];
+    const { service: s } = service({ verify: async () => outcomes.shift()! });
+    await s.setClaudeKey(KEY);
+    await s.verifyClaudeKey();
+    const replaced = await s.setClaudeKey(OTHER_KEY);
+    expect(replaced).toMatchObject({ ok: true, status: { claude: { state: 'stored-unverified' } } });
+    expect(inferenceRoutes(replaced.status)['claude-api-key'].authorized).toBe(true);
+    const offline = await s.verifyClaudeKey();
+    expect(offline).toMatchObject({ ok: false, reason: CLAUDE_REASONS.unreachable, status: { claude: { state: 'unreachable' } } });
+    expect(inferenceRoutes(offline.status)['claude-api-key'].authorized).toBe(true);
+  });
+});
+
+describe('Local data deletion of the Claude API key (review R03)', () => {
+  function dataService(control: { forgetClaudeKey(): void; holdsClaudeKey(): boolean }, userData: string): DataService {
+    return new DataService({
+      load: loadShippedPolicy(),
+      roots: governedRoots(userData, path.join(userData, 'logs')),
+      journal: new ExportJournal(userData),
+      runtime: { stop: async () => undefined, start: async () => undefined, activeTasks: () => 0 },
+      identity: { principal: async () => null, holdsSession: () => false, signOut: async () => ({ ok: true }), forgetLocally: () => undefined },
+      providers: control,
+      chooseExportDestination: async () => null,
+      chooseImportSource: async () => null,
+      clearBrowserProfile: async () => undefined,
+      appVersion: '0',
+      runtimeVersion: '0',
+      logger: recordingLogger(),
+    });
+  }
+
+  it.each([['memory-only', 'basic_text'], ['os-backed', 'gnome_libsecret']])('%s: removes the key, and no later check uses it', async (storage, backend) => {
+    const userData = tempDir('providers-delete');
+    const v = vault(backend, providersDir(userData));
+    expect(v.storage).toBe(storage);
+    const checked: string[] = [];
+    const { service: s } = service({
+      vault: v,
+      verify: async (key) => {
+        checked.push(key);
+        return 'verified';
+      },
+    });
+    await s.setClaudeKey(KEY);
+    const result = await dataService(s, userData).deleteData(['claude-key-vault']);
+    expect(result).toMatchObject({ ok: true, delete: { removed: [{ category: 'claude-key-vault', filesRemaining: 0 }] } });
+    expect(v.load()).toBeNull();
+    expect(fs.existsSync(v.filePath)).toBe(false);
+    const status = await s.getStatus();
+    expect(status.claude.state).toBe('not-configured');
+    expect(inferenceRoutes(status)['claude-api-key'].authorized).toBe(false);
+    await expect(s.verifyClaudeKey()).resolves.toMatchObject({ ok: false, reason: CLAUDE_REASONS.noKey });
+    expect(checked).toEqual([]);
+  });
+
+  it.each([['memory-only', 'basic_text'], ['os-backed', 'gnome_libsecret']])('%s: a check in flight cannot bring the key back', async (_storage, backend) => {
+    const userData = tempDir('providers-delete-pending');
+    const v = vault(backend, providersDir(userData));
+    let entered!: () => void;
+    const reached = new Promise<void>((resolve) => (entered = resolve));
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const { service: s } = service({
+      vault: v,
+      verify: async () => {
+        entered();
+        await gate;
+        return 'verified';
+      },
+    });
+    await s.setClaudeKey(KEY);
+    const checking = s.verifyClaudeKey();
+    await reached;
+    const deleted = await dataService(s, userData).deleteData(['claude-key-vault']);
+    expect(deleted.ok).toBe(true);
+    release();
+    await expect(checking).resolves.toMatchObject({ ok: false, reason: CLAUDE_REASONS.changed, status: { claude: { state: 'not-configured' } } });
+    expect(v.load()).toBeNull();
+    expect(fs.existsSync(v.filePath)).toBe(false);
+    // A key entered again afterwards is a new, ordinary key.
+    await expect(s.setClaudeKey(KEY)).resolves.toMatchObject({ ok: true, status: { claude: { state: 'stored-unverified' } } });
+  });
+
+  it('does not report completion while the key is still held', async () => {
+    const userData = tempDir('providers-delete-held');
+    const result = await dataService({ forgetClaudeKey: () => undefined, holdsClaudeKey: () => true }, userData).deleteData(['claude-key-vault']);
+    expect(result).toEqual({ ok: false, reason: 'The Claude API key could not be removed and is still stored. Remove it in Providers.' });
   });
 });

@@ -3,7 +3,9 @@
  *
  * Fails below 4.5:1 (text) or 3:1 (non-text), naming the pair and state.
  * Writes `evidence/contrast-primitives.json` when it is missing or when
- * `INQUELLO_WRITE_EVIDENCE=1`; otherwise the committed file must match.
+ * `INQUELLO_WRITE_EVIDENCE=1`; otherwise the committed file must match: every
+ * category, pair, token and field exactly, ratios within a tiny floating-point
+ * tolerance, and every recorded ratio must still meet its threshold.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -184,6 +186,44 @@ describe('primitive contrast pairs', () => {
   });
 });
 
+/**
+ * Relative tolerance for numbers in the evidence. Ratios are floating point:
+ * the last digits of a computed value can differ between platforms and Node
+ * versions (8.99580851260002 against 8.995808512600018), which says nothing
+ * about contrast. Any real change to a token moves a ratio far more than this.
+ */
+const NUMBER_TOLERANCE = 1e-9;
+
+/**
+ * Where the committed evidence differs from the computed one: every key, every
+ * array entry (so every category, pair and token) and every string exactly,
+ * numbers within `NUMBER_TOLERANCE`.
+ */
+function evidenceDifferences(committed: unknown, computed: unknown, where = '$'): string[] {
+  if (typeof committed === 'number' && typeof computed === 'number') {
+    return Math.abs(committed - computed) <= NUMBER_TOLERANCE * Math.max(1, Math.abs(computed)) ? [] : [`${where}: ${committed} is not ${computed}`];
+  }
+  if (Array.isArray(committed) && Array.isArray(computed)) {
+    if (committed.length !== computed.length) return [`${where}: ${committed.length} entries, not ${computed.length}`];
+    return committed.flatMap((entry, index) => evidenceDifferences(entry, computed[index], `${where}[${index}]`));
+  }
+  if (typeof committed === 'object' && committed !== null && typeof computed === 'object' && computed !== null && !Array.isArray(committed) && !Array.isArray(computed)) {
+    const a = committed as Record<string, unknown>;
+    const b = computed as Record<string, unknown>;
+    const keys = [...new Set([...Object.keys(a), ...Object.keys(b)])];
+    return keys.flatMap((key) => (key in a && key in b ? evidenceDifferences(a[key], b[key], `${where}.${key}`) : [`${where}.${key}: missing on one side`]));
+  }
+  return Object.is(committed, computed) ? [] : [`${where}: ${JSON.stringify(committed)} is not ${JSON.stringify(computed)}`];
+}
+
+/** Every recorded pair must meet the threshold for its kind, whatever the comparison above allows. */
+function evidenceBelowThreshold(document: { pairs: Array<{ id: string; kind: string; ratio: number; threshold: number; pass: boolean }> }): string[] {
+  return document.pairs.flatMap((pair) => {
+    const threshold = pair.kind === 'text' ? CONTRAST_THRESHOLDS.text : CONTRAST_THRESHOLDS['non-text'];
+    return pair.threshold === threshold && pair.ratio >= threshold && pair.pass ? [] : [`${pair.id}: ${pair.ratio} against ${threshold}`];
+  });
+}
+
 describe('contrast evidence', () => {
   it('matches evidence/contrast-primitives.json', () => {
     const expected = evidence();
@@ -191,6 +231,39 @@ describe('contrast evidence', () => {
       fs.mkdirSync(path.dirname(evidencePath), { recursive: true });
       fs.writeFileSync(evidencePath, expected);
     }
-    expect(fs.readFileSync(evidencePath, 'utf8'), 'evidence is stale: rerun with INQUELLO_WRITE_EVIDENCE=1 and commit it').toBe(expected);
+    const committed = JSON.parse(fs.readFileSync(evidencePath, 'utf8'));
+    expect(evidenceDifferences(committed, JSON.parse(expected)), 'evidence is stale: rerun with INQUELLO_WRITE_EVIDENCE=1 and commit it').toEqual([]);
+    expect(evidenceBelowThreshold(committed)).toEqual([]);
+  });
+
+  it('ignores floating-point noise but not a changed ratio, a missing pair or a ratio below its threshold (review R08)', () => {
+    const computed = JSON.parse(evidence());
+    const copy = () => JSON.parse(evidence());
+
+    const noise = copy();
+    for (const pair of noise.pairs) pair.ratio *= 1 + 4e-15;
+    noise.summary.minimum *= 1 - 4e-15;
+    expect(evidenceDifferences(noise, computed)).toEqual([]);
+
+    const changed = copy();
+    changed.pairs[0].ratio += 0.01;
+    expect(evidenceDifferences(changed, computed)).toEqual([`$.pairs[0].ratio: ${changed.pairs[0].ratio} is not ${computed.pairs[0].ratio}`]);
+
+    const missing = copy();
+    missing.pairs.pop();
+    expect(evidenceDifferences(missing, computed)).toEqual([`$.pairs: ${computed.pairs.length - 1} entries, not ${computed.pairs.length}`]);
+
+    const token = copy();
+    token.pairs[0].foreground.token = 'ink-300';
+    expect(evidenceDifferences(token, computed)).toEqual(['$.pairs[0].foreground.token: "ink-300" is not "action-primary-fg"']);
+
+    const below = copy();
+    const pair = below.pairs.find((entry: { kind: string }) => entry.kind === 'non-text');
+    pair.ratio = 2.99;
+    expect(evidenceBelowThreshold(below)).toEqual([`${pair.id}: 2.99 against 3`]);
+    // Even a computed result just under its threshold fails (no tolerance there).
+    const nearly = copy();
+    nearly.pairs[0].ratio = 4.5 - 1e-12;
+    expect(evidenceBelowThreshold(nearly)).toEqual([`${nearly.pairs[0].id}: ${4.5 - 1e-12} against 4.5`]);
   });
 });

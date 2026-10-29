@@ -10,6 +10,13 @@
  * record. A category that holds credentials can never be `included` (the
  * register refuses it), so credentials never leave.
  *
+ * Only regular files are exported, each read through a descriptor checked to
+ * be the regular file the inventory listed, inside its own governed root. A
+ * symbolic link, a hard link, a device or any other special file is never
+ * followed or copied, whatever its name says: the manifest lists it as
+ * omitted. So a link cannot carry an excluded credential or a file from
+ * outside Inquello's folders into an export.
+ *
  * Every export is recorded in the export journal. Any write failure removes
  * the partial export and leaves the journal unchanged.
  */
@@ -17,7 +24,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { takeInventory, type GovernedRoots, type HeldFile } from './inventory';
+import { isInside, takeInventory, type GovernedRoots, type HeldFile } from './inventory';
 import type { ExportJournal } from './journal';
 import type { DataPolicy, DataRoot } from './policy';
 
@@ -25,6 +32,9 @@ export const MANIFEST_FILE = 'manifest.json';
 export const FILES_DIR = 'files';
 export const MANIFEST_FORMAT = 'inquello-local-data-export';
 const CHUNK = 1024 * 1024;
+/** `O_NOFOLLOW` where the platform has it (not on Windows, where the lstat check stands alone). */
+const NO_FOLLOW = fs.constants.O_NOFOLLOW ?? 0;
+export const UNSAFE_SOURCE_REASON = 'Links, special files and files outside Inquello’s data folders are never exported';
 
 export interface Attribution {
   /** The signed-in principal, or null when signed out. */
@@ -86,13 +96,62 @@ export class ExportError extends Error {
   override name = 'ExportError';
 }
 
-/** Copies `source` to a new file `target` (mode 0600), hashing the bytes copied. */
-export async function copyWithDigest(source: string, target: string): Promise<{ size: number; sha256: string }> {
+/** A copy source that is not a regular file, or not inside the root it must stay in. */
+export class UnsafeSourceError extends Error {
+  override name = 'UnsafeSourceError';
+}
+
+/**
+ * Opens `source` for reading only if it is a regular file: never through a
+ * symbolic link (lstat, then `O_NOFOLLOW`), and the descriptor must be the
+ * same regular file that was checked. With `within`, the file's real path must
+ * also lie inside `within`'s real path, must be that same file, and must have
+ * no other hard link.
+ */
+async function openRegular(source: string, within?: string): Promise<fs.promises.FileHandle> {
+  const checked = await fs.promises.lstat(source);
+  if (!checked.isFile()) throw new UnsafeSourceError('not a regular file');
+  const handle = await fs.promises.open(source, fs.constants.O_RDONLY | NO_FOLLOW);
+  try {
+    const opened = await handle.stat();
+    if (!opened.isFile() || opened.dev !== checked.dev || opened.ino !== checked.ino) throw new UnsafeSourceError('the file changed while it was opened');
+    if (within !== undefined) {
+      if (opened.nlink !== 1) throw new UnsafeSourceError('the file has another hard link');
+      const real = await fs.promises.realpath(source);
+      if (!isInside(await fs.promises.realpath(within), real)) throw new UnsafeSourceError('the file is outside its data folder');
+      const resolved = await fs.promises.stat(real);
+      if (resolved.dev !== opened.dev || resolved.ino !== opened.ino) throw new UnsafeSourceError('the file changed while it was opened');
+    }
+    return handle;
+  } catch (error) {
+    await handle.close();
+    throw error;
+  }
+}
+
+/** Writes all of `chunk`, however many calls it takes; a write that makes no progress fails. */
+async function writeFully(output: fs.promises.FileHandle, chunk: Buffer): Promise<void> {
+  let offset = 0;
+  while (offset < chunk.length) {
+    const { bytesWritten } = await output.write(chunk, offset, chunk.length - offset, null);
+    if (!(bytesWritten > 0)) throw Object.assign(new Error('EIO: a write made no progress'), { code: 'EIO' });
+    offset += bytesWritten;
+  }
+}
+
+/**
+ * Copies `source` to a new file `target` (mode 0600), hashing the bytes
+ * copied. `source` must be a regular file (see `openRegular`; `within` adds
+ * the root boundary). Every chunk is written completely before it counts;
+ * an incomplete copy removes `target` and throws.
+ */
+export async function copyWithDigest(source: string, target: string, options: { within?: string } = {}): Promise<{ size: number; sha256: string }> {
   await fs.promises.mkdir(path.dirname(target), { recursive: true, mode: 0o700 });
   const hash = createHash('sha256');
-  const input = await fs.promises.open(source, 'r');
+  const input = await openRegular(source, options.within);
   try {
     const output = await fs.promises.open(target, 'wx', 0o600);
+    let complete = false;
     try {
       const buffer = Buffer.allocUnsafe(CHUNK);
       let size = 0;
@@ -100,14 +159,16 @@ export async function copyWithDigest(source: string, target: string): Promise<{ 
         const { bytesRead } = await input.read(buffer, 0, CHUNK, null);
         if (bytesRead === 0) break;
         const chunk = buffer.subarray(0, bytesRead);
+        await writeFully(output, chunk);
         hash.update(chunk);
-        await output.write(chunk);
         size += bytesRead;
       }
       await output.sync();
+      complete = true;
       return { size, sha256: hash.digest('hex') };
     } finally {
       await output.close();
+      if (!complete) await fs.promises.rm(target, { force: true });
     }
   } finally {
     await input.close();
@@ -163,8 +224,7 @@ export async function exportData(options: ExportOptions): Promise<ExportResult> 
   const { policy, roots, attribution } = options;
   const destination = path.resolve(options.destination);
   for (const root of Object.values(roots)) {
-    const rel = path.relative(path.resolve(root), destination);
-    if (rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel))) throw new ExportError('the export folder must be outside Inquello’s own data folders');
+    if (isInside(root, destination)) throw new ExportError('the export folder must be outside Inquello’s own data folders');
   }
   const inventory = takeInventory(policy, roots);
   const byCategory = new Map<string, HeldFile[]>();
@@ -181,17 +241,23 @@ export async function exportData(options: ExportOptions): Promise<ExportResult> 
       const held = byCategory.get(category.id) ?? [];
       if (category.export.mode === 'included' && category.enabled && !category.credentials) {
         const files: ManifestFile[] = [];
+        let unsafe = 0;
         for (const file of held) {
           let copied: { size: number; sha256: string };
           try {
-            copied = await copyWithDigest(file.abs, exportedFilePath(destination, file.root, file.rel));
+            copied = await copyWithDigest(file.abs, exportedFilePath(destination, file.root, file.rel), { within: roots[file.root] });
           } catch (error) {
+            if (error instanceof UnsafeSourceError || (error as NodeJS.ErrnoException).code === 'ELOOP') {
+              unsafe += 1;
+              continue;
+            }
             if ((error as NodeJS.ErrnoException).code === 'ENOENT' && !fs.existsSync(file.abs)) continue; // Removed since the inventory.
             throw error;
           }
           files.push({ root: file.root, path: file.rel, ...copied });
         }
         included.push({ category: category.id, label: category.label, files });
+        if (unsafe > 0) omissions.push({ category: category.id, label: `${category.label}: links and special files`, reason: UNSAFE_SOURCE_REASON, files: unsafe });
       } else {
         const reason =
           category.export.mode === 'excluded'

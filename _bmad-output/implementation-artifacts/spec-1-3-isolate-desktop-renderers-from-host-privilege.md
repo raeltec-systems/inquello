@@ -65,6 +65,17 @@ context:
 - Given the built fork, when `pnpm smoke` runs, then the `renderer-privileges` line shows no `require`/`process`/`module`, `inquello` exposes exactly `runtime.getStatus`, `getStatus` returns `ready`, and window-open, fetch and navigation are all blocked, and the run exits 0.
 - Given the renderer, when any channel other than a registered operation is invoked or a registered one gets an invalid payload, then no handler side effect occurs.
 
+### Review Findings
+
+Review pass 2026-10-29, HEAD `ace1ca2`, using `bmad-code-review`. Full evidence, ranking and limitations: [completed-story review](reviews/2026-10-29-epic-1/report.md). Owner selected “Leave as action items” on 2026-10-29. All patch findings remain open; no implementation fixes applied. Review status and sprint tracking synchronized.
+
+No new actionable finding assigned to this story in this pass. This is not exhaustive correctness or platform certification.
+
+#### Rejected
+
+- #2 Blocked-navigation probe list grows in production — `low`; likelihood Low, impact Low. The array is uncapped, but ordinary UI does not repeatedly attempt forbidden navigations. No present memory failure shown; adding production tracking guards for this rare negligible case is not warranted.
+- #3 Status reports expected runtime version — `low`; likelihood Low, impact Low. getStatus returns the stamp even after a mismatch, but VersionMismatchError includes the detected version in the failure/log path and the runtime is blocked. Adding another diagnostic state path has little present value.
+
 ## Implementation Notes
 
 - **Cloud machine (Linux, root):** dependencies are already installed and the fork is built. Do not commit machine paths. `desktop/.npmrc` pins D: caches, so `pnpm install` needs `electron_config_cache=/home/user/.cache/inquello/electron-cache pnpm install --frozen-lockfile --store-dir /home/user/.cache/inquello/pnpm-store --config.cache-dir=/home/user/.cache/inquello/pnpm-cache`. Node is v22 (engines warns; ignore). Chromium refuses to run as root without `--no-sandbox`, and that flag must never be used. Build as root with `pnpm run build`, then run the smoke as the existing non-root user: `runuser -u smoke -- bash -c 'cd /home/user/inquello/desktop && xvfb-run -a ./node_modules/electron/dist/electron . --smoke'`. Baseline before this story: 43 tests pass and the smoke exits 0. The bubblewrap stderr line is expected.

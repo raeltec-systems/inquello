@@ -29,6 +29,7 @@ import {
   Tabs,
   type MenuEntry,
 } from '../src/renderer/primitives';
+import { idFragment } from '../src/renderer/primitives/shared';
 
 const desktop = path.resolve(__dirname, '..');
 const importLogo = path.resolve(desktop, '..', '_bmad-output', 'planning-artifacts', 'ux-designs', 'ux-inquello-2026-10-26', 'imports', 'inquello-design-system', 'assets', 'logo');
@@ -194,6 +195,58 @@ describe('SegmentedControl', () => {
     render(<Controlled />);
     await user.click(screen.getByRole('radio', { name: 'Notes' }));
     expect(screen.getByRole('radio', { name: 'Notes' }).getAttribute('aria-checked')).toBe('true');
+  });
+});
+
+describe('ARIA ids for caller values (review R12)', () => {
+  const VALUES = ['a.b', 'a b', 'a_b', 'a-b', 'a_2e_b'];
+
+  it('idFragment gives distinct values distinct fragments', () => {
+    const fragments = VALUES.map(idFragment);
+    expect(new Set(fragments).size).toBe(VALUES.length);
+    expect(idFragment('a.b')).not.toBe(idFragment('a b'));
+    expect(idFragment('plain-Value9')).toBe('plain-Value9');
+  });
+
+  it('Tabs with values that used to collide get unique ids, each tab controlling its own panel', () => {
+    render(
+      <Tabs defaultValue="a.b">
+        <TabList label="Colliding views">
+          {VALUES.map((value) => (
+            <Tab key={value} value={value}>
+              {`Tab ${value}`}
+            </Tab>
+          ))}
+        </TabList>
+        {VALUES.map((value) => (
+          <TabPanel key={value} value={value}>
+            {`Panel ${value}`}
+          </TabPanel>
+        ))}
+      </Tabs>,
+    );
+    const ids = [...document.querySelectorAll('[id]')].map((element) => element.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const value of VALUES) {
+      const tab = screen.getByRole('tab', { name: `Tab ${value}` });
+      const panel = document.getElementById(tab.getAttribute('aria-controls')!)!;
+      expect(panel.textContent).toBe(`Panel ${value}`);
+      expect(document.getElementById(panel.getAttribute('aria-labelledby')!)).toBe(tab);
+    }
+  });
+
+  it('Menu radio options with values that used to collide get unique ids and labels', async () => {
+    const user = userEvent.setup();
+    render(<Menu label="Pick" items={[{ kind: 'radio', label: 'Choice', value: 'a.b', options: VALUES.map((value) => ({ value, label: `Option ${value}` })) }]} />);
+    await user.click(screen.getByRole('button', { name: 'Pick' }));
+    const options = screen.getAllByRole('menuitemradio');
+    expect(options).toHaveLength(VALUES.length);
+    expect(new Set(options.map((option) => option.id)).size).toBe(VALUES.length);
+    for (const [index, option] of options.entries()) {
+      expect(document.getElementById(option.getAttribute('aria-labelledby')!)!.textContent).toBe(`Option ${VALUES[index]}`);
+    }
+    const ids = [...document.querySelectorAll('[id]')].map((element) => element.id);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 });
 

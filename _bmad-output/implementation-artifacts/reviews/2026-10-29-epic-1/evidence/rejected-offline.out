@@ -1,0 +1,2 @@
+{"phase":"rejected","route":{"authorized":false,"reason":"Anthropic refused the stored Claude API key."}}
+{"phase":"offline-recheck","route":{"authorized":true,"reason":"A Claude API key is stored; Anthropic could not be reached to check it."}}

@@ -2,7 +2,7 @@
 title: 'Story 1.7: Navigate and identify work with accessible primitives'
 type: 'feature'
 created: '2026-10-28'
-status: 'done'
+status: 'in-progress'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '509a8a5c6abf7d34c02265af7c034708ca1319a7'
@@ -79,6 +79,20 @@ context:
 
 **Acceptance Criteria:**
 - Given `pnpm smoke`, when the specimen renders, then every rendered pair for the new primitives meets its threshold, focus is visible, and the run exits 0 with `design.ok: true`.
+
+### Review Findings
+
+Review pass 2026-10-29, HEAD `ace1ca2`, using `bmad-code-review`. Full evidence, ranking and limitations: [completed-story review](reviews/2026-10-29-epic-1/report.md). Owner selected “Leave as action items” on 2026-10-29. All patch findings remain open; no implementation fixes applied. Review status and sprint tracking synchronized.
+
+- [x] [Review][Patch] R12: Lossy ID normalization creates duplicate tab and menu ARIA references [desktop/src/renderer/primitives/shared.tsx:64] — BMAD medium; likelihood Low; impact Medium; change risk Low — recommendation: Schedule before dynamic values; cheap to fix sooner.
+  - Fixed in remediation (2026-10-29): idFragment escapes every character other than ASCII letters, digits and `-` (including `_`) as `_<hex>_`, so distinct values never share an id. Tests `ARIA ids for caller values (review R12)` in desktop/test/primitives-navigation.test.tsx: `a.b`, `a b`, `a_b` and others in Tabs and a Menu radio group, unique ids and correct aria-controls/aria-labelledby targets.
+
+Related shared verification issue: R08 in Story 1.6 covers this story’s contrast evidence too; count it once.
+
+#### Rejected
+
+- #8 Tabs retains removed selection — `low`; likelihood Low, impact Low. The uncontrolled selection stays stale if children remove that value. Existing caller has a fixed tab set; dynamic removal is not an accepted current flow. Automatic reconciliation adds state/registration complexity; revisit with that caller.
+- #9 SegmentedControl retains absent selection — `low`; likelihood Low, impact Low. Changed options can leave none checked, but the first option remains keyboard reachable and selection recovers on interaction. Current options are fixed. Additional reconciliation is not worth adding before a dynamic consumer exists.
 
 ## Implementation Notes
 

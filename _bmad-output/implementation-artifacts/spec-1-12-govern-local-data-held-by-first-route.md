@@ -2,7 +2,7 @@
 title: 'Story 1.12: Govern the local data actually held by the first private route'
 type: 'feature'
 created: '2026-10-28'
-status: 'done'
+status: 'in-progress'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'b4e9f3b660ce663528a1580ca5be2c75ee0fece7'
@@ -104,6 +104,24 @@ context:
 
 **Acceptance Criteria:**
 - Given the smoke, when it runs, then the runtime home is under userData, every held file is classified, and an export and reimport round trip reproduces the included categories with omissions declared. It exits 0.
+
+### Review Findings
+
+Review pass 2026-10-29, HEAD `ace1ca2`, using `bmad-code-review`. Full evidence, ranking and limitations: [completed-story review](reviews/2026-10-29-epic-1/report.md). Owner selected “Leave as action items” on 2026-10-29. All patch findings remain open; no implementation fixes applied. Review status and sprint tracking synchronized.
+
+- [x] [Review][Patch] R01: Export follows allowed history symlinks into excluded or outside files [desktop/src/main/data/export.ts:93] — BMAD high; likelihood Low; impact High; change risk Moderate — recommendation: Fix now.
+  - Fixed in remediation (2026-10-29): copyWithDigest opens a source only after lstat shows a regular file, with O_NOFOLLOW, and checks the descriptor is that file; export adds the root boundary (real path inside the root's real path, same inode, no second hard link). Links, hard links and special files are listed as omissions and never followed or copied. Tests `export sources (review R01)` in desktop/test/data-operations.test.ts: leaf links to excluded auth.json and to an outside marker, directory aliases (outside folder, identity folder), a hard link, normal files exported byte for byte, a file swapped for a link between check and open; no secret bytes in the destination.
+- [x] [Review][Patch] R07: Short writes can silently truncate exports and restored files [desktop/src/main/data/export.ts:104] — BMAD high; likelihood Low; impact High; change risk Low — recommendation: Fix now.
+  - Fixed in remediation (2026-10-29): the shared copy helper writes each chunk completely (loops on bytesWritten; a write without progress fails with EIO) before hashing/counting it, for export and import; an incomplete copy removes its target. Tests `short writes (review R07)` in desktop/test/data-operations.test.ts inject half writes and zero-progress writes for both export and import: complete output, or an explicit failure and no truncated restore.
+- [x] [Review][Patch] R15: Containment check mistakes a ..backup child for an outside path [desktop/src/main/data/export.ts:165] — BMAD low; likelihood Low; impact Low; change risk Low — recommendation: Optional small cleanup.
+  - Fixed in remediation (2026-10-29): isInside treats only `..` or `..`+separator as a parent segment (absolute relative paths stay outside), and export's destination check uses it. Tests `containment (review R15)` in desktop/test/data-operations.test.ts: root itself, ordinary child, `..backup` child, true sibling, another drive on Windows.
+
+Cross-story consequences: R02/R04 in Story 1.10b affect truthful identity deletion/cancellation; R03 in Story 1.13 affects memory-only provider-key deletion. These are counted at their origin story.
+
+#### Rejected
+
+- #21 Restart failure discards data result detail — `low`; likelihood Low, impact Low. Detailed result is lost, but the existing explicit message says the local data action ran and asks to restart Inquello (service.ts:123). It does not say nothing changed. Rare restart failure plus extra public result/recovery branching is not worth changing now.
+- #37 Runtime JSON differs from compiled-in policy wording — `low`; likelihood Low, impact Low. Mismatch is real, but strict validation/freeze remains and an actor modifying this unpackaged app can also modify its JS. No separate security boundary demonstrated. Reject a fix consisting of changing frozen intent; revisit embedding with already-deferred packaging.
 
 ## Implementation Notes
 

@@ -1,0 +1,298 @@
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.45
+   Compiling unicode-ident v1.0.22
+   Compiling libc v0.2.186
+   Compiling cfg-if v1.0.4
+   Compiling stable_deref_trait v1.2.1
+   Compiling memchr v2.8.1
+   Compiling serde_core v1.0.228
+   Compiling zmij v1.0.19
+   Compiling itoa v1.0.17
+   Compiling syn v2.0.117
+   Compiling getrandom v0.3.4
+   Compiling version_check v0.9.5
+   Compiling smallvec v1.15.1
+   Compiling generic-array v0.14.7
+   Compiling serde v1.0.228
+   Compiling typenum v1.20.0
+   Compiling writeable v0.6.2
+   Compiling serde_json v1.0.149
+   Compiling litemap v0.8.1
+   Compiling utf8_iter v1.0.4
+   Compiling pin-project-lite v0.2.16
+   Compiling find-msvc-tools v0.1.9
+   Compiling icu_properties_data v2.2.0
+   Compiling icu_normalizer_data v2.2.0
+   Compiling shlex v1.3.0
+   Compiling cc v1.2.55
+   Compiling autocfg v1.5.1
+   Compiling uuid v1.20.0
+   Compiling scopeguard v1.2.0
+   Compiling lock_api v0.4.14
+   Compiling num-traits v0.2.19
+   Compiling thiserror v2.0.18
+   Compiling crossbeam-utils v0.8.21
+   Compiling parking_lot_core v0.9.12
+   Compiling futures-sink v0.3.34
+   Compiling block-buffer v0.10.4
+   Compiling percent-encoding v2.3.2
+   Compiling once_cell v1.21.4
+   Compiling synstructure v0.13.2
+   Compiling futures-io v0.3.34
+   Compiling slab v0.4.12
+   Compiling futures-task v0.3.34
+   Compiling equivalent v1.0.2
+   Compiling futures-core v0.3.34
+   Compiling parking_lot v0.12.5
+   Compiling ring v0.17.14
+   Compiling allocator-api2 v0.2.21
+   Compiling yansi v1.0.1
+   Compiling diff v0.1.13
+   Compiling iana-time-zone v0.1.65
+   Compiling foldhash v0.2.0
+   Compiling bytes v1.12.1
+   Compiling cpufeatures v0.2.17
+   Compiling hashbrown v0.16.1
+   Compiling chrono v0.4.43
+   Compiling zerofrom-derive v0.1.6
+   Compiling yoke-derive v0.8.2
+   Compiling serde_derive v1.0.228
+   Compiling zerovec-derive v0.11.3
+   Compiling displaydoc v0.2.5
+   Compiling zerofrom v0.1.6
+   Compiling yoke v0.8.2
+   Compiling thiserror-impl v2.0.18
+   Compiling zerotrie v0.2.4
+   Compiling tracing-attributes v0.1.31
+   Compiling zerovec v0.11.6
+   Compiling tinystr v0.8.3
+   Compiling potential_utf v0.1.4
+   Compiling icu_locale_core v2.2.0
+   Compiling icu_collections v2.2.0
+   Compiling pretty_assertions v1.4.1
+   Compiling concurrent-queue v2.5.0
+   Compiling tracing-core v0.1.36
+   Compiling icu_provider v2.2.0
+   Compiling zeroize v1.8.2
+   Compiling parking v2.2.1
+   Compiling crc-catalog v2.4.0
+   Compiling hashbrown v0.17.1
+   Compiling log v0.4.34
+   Compiling icu_normalizer v2.2.0
+   Compiling icu_properties v2.2.0
+   Compiling tracing v0.1.44
+   Compiling indexmap v2.14.0
+   Compiling crc v3.4.0
+   Compiling event-listener v5.4.1
+   Compiling rustls-pki-types v1.14.0
+   Compiling idna_adapter v1.2.1
+   Compiling idna v1.1.0
+   Compiling hashlink v0.11.0
+   Compiling crossbeam-queue v0.3.12
+   Compiling getrandom v0.2.17
+   Compiling base64 v0.22.1
+   Compiling untrusted v0.9.0
+   Compiling tokio-macros v2.7.0
+   Compiling crypto-common v0.1.7
+   Compiling mio v1.2.0
+   Compiling socket2 v0.6.3
+   Compiling rustls v0.23.46
+   Compiling num-conv v0.2.0
+   Compiling pkg-config v0.3.32
+   Compiling time-core v0.1.8
+   Compiling vcpkg v0.2.15
+   Compiling powerfmt v0.2.0
+   Compiling deranged v0.5.5
+   Compiling rustls-webpki v0.103.16
+   Compiling libsqlite3-sys v0.37.0
+   Compiling time-macros v0.2.27
+   Compiling tokio v1.52.3
+   Compiling digest v0.10.7
+   Compiling inquello-domain v0.165.0 (/workspace/inquello/engine/codex-rs/inquello-domain)
+   Compiling futures-util v0.3.34
+   Compiling form_urlencoded v1.2.2
+   Compiling subtle v2.6.1
+   Compiling url v2.5.8
+   Compiling sha2 v0.10.9
+   Compiling time v0.3.47
+   Compiling either v1.15.0
+   Compiling tokio-stream v0.1.18
+   Compiling futures-intrusive v0.5.0
+   Compiling webpki-roots v1.0.10
+   Compiling spin v0.9.8
+   Compiling flume v0.12.0
+   Compiling sqlx-core v0.9.0
+   Compiling futures-executor v0.3.34
+   Compiling futures-channel v0.3.34
+   Compiling atoi v2.0.0
+   Compiling rustix v1.1.4
+   Compiling heck v0.5.0
+   Compiling dotenvy v0.15.7
+   Compiling hex v0.4.3
+   Compiling getrandom v0.4.2
+   Compiling linux-raw-sys v0.12.1
+   Compiling bitflags v2.13.1
+   Compiling fastrand v2.5.0
+   Compiling inquello-protocol v0.165.0 (/workspace/inquello/engine/codex-rs/inquello-protocol)
+   Compiling sqlx-macros-core v0.9.0
+   Compiling tempfile v3.27.0
+   Compiling sqlx-macros v0.9.0
+   Compiling sqlx-sqlite v0.9.0
+   Compiling sqlx v0.9.0
+   Compiling inquello-adapters v0.165.0 (/workspace/inquello/engine/codex-rs/inquello-adapters)
+    Finished `test` profile [unoptimized] target(s) in 21.18s
+     Running unittests src/lib.rs (/workspace/.inquello-tools/review-target/debug/deps/inquello_adapters-3df41a59a0b9f495)
+
+running 2 tests
+test sqlite::tests::version_gate_accepts_the_floor_and_later ... ok
+test sqlite::tests::version_gate_refuses_older_or_unparseable_versions ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/working_store.rs (/workspace/.inquello-tools/review-target/debug/deps/working_store-c464e6296f3869af)
+
+running 16 tests
+test linked_sqlite_meets_the_floor ... ok
+test invalid_operation_ids_are_rejected_and_nothing_is_written ... ok
+test relative_and_dot_dot_paths_into_a_writable_root_are_refused ... ok
+test initialize_creates_store_info_at_revision_one_with_applied_receipt ... ok
+test failure_between_state_and_receipt_rolls_back_both ... ok
+test port_refuses_a_stale_commit_without_writing ... ok
+test reopening_tightens_a_loosened_store_file ... ok
+test sqlite_older_than_the_floor_is_refused ... ok
+test reopen_keeps_store_id_revision_and_receipts ... ok
+test replay_returns_the_stored_receipt_without_reapplying ... ok
+test store_inside_an_agent_writable_root_is_refused_without_creating_it ... ok
+test stale_expected_revision_writes_nothing ... ok
+test symlink_into_a_writable_root_is_refused ... ok
+test reusing_an_operation_id_for_a_different_revision_is_rejected ... ok
+test store_files_are_owner_only ... ok
+test store_uses_wal_in_a_separate_file ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running unittests src/lib.rs (/workspace/.inquello-tools/review-target/debug/deps/inquello_domain-103f5075d8429134)
+
+running 33 tests
+test authorization::tests::a_shared_resource_needs_an_exact_active_grant ... ok
+test authorization::tests::a_policy_without_an_administrator_is_refused ... ok
+test authorization::tests::a_guest_role_kind_rejects_the_policy_naming_the_kind ... ok
+test authorization::tests::a_team_grant_reaches_audit_team_roles_only ... ok
+test authorization::tests::an_engagement_resource_also_needs_engagement_membership ... ok
+test authorization::tests::an_unknown_private_task_gets_the_same_reason_as_a_forbidden_one ... ok
+test authorization::tests::an_unknown_shared_resource_gets_the_same_reason_as_a_forbidden_one ... ok
+test authorization::tests::a_valid_policy_parses_and_round_trips_canonically ... ok
+test authorization::tests::deny_reasons_are_the_fixed_set ... ok
+test authorization::tests::bindings_to_roles_the_policy_lacks_grant_nothing ... ok
+test authorization::tests::another_creators_private_task_is_never_reachable ... ok
+test authorization::tests::external_audit_attributes_are_route_not_available ... ok
+test authorization::tests::manage_membership_never_reaches_a_resource ... ok
+test authorization::tests::resource_checks_still_require_the_workspace_checks_first ... ok
+test authorization::tests::only_audit_team_and_reviewer_kinds_exist ... ok
+test authorization::tests::self_elevation_without_manage_membership_is_role_lacks_action ... ok
+test authorization::tests::unknown_actions_are_refused_not_ignored ... ok
+test authorization::tests::the_creator_reaches_their_own_private_task ... ok
+test authorization::tests::workspace_actions_need_session_kind_membership_and_a_permitting_role ... ok
+test authorization::tests::workspace_kinds_and_actions_parse_closed ... ok
+test commands::tests::backend_failure_at_commit_is_surfaced_and_nothing_is_persisted ... ok
+test commands::tests::get_store_info_on_empty_store_is_none ... ok
+test authorization::tests::structural_errors_are_refused ... ok
+test commands::tests::initialize_creates_store_info_at_revision_one_with_applied_receipt ... ok
+test commands::tests::initializing_an_initialized_store_at_its_revision_is_rejected ... ok
+test commands::tests::invalid_operation_id_is_rejected_before_the_port_is_called ... ok
+test commands::tests::port_revision_conflict_at_commit_maps_to_domain_conflict ... ok
+test commands::tests::replay_returns_stored_receipt_without_reapplying ... ok
+test commands::tests::stale_expected_revision_writes_nothing ... ok
+test commands::tests::reusing_operation_id_for_a_different_revision_is_a_conflict ... ok
+test model::tests::command_kind_and_status_round_trip ... ok
+test model::tests::operation_id_accepts_printable_ids_up_to_the_limit ... ok
+test model::tests::operation_id_rejects_empty_long_and_non_printable_ids ... ok
+
+test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/capability_register.rs (/workspace/.inquello-tools/review-target/debug/deps/capability_register-d1eee5a1497f07d2)
+
+running 14 tests
+test an_unreadable_data_policy_blocks ... ok
+test duplicate_ids_and_empty_fields_are_rejected ... ok
+test missing_or_pending_evidence_cannot_support_enablement ... ok
+test failed_evidence_rejects_the_register_naming_the_entry ... ok
+test passing_synthetic_evidence_is_synthetic_only ... ok
+test committed_data_policy_names_every_enabled_rule ... ok
+test no_capability_is_real_data_eligible_while_the_data_policy_has_blockers ... ok
+test real_data_claim_needs_passing_negative_authorization ... ok
+test cross_check_fails_on_an_unknown_rule_with_a_real_data_eligible_capability ... ok
+test synthetic_evidence_alone_never_yields_real_data ... ok
+test seed_register_has_only_the_synthetic_transport_entry ... ok
+test seed_evidence_references_exist_in_the_repository ... ok
+test unknown_id_is_disabled ... ok
+test unknown_fields_are_rejected ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/dependency_direction.rs (/workspace/.inquello-tools/review-target/debug/deps/dependency_direction-7b2c3f8cd1e4ff89)
+
+running 3 tests
+test forbidden_list_covers_the_boundary ... ok
+test violations_are_found_at_any_depth ... ok
+test domain_reaches_no_forbidden_crate ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
+
+     Running tests/inventory_map.rs (/workspace/.inquello-tools/review-target/debug/deps/inventory_map-0a069f81708f8238)
+
+running 11 tests
+test an_enabled_row_needs_an_enabled_register_entry ... ok
+test a_story_absent_from_epics_is_an_invalid_mapping ... ok
+test an_unaccounted_item_is_named ... ok
+test metric_aliases_are_not_inventory_items ... ok
+test canonical_inventory_has_79_c_and_20_e_items ... ok
+test only_story_sections_are_read ... ok
+test range_expansion_covers_every_item_between_endpoints ... ok
+test unknown_ids_are_invalid_mappings ... ok
+test unmapped_items_are_deferred_unmet_with_a_reason ... ok
+test documented_ranges_expand_to_every_item ... ok
+inventory map: 99 items, 0 deferred-unmet (unmet scope, disabled):
+test committed_map_matches_the_planning_documents ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/lib.rs (/workspace/.inquello-tools/review-target/debug/deps/inquello_protocol-18093e9347bcef16)
+
+running 1 test
+test values::tests::decimal_strings_are_canonical ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/fixtures.rs (/workspace/.inquello-tools/review-target/debug/deps/fixtures-fdbc9f4e77e02653)
+
+running 8 tests
+test credential_debug_output_is_redacted ... ok
+test envelopes_refuse_unknown_fields_commands_and_actor_claims ... ok
+test error_fixture_lists_every_kind_with_its_fixed_message ... ok
+test every_fixture_file_is_covered ... ok
+test sc2_fixtures_round_trip ... ok
+test sc1_fixtures_round_trip ... ok
+test workspace_wire_types_refuse_guest_roles_unknown_commands_and_actor_claims ... ok
+test workspace_fixtures_round_trip ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests inquello_adapters
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests inquello_domain
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests inquello_protocol
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

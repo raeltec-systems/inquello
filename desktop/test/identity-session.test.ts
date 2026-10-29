@@ -8,8 +8,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 
+import { DataService, ExportJournal, governedRoots, loadShippedPolicy } from '../src/main/data';
+import { ServiceError } from '../src/main/identity/service-client';
 import { SESSION_FILE, CredentialVault } from '../src/main/identity/vault';
 import { IdentitySession, REASONS, toRendererResult, toRendererStatus, type IdentitySessionOptions } from '../src/main/identity/session';
 import type { ConfigResult } from '../src/main/identity/config';
@@ -17,6 +19,7 @@ import { CONFIG, FakeIssuer, FakeService, fakeOpener, fakeSafeStorage, httpGet, 
 import { recordingLogger, removeTempDirs, tempDir, waitFor } from './helpers';
 
 afterAll(() => removeTempDirs());
+afterEach(() => vi.restoreAllMocks());
 
 interface World {
   service: FakeService;
@@ -214,8 +217,21 @@ describe('refresh', () => {
     const stored = fileText(w.dir);
     expect(stored.includes(oldAccess)).toBe(false);
     // The session uses the newest pair; the old refresh credential is rotated out.
-    expect(w.service.current()!.rotated.has(oldRefresh)).toBe(true);
+    const current = w.service.current()!;
+    expect(current.rotated.has(oldRefresh)).toBe(true);
     expect(await session.getStatus()).toMatchObject({ identity: { state: 'signed-in' } });
+    // Review R09: the vault on disk, decrypted by a fresh vault, holds exactly the new pair.
+    const saved = new CredentialVault({ safeStorage: fakeSafeStorage('gnome_libsecret'), platform: 'linux', dir: w.dir }).load();
+    expect(saved).toMatchObject({ accessCredential: current.access, refreshCredential: current.refresh, pendingLogout: null });
+    // A fresh session (a restart) uses the saved record: the service accepts its
+    // access credential, and its refresh is the current one, not a reused one.
+    const restarted = w.make();
+    const calls = w.service.calls.length;
+    expect(await restarted.getStatus()).toMatchObject({ identity: { state: 'signed-in' }, sharedService: 'available' });
+    expect(w.service.calls.slice(calls)).toEqual(['session']);
+    expect(await restarted.refreshNow()).toBe(true);
+    expect(w.service.current()!.revoked).toBe(false);
+    expect(await restarted.getStatus()).toMatchObject({ identity: { state: 'signed-in' }, sharedService: 'available' });
   });
 
   it('refreshes before a protected request when the access credential is about to expire', async () => {
@@ -362,6 +378,219 @@ describe('logout', () => {
       ['logout-1', '1'],
       ['logout-2', '2'],
     ]);
+  });
+});
+
+describe('logout when the refresh cannot be attempted (review R02)', () => {
+  it('a first unauthorized attempt with an unavailable refresh stays pending with its operation ID, then the retry confirms it', async () => {
+    let now = Date.now();
+    const w = world('gnome_libsecret', { now: () => now });
+    const session = w.make({ operationId: () => 'logout-op-r02' });
+    await session.signIn();
+    const command = w.service.sessionCommand.bind(w.service);
+    w.service.sessionCommand = async (access, envelope) => {
+      // The access credential expires after the logout was prepared, before the
+      // command arrives, and the refresh that follows cannot be attempted.
+      now = w.service.current()!.accessExpiresAt + 1;
+      w.service.refreshOutcome = 'dependency';
+      w.service.sessionCommand = command;
+      return command(access, envelope);
+    };
+    const first = await session.signOut();
+    expect(first).toMatchObject({ ok: false, reason: REASONS.logoutPending, status: { identity: { state: 'blocked', reason: REASONS.logoutPending }, sharedService: 'unavailable' } });
+    // Nothing was revoked, and the service still accepts the family.
+    expect(w.service.current()!.revoked).toBe(false);
+    expect(w.service.revokedWith).toEqual([]);
+    expect(session.holdsSession()).toBe(true);
+    // The operation survives a restart with its ID.
+    const restarted = w.make({ operationId: () => 'logout-op-other' });
+    expect(restarted.snapshot().identity).toEqual({ state: 'blocked', reason: REASONS.logoutPending });
+    // The retry refreshes, resends the same operation, and the service confirms it.
+    const second = await restarted.signOut();
+    expect(second).toMatchObject({ ok: true, status: { identity: { state: 'signed-out' } } });
+    expect(w.service.logoutEnvelopes.map((e) => e.operation_id)).toEqual(['logout-op-r02', 'logout-op-r02']);
+    expect(w.service.current()!.revoked).toBe(true);
+    expect(fs.existsSync(path.join(w.dir, SESSION_FILE))).toBe(false);
+  });
+
+  it('an expired access credential with an unavailable refresh while preparing is not reported as signed out', async () => {
+    let now = Date.now();
+    const w = world('gnome_libsecret', { now: () => now });
+    const session = w.make();
+    await session.signIn();
+    now = w.service.current()!.accessExpiresAt + 1;
+    const refresh = w.service.refresh.bind(w.service);
+    w.service.refresh = async () => {
+      throw new ServiceError('dependency_unavailable', true, 503);
+    };
+    const result = await session.signOut();
+    expect(result).toMatchObject({ ok: false, reason: REASONS.signOutUnavailable, status: { identity: { state: 'signed-in' } } });
+    expect(w.service.current()!.revoked).toBe(false);
+    expect(session.holdsSession()).toBe(true);
+    // Once the refresh works again, sign-out completes normally.
+    w.service.refresh = refresh;
+    expect(await session.signOut()).toMatchObject({ ok: true, status: { identity: { state: 'signed-out' } } });
+    expect(w.service.current()!.revoked).toBe(true);
+  });
+
+  it('local data deletion then says revocation was not confirmed', async () => {
+    let now = Date.now();
+    const w = world('gnome_libsecret', { now: () => now });
+    const session = w.make();
+    await session.signIn();
+    const command = w.service.sessionCommand.bind(w.service);
+    w.service.sessionCommand = async (access, envelope) => {
+      now = w.service.current()!.accessExpiresAt + 1;
+      w.service.refreshOutcome = 'dependency';
+      w.service.sessionCommand = command;
+      return command(access, envelope);
+    };
+    const userData = tempDir('identity-data');
+    const load = loadShippedPolicy();
+    const data = new DataService({
+      load,
+      roots: governedRoots(userData, path.join(userData, 'logs')),
+      journal: new ExportJournal(userData),
+      runtime: { stop: async () => undefined, start: async () => undefined, activeTasks: () => 0 },
+      identity: {
+        principal: async () => null,
+        holdsSession: () => session.holdsSession(),
+        signOut: async () => ({ ok: (await session.signOut()).ok }),
+        forgetLocally: () => session.forgetLocally(),
+      },
+      providers: { forgetClaudeKey: () => undefined, holdsClaudeKey: () => false },
+      chooseExportDestination: async () => null,
+      chooseImportSource: async () => null,
+      clearBrowserProfile: async () => undefined,
+      appVersion: '0',
+      runtimeVersion: '0',
+      logger: recordingLogger(),
+    });
+    const result = await data.deleteData(['identity-session']);
+    if (!result.ok) throw new Error(result.reason);
+    expect(result.delete.serverRevocation).toBe('not-confirmed');
+    expect(result.delete.removed[0]!.note).toMatch(/could not confirm the revocation/);
+    expect(w.service.current()!.revoked).toBe(false);
+    expect(session.holdsSession()).toBe(false);
+  });
+});
+
+describe('local removal during a sign-in (review R04)', () => {
+  /** Holds the first bootstrap until released. */
+  function gateBootstrap(w: World): { reached: Promise<void>; release(): void; restore(): void } {
+    const bootstrap = w.service.bootstrap.bind(w.service);
+    let entered!: () => void;
+    const reached = new Promise<void>((resolve) => (entered = resolve));
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    w.service.bootstrap = async (request) => {
+      w.service.bootstrap = bootstrap;
+      entered();
+      await gate;
+      return bootstrap(request);
+    };
+    return { reached, release, restore: () => (w.service.bootstrap = bootstrap) };
+  }
+
+  it.each([
+    ['local removal', (session: IdentitySession) => session.forgetLocally()],
+    ['sign-out', (session: IdentitySession) => void session.signOut()],
+  ])('%s: the late result is never installed or saved, and its server session is revoked', async (_label, remove) => {
+    const w = world();
+    const session = w.make();
+    const gate = gateBootstrap(w);
+    const pending = session.signIn();
+    await gate.reached;
+    expect(session.snapshot().identity).toEqual({ state: 'signing-in' });
+    remove(session);
+    expect(session.snapshot().identity).toEqual({ state: 'signed-out' });
+    gate.release();
+    expect(await pending).toMatchObject({ ok: false, reason: REASONS.cancelled, status: { identity: { state: 'signed-out' } } });
+    expect(session.holdsSession()).toBe(false);
+    expect(fs.existsSync(path.join(w.dir, SESSION_FILE))).toBe(false);
+    expect(w.make().snapshot().identity).toEqual({ state: 'signed-out' });
+    expect(w.service.calls).toContain('abandon');
+    expect(w.service.current()!.revoked).toBe(true);
+    // A deliberately new sign-in afterwards works.
+    expect(await session.signIn()).toMatchObject({ ok: true, status: { identity: { state: 'signed-in' } } });
+    expect(w.make().snapshot().identity).toMatchObject({ state: 'signed-in' });
+    expect(w.service.current()!.revoked).toBe(false);
+  });
+
+  it('a new sign-in started after the removal wins over the old one finishing late', async () => {
+    const w = world();
+    const session = w.make();
+    const gate = gateBootstrap(w);
+    const old = session.signIn();
+    await gate.reached;
+    session.forgetLocally();
+    const fresh = await session.signIn();
+    expect(fresh).toMatchObject({ ok: true, status: { identity: { state: 'signed-in' } } });
+    const kept = w.service.current()!;
+    gate.release();
+    expect(await old).toMatchObject({ ok: false, reason: REASONS.cancelled, status: { identity: { state: 'signed-in' } } });
+    // The old sign-in's session is revoked; the new one is kept and saved.
+    expect(w.service.sessions).toHaveLength(2);
+    expect(w.service.sessions.find((s) => s.sessionId !== kept.sessionId)!.revoked).toBe(true);
+    expect(kept.revoked).toBe(false);
+    const saved = new CredentialVault({ safeStorage: fakeSafeStorage('gnome_libsecret'), platform: 'linux', dir: w.dir }).load();
+    expect(saved).toMatchObject({ sessionId: kept.sessionId, accessCredential: kept.access });
+  });
+});
+
+describe('vault save failure (review R05)', () => {
+  /** Makes the real vault's writes into `dir` fail with ENOSPC while `failing()` holds. */
+  function failWrites(dir: string, failing: () => boolean): void {
+    const real = fs.writeFileSync;
+    vi.spyOn(fs, 'writeFileSync').mockImplementation((...args: Parameters<typeof real>) => {
+      if (failing() && String(args[0]).startsWith(dir)) throw Object.assign(new Error('ENOSPC: no space left on device'), { code: 'ENOSPC' });
+      return real(...args);
+    });
+  }
+
+  it('a failed save after rotation removes the stale record, says memory-only, and a restart retries nothing stale', async () => {
+    const w = world();
+    const session = w.make();
+    await session.signIn();
+    const old = w.service.current()!.refresh;
+    let failing = true;
+    failWrites(w.dir, () => failing);
+    expect(await session.refreshNow()).toBe(true);
+    expect(w.service.current()!.refresh).not.toBe(old);
+    expect(session.snapshot()).toMatchObject({ identity: { state: 'signed-in' }, credentialStorage: 'memory-only' });
+    expect(fs.existsSync(path.join(w.dir, SESSION_FILE))).toBe(false);
+    expect(w.logger.messages.join('\n')).toMatch(/could not be saved/);
+    // A restart finds no stale credential to retry, so the family is not burnt by reuse detection.
+    const restarted = w.make();
+    expect(restarted.snapshot().identity).toEqual({ state: 'signed-out' });
+    await restarted.getStatus();
+    expect(w.service.current()!.revoked).toBe(false);
+    // The running session keeps working; the next successful save is reported again.
+    failing = false;
+    expect(await session.refreshNow()).toBe(true);
+    expect(session.snapshot().credentialStorage).toBe('os-backed');
+    const saved = new CredentialVault({ safeStorage: fakeSafeStorage('gnome_libsecret'), platform: 'linux', dir: w.dir }).load();
+    expect(saved).toMatchObject({ refreshCredential: w.service.current()!.refresh });
+  });
+
+  it('a failed save of a pending logout leaves nothing a restart could resurrect, and the retry still finishes', async () => {
+    const w = world();
+    const session = w.make({ operationId: () => 'logout-op-save' });
+    await session.signIn();
+    w.service.loseLogoutResponse = true;
+    let failing = true;
+    failWrites(w.dir, () => failing);
+    const result = await session.signOut();
+    expect(result).toMatchObject({ ok: false, reason: REASONS.logoutPending, status: { identity: { state: 'blocked' }, credentialStorage: 'memory-only' } });
+    expect(fs.existsSync(path.join(w.dir, SESSION_FILE))).toBe(false);
+    // A restart does not come back signed in with the session the user asked to end.
+    expect(w.make().snapshot().identity).toEqual({ state: 'signed-out' });
+    failing = false;
+    // This run still retries the same operation and finishes.
+    expect((await session.getStatus()).identity).toEqual({ state: 'signed-out' });
+    expect(w.service.logoutEnvelopes.map((e) => e.operation_id)).toEqual(['logout-op-save', 'logout-op-save']);
+    expect(w.service.current()!.revoked).toBe(true);
+    expect(session.snapshot().credentialStorage).toBe('os-backed');
   });
 });
 

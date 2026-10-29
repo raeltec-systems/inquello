@@ -2,7 +2,7 @@
 title: 'Story 1.13: Keep provider credentials separate and protected'
 type: 'feature'
 created: '2026-10-28'
-status: 'done'
+status: 'in-progress'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '31617fa03bf6bb73b37217f7487bccb0c022c9dc'
@@ -105,6 +105,22 @@ Both appear in one provider status, separate from identity. The runtime child ge
 
 **Acceptance Criteria:**
 - Given the smoke with keyring, when it runs, then both routes connect and disconnect without changing identity, the sentinel appears nowhere outside the vault and keyring, and the run exits 0 with `providers.ok: true`.
+
+### Review Findings
+
+Review pass 2026-10-29, HEAD `ace1ca2`, using `bmad-code-review`. Full evidence, ranking and limitations: [completed-story review](reviews/2026-10-29-epic-1/report.md). Owner selected “Leave as action items” on 2026-10-29. All patch findings remain open; no implementation fixes applied. Review status and sprint tracking synchronized.
+
+- [x] [Review][Patch] R03: Local data deletion leaves a memory-only Claude key usable [desktop/src/main/data/service.ts:285] — BMAD medium; likelihood Medium; impact High; change risk Low–moderate — recommendation: Fix now.
+  - Fixed in remediation (2026-10-29): DataService takes a provider control; deleting the Claude API key category calls ProviderService.forgetClaudeKey (clears memory-only and file, bumps a generation so a check in flight cannot restore or relabel the key) and fails rather than report completion while a key is still held; wired in main. Tests `Local data deletion of the Claude API key (review R03)` in desktop/test/providers-units.test.ts, memory-only and OS-backed, with a pending verification.
+- [x] [Review][Patch] R06: Offline recheck makes a known-rejected Claude key authorized [desktop/src/main/providers/index.ts:149] — BMAD medium; likelihood Medium; impact Medium; change risk Low — recommendation: Fix now.
+  - Fixed in remediation (2026-10-29): a check that cannot reach Anthropic keeps a rejected key `rejected` (route not authorized) until a successful check or a new key. Tests `a known rejection survives an offline check (review R06)` in desktop/test/providers-units.test.ts: rejected→unreachable, verified→unreachable, replacement.
+- [x] [Review][Defer] D03: Claude action completion waits for an unrelated Codex status request [desktop/src/main/providers/index.ts:91] — BMAD maybe-false; likelihood Unknown; impact Medium (unverified); change risk Moderate — deferred: Leave unless a shipped-runtime stall is reproduced; Reproduce with the shipped runtime and a real keyring failure, recording request completion/termination behavior; a deliberately hung fake alone does not establish production likelihood.
+
+R01 in Story 1.12 also applies to provider-secret exclusion from export; count it once.
+
+#### Rejected
+
+- #24 Malformed Codex account becomes connected — `false`; likelihood Low, impact None demonstrated. The pinned trusted runtime serializes account/read from its typed, tagged Account enum (including apiKey/chatgpt and other provider variants), not arbitrary {}. No current caller emits the alleged malformed state; inventing an untrusted runtime contradicts the accepted transport boundary. There is no demonstrated current authorization bypass.
 
 ## Implementation Notes
 
