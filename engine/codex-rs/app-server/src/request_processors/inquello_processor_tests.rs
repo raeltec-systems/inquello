@@ -1152,8 +1152,10 @@ fn exec_params(
         workspace_policy: policy,
         task_id: task_id.to_string(),
         task_folder: folder.to_string(),
-        command: command.iter().map(|part| part.to_string()).collect(),
+        command: command.iter().map(ToString::to_string).collect(),
         timeout_ms: Some(5_000),
+        permission_request_id: None,
+        sandbox_probe_target: None,
     }
 }
 
@@ -1340,7 +1342,10 @@ async fn a_permitted_full_access_profile_states_no_filesystem_limits() {
         )
         .await
         .unwrap_or_else(|error| panic!("{error:?}"));
-    assert!(plan.config_edits.is_empty());
+    assert_eq!(
+        plan.config_edits,
+        vec![("approvals_reviewer".to_string(), json!("user"))]
+    );
     assert_eq!(
         plan.exec.sandbox_policy,
         Some(codex_app_server_protocol::SandboxPolicy::DangerFullAccess)
@@ -1385,7 +1390,11 @@ async fn tools_exec_plans_the_bounded_profile_for_the_creator_only() {
         )
         .await
         .unwrap_or_else(|error| panic!("{error:?}"));
-    assert_eq!(plan.config_edits.len(), 3);
+    assert_eq!(plan.config_edits.len(), 4);
+    assert_eq!(
+        plan.config_edits[3],
+        ("approvals_reviewer".to_string(), json!("user"))
+    );
     assert_eq!(
         plan.config_edits[0],
         ("features.network_proxy".to_string(), json!(true))
@@ -1458,4 +1467,639 @@ async fn tools_exec_plans_the_bounded_profile_for_the_creator_only() {
         ),
         "invalid"
     );
+}
+
+// ---- Story 1.20: command rules and permission to act --------------------------------
+
+fn sourced(prefix: &[&str], decision: execution_policy::RuleDecision) -> SourcedRule {
+    SourcedRule {
+        rule: CommandRule::new(
+            prefix.iter().map(ToString::to_string).collect(),
+            decision,
+            None,
+        )
+        .unwrap_or_else(|error| panic!("{error}")),
+        source: RuleSource::WorkspacePolicy {
+            revision: Revision::new(1),
+        },
+    }
+}
+
+fn words(command: &[&str]) -> Vec<String> {
+    command.iter().map(ToString::to_string).collect()
+}
+
+#[test]
+fn rules_match_through_the_runtime_exec_policy_prefix_matching() {
+    use execution_policy::RuleDecision::*;
+    let rules = vec![
+        sourced(&["git", "push"], Prompt),
+        sourced(&["git"], Allow),
+        sourced(&["rm"], Forbid),
+        sourced(&["git", "push", "--force"], Forbid),
+    ];
+    let matched = |command: &[&str]| {
+        matched_rules(&words(command), &rules).unwrap_or_else(|error| panic!("{error:?}"))
+    };
+    assert_eq!(
+        matched(&["git", "push", "origin"]),
+        vec![true, true, false, false]
+    );
+    assert_eq!(matched(&["git", "pull"]), vec![false, true, false, false]);
+    assert_eq!(matched(&["git"]), vec![false, true, false, false]);
+    assert_eq!(
+        matched(&["git", "push", "--force"]),
+        vec![true, true, false, true]
+    );
+    assert_eq!(matched(&["rmdir", "x"]), vec![false, false, false, false]);
+    assert_eq!(matched(&["echo", "rm"]), vec![false, false, false, false]);
+    assert!(
+        matched_rules(&words(&["ls"]), &[])
+            .unwrap_or_default()
+            .is_empty()
+    );
+}
+
+fn refusal_of(error: &JSONRPCErrorError) -> (String, serde_json::Value) {
+    let data = error.data.clone().unwrap_or_default();
+    (
+        data["inquello"]["kind"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string(),
+        data["inquello"]["evaluation"].clone(),
+    )
+}
+
+async fn plan(
+    processor: &InquelloRequestProcessor,
+    connection: ConnectionId,
+    params: InquelloToolsExecParams,
+) -> Result<ToolsExecPlan, JSONRPCErrorError> {
+    processor
+        .tools_exec_plan(
+            connection,
+            params,
+            DeviceRequirements::default(),
+            UserConfig::default(),
+        )
+        .await
+}
+
+async fn ask(
+    processor: &InquelloRequestProcessor,
+    connection: ConnectionId,
+    policy: InquelloWorkspaceExecutionPolicy,
+    task_id: &str,
+    command: &[&str],
+    op: &str,
+) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+    processor
+        .permissions_request(
+            connection,
+            InquelloPermissionsRequestParams {
+                operation_id: op.to_string(),
+                request_id: uuid::Uuid::new_v4().to_string(),
+                workspace_policy: policy,
+                task_id: task_id.to_string(),
+                command: words(command),
+                origin: "tools_exec".to_string(),
+                ttl_ms: 600_000,
+            },
+            DeviceRequirements::default(),
+            UserConfig::default(),
+        )
+        .await
+}
+
+fn decide_params(
+    op: &str,
+    request_id: &str,
+    outcome: &str,
+    actor_kind: &str,
+    actor_ref: Option<&str>,
+) -> InquelloPermissionsDecideParams {
+    InquelloPermissionsDecideParams {
+        operation_id: op.to_string(),
+        request_id: request_id.to_string(),
+        expected_revision: 1,
+        outcome: outcome.to_string(),
+        actor_kind: actor_kind.to_string(),
+        actor_ref: actor_ref.map(str::to_string),
+    }
+}
+
+async fn set_rules(
+    processor: &InquelloRequestProcessor,
+    expected: u64,
+    rules: serde_json::Value,
+    op: &str,
+) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+    processor
+        .user_rules_set(
+            DESKTOP,
+            InquelloUserRulesSetParams {
+                operation_id: op.to_string(),
+                expected_revision: expected,
+                rules: serde_json::from_value(rules).unwrap_or_else(|error| panic!("{error}")),
+            },
+        )
+        .await
+}
+
+#[tokio::test]
+async fn a_prompt_rule_needs_one_allowed_request_for_exactly_that_command() {
+    let Fixture { dir, processor } = fixture();
+    sign_in(&processor, DESKTOP, ALICE);
+    sign_in(&processor, OTHER, BOB);
+    let task_id = new_task(&processor, DESKTOP, "task-1").await;
+    let folder = make_folder(&dir, &task_id);
+    let policy = || {
+        workspace_policy(
+            WORKSPACE,
+            4,
+            Some(json!({ "command_rules": [
+                { "prefix": ["git", "push"], "decision": "prompt", "note": "Leaves this device" },
+                { "prefix": ["rm"], "decision": "forbid" },
+            ] })),
+        )
+    };
+    let command = ["git", "push", "origin", "main"];
+
+    // Without a request: refused, with the decision record.
+    let error = plan(
+        &processor,
+        DESKTOP,
+        exec_params(policy(), &task_id, &folder, &command),
+    )
+    .await
+    .err()
+    .unwrap_or_else(|| panic!("a prompt ran without permission"));
+    let (kind, evaluation) = refusal_of(&error);
+    assert_eq!(kind, "permission_required");
+    assert_eq!(evaluation["decision"], json!("prompt"));
+    assert_eq!(evaluation["commandText"], json!("git push origin main"));
+    assert_eq!(
+        evaluation["controllingRule"]["prefix"],
+        json!(["git", "push"])
+    );
+    assert_eq!(
+        evaluation["source"]["label"],
+        json!("Workspace policy, revision 4")
+    );
+    assert_eq!(
+        evaluation["ruleText"],
+        json!("`git push` (prompt), from Workspace policy, revision 4")
+    );
+
+    // Forbid: refused before any request, rule and source named.
+    let error = plan(
+        &processor,
+        DESKTOP,
+        exec_params(policy(), &task_id, &folder, &["rm", "-rf", "output"]),
+    )
+    .await
+    .err()
+    .unwrap_or_else(|| panic!("a forbidden command was planned"));
+    let (kind, evaluation) = refusal_of(&error);
+    assert_eq!(kind, "command_forbidden");
+    assert_eq!(evaluation["source"]["kind"], json!("workspace_policy"));
+    let forbidden = ask(
+        &processor,
+        DESKTOP,
+        policy(),
+        &task_id,
+        &["rm", "x"],
+        "ask-rm",
+    )
+    .await;
+    assert_eq!(kind_of(forbidden), "command_forbidden");
+
+    // Request, list, allow, run once.
+    let asked: InquelloPermissionsRequestResponse =
+        decode(ask(&processor, DESKTOP, policy(), &task_id, &command, "ask-1").await);
+    assert_eq!(asked.request.label, "Permission to act");
+    assert_eq!(asked.request.status, "pending");
+    assert_eq!(asked.request.revision, 1);
+    let pending: InquelloPermissionsPendingResponse = decode(
+        processor
+            .permissions_pending(
+                DESKTOP,
+                InquelloPermissionsPendingParams {
+                    task_id: Some(task_id.clone()),
+                },
+            )
+            .await,
+    );
+    assert_eq!(pending.requests.len(), 1);
+    // Another principal sees nothing and cannot decide.
+    let theirs: InquelloPermissionsPendingResponse = decode(
+        processor
+            .permissions_pending(OTHER, InquelloPermissionsPendingParams { task_id: None })
+            .await,
+    );
+    assert!(theirs.requests.is_empty());
+    let request_id = asked.request.request_id.clone();
+    assert_eq!(
+        kind_of(
+            processor
+                .permissions_decide(
+                    OTHER,
+                    decide_params("op-x", &request_id, "allowed", "human", None)
+                )
+                .await
+        ),
+        "not_found"
+    );
+    // The reviewer is not available without a processing route.
+    assert_eq!(
+        kind_of(
+            processor
+                .permissions_decide(
+                    DESKTOP,
+                    decide_params(
+                        "op-r",
+                        &request_id,
+                        "allowed",
+                        "automated_reviewer",
+                        Some("auto")
+                    )
+                )
+                .await
+        ),
+        "reviewer_not_available"
+    );
+    let allowed: InquelloPermissionsDecideResponse = decode(
+        processor
+            .permissions_decide(
+                DESKTOP,
+                decide_params("op-allow", &request_id, "allowed", "human", None),
+            )
+            .await,
+    );
+    assert_eq!(allowed.request.status, "allowed");
+    assert_eq!(
+        allowed
+            .request
+            .decision
+            .as_ref()
+            .map(|d| d.actor_kind.as_str()),
+        Some("human")
+    );
+    assert_eq!(
+        allowed
+            .request
+            .decision
+            .as_ref()
+            .and_then(|d| d.label.clone()),
+        None
+    );
+    // A stale confirmation is no longer pending.
+    assert_eq!(
+        kind_of(
+            processor
+                .permissions_decide(
+                    DESKTOP,
+                    decide_params("op-late", &request_id, "denied", "human", None)
+                )
+                .await
+        ),
+        "request_not_pending"
+    );
+    let mut with_permission = exec_params(policy(), &task_id, &folder, &command);
+    with_permission.permission_request_id = Some(request_id.clone());
+    // Another command under the same permission is refused.
+    let mut other_command = exec_params(
+        policy(),
+        &task_id,
+        &folder,
+        &["git", "push", "origin", "other"],
+    );
+    other_command.permission_request_id = Some(request_id.clone());
+    assert_eq!(
+        refusal_of(
+            &plan(&processor, DESKTOP, other_command)
+                .await
+                .err()
+                .unwrap_or_else(|| panic!("ran"))
+        )
+        .0,
+        "permission_required"
+    );
+    let planned = plan(&processor, DESKTOP, with_permission.clone())
+        .await
+        .unwrap_or_else(|error| panic!("{error:?}"));
+    // Allow never lifts the sandbox: the bounded profile still applies.
+    assert_eq!(
+        planned.exec.permission_profile.as_deref(),
+        Some(format!("inquello-task-{task_id}").as_str())
+    );
+    assert_eq!(planned.exec.sandbox_policy, None);
+    assert_eq!(planned.exec.command, words(&command));
+    // Once only.
+    assert_eq!(
+        refusal_of(
+            &plan(&processor, DESKTOP, with_permission)
+                .await
+                .err()
+                .unwrap_or_else(|| panic!("ran twice"))
+        )
+        .0,
+        "permission_required"
+    );
+
+    // A denial runs nothing; the Task and its other requests continue.
+    let denied: InquelloPermissionsRequestResponse =
+        decode(ask(&processor, DESKTOP, policy(), &task_id, &command, "ask-2").await);
+    let kept: InquelloPermissionsRequestResponse = decode(
+        ask(
+            &processor,
+            DESKTOP,
+            policy(),
+            &task_id,
+            &["git", "push", "x"],
+            "ask-3",
+        )
+        .await,
+    );
+    let _: InquelloPermissionsDecideResponse = decode(
+        processor
+            .permissions_decide(
+                DESKTOP,
+                decide_params(
+                    "op-deny",
+                    &denied.request.request_id,
+                    "denied",
+                    "human",
+                    None,
+                ),
+            )
+            .await,
+    );
+    let mut after_denial = exec_params(policy(), &task_id, &folder, &command);
+    after_denial.permission_request_id = Some(denied.request.request_id.clone());
+    assert_eq!(
+        refusal_of(
+            &plan(&processor, DESKTOP, after_denial)
+                .await
+                .err()
+                .unwrap_or_else(|| panic!("ran"))
+        )
+        .0,
+        "permission_required"
+    );
+    let pending: InquelloPermissionsPendingResponse = decode(
+        processor
+            .permissions_pending(
+                DESKTOP,
+                InquelloPermissionsPendingParams {
+                    task_id: Some(task_id.clone()),
+                },
+            )
+            .await,
+    );
+    assert_eq!(
+        pending
+            .requests
+            .iter()
+            .map(|r| r.request_id.clone())
+            .collect::<Vec<_>>(),
+        vec![kept.request.request_id]
+    );
+    assert!(
+        plan(
+            &processor,
+            DESKTOP,
+            exec_params(policy(), &task_id, &folder, &["ls"])
+        )
+        .await
+        .is_ok()
+    );
+
+    // No state bleed: no review or approval state was written.
+    let states: InquelloStateListResponse = decode(
+        processor
+            .state_list(
+                DESKTOP,
+                InquelloStateListParams {
+                    task_id: task_id.clone(),
+                },
+            )
+            .await,
+    );
+    assert!(
+        states
+            .dimensions
+            .iter()
+            .all(|dimension| dimension.records.is_empty())
+    );
+    let _ = dir;
+}
+
+fn kind_of(result: Result<Option<ClientResponsePayload>, JSONRPCErrorError>) -> String {
+    kind(result)
+}
+
+#[tokio::test]
+async fn user_rules_only_ask_or_forbid_and_win_over_a_workspace_allow() {
+    let Fixture { dir, processor } = fixture();
+    sign_in(&processor, DESKTOP, ALICE);
+    let task_id = new_task(&processor, DESKTOP, "task-1").await;
+    let folder = make_folder(&dir, &task_id);
+    let policy = || {
+        workspace_policy(
+            WORKSPACE,
+            2,
+            Some(json!({ "command_rules": [{ "prefix": ["curl"], "decision": "allow" }] })),
+        )
+    };
+    assert!(
+        plan(
+            &processor,
+            DESKTOP,
+            exec_params(
+                policy(),
+                &task_id,
+                &folder,
+                &["curl", "https://example.com/"]
+            )
+        )
+        .await
+        .is_ok()
+    );
+
+    assert_eq!(
+        kind(
+            set_rules(
+                &processor,
+                0,
+                json!([{ "prefix": ["curl"], "decision": "allow" }]),
+                "op-allow"
+            )
+            .await
+        ),
+        "user_rule_cannot_allow"
+    );
+    let set: InquelloUserRulesSetResponse = decode(
+        set_rules(
+            &processor,
+            0,
+            json!([{ "prefix": ["curl"], "decision": "forbid" }]),
+            "op-forbid",
+        )
+        .await,
+    );
+    assert_eq!(set.revision, 1);
+    assert_eq!(set.receipt.command, "set_user_rules");
+    let read: InquelloUserRulesReadResponse = decode(processor.user_rules_read(DESKTOP).await);
+    assert_eq!(read.revision, 1);
+    assert_eq!(read.rules[0].decision, "forbid");
+    let error = plan(
+        &processor,
+        DESKTOP,
+        exec_params(
+            policy(),
+            &task_id,
+            &folder,
+            &["curl", "https://example.com/"],
+        ),
+    )
+    .await
+    .err()
+    .unwrap_or_else(|| panic!("the person's forbid did not win"));
+    let (kind_text, evaluation) = refusal_of(&error);
+    assert_eq!(kind_text, "command_forbidden");
+    assert_eq!(evaluation["source"]["kind"], json!("user_rule"));
+    assert_eq!(evaluation["source"]["label"], json!("your rule"));
+    assert_eq!(
+        kind(set_rules(&processor, 0, json!([]), "op-stale").await),
+        "revision_conflict"
+    );
+
+    // The sandbox check is a fixed probe that rules never block.
+    let _: InquelloUserRulesSetResponse = decode(
+        set_rules(
+            &processor,
+            1,
+            json!([{ "prefix": ["/bin/sh"], "decision": "forbid" }]),
+            "op-sh",
+        )
+        .await,
+    );
+    let mut probe = exec_params(policy(), &task_id, &folder, &[]);
+    probe.sandbox_probe_target = Some("/somewhere".to_string());
+    let planned = plan(&processor, DESKTOP, probe)
+        .await
+        .unwrap_or_else(|error| panic!("{error:?}"));
+    assert_eq!(
+        planned.exec.command,
+        words(&[
+            "/bin/sh",
+            "-c",
+            "test ! -e \"$1\"",
+            "sandbox-check",
+            "/somewhere"
+        ])
+    );
+    let mut probe_with_command = exec_params(policy(), &task_id, &folder, &["ls"]);
+    probe_with_command.sandbox_probe_target = Some("/somewhere".to_string());
+    assert_eq!(
+        refusal_of(
+            &plan(&processor, DESKTOP, probe_with_command)
+                .await
+                .err()
+                .unwrap_or_else(|| panic!("planned"))
+        )
+        .0,
+        "invalid"
+    );
+    assert_eq!(
+        refusal_of(
+            &plan(
+                &processor,
+                DESKTOP,
+                exec_params(policy(), &task_id, &folder, &["/bin/sh", "-c", "true"])
+            )
+            .await
+            .err()
+            .unwrap_or_else(|| panic!("planned"))
+        )
+        .0,
+        "command_forbidden"
+    );
+}
+
+#[tokio::test]
+async fn the_effective_policy_lists_rules_and_the_reviewer_state() {
+    let Fixture {
+        dir: _dir,
+        processor,
+    } = fixture();
+    sign_in(&processor, DESKTOP, ALICE);
+    let default: InquelloPolicyEffectiveResponse = decode(
+        effective(
+            &processor,
+            DESKTOP,
+            workspace_policy(WORKSPACE, 1, None),
+            None,
+            DeviceRequirements::default(),
+            UserConfig::default(),
+        )
+        .await,
+    );
+    assert!(default.command_rules.is_empty());
+    assert_eq!(default.reviewer.state, "off");
+    assert!(!default.reviewer.enabled);
+    assert_eq!(default.reviewer.runtime_setting, "user");
+    let on: InquelloPolicyEffectiveResponse = decode(
+        effective(
+            &processor,
+            DESKTOP,
+            workspace_policy(
+                WORKSPACE,
+                3,
+                Some(json!({
+                    "automatic_permission_review": true,
+                    "command_rules": [{ "prefix": ["git", "push"], "decision": "prompt" }],
+                })),
+            ),
+            None,
+            DeviceRequirements::default(),
+            UserConfig::default(),
+        )
+        .await,
+    );
+    assert_eq!(on.reviewer.state, "not_available");
+    assert_eq!(
+        on.reviewer.label,
+        "Automated permission review: not available (no processing route)"
+    );
+    assert_eq!(on.reviewer.runtime_setting, "user");
+    assert_eq!(on.command_rules.len(), 1);
+    assert_eq!(
+        on.command_rules[0].source.label,
+        "Workspace policy, revision 3"
+    );
+    assert_eq!(on.command_rules[0].rule.decision, "prompt");
+}
+
+#[tokio::test]
+async fn an_untrusted_asking_behaviour_asks_before_an_unmatched_command() {
+    let Fixture { dir, processor } = fixture();
+    sign_in(&processor, DESKTOP, ALICE);
+    let task_id = new_task(&processor, DESKTOP, "task-1").await;
+    let folder = make_folder(&dir, &task_id);
+    let policy = workspace_policy(WORKSPACE, 1, Some(json!({ "approvals": ["untrusted"] })));
+    let error = plan(
+        &processor,
+        DESKTOP,
+        exec_params(policy, &task_id, &folder, &["ls"]),
+    )
+    .await
+    .err()
+    .unwrap_or_else(|| panic!("an untrusted command ran without asking"));
+    let (kind_text, evaluation) = refusal_of(&error);
+    assert_eq!(kind_text, "permission_required");
+    assert_eq!(evaluation["source"]["kind"], json!("approval_behaviour"));
+    assert_eq!(evaluation["controllingRule"], serde_json::Value::Null);
 }

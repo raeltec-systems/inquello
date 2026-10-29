@@ -18,12 +18,25 @@
 //!   profile, its private working folder with an `output` folder, read-only
 //!   system locations and the Workspace's allowed network destinations, or
 //!   the true reach of a permitted Full access mode.
+//! - Story 1.20: [`CommandRule`]s on command prefixes (Workspace rules in the
+//!   `execution` section, and a person's own prompt-or-forbid rules in a
+//!   versioned record, [`set_user_rules`]); [`evaluate_command`], which
+//!   combines the runtime's own prefix matches (forbid over prompt over
+//!   allow) and names the controlling rule; permission requests and
+//!   decisions ([`request_permission`], [`decide_permission`],
+//!   [`use_permission`]); and the automatic permission reviewer switch
+//!   ([`permission_reviewer`]), bounded by the same rules.
 
 mod broad_mode;
+mod command_rules;
 mod effective;
+mod permission;
 mod profile;
 mod section;
+mod user_rules;
 
+#[cfg(test)]
+mod permission_tests;
 #[cfg(test)]
 mod profile_tests;
 #[cfg(test)]
@@ -46,6 +59,25 @@ pub use broad_mode::check_permitted;
 pub use broad_mode::set_broad_mode;
 pub use broad_mode::task_broad_mode;
 pub use broad_mode::thread_settings;
+pub use command_rules::AUTOMATED_DECISION_LABEL;
+pub use command_rules::CommandEvaluation;
+pub use command_rules::CommandRule;
+pub use command_rules::MAX_COMMAND_RULES;
+pub use command_rules::MAX_NOTE_CHARS;
+pub use command_rules::MAX_PREFIX_TOKENS;
+pub use command_rules::MAX_TOKEN_BYTES;
+pub use command_rules::ReviewerState;
+pub use command_rules::ReviewerVerdict;
+pub use command_rules::RuleDecision;
+pub use command_rules::RuleSource;
+pub use command_rules::SourcedRule;
+pub use command_rules::bounded_reviewer_verdict;
+pub use command_rules::display_command;
+pub use command_rules::effective_rules;
+pub use command_rules::evaluate_command;
+pub use command_rules::host_listed;
+pub use command_rules::named_hosts;
+pub use command_rules::permission_reviewer;
 pub use effective::DeviceRequirements;
 pub use effective::EffectivePolicy;
 pub use effective::Environment;
@@ -54,6 +86,31 @@ pub use effective::SettingSource;
 pub use effective::UserConfig;
 pub use effective::WorkspaceLayer;
 pub use effective::effective_policy;
+pub use permission::DECIDE_PERMISSION_COMMAND;
+pub use permission::DecidePermission;
+pub use permission::Decider;
+pub use permission::DeciderKind;
+pub use permission::MAX_REQUEST_TTL_MS;
+pub use permission::MIN_REQUEST_TTL_MS;
+pub use permission::NO_LONGER_PENDING;
+pub use permission::NewPermissionRequest;
+pub use permission::PERMISSION_LABEL;
+pub use permission::PermissionDecision;
+pub use permission::PermissionDecisionChange;
+pub use permission::PermissionOutcome;
+pub use permission::PermissionReceipt;
+pub use permission::PermissionRequest;
+pub use permission::PermissionRequestOutcome;
+pub use permission::PermissionStore;
+pub use permission::REQUEST_PERMISSION_COMMAND;
+pub use permission::RequestOrigin;
+pub use permission::RequestPermission;
+pub use permission::RequestStatus;
+pub use permission::decide_permission;
+pub use permission::pending_requests;
+pub use permission::permission_request;
+pub use permission::request_permission;
+pub use permission::use_permission;
 pub use profile::Boundary;
 pub use profile::FolderAccess;
 pub use profile::NetworkReach;
@@ -68,3 +125,17 @@ pub use section::DEFAULT_APPROVALS;
 pub use section::ExecutionPolicy;
 pub use section::MAX_ALLOWED_DOMAINS;
 pub use section::SandboxLevel;
+pub use user_rules::SET_USER_RULES_COMMAND;
+pub use user_rules::SetUserRules;
+pub use user_rules::UserRuleInput;
+pub use user_rules::UserRuleStore;
+pub use user_rules::UserRules;
+pub use user_rules::UserRulesChange;
+pub use user_rules::UserRulesOutcome;
+pub use user_rules::UserRulesReceipt;
+pub use user_rules::UserRulesRecord;
+pub use user_rules::rules_from_value;
+pub use user_rules::rules_to_value;
+pub use user_rules::set_user_rules;
+pub use user_rules::user_rules;
+pub use user_rules::validate_user_rules;

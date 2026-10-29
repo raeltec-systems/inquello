@@ -31,6 +31,7 @@ import { OrganiseService } from '../src/main/organise';
 import {
   BROAD_MODE_REACH,
   networkDenialText,
+  PermissionMediator,
   outsideDenialText,
   PolicyService,
   POLICY_REASONS,
@@ -143,7 +144,7 @@ describe.skipIf(!databaseConfigured)('bounded tool reads, writes and network aga
     };
     const organiseRuntime = { ready: () => runtime.state === 'ready', instance: () => runtime, request: <T,>(method: string, params?: unknown) => runtime.request<T>(method, params) };
     organise = new OrganiseService({ runtime: organiseRuntime, identity, service, logger: recordingLogger() });
-    policy = new PolicyService({ runtime: organiseRuntime, identity, organise, service: routes, logger: recordingLogger(), taskFolders: path.join(dir, 'tasks'), sandboxProbeTarget: workingStoreDir });
+    policy = new PolicyService({ runtime: organiseRuntime, identity, organise, service: routes, logger: recordingLogger(), taskFolders: path.join(dir, 'tasks'), sandboxProbeTarget: workingStoreDir, permissions: new PermissionMediator({ runtime: organiseRuntime, logger: recordingLogger(), newId: randomUUID }) });
   }, 120_000);
 
   afterAll(async () => {
@@ -271,6 +272,7 @@ describe.skipIf(!databaseConfigured)('bounded tool reads, writes and network aga
       logger: recordingLogger(),
       taskFolders: path.join(path.dirname(runtimeHome), 'tasks'),
       sandboxProbeTarget: '/usr',
+      permissions: new PermissionMediator({ runtime: organiseRuntime, logger: recordingLogger(), newId: randomUUID }),
     });
     expect(await unchecked.runTool(task, ['/bin/sh', '-c', 'printf x > output/never.txt'])).toEqual({ ok: false, code: 'sandbox-unavailable', reason: POLICY_REASONS.sandboxUnavailable });
     expect(ok(await unchecked.forTask(task)).sandbox).toEqual({ status: 'unavailable', label: 'Local sandbox unavailable on this device' });

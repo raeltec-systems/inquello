@@ -39,6 +39,16 @@ import {
   type WorkspaceTreeView,
 } from '../organise';
 import { setBroadModePayload, taskPolicyPayload, type PolicyResult, type SetBroadModeInput, type SettingsPolicyView, type TaskPolicyView } from '../policy/views';
+import {
+  decidePermissionPayload,
+  pendingPermissionsPayload,
+  setUserRulesPayload,
+  type DecidePermissionInput,
+  type PermissionCardView,
+  type PermissionDecisionView,
+  type PermissionSettingsView,
+  type SetUserRulesInput,
+} from '../policy/permissions';
 import type { CodexLoginRequest } from '../providers/codex-account';
 import { toRendererProviderResult, toRendererProviderStatus, type ProviderActionResult, type ProviderActionView, type ProviderStatus, type ProviderStatusView } from '../providers/status';
 import type { Logger } from '../runtime/logger';
@@ -74,6 +84,10 @@ export const OPERATION_NAMES = [
   'policy.getSettings',
   'policy.forTask',
   'policy.setBroadMode',
+  'permissions.pending',
+  'permissions.decide',
+  'permissions.getRules',
+  'permissions.setUserRules',
 ] as const;
 export type OperationName = (typeof OPERATION_NAMES)[number];
 
@@ -249,6 +263,14 @@ export interface PolicyOperations {
   forTask(taskId: string): Promise<PolicyResult<TaskPolicyView>>;
   /** Story 1.18: sets a Task's broader mode as the signed-in person. */
   setBroadMode(input: SetBroadModeInput): Promise<PolicyResult<TaskPolicyView>>;
+  /** Story 1.20: a Task's pending permission requests, as ApprovalCards. */
+  pendingPermissions(taskId: string): Promise<PolicyResult<PermissionCardView[]>>;
+  /** Story 1.20: the person's decision on one request. */
+  decidePermission(input: DecidePermissionInput): Promise<PolicyResult<PermissionDecisionView>>;
+  /** Story 1.20 S07: command rules with their sources, the reviewer state and the person's own rules. */
+  permissionSettings(): Promise<PermissionSettingsView>;
+  /** Story 1.20: replaces the person's own rules (prompt or forbid only). */
+  setUserRules(input: SetUserRulesInput): Promise<PolicyResult<PermissionSettingsView>>;
 }
 
 export interface OperationDeps {
@@ -414,6 +436,29 @@ export function createOperations(deps: OperationDeps): Operation[] {
     validate: setBroadModePayload,
     handle: (input) => deps.policy.setBroadMode(input),
   };
+  // Permission to act (Story 1.20): the renderer names a request and the
+  // person's choice; main supplies the actor. No command, rule source or
+  // policy passes from the renderer.
+  const permissionsPending: Operation<{ taskId: string }, PolicyResult<PermissionCardView[]>> = {
+    name: 'permissions.pending',
+    validate: pendingPermissionsPayload,
+    handle: ({ taskId }) => deps.policy.pendingPermissions(taskId),
+  };
+  const permissionsDecide: Operation<DecidePermissionInput, PolicyResult<PermissionDecisionView>> = {
+    name: 'permissions.decide',
+    validate: decidePermissionPayload,
+    handle: (input) => deps.policy.decidePermission(input),
+  };
+  const permissionsGetRules: Operation<undefined, PermissionSettingsView> = {
+    name: 'permissions.getRules',
+    validate: noPayload,
+    handle: () => deps.policy.permissionSettings(),
+  };
+  const permissionsSetUserRules: Operation<SetUserRulesInput, PolicyResult<PermissionSettingsView>> = {
+    name: 'permissions.setUserRules',
+    validate: setUserRulesPayload,
+    handle: (input) => deps.policy.setUserRules(input),
+  };
   return [
     getStatus,
     identityStatus,
@@ -442,6 +487,10 @@ export function createOperations(deps: OperationDeps): Operation[] {
     policySettings,
     policyForTask,
     policySetBroadMode,
+    permissionsPending,
+    permissionsDecide,
+    permissionsGetRules,
+    permissionsSetUserRules,
   ] as Operation[];
 }
 

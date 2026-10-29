@@ -35,6 +35,10 @@
  * Shell's own. Every draft is cleared when the Shell sees no one signed in, a
  * different principal, or a sign-in from the Sidebar; a Task's draft goes when
  * the Task is no longer in its Workspace.
+ *
+ * Story 1.20 puts the open Task's pending permission requests
+ * (`PermissionRequests.tsx`) in the contextual review area after the work
+ * area and before the Composer slot; each new request is announced once.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 
@@ -44,6 +48,7 @@ import { ArtifactArea, type ShellArtifact } from './ArtifactArea';
 import { Composer } from './Composer';
 import { createDraftStore, useDraftBinding, type DraftBinding, type DraftStore } from './drafts';
 import { Header } from './Header';
+import { PermissionRequests } from './PermissionRequests';
 import { EscapeStack, isNewThreadShortcut, isTextEntry } from './keyboard';
 import { artifactFits, layoutMode, THREAD_MIN_WIDTH } from './layout';
 import {
@@ -562,6 +567,14 @@ export function Shell({ onShowSpecimen, operationIds = newOperationId, artifact 
                 announce('Artifact closed');
               }}
               hidden={workView === 'conversation' && mode === 'single'}
+            />
+          ) : null}
+          {task && state?.signedIn ? (
+            <PermissionRequests
+              taskId={task.taskId}
+              reviewer={taskPolicy && taskPolicy.taskId === task.taskId ? (taskPolicy.reviewer ?? null) : null}
+              announce={announce}
+              operationIds={operationIds}
             />
           ) : null}
           <div className="iq-composer-slot" data-composer-slot={composer ? 'filled' : 'empty'}>

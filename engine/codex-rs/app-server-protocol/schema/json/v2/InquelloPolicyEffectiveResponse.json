@@ -24,6 +24,49 @@
       ],
       "type": "object"
     },
+    "InquelloCommandRule": {
+      "description": "One command rule: a literal command prefix and its decision.",
+      "properties": {
+        "decision": {
+          "description": "`allow`, `prompt` or `forbid` (a person's own rules: `prompt` or `forbid`).",
+          "type": "string"
+        },
+        "note": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "prefix": {
+          "description": "The literal command words, in order.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "decision",
+        "prefix"
+      ],
+      "type": "object"
+    },
+    "InquelloCommandRuleView": {
+      "description": "A rule with its source.",
+      "properties": {
+        "rule": {
+          "$ref": "#/definitions/InquelloCommandRule"
+        },
+        "source": {
+          "$ref": "#/definitions/InquelloRuleSource"
+        }
+      },
+      "required": [
+        "rule",
+        "source"
+      ],
+      "type": "object"
+    },
     "InquelloDeviceRequirements": {
       "description": "The device layer as `configRequirements/read` reports it.",
       "properties": {
@@ -54,6 +97,33 @@
       },
       "required": [
         "configured"
+      ],
+      "type": "object"
+    },
+    "InquelloPermissionReviewer": {
+      "description": "The automatic permission reviewer: a Workspace switch, off by default, usable only once a processing route exists.",
+      "properties": {
+        "enabled": {
+          "description": "The Workspace switch.",
+          "type": "boolean"
+        },
+        "label": {
+          "type": "string"
+        },
+        "runtimeSetting": {
+          "description": "The runtime's inherited reviewer setting this maps to: `user` unless active.",
+          "type": "string"
+        },
+        "state": {
+          "description": "`off`, `not_available` or `active`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "enabled",
+        "label",
+        "runtimeSetting",
+        "state"
       ],
       "type": "object"
     },
@@ -103,6 +173,40 @@
       },
       "required": [
         "kind"
+      ],
+      "type": "object"
+    },
+    "InquelloRuleSource": {
+      "description": "Where a command decision comes from.",
+      "properties": {
+        "behaviour": {
+          "description": "The asking behaviour, for `approval_behaviour`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "description": "`workspace_policy`, `user_rule` or `approval_behaviour`.",
+          "type": "string"
+        },
+        "label": {
+          "description": "The source in words, for example \"Workspace policy, revision 4\" or \"your rule\".",
+          "type": "string"
+        },
+        "revision": {
+          "description": "The policy revision (Workspace) or rules version (user rule).",
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "label"
       ],
       "type": "object"
     },
@@ -350,6 +454,13 @@
       },
       "type": "array"
     },
+    "commandRules": {
+      "description": "Story 1.20: the Workspace command rules, each with its source.",
+      "items": {
+        "$ref": "#/definitions/InquelloCommandRuleView"
+      },
+      "type": "array"
+    },
     "device": {
       "$ref": "#/definitions/InquelloDeviceRequirements"
     },
@@ -369,6 +480,14 @@
         }
       ],
       "description": "Story 1.19: what a standard Task's tools in this Workspace can reach."
+    },
+    "reviewer": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/InquelloPermissionReviewer"
+        }
+      ],
+      "description": "Story 1.20: the automatic permission reviewer's state."
     },
     "settings": {
       "description": "Every setting, in a fixed order.",
@@ -395,10 +514,12 @@
   "required": [
     "authorizationEpoch",
     "capabilities",
+    "commandRules",
     "device",
     "environment",
     "policyRevision",
     "reach",
+    "reviewer",
     "settings",
     "workspaceId"
   ],

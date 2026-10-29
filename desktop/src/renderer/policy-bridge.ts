@@ -10,6 +10,8 @@
  * treat anything malformed as a failed read, never as a half-read policy.
  */
 
+import { parseReviewer, type ReviewerItem } from './permission-bridge';
+
 export type BroadMode = 'standard' | 'no_prompt' | 'full_access';
 
 export interface PolicySettingItem {
@@ -47,6 +49,8 @@ export interface PolicyItem {
   deviceLabel: string;
   capabilities: CapabilityItem[];
   reach: ReachItem;
+  /** Story 1.20: the automatic permission reviewer's state, when main sent it. */
+  reviewer?: ReviewerItem | null;
 }
 
 export interface BroadModeOption {
@@ -162,7 +166,9 @@ export function parsePolicy(value: unknown): PolicyItem | null {
   const deviceLabel = text(device?.label);
   const reach = parseReach(r?.reach);
   if (!r || environmentLabel === null || policyRevision === null || !settings || !capabilities || deviceLabel === null || !reach) return null;
-  return { environmentLabel, policyRevision, settings, deviceLabel, capabilities, reach };
+  const reviewer = r.reviewer === undefined || r.reviewer === null ? null : parseReviewer(r.reviewer);
+  if (r.reviewer !== undefined && r.reviewer !== null && reviewer === null) return null;
+  return { environmentLabel, policyRevision, settings, deviceLabel, capabilities, reach, reviewer };
 }
 
 function parseOption(value: unknown): BroadModeOption | null {

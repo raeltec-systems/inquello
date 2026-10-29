@@ -207,6 +207,7 @@ export const EXPECTED_BRIDGE_TREE = {
   },
   state: { list: 'function', recordTaskState: 'function' },
   policy: { getSettings: 'function', forTask: 'function', setBroadMode: 'function' },
+  permissions: { pending: 'function', decide: 'function', getRules: 'function', setUserRules: 'function' },
 } as const;
 
 /** Globals that must not exist in the renderer's main world. */
@@ -3112,4 +3113,246 @@ export async function probeToolBounds(contents: WebContents, options: ToolBounds
     read.signedOutAtEnd = signOut.ok;
   }
   return evaluateToolBounds(read);
+}
+
+// ---- permission to act (Story 1.20) ---------------------------------------------------
+
+const PERMISSION_SETTLE_MS = 20_000;
+/** The prefix the smoke's own prompt rule asks before; no other probe runs it. */
+const PERMISSION_PROMPT_PREFIX = ['/usr/bin/touch'];
+/** The prefix the smoke's own forbid rule refuses. */
+const PERMISSION_FORBID_PREFIX = ['/usr/bin/rm'];
+const PERMISSION_FILE = 'permission-smoke.txt';
+/** Labels a permission card may never use. */
+const BARE_APPROVE = /^\s*approve\s*$/i;
+
+/** Sets the person's own rules through the renderer bridge, at the revision S07 read. */
+function permissionRulesProbe(rules: ReadonlyArray<{ prefix: string[]; decision: string; note: string | null }>, operationId: string): string {
+  return `(async () => {
+    const view = await globalThis.inquello.permissions.getRules();
+    const revision = view && view.userRules ? view.userRules.revision : 0;
+    return await globalThis.inquello.permissions.setUserRules({ operationId: ${JSON.stringify(operationId)}, expectedRevision: revision, rules: ${JSON.stringify(rules)} });
+  })()`;
+}
+
+/** Opens the Task, waits for a new card, reads it, announces and presses `press` ('deny' or 'run'). */
+function permissionCardProbe(taskId: string, press: 'deny' | 'run', skip: readonly string[]): string {
+  return `(async () => {
+    ${SHELL_HELPERS}
+    const out = { shellOpened: !!q('[data-shell]') || await openShell() };
+    if (!q('[data-task-view=${JSON.stringify(taskId)}]')) {
+      const row = await wait(() => q('[data-task-id=${JSON.stringify(taskId)}] a'), ${SHELL_SETTLE_MS});
+      if (row) row.click();
+    }
+    const skip = ${JSON.stringify(skip)};
+    const holder = await wait(() => [...document.querySelectorAll('[data-permission-review=${JSON.stringify(taskId)}] [data-permission-state="pending"]')].find((el) => !skip.includes(el.getAttribute('data-permission-request'))), ${PERMISSION_SETTLE_MS});
+    out.found = !!holder;
+    if (!holder) return out;
+    out.requestId = holder.getAttribute('data-permission-request');
+    const card = holder.querySelector('[role="region"]');
+    const region = card ? card.closest('[data-permission-review]') : null;
+    out.regionLabel = region ? region.getAttribute('aria-label') : null;
+    out.overline = text('.iq-approval-overline');
+    out.context = card ? (card.querySelector('.iq-approval-context') || {}).textContent || null : null;
+    out.action = card ? (card.querySelector('.iq-approval-action') || {}).textContent || null : null;
+    out.quote = card ? (card.querySelector('.iq-approval-quote') || {}).textContent || null : null;
+    out.facts = card ? [...card.querySelectorAll('.iq-approval-fact')].map((fact) => ({ term: (fact.querySelector('dt') || {}).textContent || null, detail: (fact.querySelector('dd') || {}).textContent || null })) : [];
+    out.buttons = card ? [...card.querySelectorAll('button')].map((button) => button.textContent) : [];
+    out.buttonsFocusable = card ? [...card.querySelectorAll('button')].every((button) => button.tabIndex >= 0 && !button.disabled) : false;
+    const announcer = q('[data-shell-announcer]');
+    out.announced = announcer ? announcer.textContent : null;
+    const buttons = card ? [...card.querySelectorAll('button')] : [];
+    const target = ${JSON.stringify(press)} === 'run' ? buttons[0] : buttons.find((button) => button.textContent === 'Deny');
+    out.pressed = target ? target.textContent : null;
+    if (target) target.click();
+    out.cardGone = !!(await wait(() => !q('[data-permission-request="' + out.requestId + '"][data-permission-state="pending"]'), ${PERMISSION_SETTLE_MS}));
+    const note = q('[data-permission-outcome="' + out.requestId + '"]');
+    out.outcome = note ? note.textContent : null;
+    return out;
+  })()`;
+}
+
+interface PermissionCardRead {
+  shellOpened: boolean;
+  found: boolean;
+  requestId?: string | null;
+  regionLabel?: string | null;
+  overline?: string | null;
+  context?: string | null;
+  action?: string | null;
+  quote?: string | null;
+  facts?: Array<{ term: string | null; detail: string | null }>;
+  buttons?: Array<string | null>;
+  buttonsFocusable?: boolean;
+  announced?: string | null;
+  pressed?: string | null;
+  cardGone?: boolean;
+  outcome?: string | null;
+}
+
+export interface PermissionsProbeRead {
+  configured: boolean;
+  seedRead?: boolean;
+  signedIn?: boolean;
+  taskCreated?: boolean;
+  promptRuleSet?: unknown;
+  denied?: { card: PermissionCardRead; run: { ok: boolean; code?: string; reason?: string }; fileOnDevice: boolean };
+  allowed?: { card: PermissionCardRead; run: { ok: boolean; code?: string; exitCode?: number; denials?: string[]; permissionRequestId?: string | null }; fileOnDevice: boolean };
+  forbidden?: { ok: boolean; code?: string; reason?: string };
+  allowRule?: unknown;
+  states?: { before: string; after: string; reviewAndApproval: number };
+  rulesCleared?: boolean;
+  signedOutAtEnd?: boolean;
+  error?: string;
+}
+
+export interface PermissionsReport extends PermissionsProbeRead {
+  ok: boolean;
+  failures: string[];
+}
+
+function checkCard(card: PermissionCardRead | undefined, where: string, command: string, failures: string[]): void {
+  if (!card?.found) {
+    failures.push(`${where}: no ApprovalCard appeared`);
+    return;
+  }
+  if (card.regionLabel !== 'Contextual review') failures.push(`${where}: the card is not in the contextual review area (${JSON.stringify(card.regionLabel)})`);
+  if (card.context !== 'Permission to act') failures.push(`${where}: the card is labelled ${JSON.stringify(card.context)}`);
+  if (card.quote !== command) failures.push(`${where}: the card quotes ${JSON.stringify(card.quote)}, not the exact command`);
+  const fact = (term: string) => card.facts?.find((entry) => entry.term === term)?.detail ?? '';
+  if (!fact('Destination').includes("This Task's working folder")) failures.push(`${where}: the destination reads ${JSON.stringify(fact('Destination'))}`);
+  if (!fact('Consequence').includes('cannot undo') || !fact('Consequence').includes('adds no rule')) failures.push(`${where}: the consequence reads ${JSON.stringify(fact('Consequence'))}`);
+  if (!fact('Rule').includes(PERMISSION_PROMPT_PREFIX.join(' ')) || !fact('Rule').includes('your rule')) failures.push(`${where}: the rule reads ${JSON.stringify(fact('Rule'))}`);
+  const buttons = card.buttons ?? [];
+  if (buttons[0] !== `Run \`${command}\``) failures.push(`${where}: the primary button reads ${JSON.stringify(buttons[0])}`);
+  if (JSON.stringify(buttons.slice(1)) !== JSON.stringify(['Deny', 'Deny and add a rule to always ask', 'Deny and forbid this prefix'])) failures.push(`${where}: the alternatives are ${JSON.stringify(buttons.slice(1))}`);
+  if (buttons.some((label) => BARE_APPROVE.test(label ?? '') || /always allow/i.test(label ?? ''))) failures.push(`${where}: a button reads Approve or always allow`);
+  if (!card.buttonsFocusable) failures.push(`${where}: the card's buttons are not reachable by keyboard`);
+  if (!card.announced?.includes('Permission to act needed')) failures.push(`${where}: the request was not announced (${JSON.stringify(card.announced)})`);
+  if (!card.cardGone) failures.push(`${where}: the card stayed pending after ${JSON.stringify(card.pressed)}`);
+}
+
+/** Pass/fail for the permissions probe with the default seed and the person's own rules. */
+export function evaluatePermissions(read: PermissionsProbeRead, command: string): PermissionsReport {
+  const failures: string[] = [];
+  if (read.error) failures.push(`the probe stopped: ${read.error}`);
+  if (!read.configured) failures.push('the shared service is not configured');
+  if (!read.seedRead) failures.push('the dev topology seed file (INQUELLO_SMOKE_SEED) could not be read');
+  if (!read.signedIn) failures.push('the synthetic user did not sign in');
+  if (!read.taskCreated) failures.push('the Task was not created');
+  if ((read.promptRuleSet as { ok?: unknown } | undefined)?.ok !== true) failures.push(`the prompt rule was not set (${JSON.stringify(read.promptRuleSet)})`);
+  const d = read.denied;
+  checkCard(d?.card, 'deny', command, failures);
+  if (d?.card.pressed !== 'Deny') failures.push('Deny was not pressed');
+  if (d?.run.ok !== false || d.run.code !== 'permission-denied') failures.push(`a denied command was not refused (${JSON.stringify(d?.run)})`);
+  if (d?.fileOnDevice !== false) failures.push('a denied command ran');
+  if (!d?.card.outcome?.includes('Denied: nothing ran.')) failures.push(`the denial reads ${JSON.stringify(d?.card.outcome)}`);
+  const a = read.allowed;
+  checkCard(a?.card, 'allow', command, failures);
+  if (a?.card.pressed !== `Run \`${command}\``) failures.push('the action button was not pressed');
+  if (a?.run.ok !== true || a.run.permissionRequestId !== a.card.requestId) failures.push(`the allowed command did not run under its request (${JSON.stringify(a?.run)})`);
+  if (a?.fileOnDevice !== true) failures.push('the allowed command did not write inside the Task folder');
+  if (!(a?.run.denials ?? []).some((denial) => denial.startsWith("Blocked: outside this Task's permitted locations"))) failures.push(`the allowed command was not held to the sandbox (${JSON.stringify(a?.run)})`);
+  const f = read.forbidden;
+  if (f?.ok !== false || f.code !== 'command-forbidden' || !f.reason?.includes(PERMISSION_FORBID_PREFIX.join(' ')) || !f.reason.includes('your rule')) failures.push(`a forbidden command was not refused with its rule and source (${JSON.stringify(f)})`);
+  const allowRule = read.allowRule as { ok?: unknown; code?: unknown } | undefined;
+  if (allowRule?.ok !== false || allowRule.code !== 'user-rule-cannot-allow') failures.push(`a user allow rule was not refused (${JSON.stringify(read.allowRule)})`);
+  if (!read.states || read.states.before !== read.states.after || read.states.reviewAndApproval !== 0) failures.push(`review or approval states changed (${JSON.stringify(read.states)})`);
+  if (!read.rulesCleared) failures.push('the smoke rules were not removed at the end');
+  if (!read.signedOutAtEnd) failures.push('the probe could not sign out at the end');
+  return { ok: failures.length === 0, failures, ...read };
+}
+
+export interface PermissionsProbeOptions extends Omit<OrganiseProbeOptions, 'runtimeRequest'> {
+  policy: PolicyService;
+}
+
+/** Runs the permissions probe: the person's own rules, real cards in the Shell, real runtime and sandbox. */
+export async function probePermissions(contents: WebContents, options: PermissionsProbeOptions): Promise<PermissionsReport> {
+  const { identity, organise, policy } = options;
+  const read: PermissionsProbeRead = { configured: identity.config.kind === 'configured' };
+  let command = '';
+  if (!read.configured) return evaluatePermissions(read, command);
+  try {
+    let seed: { workspace_id?: unknown } = {};
+    try {
+      seed = JSON.parse(fs.readFileSync(options.seedFile ?? '', 'utf8')) as typeof seed;
+    } catch {
+      seed = {};
+    }
+    const workspaceId = typeof seed.workspace_id === 'string' ? seed.workspace_id : null;
+    read.seedRead = workspaceId !== null;
+    if (!workspaceId) return evaluatePermissions(read, command);
+    read.signedIn = (await identity.session.signIn()).ok;
+    await organise.syncPrincipal();
+    await organise.getWorkspaces();
+    const created = await organise.createTask({ operationId: randomUUID(), workspaceId, engagementId: null, folderId: null, title: 'Smoke permissions' });
+    const other = await organise.createTask({ operationId: randomUUID(), workspaceId, engagementId: null, folderId: null, title: 'Smoke permissions other' });
+    read.taskCreated = created.ok && other.ok;
+    if (!created.ok || !other.ok) return evaluatePermissions(read, command);
+    const taskId = created.value.taskId;
+    const settings = await policy.effectiveThreadSettings(taskId);
+    const otherSettings = await policy.effectiveThreadSettings(other.value.taskId);
+    if (!settings.ok || !otherSettings.ok) throw new Error('the thread settings could not be computed');
+    const folders = settings.value.folders;
+    const outside = path.join(otherSettings.value.folders.working, PERMISSION_FILE);
+    // Relative to the Task's working folder, so no device path is quoted or reported.
+    const argv = [...PERMISSION_PROMPT_PREFIX, `output/${PERMISSION_FILE}`, `../${other.value.taskId}/${PERMISSION_FILE}`];
+    command = argv.join(' ');
+    const statesOf = async () => {
+      const states = await organise.listStates(taskId);
+      if (!states.ok) return { text: 'unread', reviewAndApproval: -1 };
+      const pick = states.value.dimensions.filter((entry) => entry.dimension === 'review' || entry.dimension === 'approval_marker');
+      return { text: JSON.stringify(pick), reviewAndApproval: pick.reduce((total, entry) => total + entry.records.length, 0) };
+    };
+    const before = await statesOf();
+
+    // The person's own rules: ask before the smoke command, forbid the smoke's rm prefix.
+    read.promptRuleSet = await contents.executeJavaScript(
+      permissionRulesProbe(
+        [
+          { prefix: PERMISSION_PROMPT_PREFIX, decision: 'prompt', note: null },
+          { prefix: PERMISSION_FORBID_PREFIX, decision: 'forbid', note: null },
+        ],
+        randomUUID(),
+      ),
+    );
+
+    // Deny: nothing runs.
+    const deniedRun = policy.runTool(taskId, argv, { timeoutMs: 30_000 });
+    const deniedCard = (await contents.executeJavaScript(permissionCardProbe(taskId, 'deny', []))) as PermissionCardRead;
+    const denied = await deniedRun;
+    read.denied = { card: deniedCard, run: denied.ok ? { ok: true } : { ok: false, code: denied.code, reason: denied.reason }, fileOnDevice: fs.existsSync(path.join(folders.output, PERMISSION_FILE)) };
+
+    // Allow: runs once, inside the sandbox.
+    const allowedRun = policy.runTool(taskId, argv, { timeoutMs: 30_000 });
+    const allowedCard = (await contents.executeJavaScript(permissionCardProbe(taskId, 'run', [deniedCard.requestId ?? '']))) as PermissionCardRead;
+    const allowed = await allowedRun;
+    read.allowed = {
+      card: allowedCard,
+      run: allowed.ok
+        ? { ok: true, exitCode: allowed.value.exitCode, denials: allowed.value.denials.map((denial) => denial.text), permissionRequestId: allowed.value.permissionRequestId }
+        : { ok: false, code: allowed.code },
+      fileOnDevice: fs.existsSync(path.join(folders.output, PERMISSION_FILE)) && !fs.existsSync(outside),
+    };
+
+    // Forbid: refused with the rule and its source, without a card.
+    const forbidden = await policy.runTool(taskId, [...PERMISSION_FORBID_PREFIX, `output/${PERMISSION_FILE}`], { timeoutMs: 30_000 });
+    read.forbidden = forbidden.ok ? { ok: true } : { ok: false, code: forbidden.code, reason: forbidden.reason };
+
+    // A user allow rule is refused by the runtime.
+    read.allowRule = await contents.executeJavaScript(permissionRulesProbe([{ prefix: ['/usr/bin/curl'], decision: 'allow', note: null }], randomUUID()));
+
+    const after = await statesOf();
+    read.states = { before: before.text, after: after.text, reviewAndApproval: after.reviewAndApproval };
+  } catch (error) {
+    read.error = (error as Error).message;
+  } finally {
+    const cleared = (await contents.executeJavaScript(permissionRulesProbe([], randomUUID())).catch(() => null)) as { ok?: unknown } | null;
+    read.rulesCleared = cleared?.ok === true;
+    const signOut = await identity.session.signOut().catch(() => ({ ok: false }));
+    await organise.syncPrincipal().catch(() => undefined);
+    read.signedOutAtEnd = signOut.ok;
+  }
+  return evaluatePermissions(read, command);
 }

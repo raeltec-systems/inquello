@@ -16,6 +16,7 @@ import type { InquelloPolicySource } from '../../protocol/generated/v2/InquelloP
 import type { InquelloTaskPolicy } from '../../protocol/generated/v2/InquelloTaskPolicy';
 import type { InquelloToolReach } from '../../protocol/generated/v2/InquelloToolReach';
 import { OperationError, type PayloadValidator } from '../security/operations';
+import { reviewerView, type ReviewerView } from './permissions';
 import { OUTPUT_FOLDER_LABEL, SANDBOX_UNAVAILABLE, WORKING_FOLDER_LABEL, type ReachBoundary } from './tools';
 
 export const SETTING_NAMES = ['sandbox', 'approval', 'network', 'mcp_tools', 'extensions', 'full_access', 'no_prompt'] as const;
@@ -147,6 +148,8 @@ export interface PolicyView {
   capabilities: CapabilityView[];
   /** What a standard Task's tools in this Workspace can reach. */
   reach: ReachView;
+  /** Story 1.20: the automatic permission reviewer's state; shown outside the policy summary. */
+  reviewer: ReviewerView;
 }
 
 export interface BroadModeView {
@@ -229,6 +232,10 @@ export type PolicyFailureCode =
   | 'human-actor-required'
   | 'broad-mode-not-permitted'
   | 'sandbox-unavailable'
+  | 'command-forbidden'
+  | 'permission-denied'
+  | 'not-pending'
+  | 'user-rule-cannot-allow'
   | 'failed';
 
 export type PolicyResult<T> = { ok: true; value: T } | { ok: false; code: PolicyFailureCode; reason: string; actualRevision?: number };
@@ -378,6 +385,7 @@ export function policyView(value: InquelloPolicyEffectiveResponse): PolicyView {
     device: { configured: device.configured === true, label: deviceLabel },
     capabilities: value.capabilities.map((entry) => capabilityView(String(entry.id), entry.enabled === true)),
     reach: reachView(value.reach, 'workspace'),
+    reviewer: reviewerView(value.reviewer),
   };
 }
 

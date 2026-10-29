@@ -1603,6 +1603,36 @@ client_request_definitions! {
         manual_payload_conversion: manual,
         response: v2::CommandExecResponse,
     },
+    /// Inquello (Story 1.20): the signed-in person's own command rules.
+    InquelloUserRulesRead => "inquello/permissions/userRules/read" {
+        params: v2::InquelloUserRulesReadParams,
+        serialization: global("inquello"),
+        response: v2::InquelloUserRulesReadResponse,
+    },
+    /// Inquello (Story 1.20): replaces the person's own rules (prompt or forbid only).
+    InquelloUserRulesSet => "inquello/permissions/userRules/set" {
+        params: v2::InquelloUserRulesSetParams,
+        serialization: global("inquello"),
+        response: v2::InquelloUserRulesSetResponse,
+    },
+    /// Inquello (Story 1.20): records a pending request for permission to act.
+    InquelloPermissionsRequest => "inquello/permissions/request" {
+        params: v2::InquelloPermissionsRequestParams,
+        serialization: global("inquello"),
+        response: v2::InquelloPermissionsRequestResponse,
+    },
+    /// Inquello (Story 1.20): the person's pending permission requests.
+    InquelloPermissionsPending => "inquello/permissions/pending" {
+        params: v2::InquelloPermissionsPendingParams,
+        serialization: global("inquello"),
+        response: v2::InquelloPermissionsPendingResponse,
+    },
+    /// Inquello (Story 1.20): decides one pending permission request.
+    InquelloPermissionsDecide => "inquello/permissions/decide" {
+        params: v2::InquelloPermissionsDecideParams,
+        serialization: global("inquello"),
+        response: v2::InquelloPermissionsDecideResponse,
+    },
 
     /// DEPRECATED APIs below
     GetConversationSummary => "getConversationSummary" {

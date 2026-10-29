@@ -15,7 +15,11 @@
 //! `not_found`, `workspace_mismatch`, `revision_conflict`,
 //! `operation_conflict`, `human_actor_required`, `dimension_not_enabled`,
 //! `invalid_value`, `broad_mode_not_permitted` (with `rule`, the governing
-//! source, and `revision` for a Workspace rule) or `store_failure`.
+//! source, and `revision` for a Workspace rule), `task_folder_missing`, and
+//! (Story 1.20) `user_rule_cannot_allow`, `command_forbidden` and
+//! `permission_required` (both with `evaluation`, the command's decision
+//! record), `request_not_pending` and `reviewer_not_available`, or
+//! `store_failure`.
 
 use crate::JsonSchema;
 use crate::TS;
@@ -614,6 +618,16 @@ pub struct InquelloToolsExecParams {
     #[ts(type = "number | null")]
     #[ts(optional = nullable)]
     pub timeout_ms: Option<i64>,
+    /// Story 1.20: the allowed permission request that covers exactly this
+    /// command, used once. A command whose rules ask is refused with
+    /// `permission_required` without one.
+    #[ts(optional = nullable)]
+    pub permission_request_id: Option<String>,
+    /// Story 1.20: the local sandbox check. When set, `command` must be empty
+    /// and the runtime runs its own fixed probe that this path is not
+    /// visible inside the Task's profile; command rules do not apply to it.
+    #[ts(optional = nullable)]
+    pub sandbox_probe_target: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
@@ -634,6 +648,10 @@ pub struct InquelloPolicyEffectiveResponse {
     pub capabilities: Vec<InquelloCapabilityContractEntry>,
     /// Story 1.19: what a standard Task's tools in this Workspace can reach.
     pub reach: InquelloToolReach,
+    /// Story 1.20: the Workspace command rules, each with its source.
+    pub command_rules: Vec<InquelloCommandRuleView>,
+    /// Story 1.20: the automatic permission reviewer's state.
+    pub reviewer: InquelloPermissionReviewer,
     /// Present when the params name a Task.
     pub task: Option<InquelloTaskPolicy>,
 }
@@ -688,5 +706,239 @@ pub struct InquelloBroadModeSetParams {
 #[ts(export_to = "v2/")]
 pub struct InquelloBroadModeSetResponse {
     pub task: InquelloTaskPolicy,
+    pub receipt: InquelloReceipt,
+}
+
+// ---- Story 1.20: command rules and permission to act ------------------------------
+
+/// One command rule: a literal command prefix and its decision.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloCommandRule {
+    /// The literal command words, in order.
+    pub prefix: Vec<String>,
+    /// `allow`, `prompt` or `forbid` (a person's own rules: `prompt` or `forbid`).
+    pub decision: String,
+    pub note: Option<String>,
+}
+
+/// Where a command decision comes from.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloRuleSource {
+    /// `workspace_policy`, `user_rule` or `approval_behaviour`.
+    pub kind: String,
+    /// The policy revision (Workspace) or rules version (user rule).
+    #[ts(type = "number | null")]
+    pub revision: Option<u64>,
+    /// The asking behaviour, for `approval_behaviour`.
+    pub behaviour: Option<String>,
+    /// The source in words, for example "Workspace policy, revision 4" or "your rule".
+    pub label: String,
+}
+
+/// A rule with its source.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloCommandRuleView {
+    pub rule: InquelloCommandRule,
+    pub source: InquelloRuleSource,
+}
+
+/// The automatic permission reviewer: a Workspace switch, off by default,
+/// usable only once a processing route exists.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloPermissionReviewer {
+    /// The Workspace switch.
+    pub enabled: bool,
+    /// `off`, `not_available` or `active`.
+    pub state: String,
+    pub label: String,
+    /// The runtime's inherited reviewer setting this maps to: `user` unless active.
+    pub runtime_setting: String,
+}
+
+/// The decision record of one command.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloCommandEvaluation {
+    /// `allow`, `prompt` or `forbid`.
+    pub decision: String,
+    /// The rule that controls the decision; null when the asking behaviour decides.
+    pub controlling_rule: Option<InquelloCommandRule>,
+    pub source: InquelloRuleSource,
+    /// A prompt refused because the Task's mode never asks.
+    pub cannot_ask: bool,
+    /// The exact command.
+    pub command: Vec<String>,
+    /// The exact command as people read it.
+    pub command_text: String,
+    /// The action and its destination in plain words.
+    pub analysis: String,
+    /// Where it takes effect, with no device path.
+    pub destination: String,
+    /// What changes and whether it can be undone.
+    pub consequence: String,
+    /// The controlling rule and its source in words.
+    pub rule_text: String,
+}
+
+/// A recorded permission decision.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloPermissionDecision {
+    /// `allowed`, `denied` or `expired`.
+    pub outcome: String,
+    /// `human`, `automated_reviewer` or `system`.
+    pub actor_kind: String,
+    pub actor_ref: String,
+    #[ts(type = "number")]
+    pub decided_at: i64,
+    /// "Automated permission review — not analytical review or Professional
+    /// Approval" for the reviewer; null otherwise.
+    pub label: Option<String>,
+}
+
+/// One request for permission to act.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloPermissionRequest {
+    pub request_id: String,
+    pub task_id: String,
+    pub workspace_id: String,
+    /// `tools_exec` or `runtime`.
+    pub origin: String,
+    /// Always "Permission to act".
+    pub label: String,
+    pub evaluation: InquelloCommandEvaluation,
+    #[ts(type = "number")]
+    pub created_at: i64,
+    #[ts(type = "number")]
+    pub expires_at: i64,
+    /// `pending`, `allowed`, `denied` or `expired`.
+    pub status: String,
+    /// 1 while undecided, 2 once decided.
+    #[ts(type = "number")]
+    pub revision: u64,
+    pub decision: Option<InquelloPermissionDecision>,
+    pub used: bool,
+}
+
+/// Reads the signed-in person's own command rules.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloUserRulesReadParams {}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloUserRulesReadResponse {
+    /// 0 before the first version.
+    #[ts(type = "number")]
+    pub revision: u64,
+    pub rules: Vec<InquelloCommandRule>,
+}
+
+/// Replaces the person's own rules: `prompt` or `forbid` only
+/// (`user_rule_cannot_allow` otherwise).
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloUserRulesSetParams {
+    pub operation_id: String,
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+    pub rules: Vec<InquelloCommandRule>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloUserRulesSetResponse {
+    #[ts(type = "number")]
+    pub revision: u64,
+    pub rules: Vec<InquelloCommandRule>,
+    pub receipt: InquelloReceipt,
+}
+
+/// Records a pending request for permission to run one command for a Task.
+/// The decision record is computed here from the Task's rules and policy. A
+/// forbidden command is refused (`command_forbidden`) and no request exists.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloPermissionsRequestParams {
+    pub operation_id: String,
+    pub request_id: String,
+    pub workspace_policy: InquelloWorkspaceExecutionPolicy,
+    pub task_id: String,
+    pub command: Vec<String>,
+    /// `tools_exec` or `runtime`.
+    pub origin: String,
+    /// How long the request waits for a decision.
+    #[ts(type = "number")]
+    pub ttl_ms: u64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloPermissionsRequestResponse {
+    pub request: InquelloPermissionRequest,
+    pub receipt: InquelloReceipt,
+}
+
+/// The person's pending requests, of one Task when named.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloPermissionsPendingParams {
+    #[ts(optional = nullable)]
+    pub task_id: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloPermissionsPendingResponse {
+    pub requests: Vec<InquelloPermissionRequest>,
+}
+
+/// Decides one pending request. A person allows or denies; the host only
+/// expires or denies; the automatic reviewer is refused
+/// (`reviewer_not_available`) until a processing route exists. A decided or
+/// expired request is `request_not_pending`.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloPermissionsDecideParams {
+    pub operation_id: String,
+    pub request_id: String,
+    /// 1: the request's revision while undecided.
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+    /// `allowed`, `denied` or `expired`.
+    pub outcome: String,
+    /// Supplied by the desktop main process: `human` (the bound principal),
+    /// `system` or `automated_reviewer`.
+    pub actor_kind: String,
+    #[ts(optional = nullable)]
+    pub actor_ref: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloPermissionsDecideResponse {
+    pub request: InquelloPermissionRequest,
     pub receipt: InquelloReceipt,
 }

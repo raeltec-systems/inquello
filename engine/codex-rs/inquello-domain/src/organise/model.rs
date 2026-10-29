@@ -81,6 +81,11 @@ uuid_id!(
     TaskId,
     "task_id"
 );
+uuid_id!(
+    /// A pending permission request (Story 1.20).
+    PermissionRequestId,
+    "request_id"
+);
 
 fn parse_canonical_uuid(value: &str) -> Option<Uuid> {
     let uuid = Uuid::parse_str(value).ok()?;

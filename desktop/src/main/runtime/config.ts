@@ -16,6 +16,11 @@
  *   network only through the runtime's own proxy, which allows only the
  *   Workspace's listed domains and names every blocked destination.
  *
+ * - `approvals_reviewer = "user"` (Story 1.20): the inherited automatic
+ *   approval reviewer stays off. Every permission request comes to the
+ *   person until a Workspace switches automated permission review on and a
+ *   processing route exists (Story 1.22).
+ *
  * While the runtime runs, `inquello/tools/exec` adds each Task's named
  * permissions profile (`[permissions.inquello-task-<id>]`) through the
  * runtime's own configuration writer; the next start drops them, and each
@@ -33,6 +38,8 @@ export const RUNTIME_CONFIG_TOML = [
   '# Written by Inquello before every runtime start; changes here are replaced.',
   '# Codex logins live in the OS keyring only: no auth.json fallback.',
   'cli_auth_credentials_store = "keyring"',
+  '# Permission requests come to the person; the automatic reviewer stays off.',
+  'approvals_reviewer = "user"',
   '',
   '[features]',
   '# Keep the login itself in the keyring, not in an encrypted file in this directory.',

@@ -31,7 +31,14 @@
  *   checks that a path outside the Task's profile (the working store's
  *   folder) is not visible. If it is visible, or the probe cannot run, the
  *   local sandbox is unavailable on this device and bounded commands are
- *   refused.
+ *   refused. The runtime builds the fixed probe itself
+ *   (`sandboxProbeTarget`), so no command rule blocks it.
+ * - **Permission to act (Story 1.20).** `inquello/tools/exec` applies the
+ *   Workspace command rules and the person's own rules. A forbidden command
+ *   is refused with its rule and source named. A command that asks waits on
+ *   a pending request (`PermissionMediator`): only the person's "Run …"
+ *   lets that exact command run, once, still inside the Task's profile; a
+ *   denial, or no decision in time, runs nothing and the Task continues.
  */
 import { RpcResponseError } from '../runtime/errors';
 import type { Logger } from '../runtime/logger';
@@ -43,6 +50,27 @@ import type { InquelloBroadModeSetResponse } from '../../protocol/generated/v2/I
 import type { InquelloPolicyEffectiveResponse } from '../../protocol/generated/v2/InquelloPolicyEffectiveResponse';
 import type { InquelloWorkspaceExecutionPolicy } from '../../protocol/generated/v2/InquelloWorkspaceExecutionPolicy';
 import type { CommandExecResponse } from '../../protocol/generated/v2/CommandExecResponse';
+import type { InquelloUserRulesReadResponse } from '../../protocol/generated/v2/InquelloUserRulesReadResponse';
+import type { InquelloUserRulesSetResponse } from '../../protocol/generated/v2/InquelloUserRulesSetResponse';
+import type { InquelloCommandEvaluation } from '../../protocol/generated/v2/InquelloCommandEvaluation';
+import {
+  ALLOWED_TEXT,
+  DENIED_TEXT,
+  EXPIRED_TEXT,
+  NO_LONGER_PENDING,
+  forbiddenText,
+  ruleItemView,
+  sourcedRuleView,
+  reviewerView,
+  type DecidePermissionInput,
+  type PermissionCardView,
+  type PermissionDecisionView,
+  type PermissionMediator,
+  type PermissionSettingsView,
+  type RuleItemView,
+  type SetUserRulesInput,
+  type UserRulesView,
+} from './permissions';
 import { ensureTaskFolder, SANDBOX_UNAVAILABLE, translateDenials, type ToolDenial } from './tools';
 import {
   BROAD_MODE_TITLE,
@@ -80,6 +108,9 @@ export const POLICY_REASONS = {
   humanRequired: 'Only a person can choose a broader execution mode.',
   sandboxUnavailable: SANDBOX_UNAVAILABLE,
   noTaskFolders: 'Task folders are not set up on this device, so tools cannot run.',
+  notPending: NO_LONGER_PENDING,
+  userRuleCannotAllow: 'Your own rules can only ask first or forbid; they never allow a command.',
+  rulesConflict: 'Your rules were changed first. Review them and try again.',
   failed: 'The request did not complete.',
 } as const;
 
@@ -90,6 +121,8 @@ export interface ToolRunView {
   stderr: string;
   /** The runtime's refusals translated; empty when nothing was blocked. */
   denials: ToolDenial[];
+  /** The permission request the person allowed for this run, when its rules asked. */
+  permissionRequestId: string | null;
 }
 
 /** The shared-service route the policy needs (Story 1.18). */
@@ -114,6 +147,8 @@ export interface PolicyServiceOptions {
   taskFolders: string | null;
   /** A path on this device that no Task profile reaches (the working store's folder), for the sandbox check. */
   sandboxProbeTarget: string | null;
+  /** Pending permission requests and their decisions (Story 1.20). */
+  permissions: PermissionMediator;
 }
 
 interface TaskContext {
@@ -130,6 +165,7 @@ interface Refusal {
   actual?: number;
   rule?: SourceKind;
   revision?: number | null;
+  evaluation?: InquelloCommandEvaluation;
 }
 
 function refusalOf(error: unknown): Refusal | null {
@@ -140,6 +176,7 @@ function refusalOf(error: unknown): Refusal | null {
   if (typeof data.actual === 'number') refusal.actual = data.actual;
   if (typeof data.rule === 'string') refusal.rule = data.rule as SourceKind;
   if (typeof data.revision === 'number') refusal.revision = data.revision;
+  if (typeof data.evaluation === 'object' && data.evaluation !== null) refusal.evaluation = data.evaluation as InquelloCommandEvaluation;
   return refusal;
 }
 
@@ -197,6 +234,12 @@ export class PolicyService {
       case 'store_not_configured':
       case 'store_unavailable':
         return fail('failed', POLICY_REASONS.storeUnavailable);
+      case 'command_forbidden':
+        return fail('command-forbidden', forbiddenText(refusal.evaluation ?? null));
+      case 'request_not_pending':
+        return fail('not-pending', POLICY_REASONS.notPending);
+      case 'user_rule_cannot_allow':
+        return fail('user-rule-cannot-allow', POLICY_REASONS.userRuleCannotAllow);
       default:
         this.options.logger.warn(`policy: runtime request failed (${(error as Error).message})`);
         return fail(refusal ? 'failed' : 'runtime-unavailable', refusal ? POLICY_REASONS.failed : POLICY_REASONS.runtimeUnavailable);
@@ -281,7 +324,8 @@ export class PolicyService {
           workspacePolicy: context.layer,
           taskId,
           taskFolder: context.folders.working,
-          command: ['/bin/sh', '-c', 'test ! -e "$1"', 'sandbox-check', target],
+          command: [],
+          sandboxProbeTarget: target,
           timeoutMs: 20_000,
         });
         if (result.exitCode !== 0) this.options.logger.warn(`policy: the local sandbox check failed (exit ${result.exitCode})`);
@@ -428,22 +472,161 @@ export class PolicyService {
     if (!settings.ok) return settings;
     const { reach, folders } = settings.value;
     if (reach.bounded && !(await this.sandboxAvailable(context.value, taskId))) return fail('sandbox-unavailable', POLICY_REASONS.sandboxUnavailable);
-    let result: CommandExecResponse;
-    try {
-      result = await this.options.runtime.request<CommandExecResponse>('inquello/tools/exec', {
+    const exec = (permissionRequestId: string | null) =>
+      this.options.runtime.request<CommandExecResponse>('inquello/tools/exec', {
         workspacePolicy: context.value.layer,
         taskId,
         taskFolder: folders.working,
         command: [...command],
         timeoutMs: options.timeoutMs ?? 60_000,
+        permissionRequestId,
       });
+    let result: CommandExecResponse;
+    let permissionRequestId: string | null = null;
+    try {
+      result = await exec(null);
     } catch (error) {
-      return this.runtimeFailure(error);
+      if (refusalOf(error)?.kind !== 'permission_required') return this.runtimeFailure(error);
+      // The rules ask: a pending request waits for the person (or declines by default).
+      const asked = await this.options.permissions.ask({ workspacePolicy: context.value.layer, taskId, command, origin: 'tools_exec' });
+      if (!asked.ok) return this.runtimeFailure(asked.error);
+      if (asked.outcome !== 'allowed') {
+        this.options.logger.info(`policy: a command was ${asked.outcome === 'expired' ? 'declined by default' : 'denied'}; nothing ran`);
+        return fail('permission-denied', asked.outcome === 'expired' ? EXPIRED_TEXT : DENIED_TEXT);
+      }
+      permissionRequestId = asked.requestId;
+      try {
+        result = await exec(permissionRequestId);
+      } catch (retry) {
+        return this.runtimeFailure(retry);
+      }
     }
     const run = { exitCode: Number(result.exitCode), stdout: String(result.stdout ?? ''), stderr: String(result.stderr ?? '') };
     return {
       ok: true,
-      value: { ...run, denials: translateDenials(run, { working: folders.working, output: folders.output, bounded: reach.bounded, boundaries: reach.boundaries }) },
+      value: {
+        ...run,
+        denials: translateDenials(run, { working: folders.working, output: folders.output, bounded: reach.bounded, boundaries: reach.boundaries }),
+        permissionRequestId,
+      },
     };
+  }
+
+  // ---- permission to act (Story 1.20) ------------------------------------------------
+
+  /** The open Task's pending requests as ApprovalCards (creator only). */
+  async pendingPermissions(taskId: string): Promise<PolicyResult<PermissionCardView[]>> {
+    const prepared = await this.prepare();
+    if (!prepared.ok) return prepared;
+    try {
+      return { ok: true, value: await this.options.permissions.pending(taskId) };
+    } catch (error) {
+      return this.runtimeFailure(error);
+    }
+  }
+
+  /**
+   * Records the person's decision on one request. "Run …" allows that one
+   * request; every other choice denies it, and "Deny and add a rule to always
+   * ask" or "Deny and forbid this prefix" also records the person's own rule
+   * (with its own receipt). A stale or expired request is "no longer pending".
+   */
+  async decidePermission(input: DecidePermissionInput): Promise<PolicyResult<PermissionDecisionView>> {
+    const prepared = await this.prepare();
+    if (!prepared.ok) return prepared;
+    const decided = await this.options.permissions.decide(input.requestId, input.choice === 'run' ? 'allowed' : 'denied', input.operationId);
+    if (!decided.ok) return this.runtimeFailure(decided.error);
+    if (decided.outcome === 'allowed') return { ok: true, value: { outcome: 'allowed', text: ALLOWED_TEXT, rule: null } };
+    if (input.choice === 'deny') return { ok: true, value: { outcome: 'denied', text: DENIED_TEXT, rule: null } };
+    const decision = input.choice === 'deny-ask' ? 'prompt' : 'forbid';
+    const added = await this.addUserRule(decided.rulePrefix, decision, `${input.operationId}:rule`);
+    if (!added.ok) return { ok: true, value: { outcome: 'denied', text: `${DENIED_TEXT} The rule was not added: ${added.reason}`, rule: null } };
+    const rule = added.value;
+    return {
+      ok: true,
+      value: { outcome: 'denied', text: `${DENIED_TEXT} Added your rule: \`${rule.prefixText}\` ${decision === 'prompt' ? 'always asks you first' : 'never runs'}.`, rule },
+    };
+  }
+
+  /** Adds (or replaces) one of the person's own rules for `prefix`. */
+  private async addUserRule(prefix: string[], decision: 'prompt' | 'forbid', operationId: string): Promise<PolicyResult<RuleItemView>> {
+    let current: InquelloUserRulesReadResponse;
+    try {
+      current = await this.options.runtime.request<InquelloUserRulesReadResponse>('inquello/permissions/userRules/read', {});
+    } catch (error) {
+      return this.runtimeFailure(error);
+    }
+    const same = (rule: { prefix: string[] }) => rule.prefix.length === prefix.length && rule.prefix.every((token, index) => token === prefix[index]);
+    const existing = current.rules.find(same);
+    // Never loosen: an existing rule that already decides as strictly stays.
+    if (existing && (existing.decision === decision || existing.decision === 'forbid')) return { ok: true, value: ruleItemView(existing, 'Your rule') };
+    const rules = [...current.rules.filter((rule) => !same(rule)).map((rule) => ({ prefix: rule.prefix, decision: rule.decision, note: rule.note ?? null })), { prefix, decision, note: null }];
+    try {
+      const set = await this.options.runtime.request<InquelloUserRulesSetResponse>('inquello/permissions/userRules/set', { operationId, expectedRevision: Number(current.revision), rules });
+      const added = set.rules.find(same);
+      return added ? { ok: true, value: ruleItemView(added, 'Your rule') } : fail('failed', POLICY_REASONS.failed);
+    } catch (error) {
+      return this.runtimeFailure(error);
+    }
+  }
+
+  private async userRulesView(): Promise<PolicyResult<UserRulesView>> {
+    try {
+      const current = await this.options.runtime.request<InquelloUserRulesReadResponse>('inquello/permissions/userRules/read', {});
+      return { ok: true, value: { revision: Number(current.revision), rules: current.rules.map((rule) => ruleItemView(rule, 'Your rule')) } };
+    } catch (error) {
+      return this.runtimeFailure(error);
+    }
+  }
+
+  /** S07: each Workspace's command rules with their sources, the reviewer state, and the person's own rules. */
+  async permissionSettings(): Promise<PermissionSettingsView> {
+    if (!this.options.identity.principalId()) return { signedIn: false, userRules: null, workspaces: [], reason: POLICY_REASONS.signedOut };
+    const listing = await this.options.organise.getWorkspaces();
+    if (!listing.signedIn) return { signedIn: false, userRules: null, workspaces: [], reason: POLICY_REASONS.signedOut };
+    const prepared = await this.prepare();
+    if (!prepared.ok) return { signedIn: true, userRules: null, workspaces: [], reason: prepared.reason };
+    const own = await this.userRulesView();
+    const workspaces: PermissionSettingsView['workspaces'] = [];
+    for (const workspace of listing.workspaces) {
+      const layer = await this.workspacePolicy(workspace.workspaceId);
+      const response = layer.ok ? await this.effective(layer.value, null) : layer;
+      if (!response.ok) {
+        workspaces.push({ workspaceId: workspace.workspaceId, name: workspace.name, rules: [], reviewer: null, reason: response.reason });
+        continue;
+      }
+      try {
+        workspaces.push({
+          workspaceId: workspace.workspaceId,
+          name: workspace.name,
+          rules: response.value.commandRules.map(sourcedRuleView),
+          reviewer: reviewerView(response.value.reviewer),
+          reason: null,
+        });
+      } catch (error) {
+        this.options.logger.warn(`policy: the runtime answer was not understood (${(error as Error).message})`);
+        workspaces.push({ workspaceId: workspace.workspaceId, name: workspace.name, rules: [], reviewer: null, reason: POLICY_REASONS.failed });
+      }
+    }
+    return { signedIn: true, userRules: own.ok ? own.value : null, workspaces, reason: own.ok ? null : own.reason };
+  }
+
+  /** Replaces the person's own rules at the revision they saw; the runtime refuses an allow rule. */
+  async setUserRules(input: SetUserRulesInput): Promise<PolicyResult<PermissionSettingsView>> {
+    const prepared = await this.prepare();
+    if (!prepared.ok) return prepared;
+    try {
+      await this.options.runtime.request<InquelloUserRulesSetResponse>('inquello/permissions/userRules/set', {
+        operationId: input.operationId,
+        expectedRevision: input.expectedRevision,
+        rules: input.rules,
+      });
+    } catch (error) {
+      const refusal = refusalOf(error);
+      if (refusal?.kind === 'revision_conflict') return fail('conflict', POLICY_REASONS.rulesConflict, refusal.actual);
+      return this.runtimeFailure(error);
+    }
+    this.options.logger.info('policy: your command rules were changed');
+    return { ok: true, value: await this.permissionSettings() };
   }
 }

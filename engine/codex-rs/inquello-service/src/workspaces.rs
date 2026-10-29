@@ -32,6 +32,7 @@ use inquello_domain::authorization::WorkspaceKind;
 use inquello_domain::authorization::WorkspacePolicy;
 use inquello_domain::execution_policy::ApprovalBehaviour;
 use inquello_domain::execution_policy::ExecutionPolicy;
+use inquello_domain::execution_policy::RuleDecision;
 use inquello_domain::execution_policy::SandboxLevel;
 use inquello_protocol::Revision;
 use inquello_protocol::workspace as wire;
@@ -467,6 +468,22 @@ fn execution_view(policy: &ExecutionPolicy) -> wire::ExecutionSection {
         extensions: access(policy.extensions),
         allow_full_access: policy.allow_full_access,
         allow_no_prompt: policy.allow_no_prompt,
+        allowed_domains: policy.allowed_domains.clone(),
+        command_rules: policy.command_rules.as_ref().map(|rules| {
+            rules
+                .iter()
+                .map(|rule| wire::CommandRuleView {
+                    prefix: rule.prefix.clone(),
+                    decision: match rule.decision {
+                        RuleDecision::Allow => wire::RuleDecision::Allow,
+                        RuleDecision::Prompt => wire::RuleDecision::Prompt,
+                        RuleDecision::Forbid => wire::RuleDecision::Forbid,
+                    },
+                    note: rule.note.clone(),
+                })
+                .collect()
+        }),
+        automatic_permission_review: policy.automatic_permission_review,
     }
 }
 

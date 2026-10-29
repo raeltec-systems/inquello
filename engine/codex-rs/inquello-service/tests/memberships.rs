@@ -1702,6 +1702,10 @@ async fn the_execution_policy_is_changed_by_the_operator_and_read_by_members() {
             "execution",
         ),
         (json!({ "approvals": ["never"] }), "execution"),
+        (
+            json!({ "command_rules": [{ "prefix": ["rm", "*"], "decision": "forbid" }] }),
+            "execution",
+        ),
     ] {
         let result = update_policy(
             &h,
@@ -1753,4 +1757,47 @@ async fn the_execution_policy_is_changed_by_the_operator_and_read_by_members() {
         .await;
     assert_refused(&response, DenyReason::NotSignedIn);
     h.finish().await;
+}
+
+#[tokio::test]
+async fn members_read_the_command_rules_and_the_reviewer_switch() {
+    let h = Harness::start().await;
+    let ws = workspace_with_admin(&h, "Rules Co", "ada").await;
+    let rita = join(&h, &ws, "rita", &["reviewer"]).await;
+    update_policy(
+        &h,
+        ws.id,
+        policy_with(|policy| {
+            policy["execution"] = json!({
+                "network": "allowed",
+                "allowed_domains": ["api.example.com"],
+                "command_rules": [
+                    { "prefix": ["git", "push"], "decision": "prompt", "note": "Leaves this device" },
+                    { "prefix": ["rm"], "decision": "forbid" },
+                ],
+                "automatic_permission_review": true,
+            });
+        }),
+    )
+    .await
+    .expect("operator updates the policy");
+    let view: ExecutionPolicyView = execution_view(&h, ws.id, &rita).await.ok();
+    let execution = view.execution.expect("an execution section");
+    assert_eq!(
+        execution.allowed_domains,
+        Some(vec!["api.example.com".to_string()])
+    );
+    assert_eq!(execution.automatic_permission_review, Some(true));
+    let rules = execution.command_rules.expect("command rules");
+    assert_eq!(rules.len(), 2);
+    assert_eq!(rules[0].prefix, vec!["git".to_string(), "push".to_string()]);
+    assert_eq!(
+        rules[0].decision,
+        inquello_protocol::workspace::RuleDecision::Prompt
+    );
+    assert_eq!(rules[0].note.as_deref(), Some("Leaves this device"));
+    assert_eq!(
+        rules[1].decision,
+        inquello_protocol::workspace::RuleDecision::Forbid
+    );
 }

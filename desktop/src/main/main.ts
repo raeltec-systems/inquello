@@ -95,6 +95,16 @@
  * boundary. After `policy`, `--smoke` runs the tool-bounds probe and prints a
  * `tool-bounds` line, which the run also requires to pass; it reports denial
  * texts and outcomes, never a device path or a command's output.
+ *
+ * Permission to act (Story 1.20): `inquello/tools/exec` applies the
+ * Workspace command rules and the person's own rules. A command whose rules
+ * ask waits on a pending request (`PermissionMediator`), shown in the Task's
+ * contextual review area as an ApprovalCard; only the person's "Run …" lets
+ * it run, once, inside the Task's profile, and a request no one decides in
+ * time is declined by default. The renderer reads the cards and rules and
+ * records decisions through the `permissions.*` operations. After
+ * `tool-bounds`, `--smoke` runs the permissions probe and prints a
+ * `permissions` line, which the run also requires to pass.
  */
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
@@ -119,9 +129,9 @@ import {
   type PolicyOptions,
 } from './security/policy';
 import { OrganiseService } from './organise';
-import { EscalationGate, PolicyService, taskFoldersRoot } from './policy';
+import { EscalationGate, PermissionMediator, PolicyService, taskFoldersRoot } from './policy';
 import { createProviders, loadProviderDevConfig, PROVIDER_DEV_CONFIG_ENV, providersDir, type ProviderService } from './providers';
-import { probeComposer, probeData, probeIdentity, probeOrganise, probePolicy, probeProviders, probeRenderer, probeShellLayout, probeStates, probeToolBounds, SHELL_LAYOUT } from './smoke-probe';
+import { probeComposer, probeData, probeIdentity, probeOrganise, probePermissions, probePolicy, probeProviders, probeRenderer, probeShellLayout, probeStates, probeToolBounds, SHELL_LAYOUT } from './smoke-probe';
 
 const smoke = process.argv.includes('--smoke');
 // The smoke run keeps what main logs, so the providers probe can scan it for a leaked key.
@@ -142,6 +152,7 @@ let statesOk = false;
 let shellLayoutOk = false;
 let composerOk = false;
 let toolBoundsOk = false;
+let permissionsOk = false;
 let organise: OrganiseService | undefined;
 let policy: PolicyService | undefined;
 /** Escalations the runtime raises: pending authorization requests, declined in Story 1.19. */
@@ -358,11 +369,15 @@ async function runSmokeProbe(contents: WebContents): Promise<void> {
   toolBoundsOk = toolBoundsReport.ok;
   process.stdout.write(`${JSON.stringify({ event: 'tool-bounds', ...toolBoundsReport })}\n`);
   if (!toolBoundsReport.ok) logger.error(`tool-bounds probe failed: ${toolBoundsReport.failures.join('; ')}`);
+  const permissionsReport = await probePermissions(contents, { identity, organise, policy, seedFile: process.env.INQUELLO_SMOKE_SEED ?? null });
+  permissionsOk = permissionsReport.ok;
+  process.stdout.write(`${JSON.stringify({ event: 'permissions', ...permissionsReport })}\n`);
+  if (!permissionsReport.ok) logger.error(`permissions probe failed: ${permissionsReport.failures.join('; ')}`);
 }
 
 function exitCodeFor(exit: ExitInfo | undefined): number {
   if (!smoke) return 0;
-  return handshakeOk && privilegesOk && designOk && identityOk && dataOk && providersOk && organiseOk && statesOk && shellLayoutOk && composerOk && policyOk && toolBoundsOk && exit !== undefined && exit.exitCode === 0 && !exit.killed ? 0 : 1;
+  return handshakeOk && privilegesOk && designOk && identityOk && dataOk && providersOk && organiseOk && statesOk && shellLayoutOk && composerOk && policyOk && toolBoundsOk && permissionsOk && exit !== undefined && exit.exitCode === 0 && !exit.killed ? 0 : 1;
 }
 
 app.on('before-quit', (event) => {
@@ -436,18 +451,20 @@ void app.whenReady().then(async () => {
     logger,
   });
   organise = organiseService;
+  const policyRuntime = {
+    ready: () => runtime?.state === 'ready',
+    instance: () => runtime,
+    request: <T,>(method: string, params?: unknown) => (runtime ? runtime.request<T>(method, params) : Promise.reject(new Error('the runtime is not running'))),
+  };
   const policyService = new PolicyService({
-    runtime: {
-      ready: () => runtime?.state === 'ready',
-      instance: () => runtime,
-      request: <T,>(method: string, params?: unknown) => (runtime ? runtime.request<T>(method, params) : Promise.reject(new Error('the runtime is not running'))),
-    },
+    runtime: policyRuntime,
     identity: identitySession,
     organise: organiseService,
     service: identity.service,
     logger,
     taskFolders: taskFoldersRoot(userData),
     sandboxProbeTarget: path.dirname(workingStorePath(userData)),
+    permissions: new PermissionMediator({ runtime: policyRuntime, logger, newId: randomUUID }),
   });
   policy = policyService;
   /** Rebinds the runtime's principal after a sign-in change. */
@@ -549,6 +566,10 @@ void app.whenReady().then(async () => {
         settings: () => policyService.settings(),
         forTask: (taskId) => policyService.forTask(taskId),
         setBroadMode: (input) => policyService.setBroadMode(input),
+        pendingPermissions: (taskId) => policyService.pendingPermissions(taskId),
+        decidePermission: (input) => policyService.decidePermission(input),
+        permissionSettings: () => policyService.permissionSettings(),
+        setUserRules: (input) => policyService.setUserRules(input),
       },
     }),
     { trustedWebContentsIds, logger },

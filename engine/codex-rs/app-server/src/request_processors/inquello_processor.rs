@@ -29,6 +29,17 @@
 //!   Workspace policy, checks it is the Task's own Workspace, and refuses a
 //!   broader mode the effective policy does not permit
 //!   (`broad_mode_not_permitted`, with the governing rule).
+//! - Story 1.20: `inquello/tools/exec` evaluates the command against the
+//!   Workspace command rules and the person's own rules, matched by the
+//!   runtime's own exec-policy prefix matching. A forbidden command is
+//!   refused (`command_forbidden`); a command that asks needs an allowed
+//!   permission request for exactly that command (`permission_required`
+//!   otherwise), used once. `inquello/permissions/request`, `pending` and
+//!   `decide` hold those requests; `inquello/permissions/userRules/read` and
+//!   `set` hold the person's own rules (prompt or forbid only). The
+//!   automatic permission reviewer is mapped to the runtime's inherited
+//!   `approvals_reviewer` setting, which stays `user` until a processing
+//!   route exists.
 
 use crate::error_code::INTERNAL_ERROR_CODE;
 use crate::error_code::INVALID_REQUEST_ERROR_CODE;
@@ -44,6 +55,9 @@ use codex_app_server_protocol::InquelloBroadModeReadResponse;
 use codex_app_server_protocol::InquelloBroadModeSetParams;
 use codex_app_server_protocol::InquelloBroadModeSetResponse;
 use codex_app_server_protocol::InquelloCapabilityContractEntry;
+use codex_app_server_protocol::InquelloCommandEvaluation;
+use codex_app_server_protocol::InquelloCommandRule;
+use codex_app_server_protocol::InquelloCommandRuleView;
 use codex_app_server_protocol::InquelloDeviceRequirements;
 use codex_app_server_protocol::InquelloEngagement;
 use codex_app_server_protocol::InquelloEngagementCreateParams;
@@ -53,11 +67,21 @@ use codex_app_server_protocol::InquelloFolder;
 use codex_app_server_protocol::InquelloFolderCreateParams;
 use codex_app_server_protocol::InquelloFolderResponse;
 use codex_app_server_protocol::InquelloKnownWorkspace;
+use codex_app_server_protocol::InquelloPermissionDecision;
+use codex_app_server_protocol::InquelloPermissionRequest;
+use codex_app_server_protocol::InquelloPermissionReviewer;
+use codex_app_server_protocol::InquelloPermissionsDecideParams;
+use codex_app_server_protocol::InquelloPermissionsDecideResponse;
+use codex_app_server_protocol::InquelloPermissionsPendingParams;
+use codex_app_server_protocol::InquelloPermissionsPendingResponse;
+use codex_app_server_protocol::InquelloPermissionsRequestParams;
+use codex_app_server_protocol::InquelloPermissionsRequestResponse;
 use codex_app_server_protocol::InquelloPolicyEffectiveParams;
 use codex_app_server_protocol::InquelloPolicyEffectiveResponse;
 use codex_app_server_protocol::InquelloPolicySetting;
 use codex_app_server_protocol::InquelloPolicySource;
 use codex_app_server_protocol::InquelloReceipt;
+use codex_app_server_protocol::InquelloRuleSource;
 use codex_app_server_protocol::InquelloRuntimeProfile;
 use codex_app_server_protocol::InquelloSetPrincipalParams;
 use codex_app_server_protocol::InquelloSetPrincipalResponse;
@@ -80,6 +104,9 @@ use codex_app_server_protocol::InquelloThreadSettings;
 use codex_app_server_protocol::InquelloToolBoundary;
 use codex_app_server_protocol::InquelloToolReach;
 use codex_app_server_protocol::InquelloToolsExecParams;
+use codex_app_server_protocol::InquelloUserRulesReadResponse;
+use codex_app_server_protocol::InquelloUserRulesSetParams;
+use codex_app_server_protocol::InquelloUserRulesSetResponse;
 use codex_app_server_protocol::InquelloWorkspaceExecutionPolicy;
 use codex_app_server_protocol::InquelloWorkspaceListResponse;
 use codex_app_server_protocol::InquelloWorkspaceRememberParams;
@@ -90,18 +117,24 @@ use codex_app_server_protocol::JSONRPCErrorError;
 use codex_app_server_protocol::SandboxMode;
 use inquello_adapters::SqliteWorkingStore;
 use inquello_adapters::SystemClock;
+use inquello_domain::Clock;
 use inquello_domain::DomainError;
 use inquello_domain::InitializeStore;
 use inquello_domain::Revision;
 use inquello_domain::execution_policy;
 use inquello_domain::execution_policy::ApprovalBehaviour;
 use inquello_domain::execution_policy::BroadModeStatus;
+use inquello_domain::execution_policy::CommandEvaluation;
+use inquello_domain::execution_policy::CommandRule;
 use inquello_domain::execution_policy::DeviceRequirements;
 use inquello_domain::execution_policy::EffectivePolicy;
 use inquello_domain::execution_policy::ExecutionPolicy;
+use inquello_domain::execution_policy::RuleDecision;
+use inquello_domain::execution_policy::RuleSource;
 use inquello_domain::execution_policy::SandboxLevel;
 use inquello_domain::execution_policy::Setting;
 use inquello_domain::execution_policy::SettingSource;
+use inquello_domain::execution_policy::SourcedRule;
 use inquello_domain::execution_policy::TaskFolder;
 use inquello_domain::execution_policy::ToolProfile;
 use inquello_domain::execution_policy::ToolReach;
@@ -627,6 +660,11 @@ impl InquelloRequestProcessor {
                     &policy,
                     BroadModeStatus::Standard,
                 )),
+                command_rules: execution_policy::effective_rules(&policy, &[], Revision::ZERO)
+                    .iter()
+                    .map(sourced_rule_view)
+                    .collect(),
+                reviewer: reviewer_view(&policy),
                 task,
             }
             .into(),
@@ -727,28 +765,99 @@ impl InquelloRequestProcessor {
         user: UserConfig,
     ) -> Result<ToolsExecPlan, JSONRPCErrorError> {
         let (store, actor) = self.context(connection_id).await?;
-        if params.command.is_empty() {
-            return Err(refusal("invalid", "command must not be empty"));
-        }
         let layer = workspace_layer(&params.workspace_policy)?;
-        let policy = execution_policy::effective_policy(&layer, &device, &user);
-        let broad = execution_policy::task_broad_mode(&store, actor, &params.task_id)
-            .await
-            .map_err(domain_error)?;
-        if broad.workspace_id != layer.workspace_id {
-            return Err(domain_error(DomainError::WorkspaceMismatch));
+        let command = match &params.sandbox_probe_target {
+            // The local sandbox check (Story 1.19): a fixed probe, built here,
+            // that only tests whether a path is visible. Rules do not apply.
+            Some(target) => {
+                if !params.command.is_empty() || target.is_empty() {
+                    return Err(refusal(
+                        "invalid",
+                        "a sandbox check takes a probe target and no command",
+                    ));
+                }
+                vec![
+                    "/bin/sh".to_string(),
+                    "-c".to_string(),
+                    "test ! -e \"$1\"".to_string(),
+                    "sandbox-check".to_string(),
+                    target.clone(),
+                ]
+            }
+            None => {
+                if params.command.is_empty() {
+                    return Err(refusal("invalid", "command must not be empty"));
+                }
+                params.command.clone()
+            }
+        };
+        let evaluated = evaluate_task_command(
+            &store,
+            actor,
+            &layer,
+            &device,
+            &user,
+            &params.task_id,
+            &command,
+        )
+        .await?;
+        if params.sandbox_probe_target.is_none() {
+            match evaluated.evaluation.decision {
+                RuleDecision::Forbid => {
+                    return Err(evaluation_refusal(
+                        "command_forbidden",
+                        "this command is forbidden by a command rule",
+                        &evaluated.evaluation,
+                    ));
+                }
+                RuleDecision::Prompt => {
+                    let Some(request_id) = &params.permission_request_id else {
+                        return Err(evaluation_refusal(
+                            "permission_required",
+                            "this command needs permission to act",
+                            &evaluated.evaluation,
+                        ));
+                    };
+                    execution_policy::use_permission(
+                        &store,
+                        &SystemClock,
+                        actor,
+                        request_id,
+                        evaluated.broad.task_id,
+                        &command,
+                    )
+                    .await
+                    .map_err(|error| match error {
+                        DomainError::PermissionNotGranted => evaluation_refusal(
+                            "permission_required",
+                            "no allowed permission request covers this command",
+                            &evaluated.evaluation,
+                        ),
+                        error => domain_error(error),
+                    })?;
+                }
+                // An allowed command still runs inside the Task's profile.
+                RuleDecision::Allow => {}
+            }
         }
-        let folder = task_folder(&params.task_folder, broad.task_id)?;
+        let policy = &evaluated.policy;
+        let folder = task_folder(&params.task_folder, evaluated.broad.task_id)?;
         if !folder.root().is_dir() || !folder.output().is_dir() {
             return Err(refusal(
                 "task_folder_missing",
                 "the Task's working folder has not been created",
             ));
         }
-        let status = BroadModeStatus::of(&policy, broad.recorded());
-        let profile = execution_policy::tool_profile(&policy, status, folder);
+        let profile = execution_policy::tool_profile(policy, evaluated.status, folder);
         let runtime = runtime_profile(&profile);
         let cwd = profile.folder.root().to_path_buf();
+        let reviewer = (
+            "approvals_reviewer".to_string(),
+            json!(
+                execution_policy::permission_reviewer(policy, PROCESSING_ROUTE_AVAILABLE)
+                    .runtime_setting()
+            ),
+        );
         let (config_edits, sandbox_policy, permission_profile) =
             match (runtime.permission_profile_id, runtime.permission_profile) {
                 (Some(id), Some(table)) => (
@@ -756,12 +865,13 @@ impl InquelloRequestProcessor {
                         ("features.network_proxy".to_string(), json!(true)),
                         ("default_permissions".to_string(), json!(":read-only")),
                         (format!("permissions.{id}"), table),
+                        reviewer,
                     ],
                     None,
                     Some(id),
                 ),
                 _ => (
-                    Vec::new(),
+                    vec![reviewer],
                     Some(codex_app_server_protocol::SandboxPolicy::DangerFullAccess),
                     None,
                 ),
@@ -769,7 +879,7 @@ impl InquelloRequestProcessor {
         Ok(ToolsExecPlan {
             config_edits,
             exec: CommandExecParams {
-                command: params.command,
+                command,
                 process_id: None,
                 tty: false,
                 stream_stdin: false,
@@ -785,6 +895,425 @@ impl InquelloRequestProcessor {
                 permission_profile,
             },
         })
+    }
+}
+
+// ---- Command rules and permission to act (Story 1.20) ----------------------------
+
+/// Whether a processing route exists for the automatic permission reviewer.
+/// None does before Story 1.22, so the reviewer is never active and the
+/// runtime's `approvals_reviewer` stays `user`.
+pub(crate) const PROCESSING_ROUTE_AVAILABLE: bool = false;
+
+/// The justification prefix that carries a rule's index through the
+/// runtime's matcher.
+const RULE_MARK: &str = "inquello-rule:";
+
+/// Which of `rules` match `command` under the runtime's own exec-policy
+/// prefix matching (`codex-execpolicy`, reached through the requirements
+/// form `codex-config` exposes). Each rule becomes one prefix rule whose
+/// justification carries its index. The matcher's decision is not used:
+/// Inquello combines the matches itself (forbid over prompt over allow), so
+/// every rule is given to the matcher as `prompt`.
+pub(crate) fn matched_rules(
+    command: &[String],
+    rules: &[SourcedRule],
+) -> Result<Vec<bool>, JSONRPCErrorError> {
+    let mut matched = vec![false; rules.len()];
+    if rules.is_empty() || command.is_empty() {
+        return Ok(matched);
+    }
+    let requirements = codex_config::RequirementsExecPolicyToml {
+        prefix_rules: rules
+            .iter()
+            .enumerate()
+            .map(
+                |(index, sourced)| codex_config::RequirementsExecPolicyPrefixRuleToml {
+                    pattern: sourced
+                        .rule
+                        .prefix
+                        .iter()
+                        .map(
+                            |token| codex_config::RequirementsExecPolicyPatternTokenToml {
+                                token: Some(token.clone()),
+                                any_of: None,
+                            },
+                        )
+                        .collect(),
+                    decision: Some(codex_config::RequirementsExecPolicyDecisionToml::Prompt),
+                    justification: Some(format!("{RULE_MARK}{index}")),
+                },
+            )
+            .collect(),
+    };
+    let policy = requirements.to_policy().map_err(|error| {
+        tracing::error!("inquello command rules did not compile: {error}");
+        failure(
+            "rules_unavailable",
+            "the command rules could not be applied",
+        )
+    })?;
+    for found in policy.matches_for_command(command, None) {
+        let value = serde_json::to_value(&found).unwrap_or_default();
+        let index = value["prefixRuleMatch"]["justification"]
+            .as_str()
+            .and_then(|justification| justification.strip_prefix(RULE_MARK))
+            .and_then(|index| index.parse::<usize>().ok());
+        if let Some(index) = index
+            && let Some(slot) = matched.get_mut(index)
+        {
+            *slot = true;
+        }
+    }
+    Ok(matched)
+}
+
+/// One command evaluated for a Task, with the inputs it came from.
+pub(crate) struct TaskEvaluation {
+    pub(crate) policy: EffectivePolicy,
+    pub(crate) broad: execution_policy::TaskBroadMode,
+    pub(crate) status: BroadModeStatus,
+    pub(crate) evaluation: CommandEvaluation,
+}
+
+/// Evaluates `command` for the caller's Task under the Workspace layer, the
+/// device and user layers and the person's own rules.
+async fn evaluate_task_command(
+    store: &SqliteWorkingStore,
+    actor: Actor,
+    layer: &WorkspaceLayer,
+    device: &DeviceRequirements,
+    user: &UserConfig,
+    task_id: &str,
+    command: &[String],
+) -> Result<TaskEvaluation, JSONRPCErrorError> {
+    let policy = execution_policy::effective_policy(layer, device, user);
+    let broad = execution_policy::task_broad_mode(store, actor, task_id)
+        .await
+        .map_err(domain_error)?;
+    if broad.workspace_id != layer.workspace_id {
+        return Err(domain_error(DomainError::WorkspaceMismatch));
+    }
+    let status = BroadModeStatus::of(&policy, broad.recorded());
+    let own = execution_policy::user_rules(store, actor)
+        .await
+        .map_err(domain_error)?;
+    let rules = execution_policy::effective_rules(&policy, &own.rules, own.revision);
+    let matched = matched_rules(command, &rules)?;
+    let evaluation = execution_policy::evaluate_command(command, &rules, &matched, &policy, status);
+    Ok(TaskEvaluation {
+        policy,
+        broad,
+        status,
+        evaluation,
+    })
+}
+
+impl InquelloRequestProcessor {
+    pub(crate) async fn user_rules_read(
+        &self,
+        connection_id: ConnectionId,
+    ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        let (store, actor) = self.context(connection_id).await?;
+        let rules = execution_policy::user_rules(&store, actor)
+            .await
+            .map_err(domain_error)?;
+        Ok(Some(
+            InquelloUserRulesReadResponse {
+                revision: rules.revision.get(),
+                rules: rules.rules.iter().map(rule_view).collect(),
+            }
+            .into(),
+        ))
+    }
+
+    pub(crate) async fn user_rules_set(
+        &self,
+        connection_id: ConnectionId,
+        params: InquelloUserRulesSetParams,
+    ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        let (store, actor) = self.context(connection_id).await?;
+        let outcome = execution_policy::set_user_rules(
+            &store,
+            &SystemClock,
+            actor,
+            execution_policy::SetUserRules {
+                operation_id: params.operation_id,
+                expected_revision: Revision::new(params.expected_revision),
+                rules: params
+                    .rules
+                    .into_iter()
+                    .map(|rule| execution_policy::UserRuleInput {
+                        prefix: rule.prefix,
+                        decision: rule.decision,
+                        note: rule.note,
+                    })
+                    .collect(),
+            },
+        )
+        .await
+        .map_err(domain_error)?;
+        Ok(Some(
+            InquelloUserRulesSetResponse {
+                revision: outcome.record.revision.get(),
+                rules: outcome.record.rules.iter().map(rule_view).collect(),
+                receipt: InquelloReceipt {
+                    operation_id: outcome.receipt.operation_id.to_string(),
+                    command: execution_policy::SET_USER_RULES_COMMAND.to_string(),
+                    expected_revision: outcome.receipt.expected_revision.get(),
+                    resulting_revision: outcome.receipt.resulting_revision.get(),
+                    replayed: outcome.replayed,
+                },
+            }
+            .into(),
+        ))
+    }
+
+    /// Records a pending request after evaluating the command here. A
+    /// forbidden command is refused with its rule and no request exists.
+    pub(crate) async fn permissions_request(
+        &self,
+        connection_id: ConnectionId,
+        params: InquelloPermissionsRequestParams,
+        device: DeviceRequirements,
+        user: UserConfig,
+    ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        let (store, actor) = self.context(connection_id).await?;
+        if params.command.is_empty() {
+            return Err(refusal("invalid", "command must not be empty"));
+        }
+        let layer = workspace_layer(&params.workspace_policy)?;
+        let evaluated = evaluate_task_command(
+            &store,
+            actor,
+            &layer,
+            &device,
+            &user,
+            &params.task_id,
+            &params.command,
+        )
+        .await?;
+        if evaluated.evaluation.decision == RuleDecision::Forbid {
+            return Err(evaluation_refusal(
+                "command_forbidden",
+                "this command is forbidden by a command rule",
+                &evaluated.evaluation,
+            ));
+        }
+        let outcome = execution_policy::request_permission(
+            &store,
+            &SystemClock,
+            actor,
+            execution_policy::RequestPermission {
+                operation_id: params.operation_id,
+                request_id: params.request_id,
+                task_id: params.task_id,
+                origin: params.origin,
+                evaluation: evaluated.evaluation,
+                ttl_ms: params.ttl_ms,
+            },
+        )
+        .await
+        .map_err(domain_error)?;
+        Ok(Some(
+            InquelloPermissionsRequestResponse {
+                request: request_view(&outcome.request, SystemClock.now()),
+                receipt: permission_receipt_view(&outcome),
+            }
+            .into(),
+        ))
+    }
+
+    pub(crate) async fn permissions_pending(
+        &self,
+        connection_id: ConnectionId,
+        params: InquelloPermissionsPendingParams,
+    ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        let (store, actor) = self.context(connection_id).await?;
+        let now = SystemClock.now();
+        let requests =
+            execution_policy::pending_requests(&store, actor, params.task_id.as_deref(), now)
+                .await
+                .map_err(domain_error)?;
+        Ok(Some(
+            InquelloPermissionsPendingResponse {
+                requests: requests
+                    .iter()
+                    .map(|request| request_view(request, now))
+                    .collect(),
+            }
+            .into(),
+        ))
+    }
+
+    /// Decides one request. A `human` decider is the bound principal; the
+    /// automatic reviewer is refused until a processing route exists.
+    pub(crate) async fn permissions_decide(
+        &self,
+        connection_id: ConnectionId,
+        params: InquelloPermissionsDecideParams,
+    ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        let (store, actor) = self.context(connection_id).await?;
+        let invalid = |message: &str| refusal("invalid", message);
+        let decider = match (params.actor_kind.as_str(), params.actor_ref) {
+            ("human", None) => execution_policy::Decider::Human,
+            ("human", Some(_)) => {
+                return Err(invalid(
+                    "a human actor is the signed-in principal and takes no actor reference",
+                ));
+            }
+            ("system", Some(reference)) => execution_policy::Decider::System { reference },
+            ("automated_reviewer", _) if !PROCESSING_ROUTE_AVAILABLE => {
+                return Err(refusal(
+                    "reviewer_not_available",
+                    "Automated permission review: not available (no processing route)",
+                ));
+            }
+            ("automated_reviewer", Some(reference)) => {
+                execution_policy::Decider::AutomatedReviewer { reference }
+            }
+            ("system" | "automated_reviewer", None) => {
+                return Err(invalid("this actor needs an actor reference"));
+            }
+            _ => {
+                return Err(invalid(
+                    "actor_kind must be human, system or automated_reviewer",
+                ));
+            }
+        };
+        let outcome = execution_policy::decide_permission(
+            &store,
+            &SystemClock,
+            actor,
+            execution_policy::DecidePermission {
+                operation_id: params.operation_id,
+                expected_revision: Revision::new(params.expected_revision),
+                request_id: params.request_id,
+                outcome: params.outcome,
+                decider,
+            },
+        )
+        .await
+        .map_err(domain_error)?;
+        Ok(Some(
+            InquelloPermissionsDecideResponse {
+                request: request_view(&outcome.request, SystemClock.now()),
+                receipt: permission_receipt_view(&outcome),
+            }
+            .into(),
+        ))
+    }
+}
+
+fn rule_view(rule: &CommandRule) -> InquelloCommandRule {
+    InquelloCommandRule {
+        prefix: rule.prefix.clone(),
+        decision: rule.decision.as_str().to_string(),
+        note: rule.note.clone(),
+    }
+}
+
+fn rule_source_view(source: RuleSource) -> InquelloRuleSource {
+    InquelloRuleSource {
+        kind: source.kind().to_string(),
+        revision: source.revision().map(Revision::get),
+        behaviour: source
+            .behaviour()
+            .map(|behaviour| behaviour.as_str().to_string()),
+        label: source.to_string(),
+    }
+}
+
+fn sourced_rule_view(sourced: &SourcedRule) -> InquelloCommandRuleView {
+    InquelloCommandRuleView {
+        rule: rule_view(&sourced.rule),
+        source: rule_source_view(sourced.source),
+    }
+}
+
+fn reviewer_view(policy: &EffectivePolicy) -> InquelloPermissionReviewer {
+    let state = execution_policy::permission_reviewer(policy, PROCESSING_ROUTE_AVAILABLE);
+    InquelloPermissionReviewer {
+        enabled: policy.automatic_permission_review.value,
+        state: state.kind().to_string(),
+        label: state.label().to_string(),
+        runtime_setting: state.runtime_setting().to_string(),
+    }
+}
+
+fn evaluation_view(evaluation: &CommandEvaluation) -> InquelloCommandEvaluation {
+    InquelloCommandEvaluation {
+        decision: evaluation.decision.as_str().to_string(),
+        controlling_rule: evaluation.controlling_rule.as_ref().map(rule_view),
+        source: rule_source_view(evaluation.source),
+        cannot_ask: evaluation.cannot_ask,
+        command: evaluation.command.clone(),
+        command_text: evaluation.command_text(),
+        analysis: evaluation.analysis.clone(),
+        destination: evaluation.destination.clone(),
+        consequence: evaluation.consequence.clone(),
+        rule_text: evaluation.rule_text(),
+    }
+}
+
+fn request_view(
+    request: &execution_policy::PermissionRequest,
+    now: inquello_domain::Timestamp,
+) -> InquelloPermissionRequest {
+    InquelloPermissionRequest {
+        request_id: request.request_id.to_string(),
+        task_id: request.task_id.to_string(),
+        workspace_id: request.workspace_id.to_string(),
+        origin: request.origin.as_str().to_string(),
+        label: execution_policy::PERMISSION_LABEL.to_string(),
+        evaluation: evaluation_view(&request.evaluation),
+        created_at: request.created_at.unix_millis(),
+        expires_at: request.expires_at.unix_millis(),
+        status: request.status(now).as_str().to_string(),
+        revision: request.revision().get(),
+        decision: request
+            .decision
+            .as_ref()
+            .map(|decision| InquelloPermissionDecision {
+                outcome: decision.outcome.as_str().to_string(),
+                actor_kind: decision.actor_kind.as_str().to_string(),
+                actor_ref: decision.actor_ref.clone(),
+                decided_at: decision.decided_at.unix_millis(),
+                label: (decision.actor_kind == execution_policy::DeciderKind::AutomatedReviewer)
+                    .then(|| execution_policy::AUTOMATED_DECISION_LABEL.to_string()),
+            }),
+        used: request.used_at.is_some(),
+    }
+}
+
+fn permission_receipt_view(
+    outcome: &execution_policy::PermissionRequestOutcome,
+) -> InquelloReceipt {
+    InquelloReceipt {
+        operation_id: outcome.receipt.operation_id.to_string(),
+        command: outcome.receipt.command.clone(),
+        expected_revision: outcome.receipt.expected_revision.get(),
+        resulting_revision: outcome.receipt.resulting_revision.get(),
+        replayed: outcome.replayed,
+    }
+}
+
+/// A refusal that carries the command's decision record, so the host can
+/// name the rule and its source.
+fn evaluation_refusal(
+    kind: &str,
+    message: &str,
+    evaluation: &CommandEvaluation,
+) -> JSONRPCErrorError {
+    JSONRPCErrorError {
+        code: INVALID_REQUEST_ERROR_CODE,
+        message: message.to_string(),
+        data: Some(json!({
+            "inquello": {
+                "kind": kind,
+                "evaluation": serde_json::to_value(evaluation_view(evaluation)).unwrap_or_default(),
+            }
+        })),
     }
 }
 
@@ -1350,6 +1879,17 @@ fn domain_error(error: DomainError) -> JSONRPCErrorError {
                 }
             })),
         },
+        DomainError::UserRuleCannotAllow => refusal(
+            "user_rule_cannot_allow",
+            "your own rules can only ask or forbid, never allow",
+        ),
+        DomainError::RequestNotPending => {
+            refusal("request_not_pending", "This request is no longer pending")
+        }
+        DomainError::PermissionNotGranted => refusal(
+            "permission_required",
+            "no allowed permission request covers this action",
+        ),
         DomainError::AlreadyInitialized | DomainError::Store(_) => {
             tracing::error!("inquello working store failure: {error}");
             failure("store_failure", "the Inquello working store failed")

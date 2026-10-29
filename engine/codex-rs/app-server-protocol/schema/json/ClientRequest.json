@@ -1833,6 +1833,33 @@
       ],
       "type": "object"
     },
+    "InquelloCommandRule": {
+      "description": "One command rule: a literal command prefix and its decision.",
+      "properties": {
+        "decision": {
+          "description": "`allow`, `prompt` or `forbid` (a person's own rules: `prompt` or `forbid`).",
+          "type": "string"
+        },
+        "note": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "prefix": {
+          "description": "The literal command words, in order.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "decision",
+        "prefix"
+      ],
+      "type": "object"
+    },
     "InquelloEngagementCreateParams": {
       "properties": {
         "clientEntity": {
@@ -1970,6 +1997,100 @@
         "name",
         "operationId",
         "workspaceId"
+      ],
+      "type": "object"
+    },
+    "InquelloPermissionsDecideParams": {
+      "description": "Decides one pending request. A person allows or denies; the host only expires or denies; the automatic reviewer is refused (`reviewer_not_available`) until a processing route exists. A decided or expired request is `request_not_pending`.",
+      "properties": {
+        "actorKind": {
+          "description": "Supplied by the desktop main process: `human` (the bound principal), `system` or `automated_reviewer`.",
+          "type": "string"
+        },
+        "actorRef": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expectedRevision": {
+          "description": "1: the request's revision while undecided.",
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "outcome": {
+          "description": "`allowed`, `denied` or `expired`.",
+          "type": "string"
+        },
+        "requestId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "actorKind",
+        "expectedRevision",
+        "operationId",
+        "outcome",
+        "requestId"
+      ],
+      "type": "object"
+    },
+    "InquelloPermissionsPendingParams": {
+      "description": "The person's pending requests, of one Task when named.",
+      "properties": {
+        "taskId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "InquelloPermissionsRequestParams": {
+      "description": "Records a pending request for permission to run one command for a Task. The decision record is computed here from the Task's rules and policy. A forbidden command is refused (`command_forbidden`) and no request exists.",
+      "properties": {
+        "command": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "origin": {
+          "description": "`tools_exec` or `runtime`.",
+          "type": "string"
+        },
+        "requestId": {
+          "type": "string"
+        },
+        "taskId": {
+          "type": "string"
+        },
+        "ttlMs": {
+          "description": "How long the request waits for a decision.",
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "workspacePolicy": {
+          "$ref": "#/definitions/InquelloWorkspaceExecutionPolicy"
+        }
+      },
+      "required": [
+        "command",
+        "operationId",
+        "origin",
+        "requestId",
+        "taskId",
+        "ttlMs",
+        "workspacePolicy"
       ],
       "type": "object"
     },
@@ -2217,6 +2338,20 @@
           },
           "type": "array"
         },
+        "permissionRequestId": {
+          "description": "Story 1.20: the allowed permission request that covers exactly this command, used once. A command whose rules ask is refused with `permission_required` without one.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sandboxProbeTarget": {
+          "description": "Story 1.20: the local sandbox check. When set, `command` must be empty and the runtime runs its own fixed probe that this path is not visible inside the Task's profile; command rules do not apply to it.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "taskFolder": {
           "type": "string"
         },
@@ -2240,6 +2375,35 @@
         "taskFolder",
         "taskId",
         "workspacePolicy"
+      ],
+      "type": "object"
+    },
+    "InquelloUserRulesReadParams": {
+      "description": "Reads the signed-in person's own command rules.",
+      "type": "object"
+    },
+    "InquelloUserRulesSetParams": {
+      "description": "Replaces the person's own rules: `prompt` or `forbid` only (`user_rule_cannot_allow` otherwise).",
+      "properties": {
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "rules": {
+          "items": {
+            "$ref": "#/definitions/InquelloCommandRule"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "expectedRevision",
+        "operationId",
+        "rules"
       ],
       "type": "object"
     },
@@ -9776,6 +9940,131 @@
         "params"
       ],
       "title": "Inquello/tools/execRequest",
+      "type": "object"
+    },
+    {
+      "description": "Inquello (Story 1.20): the signed-in person's own command rules.",
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "enum": [
+            "inquello/permissions/userRules/read"
+          ],
+          "title": "Inquello/permissions/userRules/readRequestMethod",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/definitions/InquelloUserRulesReadParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "title": "Inquello/permissions/userRules/readRequest",
+      "type": "object"
+    },
+    {
+      "description": "Inquello (Story 1.20): replaces the person's own rules (prompt or forbid only).",
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "enum": [
+            "inquello/permissions/userRules/set"
+          ],
+          "title": "Inquello/permissions/userRules/setRequestMethod",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/definitions/InquelloUserRulesSetParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "title": "Inquello/permissions/userRules/setRequest",
+      "type": "object"
+    },
+    {
+      "description": "Inquello (Story 1.20): records a pending request for permission to act.",
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "enum": [
+            "inquello/permissions/request"
+          ],
+          "title": "Inquello/permissions/requestRequestMethod",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/definitions/InquelloPermissionsRequestParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "title": "Inquello/permissions/requestRequest",
+      "type": "object"
+    },
+    {
+      "description": "Inquello (Story 1.20): the person's pending permission requests.",
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "enum": [
+            "inquello/permissions/pending"
+          ],
+          "title": "Inquello/permissions/pendingRequestMethod",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/definitions/InquelloPermissionsPendingParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "title": "Inquello/permissions/pendingRequest",
+      "type": "object"
+    },
+    {
+      "description": "Inquello (Story 1.20): decides one pending permission request.",
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "enum": [
+            "inquello/permissions/decide"
+          ],
+          "title": "Inquello/permissions/decideRequestMethod",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/definitions/InquelloPermissionsDecideParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "title": "Inquello/permissions/decideRequest",
       "type": "object"
     },
     {

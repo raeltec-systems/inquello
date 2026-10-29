@@ -17,8 +17,12 @@
  *   - a sandbox error with nothing attributable is "Blocked by the local
  *     sandbox" and nothing more specific.
  * - **Escalation.** When the runtime would ask before an action, the request
- *   is recorded as a pending authorization request (for Story 1.20) and, in
- *   this story, declined with the boundary named.
+ *   is recorded as a pending authorization request. When its thread belongs
+ *   to a known Task (`routeFor`, wired once Story 1.25 attaches threads to
+ *   Tasks), the request goes to the same permission path as
+ *   `inquello/tools/exec` (Story 1.20): an ApprovalCard, and the runtime is
+ *   answered only after the person decides. Otherwise it is declined with
+ *   the boundary named.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -202,20 +206,27 @@ export const ESCALATION_METHODS = [
 ] as const;
 export type EscalationMethod = (typeof ESCALATION_METHODS)[number];
 
-/** A pending authorization request for Story 1.20; declined in this story. */
+/** A pending authorization request: declined, or routed to the person (Story 1.20). */
 export interface PendingAuthorization {
   id: string;
   method: EscalationMethod;
   threadId: string | null;
-  status: 'declined';
+  status: 'declined' | 'pending' | 'allowed';
   /** The denial text, with the boundary or destination named. */
   reason: string;
   receivedAt: string;
 }
 
+/** The permission path for a thread's Task (Story 1.20): asks the person and resolves with the outcome. */
+export interface EscalationRoute {
+  ask(command: readonly string[]): Promise<'allowed' | 'denied' | 'expired'>;
+}
+
 export interface EscalationGateOptions {
   /** The permitted boundaries of the Task that owns a thread, when known. */
   boundaryFor?: (threadId: string | null) => string | null;
+  /** The permission path of the Task that owns a thread, when known. */
+  routeFor?: (threadId: string | null) => EscalationRoute | null;
   now?: () => Date;
   newId: () => string;
 }
@@ -237,7 +248,11 @@ export class EscalationGate {
     return (ESCALATION_METHODS as readonly string[]).includes(method);
   }
 
-  /** The runtime's answer to an escalation request, or undefined for any other request. */
+  /**
+   * The runtime's answer to an escalation request, or undefined for any
+   * other request. A command escalation of a Task with a permission path is
+   * answered later, once the person has decided.
+   */
   answer(method: string, params: unknown): unknown {
     if (!this.handles(method)) return undefined;
     const p = (typeof params === 'object' && params !== null ? params : {}) as Record<string, unknown>;
@@ -246,21 +261,49 @@ export class EscalationGate {
     const host = network && typeof network.host === 'string' && network.host.length > 0 ? network.host : null;
     const boundary = this.options.boundaryFor?.(threadId) ?? null;
     const reason = host ? networkDenialText(host) : boundary ? outsideDenialText(boundary) : DENIAL_SANDBOX;
-    this.records.push({ id: this.options.newId(), method, threadId, status: 'declined', reason, receivedAt: (this.options.now?.() ?? new Date()).toISOString() });
+    const route = method === 'item/commandExecution/requestApproval' || method === 'execCommandApproval' ? (this.options.routeFor?.(threadId) ?? null) : null;
+    const command = route ? commandOf(p.command) : null;
+    const record: PendingAuthorization = { id: this.options.newId(), method, threadId, status: route && command ? 'pending' : 'declined', reason, receivedAt: (this.options.now?.() ?? new Date()).toISOString() };
+    this.records.push(record);
     if (this.records.length > MAX_PENDING) this.records.splice(0, this.records.length - MAX_PENDING);
-    switch (method) {
-      case 'item/permissions/requestApproval':
-        return { permissions: {}, scope: 'turn' };
-      case 'execCommandApproval':
-      case 'applyPatchApproval':
-        return { decision: { denied: { rejection: reason } } };
-      default:
-        return { decision: 'decline' };
+    if (route && command) {
+      return route.ask(command).then(
+        (outcome) => {
+          record.status = outcome === 'allowed' ? 'allowed' : 'declined';
+          if (outcome === 'allowed') return method === 'execCommandApproval' ? { decision: 'approved' } : { decision: 'accept' };
+          return declined(method, reason);
+        },
+        () => {
+          record.status = 'declined';
+          return declined(method, reason);
+        },
+      );
     }
+    return declined(method, reason);
   }
 
   /** The recorded requests, newest last. */
   pending(): readonly PendingAuthorization[] {
     return this.records.map((record) => ({ ...record }));
+  }
+}
+
+/** A command escalation's argv: the runtime's own list, or its command line split on spaces. */
+function commandOf(value: unknown): string[] | null {
+  if (Array.isArray(value) && value.length > 0 && value.every((part) => typeof part === 'string')) return value as string[];
+  if (typeof value === 'string' && value.trim() !== '') return value.trim().split(/\s+/);
+  return null;
+}
+
+/** The runtime's decline for each escalation method. */
+function declined(method: EscalationMethod, reason: string): unknown {
+  switch (method) {
+    case 'item/permissions/requestApproval':
+      return { permissions: {}, scope: 'turn' };
+    case 'execCommandApproval':
+    case 'applyPatchApproval':
+      return { decision: { denied: { rejection: reason } } };
+    default:
+      return { decision: 'decline' };
   }
 }

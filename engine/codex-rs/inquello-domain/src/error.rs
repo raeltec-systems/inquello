@@ -65,6 +65,15 @@ pub enum DomainError {
     /// names the governing rule (Story 1.18).
     #[error("broad_mode_not_permitted: governed by {rule}")]
     BroadModeNotPermitted { rule: SettingSource },
+    /// A person's own command rule may only prompt or forbid (Story 1.20).
+    #[error("user_rule_cannot_allow: your own rules can only ask or forbid")]
+    UserRuleCannotAllow,
+    /// The permission request was already decided or has expired (Story 1.20).
+    #[error("this request is no longer pending")]
+    RequestNotPending,
+    /// No allowed, unused permission covers this exact action (Story 1.20).
+    #[error("no permission covers this action")]
+    PermissionNotGranted,
     #[error(transparent)]
     Store(StoreError),
 }

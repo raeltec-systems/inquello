@@ -39,7 +39,7 @@ export interface RpcConnectionOptions {
    * Answers a server-initiated request with a result; returning `undefined`
    * (or throwing) answers it as unsupported (Story 1.19: escalations).
    */
-  onServerRequest?: (method: string, params: unknown) => unknown;
+  onServerRequest?: (method: string, params: unknown) => unknown | Promise<unknown>;
   /** Called once when the inbound stream can no longer be trusted (e.g. oversized line). */
   onFatal: (error: Error) => void;
 }
@@ -227,7 +227,12 @@ export class RpcConnection {
     }
   }
 
-  /** Answers a server-initiated request through `onServerRequest`, or as unsupported so none is left waiting. */
+  /**
+   * Answers a server-initiated request through `onServerRequest`, or as
+   * unsupported so none is left waiting. A handler may answer later with a
+   * promise (Story 1.20: a permission request waits for the person); a
+   * rejected or empty answer is sent as unsupported.
+   */
   private answerServerRequest(id: RequestId, method: string, params: unknown): void {
     let result: unknown;
     try {
@@ -236,6 +241,24 @@ export class RpcConnection {
       this.options.logger.error(`server request handler for ${method} threw: ${(error as Error).message}`);
       result = undefined;
     }
+    if (result instanceof Promise) {
+      const answer = (value: unknown) => {
+        try {
+          this.sendServerAnswer(id, method, value);
+        } catch (error) {
+          this.options.logger.warn(`the answer to ${method} could not be sent (${(error as Error).message})`);
+        }
+      };
+      result.then(answer, (error: unknown) => {
+        this.options.logger.error(`server request handler for ${method} failed: ${(error as Error).message}`);
+        answer(undefined);
+      });
+      return;
+    }
+    this.sendServerAnswer(id, method, result);
+  }
+
+  private sendServerAnswer(id: RequestId, method: string, result: unknown): void {
     if (result !== undefined) {
       this.send({ line: encodeLine({ id, result }) }, true);
       return;

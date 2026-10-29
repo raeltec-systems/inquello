@@ -20,6 +20,9 @@
  * recorded state, and only Task and run states can be recorded. And so do
  * the `policy` operations (Story 1.18); main fetches the Workspace policy and
  * supplies the actor, and a broader mode needs the reach the person confirmed.
+ * So do the `permissions` operations (Story 1.20): the renderer names a
+ * request and the person's choice, or the person's own rules; main supplies
+ * the actor and the runtime evaluates every rule.
  *
  * Self-contained by design: a sandboxed preload can `require` only `electron`,
  * so the channel strings are literals that a test checks against
@@ -54,6 +57,10 @@ const STATE_RECORD_TASK_STATE_CHANNEL = 'inquello:op:state.recordTaskState';
 const POLICY_SETTINGS_CHANNEL = 'inquello:op:policy.getSettings';
 const POLICY_FOR_TASK_CHANNEL = 'inquello:op:policy.forTask';
 const POLICY_SET_BROAD_MODE_CHANNEL = 'inquello:op:policy.setBroadMode';
+const PERMISSIONS_PENDING_CHANNEL = 'inquello:op:permissions.pending';
+const PERMISSIONS_DECIDE_CHANNEL = 'inquello:op:permissions.decide';
+const PERMISSIONS_GET_RULES_CHANNEL = 'inquello:op:permissions.getRules';
+const PERMISSIONS_SET_USER_RULES_CHANNEL = 'inquello:op:permissions.setUserRules';
 
 const api = Object.freeze({
   runtime: Object.freeze({
@@ -123,6 +130,16 @@ const api = Object.freeze({
     forTask: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(POLICY_FOR_TASK_CHANNEL, ...args),
     /** `{ operationId, taskId, expectedRevision, mode, confirmation }`; a broader mode needs the reach the person confirmed. */
     setBroadMode: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(POLICY_SET_BROAD_MODE_CHANNEL, ...args),
+  }),
+  permissions: Object.freeze({
+    /** `{ taskId }`; resolves with `{ ok, value }` (the Task's pending permission requests as cards) or `{ ok: false, reason }`. */
+    pending: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(PERMISSIONS_PENDING_CHANNEL, ...args),
+    /** `{ operationId, requestId, choice }` with choice `run`, `deny`, `deny-ask` or `deny-forbid`; main records it as the person. */
+    decide: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(PERMISSIONS_DECIDE_CHANNEL, ...args),
+    /** Resolves with each Workspace's command rules and reviewer state, and the person's own rules. Takes no arguments. */
+    getRules: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(PERMISSIONS_GET_RULES_CHANNEL, ...args),
+    /** `{ operationId, expectedRevision, rules }`; the runtime refuses an allow rule. */
+    setUserRules: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(PERMISSIONS_SET_USER_RULES_CHANNEL, ...args),
   }),
 });
 

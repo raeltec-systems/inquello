@@ -3,6 +3,7 @@
 //! own configuration, combined so that the most restrictive value wins and
 //! every setting names the rule that governs it.
 
+use crate::execution_policy::command_rules::CommandRule;
 use crate::execution_policy::section::ApprovalBehaviour;
 use crate::execution_policy::section::ExecutionPolicy;
 use crate::execution_policy::section::SandboxLevel;
@@ -137,6 +138,12 @@ pub struct EffectivePolicy {
     pub full_access: Setting<bool>,
     /// Whether a Task may use the no-prompt broad mode.
     pub no_prompt: Setting<bool>,
+    /// The Workspace command rules (Story 1.20), governed by the Workspace
+    /// policy at `policy_revision`; empty when none are listed.
+    pub command_rules: Vec<CommandRule>,
+    /// Whether the Workspace switches the automatic permission reviewer on
+    /// (Story 1.20); off by default.
+    pub automatic_permission_review: Setting<bool>,
 }
 
 /// The most restrictive candidate wins; on a tie the earlier layer is named.
@@ -316,5 +323,11 @@ pub fn effective_policy(
             device_allows_full && device_allows_never,
         ),
         no_prompt: broad(execution.allow_no_prompt, device_allows_never),
+        command_rules: execution.command_rules().to_vec(),
+        automatic_permission_review: Setting {
+            value: execution.automatic_permission_review.unwrap_or(false),
+            source: from_workspace(execution.automatic_permission_review.is_some()),
+            restricted: execution.automatic_permission_review != Some(true),
+        },
     }
 }

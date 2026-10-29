@@ -142,5 +142,21 @@ export function fakePolicy(calls: string[] = []): PolicyOperations {
       calls.push(`setBroadMode:${JSON.stringify([input])}`);
       return signedOut;
     },
+    pendingPermissions: async (taskId) => {
+      calls.push(`pendingPermissions:${JSON.stringify([taskId])}`);
+      return signedOut;
+    },
+    decidePermission: async (input) => {
+      calls.push(`decidePermission:${JSON.stringify([input])}`);
+      return signedOut;
+    },
+    permissionSettings: async () => {
+      calls.push('permissionSettings');
+      return { signedIn: false, userRules: null, workspaces: [], reason: signedOut.reason };
+    },
+    setUserRules: async (input) => {
+      calls.push(`setUserRules:${JSON.stringify([input])}`);
+      return signedOut;
+    },
   };
 }

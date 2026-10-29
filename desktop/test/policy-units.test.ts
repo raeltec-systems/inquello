@@ -10,6 +10,7 @@ import { ServiceError } from '../src/main/identity/service-client';
 import type { ExecutionPolicyView } from '../src/main/identity/wire';
 import type { OrganiseIdentity, OrganiseRuntime, WorkspacesView } from '../src/main/organise';
 import {
+  PermissionMediator,
   BROAD_MODE_REACH,
   DEFAULT_CAPABILITIES,
   DEVICE_NONE,
@@ -58,6 +59,8 @@ function response(overrides: Partial<Record<string, { value: string; source?: So
       { id: 'execution_sandbox', enabled: true, limits: ['Execution sandbox: local OS sandbox on this device; no hosted sandbox — V2 revisit (OQ-13)'] },
     ],
     reach: BOUNDED_REACH,
+    commandRules: [],
+    reviewer: { enabled: false, state: 'off', label: 'Automated permission review: off. Every request comes to you.', runtimeSetting: 'user' },
     task: null,
   };
 }
@@ -127,6 +130,7 @@ function harness(options: { runtime?: (method: string, params: Record<string, un
     engagementCreation: { enabled: true },
   };
   const policy = new PolicyService({
+    permissions: new PermissionMediator({ runtime, logger: recordingLogger(), newId: () => '00000000-0000-4000-8000-0000000000aa' }),
     runtime,
     identity: organiseIdentity,
     organise: { syncPrincipal: async () => undefined, getWorkspaces: async () => workspaces },

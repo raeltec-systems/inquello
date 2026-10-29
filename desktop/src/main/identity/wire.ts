@@ -250,6 +250,12 @@ export const parseExecutionSection = object({
   extensions: optional(access),
   allow_full_access: optional(bool),
   allow_no_prompt: optional(bool),
+  /** Story 1.19: the destinations a Task's tools may contact. */
+  allowed_domains: optional(array(str)),
+  /** Story 1.20: command rules on command prefixes. */
+  command_rules: optional(array(object({ prefix: array(str), decision: oneOf(['allow', 'prompt', 'forbid'] as const), note: optional(str) }))),
+  /** Story 1.20: the automatic permission reviewer switch. */
+  automatic_permission_review: optional(bool),
 });
 export type ExecutionSection = ReturnType<typeof parseExecutionSection>;
 /** `GET /v1/workspaces/{id}/execution-policy` (Story 1.18). */

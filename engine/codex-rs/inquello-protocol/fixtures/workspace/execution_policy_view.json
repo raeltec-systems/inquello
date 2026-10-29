@@ -9,6 +9,13 @@
     "mcp_tools": "denied",
     "extensions": "denied",
     "allow_full_access": true,
-    "allow_no_prompt": true
+    "allow_no_prompt": true,
+    "allowed_domains": ["api.example.com", "*.example.org"],
+    "command_rules": [
+      { "prefix": ["git", "push"], "decision": "prompt", "note": "Pushes leave this device" },
+      { "prefix": ["rm"], "decision": "forbid" },
+      { "prefix": ["ls"], "decision": "allow" }
+    ],
+    "automatic_permission_review": false
   }
 }

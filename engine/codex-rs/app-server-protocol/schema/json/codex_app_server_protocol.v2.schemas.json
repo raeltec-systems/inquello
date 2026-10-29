@@ -4774,6 +4774,131 @@
           "type": "object"
         },
         {
+          "description": "Inquello (Story 1.20): the signed-in person's own command rules.",
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/RequestId"
+            },
+            "method": {
+              "enum": [
+                "inquello/permissions/userRules/read"
+              ],
+              "title": "Inquello/permissions/userRules/readRequestMethod",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/definitions/InquelloUserRulesReadParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "title": "Inquello/permissions/userRules/readRequest",
+          "type": "object"
+        },
+        {
+          "description": "Inquello (Story 1.20): replaces the person's own rules (prompt or forbid only).",
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/RequestId"
+            },
+            "method": {
+              "enum": [
+                "inquello/permissions/userRules/set"
+              ],
+              "title": "Inquello/permissions/userRules/setRequestMethod",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/definitions/InquelloUserRulesSetParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "title": "Inquello/permissions/userRules/setRequest",
+          "type": "object"
+        },
+        {
+          "description": "Inquello (Story 1.20): records a pending request for permission to act.",
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/RequestId"
+            },
+            "method": {
+              "enum": [
+                "inquello/permissions/request"
+              ],
+              "title": "Inquello/permissions/requestRequestMethod",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/definitions/InquelloPermissionsRequestParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "title": "Inquello/permissions/requestRequest",
+          "type": "object"
+        },
+        {
+          "description": "Inquello (Story 1.20): the person's pending permission requests.",
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/RequestId"
+            },
+            "method": {
+              "enum": [
+                "inquello/permissions/pending"
+              ],
+              "title": "Inquello/permissions/pendingRequestMethod",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/definitions/InquelloPermissionsPendingParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "title": "Inquello/permissions/pendingRequest",
+          "type": "object"
+        },
+        {
+          "description": "Inquello (Story 1.20): decides one pending permission request.",
+          "properties": {
+            "id": {
+              "$ref": "#/definitions/RequestId"
+            },
+            "method": {
+              "enum": [
+                "inquello/permissions/decide"
+              ],
+              "title": "Inquello/permissions/decideRequestMethod",
+              "type": "string"
+            },
+            "params": {
+              "$ref": "#/definitions/InquelloPermissionsDecideParams"
+            }
+          },
+          "required": [
+            "id",
+            "method",
+            "params"
+          ],
+          "title": "Inquello/permissions/decideRequest",
+          "type": "object"
+        },
+        {
           "properties": {
             "id": {
               "$ref": "#/definitions/RequestId"
@@ -10561,6 +10686,115 @@
       ],
       "type": "object"
     },
+    "InquelloCommandEvaluation": {
+      "description": "The decision record of one command.",
+      "properties": {
+        "analysis": {
+          "description": "The action and its destination in plain words.",
+          "type": "string"
+        },
+        "cannotAsk": {
+          "description": "A prompt refused because the Task's mode never asks.",
+          "type": "boolean"
+        },
+        "command": {
+          "description": "The exact command.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "commandText": {
+          "description": "The exact command as people read it.",
+          "type": "string"
+        },
+        "consequence": {
+          "description": "What changes and whether it can be undone.",
+          "type": "string"
+        },
+        "controllingRule": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/InquelloCommandRule"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The rule that controls the decision; null when the asking behaviour decides."
+        },
+        "decision": {
+          "description": "`allow`, `prompt` or `forbid`.",
+          "type": "string"
+        },
+        "destination": {
+          "description": "Where it takes effect, with no device path.",
+          "type": "string"
+        },
+        "ruleText": {
+          "description": "The controlling rule and its source in words.",
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/definitions/InquelloRuleSource"
+        }
+      },
+      "required": [
+        "analysis",
+        "cannotAsk",
+        "command",
+        "commandText",
+        "consequence",
+        "decision",
+        "destination",
+        "ruleText",
+        "source"
+      ],
+      "type": "object"
+    },
+    "InquelloCommandRule": {
+      "description": "One command rule: a literal command prefix and its decision.",
+      "properties": {
+        "decision": {
+          "description": "`allow`, `prompt` or `forbid` (a person's own rules: `prompt` or `forbid`).",
+          "type": "string"
+        },
+        "note": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "prefix": {
+          "description": "The literal command words, in order.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "decision",
+        "prefix"
+      ],
+      "type": "object"
+    },
+    "InquelloCommandRuleView": {
+      "description": "A rule with its source.",
+      "properties": {
+        "rule": {
+          "$ref": "#/definitions/InquelloCommandRule"
+        },
+        "source": {
+          "$ref": "#/definitions/InquelloRuleSource"
+        }
+      },
+      "required": [
+        "rule",
+        "source"
+      ],
+      "type": "object"
+    },
     "InquelloDeviceRequirements": {
       "description": "The device layer as `configRequirements/read` reports it.",
       "properties": {
@@ -10886,6 +11120,287 @@
       ],
       "type": "object"
     },
+    "InquelloPermissionDecision": {
+      "description": "A recorded permission decision.",
+      "properties": {
+        "actorKind": {
+          "description": "`human`, `automated_reviewer` or `system`.",
+          "type": "string"
+        },
+        "actorRef": {
+          "type": "string"
+        },
+        "decidedAt": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "label": {
+          "description": "\"Automated permission review — not analytical review or Professional Approval\" for the reviewer; null otherwise.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "outcome": {
+          "description": "`allowed`, `denied` or `expired`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "actorKind",
+        "actorRef",
+        "decidedAt",
+        "outcome"
+      ],
+      "type": "object"
+    },
+    "InquelloPermissionRequest": {
+      "description": "One request for permission to act.",
+      "properties": {
+        "createdAt": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "decision": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/InquelloPermissionDecision"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evaluation": {
+          "$ref": "#/definitions/InquelloCommandEvaluation"
+        },
+        "expiresAt": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "label": {
+          "description": "Always \"Permission to act\".",
+          "type": "string"
+        },
+        "origin": {
+          "description": "`tools_exec` or `runtime`.",
+          "type": "string"
+        },
+        "requestId": {
+          "type": "string"
+        },
+        "revision": {
+          "description": "1 while undecided, 2 once decided.",
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "status": {
+          "description": "`pending`, `allowed`, `denied` or `expired`.",
+          "type": "string"
+        },
+        "taskId": {
+          "type": "string"
+        },
+        "used": {
+          "type": "boolean"
+        },
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "createdAt",
+        "evaluation",
+        "expiresAt",
+        "label",
+        "origin",
+        "requestId",
+        "revision",
+        "status",
+        "taskId",
+        "used",
+        "workspaceId"
+      ],
+      "type": "object"
+    },
+    "InquelloPermissionReviewer": {
+      "description": "The automatic permission reviewer: a Workspace switch, off by default, usable only once a processing route exists.",
+      "properties": {
+        "enabled": {
+          "description": "The Workspace switch.",
+          "type": "boolean"
+        },
+        "label": {
+          "type": "string"
+        },
+        "runtimeSetting": {
+          "description": "The runtime's inherited reviewer setting this maps to: `user` unless active.",
+          "type": "string"
+        },
+        "state": {
+          "description": "`off`, `not_available` or `active`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "enabled",
+        "label",
+        "runtimeSetting",
+        "state"
+      ],
+      "type": "object"
+    },
+    "InquelloPermissionsDecideParams": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "description": "Decides one pending request. A person allows or denies; the host only expires or denies; the automatic reviewer is refused (`reviewer_not_available`) until a processing route exists. A decided or expired request is `request_not_pending`.",
+      "properties": {
+        "actorKind": {
+          "description": "Supplied by the desktop main process: `human` (the bound principal), `system` or `automated_reviewer`.",
+          "type": "string"
+        },
+        "actorRef": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expectedRevision": {
+          "description": "1: the request's revision while undecided.",
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "outcome": {
+          "description": "`allowed`, `denied` or `expired`.",
+          "type": "string"
+        },
+        "requestId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "actorKind",
+        "expectedRevision",
+        "operationId",
+        "outcome",
+        "requestId"
+      ],
+      "title": "InquelloPermissionsDecideParams",
+      "type": "object"
+    },
+    "InquelloPermissionsDecideResponse": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "receipt": {
+          "$ref": "#/definitions/InquelloReceipt"
+        },
+        "request": {
+          "$ref": "#/definitions/InquelloPermissionRequest"
+        }
+      },
+      "required": [
+        "receipt",
+        "request"
+      ],
+      "title": "InquelloPermissionsDecideResponse",
+      "type": "object"
+    },
+    "InquelloPermissionsPendingParams": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "description": "The person's pending requests, of one Task when named.",
+      "properties": {
+        "taskId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "title": "InquelloPermissionsPendingParams",
+      "type": "object"
+    },
+    "InquelloPermissionsPendingResponse": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "requests": {
+          "items": {
+            "$ref": "#/definitions/InquelloPermissionRequest"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "requests"
+      ],
+      "title": "InquelloPermissionsPendingResponse",
+      "type": "object"
+    },
+    "InquelloPermissionsRequestParams": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "description": "Records a pending request for permission to run one command for a Task. The decision record is computed here from the Task's rules and policy. A forbidden command is refused (`command_forbidden`) and no request exists.",
+      "properties": {
+        "command": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "origin": {
+          "description": "`tools_exec` or `runtime`.",
+          "type": "string"
+        },
+        "requestId": {
+          "type": "string"
+        },
+        "taskId": {
+          "type": "string"
+        },
+        "ttlMs": {
+          "description": "How long the request waits for a decision.",
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "workspacePolicy": {
+          "$ref": "#/definitions/InquelloWorkspaceExecutionPolicy"
+        }
+      },
+      "required": [
+        "command",
+        "operationId",
+        "origin",
+        "requestId",
+        "taskId",
+        "ttlMs",
+        "workspacePolicy"
+      ],
+      "title": "InquelloPermissionsRequestParams",
+      "type": "object"
+    },
+    "InquelloPermissionsRequestResponse": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "receipt": {
+          "$ref": "#/definitions/InquelloReceipt"
+        },
+        "request": {
+          "$ref": "#/definitions/InquelloPermissionRequest"
+        }
+      },
+      "required": [
+        "receipt",
+        "request"
+      ],
+      "title": "InquelloPermissionsRequestResponse",
+      "type": "object"
+    },
     "InquelloPolicyEffectiveParams": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "description": "Computes the effective policy over the Workspace layer (from the params), this runtime's managed requirements (`configRequirements/read`) and the user's own configuration. With a `taskId`, also the Task's broader mode, its status under this policy and the thread settings it would get; only the Task's creator may name it, and the Task must belong to the Workspace.",
@@ -10928,6 +11443,13 @@
           },
           "type": "array"
         },
+        "commandRules": {
+          "description": "Story 1.20: the Workspace command rules, each with its source.",
+          "items": {
+            "$ref": "#/definitions/InquelloCommandRuleView"
+          },
+          "type": "array"
+        },
         "device": {
           "$ref": "#/definitions/InquelloDeviceRequirements"
         },
@@ -10947,6 +11469,14 @@
             }
           ],
           "description": "Story 1.19: what a standard Task's tools in this Workspace can reach."
+        },
+        "reviewer": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/InquelloPermissionReviewer"
+            }
+          ],
+          "description": "Story 1.20: the automatic permission reviewer's state."
         },
         "settings": {
           "description": "Every setting, in a fixed order.",
@@ -10973,10 +11503,12 @@
       "required": [
         "authorizationEpoch",
         "capabilities",
+        "commandRules",
         "device",
         "environment",
         "policyRevision",
         "reach",
+        "reviewer",
         "settings",
         "workspaceId"
       ],
@@ -11062,6 +11594,40 @@
         "operationId",
         "replayed",
         "resultingRevision"
+      ],
+      "type": "object"
+    },
+    "InquelloRuleSource": {
+      "description": "Where a command decision comes from.",
+      "properties": {
+        "behaviour": {
+          "description": "The asking behaviour, for `approval_behaviour`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "description": "`workspace_policy`, `user_rule` or `approval_behaviour`.",
+          "type": "string"
+        },
+        "label": {
+          "description": "The source in words, for example \"Workspace policy, revision 4\" or \"your rule\".",
+          "type": "string"
+        },
+        "revision": {
+          "description": "The policy revision (Workspace) or rules version (user rule).",
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "label"
       ],
       "type": "object"
     },
@@ -11757,6 +12323,20 @@
           },
           "type": "array"
         },
+        "permissionRequestId": {
+          "description": "Story 1.20: the allowed permission request that covers exactly this command, used once. A command whose rules ask is refused with `permission_required` without one.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sandboxProbeTarget": {
+          "description": "Story 1.20: the local sandbox check. When set, `command` must be empty and the runtime runs its own fixed probe that this path is not visible inside the Task's profile; command rules do not apply to it.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "taskFolder": {
           "type": "string"
         },
@@ -11782,6 +12362,88 @@
         "workspacePolicy"
       ],
       "title": "InquelloToolsExecParams",
+      "type": "object"
+    },
+    "InquelloUserRulesReadParams": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "description": "Reads the signed-in person's own command rules.",
+      "title": "InquelloUserRulesReadParams",
+      "type": "object"
+    },
+    "InquelloUserRulesReadResponse": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "revision": {
+          "description": "0 before the first version.",
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "rules": {
+          "items": {
+            "$ref": "#/definitions/InquelloCommandRule"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "revision",
+        "rules"
+      ],
+      "title": "InquelloUserRulesReadResponse",
+      "type": "object"
+    },
+    "InquelloUserRulesSetParams": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "description": "Replaces the person's own rules: `prompt` or `forbid` only (`user_rule_cannot_allow` otherwise).",
+      "properties": {
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "rules": {
+          "items": {
+            "$ref": "#/definitions/InquelloCommandRule"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "expectedRevision",
+        "operationId",
+        "rules"
+      ],
+      "title": "InquelloUserRulesSetParams",
+      "type": "object"
+    },
+    "InquelloUserRulesSetResponse": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "properties": {
+        "receipt": {
+          "$ref": "#/definitions/InquelloReceipt"
+        },
+        "revision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "rules": {
+          "items": {
+            "$ref": "#/definitions/InquelloCommandRule"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "receipt",
+        "revision",
+        "rules"
+      ],
+      "title": "InquelloUserRulesSetResponse",
       "type": "object"
     },
     "InquelloWorkspaceExecutionPolicy": {

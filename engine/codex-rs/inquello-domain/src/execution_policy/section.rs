@@ -3,6 +3,8 @@
 
 use crate::authorization::PolicyError;
 use crate::authorization::check_keys;
+use crate::execution_policy::command_rules::CommandRule;
+use crate::execution_policy::command_rules::MAX_COMMAND_RULES;
 use serde_json::Map;
 use serde_json::Value;
 use std::collections::BTreeSet;
@@ -101,12 +103,19 @@ pub struct ExecutionPolicy {
     /// `**.example.com`), lowercase, with no scheme, port or path. Absent or
     /// empty means no network destination.
     pub allowed_domains: Option<Vec<String>>,
+    /// Command rules on command prefixes (Story 1.20): allow, prompt or
+    /// forbid. Matched with the runtime's own exec-policy prefix matching.
+    pub command_rules: Option<Vec<CommandRule>>,
+    /// Whether the inherited automatic permission reviewer may decide
+    /// permission requests (Story 1.20). Absent means off. It becomes usable
+    /// only once a processing route exists.
+    pub automatic_permission_review: Option<bool>,
 }
 
 /// The most patterns `allowed_domains` may list.
 pub const MAX_ALLOWED_DOMAINS: usize = 100;
 
-const FIELDS: [&str; 8] = [
+const FIELDS: [&str; 10] = [
     "sandbox",
     "approvals",
     "network",
@@ -115,6 +124,8 @@ const FIELDS: [&str; 8] = [
     "allow_full_access",
     "allow_no_prompt",
     "allowed_domains",
+    "command_rules",
+    "automatic_permission_review",
 ];
 
 const AT: &str = "the execution policy";
@@ -279,6 +290,32 @@ impl ExecutionPolicy {
                     Some(domains)
                 }
             },
+            command_rules: match object.get("command_rules") {
+                None => None,
+                Some(raw) => {
+                    let raw = raw
+                        .as_array()
+                        .ok_or_else(|| invalid("`command_rules` must be an array"))?;
+                    if raw.len() > MAX_COMMAND_RULES {
+                        return Err(invalid(format!(
+                            "`command_rules` may list at most {MAX_COMMAND_RULES} rules"
+                        )));
+                    }
+                    let mut rules: Vec<CommandRule> = Vec::with_capacity(raw.len());
+                    for (index, entry) in raw.iter().enumerate() {
+                        let rule = CommandRule::from_value(entry)
+                            .map_err(|why| invalid(format!("command rule {index}: {why}")))?;
+                        if rules.iter().any(|known| known.prefix == rule.prefix) {
+                            return Err(invalid(format!(
+                                "command rule {index}: the prefix is listed more than once"
+                            )));
+                        }
+                        rules.push(rule);
+                    }
+                    Some(rules)
+                }
+            },
+            automatic_permission_review: flag(object, "automatic_permission_review")?,
         };
         if policy
             .allowed_domains
@@ -367,7 +404,24 @@ impl ExecutionPolicy {
                 Value::Array(domains.iter().cloned().map(Value::String).collect()),
             );
         }
+        if let Some(rules) = &self.command_rules {
+            object.insert(
+                "command_rules".to_string(),
+                Value::Array(rules.iter().map(CommandRule::to_value).collect()),
+            );
+        }
+        if let Some(value) = self.automatic_permission_review {
+            object.insert(
+                "automatic_permission_review".to_string(),
+                Value::Bool(value),
+            );
+        }
         Value::Object(object)
+    }
+
+    /// The Workspace command rules; empty when none are listed.
+    pub fn command_rules(&self) -> &[CommandRule] {
+        self.command_rules.as_deref().unwrap_or_default()
     }
 
     /// The listed destinations; empty when none are listed.

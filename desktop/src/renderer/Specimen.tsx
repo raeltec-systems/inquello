@@ -18,12 +18,15 @@
  * `inquello.provider` operations. Story 1.18 adds the Capabilities and
  * processing block (S07) last: the effective managed policy of each
  * Workspace and the Capability Contract, read through `inquello.policy`.
- * Nothing else here performs one.
+ * Story 1.20 adds the command rules after it: each Workspace's rules with
+ * their sources, the automatic permission reviewer's state, and the
+ * person's own rules (`inquello.permissions`). Nothing else here performs one.
  */
 import type { ReactElement, ReactNode } from 'react';
 
 import { Account } from './Account';
 import { Capabilities } from './Capabilities';
+import { PermissionRules } from './PermissionRules';
 import { LocalData } from './LocalData';
 import { Providers } from './Providers';
 import { CONTRAST_PAIRS } from './design/contrast';
@@ -457,6 +460,7 @@ export function Specimen({ onIdentityChanged }: SpecimenProps = {}): ReactElemen
 
       <Section title="Capabilities and processing">
         <Capabilities />
+        <PermissionRules />
       </Section>
     </main>
   );

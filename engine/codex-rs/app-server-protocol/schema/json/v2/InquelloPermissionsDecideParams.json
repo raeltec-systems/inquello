@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "description": "Decides one pending request. A person allows or denies; the host only expires or denies; the automatic reviewer is refused (`reviewer_not_available`) until a processing route exists. A decided or expired request is `request_not_pending`.",
+  "properties": {
+    "actorKind": {
+      "description": "Supplied by the desktop main process: `human` (the bound principal), `system` or `automated_reviewer`.",
+      "type": "string"
+    },
+    "actorRef": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "expectedRevision": {
+      "description": "1: the request's revision while undecided.",
+      "format": "uint64",
+      "minimum": 0.0,
+      "type": "integer"
+    },
+    "operationId": {
+      "type": "string"
+    },
+    "outcome": {
+      "description": "`allowed`, `denied` or `expired`.",
+      "type": "string"
+    },
+    "requestId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "actorKind",
+    "expectedRevision",
+    "operationId",
+    "outcome",
+    "requestId"
+  ],
+  "title": "InquelloPermissionsDecideParams",
+  "type": "object"
+}

@@ -25,7 +25,7 @@ import { IssuerClient, SharedServiceClient, httpsTransport } from '../src/main/i
 import { IdentitySession } from '../src/main/identity/session';
 import { CredentialVault } from '../src/main/identity/vault';
 import { OrganiseService } from '../src/main/organise';
-import { BROAD_MODE_REACH, PolicyService } from '../src/main/policy';
+import { BROAD_MODE_REACH, PermissionMediator, PolicyService } from '../src/main/policy';
 import { AppServerRuntime, resolveAppServerBinary, runtimeChildEnv } from '../src/main/runtime';
 import { fakeSafeStorage } from './identity-fakes';
 import { recordingLogger, removeTempDirs, tempDir } from './helpers';
@@ -126,7 +126,7 @@ describe.skipIf(!databaseConfigured)('the effective policy against the real runt
     expect((await identity.withAccess((access) => service.acceptInvite(access, seed.invite_id)))?.workspace_id).toBe(seed.workspace_id);
     const organiseRuntime = { ready: () => runtime.state === 'ready', instance: () => runtime, request: <T,>(method: string, params?: unknown) => runtime.request<T>(method, params) };
     organise = new OrganiseService({ runtime: organiseRuntime, identity, service, logger: recordingLogger() });
-    policy = new PolicyService({ runtime: organiseRuntime, identity, organise, service, logger: recordingLogger(), taskFolders: path.join(dir, 'tasks'), sandboxProbeTarget: path.dirname(workingStore) });
+    policy = new PolicyService({ runtime: organiseRuntime, identity, organise, service, logger: recordingLogger(), taskFolders: path.join(dir, 'tasks'), sandboxProbeTarget: path.dirname(workingStore), permissions: new PermissionMediator({ runtime: organiseRuntime, logger: recordingLogger(), newId: randomUUID }) });
   }, 120_000);
 
   afterAll(async () => {

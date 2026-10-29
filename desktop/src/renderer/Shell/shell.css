@@ -410,14 +410,14 @@ a.iq-nav-row:hover {
   flex: 1 1 auto;
   min-height: 0;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  grid-template-areas: 'switch' 'thread' 'composer';
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-areas: 'switch' 'thread' 'review' 'composer';
 }
 
 .iq-shell:not(.iq-shell--single) .iq-work--artifact {
   /* The thread keeps its readable minimum (set by the Shell from layout.ts); the artifact grows from 380px towards 560px. */
   grid-template-columns: minmax(var(--iq-thread-min-width, 0), 1fr) minmax(var(--panel-min-width), var(--panel-default-width));
-  grid-template-areas: 'switch switch' 'thread artifact' 'composer artifact';
+  grid-template-areas: 'switch switch' 'thread artifact' 'review artifact' 'composer artifact';
 }
 
 .iq-work-switch {
@@ -438,6 +438,33 @@ a.iq-nav-row:hover {
   margin: 0 auto;
   padding: var(--space-6) var(--space-4);
   box-sizing: border-box;
+}
+
+/* Story 1.20: pending permission requests, in the contextual review area before the Composer. */
+.iq-permission-review {
+  grid-area: review;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+  max-width: var(--thread-max-width);
+  max-height: 50vh;
+  margin: 0 auto;
+  padding: var(--space-2) var(--space-4);
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.iq-permission-note {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm, 0.875rem);
+}
+
+.iq-permission-stale {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
 }
 
 .iq-composer-slot {

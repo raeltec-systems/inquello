@@ -16,21 +16,44 @@ use inquello_domain::Revision;
 use inquello_domain::StateChange;
 use inquello_domain::StoreError;
 use inquello_domain::StoreInfo;
+use inquello_domain::Timestamp;
 use inquello_domain::WorkingStore;
 use inquello_domain::execution_policy::BroadModeChange;
 use inquello_domain::execution_policy::BroadModeOutcome;
 use inquello_domain::execution_policy::BroadModeReceipt;
 use inquello_domain::execution_policy::BroadModeRecord;
+use inquello_domain::execution_policy::BroadModeStatus;
 use inquello_domain::execution_policy::BroadModeStore;
 use inquello_domain::execution_policy::BroadModeTask;
+use inquello_domain::execution_policy::DecidePermission;
+use inquello_domain::execution_policy::Decider;
 use inquello_domain::execution_policy::DeviceRequirements;
 use inquello_domain::execution_policy::EffectivePolicy;
 use inquello_domain::execution_policy::ExecutionPolicy;
+use inquello_domain::execution_policy::NewPermissionRequest;
+use inquello_domain::execution_policy::PermissionDecisionChange;
+use inquello_domain::execution_policy::PermissionReceipt;
+use inquello_domain::execution_policy::PermissionRequest;
+use inquello_domain::execution_policy::PermissionRequestOutcome;
+use inquello_domain::execution_policy::PermissionStore;
+use inquello_domain::execution_policy::RequestPermission;
 use inquello_domain::execution_policy::SetBroadMode;
+use inquello_domain::execution_policy::SetUserRules;
 use inquello_domain::execution_policy::UserConfig;
+use inquello_domain::execution_policy::UserRuleInput;
+use inquello_domain::execution_policy::UserRuleStore;
+use inquello_domain::execution_policy::UserRulesChange;
+use inquello_domain::execution_policy::UserRulesOutcome;
+use inquello_domain::execution_policy::UserRulesReceipt;
+use inquello_domain::execution_policy::UserRulesRecord;
 use inquello_domain::execution_policy::WorkspaceLayer;
+use inquello_domain::execution_policy::decide_permission;
 use inquello_domain::execution_policy::effective_policy;
+use inquello_domain::execution_policy::effective_rules;
+use inquello_domain::execution_policy::evaluate_command;
+use inquello_domain::execution_policy::request_permission;
 use inquello_domain::execution_policy::set_broad_mode;
+use inquello_domain::execution_policy::set_user_rules;
 use inquello_domain::initialize_store;
 use inquello_domain::organise::Actor;
 use inquello_domain::organise::CreateEngagement;
@@ -45,6 +68,7 @@ use inquello_domain::organise::OrganiseOutcome;
 use inquello_domain::organise::OrganiseReceipt;
 use inquello_domain::organise::OrganiseRecord;
 use inquello_domain::organise::OrganiseStore;
+use inquello_domain::organise::PermissionRequestId;
 use inquello_domain::organise::PrincipalId;
 use inquello_domain::organise::RenameTask;
 use inquello_domain::organise::ServiceEngagementId;
@@ -91,6 +115,10 @@ enum Pause {
     StatesLoad,
     /// After the broad-mode read (broad-mode writes, Story 1.18).
     BroadModeLoad,
+    /// After the user-rules read (Story 1.20).
+    UserRulesLoad,
+    /// After the permission-request read (decisions, Story 1.20).
+    PermissionLoad,
 }
 
 /// The real store, with a two-party barrier at `pause` and, optionally, a
@@ -298,6 +326,102 @@ impl BroadModeStore for Gate {
 
     async fn commit_broad_mode(&self, change: BroadModeChange) -> Result<(), StoreError> {
         self.store.commit_broad_mode(change).await
+    }
+}
+
+impl UserRuleStore for Gate {
+    async fn find_user_rules_receipt(
+        &self,
+        id: &OperationId,
+    ) -> Result<Option<UserRulesReceipt>, StoreError> {
+        if self.hide_lookup() {
+            return Ok(None);
+        }
+        let result = self.store.find_user_rules_receipt(id).await;
+        self.arrive(Pause::ReceiptLookup).await;
+        result
+    }
+
+    async fn load_user_rules(
+        &self,
+        principal_id: PrincipalId,
+    ) -> Result<Option<UserRulesRecord>, StoreError> {
+        let result = self.store.load_user_rules(principal_id).await;
+        self.arrive(Pause::UserRulesLoad).await;
+        result
+    }
+
+    async fn load_user_rules_record(
+        &self,
+        principal_id: PrincipalId,
+        revision: Revision,
+    ) -> Result<Option<UserRulesRecord>, StoreError> {
+        self.store
+            .load_user_rules_record(principal_id, revision)
+            .await
+    }
+
+    async fn commit_user_rules(&self, change: UserRulesChange) -> Result<(), StoreError> {
+        self.store.commit_user_rules(change).await
+    }
+}
+
+impl PermissionStore for Gate {
+    async fn find_permission_receipt(
+        &self,
+        id: &OperationId,
+    ) -> Result<Option<PermissionReceipt>, StoreError> {
+        if self.hide_lookup() {
+            return Ok(None);
+        }
+        let result = self.store.find_permission_receipt(id).await;
+        self.arrive(Pause::ReceiptLookup).await;
+        result
+    }
+
+    async fn load_permission_task(&self, id: TaskId) -> Result<Option<BroadModeTask>, StoreError> {
+        self.store.load_permission_task(id).await
+    }
+
+    async fn load_permission_request(
+        &self,
+        id: PermissionRequestId,
+    ) -> Result<Option<PermissionRequest>, StoreError> {
+        let result = self.store.load_permission_request(id).await;
+        self.arrive(Pause::PermissionLoad).await;
+        result
+    }
+
+    async fn list_undecided_requests(
+        &self,
+        principal_id: PrincipalId,
+        task_id: Option<TaskId>,
+    ) -> Result<Vec<PermissionRequest>, StoreError> {
+        self.store
+            .list_undecided_requests(principal_id, task_id)
+            .await
+    }
+
+    async fn commit_permission_request(
+        &self,
+        change: NewPermissionRequest,
+    ) -> Result<(), StoreError> {
+        self.store.commit_permission_request(change).await
+    }
+
+    async fn commit_permission_decision(
+        &self,
+        change: PermissionDecisionChange,
+    ) -> Result<(), StoreError> {
+        self.store.commit_permission_decision(change).await
+    }
+
+    async fn mark_permission_used(
+        &self,
+        id: PermissionRequestId,
+        at: Timestamp,
+    ) -> Result<bool, StoreError> {
+        self.store.mark_permission_used(id, at).await
     }
 }
 
@@ -995,4 +1119,206 @@ async fn independent_broad_mode_writes_racing_at_the_same_revision_still_conflic
         other => panic!("expected one applied and one revision conflict, got {other:?}"),
     }
     assert_eq!(broad_revision(&store, &task).await, Revision::new(1));
+}
+
+// ---- A person's rules and permission decisions (Story 1.20) ----------------------------
+
+fn user_rules_command(id: &str, decision: &str) -> SetUserRules {
+    SetUserRules {
+        operation_id: id.to_string(),
+        expected_revision: Revision::ZERO,
+        rules: vec![UserRuleInput {
+            prefix: vec!["git".to_string(), "push".to_string()],
+            decision: decision.to_string(),
+            note: None,
+        }],
+    }
+}
+
+#[tokio::test]
+async fn identical_user_rule_writes_racing_record_one_version() {
+    let (_dir, store) = open().await;
+    let gate = Gate::racing(&store, Pause::UserRulesLoad);
+    let (first, second) = tokio::join!(
+        set_user_rules(
+            &gate,
+            &SystemClock,
+            actor(),
+            user_rules_command("op-r", "forbid")
+        ),
+        set_user_rules(
+            &gate,
+            &SystemClock,
+            actor(),
+            user_rules_command("op-r", "forbid")
+        ),
+    );
+    let (applied, replay) = applied_once(first, second, |o: &UserRulesOutcome| o.replayed);
+    assert_eq!(replay.receipt, applied.receipt);
+    assert_eq!(replay.record, applied.record);
+    let latest = store
+        .load_user_rules(actor().principal_id)
+        .await
+        .unwrap_or_else(|error| panic!("{error}"));
+    assert_eq!(latest.map(|record| record.revision), Some(Revision::new(1)));
+}
+
+#[tokio::test]
+async fn independent_user_rule_writes_racing_at_the_same_version_still_conflict() {
+    let (_dir, store) = open().await;
+    let gate = Gate::racing(&store, Pause::UserRulesLoad);
+    let (first, second) = tokio::join!(
+        set_user_rules(
+            &gate,
+            &SystemClock,
+            actor(),
+            user_rules_command("op-x", "forbid")
+        ),
+        set_user_rules(
+            &gate,
+            &SystemClock,
+            actor(),
+            user_rules_command("op-y", "prompt")
+        ),
+    );
+    let conflict = DomainError::RevisionConflict {
+        expected: Revision::ZERO,
+        actual: Revision::new(1),
+    };
+    match (first, second) {
+        (Ok(_), Err(error)) | (Err(error), Ok(_)) => assert_eq!(error, conflict),
+        other => panic!("expected one applied and one revision conflict, got {other:?}"),
+    }
+}
+
+/// One pending request for `task`, asking before `git push`.
+async fn pending_request(store: &SqliteWorkingStore, task: &Task) -> PermissionRequestId {
+    let policy = effective_policy(
+        &WorkspaceLayer {
+            workspace_id: WorkspaceId::parse(WORKSPACE).unwrap_or_else(|error| panic!("{error}")),
+            policy_revision: Revision::new(2),
+            authorization_epoch: Revision::new(2),
+            execution: Some(
+                ExecutionPolicy::from_value(&serde_json::json!({
+                    "command_rules": [{ "prefix": ["git", "push"], "decision": "prompt" }],
+                }))
+                .unwrap_or_else(|error| panic!("{error}")),
+            ),
+        },
+        &DeviceRequirements::default(),
+        &UserConfig::default(),
+    );
+    let rules = effective_rules(&policy, &[], Revision::ZERO);
+    let command = vec!["git".to_string(), "push".to_string()];
+    let evaluation = evaluate_command(
+        &command,
+        &rules,
+        &[true],
+        &policy,
+        BroadModeStatus::Standard,
+    );
+    let request_id = PermissionRequestId::from_uuid(Uuid::new_v4());
+    ok(request_permission(
+        store,
+        &SystemClock,
+        actor(),
+        RequestPermission {
+            operation_id: format!("ask-{request_id}"),
+            request_id: request_id.to_string(),
+            task_id: task.task_id.to_string(),
+            origin: "tools_exec".to_string(),
+            evaluation,
+            ttl_ms: 600_000,
+        },
+    )
+    .await);
+    request_id
+}
+
+fn decision(id: &str, request: PermissionRequestId, outcome: &str) -> DecidePermission {
+    DecidePermission {
+        operation_id: id.to_string(),
+        expected_revision: Revision::new(1),
+        request_id: request.to_string(),
+        outcome: outcome.to_string(),
+        decider: Decider::Human,
+    }
+}
+
+#[tokio::test]
+async fn identical_permission_decisions_racing_record_one_decision() {
+    let (_dir, store) = open().await;
+    let task = new_task(&store).await;
+    let request = pending_request(&store, &task).await;
+    let gate = Gate::racing(&store, Pause::PermissionLoad);
+    let (first, second) = tokio::join!(
+        decide_permission(
+            &gate,
+            &SystemClock,
+            actor(),
+            decision("op-d", request, "denied")
+        ),
+        decide_permission(
+            &gate,
+            &SystemClock,
+            actor(),
+            decision("op-d", request, "denied")
+        ),
+    );
+    let (applied, replay) = applied_once(first, second, |o: &PermissionRequestOutcome| o.replayed);
+    assert_eq!(replay.receipt, applied.receipt);
+    assert_eq!(replay.request.decision, applied.request.decision);
+}
+
+#[tokio::test]
+async fn independent_permission_decisions_racing_decide_once() {
+    let (_dir, store) = open().await;
+    let task = new_task(&store).await;
+    let request = pending_request(&store, &task).await;
+    let gate = Gate::racing(&store, Pause::PermissionLoad);
+    let (first, second) = tokio::join!(
+        decide_permission(
+            &gate,
+            &SystemClock,
+            actor(),
+            decision("op-allow", request, "allowed")
+        ),
+        decide_permission(
+            &gate,
+            &SystemClock,
+            actor(),
+            decision("op-deny", request, "denied")
+        ),
+    );
+    match (first, second) {
+        (Ok(outcome), Err(error)) | (Err(error), Ok(outcome)) => {
+            assert_eq!(error, DomainError::RequestNotPending);
+            assert!(!outcome.replayed);
+        }
+        other => panic!("expected one decision and one refusal, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn a_permission_decision_whose_lookup_missed_a_committed_receipt_replays_it() {
+    let (_dir, store) = open().await;
+    let task = new_task(&store).await;
+    let request = pending_request(&store, &task).await;
+    let applied = ok(decide_permission(
+        &store,
+        &SystemClock,
+        actor(),
+        decision("op-d", request, "allowed"),
+    )
+    .await);
+    let gate = Gate::stale_lookup(&store);
+    let replay = ok(decide_permission(
+        &gate,
+        &SystemClock,
+        actor(),
+        decision("op-d", request, "allowed"),
+    )
+    .await);
+    assert!(replay.replayed);
+    assert_eq!(replay.receipt, applied.receipt);
 }

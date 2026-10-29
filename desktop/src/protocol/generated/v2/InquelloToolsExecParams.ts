@@ -18,4 +18,16 @@ command: Array<string>,
 /**
  * Optional timeout in milliseconds.
  */
-timeoutMs?: number | null, };
+timeoutMs?: number | null,
+/**
+ * Story 1.20: the allowed permission request that covers exactly this
+ * command, used once. A command whose rules ask is refused with
+ * `permission_required` without one.
+ */
+permissionRequestId?: string | null,
+/**
+ * Story 1.20: the local sandbox check. When set, `command` must be empty
+ * and the runtime runs its own fixed probe that this path is not
+ * visible inside the Task's profile; command rules do not apply to it.
+ */
+sandboxProbeTarget?: string | null, };

@@ -47,6 +47,7 @@ pub use model::OrganiseOutcome;
 pub use model::OrganiseReceipt;
 pub use model::OrganiseRecord;
 pub use model::PeriodDate;
+pub use model::PermissionRequestId;
 pub use model::PrincipalId;
 pub use model::ServiceEngagementId;
 pub use model::TEXT_MAX_CHARS;

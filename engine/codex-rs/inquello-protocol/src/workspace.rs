@@ -165,6 +165,34 @@ pub struct ExecutionSection {
     pub allow_full_access: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub allow_no_prompt: Option<bool>,
+    /// Story 1.19: the destinations a Task's tools may contact.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub allowed_domains: Option<Vec<String>>,
+    /// Story 1.20: command rules on command prefixes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub command_rules: Option<Vec<CommandRuleView>>,
+    /// Story 1.20: the automatic permission reviewer switch (off when absent).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub automatic_permission_review: Option<bool>,
+}
+
+/// One Workspace command rule (Story 1.20): a literal command prefix and its
+/// decision.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CommandRuleView {
+    pub prefix: Vec<String>,
+    pub decision: RuleDecision,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RuleDecision {
+    Allow,
+    Prompt,
+    Forbid,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

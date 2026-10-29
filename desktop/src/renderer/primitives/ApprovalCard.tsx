@@ -4,7 +4,8 @@
  *
  * - Required: `context` (who or what is asking), `action` (the exact action),
  *   `destination`, `consequence`, `primaryLabel` and `onPrimary`. `quote`
- *   optionally shows the exact content that would be sent.
+ *   optionally shows the exact content that would be sent, and `rule` the
+ *   rule that asks for this permission (Story 1.20).
  * - The primary label names the action. A generic label (Approve, OK, Yes,
  *   Confirm, Continue) is rejected: a warning names it and nothing renders.
  *   Alternatives are optional, each with a real label and handler; one with a
@@ -41,6 +42,8 @@ export interface ApprovalCardProps {
   consequence: ReactNode;
   /** The exact content that would be sent. */
   quote?: ReactNode;
+  /** The rule that asks for this permission, with its source. */
+  rule?: ReactNode;
   /** Names the action, for example "Send October statement request". */
   primaryLabel: string;
   onPrimary: () => void;
@@ -60,6 +63,7 @@ export function ApprovalCard({
   destination,
   consequence,
   quote,
+  rule,
   primaryLabel,
   onPrimary,
   alternatives = [],
@@ -98,6 +102,12 @@ export function ApprovalCard({
           <dt>Consequence</dt>
           <dd>{consequence}</dd>
         </div>
+        {rule !== undefined ? (
+          <div className="iq-approval-fact">
+            <dt>Rule</dt>
+            <dd>{rule}</dd>
+          </div>
+        ) : null}
       </dl>
       <div className="iq-approval-actions">
         <Button variant="primary" onPress={() => onPrimary()}>

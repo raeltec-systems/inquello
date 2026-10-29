@@ -322,6 +322,46 @@ describe('operation registry', () => {
     ]);
   });
 
+  it('validates permission payloads in main: a request and a choice only, never an actor, command or rule source (Story 1.20)', async () => {
+    const taskId = '3a1b2c3d-4e5f-4a6b-8c7d-8e9f0a1b2c3d';
+    const requestId = '4a1b2c3d-4e5f-4a6b-8c7d-8e9f0a1b2c3d';
+    const operationId = '0a1b2c3d-4e5f-4a6b-8c7d-8e9f0a1b2c3d';
+    const decide = { operationId, requestId, choice: 'run' };
+    for (const bad of [
+      { ...decide, choice: 'approve' },
+      { ...decide, choice: 'always-allow' },
+      { ...decide, actorKind: 'human' },
+      { ...decide, command: ['ls'] },
+      { ...decide, requestId: 'x' },
+    ]) {
+      await expect(ipc.invoke(channelFor('permissions.decide'), trustedEvent, bad)).rejects.toThrow('invalid payload for permissions.decide');
+    }
+    const rules = { operationId, expectedRevision: 0, rules: [{ prefix: ['git', 'push'], decision: 'forbid', note: null }] };
+    for (const bad of [
+      { ...rules, rules: [{ prefix: [], decision: 'forbid', note: null }] },
+      { ...rules, rules: [{ prefix: ['git'], decision: 'always', note: null }] },
+      { ...rules, rules: [{ prefix: ['git'], decision: 'forbid', note: null, source: 'workspace_policy' }] },
+      { ...rules, principalId: taskId },
+      { ...rules, expectedRevision: -1 },
+    ]) {
+      await expect(ipc.invoke(channelFor('permissions.setUserRules'), trustedEvent, bad)).rejects.toThrow('invalid payload for permissions.setUserRules');
+    }
+    await expect(ipc.invoke(channelFor('permissions.pending'), trustedEvent, { taskId, workspaceId: taskId })).rejects.toThrow('invalid payload for permissions.pending');
+    await expect(ipc.invoke(channelFor('permissions.getRules'), trustedEvent, { taskId })).rejects.toThrow('invalid payload for permissions.getRules');
+    // An allow rule passes main's shape check: the runtime refuses it itself.
+    const allow = { ...rules, rules: [{ prefix: ['curl'], decision: 'allow', note: null }] };
+    await expect(ipc.invoke(channelFor('permissions.setUserRules'), trustedEvent, allow)).resolves.toMatchObject({ ok: false });
+    await expect(ipc.invoke(channelFor('permissions.decide'), trustedEvent, decide)).resolves.toMatchObject({ ok: false });
+    await expect(ipc.invoke(channelFor('permissions.pending'), trustedEvent, { taskId })).resolves.toMatchObject({ ok: false });
+    await expect(ipc.invoke(channelFor('permissions.getRules'), trustedEvent)).resolves.toMatchObject({ signedIn: false });
+    expect(policyCalls.slice(-4)).toEqual([
+      `setUserRules:${JSON.stringify([allow])}`,
+      `decidePermission:${JSON.stringify([decide])}`,
+      `pendingPermissions:${JSON.stringify([taskId])}`,
+      'permissionSettings',
+    ]);
+  });
+
   it('registers exactly one fixed channel per named operation', () => {
     expect(OPERATION_NAMES).toEqual([
       'runtime.getStatus',
@@ -351,6 +391,10 @@ describe('operation registry', () => {
       'policy.getSettings',
       'policy.forTask',
       'policy.setBroadMode',
+      'permissions.pending',
+      'permissions.decide',
+      'permissions.getRules',
+      'permissions.setUserRules',
     ]);
     expect([...ipc.handlers.keys()]).toEqual(OPERATION_NAMES.map((name) => `${CHANNEL_PREFIX}${name}`));
   });
@@ -888,12 +932,12 @@ describe('host privilege source scan', () => {
     const uses = body.match(/ipcRenderer[^\n]*/g) ?? [];
     expect(uses.length).toBeGreaterThan(0);
     for (const use of uses) expect(use).toMatch(/^ipcRenderer\.invoke\([A-Z_]+_CHANNEL(?:, \.\.\.args)?\)/);
-    // Only the data operations, the two provider operations that take what the user entered, and the organise, state and policy operations forward arguments.
-    expect((body.match(/_CHANNEL, \.\.\.args\)/g) ?? []).length).toBe(19);
+    // Only the data operations, the two provider operations that take what the user entered, and the organise, state, policy and permissions operations forward arguments.
+    expect((body.match(/_CHANNEL, \.\.\.args\)/g) ?? []).length).toBe(23);
     expect(
       body
         .match(/[A-Z_]+_CHANNEL, \.\.\.args\)/g)
-        ?.every((use) => use.startsWith('DATA_') || use.startsWith('PROVIDER_SET_CLAUDE_KEY_') || use.startsWith('PROVIDER_CODEX_LOGIN_') || use.startsWith('ORGANISE_') || use.startsWith('STATE_') || use.startsWith('POLICY_')),
+        ?.every((use) => use.startsWith('DATA_') || use.startsWith('PROVIDER_SET_CLAUDE_KEY_') || use.startsWith('PROVIDER_CODEX_LOGIN_') || use.startsWith('ORGANISE_') || use.startsWith('STATE_') || use.startsWith('POLICY_') || use.startsWith('PERMISSIONS_')),
     ).toBe(true);
     expect(preload).not.toMatch(/\.on\(|\.send\(|sendSync|postMessage/);
   });

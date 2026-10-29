@@ -2028,6 +2028,34 @@ impl MessageProcessor {
                 self.inquello_tools_exec(connection_id, &request_id, params)
                     .await
             }
+            ClientRequest::InquelloUserRulesRead { .. } => {
+                self.inquello_processor.user_rules_read(connection_id).await
+            }
+            ClientRequest::InquelloUserRulesSet { params, .. } => {
+                self.inquello_processor
+                    .user_rules_set(connection_id, params)
+                    .await
+            }
+            ClientRequest::InquelloPermissionsRequest { params, .. } => {
+                match self.inquello_policy_layers().await {
+                    Ok((device, user)) => {
+                        self.inquello_processor
+                            .permissions_request(connection_id, params, device, user)
+                            .await
+                    }
+                    Err(error) => Err(error),
+                }
+            }
+            ClientRequest::InquelloPermissionsPending { params, .. } => {
+                self.inquello_processor
+                    .permissions_pending(connection_id, params)
+                    .await
+            }
+            ClientRequest::InquelloPermissionsDecide { params, .. } => {
+                self.inquello_processor
+                    .permissions_decide(connection_id, params)
+                    .await
+            }
             ClientRequest::FuzzyFileSearch { params, .. } => self
                 .search_processor
                 .fuzzy_file_search(params)
