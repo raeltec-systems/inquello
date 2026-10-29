@@ -19,6 +19,19 @@
  *   sandbox and approval settings: derived only from the effective policy and
  *   the Task's broad mode. Story 1.25 starts threads only through it; no
  *   preload operation reaches it.
+ * - **Tool profile (Story 1.19).** `effectiveThreadSettings` also creates the
+ *   Task's private folder on first use and returns the Task's tool profile in
+ *   the runtime's own form. `runTool(taskId, command)` is the only way a
+ *   command runs for a Task (verification and the smoke in this story): it
+ *   goes through `effectiveThreadSettings`, refuses to run when the local
+ *   sandbox is unavailable on this device (never unsandboxed), runs through
+ *   the runtime's `inquello/tools/exec`, and translates the runtime's own
+ *   result into denials that name the boundary or destination.
+ * - **Sandbox check.** Once per runtime process, a bounded probe command
+ *   checks that a path outside the Task's profile (the working store's
+ *   folder) is not visible. If it is visible, or the probe cannot run, the
+ *   local sandbox is unavailable on this device and bounded commands are
+ *   refused.
  */
 import { RpcResponseError } from '../runtime/errors';
 import type { Logger } from '../runtime/logger';
@@ -29,22 +42,25 @@ import type { InquelloBroadModeReadResponse } from '../../protocol/generated/v2/
 import type { InquelloBroadModeSetResponse } from '../../protocol/generated/v2/InquelloBroadModeSetResponse';
 import type { InquelloPolicyEffectiveResponse } from '../../protocol/generated/v2/InquelloPolicyEffectiveResponse';
 import type { InquelloWorkspaceExecutionPolicy } from '../../protocol/generated/v2/InquelloWorkspaceExecutionPolicy';
+import type { CommandExecResponse } from '../../protocol/generated/v2/CommandExecResponse';
+import { ensureTaskFolder, SANDBOX_UNAVAILABLE, translateDenials, type ToolDenial } from './tools';
 import {
   BROAD_MODE_TITLE,
   DEFAULT_CAPABILITIES,
   ENVIRONMENT_LABEL,
   policyView,
+  runtimeProfileView,
   taskPolicyView,
   unavailableReason,
   type BroadMode,
   type PolicyFailureCode,
   type PolicyResult,
+  type EffectiveThreadSettings,
   type PolicyView,
   type SetBroadModeInput,
   type SettingsPolicyView,
   type SourceKind,
   type TaskPolicyView,
-  type ThreadSettingsView,
   type WorkspacePolicyEntry,
 } from './views';
 
@@ -62,8 +78,19 @@ export const POLICY_REASONS = {
   runtimeUnavailable: 'The local runtime is not running, so the policy cannot be computed right now.',
   storeUnavailable: 'Private work on this device could not be opened.',
   humanRequired: 'Only a person can choose a broader execution mode.',
+  sandboxUnavailable: SANDBOX_UNAVAILABLE,
+  noTaskFolders: 'Task folders are not set up on this device, so tools cannot run.',
   failed: 'The request did not complete.',
 } as const;
+
+/** A tool run's outcome, main only (it holds the command's own output). */
+export interface ToolRunView {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+  /** The runtime's refusals translated; empty when nothing was blocked. */
+  denials: ToolDenial[];
+}
 
 /** The shared-service route the policy needs (Story 1.18). */
 export interface ExecutionPolicyRoutes {
@@ -83,6 +110,16 @@ export interface PolicyServiceOptions {
   /** Absent when the shared service is not configured. */
   service: ExecutionPolicyRoutes | null;
   logger: Logger;
+  /** Where Task folders live (`<userData>/tasks`); null when none may be created. */
+  taskFolders: string | null;
+  /** A path on this device that no Task profile reaches (the working store's folder), for the sandbox check. */
+  sandboxProbeTarget: string | null;
+}
+
+interface TaskContext {
+  layer: InquelloWorkspaceExecutionPolicy;
+  response: InquelloPolicyEffectiveResponse;
+  folders: { working: string; output: string } | null;
 }
 
 const fail = <T>(code: PolicyFailureCode, reason: string, actualRevision?: number): PolicyResult<T> =>
@@ -117,6 +154,9 @@ function workspaceLayer(view: ExecutionPolicyView): InquelloWorkspaceExecutionPo
 }
 
 export class PolicyService {
+  /** The sandbox check per runtime process. */
+  private sandboxCheck: { runtime: unknown; available: Promise<boolean> } | null = null;
+
   constructor(private readonly options: PolicyServiceOptions) {}
 
   private async prepare(): Promise<PolicyResult<string>> {
@@ -183,12 +223,76 @@ export class PolicyService {
     }
   }
 
-  private async effective(workspacePolicy: InquelloWorkspaceExecutionPolicy, taskId: string | null): Promise<PolicyResult<InquelloPolicyEffectiveResponse>> {
+  private async effective(workspacePolicy: InquelloWorkspaceExecutionPolicy, taskId: string | null, taskFolder: string | null = null): Promise<PolicyResult<InquelloPolicyEffectiveResponse>> {
     try {
-      return { ok: true, value: await this.options.runtime.request<InquelloPolicyEffectiveResponse>('inquello/policy/effective', { workspacePolicy, taskId }) };
+      const params = taskFolder === null ? { workspacePolicy, taskId } : { workspacePolicy, taskId, taskFolder };
+      return { ok: true, value: await this.options.runtime.request<InquelloPolicyEffectiveResponse>('inquello/policy/effective', params) };
     } catch (error) {
       return this.runtimeFailure(error);
     }
+  }
+
+  /**
+   * The Task's Workspace layer and effective policy, recomputed now. With
+   * `withFolder`, the Task's folder is created on first use (only after the
+   * runtime confirmed the caller created the Task) and the answer carries
+   * the tool profile in the runtime's own form.
+   */
+  private async taskContext(taskId: string, withFolder: boolean): Promise<PolicyResult<TaskContext>> {
+    const prepared = await this.prepare();
+    if (!prepared.ok) return prepared;
+    const task = await this.taskWorkspace(taskId);
+    if (!task.ok) return task;
+    const layer = await this.workspacePolicy(task.value.workspaceId);
+    if (!layer.ok) return layer;
+    let folders: TaskContext['folders'] = null;
+    if (withFolder) {
+      if (!this.options.taskFolders) return fail('failed', POLICY_REASONS.noTaskFolders);
+      try {
+        folders = ensureTaskFolder(this.options.taskFolders, taskId);
+      } catch (error) {
+        this.options.logger.warn(`policy: the Task folder could not be created (${(error as Error).message})`);
+        return fail('failed', POLICY_REASONS.failed);
+      }
+    }
+    const response = await this.effective(layer.value, taskId, folders?.working ?? null);
+    if (!response.ok) return response;
+    if (!response.value.task) {
+      this.options.logger.warn('policy: the runtime omitted the Task policy');
+      return fail('failed', POLICY_REASONS.failed);
+    }
+    return { ok: true, value: { layer: layer.value, response: response.value, folders } };
+  }
+
+  /**
+   * Whether the local sandbox applies on this device, checked once per
+   * runtime process with a bounded probe through the Task's own profile: the
+   * probe target must not be visible inside it. A probe that cannot run, or
+   * sees the probe target, means the sandbox is unavailable.
+   */
+  private sandboxAvailable(context: TaskContext, taskId: string): Promise<boolean> {
+    const runtime = this.options.runtime.instance();
+    if (this.sandboxCheck && this.sandboxCheck.runtime === runtime) return this.sandboxCheck.available;
+    const target = this.options.sandboxProbeTarget;
+    const available = (async () => {
+      if (!target || !context.folders) return false;
+      try {
+        const result = await this.options.runtime.request<CommandExecResponse>('inquello/tools/exec', {
+          workspacePolicy: context.layer,
+          taskId,
+          taskFolder: context.folders.working,
+          command: ['/bin/sh', '-c', 'test ! -e "$1"', 'sandbox-check', target],
+          timeoutMs: 20_000,
+        });
+        if (result.exitCode !== 0) this.options.logger.warn(`policy: the local sandbox check failed (exit ${result.exitCode})`);
+        return result.exitCode === 0;
+      } catch (error) {
+        this.options.logger.warn(`policy: the local sandbox check could not run (${(error as Error).message})`);
+        return false;
+      }
+    })();
+    this.sandboxCheck = { runtime, available };
+    return available;
   }
 
   /** One Workspace's effective policy on this device. */
@@ -232,19 +336,19 @@ export class PolicyService {
     }
   }
 
-  /** The Task's effective policy, broader mode and thread settings, recomputed now. */
+  /**
+   * The Task's effective policy, broader mode, thread settings and tool
+   * reach, recomputed now. A bounded Task also shows whether the local
+   * sandbox applies on this device (the check creates the Task's folder).
+   */
   async forTask(taskId: string): Promise<PolicyResult<TaskPolicyView>> {
-    const prepared = await this.prepare();
-    if (!prepared.ok) return prepared;
-    const task = await this.taskWorkspace(taskId);
-    if (!task.ok) return task;
-    const layer = await this.workspacePolicy(task.value.workspaceId);
-    if (!layer.ok) return layer;
-    const response = await this.effective(layer.value, taskId);
-    if (!response.ok) return response;
+    const context = await this.taskContext(taskId, this.options.taskFolders !== null);
+    if (!context.ok) return context;
+    const task = context.value.response.task!;
     try {
-      if (!response.value.task) throw new Error('the runtime omitted the Task policy');
-      return { ok: true, value: taskPolicyView(response.value, response.value.task) };
+      const bounded = task.reach.bounded === true;
+      const available = bounded ? await this.sandboxAvailable(context.value, taskId) : false;
+      return { ok: true, value: taskPolicyView(context.value.response, task, available) };
     } catch (error) {
       this.options.logger.warn(`policy: the runtime answer was not understood (${(error as Error).message})`);
       return fail('failed', POLICY_REASONS.failed);
@@ -282,13 +386,64 @@ export class PolicyService {
   }
 
   /**
-   * Main only: the sandbox and approval settings a thread of this Task gets,
-   * derived only from the effective policy and the Task's broad mode. Story
-   * 1.25 starts threads only through this; it fails closed when the policy
-   * cannot be computed.
+   * Main only: the sandbox and approval settings a thread of this Task gets
+   * and the Task's tool profile in the runtime's own form, derived only from
+   * the effective policy and the Task's broad mode. The Task's folder is
+   * created on first use. Story 1.25 starts threads only through this; it
+   * fails closed when the policy cannot be computed.
    */
-  async effectiveThreadSettings(taskId: string): Promise<PolicyResult<ThreadSettingsView>> {
-    const policy = await this.forTask(taskId);
-    return policy.ok ? { ok: true, value: policy.value.threadSettings } : policy;
+  async effectiveThreadSettings(taskId: string): Promise<PolicyResult<EffectiveThreadSettings>> {
+    const context = await this.taskContext(taskId, true);
+    if (!context.ok) return context;
+    return this.threadSettingsOf(context.value);
+  }
+
+  private threadSettingsOf(context: TaskContext): PolicyResult<EffectiveThreadSettings> {
+    const task = context.response.task!;
+    try {
+      const view = taskPolicyView(context.response, task, false);
+      return {
+        ok: true,
+        value: { ...view.threadSettings, profile: runtimeProfileView(task.runtimeProfile, view.reach.bounded), folders: context.folders!, reach: view.reach },
+      };
+    } catch (error) {
+      this.options.logger.warn(`policy: the runtime answer was not understood (${(error as Error).message})`);
+      return fail('failed', POLICY_REASONS.failed);
+    }
+  }
+
+  /**
+   * Main only: runs one command for the Task inside its tool profile, through
+   * `effectiveThreadSettings` and the runtime's `inquello/tools/exec`. A
+   * bounded command is refused when the local sandbox is unavailable on this
+   * device; nothing ever runs unsandboxed except under a permitted Full
+   * access mode. A denied command never ends the Task: later permitted
+   * commands still run and earlier outputs stay.
+   */
+  async runTool(taskId: string, command: readonly string[], options: { timeoutMs?: number } = {}): Promise<PolicyResult<ToolRunView>> {
+    if (command.length === 0 || command.some((part) => typeof part !== 'string')) return fail('invalid', POLICY_REASONS.invalid);
+    const context = await this.taskContext(taskId, true);
+    if (!context.ok) return context;
+    const settings = this.threadSettingsOf(context.value);
+    if (!settings.ok) return settings;
+    const { reach, folders } = settings.value;
+    if (reach.bounded && !(await this.sandboxAvailable(context.value, taskId))) return fail('sandbox-unavailable', POLICY_REASONS.sandboxUnavailable);
+    let result: CommandExecResponse;
+    try {
+      result = await this.options.runtime.request<CommandExecResponse>('inquello/tools/exec', {
+        workspacePolicy: context.value.layer,
+        taskId,
+        taskFolder: folders.working,
+        command: [...command],
+        timeoutMs: options.timeoutMs ?? 60_000,
+      });
+    } catch (error) {
+      return this.runtimeFailure(error);
+    }
+    const run = { exitCode: Number(result.exitCode), stdout: String(result.stdout ?? ''), stderr: String(result.stderr ?? '') };
+    return {
+      ok: true,
+      value: { ...run, denials: translateDenials(run, { working: folders.working, output: folders.output, bounded: reach.bounded, boundaries: reach.boundaries }) },
+    };
   }
 }

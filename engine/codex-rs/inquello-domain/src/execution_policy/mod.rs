@@ -14,11 +14,18 @@
 //!   standard.
 //! - [`thread_settings`]: the only derivation of a thread's sandbox and
 //!   approval settings, from the effective policy and the broad mode.
+//! - [`tool_profile`] (Story 1.19): the only derivation of a Task's tool
+//!   profile, its private working folder with an `output` folder, read-only
+//!   system locations and the Workspace's allowed network destinations, or
+//!   the true reach of a permitted Full access mode.
 
 mod broad_mode;
 mod effective;
+mod profile;
 mod section;
 
+#[cfg(test)]
+mod profile_tests;
 #[cfg(test)]
 mod tests;
 
@@ -47,7 +54,17 @@ pub use effective::SettingSource;
 pub use effective::UserConfig;
 pub use effective::WorkspaceLayer;
 pub use effective::effective_policy;
+pub use profile::Boundary;
+pub use profile::FolderAccess;
+pub use profile::NetworkReach;
+pub use profile::TASK_OUTPUT_DIR;
+pub use profile::TaskFolder;
+pub use profile::ToolProfile;
+pub use profile::ToolReach;
+pub use profile::tool_profile;
+pub use profile::tool_reach;
 pub use section::ApprovalBehaviour;
 pub use section::DEFAULT_APPROVALS;
 pub use section::ExecutionPolicy;
+pub use section::MAX_ALLOWED_DOMAINS;
 pub use section::SandboxLevel;

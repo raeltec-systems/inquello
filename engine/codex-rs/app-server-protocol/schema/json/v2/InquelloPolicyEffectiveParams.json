@@ -31,6 +31,13 @@
   },
   "description": "Computes the effective policy over the Workspace layer (from the params), this runtime's managed requirements (`configRequirements/read`) and the user's own configuration. With a `taskId`, also the Task's broader mode, its status under this policy and the thread settings it would get; only the Task's creator may name it, and the Task must belong to the Workspace.",
   "properties": {
+    "taskFolder": {
+      "description": "Story 1.19: the Task's private working folder (absolute, named after the Task). With a `taskId`, the response also carries the Task's tool profile in the runtime's own form.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "taskId": {
       "type": [
         "string",

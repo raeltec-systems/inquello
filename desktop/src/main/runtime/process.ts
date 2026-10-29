@@ -67,6 +67,8 @@ export interface AppServerRuntimeOptions {
   maxLineBytes?: number;
   logger?: Logger;
   onNotification?: (notification: ServerNotificationMessage) => void;
+  /** Answers a server-initiated request; `undefined` leaves it unsupported (Story 1.19 escalations). */
+  onServerRequest?: (method: string, params: unknown) => unknown;
 }
 
 export class AppServerRuntime extends EventEmitter<{ state: [StateChange] }> {
@@ -160,6 +162,7 @@ export class AppServerRuntime extends EventEmitter<{ state: [StateChange] }> {
         maxQueuedMessages: this.options.maxQueuedMessages,
         maxLineBytes: this.options.maxLineBytes,
         onNotification: this.options.onNotification,
+        onServerRequest: this.options.onServerRequest,
         onFatal: (error) => this.fail(error),
       });
       this.rpc = rpc;

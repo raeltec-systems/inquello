@@ -10,4 +10,10 @@ import type { InquelloWorkspaceExecutionPolicy } from "./InquelloWorkspaceExecut
  * its status under this policy and the thread settings it would get; only the
  * Task's creator may name it, and the Task must belong to the Workspace.
  */
-export type InquelloPolicyEffectiveParams = { workspacePolicy: InquelloWorkspaceExecutionPolicy, taskId?: string | null, };
+export type InquelloPolicyEffectiveParams = { workspacePolicy: InquelloWorkspaceExecutionPolicy, taskId?: string | null,
+/**
+ * Story 1.19: the Task's private working folder (absolute, named after
+ * the Task). With a `taskId`, the response also carries the Task's tool
+ * profile in the runtime's own form.
+ */
+taskFolder?: string | null, };

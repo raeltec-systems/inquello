@@ -126,7 +126,7 @@ describe.skipIf(!databaseConfigured)('the effective policy against the real runt
     expect((await identity.withAccess((access) => service.acceptInvite(access, seed.invite_id)))?.workspace_id).toBe(seed.workspace_id);
     const organiseRuntime = { ready: () => runtime.state === 'ready', instance: () => runtime, request: <T,>(method: string, params?: unknown) => runtime.request<T>(method, params) };
     organise = new OrganiseService({ runtime: organiseRuntime, identity, service, logger: recordingLogger() });
-    policy = new PolicyService({ runtime: organiseRuntime, identity, organise, service, logger: recordingLogger() });
+    policy = new PolicyService({ runtime: organiseRuntime, identity, organise, service, logger: recordingLogger(), taskFolders: path.join(dir, 'tasks'), sandboxProbeTarget: path.dirname(workingStore) });
   }, 120_000);
 
   afterAll(async () => {
@@ -145,7 +145,7 @@ describe.skipIf(!databaseConfigured)('the effective policy against the real runt
     expect(view.settings.find((setting) => setting.name === 'full_access')).toMatchObject({ value: 'permitted', sourceLabel: 'Set by Workspace policy, revision 1' });
     expect(view.settings.find((setting) => setting.name === 'mcp_tools')).toMatchObject({ value: 'denied', sourceLabel: 'Restricted by Workspace policy, revision 1' });
     expect(view.device).toEqual({ configured: false, label: 'None configured on this device' });
-    expect(view.capabilities.map((capability) => capability.id)).toEqual(['prompt_inspection', 'specialist_cyber_access']);
+    expect(view.capabilities.map((capability) => capability.id)).toEqual(['prompt_inspection', 'specialist_cyber_access', 'execution_sandbox']);
   });
 
   it('turns Full access on for one Task only after its confirmation, and derives the thread settings from it', async () => {
@@ -154,7 +154,7 @@ describe.skipIf(!databaseConfigured)('the effective policy against the real runt
     const before = ok(await policy.forTask(task.taskId));
     expect(before.broadMode).toMatchObject({ status: 'standard', recorded: 'standard', revision: 0 });
     expect(before.options.every((option) => option.available)).toBe(true);
-    expect(ok(await policy.effectiveThreadSettings(task.taskId))).toEqual({ sandbox: 'workspace-write', approvalPolicy: 'on-request', networkAccess: true, mode: 'standard' });
+    expect(ok(await policy.effectiveThreadSettings(task.taskId))).toMatchObject({ sandbox: 'workspace-write', approvalPolicy: 'on-request', networkAccess: true, mode: 'standard' });
 
     // Without its confirmation the runtime refuses it, even from main.
     await expect(
@@ -173,7 +173,7 @@ describe.skipIf(!databaseConfigured)('the effective policy against the real runt
     const operationId = randomUUID();
     const set = ok(await policy.setBroadMode({ operationId, taskId: task.taskId, expectedRevision: 0, mode: 'full_access', confirmation: BROAD_MODE_REACH.full_access }));
     expect(set.broadMode).toMatchObject({ status: 'active', recorded: 'full_access', label: 'Broader execution mode', reach: BROAD_MODE_REACH.full_access, revision: 1 });
-    expect(ok(await policy.effectiveThreadSettings(task.taskId))).toEqual({ sandbox: 'danger-full-access', approvalPolicy: 'never', networkAccess: true, mode: 'full_access' });
+    expect(ok(await policy.effectiveThreadSettings(task.taskId))).toMatchObject({ sandbox: 'danger-full-access', approvalPolicy: 'never', networkAccess: true, mode: 'full_access' });
     // A retry of the same operation replays; the other Task stays standard.
     expect(ok(await policy.setBroadMode({ operationId, taskId: task.taskId, expectedRevision: 0, mode: 'full_access', confirmation: BROAD_MODE_REACH.full_access })).broadMode.revision).toBe(1);
     expect(ok(await policy.effectiveThreadSettings(other.taskId)).mode).toBe('standard');

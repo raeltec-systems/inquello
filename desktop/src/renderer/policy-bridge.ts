@@ -1,7 +1,9 @@
 /**
  * The renderer's typed view of `window.inquello.policy` (Story 1.18): the
  * effective managed policy for Settings (S07, "Capabilities and processing")
- * and for the open Task, and a Task's broader execution mode.
+ * and for the open Task, and a Task's broader execution mode. Story 1.19
+ * adds the reach of a Task's tools in plain words and whether the local
+ * sandbox applies on this device.
  *
  * Main supplies every text (setting names, values, governing rules, reach
  * statements, reasons); these parsers keep only the published fields and
@@ -22,6 +24,20 @@ export interface CapabilityItem {
   id: string;
   label: string;
   statusLabel: string;
+  enabled: boolean;
+}
+
+/** One line of a Task's tool reach (Story 1.19), in main's plain words. */
+export interface ReachLineItem {
+  name: string;
+  label: string;
+  value: string;
+}
+
+export interface ReachItem {
+  bounded: boolean;
+  lines: ReachLineItem[];
+  networkSourceLabel: string;
 }
 
 export interface PolicyItem {
@@ -30,6 +46,7 @@ export interface PolicyItem {
   settings: PolicySettingItem[];
   deviceLabel: string;
   capabilities: CapabilityItem[];
+  reach: ReachItem;
 }
 
 export interface BroadModeOption {
@@ -53,6 +70,7 @@ export interface TaskPolicyItem extends PolicyItem {
     suspendedReason: string | null;
   };
   options: BroadModeOption[];
+  sandbox: { status: 'available' | 'unavailable' | 'not-applicable'; label: string };
 }
 
 export interface SettingsPolicyItem {
@@ -103,14 +121,35 @@ function parseSetting(value: unknown): PolicySettingItem | null {
   return { name, label, valueLabel, sourceLabel, restricted: r.restricted };
 }
 
+/** The only contract entry that may be enabled: the local execution sandbox (Story 1.19). */
+const ENABLED_CAPABILITIES: readonly string[] = ['execution_sandbox'];
+
 function parseCapability(value: unknown): CapabilityItem | null {
   const r = record(value);
   const id = text(r?.id);
   const label = text(r?.label);
   const statusLabel = text(r?.statusLabel);
-  // An enabled entry is never shown as such: Story 1.18 enables nothing.
-  if (!r || id === null || label === null || statusLabel === null || r.enabled !== false) return null;
-  return { id, label, statusLabel };
+  if (!r || id === null || label === null || statusLabel === null || typeof r.enabled !== 'boolean') return null;
+  // Any other enabled entry is refused, never shown as enabled.
+  if (r.enabled && !ENABLED_CAPABILITIES.includes(id)) return null;
+  return { id, label, statusLabel, enabled: r.enabled };
+}
+
+function parseReachLine(value: unknown): ReachLineItem | null {
+  const r = record(value);
+  const name = text(r?.name);
+  const label = text(r?.label);
+  const line = text(r?.value);
+  if (!r || name === null || label === null || line === null) return null;
+  return { name, label, value: line };
+}
+
+function parseReach(value: unknown): ReachItem | null {
+  const r = record(value);
+  const lines = list(r?.lines, parseReachLine);
+  const networkSourceLabel = text(r?.networkSourceLabel);
+  if (!r || typeof r.bounded !== 'boolean' || !lines || lines.length === 0 || networkSourceLabel === null) return null;
+  return { bounded: r.bounded, lines, networkSourceLabel };
 }
 
 export function parsePolicy(value: unknown): PolicyItem | null {
@@ -121,8 +160,9 @@ export function parsePolicy(value: unknown): PolicyItem | null {
   const settings = list(r?.settings, parseSetting);
   const capabilities = list(r?.capabilities, parseCapability);
   const deviceLabel = text(device?.label);
-  if (!r || environmentLabel === null || policyRevision === null || !settings || !capabilities || deviceLabel === null) return null;
-  return { environmentLabel, policyRevision, settings, deviceLabel, capabilities };
+  const reach = parseReach(r?.reach);
+  if (!r || environmentLabel === null || policyRevision === null || !settings || !capabilities || deviceLabel === null || !reach) return null;
+  return { environmentLabel, policyRevision, settings, deviceLabel, capabilities, reach };
 }
 
 function parseOption(value: unknown): BroadModeOption | null {
@@ -152,11 +192,16 @@ export function parseTaskPolicy(value: unknown): TaskPolicyItem | null {
   if (status !== 'standard' && status !== 'active' && status !== 'suspended') return null;
   const suspendedReason = broad.suspendedReason === null ? null : text(broad.suspendedReason);
   if (status === 'suspended' && suspendedReason === null) return null;
+  const sandbox = record(r.sandbox);
+  const sandboxLabel = text(sandbox?.label);
+  const sandboxStatus = sandbox?.status;
+  if (sandboxLabel === null || (sandboxStatus !== 'available' && sandboxStatus !== 'unavailable' && sandboxStatus !== 'not-applicable')) return null;
   return {
     ...base,
     taskId,
     broadMode: { label, revision, recorded: broad.recorded, status, effectiveMode: broad.effectiveMode, reach, statusLabel, suspendedReason },
     options,
+    sandbox: { status: sandboxStatus, label: sandboxLabel },
   };
 }
 

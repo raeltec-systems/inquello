@@ -259,6 +259,7 @@ export type { InquelloPolicyEffectiveResponse } from "./InquelloPolicyEffectiveR
 export type { InquelloPolicySetting } from "./InquelloPolicySetting";
 export type { InquelloPolicySource } from "./InquelloPolicySource";
 export type { InquelloReceipt } from "./InquelloReceipt";
+export type { InquelloRuntimeProfile } from "./InquelloRuntimeProfile";
 export type { InquelloSetPrincipalParams } from "./InquelloSetPrincipalParams";
 export type { InquelloSetPrincipalResponse } from "./InquelloSetPrincipalResponse";
 export type { InquelloStateDimension } from "./InquelloStateDimension";
@@ -277,6 +278,9 @@ export type { InquelloTaskRenameParams } from "./InquelloTaskRenameParams";
 export type { InquelloTaskResponse } from "./InquelloTaskResponse";
 export type { InquelloTaskVisibility } from "./InquelloTaskVisibility";
 export type { InquelloThreadSettings } from "./InquelloThreadSettings";
+export type { InquelloToolBoundary } from "./InquelloToolBoundary";
+export type { InquelloToolReach } from "./InquelloToolReach";
+export type { InquelloToolsExecParams } from "./InquelloToolsExecParams";
 export type { InquelloWorkspaceExecutionPolicy } from "./InquelloWorkspaceExecutionPolicy";
 export type { InquelloWorkspaceListParams } from "./InquelloWorkspaceListParams";
 export type { InquelloWorkspaceListResponse } from "./InquelloWorkspaceListResponse";

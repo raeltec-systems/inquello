@@ -8,7 +8,11 @@
  *   device-managed requirements ("None configured on this device" when none).
  * - The environment is always the local device in V1.
  * - The Capability Contract: prompt inspection and specialist cyber access
- *   are listed as not enabled until their eligibility is verified.
+ *   are listed as not enabled until their eligibility is verified, and the
+ *   execution sandbox is the local OS sandbox on this device with no hosted
+ *   sandbox (Story 1.19, OQ-13).
+ * - What a Task's tools can reach in each Workspace (Story 1.19): read,
+ *   write and contact, in plain words.
  *
  * Read-only. Talks to main only through `inquello.policy.getSettings`; every
  * text comes from main. Values render through StatusChip's custom label path,
@@ -18,12 +22,14 @@ import { useCallback, useEffect, useState, type ReactElement } from 'react';
 
 import { parseSettingsPolicy, policyBridge, type CapabilityItem, type PolicyItem, type SettingsPolicyItem } from './policy-bridge';
 import { StatusChip } from './primitives';
+import { ReachList } from './Shell/TaskPolicy';
 
 const REFRESH_MS = 30_000;
 
 const FALLBACK_CAPABILITIES: readonly CapabilityItem[] = [
-  { id: 'prompt_inspection', label: 'Prompt inspection', statusLabel: 'Not enabled — eligibility verification required' },
-  { id: 'specialist_cyber_access', label: 'Specialist cyber access', statusLabel: 'Not enabled — eligibility verification required' },
+  { id: 'prompt_inspection', label: 'Prompt inspection', statusLabel: 'Not enabled — eligibility verification required', enabled: false },
+  { id: 'specialist_cyber_access', label: 'Specialist cyber access', statusLabel: 'Not enabled — eligibility verification required', enabled: false },
+  { id: 'execution_sandbox', label: 'Execution sandbox', statusLabel: 'Local OS sandbox on this device; no hosted sandbox — V2 revisit (OQ-13)', enabled: true },
 ];
 
 export function PolicySettings({ policy }: { policy: PolicyItem }): ReactElement {
@@ -45,6 +51,8 @@ export function PolicySettings({ policy }: { policy: PolicyItem }): ReactElement
       <p className="specimen-account-note" data-policy-device>
         {`Device-managed requirements: ${policy.deviceLabel}`}
       </p>
+      <h4 className="specimen-policy-heading">What a Task's tools can reach</h4>
+      <ReachList reach={policy.reach} scope="workspace" />
     </>
   );
 }
@@ -57,7 +65,7 @@ export function CapabilityContract({ capabilities }: { capabilities: readonly Ca
       </h3>
       <ul className="specimen-policy-capabilities">
         {capabilities.map((capability) => (
-          <li key={capability.id} data-capability={capability.id} data-enabled="false">
+          <li key={capability.id} data-capability={capability.id} data-enabled={String(capability.enabled)}>
             <span className="specimen-policy-capability">{capability.label}</span>
             <StatusChip status={`capability:${capability.id}`} label={capability.statusLabel} />
           </li>

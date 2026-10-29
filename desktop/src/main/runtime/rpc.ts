@@ -35,6 +35,11 @@ export interface RpcConnectionOptions {
   /** Framing limit for inbound lines. */
   maxLineBytes?: number;
   onNotification?: (notification: ServerNotificationMessage) => void;
+  /**
+   * Answers a server-initiated request with a result; returning `undefined`
+   * (or throwing) answers it as unsupported (Story 1.19: escalations).
+   */
+  onServerRequest?: (method: string, params: unknown) => unknown;
   /** Called once when the inbound stream can no longer be trusted (e.g. oversized line). */
   onFatal: (error: Error) => void;
 }
@@ -198,7 +203,7 @@ export class RpcConnection {
     const method = typeof record.method === 'string' ? record.method : undefined;
 
     if (hasId && method !== undefined) {
-      this.answerServerRequest(id, method);
+      this.answerServerRequest(id, method, record.params);
     } else if (method !== undefined) {
       try {
         this.options.onNotification?.({ method, params: record.params });
@@ -222,8 +227,19 @@ export class RpcConnection {
     }
   }
 
-  /** This story handles no server-initiated requests; answer each so none is left waiting. */
-  private answerServerRequest(id: RequestId, method: string): void {
+  /** Answers a server-initiated request through `onServerRequest`, or as unsupported so none is left waiting. */
+  private answerServerRequest(id: RequestId, method: string, params: unknown): void {
+    let result: unknown;
+    try {
+      result = this.options.onServerRequest?.(method, params);
+    } catch (error) {
+      this.options.logger.error(`server request handler for ${method} threw: ${(error as Error).message}`);
+      result = undefined;
+    }
+    if (result !== undefined) {
+      this.send({ line: encodeLine({ id, result }) }, true);
+      return;
+    }
     this.options.logger.warn(`answering unsupported server request ${JSON.stringify(method)} with ${METHOD_NOT_FOUND_ERROR_CODE}`);
     const response = {
       id,

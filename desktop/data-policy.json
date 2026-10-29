@@ -254,7 +254,7 @@
       "access": "runtime",
       "export": {
         "mode": "excluded",
-        "reason": "Written by Inquello before every runtime start; it holds only the credential-store setting and no credential"
+        "reason": "Written by Inquello before every runtime start (and with each Task's tool profile while it runs); it holds settings and folder locations, no credential"
       },
       "deletion": "Delete Runtime configuration in Local data (the runtime is stopped, the file is removed, then Inquello rewrites it before the runtime restarts)",
       "recovery": "Rewritten by Inquello before every runtime start"
@@ -295,6 +295,23 @@
       "export": { "mode": "included" },
       "deletion": "Delete Private work organisation in Local data (the runtime is stopped, the files are removed, then the runtime restarts with an empty working store)",
       "recovery": "Reimport an earlier export while no working store exists; shared-service Engagements remain on the service, but their local details, folders and private Tasks are not recoverable otherwise"
+    },
+    {
+      "id": "task-folders",
+      "label": "Task working folders",
+      "location": {
+        "root": "user-data",
+        "globs": ["tasks/**"]
+      },
+      "enabled": true,
+      "credentials": false,
+      "owner": "The signed-in creator, on this device",
+      "rule_owner": "Organisation data-policy owner (OQ-2)",
+      "retention": "until-owner-deletes",
+      "access": "runtime",
+      "export": { "mode": "included" },
+      "deletion": "Delete Task working folders in Local data (the runtime is stopped, every Task's working folder and Output folder is removed, then the runtime restarts)",
+      "recovery": "Reimport an earlier export while no Task working folders exist; otherwise not recoverable"
     },
     {
       "id": "provider-credentials",

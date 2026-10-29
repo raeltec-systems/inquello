@@ -431,6 +431,12 @@ pub struct InquelloPolicyEffectiveParams {
     pub workspace_policy: InquelloWorkspaceExecutionPolicy,
     #[ts(optional = nullable)]
     pub task_id: Option<String>,
+    /// Story 1.19: the Task's private working folder (absolute, named after
+    /// the Task). With a `taskId`, the response also carries the Task's tool
+    /// profile in the runtime's own form.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub task_folder: Option<String>,
 }
 
 /// The rule that governs a setting.
@@ -530,6 +536,84 @@ pub struct InquelloThreadSettings {
 pub struct InquelloTaskPolicy {
     pub broad_mode: InquelloTaskBroadMode,
     pub thread_settings: InquelloThreadSettings,
+    /// Story 1.19: what the Task's tools can reach, without device paths.
+    pub reach: InquelloToolReach,
+    /// Story 1.19: the tool profile in the runtime's own form; present when
+    /// the params name the Task folder.
+    pub runtime_profile: Option<InquelloRuntimeProfile>,
+}
+
+/// One permitted location of a bounded tool profile (Story 1.19).
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloToolBoundary {
+    /// `working_folder`, `output_folder` or `system`.
+    pub kind: String,
+    /// `read` or `write`.
+    pub access: String,
+    /// The boundary's name in a denial, for example "working folder
+    /// (read/write)", "output folder" or "system (read-only)".
+    pub label: String,
+}
+
+/// What a Task's tools can reach (Story 1.19), with no device path.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloToolReach {
+    /// False only for a permitted Full access broad mode: no filesystem or
+    /// network limits.
+    pub bounded: bool,
+    /// The permitted locations of a bounded profile; empty when unbounded.
+    pub boundaries: Vec<InquelloToolBoundary>,
+    /// `listed` (only `domains`; none when empty) or `unrestricted`.
+    pub network: String,
+    pub domains: Vec<String>,
+    /// The rule that governs the network reach.
+    pub network_source: InquelloPolicySource,
+}
+
+/// A Task's tool profile in the runtime's own form (Story 1.19).
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloRuntimeProfile {
+    /// `permission-profile` (bounded: the named permissions profile below) or
+    /// `danger-full-access` (a permitted Full access mode).
+    pub sandbox: String,
+    /// The permissions profile id `inquello/tools/exec` applies, when bounded.
+    pub permission_profile_id: Option<String>,
+    /// The `[permissions.<id>]` table, when bounded.
+    pub permission_profile: Option<JsonValue>,
+    /// Absolute folders the profile reads (beyond the runtime's minimal
+    /// system set); empty when unbounded.
+    pub readable_roots: Vec<String>,
+    /// Absolute folders the profile writes; empty when unbounded.
+    pub writable_roots: Vec<String>,
+    /// The network allowlist through the runtime's proxy; null when
+    /// unrestricted.
+    pub network_allowlist: Option<Vec<String>>,
+}
+
+/// Runs one command for a Task inside the Task's tool profile (Story 1.19),
+/// through the runtime's own command execution. The profile is derived here
+/// from the same inputs as `inquello/policy/effective`; the Task must be the
+/// caller's and belong to the Workspace. The response is the runtime's own
+/// `command/exec` result.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloToolsExecParams {
+    pub workspace_policy: InquelloWorkspaceExecutionPolicy,
+    pub task_id: String,
+    pub task_folder: String,
+    /// Command argv vector. Empty arrays are rejected.
+    pub command: Vec<String>,
+    /// Optional timeout in milliseconds.
+    #[ts(type = "number | null")]
+    #[ts(optional = nullable)]
+    pub timeout_ms: Option<i64>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
@@ -546,8 +630,10 @@ pub struct InquelloPolicyEffectiveResponse {
     /// Every setting, in a fixed order.
     pub settings: Vec<InquelloPolicySetting>,
     pub device: InquelloDeviceRequirements,
-    /// Capability Contract entries that are listed but not enabled.
+    /// Capability Contract entries.
     pub capabilities: Vec<InquelloCapabilityContractEntry>,
+    /// Story 1.19: what a standard Task's tools in this Workspace can reach.
+    pub reach: InquelloToolReach,
     /// Present when the params name a Task.
     pub task: Option<InquelloTaskPolicy>,
 }

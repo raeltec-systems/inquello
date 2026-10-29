@@ -205,14 +205,20 @@ fn duplicate_ids_and_empty_fields_are_rejected() {
 }
 
 #[test]
-fn seed_register_has_only_the_synthetic_transport_entry() {
+fn seed_register_enables_only_synthetic_entries() {
     let register = CapabilityRegister::load_embedded().unwrap();
     let enabled: Vec<(&str, Enablement)> = register
         .entries()
         .map(|entry| (entry.id.as_str(), entry.enablement()))
         .filter(|(_, state)| state.is_enabled())
         .collect();
-    assert_eq!(enabled, vec![(SEED_ID, Enablement::SyntheticOnly)]);
+    assert_eq!(
+        enabled,
+        vec![
+            (SEED_ID, Enablement::SyntheticOnly),
+            ("execution_sandbox", Enablement::SyntheticOnly),
+        ]
+    );
     assert_eq!(enablement(SEED_ID), Enablement::SyntheticOnly);
     assert!(
         register
@@ -428,4 +434,26 @@ fn prompt_inspection_and_specialist_cyber_access_are_registered_not_enabled() {
                 .any(|limit| limit == "Eligibility verification required before enablement")
         );
     }
+}
+
+/// Story 1.19: the Capability Contract records the local execution sandbox
+/// (OQ-13) as synthetic-only, with no hosted sandbox.
+#[test]
+fn the_execution_sandbox_is_local_only_and_synthetic() {
+    let register = CapabilityRegister::load_embedded().unwrap();
+    let entry = register.entry("execution_sandbox").unwrap();
+    assert_eq!(entry.enablement(), Enablement::SyntheticOnly);
+    assert!(!entry.enablement().allows_real_data());
+    assert_eq!(
+        entry.limits.first().map(String::as_str),
+        Some(
+            "Execution sandbox: local OS sandbox on this device; no hosted sandbox — V2 revisit (OQ-13)"
+        )
+    );
+    assert!(
+        entry
+            .evidence
+            .iter()
+            .all(|evidence| evidence.kind == EvidenceKind::Synthetic)
+    );
 }

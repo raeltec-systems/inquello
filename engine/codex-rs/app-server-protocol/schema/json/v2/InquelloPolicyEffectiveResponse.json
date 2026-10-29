@@ -106,6 +106,55 @@
       ],
       "type": "object"
     },
+    "InquelloRuntimeProfile": {
+      "description": "A Task's tool profile in the runtime's own form (Story 1.19).",
+      "properties": {
+        "networkAllowlist": {
+          "description": "The network allowlist through the runtime's proxy; null when unrestricted.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "permissionProfile": {
+          "description": "The `[permissions.<id>]` table, when bounded."
+        },
+        "permissionProfileId": {
+          "description": "The permissions profile id `inquello/tools/exec` applies, when bounded.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "readableRoots": {
+          "description": "Absolute folders the profile reads (beyond the runtime's minimal system set); empty when unbounded.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "sandbox": {
+          "description": "`permission-profile` (bounded: the named permissions profile below) or `danger-full-access` (a permitted Full access mode).",
+          "type": "string"
+        },
+        "writableRoots": {
+          "description": "Absolute folders the profile writes; empty when unbounded.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "readableRoots",
+        "sandbox",
+        "writableRoots"
+      ],
+      "type": "object"
+    },
     "InquelloTaskBroadMode": {
       "description": "A Task's broader execution mode under the current policy.",
       "properties": {
@@ -166,12 +215,32 @@
         "broadMode": {
           "$ref": "#/definitions/InquelloTaskBroadMode"
         },
+        "reach": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/InquelloToolReach"
+            }
+          ],
+          "description": "Story 1.19: what the Task's tools can reach, without device paths."
+        },
+        "runtimeProfile": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/InquelloRuntimeProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Story 1.19: the tool profile in the runtime's own form; present when the params name the Task folder."
+        },
         "threadSettings": {
           "$ref": "#/definitions/InquelloThreadSettings"
         }
       },
       "required": [
         "broadMode",
+        "reach",
         "threadSettings"
       ],
       "type": "object"
@@ -201,6 +270,71 @@
         "sandbox"
       ],
       "type": "object"
+    },
+    "InquelloToolBoundary": {
+      "description": "One permitted location of a bounded tool profile (Story 1.19).",
+      "properties": {
+        "access": {
+          "description": "`read` or `write`.",
+          "type": "string"
+        },
+        "kind": {
+          "description": "`working_folder`, `output_folder` or `system`.",
+          "type": "string"
+        },
+        "label": {
+          "description": "The boundary's name in a denial, for example \"working folder (read/write)\", \"output folder\" or \"system (read-only)\".",
+          "type": "string"
+        }
+      },
+      "required": [
+        "access",
+        "kind",
+        "label"
+      ],
+      "type": "object"
+    },
+    "InquelloToolReach": {
+      "description": "What a Task's tools can reach (Story 1.19), with no device path.",
+      "properties": {
+        "boundaries": {
+          "description": "The permitted locations of a bounded profile; empty when unbounded.",
+          "items": {
+            "$ref": "#/definitions/InquelloToolBoundary"
+          },
+          "type": "array"
+        },
+        "bounded": {
+          "description": "False only for a permitted Full access broad mode: no filesystem or network limits.",
+          "type": "boolean"
+        },
+        "domains": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "network": {
+          "description": "`listed` (only `domains`; none when empty) or `unrestricted`.",
+          "type": "string"
+        },
+        "networkSource": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/InquelloPolicySource"
+            }
+          ],
+          "description": "The rule that governs the network reach."
+        }
+      },
+      "required": [
+        "boundaries",
+        "bounded",
+        "domains",
+        "network",
+        "networkSource"
+      ],
+      "type": "object"
     }
   },
   "properties": {
@@ -210,7 +344,7 @@
       "type": "integer"
     },
     "capabilities": {
-      "description": "Capability Contract entries that are listed but not enabled.",
+      "description": "Capability Contract entries.",
       "items": {
         "$ref": "#/definitions/InquelloCapabilityContractEntry"
       },
@@ -227,6 +361,14 @@
       "format": "uint64",
       "minimum": 0.0,
       "type": "integer"
+    },
+    "reach": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/InquelloToolReach"
+        }
+      ],
+      "description": "Story 1.19: what a standard Task's tools in this Workspace can reach."
     },
     "settings": {
       "description": "Every setting, in a fixed order.",
@@ -256,6 +398,7 @@
     "device",
     "environment",
     "policyRevision",
+    "reach",
     "settings",
     "workspaceId"
   ],

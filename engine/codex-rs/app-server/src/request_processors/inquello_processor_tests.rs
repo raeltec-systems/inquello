@@ -678,6 +678,7 @@ async fn effective(
             InquelloPolicyEffectiveParams {
                 workspace_policy: policy,
                 task_id: task_id.map(str::to_string),
+                task_folder: None,
             },
             device,
             user,
@@ -768,8 +769,23 @@ async fn the_effective_policy_names_its_sources_and_the_capability_contract() {
         .iter()
         .map(|c| c.id.as_str())
         .collect();
-    assert_eq!(ids, ["prompt_inspection", "specialist_cyber_access"]);
-    assert!(response.capabilities.iter().all(|c| {
+    assert_eq!(
+        ids,
+        [
+            "prompt_inspection",
+            "specialist_cyber_access",
+            "execution_sandbox"
+        ]
+    );
+    let sandbox = &response.capabilities[2];
+    assert!(sandbox.enabled);
+    assert_eq!(
+        sandbox.limits.first().map(String::as_str),
+        Some(
+            "Execution sandbox: local OS sandbox on this device; no hosted sandbox — V2 revisit (OQ-13)"
+        )
+    );
+    assert!(response.capabilities[..2].iter().all(|c| {
         !c.enabled
             && c.limits
                 .iter()
@@ -1095,5 +1111,351 @@ async fn a_broad_mode_is_explicit_permitted_per_task_and_suspended_by_policy() {
                 .await
         ),
         "not_found"
+    );
+}
+
+// ---- Story 1.19: the tool profile ------------------------------------------------
+
+fn make_folder(dir: &TempDir, task_id: &str) -> String {
+    let root = dir.path().join("tasks").join(task_id);
+    std::fs::create_dir_all(root.join("output")).unwrap_or_else(|error| panic!("{error}"));
+    root.to_string_lossy().into_owned()
+}
+
+async fn task_profile(
+    processor: &InquelloRequestProcessor,
+    policy: InquelloWorkspaceExecutionPolicy,
+    task_id: &str,
+    folder: Option<String>,
+) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+    processor
+        .policy_effective(
+            DESKTOP,
+            InquelloPolicyEffectiveParams {
+                workspace_policy: policy,
+                task_id: Some(task_id.to_string()),
+                task_folder: folder,
+            },
+            DeviceRequirements::default(),
+            UserConfig::default(),
+        )
+        .await
+}
+
+fn exec_params(
+    policy: InquelloWorkspaceExecutionPolicy,
+    task_id: &str,
+    folder: &str,
+    command: &[&str],
+) -> InquelloToolsExecParams {
+    InquelloToolsExecParams {
+        workspace_policy: policy,
+        task_id: task_id.to_string(),
+        task_folder: folder.to_string(),
+        command: command.iter().map(|part| part.to_string()).collect(),
+        timeout_ms: Some(5_000),
+    }
+}
+
+#[tokio::test]
+async fn a_standard_task_profile_names_its_boundaries_and_runtime_form() {
+    let Fixture { dir, processor } = fixture();
+    sign_in(&processor, DESKTOP, ALICE);
+    let task_id = new_task(&processor, DESKTOP, "task-1").await;
+    let folder = make_folder(&dir, &task_id);
+    let policy = || {
+        workspace_policy(
+            WORKSPACE,
+            5,
+            Some(
+                json!({ "network": "allowed", "allowed_domains": ["example.org", "*.example.com"] }),
+            ),
+        )
+    };
+
+    // Without a folder: the reach only, and the Workspace's standard reach.
+    let response: InquelloPolicyEffectiveResponse =
+        decode(task_profile(&processor, policy(), &task_id, None).await);
+    assert!(response.reach.bounded);
+    let task = response.task.unwrap_or_else(|| panic!("no task"));
+    assert_eq!(task.reach, response.reach);
+    assert!(task.runtime_profile.is_none());
+    assert_eq!(
+        task.reach
+            .boundaries
+            .iter()
+            .map(|b| (b.kind.as_str(), b.access.as_str(), b.label.as_str()))
+            .collect::<Vec<_>>(),
+        [
+            ("working_folder", "write", "working folder (read/write)"),
+            ("output_folder", "write", "output folder"),
+            ("system", "read", "system (read-only)"),
+        ]
+    );
+    assert_eq!(task.reach.network, "listed");
+    assert_eq!(task.reach.domains, ["example.org", "*.example.com"]);
+    assert_eq!(
+        task.reach.network_source,
+        InquelloPolicySource {
+            kind: "workspace_policy".to_string(),
+            revision: Some(5)
+        }
+    );
+
+    // With the folder: the runtime's own permission-profile form.
+    let response: InquelloPolicyEffectiveResponse =
+        decode(task_profile(&processor, policy(), &task_id, Some(folder.clone())).await);
+    let runtime = response
+        .task
+        .and_then(|task| task.runtime_profile)
+        .unwrap_or_else(|| panic!("no runtime profile"));
+    let output = format!("{folder}/output");
+    assert_eq!(runtime.sandbox, "permission-profile");
+    assert_eq!(
+        runtime.permission_profile_id.as_deref(),
+        Some(format!("inquello-task-{task_id}").as_str())
+    );
+    assert_eq!(runtime.readable_roots, [folder.clone(), output.clone()]);
+    assert_eq!(runtime.writable_roots, [folder.clone(), output.clone()]);
+    assert_eq!(
+        runtime.network_allowlist,
+        Some(vec!["example.org".to_string(), "*.example.com".to_string()])
+    );
+    let table = runtime
+        .permission_profile
+        .unwrap_or_else(|| panic!("no permissions table"));
+    assert_eq!(table["filesystem"][":minimal"], "read");
+    assert_eq!(table["filesystem"][folder.as_str()], "write");
+    assert_eq!(table["filesystem"][output.as_str()], "write");
+    let exe = std::env::current_exe().unwrap_or_else(|error| panic!("{error}"));
+    assert_eq!(table["filesystem"][exe.to_string_lossy().as_ref()], "read");
+    assert_eq!(
+        table["filesystem"].as_object().map(serde_json::Map::len),
+        Some(4)
+    );
+    assert_eq!(
+        table["network"],
+        json!({ "enabled": true, "domains": { "example.org": "allow", "*.example.com": "allow" } })
+    );
+    // The table is a valid upstream permissions profile.
+    let parsed: Result<codex_config::permissions_toml::PermissionProfileToml, _> =
+        serde_json::from_value(table);
+    assert!(parsed.is_ok(), "{parsed:?}");
+
+    // A read-only ceiling: nothing writable, the folder read only.
+    let response: InquelloPolicyEffectiveResponse = decode(
+        task_profile(
+            &processor,
+            workspace_policy(WORKSPACE, 6, Some(json!({ "sandbox": "read_only" }))),
+            &task_id,
+            Some(folder.clone()),
+        )
+        .await,
+    );
+    let task = response.task.unwrap_or_else(|| panic!("no task"));
+    assert_eq!(task.reach.boundaries[0].label, "working folder (read-only)");
+    assert_eq!(task.reach.domains, Vec::<String>::new());
+    let runtime = task.runtime_profile.unwrap_or_else(|| panic!("no profile"));
+    assert_eq!(runtime.writable_roots, Vec::<String>::new());
+    assert_eq!(runtime.network_allowlist, Some(Vec::new()));
+    let table = runtime.permission_profile.unwrap_or_default();
+    assert_eq!(table["filesystem"][folder.as_str()], "read");
+    assert_eq!(table["network"], json!({ "enabled": true }));
+
+    // A folder not named after the Task, or without a Task, is refused.
+    assert_eq!(
+        kind(
+            task_profile(
+                &processor,
+                policy(),
+                &task_id,
+                Some(dir.path().join("x").to_string_lossy().into_owned())
+            )
+            .await
+        ),
+        "invalid"
+    );
+    assert_eq!(
+        kind(
+            processor
+                .policy_effective(
+                    DESKTOP,
+                    InquelloPolicyEffectiveParams {
+                        workspace_policy: policy(),
+                        task_id: None,
+                        task_folder: Some(folder),
+                    },
+                    DeviceRequirements::default(),
+                    UserConfig::default(),
+                )
+                .await
+        ),
+        "invalid"
+    );
+}
+
+#[tokio::test]
+async fn a_permitted_full_access_profile_states_no_filesystem_limits() {
+    let Fixture { dir, processor } = fixture();
+    sign_in(&processor, DESKTOP, ALICE);
+    let task_id = new_task(&processor, DESKTOP, "task-1").await;
+    let folder = make_folder(&dir, &task_id);
+    let open = || workspace_policy(WORKSPACE, 2, Some(permissive()));
+    let _: InquelloBroadModeSetResponse = decode(
+        processor
+            .broad_mode_set(
+                DESKTOP,
+                broad_params(
+                    "op-1",
+                    0,
+                    &task_id,
+                    "full_access",
+                    Some(FULL_ACCESS_REACH),
+                    open(),
+                ),
+                DeviceRequirements::default(),
+                UserConfig::default(),
+            )
+            .await,
+    );
+    let response: InquelloPolicyEffectiveResponse =
+        decode(task_profile(&processor, open(), &task_id, Some(folder.clone())).await);
+    let task = response.task.unwrap_or_else(|| panic!("no task"));
+    assert!(!task.reach.bounded);
+    assert!(task.reach.boundaries.is_empty());
+    assert_eq!(task.reach.network, "unrestricted");
+    let runtime = task.runtime_profile.unwrap_or_else(|| panic!("no profile"));
+    assert_eq!(runtime.sandbox, "danger-full-access");
+    assert_eq!(runtime.permission_profile, None);
+    assert_eq!(runtime.network_allowlist, None);
+    // The Workspace's standard reach stays bounded.
+    assert!(response.reach.bounded);
+
+    let plan = processor
+        .tools_exec_plan(
+            DESKTOP,
+            exec_params(open(), &task_id, &folder, &["true"]),
+            DeviceRequirements::default(),
+            UserConfig::default(),
+        )
+        .await
+        .unwrap_or_else(|error| panic!("{error:?}"));
+    assert!(plan.config_edits.is_empty());
+    assert_eq!(
+        plan.exec.sandbox_policy,
+        Some(codex_app_server_protocol::SandboxPolicy::DangerFullAccess)
+    );
+    assert_eq!(plan.exec.permission_profile, None);
+}
+
+#[tokio::test]
+async fn tools_exec_plans_the_bounded_profile_for_the_creator_only() {
+    let Fixture { dir, processor } = fixture();
+    sign_in(&processor, DESKTOP, ALICE);
+    sign_in(&processor, OTHER, BOB);
+    let task_id = new_task(&processor, DESKTOP, "task-1").await;
+    let policy = || workspace_policy(WORKSPACE, 1, None);
+    let folder = dir.path().join("tasks").join(&task_id);
+    let folder_text = folder.to_string_lossy().into_owned();
+
+    // The folder must exist first.
+    let missing = processor
+        .tools_exec_plan(
+            DESKTOP,
+            exec_params(policy(), &task_id, &folder_text, &["true"]),
+            DeviceRequirements::default(),
+            UserConfig::default(),
+        )
+        .await;
+    assert_eq!(
+        missing
+            .err()
+            .and_then(|error| error.data)
+            .map(|data| data["inquello"]["kind"].clone()),
+        Some(json!("task_folder_missing"))
+    );
+    make_folder(&dir, &task_id);
+
+    let plan = processor
+        .tools_exec_plan(
+            DESKTOP,
+            exec_params(policy(), &task_id, &folder_text, &["sh", "-c", "true"]),
+            DeviceRequirements::default(),
+            UserConfig::default(),
+        )
+        .await
+        .unwrap_or_else(|error| panic!("{error:?}"));
+    assert_eq!(plan.config_edits.len(), 3);
+    assert_eq!(
+        plan.config_edits[0],
+        ("features.network_proxy".to_string(), json!(true))
+    );
+    assert_eq!(
+        plan.config_edits[1],
+        ("default_permissions".to_string(), json!(":read-only"))
+    );
+    let (key_path, table) = &plan.config_edits[2];
+    assert_eq!(key_path, &format!("permissions.inquello-task-{task_id}"));
+    assert_eq!(table["network"], json!({ "enabled": true }));
+    assert_eq!(
+        plan.exec.permission_profile.as_deref(),
+        Some(format!("inquello-task-{task_id}").as_str())
+    );
+    assert_eq!(plan.exec.sandbox_policy, None);
+    assert_eq!(plan.exec.cwd, Some(folder));
+    assert_eq!(plan.exec.command, ["sh", "-c", "true"]);
+    assert_eq!(plan.exec.timeout_ms, Some(5_000));
+
+    // Another principal, another Workspace or an empty command is refused.
+    let refused = |result: Result<ToolsExecPlan, JSONRPCErrorError>| {
+        result
+            .err()
+            .and_then(|error| error.data)
+            .and_then(|data| data["inquello"]["kind"].as_str().map(str::to_string))
+            .unwrap_or_default()
+    };
+    assert_eq!(
+        refused(
+            processor
+                .tools_exec_plan(
+                    OTHER,
+                    exec_params(policy(), &task_id, &folder_text, &["true"]),
+                    DeviceRequirements::default(),
+                    UserConfig::default(),
+                )
+                .await
+        ),
+        "not_found"
+    );
+    assert_eq!(
+        refused(
+            processor
+                .tools_exec_plan(
+                    DESKTOP,
+                    exec_params(
+                        workspace_policy(OTHER_WORKSPACE, 1, None),
+                        &task_id,
+                        &folder_text,
+                        &["true"]
+                    ),
+                    DeviceRequirements::default(),
+                    UserConfig::default(),
+                )
+                .await
+        ),
+        "workspace_mismatch"
+    );
+    assert_eq!(
+        refused(
+            processor
+                .tools_exec_plan(
+                    DESKTOP,
+                    exec_params(policy(), &task_id, &folder_text, &[]),
+                    DeviceRequirements::default(),
+                    UserConfig::default(),
+                )
+                .await
+        ),
+        "invalid"
     );
 }

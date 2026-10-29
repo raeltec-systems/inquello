@@ -35,6 +35,7 @@ use crate::error_code::INVALID_REQUEST_ERROR_CODE;
 use crate::outgoing_message::ConnectionId;
 use codex_app_server_protocol::AskForApproval;
 use codex_app_server_protocol::ClientResponsePayload;
+use codex_app_server_protocol::CommandExecParams;
 use codex_app_server_protocol::ConfigLayerSource;
 use codex_app_server_protocol::ConfigReadResponse;
 use codex_app_server_protocol::ConfigRequirementsReadResponse;
@@ -57,6 +58,7 @@ use codex_app_server_protocol::InquelloPolicyEffectiveResponse;
 use codex_app_server_protocol::InquelloPolicySetting;
 use codex_app_server_protocol::InquelloPolicySource;
 use codex_app_server_protocol::InquelloReceipt;
+use codex_app_server_protocol::InquelloRuntimeProfile;
 use codex_app_server_protocol::InquelloSetPrincipalParams;
 use codex_app_server_protocol::InquelloSetPrincipalResponse;
 use codex_app_server_protocol::InquelloStateDimension;
@@ -75,6 +77,9 @@ use codex_app_server_protocol::InquelloTaskRenameParams;
 use codex_app_server_protocol::InquelloTaskResponse;
 use codex_app_server_protocol::InquelloTaskVisibility;
 use codex_app_server_protocol::InquelloThreadSettings;
+use codex_app_server_protocol::InquelloToolBoundary;
+use codex_app_server_protocol::InquelloToolReach;
+use codex_app_server_protocol::InquelloToolsExecParams;
 use codex_app_server_protocol::InquelloWorkspaceExecutionPolicy;
 use codex_app_server_protocol::InquelloWorkspaceListResponse;
 use codex_app_server_protocol::InquelloWorkspaceRememberParams;
@@ -97,6 +102,9 @@ use inquello_domain::execution_policy::ExecutionPolicy;
 use inquello_domain::execution_policy::SandboxLevel;
 use inquello_domain::execution_policy::Setting;
 use inquello_domain::execution_policy::SettingSource;
+use inquello_domain::execution_policy::TaskFolder;
+use inquello_domain::execution_policy::ToolProfile;
+use inquello_domain::execution_policy::ToolReach;
 use inquello_domain::execution_policy::UserConfig;
 use inquello_domain::execution_policy::WorkspaceLayer;
 use inquello_domain::organise;
@@ -104,6 +112,7 @@ use inquello_domain::organise::Actor;
 use inquello_domain::organise::OrganiseOutcome;
 use inquello_domain::organise::OrganiseRecord;
 use inquello_domain::organise::PrincipalId;
+use inquello_domain::organise::TaskId;
 use inquello_domain::organise::WorkspaceId;
 use inquello_domain::state;
 use inquello_domain::state::StateDimension;
@@ -593,7 +602,15 @@ impl InquelloRequestProcessor {
                 if broad.workspace_id != layer.workspace_id {
                     return Err(domain_error(DomainError::WorkspaceMismatch));
                 }
-                Some(task_policy(&policy, &broad))
+                let folder = params
+                    .task_folder
+                    .as_deref()
+                    .map(|folder| task_folder(folder, broad.task_id))
+                    .transpose()?;
+                Some(task_policy(&policy, &broad, folder))
+            }
+            None if params.task_folder.is_some() => {
+                return Err(refusal("invalid", "taskFolder needs a taskId"));
             }
             None => None,
         };
@@ -606,6 +623,10 @@ impl InquelloRequestProcessor {
                 settings: settings_view(&policy),
                 device: device_view(&device),
                 capabilities: capability_contract(),
+                reach: reach_view(&execution_policy::tool_reach(
+                    &policy,
+                    BroadModeStatus::Standard,
+                )),
                 task,
             }
             .into(),
@@ -665,7 +686,7 @@ impl InquelloRequestProcessor {
                 .map_err(domain_error)?;
         Ok(Some(
             InquelloBroadModeSetResponse {
-                task: task_policy(&policy, &broad),
+                task: task_policy(&policy, &broad, None),
                 receipt: InquelloReceipt {
                     operation_id: outcome.receipt.operation_id.to_string(),
                     command: execution_policy::SET_BROAD_MODE_COMMAND.to_string(),
@@ -676,6 +697,187 @@ impl InquelloRequestProcessor {
             }
             .into(),
         ))
+    }
+}
+
+/// What `inquello/tools/exec` runs (Story 1.19): the configuration edits to
+/// write into the runtime's user configuration, when bounded, and the
+/// runtime's own `command/exec` params.
+pub(crate) struct ToolsExecPlan {
+    /// `(key path, value)` pairs: the network proxy feature (without it a
+    /// profile's network would not go through the proxy), the runtime's
+    /// default permissions (the built-in `:read-only`, which the runtime
+    /// requires once named profiles exist, so nothing outside a Task profile
+    /// reaches more than read only) and the `[permissions.<id>]` table. Empty
+    /// when unbounded.
+    pub(crate) config_edits: Vec<(String, serde_json::Value)>,
+    pub(crate) exec: CommandExecParams,
+}
+
+impl InquelloRequestProcessor {
+    /// Derives the Task's tool profile from the same inputs as
+    /// `inquello/policy/effective` and plans its command. Only the Task's
+    /// creator may run it, and the Task must belong to the Workspace. The
+    /// Task folder and its `output` folder must already exist.
+    pub(crate) async fn tools_exec_plan(
+        &self,
+        connection_id: ConnectionId,
+        params: InquelloToolsExecParams,
+        device: DeviceRequirements,
+        user: UserConfig,
+    ) -> Result<ToolsExecPlan, JSONRPCErrorError> {
+        let (store, actor) = self.context(connection_id).await?;
+        if params.command.is_empty() {
+            return Err(refusal("invalid", "command must not be empty"));
+        }
+        let layer = workspace_layer(&params.workspace_policy)?;
+        let policy = execution_policy::effective_policy(&layer, &device, &user);
+        let broad = execution_policy::task_broad_mode(&store, actor, &params.task_id)
+            .await
+            .map_err(domain_error)?;
+        if broad.workspace_id != layer.workspace_id {
+            return Err(domain_error(DomainError::WorkspaceMismatch));
+        }
+        let folder = task_folder(&params.task_folder, broad.task_id)?;
+        if !folder.root().is_dir() || !folder.output().is_dir() {
+            return Err(refusal(
+                "task_folder_missing",
+                "the Task's working folder has not been created",
+            ));
+        }
+        let status = BroadModeStatus::of(&policy, broad.recorded());
+        let profile = execution_policy::tool_profile(&policy, status, folder);
+        let runtime = runtime_profile(&profile);
+        let cwd = profile.folder.root().to_path_buf();
+        let (config_edits, sandbox_policy, permission_profile) =
+            match (runtime.permission_profile_id, runtime.permission_profile) {
+                (Some(id), Some(table)) => (
+                    vec![
+                        ("features.network_proxy".to_string(), json!(true)),
+                        ("default_permissions".to_string(), json!(":read-only")),
+                        (format!("permissions.{id}"), table),
+                    ],
+                    None,
+                    Some(id),
+                ),
+                _ => (
+                    Vec::new(),
+                    Some(codex_app_server_protocol::SandboxPolicy::DangerFullAccess),
+                    None,
+                ),
+            };
+        Ok(ToolsExecPlan {
+            config_edits,
+            exec: CommandExecParams {
+                command: params.command,
+                process_id: None,
+                tty: false,
+                stream_stdin: false,
+                stream_stdout_stderr: false,
+                output_bytes_cap: None,
+                disable_output_cap: false,
+                disable_timeout: false,
+                timeout_ms: params.timeout_ms,
+                cwd: Some(cwd),
+                env: None,
+                size: None,
+                sandbox_policy,
+                permission_profile,
+            },
+        })
+    }
+}
+
+/// The Task folder from main's payload, validated by the domain.
+fn task_folder(folder: &str, task_id: TaskId) -> Result<TaskFolder, JSONRPCErrorError> {
+    TaskFolder::new(std::path::PathBuf::from(folder), task_id).map_err(domain_error)
+}
+
+/// The permissions profile id of a Task's tool profile.
+fn permission_profile_id(task_id: TaskId) -> String {
+    format!("inquello-task-{task_id}")
+}
+
+fn reach_view(reach: &ToolReach) -> InquelloToolReach {
+    let (network, domains) = match &reach.network {
+        execution_policy::NetworkReach::Listed(domains) => ("listed", domains.clone()),
+        execution_policy::NetworkReach::Unrestricted => ("unrestricted", Vec::new()),
+    };
+    InquelloToolReach {
+        bounded: reach.bounded,
+        boundaries: reach
+            .boundaries
+            .iter()
+            .map(|boundary| InquelloToolBoundary {
+                kind: boundary.kind().to_string(),
+                access: boundary.access().as_str().to_string(),
+                label: boundary.label().to_string(),
+            })
+            .collect(),
+        network: network.to_string(),
+        domains,
+        network_source: source_view(reach.network_source),
+    }
+}
+
+/// The tool profile in the runtime's own form. A bounded profile is a named
+/// permissions profile: the runtime's `:minimal` system set and this runtime's
+/// own executable (which the Linux sandbox re-executes) read only, the Task
+/// folders as derived, and the network through the runtime's proxy with only
+/// the allowed domains (none when empty, so every destination is blocked and
+/// named). A permitted Full access mode is `danger-full-access`.
+fn runtime_profile(profile: &ToolProfile) -> InquelloRuntimeProfile {
+    if !profile.reach.bounded {
+        return InquelloRuntimeProfile {
+            sandbox: "danger-full-access".to_string(),
+            permission_profile_id: None,
+            permission_profile: None,
+            readable_roots: Vec::new(),
+            writable_roots: Vec::new(),
+            network_allowlist: None,
+        };
+    }
+    let mut filesystem = serde_json::Map::new();
+    filesystem.insert(":minimal".to_string(), json!("read"));
+    if let Ok(exe) = std::env::current_exe() {
+        filesystem.insert(exe.to_string_lossy().into_owned(), json!("read"));
+    }
+    for (path, access) in profile.folders() {
+        filesystem.insert(path.to_string_lossy().into_owned(), json!(access.as_str()));
+    }
+    let allowlist = profile.network_allowlist().unwrap_or_default().to_vec();
+    let mut network = serde_json::Map::new();
+    network.insert("enabled".to_string(), json!(true));
+    if !allowlist.is_empty() {
+        network.insert(
+            "domains".to_string(),
+            serde_json::Value::Object(
+                allowlist
+                    .iter()
+                    .map(|domain| (domain.clone(), json!("allow")))
+                    .collect(),
+            ),
+        );
+    }
+    InquelloRuntimeProfile {
+        sandbox: "permission-profile".to_string(),
+        permission_profile_id: Some(permission_profile_id(profile.folder.task_id())),
+        permission_profile: Some(json!({
+            "description": "Inquello Task tool profile (Story 1.19)",
+            "filesystem": filesystem,
+            "network": network,
+        })),
+        readable_roots: profile
+            .folders()
+            .into_iter()
+            .map(|(path, _)| path.to_string_lossy().into_owned())
+            .collect(),
+        writable_roots: profile
+            .writable_roots()
+            .into_iter()
+            .map(|path| path.to_string_lossy().into_owned())
+            .collect(),
+        network_allowlist: Some(allowlist),
     }
 }
 
@@ -855,34 +1057,45 @@ fn device_view(device: &DeviceRequirements) -> InquelloDeviceRequirements {
     }
 }
 
-/// The Capability Contract entries Story 1.18 lists as not enabled, from the
-/// compiled register (fail closed: a missing entry is listed as not enabled).
+/// The Capability Contract entries from the compiled register: the two Story
+/// 1.18 lists as not enabled, and the Story 1.19 local execution sandbox
+/// (OQ-13). Fail closed: a missing entry is listed as not enabled.
 fn capability_contract() -> Vec<InquelloCapabilityContractEntry> {
     let register = inquello_domain::capability::CapabilityRegister::load_embedded().ok();
-    ["prompt_inspection", "specialist_cyber_access"]
-        .into_iter()
-        .map(|id| {
-            let entry = register.as_ref().and_then(|register| register.entry(id));
-            InquelloCapabilityContractEntry {
-                id: id.to_string(),
-                enabled: inquello_domain::capability::enablement(id).is_enabled(),
-                limits: entry.map_or_else(
-                    || vec!["Eligibility verification required before enablement".to_string()],
-                    |entry| entry.limits.clone(),
-                ),
-            }
-        })
-        .collect()
+    [
+        ("prompt_inspection", "Eligibility verification required before enablement"),
+        ("specialist_cyber_access", "Eligibility verification required before enablement"),
+        (
+            "execution_sandbox",
+            "Execution sandbox: local OS sandbox on this device; no hosted sandbox — V2 revisit (OQ-13)",
+        ),
+    ]
+    .into_iter()
+    .map(|(id, fallback)| {
+        let entry = register.as_ref().and_then(|register| register.entry(id));
+        InquelloCapabilityContractEntry {
+            id: id.to_string(),
+            enabled: inquello_domain::capability::enablement(id).is_enabled(),
+            limits: entry.map_or_else(|| vec![fallback.to_string()], |entry| entry.limits.clone()),
+        }
+    })
+    .collect()
 }
 
 fn task_policy(
     policy: &EffectivePolicy,
     broad: &execution_policy::TaskBroadMode,
+    folder: Option<TaskFolder>,
 ) -> InquelloTaskPolicy {
     let recorded = broad.recorded();
     let status = BroadModeStatus::of(policy, recorded);
     let settings = execution_policy::thread_settings(policy, status);
+    let reach = reach_view(&execution_policy::tool_reach(policy, status));
+    let runtime_profile = folder
+        .map(|folder| runtime_profile(&execution_policy::tool_profile(policy, status, folder)));
     InquelloTaskPolicy {
+        reach,
+        runtime_profile,
         broad_mode: InquelloTaskBroadMode {
             task_id: broad.task_id.to_string(),
             revision: broad.revision.get(),

@@ -958,6 +958,45 @@ impl MessageProcessor {
         ))
     }
 
+    /// Inquello (Story 1.19): runs one command inside a Task's tool profile.
+    /// The inquello processor derives the profile; a bounded profile is
+    /// written as a named permissions profile into the runtime's user
+    /// configuration and the command runs through the runtime's own
+    /// `command/exec` with it, so the response is that command's result.
+    async fn inquello_tools_exec(
+        &self,
+        connection_id: ConnectionId,
+        request_id: &ConnectionRequestId,
+        params: codex_app_server_protocol::InquelloToolsExecParams,
+    ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        let (device, user) = self.inquello_policy_layers().await?;
+        let plan = self
+            .inquello_processor
+            .tools_exec_plan(connection_id, params, device, user)
+            .await?;
+        if !plan.config_edits.is_empty() {
+            self.config_processor
+                .batch_write(codex_app_server_protocol::ConfigBatchWriteParams {
+                    edits: plan
+                        .config_edits
+                        .into_iter()
+                        .map(|(key_path, value)| codex_app_server_protocol::ConfigEdit {
+                            key_path,
+                            value,
+                            merge_strategy: codex_app_server_protocol::MergeStrategy::Replace,
+                        })
+                        .collect(),
+                    file_path: None,
+                    expected_version: None,
+                    reload_user_config: false,
+                })
+                .await?;
+        }
+        self.command_exec_processor
+            .one_off_command_exec(request_id, plan.exec)
+            .await
+    }
+
     pub(crate) async fn process_response(
         &self,
         connection_id: ConnectionId,
@@ -1984,6 +2023,10 @@ impl MessageProcessor {
                     }
                     Err(error) => Err(error),
                 }
+            }
+            ClientRequest::InquelloToolsExec { params, .. } => {
+                self.inquello_tools_exec(connection_id, &request_id, params)
+                    .await
             }
             ClientRequest::FuzzyFileSearch { params, .. } => self
                 .search_processor

@@ -12,11 +12,34 @@
  * - Choosing a broader mode opens an explicit confirmation that states its
  *   reach; only "Turn on" in that confirmation sets it, for this Task only.
  *   An unavailable mode stays focusable and says which rule prevents it.
+ * - What the Task's tools can reach (Story 1.19), in plain words with no
+ *   device path or sandbox syntax: what they can read, where they can write
+ *   and which destinations they can contact, or "No filesystem limits" under
+ *   a permitted Full access mode; and whether the local sandbox applies on
+ *   this device ("Local sandbox unavailable on this device" when it cannot).
  */
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactElement } from 'react';
 
 import { Button, StatusChip } from '../primitives';
-import type { BroadModeOption, TaskPolicyItem } from '../policy-bridge';
+import type { BroadModeOption, ReachItem, TaskPolicyItem } from '../policy-bridge';
+
+/** The reach lines main supplies, as a definition list. */
+export function ReachList({ reach, scope }: { reach: ReachItem; scope: string }): ReactElement {
+  return (
+    <dl className="iq-task-states-list" data-reach={scope} data-reach-bounded={String(reach.bounded)}>
+      {reach.lines.map((line) => (
+        <div key={line.name} className="iq-task-state" data-reach-line={line.name}>
+          <dt className="iq-task-state-name">{line.label}</dt>
+          <dd className="iq-task-state-value">{line.value}</dd>
+        </div>
+      ))}
+      <div className="iq-task-state" data-reach-line="network-rule">
+        <dt className="iq-task-state-name">Destinations set by</dt>
+        <dd className="iq-task-state-value">{reach.networkSourceLabel}</dd>
+      </div>
+    </dl>
+  );
+}
 
 export interface TaskPolicyProps {
   policy: TaskPolicyItem | null;
@@ -96,6 +119,15 @@ export function TaskPolicy({ policy, notice = null, onSetMode }: TaskPolicyProps
               );
             })}
           </dl>
+          <section className="iq-task-reach" aria-labelledby="iq-task-reach-heading" data-task-reach={policy.taskId}>
+            <h3 id="iq-task-reach-heading" className="iq-task-state-name">
+              What this Task's tools can reach
+            </h3>
+            <p className={policy.sandbox.status === 'unavailable' ? 'iq-task-notice' : 'iq-task-state-meta'} role={policy.sandbox.status === 'unavailable' ? 'status' : undefined} data-task-sandbox={policy.sandbox.status}>
+              {policy.sandbox.label}
+            </p>
+            <ReachList reach={policy.reach} scope="task" />
+          </section>
           <div className="iq-task-mode" data-broad-mode={broad?.recorded} data-broad-mode-status={broad?.status} data-broad-mode-effective={broad?.effectiveMode}>
             <p className="iq-task-mode-line">
               <span className="iq-task-state-name">{broad?.label}</span>{' '}

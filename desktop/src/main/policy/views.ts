@@ -14,7 +14,9 @@
 import type { InquelloPolicyEffectiveResponse } from '../../protocol/generated/v2/InquelloPolicyEffectiveResponse';
 import type { InquelloPolicySource } from '../../protocol/generated/v2/InquelloPolicySource';
 import type { InquelloTaskPolicy } from '../../protocol/generated/v2/InquelloTaskPolicy';
+import type { InquelloToolReach } from '../../protocol/generated/v2/InquelloToolReach';
 import { OperationError, type PayloadValidator } from '../security/operations';
+import { OUTPUT_FOLDER_LABEL, SANDBOX_UNAVAILABLE, WORKING_FOLDER_LABEL, type ReachBoundary } from './tools';
 
 export const SETTING_NAMES = ['sandbox', 'approval', 'network', 'mcp_tools', 'extensions', 'full_access', 'no_prompt'] as const;
 export type SettingName = (typeof SETTING_NAMES)[number];
@@ -67,12 +69,20 @@ const VALUE_LABEL: Record<string, string> = {
 export const ENVIRONMENT_LABEL = 'Local device';
 export const DEVICE_NONE = 'None configured on this device';
 
-/** The Capability Contract entries listed as not enabled (Story 1.18). */
+/**
+ * The Capability Contract: prompt inspection and specialist cyber access are
+ * listed as not enabled (Story 1.18); the execution sandbox is the local OS
+ * sandbox on this device, with no hosted sandbox (Story 1.19, OQ-13).
+ */
 export const CAPABILITY_LABEL: Record<string, string> = {
   prompt_inspection: 'Prompt inspection',
   specialist_cyber_access: 'Specialist cyber access',
+  execution_sandbox: 'Execution sandbox',
 };
 export const CAPABILITY_NOT_ENABLED = 'Not enabled — eligibility verification required';
+export const EXECUTION_SANDBOX_STATUS = 'Local OS sandbox on this device; no hosted sandbox — V2 revisit (OQ-13)';
+/** The only contract entries that may be reported enabled, with their fixed status text. */
+const ENABLED_CAPABILITY_STATUS: Record<string, string> = { execution_sandbox: EXECUTION_SANDBOX_STATUS };
 
 export interface PolicySourceView {
   kind: SourceKind;
@@ -94,8 +104,36 @@ export interface PolicySettingView {
 export interface CapabilityView {
   id: string;
   label: string;
-  enabled: false;
+  enabled: boolean;
   statusLabel: string;
+}
+
+/** One line of the reach explanation: what tools can read, write and contact. */
+export interface ReachLine {
+  name: 'read' | 'write' | 'contact' | 'filesystem' | 'network';
+  label: string;
+  value: string;
+}
+
+/**
+ * What a Task's tools can reach, in plain words with no device path and no
+ * sandbox syntax (Story 1.19).
+ */
+export interface ReachView {
+  bounded: boolean;
+  lines: ReachLine[];
+  /** The listed destinations; empty when none (or unrestricted). */
+  domains: string[];
+  /** The rule that governs the network reach. */
+  networkSourceLabel: string;
+  /** The boundary names a denial uses. */
+  boundaries: ReachBoundary[];
+}
+
+/** Whether the local sandbox applies to the Task on this device. */
+export interface SandboxView {
+  status: 'available' | 'unavailable' | 'not-applicable';
+  label: string;
 }
 
 export interface PolicyView {
@@ -107,6 +145,8 @@ export interface PolicyView {
   settings: PolicySettingView[];
   device: { configured: boolean; label: string };
   capabilities: CapabilityView[];
+  /** What a standard Task's tools in this Workspace can reach. */
+  reach: ReachView;
 }
 
 export interface BroadModeView {
@@ -135,6 +175,29 @@ export interface TaskPolicyView extends PolicyView {
   /** Each broader mode, its reach and, when unavailable, the rule that prevents it. */
   options: Array<{ mode: Exclude<BroadMode, 'standard'>; title: string; reach: string; available: boolean; unavailableReason: string | null }>;
   threadSettings: ThreadSettingsView;
+  /** Whether the local sandbox applies on this device; set by the policy service. */
+  sandbox: SandboxView;
+}
+
+/**
+ * Main only: the Task's tool profile in the runtime's own form (Story 1.19).
+ * It holds device paths and never reaches the renderer.
+ */
+export interface RuntimeProfileView {
+  sandbox: 'permission-profile' | 'danger-full-access';
+  permissionProfileId: string | null;
+  permissionProfile: Record<string, unknown> | null;
+  readableRoots: string[];
+  writableRoots: string[];
+  networkAllowlist: string[] | null;
+}
+
+/** Main only: a thread's settings and the Task's tool profile. */
+export interface EffectiveThreadSettings extends ThreadSettingsView {
+  profile: RuntimeProfileView;
+  /** The Task's working and output folders. */
+  folders: { working: string; output: string };
+  reach: ReachView;
 }
 
 export interface WorkspacePolicyEntry {
@@ -165,6 +228,7 @@ export type PolicyFailureCode =
   | 'runtime-unavailable'
   | 'human-actor-required'
   | 'broad-mode-not-permitted'
+  | 'sandbox-unavailable'
   | 'failed';
 
 export type PolicyResult<T> = { ok: true; value: T } | { ok: false; code: PolicyFailureCode; reason: string; actualRevision?: number };
@@ -212,10 +276,68 @@ function sourceView(value: InquelloPolicySource): PolicySourceView {
   return { kind, revision: kind === 'workspace_policy' && typeof value.revision === 'number' ? value.revision : null };
 }
 
-const capabilityView = (id: string): CapabilityView => ({ id, label: CAPABILITY_LABEL[id] ?? id, enabled: false, statusLabel: CAPABILITY_NOT_ENABLED });
+const capabilityView = (id: string, enabled: boolean): CapabilityView => ({
+  id,
+  label: CAPABILITY_LABEL[id] ?? id,
+  enabled,
+  statusLabel: enabled ? ENABLED_CAPABILITY_STATUS[id]! : CAPABILITY_NOT_ENABLED,
+});
 
-/** The listed-not-enabled entries when no runtime answer is at hand. */
-export const DEFAULT_CAPABILITIES: readonly CapabilityView[] = Object.keys(CAPABILITY_LABEL).map(capabilityView);
+/** The contract entries when no runtime answer is at hand. */
+export const DEFAULT_CAPABILITIES: readonly CapabilityView[] = Object.keys(CAPABILITY_LABEL).map((id) => capabilityView(id, id in ENABLED_CAPABILITY_STATUS));
+
+const BOUNDARY_KINDS = ['working_folder', 'output_folder', 'system'] as const;
+
+/**
+ * The reach in plain words. `scope` words the folders for one Task ("This
+ * Task's working folder") or for any Task of a Workspace (S07).
+ */
+export function reachView(value: InquelloToolReach, scope: 'task' | 'workspace'): ReachView {
+  const boundaries: ReachBoundary[] = value.boundaries.map((boundary) => ({
+    kind: oneOf(BOUNDARY_KINDS, boundary.kind, 'boundary'),
+    access: oneOf(['read', 'write'] as const, boundary.access, 'boundary access'),
+    label: String(boundary.label),
+  }));
+  const network = oneOf(['listed', 'unrestricted'] as const, value.network, 'network reach');
+  const networkSourceLabel = sourceLabel(sourceView(value.networkSource), true);
+  if (!value.bounded) {
+    if (boundaries.length > 0 || network !== 'unrestricted') throw new Error('an unbounded reach claimed a boundary');
+    return {
+      bounded: false,
+      lines: [
+        { name: 'filesystem', label: 'Files', value: 'No filesystem limits: tools can read and change anything this account can on this device' },
+        { name: 'network', label: 'Network', value: 'No network limits: tools can contact any destination' },
+      ],
+      domains: [],
+      networkSourceLabel,
+      boundaries: [],
+    };
+  }
+  const folderName = (kind: 'working_folder' | 'output_folder') =>
+    kind === 'working_folder' ? (scope === 'task' ? WORKING_FOLDER_LABEL : "A Task's own working folder") : scope === 'task' ? OUTPUT_FOLDER_LABEL : 'its Output folder';
+  const folders = boundaries.filter((boundary): boundary is ReachBoundary & { kind: 'working_folder' | 'output_folder' } => boundary.kind !== 'system');
+  if (folders.length !== 2 || !boundaries.some((boundary) => boundary.kind === 'system')) throw new Error('a bounded reach is missing a boundary');
+  const readable = [...folders.map((boundary) => folderName(boundary.kind)), 'the system files tools need in order to run (read only)'];
+  const writable = folders.filter((boundary) => boundary.access === 'write').map((boundary) => folderName(boundary.kind));
+  const domains = (value.domains ?? []).map(String);
+  return {
+    bounded: true,
+    lines: [
+      { name: 'read', label: 'Can read', value: `${readable.slice(0, -1).join(', ')} and ${readable.at(-1)}. Nothing else on this device.` },
+      { name: 'write', label: 'Can write to', value: writable.length > 0 ? `${writable.join(' and ')} only.` : 'Nothing: the policy allows no writes, so these folders are read only.' },
+      { name: 'contact', label: 'Can contact', value: domains.length > 0 ? `Only ${domains.join(', ')}. Any other destination is blocked.` : 'No network destinations. Every destination is blocked.' },
+    ],
+    domains,
+    networkSourceLabel,
+    boundaries,
+  };
+}
+
+/** The sandbox line of a Task. */
+export function sandboxView(bounded: boolean, available: boolean): SandboxView {
+  if (!bounded) return { status: 'not-applicable', label: 'Full access runs without the local sandbox on this device.' };
+  return available ? { status: 'available', label: 'Local OS sandbox on this device.' } : { status: 'unavailable', label: SANDBOX_UNAVAILABLE };
+}
 
 /** Rebuilds the runtime's answer field by field. An enabled contract entry is refused, never shown as enabled. */
 export function policyView(value: InquelloPolicyEffectiveResponse): PolicyView {
@@ -244,7 +366,7 @@ export function policyView(value: InquelloPolicyEffectiveResponse): PolicyView {
     deviceLabel = parts.join(' ');
   }
   for (const entry of value.capabilities) {
-    if (entry.enabled) throw new Error(`the runtime reported ${String(entry.id)} as enabled`);
+    if (entry.enabled && !(String(entry.id) in ENABLED_CAPABILITY_STATUS)) throw new Error(`the runtime reported ${String(entry.id)} as enabled`);
   }
   return {
     environment: oneOf(['local_device'] as const, value.environment, 'environment'),
@@ -254,12 +376,14 @@ export function policyView(value: InquelloPolicyEffectiveResponse): PolicyView {
     authorizationEpoch: Number(value.authorizationEpoch),
     settings,
     device: { configured: device.configured === true, label: deviceLabel },
-    capabilities: value.capabilities.map((entry) => capabilityView(String(entry.id))),
+    capabilities: value.capabilities.map((entry) => capabilityView(String(entry.id), entry.enabled === true)),
+    reach: reachView(value.reach, 'workspace'),
   };
 }
 
-export function taskPolicyView(value: InquelloPolicyEffectiveResponse, task: InquelloTaskPolicy): TaskPolicyView {
+export function taskPolicyView(value: InquelloPolicyEffectiveResponse, task: InquelloTaskPolicy, sandboxAvailable: boolean): TaskPolicyView {
   const base = policyView(value);
+  const reach = reachView(task.reach, 'task');
   const broad = task.broadMode;
   const recorded = oneOf(BROAD_MODES, broad.recorded, 'broad mode');
   const status = oneOf(['standard', 'active', 'suspended'] as const, broad.status, 'broad-mode status');
@@ -296,6 +420,27 @@ export function taskPolicyView(value: InquelloPolicyEffectiveResponse, task: Inq
       networkAccess: settings.networkAccess === true,
       mode: oneOf(BROAD_MODES, settings.mode, 'thread mode'),
     },
+    reach,
+    sandbox: sandboxView(reach.bounded, sandboxAvailable),
+  };
+}
+
+/** Main only: the runtime's own profile form, checked against the reach it claims. */
+export function runtimeProfileView(value: InquelloTaskPolicy['runtimeProfile'], bounded: boolean): RuntimeProfileView {
+  if (!value) throw new Error('the runtime omitted the tool profile');
+  const sandbox = oneOf(['permission-profile', 'danger-full-access'] as const, value.sandbox, 'profile sandbox');
+  if ((sandbox === 'permission-profile') !== bounded) throw new Error('the tool profile disagrees with its reach');
+  const table = value.permissionProfile;
+  if (bounded && (typeof value.permissionProfileId !== 'string' || typeof table !== 'object' || table === null || Array.isArray(table))) {
+    throw new Error('a bounded tool profile has no permissions profile');
+  }
+  return {
+    sandbox,
+    permissionProfileId: bounded ? (value.permissionProfileId as string) : null,
+    permissionProfile: bounded ? (table as Record<string, unknown>) : null,
+    readableRoots: value.readableRoots.map(String),
+    writableRoots: value.writableRoots.map(String),
+    networkAllowlist: value.networkAllowlist ? value.networkAllowlist.map(String) : null,
   };
 }
 

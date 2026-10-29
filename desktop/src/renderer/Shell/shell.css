@@ -666,6 +666,16 @@ a.iq-nav-row:hover {
 .iq-task-policy {
   margin-bottom: var(--space-4);
 }
+/* What the Task's tools can reach (Story 1.19). */
+.iq-task-reach {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+.iq-task-reach h3 {
+  margin: 0;
+}
 .iq-task-mode {
   display: flex;
   flex-direction: column;

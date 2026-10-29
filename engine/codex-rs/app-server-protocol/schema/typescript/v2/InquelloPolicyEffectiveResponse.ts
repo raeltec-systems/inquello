@@ -5,6 +5,7 @@ import type { InquelloCapabilityContractEntry } from "./InquelloCapabilityContra
 import type { InquelloDeviceRequirements } from "./InquelloDeviceRequirements";
 import type { InquelloPolicySetting } from "./InquelloPolicySetting";
 import type { InquelloTaskPolicy } from "./InquelloTaskPolicy";
+import type { InquelloToolReach } from "./InquelloToolReach";
 
 export type InquelloPolicyEffectiveResponse = {
 /**
@@ -16,9 +17,13 @@ environment: string, workspaceId: string, policyRevision: number, authorizationE
  */
 settings: Array<InquelloPolicySetting>, device: InquelloDeviceRequirements,
 /**
- * Capability Contract entries that are listed but not enabled.
+ * Capability Contract entries.
  */
 capabilities: Array<InquelloCapabilityContractEntry>,
+/**
+ * Story 1.19: what a standard Task's tools in this Workspace can reach.
+ */
+reach: InquelloToolReach,
 /**
  * Present when the params name a Task.
  */

@@ -82,6 +82,19 @@
  * `--smoke` then runs the composer probe (Story 1.17) and prints a `composer`
  * line, which the run also requires to pass. It reports draft lengths and
  * comparisons only, never draft text.
+ *
+ * Bounded tools (Story 1.19): each Task gets a private working folder with an
+ * `output` folder under `<userData>/tasks` (the `task-folders` category of
+ * the data register), created on first use. `PolicyService.runTool` runs a
+ * command for a Task only through `effectiveThreadSettings` and the runtime's
+ * `inquello/tools/exec`, inside the Task's tool profile (the local sandbox
+ * with the bundled bubblewrap, and the runtime's network proxy with the
+ * Workspace's allowed domains), and refuses when the local sandbox is
+ * unavailable. Escalations the runtime raises are answered by the escalation
+ * gate: recorded as pending authorization requests and declined, naming the
+ * boundary. After `policy`, `--smoke` runs the tool-bounds probe and prints a
+ * `tool-bounds` line, which the run also requires to pass; it reports denial
+ * texts and outcomes, never a device path or a command's output.
  */
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
@@ -106,9 +119,9 @@ import {
   type PolicyOptions,
 } from './security/policy';
 import { OrganiseService } from './organise';
-import { PolicyService } from './policy';
+import { EscalationGate, PolicyService, taskFoldersRoot } from './policy';
 import { createProviders, loadProviderDevConfig, PROVIDER_DEV_CONFIG_ENV, providersDir, type ProviderService } from './providers';
-import { probeComposer, probeData, probeIdentity, probeOrganise, probePolicy, probeProviders, probeRenderer, probeShellLayout, probeStates, SHELL_LAYOUT } from './smoke-probe';
+import { probeComposer, probeData, probeIdentity, probeOrganise, probePolicy, probeProviders, probeRenderer, probeShellLayout, probeStates, probeToolBounds, SHELL_LAYOUT } from './smoke-probe';
 
 const smoke = process.argv.includes('--smoke');
 // The smoke run keeps what main logs, so the providers probe can scan it for a leaked key.
@@ -128,8 +141,11 @@ let policyOk = false;
 let statesOk = false;
 let shellLayoutOk = false;
 let composerOk = false;
+let toolBoundsOk = false;
 let organise: OrganiseService | undefined;
 let policy: PolicyService | undefined;
+/** Escalations the runtime raises: pending authorization requests, declined in Story 1.19. */
+const escalations = new EscalationGate({ newId: randomUUID });
 let identity: IdentityWiring | undefined;
 let providers: ProviderService | undefined;
 let dataService: DataService | undefined;
@@ -216,6 +232,7 @@ async function startRuntime(): Promise<void> {
     stderrLogPath: path.join(app.getPath('logs'), 'app-server-stderr.log'),
     logger,
     onNotification: ({ method, params }) => providers?.codex.handleNotification(method, params),
+    onServerRequest: (method, params) => escalations.answer(method, params),
   });
   runtime.on('state', ({ state, error }) => {
     if (state === 'disconnected' && error) logger.error(`runtime disconnected; not restarting. ${error.message}`);
@@ -337,11 +354,15 @@ async function runSmokeProbe(contents: WebContents): Promise<void> {
   policyOk = policyReport.ok;
   process.stdout.write(`${JSON.stringify({ event: 'policy', ...policyReport })}\n`);
   if (!policyReport.ok) logger.error(`policy probe failed: ${policyReport.failures.join('; ')}`);
+  const toolBoundsReport = await probeToolBounds(contents, { identity, organise, policy, seedFile: process.env.INQUELLO_SMOKE_SEED ?? null, userDataDir: app.getPath('userData') });
+  toolBoundsOk = toolBoundsReport.ok;
+  process.stdout.write(`${JSON.stringify({ event: 'tool-bounds', ...toolBoundsReport })}\n`);
+  if (!toolBoundsReport.ok) logger.error(`tool-bounds probe failed: ${toolBoundsReport.failures.join('; ')}`);
 }
 
 function exitCodeFor(exit: ExitInfo | undefined): number {
   if (!smoke) return 0;
-  return handshakeOk && privilegesOk && designOk && identityOk && dataOk && providersOk && organiseOk && statesOk && shellLayoutOk && composerOk && policyOk && exit !== undefined && exit.exitCode === 0 && !exit.killed ? 0 : 1;
+  return handshakeOk && privilegesOk && designOk && identityOk && dataOk && providersOk && organiseOk && statesOk && shellLayoutOk && composerOk && policyOk && toolBoundsOk && exit !== undefined && exit.exitCode === 0 && !exit.killed ? 0 : 1;
 }
 
 app.on('before-quit', (event) => {
@@ -386,6 +407,8 @@ void app.whenReady().then(async () => {
     fs.rmSync(path.dirname(workingStorePath(userData)), { recursive: true, force: true });
     // No Claude API key from an earlier run.
     fs.rmSync(providersDir(userData), { recursive: true, force: true });
+    // No Task folders from an earlier run.
+    fs.rmSync(taskFoldersRoot(userData), { recursive: true, force: true });
     // The providers probe checks that an inherited provider key never reaches the runtime.
     if (!Object.keys(process.env).some((name) => isProviderCredentialVar(name))) {
       process.env.OPENAI_API_KEY = `sk-inherited-smoke-${randomUUID()}`;
@@ -423,6 +446,8 @@ void app.whenReady().then(async () => {
     organise: organiseService,
     service: identity.service,
     logger,
+    taskFolders: taskFoldersRoot(userData),
+    sandboxProbeTarget: path.dirname(workingStorePath(userData)),
   });
   policy = policyService;
   /** Rebinds the runtime's principal after a sign-in change. */

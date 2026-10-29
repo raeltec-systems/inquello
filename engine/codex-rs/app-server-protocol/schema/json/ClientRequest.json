@@ -1976,6 +1976,13 @@
     "InquelloPolicyEffectiveParams": {
       "description": "Computes the effective policy over the Workspace layer (from the params), this runtime's managed requirements (`configRequirements/read`) and the user's own configuration. With a `taskId`, also the Task's broader mode, its status under this policy and the thread settings it would get; only the Task's creator may name it, and the Task must belong to the Workspace.",
       "properties": {
+        "taskFolder": {
+          "description": "Story 1.19: the Task's private working folder (absolute, named after the Task). With a `taskId`, the response also carries the Task's tool profile in the runtime's own form.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "taskId": {
           "type": [
             "string",
@@ -2197,6 +2204,42 @@
         "taskId",
         "title",
         "workspaceId"
+      ],
+      "type": "object"
+    },
+    "InquelloToolsExecParams": {
+      "description": "Runs one command for a Task inside the Task's tool profile (Story 1.19), through the runtime's own command execution. The profile is derived here from the same inputs as `inquello/policy/effective`; the Task must be the caller's and belong to the Workspace. The response is the runtime's own `command/exec` result.",
+      "properties": {
+        "command": {
+          "description": "Command argv vector. Empty arrays are rejected.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "taskFolder": {
+          "type": "string"
+        },
+        "taskId": {
+          "type": "string"
+        },
+        "timeoutMs": {
+          "description": "Optional timeout in milliseconds.",
+          "format": "int64",
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "workspacePolicy": {
+          "$ref": "#/definitions/InquelloWorkspaceExecutionPolicy"
+        }
+      },
+      "required": [
+        "command",
+        "taskFolder",
+        "taskId",
+        "workspacePolicy"
       ],
       "type": "object"
     },
@@ -9708,6 +9751,31 @@
         "params"
       ],
       "title": "Inquello/broadMode/setRequest",
+      "type": "object"
+    },
+    {
+      "description": "Inquello (Story 1.19): runs one command inside a Task's tool profile; the result is the runtime's own `command/exec` result.",
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/RequestId"
+        },
+        "method": {
+          "enum": [
+            "inquello/tools/exec"
+          ],
+          "title": "Inquello/tools/execRequestMethod",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/definitions/InquelloToolsExecParams"
+        }
+      },
+      "required": [
+        "id",
+        "method",
+        "params"
+      ],
+      "title": "Inquello/tools/execRequest",
       "type": "object"
     },
     {

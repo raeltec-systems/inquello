@@ -1,0 +1,67 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "InquelloWorkspaceExecutionPolicy": {
+      "description": "The Workspace execution policy as the desktop main process fetched it from the shared service (`GET /v1/workspaces/{id}/execution-policy`).",
+      "properties": {
+        "authorizationEpoch": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "execution": {
+          "description": "The policy's `execution` section in its canonical snake_case form, or null when the policy has none (the conservative Inquello default applies). Validated again here; an invalid section is `invalid`."
+        },
+        "policyRevision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "authorizationEpoch",
+        "policyRevision",
+        "workspaceId"
+      ],
+      "type": "object"
+    }
+  },
+  "description": "Runs one command for a Task inside the Task's tool profile (Story 1.19), through the runtime's own command execution. The profile is derived here from the same inputs as `inquello/policy/effective`; the Task must be the caller's and belong to the Workspace. The response is the runtime's own `command/exec` result.",
+  "properties": {
+    "command": {
+      "description": "Command argv vector. Empty arrays are rejected.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "taskFolder": {
+      "type": "string"
+    },
+    "taskId": {
+      "type": "string"
+    },
+    "timeoutMs": {
+      "description": "Optional timeout in milliseconds.",
+      "format": "int64",
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "workspacePolicy": {
+      "$ref": "#/definitions/InquelloWorkspaceExecutionPolicy"
+    }
+  },
+  "required": [
+    "command",
+    "taskFolder",
+    "taskId",
+    "workspacePolicy"
+  ],
+  "title": "InquelloToolsExecParams",
+  "type": "object"
+}

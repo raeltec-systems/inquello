@@ -78,6 +78,34 @@ function pruneEmpty(dir: string, stop: string): void {
   }
 }
 
+/** Removes `dir` and every directory below it that holds no file; symlinks are never followed. */
+function pruneEmptyTree(dir: string): void {
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) if (entry.isDirectory()) pruneEmptyTree(path.join(dir, entry.name));
+  try {
+    fs.rmdirSync(dir);
+  } catch {
+    // Not empty: it still holds a file.
+  }
+}
+
+/** The directory tree a glob such as `tasks/**` covers, or null for any other glob. */
+function globDirectory(glob: string): string | null {
+  if (!glob.endsWith('/**')) return null;
+  const parts = glob.split('/');
+  const fixed: string[] = [];
+  for (const part of parts.slice(0, -1)) {
+    if (/[*?[\]{}]/.test(part)) break;
+    fixed.push(part);
+  }
+  return fixed.length > 0 ? fixed.join('/') : null;
+}
+
 export function validateDeletion(policy: DataPolicy, categories: readonly string[]): void {
   if (categories.length === 0) throw new DeleteError('no category was chosen');
   for (const id of categories) {
@@ -105,6 +133,17 @@ export async function deleteCategories(options: DeleteOptions): Promise<DeleteRe
       pruneEmpty(path.dirname(file.abs), roots[file.root]);
     } catch {
       // Counted as remaining below.
+    }
+  }
+  // Directories a chosen category held and now leaves empty (for example an
+  // unused Task folder and its Output folder) are removed too.
+  for (const id of chosen) {
+    const category = categoryById(policy, id);
+    if (!category || id === CHROMIUM_PROFILE || isStoreCategory(category)) continue;
+    const location = category.location as { root: keyof GovernedRoots; globs: readonly string[] };
+    for (const glob of location.globs) {
+      const dir = globDirectory(glob);
+      if (dir) pruneEmptyTree(path.join(roots[location.root], dir));
     }
   }
   const after = takeInventory(policy, roots);

@@ -1595,6 +1595,14 @@ client_request_definitions! {
         serialization: global("inquello"),
         response: v2::InquelloBroadModeSetResponse,
     },
+    /// Inquello (Story 1.19): runs one command inside a Task's tool profile;
+    /// the result is the runtime's own `command/exec` result.
+    InquelloToolsExec => "inquello/tools/exec" {
+        params: v2::InquelloToolsExecParams,
+        serialization: global("inquello"),
+        manual_payload_conversion: manual,
+        response: v2::CommandExecResponse,
+    },
 
     /// DEPRECATED APIs below
     GetConversationSummary => "getConversationSummary" {

@@ -134,7 +134,7 @@ import type { WebContents } from 'electron';
 import { digestFile, exportedFilePath, governedRoots, importData, isInside, readManifest, ruleBlockers, takeInventory, type DataService, type GovernedRoots } from './data';
 import type { IdentityWiring } from './identity';
 import type { OrganiseService, TaskView } from './organise';
-import type { PolicyService } from './policy';
+import { EXECUTION_SANDBOX_STATUS, networkDenialText, outsideDenialText, type PolicyService, type ToolDenial } from './policy';
 import type { ProviderService } from './providers';
 import { isProviderCredentialVar } from './runtime/env';
 import type { BlockedKind } from './security/policy';
@@ -2899,7 +2899,11 @@ export async function probePolicy(contents: WebContents, options: PolicyProbeOpt
     const taskId = created.value.taskId;
     read.settings = (await contents.executeJavaScript(policySettingsProbe(workspaceId))) as PolicyProbeRead['settings'];
     read.task = (await contents.executeJavaScript(policyTaskProbe(taskId, randomUUID()))) as PolicyProbeRead['task'];
-    read.threadSettings = await policy.effectiveThreadSettings(taskId);
+    // Only the thread settings: the tool profile holds device paths, which no report prints.
+    const thread = await policy.effectiveThreadSettings(taskId);
+    read.threadSettings = thread.ok
+      ? { ok: true, value: { sandbox: thread.value.sandbox, approvalPolicy: thread.value.approvalPolicy, networkAccess: thread.value.networkAccess, mode: thread.value.mode } }
+      : thread;
   } catch (error) {
     read.error = (error as Error).message;
   } finally {
@@ -2908,4 +2912,204 @@ export async function probePolicy(contents: WebContents, options: PolicyProbeOpt
     read.signedOutAtEnd = signOut.ok;
   }
   return evaluatePolicy(read);
+}
+
+// ---- bounded tool reads, writes and network (Story 1.19) ------------------------------
+
+const TOOL_BOUNDS_SYSTEM = 'system (read-only)';
+const TOOL_BOUNDS_PERMITTED = 'working folder (read/write), output folder, system (read-only)';
+const TOOL_BOUNDS_DESTINATION = 'example.com';
+
+/** Opens the Task and reads what its tools can reach, then S07's sandbox entry and reach. */
+function toolBoundsRendererProbe(taskId: string, workspaceId: string): string {
+  return `(async () => {
+    ${SHELL_HELPERS}
+    location.hash = '#specimen';
+    await wait(() => !q('[data-shell]'), 5000);
+    const out = { shellOpened: await openShell() };
+    const row = await wait(() => q('[data-task-id=${JSON.stringify(taskId)}] a'), ${SHELL_SETTLE_MS});
+    if (row) row.click();
+    const reach = await wait(() => q('[data-task-reach=${JSON.stringify(taskId)}] [data-reach]'), ${POLICY_SETTLE_MS});
+    const section = q('[data-task-reach=${JSON.stringify(taskId)}]');
+    out.bounded = reach ? reach.getAttribute('data-reach-bounded') : null;
+    out.lines = reach ? [...reach.querySelectorAll('[data-reach-line]')].map((line) => ({ name: line.getAttribute('data-reach-line'), text: line.textContent })) : [];
+    out.sandbox = section && q('[data-task-sandbox]', section) ? { status: q('[data-task-sandbox]', section).getAttribute('data-task-sandbox'), text: q('[data-task-sandbox]', section).textContent } : null;
+    out.sectionText = section ? section.textContent : null;
+    location.hash = '#specimen';
+    await wait(() => !q('[data-shell]'), 5000);
+    await wait(() => q('[data-policy-workspace=${JSON.stringify(workspaceId)}] [data-reach]'), ${POLICY_SETTLE_MS});
+    const workspace = q('[data-policy-workspace=${JSON.stringify(workspaceId)}] [data-reach]');
+    out.settingsReach = workspace ? workspace.textContent : null;
+    const sandbox = q('[data-capability-contract] [data-capability="execution_sandbox"]');
+    out.contract = sandbox ? { text: sandbox.textContent, enabled: sandbox.getAttribute('data-enabled') } : null;
+    out.pageText = document.body.textContent;
+    return out;
+  })()`;
+}
+
+export interface ToolRunRead {
+  ok: boolean;
+  code?: string;
+  exitCode?: number;
+  denials?: ToolDenial[];
+  /** Whether the run printed what the check expects (never the output itself). */
+  expected?: boolean;
+}
+
+export interface ToolBoundsProbeRead {
+  configured: boolean;
+  seedRead?: boolean;
+  signedIn?: boolean;
+  tasksCreated?: boolean;
+  profile?: { bounded: boolean; sandbox: string; writableCount: number; allowlist: string[] | null; folderUnderUserData: boolean; private: boolean };
+  writeInside?: ToolRunRead & { fileOnDevice: boolean };
+  writeOutside?: ToolRunRead & { fileOnDevice: boolean };
+  writeSystem?: ToolRunRead;
+  readOutside?: ToolRunRead;
+  network?: ToolRunRead;
+  continued?: ToolRunRead;
+  renderer?: {
+    shellOpened: boolean;
+    bounded: string | null;
+    lines: Array<{ name: string | null; text: string | null }>;
+    sandbox: { status: string | null; text: string | null } | null;
+    sectionText: string | null;
+    settingsReach: string | null;
+    contract: { text: string | null; enabled: string | null } | null;
+    /** Whether any rendered text held a device path of a Task folder. */
+    pathShown?: boolean;
+    wording?: boolean;
+  };
+  signedOutAtEnd?: boolean;
+  error?: string;
+}
+
+export interface ToolBoundsReport extends Omit<ToolBoundsProbeRead, 'renderer'> {
+  ok: boolean;
+  failures: string[];
+  renderer?: Omit<NonNullable<ToolBoundsProbeRead['renderer']>, 'sectionText'>;
+}
+
+const denialTexts = (run: ToolRunRead | undefined): string[] => (run?.denials ?? []).map((denial) => denial.text);
+
+/** Pass/fail for the tool-bounds probe with the default seed (no `execution` section: no destinations). */
+export function evaluateToolBounds(read: ToolBoundsProbeRead): ToolBoundsReport {
+  const failures: string[] = [];
+  if (read.error) failures.push(`the probe stopped: ${read.error}`);
+  if (!read.configured) failures.push('the shared service is not configured');
+  if (!read.seedRead) failures.push('the dev topology seed file (INQUELLO_SMOKE_SEED) could not be read');
+  if (!read.signedIn) failures.push('the synthetic user did not sign in');
+  if (!read.tasksCreated) failures.push('the Tasks were not created');
+  const p = read.profile;
+  if (!p?.bounded || p.sandbox !== 'permission-profile') failures.push(`the Task profile is not bounded (${JSON.stringify(p)})`);
+  if (p && (p.writableCount !== 2 || JSON.stringify(p.allowlist) !== '[]')) failures.push(`the Task profile reaches more than its folders (${JSON.stringify(p)})`);
+  if (p && (!p.folderUnderUserData || !p.private)) failures.push('the Task folder is not a private folder in the data area');
+  const w = read.writeInside;
+  if (!w?.ok || w.exitCode !== 0 || !w.expected || !w.fileOnDevice || (w.denials ?? []).length !== 0) failures.push(`a write inside output did not succeed (${JSON.stringify(w)})`);
+  const o = read.writeOutside;
+  if (!o?.ok || o.exitCode === 0 || o.fileOnDevice || !denialTexts(o).includes(outsideDenialText(TOOL_BOUNDS_PERMITTED))) failures.push(`a write outside was not denied with its boundary (${JSON.stringify(o)})`);
+  const sys = read.writeSystem;
+  if (!sys?.ok || sys.exitCode === 0 || !denialTexts(sys).includes(outsideDenialText(TOOL_BOUNDS_SYSTEM))) failures.push(`a system write was not denied with its boundary (${JSON.stringify(sys)})`);
+  const r = read.readOutside;
+  if (!r?.ok || r.exitCode === 0 || r.expected || !denialTexts(r).includes(outsideDenialText(TOOL_BOUNDS_PERMITTED))) failures.push(`another Task's folder was readable (${JSON.stringify(r)})`);
+  const n = read.network;
+  if (!n?.ok || !denialTexts(n).includes(networkDenialText(TOOL_BOUNDS_DESTINATION))) failures.push(`an unlisted destination was not blocked and named (${JSON.stringify(n)})`);
+  const c = read.continued;
+  if (!c?.ok || c.exitCode !== 0 || !c.expected) failures.push(`a permitted command after the denials failed, or the earlier output was lost (${JSON.stringify(c)})`);
+  const ui = read.renderer;
+  if (!ui?.shellOpened) failures.push('the Shell did not open');
+  if (ui?.bounded !== 'true') failures.push('the Task does not show a bounded reach');
+  const line = (name: string) => ui?.lines.find((entry) => entry.name === name)?.text ?? '';
+  if (!line('read').includes("This Task's working folder") || !line('read').includes('Output folder') || !line('read').includes('system files')) failures.push(`the Task's read line reads ${JSON.stringify(line('read'))}`);
+  if (!line('write').includes("This Task's working folder") || !line('write').includes('Output folder')) failures.push(`the Task's write line reads ${JSON.stringify(line('write'))}`);
+  if (!line('contact').includes('No network destinations')) failures.push(`the Task's contact line reads ${JSON.stringify(line('contact'))}`);
+  if (ui?.sandbox?.status !== 'available') failures.push(`the Task's sandbox reads ${JSON.stringify(ui?.sandbox)}`);
+  if (ui?.pathShown !== false) failures.push('a device path of a Task folder is shown');
+  if (ui?.wording !== false) failures.push('the reach uses review or approval wording');
+  if (!ui?.settingsReach?.includes('No network destinations')) failures.push(`S07 reach reads ${JSON.stringify(ui?.settingsReach)}`);
+  if (!ui?.contract?.text?.includes('Execution sandbox') || !ui.contract.text.includes(EXECUTION_SANDBOX_STATUS)) failures.push(`S07 does not record the execution sandbox (${JSON.stringify(ui?.contract)})`);
+  if (!read.signedOutAtEnd) failures.push('the probe could not sign out at the end');
+  const { renderer, ...rest } = read;
+  const report: ToolBoundsReport = { ok: failures.length === 0, failures, ...rest };
+  if (renderer) {
+    const { sectionText: _sectionText, ...shown } = renderer;
+    report.renderer = shown;
+  }
+  return report;
+}
+
+export interface ToolBoundsProbeOptions extends Omit<OrganiseProbeOptions, 'runtimeRequest'> {
+  policy: PolicyService;
+  /** The data area that holds the Task folders. */
+  userDataDir: string;
+}
+
+async function toolRun(policy: PolicyService, taskId: string, command: string[], expect?: (stdout: string) => boolean): Promise<ToolRunRead> {
+  const result = await policy.runTool(taskId, command, { timeoutMs: 30_000 });
+  if (!result.ok) return { ok: false, code: result.code };
+  return { ok: true, exitCode: result.value.exitCode, denials: result.value.denials, expected: expect ? expect(result.value.stdout) : undefined };
+}
+
+/** Runs the tool-bounds probe: real runtime, real local sandbox, synthetic paths and destinations. */
+export async function probeToolBounds(contents: WebContents, options: ToolBoundsProbeOptions): Promise<ToolBoundsReport> {
+  const { identity, organise, policy } = options;
+  const read: ToolBoundsProbeRead = { configured: identity.config.kind === 'configured' };
+  if (!read.configured) return evaluateToolBounds(read);
+  try {
+    let seed: { workspace_id?: unknown } = {};
+    try {
+      seed = JSON.parse(fs.readFileSync(options.seedFile ?? '', 'utf8')) as typeof seed;
+    } catch {
+      seed = {};
+    }
+    const workspaceId = typeof seed.workspace_id === 'string' ? seed.workspace_id : null;
+    read.seedRead = workspaceId !== null;
+    if (!workspaceId) return evaluateToolBounds(read);
+    read.signedIn = (await identity.session.signIn()).ok;
+    await organise.syncPrincipal();
+    await organise.getWorkspaces();
+    const a = await organise.createTask({ operationId: randomUUID(), workspaceId, engagementId: null, folderId: null, title: 'Smoke tool bounds' });
+    const b = await organise.createTask({ operationId: randomUUID(), workspaceId, engagementId: null, folderId: null, title: 'Smoke other Task' });
+    read.tasksCreated = a.ok && b.ok;
+    if (!a.ok || !b.ok) return evaluateToolBounds(read);
+    const taskA = a.value.taskId;
+    const settingsA = await policy.effectiveThreadSettings(taskA);
+    const settingsB = await policy.effectiveThreadSettings(b.value.taskId);
+    if (!settingsA.ok || !settingsB.ok) throw new Error(`the thread settings could not be computed (${settingsA.ok ? '' : settingsA.reason} ${settingsB.ok ? '' : settingsB.reason})`);
+    const folders = settingsA.value.folders;
+    const other = settingsB.value.folders.working;
+    const mode = fs.statSync(folders.working).mode & 0o777;
+    read.profile = {
+      bounded: settingsA.value.reach.bounded,
+      sandbox: settingsA.value.profile.sandbox,
+      writableCount: settingsA.value.profile.writableRoots.length,
+      allowlist: settingsA.value.profile.networkAllowlist,
+      folderUnderUserData: isInside(options.userDataDir, folders.working),
+      private: process.platform === 'win32' || mode === 0o700,
+    };
+    // Another Task's synthetic file, written on this device by main.
+    fs.writeFileSync(path.join(other, 'synthetic-secret.txt'), 'synthetic', { mode: 0o600 });
+    const inside = await toolRun(policy, taskA, ['/bin/sh', '-c', 'printf tool-bounds > output/a.txt && cat output/a.txt'], (out) => out === 'tool-bounds');
+    read.writeInside = { ...inside, fileOnDevice: fs.existsSync(path.join(folders.output, 'a.txt')) };
+    const outsideFile = path.join(other, 'written-by-another-task.txt');
+    const outside = await toolRun(policy, taskA, ['/bin/sh', '-c', 'printf x > "$1"', 'tool-bounds', outsideFile]);
+    read.writeOutside = { ...outside, fileOnDevice: fs.existsSync(outsideFile) };
+    read.writeSystem = await toolRun(policy, taskA, ['/bin/sh', '-c', 'printf x > /etc/inquello-tool-bounds']);
+    read.readOutside = await toolRun(policy, taskA, ['/bin/cat', path.join(other, 'synthetic-secret.txt')], (out) => out.includes('synthetic'));
+    read.network = await toolRun(policy, taskA, ['curl', '-sS', '-m', '20', `http://${TOOL_BOUNDS_DESTINATION}/`]);
+    read.continued = await toolRun(policy, taskA, ['/bin/sh', '-c', 'cat output/a.txt'], (out) => out === 'tool-bounds');
+    const ui = (await contents.executeJavaScript(toolBoundsRendererProbe(taskA, workspaceId))) as NonNullable<ToolBoundsProbeRead['renderer']> & { pageText?: string | null };
+    const shown = `${ui.sectionText ?? ''} ${ui.settingsReach ?? ''} ${ui.pageText ?? ''}`;
+    ui.pathShown = [folders.working, folders.output, other, options.userDataDir].some((dir) => shown.includes(dir)) || shown.includes(`/tasks/`);
+    ui.wording = APPROVAL_WORDING.test(`${ui.sectionText ?? ''} ${ui.settingsReach ?? ''}`);
+    delete ui.pageText;
+    read.renderer = ui;
+  } catch (error) {
+    read.error = (error as Error).message;
+  } finally {
+    const signOut = await identity.session.signOut().catch(() => ({ ok: false }));
+    await organise.syncPrincipal().catch(() => undefined);
+    read.signedOutAtEnd = signOut.ok;
+  }
+  return evaluateToolBounds(read);
 }

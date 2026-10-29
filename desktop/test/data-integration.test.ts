@@ -146,6 +146,7 @@ describe('a real runtime home', () => {
       { category: 'task-history', label: 'Task history', files: 2 },
       { category: 'desktop-stderr-log', label: 'Desktop runtime error log', files: 1 },
       { category: 'working-store', label: 'Private work organisation', files: 0 },
+      { category: 'task-folders', label: 'Task working folders', files: 0 },
     ]);
     expect(exported.export.attribution).toEqual({ principal: null, appVersion: '0.0.0-test', runtimeVersion: schemaStamp.runtimeVersion });
     expect(exported.export.omissions.map((omission) => omission.category)).toEqual(expect.arrayContaining(['identity-session', 'chromium-profile', 'runtime-state']));
@@ -168,6 +169,7 @@ describe('a real runtime home', () => {
       { category: 'task-history', label: 'Task history', files: 2 },
       { category: 'desktop-stderr-log', label: 'Desktop runtime error log', files: 0 },
       { category: 'working-store', label: 'Private work organisation', files: 0 },
+      { category: 'task-folders', label: 'Task working folders', files: 0 },
     ]);
     // The restarted runtime has already begun a new log; it is never overwritten, and the report says so.
     expect(imported.import.notRestored).toEqual([{ category: 'desktop-stderr-log', path: 'logs:app-server-stderr.log', reason: 'A file already exists there; it was not overwritten' }]);

@@ -127,6 +127,10 @@ pub struct EffectivePolicy {
     /// The approval behaviour of a standard Task.
     pub approval: Setting<ApprovalBehaviour>,
     pub network: Setting<bool>,
+    /// The destinations a Task's tools may contact (Story 1.19): the Workspace
+    /// `allowed_domains` when network is allowed, otherwise none. Empty means
+    /// no destination.
+    pub allowed_domains: Setting<Vec<String>>,
     pub mcp_tools: Setting<bool>,
     pub extensions: Setting<bool>,
     /// Whether a Task may use the full-access broad mode.
@@ -235,6 +239,21 @@ pub fn effective_policy(
     }
     let (network, network_source) = strictest(&candidates);
 
+    // Allowed destinations: only reachable when network is allowed.
+    let allowed_domains = if network {
+        Setting {
+            value: execution.allowed_domains().to_vec(),
+            source: from_workspace(execution.allowed_domains.is_some()),
+            restricted: true,
+        }
+    } else {
+        Setting {
+            value: Vec::new(),
+            source: network_source,
+            restricted: true,
+        }
+    };
+
     let toggle = |value: Option<bool>| {
         let allowed = value.unwrap_or(false);
         Setting {
@@ -289,6 +308,7 @@ pub fn effective_policy(
             source: network_source,
             restricted: !network,
         },
+        allowed_domains,
         mcp_tools: toggle(execution.mcp_tools),
         extensions: toggle(execution.extensions),
         full_access: broad(

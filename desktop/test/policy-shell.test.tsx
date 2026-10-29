@@ -54,6 +54,16 @@ function policy(sandboxSource = 'Inquello default') {
     ],
     device: { configured: false, label: 'None configured on this device' },
     capabilities,
+    reach: {
+      bounded: true,
+      lines: [
+        { name: 'read', label: 'Can read', value: "A Task's own working folder, its Output folder and the system files tools need in order to run (read only). Nothing else on this device." },
+        { name: 'write', label: 'Can write to', value: "A Task's own working folder and its Output folder only." },
+        { name: 'contact', label: 'Can contact', value: 'No network destinations. Every destination is blocked.' },
+      ],
+      domains: [],
+      networkSourceLabel: 'Inquello default',
+    },
   };
 }
 
@@ -85,6 +95,7 @@ function taskPolicy(overrides: { status?: 'standard' | 'active' | 'suspended'; r
       },
     ],
     threadSettings: { sandbox: 'workspace-write', approvalPolicy: 'on-request', networkAccess: false, mode: 'standard' },
+    sandbox: { status: 'available', label: 'Local OS sandbox on this device.' },
   });
   if (!parsed) throw new Error('the Task policy did not parse');
   return parsed;

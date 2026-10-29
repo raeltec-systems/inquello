@@ -72,6 +72,39 @@
       "processing_scope": "Not enabled. No specialist cyber model, programme or elevated access is requested or used",
       "eligibility": "disabled",
       "evidence": []
+    },
+    {
+      "id": "execution_sandbox",
+      "owner": "Inquello execution policy (Story 1.19): the Task tool profile derived in inquello-domain and applied by the desktop main process",
+      "supply": "The inherited Codex local sandbox and network proxy of codex-app-server from the Inquello fork of openai/codex at rust-v0.165.0 (bundled bubblewrap on Linux), driven through inquello/tools/exec",
+      "versions": {
+        "codex-app-server": "0.165.0",
+        "tool-profile": "1.19"
+      },
+      "limits": [
+        "Execution sandbox: local OS sandbox on this device; no hosted sandbox — V2 revisit (OQ-13)",
+        "Tools read and write only the Task's private working folder and its output folder, read the system locations they need, and contact only the Workspace's allowed domains through the runtime's network proxy",
+        "If the local sandbox cannot be applied on this device, execution is refused; a permitted Full access broad mode is the only unsandboxed path",
+        "Verified on Linux with the bundled bubblewrap only; macOS and Windows are not yet verified"
+      ],
+      "identity": "No identity: tools run as the desktop user's own process inside the sandbox, with no Inquello or provider credential",
+      "formats": [
+        "command argv executed through the runtime's command execution"
+      ],
+      "processing_scope": "Local process sandbox on the user's device for synthetic commands only; no model runs and no real data in this story",
+      "eligibility": "synthetic-only",
+      "evidence": [
+        {
+          "kind": "synthetic",
+          "status": "passed",
+          "reference": "desktop/test/tool-bounds-integration.test.ts"
+        },
+        {
+          "kind": "synthetic",
+          "status": "passed",
+          "reference": "desktop/src/main/smoke-probe.ts#tool-bounds (keyring smoke, seeded topology)"
+        }
+      ]
     }
   ]
 }

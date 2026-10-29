@@ -96,9 +96,17 @@ pub struct ExecutionPolicy {
     pub allow_full_access: Option<bool>,
     /// Whether a Task may use the no-prompt broad mode.
     pub allow_no_prompt: Option<bool>,
+    /// The network destinations a Task's tools may contact (Story 1.19): host
+    /// or wildcard patterns (`example.com`, `*.example.com`,
+    /// `**.example.com`), lowercase, with no scheme, port or path. Absent or
+    /// empty means no network destination.
+    pub allowed_domains: Option<Vec<String>>,
 }
 
-const FIELDS: [&str; 7] = [
+/// The most patterns `allowed_domains` may list.
+pub const MAX_ALLOWED_DOMAINS: usize = 100;
+
+const FIELDS: [&str; 8] = [
     "sandbox",
     "approvals",
     "network",
@@ -106,6 +114,7 @@ const FIELDS: [&str; 7] = [
     "extensions",
     "allow_full_access",
     "allow_no_prompt",
+    "allowed_domains",
 ];
 
 const AT: &str = "the execution policy";
@@ -132,6 +141,58 @@ fn flag(object: &Map<String, Value>, key: &str) -> Result<Option<bool>, PolicyEr
         Some(Value::Bool(value)) => Ok(Some(*value)),
         Some(_) => Err(invalid(format!("`{key}` must be true or false"))),
     }
+}
+
+/// Validates one `allowed_domains` pattern: a host name, or a host name after
+/// `*.` (subdomains only) or `**.` (the domain and its subdomains). Labels are
+/// 1 to 63 lowercase letters, digits or hyphens, not starting or ending with a
+/// hyphen. A scheme, port, path, user, query or the bare `*` is refused.
+fn domain_pattern(raw: &str) -> Result<String, PolicyError> {
+    let refuse = |why: &str| invalid(format!("allowed domain `{raw}` {why}"));
+    if raw.is_empty() {
+        return Err(invalid("an allowed domain must not be empty"));
+    }
+    if raw.len() > 253 {
+        return Err(refuse("is longer than 253 characters"));
+    }
+    if raw.contains("://") {
+        return Err(refuse("must not include a scheme"));
+    }
+    if raw.contains('/') {
+        return Err(refuse("must not include a path"));
+    }
+    if raw.contains(':') {
+        return Err(refuse("must not include a port"));
+    }
+    if raw.contains(['@', '?', '#']) || raw.chars().any(char::is_whitespace) {
+        return Err(refuse("must be a host name only"));
+    }
+    let host = raw
+        .strip_prefix("**.")
+        .or_else(|| raw.strip_prefix("*."))
+        .unwrap_or(raw);
+    let wildcard = host.len() != raw.len();
+    let labels: Vec<&str> = host.split('.').collect();
+    if wildcard && labels.len() < 2 {
+        return Err(refuse(
+            "must name a domain of at least two labels after the wildcard",
+        ));
+    }
+    for label in &labels {
+        let valid = !label.is_empty()
+            && label.len() <= 63
+            && !label.starts_with('-')
+            && !label.ends_with('-')
+            && label
+                .chars()
+                .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
+        if !valid {
+            return Err(refuse(
+                "must be a lowercase host name, optionally after `*.` or `**.`",
+            ));
+        }
+    }
+    Ok(raw.to_string())
 }
 
 fn toggle_value(value: bool) -> Value {
@@ -191,7 +252,44 @@ impl ExecutionPolicy {
             extensions: toggle(object, "extensions")?,
             allow_full_access: flag(object, "allow_full_access")?,
             allow_no_prompt: flag(object, "allow_no_prompt")?,
+            allowed_domains: match object.get("allowed_domains") {
+                None => None,
+                Some(raw) => {
+                    let raw = raw
+                        .as_array()
+                        .ok_or_else(|| invalid("`allowed_domains` must be an array"))?;
+                    if raw.len() > MAX_ALLOWED_DOMAINS {
+                        return Err(invalid(format!(
+                            "`allowed_domains` may list at most {MAX_ALLOWED_DOMAINS} patterns"
+                        )));
+                    }
+                    let mut domains = Vec::with_capacity(raw.len());
+                    for entry in raw {
+                        let pattern = entry
+                            .as_str()
+                            .ok_or_else(|| invalid("each allowed domain must be a string"))?;
+                        let pattern = domain_pattern(pattern)?;
+                        if domains.contains(&pattern) {
+                            return Err(invalid(format!(
+                                "allowed domain `{pattern}` is listed more than once"
+                            )));
+                        }
+                        domains.push(pattern);
+                    }
+                    Some(domains)
+                }
+            },
         };
+        if policy
+            .allowed_domains
+            .as_ref()
+            .is_some_and(|domains| !domains.is_empty())
+            && policy.network != Some(true)
+        {
+            return Err(invalid(
+                "`allowed_domains` needs `network` allowed: listed destinations are reached through the network",
+            ));
+        }
         if policy.allow_no_prompt == Some(true)
             && !policy.approvals().contains(&ApprovalBehaviour::Never)
         {
@@ -263,6 +361,17 @@ impl ExecutionPolicy {
                 object.insert(key.to_string(), Value::Bool(value));
             }
         }
+        if let Some(domains) = &self.allowed_domains {
+            object.insert(
+                "allowed_domains".to_string(),
+                Value::Array(domains.iter().cloned().map(Value::String).collect()),
+            );
+        }
         Value::Object(object)
+    }
+
+    /// The listed destinations; empty when none are listed.
+    pub fn allowed_domains(&self) -> &[String] {
+        self.allowed_domains.as_deref().unwrap_or_default()
     }
 }

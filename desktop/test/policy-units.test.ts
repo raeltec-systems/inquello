@@ -24,7 +24,7 @@ import {
 import { RpcResponseError } from '../src/main/runtime';
 import type { InquelloPolicyEffectiveResponse } from '../src/protocol/generated/v2/InquelloPolicyEffectiveResponse';
 import type { InquelloTaskPolicy } from '../src/protocol/generated/v2/InquelloTaskPolicy';
-import { recordingLogger } from './helpers';
+import { recordingLogger, tempDir } from './helpers';
 
 const PRINCIPAL = '11111111-1111-4111-8111-111111111111';
 const WORKSPACE = '5d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e';
@@ -55,10 +55,25 @@ function response(overrides: Partial<Record<string, { value: string; source?: So
     capabilities: [
       { id: 'prompt_inspection', enabled: false, limits: ['Eligibility verification required before enablement'] },
       { id: 'specialist_cyber_access', enabled: false, limits: ['Eligibility verification required before enablement'] },
+      { id: 'execution_sandbox', enabled: true, limits: ['Execution sandbox: local OS sandbox on this device; no hosted sandbox — V2 revisit (OQ-13)'] },
     ],
+    reach: BOUNDED_REACH,
     task: null,
   };
 }
+
+const BOUNDED_REACH = {
+  bounded: true,
+  boundaries: [
+    { kind: 'working_folder', access: 'write', label: 'working folder (read/write)' },
+    { kind: 'output_folder', access: 'write', label: 'output folder' },
+    { kind: 'system', access: 'read', label: 'system (read-only)' },
+  ],
+  network: 'listed',
+  domains: [] as string[],
+  networkSource: DEFAULT,
+};
+const UNBOUNDED_REACH = { bounded: false, boundaries: [], network: 'unrestricted', domains: [] as string[], networkSource: { kind: 'workspace_policy', revision: 4 } };
 
 function taskPart(recorded = 'standard', status = 'standard', governing: Source | null = null): InquelloTaskPolicy {
   const effective = status === 'active' ? recorded : 'standard';
@@ -70,10 +85,15 @@ function taskPart(recorded = 'standard', status = 'standard', governing: Source 
       networkAccess: effective === 'full_access',
       mode: effective,
     },
+    reach: effective === 'full_access' ? UNBOUNDED_REACH : BOUNDED_REACH,
+    runtimeProfile:
+      effective === 'full_access'
+        ? { sandbox: 'danger-full-access', permissionProfileId: null, permissionProfile: null, readableRoots: [], writableRoots: [], networkAllowlist: null }
+        : null,
   };
 }
 
-function harness(options: { runtime?: (method: string, params: Record<string, unknown>) => unknown; service?: ExecutionPolicyRoutes | null; workspaces?: WorkspacesView } = {}) {
+function harness(options: { runtime?: (method: string, params: Record<string, unknown>) => unknown; service?: ExecutionPolicyRoutes | null; workspaces?: WorkspacesView; taskFolders?: string | null } = {}) {
   const calls: Array<{ method: string; params: Record<string, unknown> }> = [];
   const serviceCalls: string[] = [];
   const identity = { principal: PRINCIPAL as string | null };
@@ -112,6 +132,8 @@ function harness(options: { runtime?: (method: string, params: Record<string, un
     organise: { syncPrincipal: async () => undefined, getWorkspaces: async () => workspaces },
     service,
     logger: recordingLogger(),
+    taskFolders: options.taskFolders ?? null,
+    sandboxProbeTarget: null,
   });
   return { policy, calls, serviceCalls, identity };
 }
@@ -127,7 +149,9 @@ describe('policy views', () => {
     expect(view.capabilities.map((capability) => [capability.label, capability.statusLabel])).toEqual([
       ['Prompt inspection', 'Not enabled — eligibility verification required'],
       ['Specialist cyber access', 'Not enabled — eligibility verification required'],
+      ['Execution sandbox', 'Local OS sandbox on this device; no hosted sandbox — V2 revisit (OQ-13)'],
     ]);
+    expect(view.capabilities.map((capability) => capability.enabled)).toEqual([false, false, true]);
   });
 
   it('names each governing rule in plain words', () => {
@@ -162,11 +186,12 @@ describe('policy views', () => {
     const active = taskPolicyView(
       response({ full_access: { value: 'permitted', source: { kind: 'workspace_policy', revision: 2 }, restricted: false } }),
       taskPart('full_access', 'active'),
+      false,
     );
     expect(active.broadMode).toMatchObject({ label: 'Broader execution mode', status: 'active', statusLabel: 'Full access', reach: BROAD_MODE_REACH.full_access });
     expect(active.options.find((option) => option.mode === 'full_access')).toMatchObject({ available: true, unavailableReason: null });
     expect(active.options.find((option) => option.mode === 'no_prompt')).toMatchObject({ available: false, unavailableReason: 'No prompt is not available: not permitted by the Inquello default.' });
-    const suspended = taskPolicyView(response({ full_access: { value: 'not_permitted', source: { kind: 'workspace_policy', revision: 3 } } }), taskPart('full_access', 'suspended', { kind: 'workspace_policy', revision: 3 }));
+    const suspended = taskPolicyView(response({ full_access: { value: 'not_permitted', source: { kind: 'workspace_policy', revision: 3 } } }), taskPart('full_access', 'suspended', { kind: 'workspace_policy', revision: 3 }), true);
     expect(suspended.broadMode.statusLabel).toBe('Suspended by policy');
     expect(suspended.broadMode.effectiveMode).toBe('standard');
     expect(suspended.broadMode.suspendedReason).toBe('Suspended by policy: Workspace policy, revision 3 no longer permits Full access. This Task runs in Standard mode.');
@@ -265,15 +290,19 @@ describe('the policy service', () => {
 
   it('derives thread settings only from the effective policy and the broad mode', async () => {
     const h = harness({
+      taskFolders: tempDir('policy-units-tasks'),
       runtime: (method) => {
         if (method === 'inquello/broadMode/read') return { taskId: TASK, workspaceId: WORKSPACE, revision: 1, mode: 'full_access' };
         return { ...response({ full_access: { value: 'permitted', source: { kind: 'workspace_policy', revision: 4 }, restricted: false } }), task: taskPart('full_access', 'active') };
       },
     });
-    expect(await h.policy.effectiveThreadSettings(TASK)).toEqual({
+    expect(await h.policy.effectiveThreadSettings(TASK)).toMatchObject({
       ok: true,
-      value: { sandbox: 'danger-full-access', approvalPolicy: 'never', networkAccess: true, mode: 'full_access' },
+      value: { sandbox: 'danger-full-access', approvalPolicy: 'never', networkAccess: true, mode: 'full_access', profile: { sandbox: 'danger-full-access', permissionProfile: null } },
     });
+    // Without a Task folder area nothing is derived for a run.
+    const none = harness({ runtime: () => ({ taskId: TASK, workspaceId: WORKSPACE, revision: 0, mode: 'standard' }) });
+    expect(await none.policy.effectiveThreadSettings(TASK)).toEqual({ ok: false, code: 'failed', reason: POLICY_REASONS.noTaskFolders });
   });
 
   it('maps another creator to an unknown Task and a signed-out person to sign-in', async () => {

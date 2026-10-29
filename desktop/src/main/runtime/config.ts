@@ -12,6 +12,15 @@
  *   itself on every platform, rather than an encrypted file under the runtime
  *   home whose key sits in the keyring (the Windows default).
  *
+ * - `[features] network_proxy = true` (Story 1.19): a Task's tools reach the
+ *   network only through the runtime's own proxy, which allows only the
+ *   Workspace's listed domains and names every blocked destination.
+ *
+ * While the runtime runs, `inquello/tools/exec` adds each Task's named
+ * permissions profile (`[permissions.inquello-task-<id>]`) through the
+ * runtime's own configuration writer; the next start drops them, and each
+ * run writes its profile again.
+ *
  * The file holds no credential. It is written atomically with mode 0600.
  */
 import { randomUUID } from 'node:crypto';
@@ -28,6 +37,8 @@ export const RUNTIME_CONFIG_TOML = [
   '[features]',
   '# Keep the login itself in the keyring, not in an encrypted file in this directory.',
   'secret_auth_storage = false',
+  '# Task tools reach the network only through the runtime\'s proxy, with the Workspace\'s allowed domains.',
+  'network_proxy = true',
   '',
 ].join('\n');
 
