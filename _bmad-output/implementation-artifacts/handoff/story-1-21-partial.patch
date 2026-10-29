@@ -1,0 +1,199 @@
+diff --git a/engine/codex-rs/inquello-domain/src/execution_policy/section.rs b/engine/codex-rs/inquello-domain/src/execution_policy/section.rs
+index 52e270b..faacb0e 100644
+--- a/engine/codex-rs/inquello-domain/src/execution_policy/section.rs
++++ b/engine/codex-rs/inquello-domain/src/execution_policy/section.rs
+@@ -110,12 +110,16 @@ pub struct ExecutionPolicy {
+     /// permission requests (Story 1.20). Absent means off. It becomes usable
+     /// only once a processing route exists.
+     pub automatic_permission_review: Option<bool>,
++    /// Whether people may add local (stdio) MCP servers (Story 1.21). A local
++    /// server runs a program on the device outside the Task sandbox, so it
++    /// needs `mcp_tools` allowed. Absent means not allowed.
++    pub allow_local_mcp_servers: Option<bool>,
+ }
+ 
+ /// The most patterns `allowed_domains` may list.
+ pub const MAX_ALLOWED_DOMAINS: usize = 100;
+ 
+-const FIELDS: [&str; 10] = [
++const FIELDS: [&str; 11] = [
+     "sandbox",
+     "approvals",
+     "network",
+@@ -126,6 +130,7 @@ const FIELDS: [&str; 10] = [
+     "allowed_domains",
+     "command_rules",
+     "automatic_permission_review",
++    "allow_local_mcp_servers",
+ ];
+ 
+ const AT: &str = "the execution policy";
+@@ -316,7 +321,13 @@ impl ExecutionPolicy {
+                 }
+             },
+             automatic_permission_review: flag(object, "automatic_permission_review")?,
++            allow_local_mcp_servers: flag(object, "allow_local_mcp_servers")?,
+         };
++        if policy.allow_local_mcp_servers == Some(true) && policy.mcp_tools != Some(true) {
++            return Err(invalid(
++                "`allow_local_mcp_servers` needs `mcp_tools` allowed: a local MCP server provides MCP tools",
++            ));
++        }
+         if policy
+             .allowed_domains
+             .as_ref()
+@@ -416,6 +427,9 @@ impl ExecutionPolicy {
+                 Value::Bool(value),
+             );
+         }
++        if let Some(value) = self.allow_local_mcp_servers {
++            object.insert("allow_local_mcp_servers".to_string(), Value::Bool(value));
++        }
+         Value::Object(object)
+     }
+ 
+@@ -424,6 +438,11 @@ impl ExecutionPolicy {
+         self.command_rules.as_deref().unwrap_or_default()
+     }
+ 
++    /// Whether local (stdio) MCP servers may be added; false when absent.
++    pub fn local_mcp_servers_allowed(&self) -> bool {
++        self.allow_local_mcp_servers == Some(true)
++    }
++
+     /// The listed destinations; empty when none are listed.
+     pub fn allowed_domains(&self) -> &[String] {
+         self.allowed_domains.as_deref().unwrap_or_default()
+diff --git a/engine/codex-rs/inquello-domain/src/execution_policy/tests.rs b/engine/codex-rs/inquello-domain/src/execution_policy/tests.rs
+index cf901b3..3baa178 100644
+--- a/engine/codex-rs/inquello-domain/src/execution_policy/tests.rs
++++ b/engine/codex-rs/inquello-domain/src/execution_policy/tests.rs
+@@ -166,6 +166,45 @@ fn malformed_execution_values_are_refused() {
+     }
+ }
+ 
++#[test]
++fn local_mcp_servers_need_their_flag_and_mcp_tools() {
++    // Absent: not allowed (Story 1.21).
++    let none = ExecutionPolicy::from_value(&json!({})).unwrap_or_else(|error| panic!("{error}"));
++    assert_eq!(none.allow_local_mcp_servers, None);
++    assert!(!none.local_mcp_servers_allowed());
++    // Allowed with MCP tools, and round-tripped canonically.
++    let policy = policy_with(json!({ "mcp_tools": "allowed", "allow_local_mcp_servers": true }))
++        .unwrap_or_else(|error| panic!("{error}"));
++    assert_eq!(
++        policy.to_value()["execution"],
++        json!({ "mcp_tools": "allowed", "allow_local_mcp_servers": true })
++    );
++    assert_eq!(
++        policy.execution().map(ExecutionPolicy::local_mcp_servers_allowed),
++        Some(true)
++    );
++    let off = policy_with(json!({ "allow_local_mcp_servers": false }))
++        .unwrap_or_else(|error| panic!("{error}"));
++    assert_eq!(
++        off.to_value()["execution"],
++        json!({ "allow_local_mcp_servers": false })
++    );
++    // Refused: without MCP tools allowed, or not a boolean.
++    for execution in [
++        json!({ "allow_local_mcp_servers": true }),
++        json!({ "mcp_tools": "denied", "allow_local_mcp_servers": true }),
++        json!({ "mcp_tools": "allowed", "allow_local_mcp_servers": "yes" }),
++    ] {
++        assert!(
++            matches!(
++                policy_with(execution.clone()),
++                Err(PolicyError::InvalidExecution(_))
++            ),
++            "{execution} must be refused"
++        );
++    }
++}
++
+ // ---- the effective computation -------------------------------------------------
+ 
+ #[test]
+diff --git a/engine/codex-rs/inquello-protocol/fixtures/workspace/execution_policy_view.json b/engine/codex-rs/inquello-protocol/fixtures/workspace/execution_policy_view.json
+index ab6958c..2ba838a 100644
+--- a/engine/codex-rs/inquello-protocol/fixtures/workspace/execution_policy_view.json
++++ b/engine/codex-rs/inquello-protocol/fixtures/workspace/execution_policy_view.json
+@@ -16,6 +16,7 @@
+       { "prefix": ["rm"], "decision": "forbid" },
+       { "prefix": ["ls"], "decision": "allow" }
+     ],
+-    "automatic_permission_review": false
++    "automatic_permission_review": false,
++    "allow_local_mcp_servers": false
+   }
+ }
+diff --git a/engine/codex-rs/inquello-protocol/src/workspace.rs b/engine/codex-rs/inquello-protocol/src/workspace.rs
+index 6813e68..034ae3f 100644
+--- a/engine/codex-rs/inquello-protocol/src/workspace.rs
++++ b/engine/codex-rs/inquello-protocol/src/workspace.rs
+@@ -174,6 +174,10 @@ pub struct ExecutionSection {
+     /// Story 1.20: the automatic permission reviewer switch (off when absent).
+     #[serde(default, skip_serializing_if = "Option::is_none")]
+     pub automatic_permission_review: Option<bool>,
++    /// Story 1.21: whether local (stdio) MCP servers may be added; they run
++    /// on the device outside the Task sandbox (not allowed when absent).
++    #[serde(default, skip_serializing_if = "Option::is_none")]
++    pub allow_local_mcp_servers: Option<bool>,
+ }
+ 
+ /// One Workspace command rule (Story 1.20): a literal command prefix and its
+diff --git a/engine/codex-rs/inquello-service/src/workspaces.rs b/engine/codex-rs/inquello-service/src/workspaces.rs
+index 106d319..2d4f0e6 100644
+--- a/engine/codex-rs/inquello-service/src/workspaces.rs
++++ b/engine/codex-rs/inquello-service/src/workspaces.rs
+@@ -484,6 +484,7 @@ fn execution_view(policy: &ExecutionPolicy) -> wire::ExecutionSection {
+                 .collect()
+         }),
+         automatic_permission_review: policy.automatic_permission_review,
++        allow_local_mcp_servers: policy.allow_local_mcp_servers,
+     }
+ }
+ 
+diff --git a/engine/codex-rs/inquello-service/tests/memberships.rs b/engine/codex-rs/inquello-service/tests/memberships.rs
+index 1be4458..d1ce086 100644
+--- a/engine/codex-rs/inquello-service/tests/memberships.rs
++++ b/engine/codex-rs/inquello-service/tests/memberships.rs
+@@ -1801,3 +1801,38 @@ async fn members_read_the_command_rules_and_the_reviewer_switch() {
+         inquello_protocol::workspace::RuleDecision::Forbid
+     );
+ }
++
++#[tokio::test]
++async fn members_read_whether_local_mcp_servers_are_allowed() {
++    let h = Harness::start().await;
++    let ws = workspace_with_admin(&h, "Local MCP Co", "ada").await;
++    let rita = join(&h, &ws, "rita", &["reviewer"]).await;
++    // Refused without MCP tools allowed: the policy is unchanged.
++    let refused = update_policy(
++        &h,
++        ws.id,
++        policy_with(|policy| {
++            policy["execution"] = json!({ "allow_local_mcp_servers": true });
++        }),
++    )
++    .await;
++    assert!(refused.is_err(), "a local MCP flag without MCP tools must be refused");
++    let before: ExecutionPolicyView = execution_view(&h, ws.id, &rita).await.ok();
++    assert_eq!(before.execution, None);
++    update_policy(
++        &h,
++        ws.id,
++        policy_with(|policy| {
++            policy["execution"] = json!({ "mcp_tools": "allowed", "allow_local_mcp_servers": true });
++        }),
++    )
++    .await
++    .expect("operator updates the policy");
++    let view: ExecutionPolicyView = execution_view(&h, ws.id, &rita).await.ok();
++    let execution = view.execution.expect("an execution section");
++    assert_eq!(execution.allow_local_mcp_servers, Some(true));
++    assert_eq!(
++        execution.mcp_tools,
++        Some(inquello_protocol::workspace::Access::Allowed)
++    );
++}
