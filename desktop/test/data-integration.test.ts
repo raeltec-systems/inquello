@@ -131,6 +131,7 @@ describe('a real runtime home', () => {
         activeTasks: () => 0,
       },
       identity: { principal: async () => null, holdsSession: () => false, signOut: async () => ({ ok: true }), forgetLocally: () => {} },
+      providers: { forgetClaudeKey: () => undefined, holdsClaudeKey: () => false },
       chooseExportDestination: async () => path.join(exportParent, 'export'),
       chooseImportSource: async () => importSource,
       clearBrowserProfile: async () => {},

@@ -501,6 +501,7 @@ function harness(): Harness {
         fs.rmSync(path.join(roots['user-data'], 'identity', 'session.bin'), { force: true });
       },
     },
+    providers: { forgetClaudeKey: () => void events.push('providers:forgetClaudeKey'), holdsClaudeKey: () => false },
     chooseExportDestination: async () => exportDest,
     chooseImportSource: async () => importSource,
     clearBrowserProfile: async () => void events.push('browser:clear'),
@@ -576,7 +577,7 @@ describe('data service', () => {
     const enabled = h.service.deletableCategories();
     const deleted = await h.service.deleteData(enabled);
     if (!deleted.ok) throw new Error(deleted.reason);
-    expect(h.events).toEqual(['identity:signOut', 'runtime:stop', 'browser:clear', 'runtime:start']);
+    expect(h.events).toEqual(['identity:signOut', 'runtime:stop', 'providers:forgetClaudeKey', 'browser:clear', 'runtime:start']);
     expect(deleted.delete.serverRevocation).toBe('confirmed');
     // Only the keyring entry stays: Local data never deletes from the OS credential store.
     expect(deleted.delete.retained).toEqual([{ category: 'codex-keyring-entry', label: 'Codex login (OS keyring)', files: 0 }]);
@@ -632,14 +633,15 @@ describe('data service', () => {
     expect(fs.existsSync(path.join(h.roots['user-data'], 'identity', 'device-id'))).toBe(true);
   });
 
-  it('deleting the identity session when signed out needs no sign-out', async () => {
+  it('deleting the identity session when signed out needs no sign-out, but still cancels a pending sign-in (review R04)', async () => {
     const h = harness();
     h.identity.held = false;
     const result = await h.service.deleteData(['identity-session']);
     if (!result.ok) throw new Error(result.reason);
     expect(result.delete.serverRevocation).toBe('not-signed-in');
-    expect(h.events).toEqual(['runtime:stop', 'runtime:start']);
-    expect(result.delete.removed[0]!.filesRemoved).toBe(1);
+    expect(h.events).toEqual(['identity:forgetLocally', 'runtime:stop', 'runtime:start']);
+    expect(result.delete.removed[0]).toMatchObject({ category: 'identity-session', filesRemaining: 0 });
+    expect(fs.existsSync(path.join(h.roots['user-data'], 'identity', 'session.bin'))).toBe(false);
   });
 
   it('runs one action at a time', async () => {
