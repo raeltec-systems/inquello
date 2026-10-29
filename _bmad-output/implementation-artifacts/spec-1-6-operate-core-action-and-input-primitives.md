@@ -88,7 +88,8 @@ context:
 
 Review pass 2026-10-29, HEAD `ace1ca2`, using `bmad-code-review`. Full evidence, ranking and limitations: [completed-story review](reviews/2026-10-29-epic-1/report.md). Owner selected “Leave as action items” on 2026-10-29. All patch findings remain open; no implementation fixes applied. Review status and sprint tracking synchronized.
 
-- [ ] [Review][Patch] R08: Contrast evidence rejects harmless floating-point serialization differences [desktop/test/contrast.test.ts:194] — BMAD medium; likelihood High; impact Medium; change risk Low — recommendation: Fix now.
+- [x] [Review][Patch] R08: Contrast evidence rejects harmless floating-point serialization differences [desktop/test/contrast.test.ts:194] — BMAD medium; likelihood High; impact Medium; change risk Low — recommendation: Fix now.
+  - Fixed in remediation (2026-10-29): the evidence check compares parsed documents (keys, every pair and token, strings exactly; numbers within a relative 1e-9) and separately requires every recorded ratio to meet its threshold. Thresholds unchanged. Tests `contrast evidence` in desktop/test/contrast.test.ts, including float noise accepted and a changed ratio, a missing pair, a changed token and a ratio below threshold rejected.
 
 #### Rejected
 

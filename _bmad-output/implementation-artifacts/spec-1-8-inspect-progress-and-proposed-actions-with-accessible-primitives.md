@@ -91,7 +91,8 @@ context:
 
 Review pass 2026-10-29, HEAD `ace1ca2`, using `bmad-code-review`. Full evidence, ranking and limitations: [completed-story review](reviews/2026-10-29-epic-1/report.md). Owner selected “Leave as action items” on 2026-10-29. All patch findings remain open; no implementation fixes applied. Review status and sprint tracking synchronized.
 
-- [ ] [Review][Patch] R14: DiffLine collapses significant whitespace in plain-text source [desktop/src/renderer/primitives/primitives.css:852] — BMAD low; likelihood Low; impact Medium; change risk Low — recommendation: Optional small cleanup before source-code diff use.
+- [x] [Review][Patch] R14: DiffLine collapses significant whitespace in plain-text source [desktop/src/renderer/primitives/primitives.css:852] — BMAD low; likelihood Low; impact Medium; change risk Low — recommendation: Optional small cleanup before source-code diff use.
+  - Fixed in remediation (2026-10-29): `.iq-diff-body` uses `white-space: pre-wrap` (still `overflow-wrap: anywhere`). Test `keeps the whitespace of plain-text source, still wrapping long lines (review R14)` in desktop/test/primitives-progress.test.tsx. No real-browser check was run.
 
 Related shared verification issue: R08 in Story 1.6 covers this story’s contrast evidence too; count it once.
 

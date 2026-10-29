@@ -91,7 +91,8 @@ context:
 
 Review pass 2026-10-29, HEAD `ace1ca2`, using `bmad-code-review`. Full evidence, ranking and limitations: [completed-story review](reviews/2026-10-29-epic-1/report.md). Owner selected “Leave as action items” on 2026-10-29. All patch findings remain open; no implementation fixes applied. Review status and sprint tracking synchronized.
 
-- [ ] [Review][Patch] R13: Production build omits the renderer type check [desktop/package.json:16] — BMAD low; likelihood Low; impact Low; change risk Low — recommendation: Optional small cleanup.
+- [x] [Review][Patch] R13: Production build omits the renderer type check [desktop/package.json:16] — BMAD low; likelihood Low; impact Low; change risk Low — recommendation: Optional small cleanup.
+  - Fixed in remediation (2026-10-29): `pnpm run build` now runs `tsc -p tsconfig.renderer.json --noEmit`; a temporary renderer type error made the build fail (exit 2), then was removed.
 
 #### Rejected
 

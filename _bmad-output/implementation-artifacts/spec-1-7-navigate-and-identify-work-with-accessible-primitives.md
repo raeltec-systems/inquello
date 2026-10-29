@@ -84,7 +84,8 @@ context:
 
 Review pass 2026-10-29, HEAD `ace1ca2`, using `bmad-code-review`. Full evidence, ranking and limitations: [completed-story review](reviews/2026-10-29-epic-1/report.md). Owner selected “Leave as action items” on 2026-10-29. All patch findings remain open; no implementation fixes applied. Review status and sprint tracking synchronized.
 
-- [ ] [Review][Patch] R12: Lossy ID normalization creates duplicate tab and menu ARIA references [desktop/src/renderer/primitives/shared.tsx:64] — BMAD medium; likelihood Low; impact Medium; change risk Low — recommendation: Schedule before dynamic values; cheap to fix sooner.
+- [x] [Review][Patch] R12: Lossy ID normalization creates duplicate tab and menu ARIA references [desktop/src/renderer/primitives/shared.tsx:64] — BMAD medium; likelihood Low; impact Medium; change risk Low — recommendation: Schedule before dynamic values; cheap to fix sooner.
+  - Fixed in remediation (2026-10-29): idFragment escapes every character other than ASCII letters, digits and `-` (including `_`) as `_<hex>_`, so distinct values never share an id. Tests `ARIA ids for caller values (review R12)` in desktop/test/primitives-navigation.test.tsx: `a.b`, `a b`, `a_b` and others in Tabs and a Menu radio group, unique ids and correct aria-controls/aria-labelledby targets.
 
 Related shared verification issue: R08 in Story 1.6 covers this story’s contrast evidence too; count it once.
 
