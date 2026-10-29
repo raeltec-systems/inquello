@@ -23,6 +23,18 @@
  * and requires a new sign-in. Logout is an SC-2 envelope whose `operation_id`
  * is persisted (with the record) until it resolves; a retry reuses the same
  * envelope, and `unauthenticated` on a retried self-logout means logged out.
+ * On a first attempt, `unauthenticated` is followed by one refresh: a refresh
+ * that ends the family (discarding and revoking it) completes the logout, but
+ * one the service could not attempt leaves the family alive, so the logout
+ * stays pending with its operation ID and is not reported as confirmed.
+ *
+ * Removing the session locally, or signing out, cancels a sign-in still in
+ * progress: its late result is never installed or saved, and a session its
+ * bootstrap created is abandoned (revoked) at the service.
+ *
+ * When the vault cannot save the record, the saved copy is removed (so a
+ * restart cannot reuse credentials a rotation replaced) and the status says
+ * the session is memory-only for this run.
  *
  * Status keeps three things separate: the identity, the shared service's
  * availability, and private work, which is always local and never depends on
@@ -73,6 +85,7 @@ export const REASONS = {
   issuerRejected: 'The identity provider did not complete the sign-in.',
   serviceRejected: 'The shared service did not accept the sign-in.',
   interrupted: 'Sign-in was interrupted. Sign in again.',
+  cancelled: 'Sign-in was cancelled because the session was removed. Sign in again.',
   logoutPending: 'Sign-out is waiting for the shared service. Sign out again to retry.',
   signOutUnavailable: 'The shared service could not be reached, so you are still signed in.',
 } as const;
@@ -137,7 +150,10 @@ export class IdentitySession {
   private readonly config: ServiceConfig | null;
   private readonly configInvalid: boolean;
   private record: StoredSession | null = null;
-  private signingIn = false;
+  /** The sign-in in progress; cleared (cancelling it) by sign-out and local removal. */
+  private signInToken: object | null = null;
+  /** The last save of the record failed, so nothing current is on disk. */
+  private persistFailed = false;
   private shared: SharedServiceState;
   private chain: Promise<unknown> = Promise.resolve();
   private refreshing: Promise<boolean> | null = null;
@@ -165,9 +181,14 @@ export class IdentitySession {
     return {
       identity: this.identityState(),
       sharedService: this.shared,
-      credentialStorage: this.options.vault.storage,
+      // A record the vault could not save lasts for this run only.
+      credentialStorage: this.persistFailed ? 'memory-only' : this.options.vault.storage,
       privateWork: 'local',
     };
+  }
+
+  private get signingIn(): boolean {
+    return this.signInToken !== null;
   }
 
   private identityState(): IdentityState {
@@ -242,21 +263,28 @@ export class IdentitySession {
     if (this.signingIn) return this.result(false, REASONS.inProgress);
     if (this.record?.pendingLogout) return this.result(false, REASONS.logoutPending);
     if (this.record) return this.result(true);
-    this.signingIn = true;
+    const token = {};
+    this.signInToken = token;
     let reason: string | undefined;
     try {
-      await this.runSignIn(this.config);
+      await this.runSignIn(this.config, token);
     } catch (error) {
       reason = error instanceof SignInFailure ? error.reason : REASONS.interrupted;
       this.options.logger.warn(`identity: sign-in did not complete (${reason})`);
     } finally {
-      this.signingIn = false;
+      if (this.signInToken === token) this.signInToken = null;
     }
     return reason === undefined ? this.result(true) : this.result(false, reason);
   }
 
-  private async runSignIn(config: ServiceConfig): Promise<void> {
+  /** Cancels a sign-in in progress: its result is never installed. */
+  private cancelSignIn(): void {
+    this.signInToken = null;
+  }
+
+  private async runSignIn(config: ServiceConfig, token: object): Promise<void> {
     const issuer = this.options.issuer!;
+    const cancelled = () => this.signInToken !== token;
     let endpoints;
     try {
       endpoints = await issuer.discover();
@@ -322,6 +350,10 @@ export class IdentitySession {
         throw new SignInFailure(error instanceof LoopbackError && error.failure === 'timeout' ? REASONS.timedOut : REASONS.issuerRejected);
       }
       this.remember(code);
+      if (cancelled()) {
+        await abandon();
+        throw new SignInFailure(REASONS.cancelled);
+      }
 
       let idToken: string;
       try {
@@ -337,6 +369,10 @@ export class IdentitySession {
         throw new SignInFailure(error instanceof IssuerError && error.code === 'transport' ? REASONS.issuerUnavailable : REASONS.issuerRejected);
       }
       this.remember(idToken);
+      if (cancelled()) {
+        await abandon();
+        throw new SignInFailure(REASONS.cancelled);
+      }
 
       let credentials: SessionCredentials;
       try {
@@ -364,6 +400,17 @@ export class IdentitySession {
         this.shared = 'available';
       } catch (error) {
         this.noteServiceError(error);
+      }
+      if (cancelled()) {
+        // Removed or signed out while the sign-in ran: never install or save
+        // this session; abandoning the transaction revokes it at the service.
+        await abandon();
+        try {
+          await this.service.revokeFamily({ refreshCredential: credentials.refresh_credential });
+        } catch {
+          // Already revoked by the abandon, or it expires on its own.
+        }
+        throw new SignInFailure(REASONS.cancelled);
       }
       this.record = {
         version: 1,
@@ -443,10 +490,7 @@ export class IdentitySession {
   }
 
   private async discardFamily(record: StoredSession): Promise<void> {
-    if (this.record === record || this.record?.sessionId === record.sessionId) {
-      this.record = null;
-      this.options.vault.clear();
-    }
+    if (this.record === record || this.record?.sessionId === record.sessionId) this.dropRecord();
     try {
       await this.service.revokeFamily({ refreshCredential: record.refreshCredential });
     } catch {
@@ -458,6 +502,8 @@ export class IdentitySession {
 
   async signOut(): Promise<IdentityActionResult> {
     if (this.configInvalid) return this.result(false, REASONS.configInvalid);
+    // Signing out also cancels a sign-in that has not finished.
+    this.cancelSignIn();
     if (!this.config || !this.record) return this.result(true);
     return this.exclusive(async () => {
       if (!this.record) return this.result(true);
@@ -469,7 +515,7 @@ export class IdentitySession {
   }
 
   /** Reads the epoch and the session revision and persists a new pending logout. */
-  private async prepareLogout(): Promise<boolean> {
+  private async prepareLogout(refreshed = false): Promise<boolean> {
     const access = await this.freshAccess();
     if (!access || !this.record) return false;
     try {
@@ -488,7 +534,16 @@ export class IdentitySession {
       return true;
     } catch (error) {
       if (error instanceof ServiceError && error.kind === 'unauthenticated') {
-        // The session is already unusable on the service: finish locally.
+        // The access credential was refused. Refresh once: a refresh that
+        // ends the family discards (and revokes) it, which finishes the
+        // logout; one the service could not attempt keeps the family, which
+        // is still alive there, so nothing is confirmed.
+        if (!refreshed) {
+          if (await this.refresh()) return this.prepareLogout(true);
+          return false;
+        }
+        // Refused even after a successful refresh: the session is unusable
+        // on the service. Finish locally.
         await this.discardFamily(this.record);
         return false;
       }
@@ -544,9 +599,21 @@ export class IdentitySession {
             this.finishLogout();
             return this.result(true);
           }
-          // First attempt: the access credential was refused. Refresh once and
-          // retry the same envelope; a failed refresh discards the family.
+          // First attempt: the access credential was refused, so nothing was
+          // committed. Refresh once and retry the same envelope.
           if (await this.refresh()) return this.attemptLogout(interactive, rePrepared);
+          if (this.record?.pendingLogout) {
+            // The refresh could not be attempted (service or dependency
+            // unavailable): the family is still alive on the service, so the
+            // logout is not confirmed. Keep the operation and its ID for a
+            // retry; since this attempt committed nothing, it is not "sent".
+            this.record = { ...this.record, pendingLogout: { ...this.record.pendingLogout, sent: false } };
+            this.persist();
+            this.shared = 'unavailable';
+            return this.result(false, REASONS.logoutPending);
+          }
+          // The refresh ended the family (refused or uncertain): it was
+          // discarded and its revocation sent.
           this.finishLogout();
           return this.result(true);
         case 'version_conflict':
@@ -582,20 +649,28 @@ export class IdentitySession {
   }
 
   /**
-   * Drops the session on this device only: memory and the vault file. Used by
-   * the local data deletion (Story 1.12) after `signOut` could not get the
-   * shared service to confirm; the server session then lapses on its own.
+   * Drops the session on this device only: memory and the vault file, and
+   * cancels a sign-in still in progress so its result is never installed.
+   * Used by the local data deletion (Story 1.12) after `signOut` could not get
+   * the shared service to confirm, or when no session was held; the server
+   * session then lapses on its own.
    */
   forgetLocally(): void {
-    this.record = null;
-    this.options.vault.clear();
-    this.options.logger.info('identity: the session was removed locally without server confirmation');
+    const held = this.record !== null;
+    this.cancelSignIn();
+    this.dropRecord();
+    if (held) this.options.logger.info('identity: the session was removed locally without server confirmation');
   }
 
   private finishLogout(): void {
+    this.dropRecord();
+    this.options.logger.info('identity: signed out');
+  }
+
+  private dropRecord(): void {
     this.record = null;
     this.options.vault.clear();
-    this.options.logger.info('identity: signed out');
+    this.persistFailed = false;
   }
 
   // ---- helpers -------------------------------------------------------------
@@ -614,8 +689,18 @@ export class IdentitySession {
     if (!this.record) return;
     try {
       this.options.vault.save(this.record);
+      this.persistFailed = false;
     } catch {
+      this.persistFailed = true;
       this.options.logger.error('identity: the session could not be saved; it lasts for this run only');
+      // What is on disk is now outdated (for example a refresh credential a
+      // rotation replaced, or a record without the pending logout): remove it
+      // so a restart cannot reuse it.
+      try {
+        this.options.vault.clear();
+      } catch {
+        this.options.logger.error('identity: the outdated saved session could not be removed');
+      }
     }
   }
 
