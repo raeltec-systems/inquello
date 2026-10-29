@@ -145,6 +145,20 @@ impl OrganiseStore for SqliteWorkingStore {
             .begin_with("BEGIN IMMEDIATE")
             .await
             .map_err(backend)?;
+        // A receipt recorded by a concurrent writer of the same operation wins
+        // over the revision and uniqueness checks, so the caller replays (or
+        // refuses) it instead of reporting that writer's change as a conflict.
+        let recorded: Option<i64> =
+            sqlx::query_scalar("SELECT 1 FROM organise_receipts WHERE operation_id = ?")
+                .bind(receipt.operation_id.as_str())
+                .fetch_optional(&mut *tx)
+                .await
+                .map_err(backend)?;
+        if recorded.is_some() {
+            return Err(StoreError::DuplicateOperation {
+                operation_id: receipt.operation_id,
+            });
+        }
         let actual = current_revision(&mut tx, &record).await?;
         if actual != expected_revision {
             return Err(StoreError::RevisionConflict {

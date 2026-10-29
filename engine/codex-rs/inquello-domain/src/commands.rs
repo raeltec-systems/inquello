@@ -35,6 +35,8 @@ pub struct InitializeStore {
 ///   [`DomainError::OperationConflict`].
 /// - An expected revision that differs from the store's fails with
 ///   [`DomainError::RevisionConflict`] and writes nothing.
+/// - Two identical requests racing each other both succeed: one applies, the
+///   other replays its receipt.
 pub async fn initialize_store<S, C>(
     store: &S,
     clock: &C,
@@ -51,7 +53,42 @@ where
     if let Some(outcome) = replay(store, &operation_id, kind, expected).await? {
         return Ok(outcome);
     }
+    match apply_initialize(store, clock, &operation_id, expected).await {
+        // A concurrent request with this operation ID may have committed after
+        // the lookup above; its revision is then what refused this one.
+        Err(error) if may_follow_concurrent_apply(&error) => {
+            match replay(store, &operation_id, kind, expected).await? {
+                Some(outcome) => Ok(outcome),
+                None => Err(error),
+            }
+        }
+        result => result,
+    }
+}
 
+/// Whether a refusal met after the receipt lookup may have been caused by a
+/// concurrent request with the same operation ID committing in between, so the
+/// receipt must be looked up again before the refusal is returned. Store
+/// failures and operation conflicts are final.
+pub(crate) fn may_follow_concurrent_apply(error: &DomainError) -> bool {
+    !matches!(
+        error,
+        DomainError::Store(_) | DomainError::OperationConflict { .. }
+    )
+}
+
+/// The [`initialize_store`] steps after a receipt lookup found nothing.
+async fn apply_initialize<S, C>(
+    store: &S,
+    clock: &C,
+    operation_id: &OperationId,
+    expected: Revision,
+) -> Result<CommandOutcome, DomainError>
+where
+    S: WorkingStore,
+    C: Clock,
+{
+    let kind = CommandKind::InitializeStore;
     let current = store.load_store_info().await.map_err(DomainError::Store)?;
     let actual = current
         .as_ref()
@@ -95,7 +132,7 @@ where
         }
         Err(error @ StoreError::DuplicateOperation { .. }) => {
             // Another writer recorded this operation ID after our lookup.
-            match replay(store, &operation_id, kind, expected).await? {
+            match replay(store, operation_id, kind, expected).await? {
                 Some(outcome) => Ok(outcome),
                 None => Err(DomainError::Store(error)),
             }

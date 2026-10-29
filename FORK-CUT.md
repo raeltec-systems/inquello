@@ -153,6 +153,15 @@ The first patch to upstream crates' code: the forked app-server now hosts the In
 
 After a future `git subtree pull`, expect conflicts in `common.rs` (the `ClientRequest` list), `v2/mod.rs`, `message_processor.rs`, `request_processors.rs`, `main.rs` and the regenerated schema fixtures; regenerate the fixtures rather than merging them by hand.
 
+### Patch 8: Review remediation R10 and R11 (Epic 1 review, 2026-10-29)
+
+Changes only the Inquello crates; no upstream crate's code changes.
+
+- **`inquello-adapters`**: `commit` and `commit_organise` check for the operation's receipt first inside their `BEGIN IMMEDIATE` transaction and return `DuplicateOperation`, so a request that raced an identical one replays it instead of reporting a revision conflict (R10). New test target `tests/concurrent_operations.rs`; the `tokio` dev-dependency gains the `sync` feature (for `tokio::sync::Barrier`), which other workspace crates already enable.
+- **`inquello-domain`**: `initialize_store` and the organise commands look the receipt up again when refused after the first lookup (R10). The port docs state the receipt check's precedence.
+- **`inquello-service`**: expiry is checked against the clock read after the relevant row locks (refresh, bootstrap, `authenticate` and its callers, invite acceptance); `Authenticated` carries that time (R11). New lock-wait tests in `tests/identity.rs`.
+- **Workspace manifest and lockfile**: unchanged.
+
 ## Toolchain setup (Windows, everything on D:)
 
 The owner authorized these installs on 2026-10-28. Toolchains, caches and build output stay on D:. The Microsoft C++ build tools were already present and were not installed.

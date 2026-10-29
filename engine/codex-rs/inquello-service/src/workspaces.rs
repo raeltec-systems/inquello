@@ -281,11 +281,16 @@ pub(crate) async fn list_workspaces(
     state: &AppState,
     access: &str,
 ) -> Result<wire::WorkspacesView, ApiError> {
-    let now = state.clock.now();
     let mut tx = state.pool.begin().await?;
-    let auth = sessions::authenticate(&mut tx, access, now, LockMode::Share, LockMode::Share)
-        .await
-        .map_err(ApiError::on_workspace_route)?;
+    let auth = sessions::authenticate(
+        &mut tx,
+        access,
+        state.clock.as_ref(),
+        LockMode::Share,
+        LockMode::Share,
+    )
+    .await
+    .map_err(ApiError::on_workspace_route)?;
     let ids: Vec<Uuid> = sqlx::query_scalar(
         "SELECT workspace_id FROM memberships \
          WHERE principal_id = $1 AND status = 'active' ORDER BY workspace_id",
@@ -359,11 +364,16 @@ pub(crate) async fn roles(
     access: &str,
     workspace_id: Uuid,
 ) -> Result<wire::RolesView, ApiError> {
-    let now = state.clock.now();
     let mut tx = state.pool.begin().await?;
-    let auth = sessions::authenticate(&mut tx, access, now, LockMode::Share, LockMode::Share)
-        .await
-        .map_err(ApiError::on_workspace_route)?;
+    let auth = sessions::authenticate(
+        &mut tx,
+        access,
+        state.clock.as_ref(),
+        LockMode::Share,
+        LockMode::Share,
+    )
+    .await
+    .map_err(ApiError::on_workspace_route)?;
     let authority = resolve(&mut tx, &auth, workspace_id, LockMode::Share).await?;
     authority.require_member()?;
     let roles = authority
@@ -469,11 +479,16 @@ pub(crate) async fn access_check(
     workspace_id: Uuid,
     request: wire::AccessCheckRequest,
 ) -> Result<wire::AccessCheckResponse, ApiError> {
-    let now = state.clock.now();
     let mut tx = state.pool.begin().await?;
-    let auth = sessions::authenticate(&mut tx, access, now, LockMode::Share, LockMode::Share)
-        .await
-        .map_err(ApiError::on_workspace_route)?;
+    let auth = sessions::authenticate(
+        &mut tx,
+        access,
+        state.clock.as_ref(),
+        LockMode::Share,
+        LockMode::Share,
+    )
+    .await
+    .map_err(ApiError::on_workspace_route)?;
     let authority = resolve(&mut tx, &auth, workspace_id, LockMode::Share).await?;
     let action = domain_action(request.action);
     let reference = request.resource.map(|resource| ResourceRef {
@@ -533,11 +548,16 @@ pub(crate) async fn accept_invite(
     access: &str,
     invite_id: Uuid,
 ) -> Result<wire::AcceptInviteResponse, ApiError> {
-    let now = state.clock.now();
     let mut tx = state.pool.begin().await?;
-    let auth = sessions::authenticate(&mut tx, access, now, LockMode::Update, LockMode::Share)
-        .await
-        .map_err(ApiError::on_workspace_route)?;
+    let auth = sessions::authenticate(
+        &mut tx,
+        access,
+        state.clock.as_ref(),
+        LockMode::Update,
+        LockMode::Share,
+    )
+    .await
+    .map_err(ApiError::on_workspace_route)?;
     let principal = sqlx::query("SELECT issuer, subject FROM principals WHERE principal_id = $1")
         .bind(auth.principal_id)
         .fetch_one(&mut *tx)
@@ -567,6 +587,10 @@ pub(crate) async fn accept_invite(
     .fetch_optional(&mut *tx)
     .await?
     .ok_or_else(|| invite_refused("unknown invite"))?;
+    // Sampled only now that the invite row is locked: an accept that waited on
+    // the lock past the invite's expiry is refused, and the membership and
+    // invite times recorded below agree with that check.
+    let now = state.clock.now();
     let invite_state: String = invite.try_get("state")?;
     let expires_at: chrono::DateTime<chrono::Utc> = invite.try_get("expires_at")?;
     let bound_issuer: String = invite.try_get("issuer")?;

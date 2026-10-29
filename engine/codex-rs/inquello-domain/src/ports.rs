@@ -37,9 +37,10 @@ pub trait WorkingStore: Send + Sync {
     /// Atomically compares the store revision with `change.expected_revision`, writes
     /// `change.store_info` and records `change.receipt`.
     ///
-    /// Returns [`StoreError::RevisionConflict`] when the revision differs and
-    /// [`StoreError::DuplicateOperation`] when the operation ID already has a receipt.
-    /// On any error nothing is persisted.
+    /// Returns [`StoreError::DuplicateOperation`] when the operation ID already has a
+    /// receipt (checked first, under the same write lock) and
+    /// [`StoreError::RevisionConflict`] when the revision differs. On any error
+    /// nothing is persisted.
     fn commit(&self, change: StateChange) -> impl Future<Output = Result<(), StoreError>> + Send;
 }
 

@@ -68,10 +68,10 @@ pub trait OrganiseStore: Send + Sync {
 
     /// Atomically applies `change` (see [`OrganiseChange`]).
     ///
-    /// Returns [`StoreError::RevisionConflict`] when the stored revision differs
-    /// (actual 0 when the record does not exist) and
-    /// [`StoreError::DuplicateOperation`] when the operation ID already has a
-    /// receipt. On any error nothing is persisted.
+    /// Returns [`StoreError::DuplicateOperation`] when the operation ID already
+    /// has a receipt (checked first, under the same write lock) and
+    /// [`StoreError::RevisionConflict`] when the stored revision differs (actual
+    /// 0 when the record does not exist). On any error nothing is persisted.
     fn commit_organise(
         &self,
         change: OrganiseChange,

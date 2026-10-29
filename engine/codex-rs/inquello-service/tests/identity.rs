@@ -920,3 +920,215 @@ async fn login_transactions_are_allowlisted_expiring_and_abandonable() {
         .assert_error(ErrorKind::Unauthenticated);
     h.finish().await;
 }
+
+// ---- Expiry after a lock wait (review finding R11) ---------------------------
+//
+// Each case holds the row lock the request needs in a separate transaction,
+// waits until the request is blocked on it, moves the clock and only then
+// releases the lock. Expiry must be judged at the time the lock was obtained,
+// not at the time the request arrived.
+
+/// Waits until a backend of this test's database is blocked on a row lock.
+async fn wait_for_lock_waiter(h: &Harness) {
+    for _ in 0..1000 {
+        let waiting: i64 = sqlx::query_scalar(
+            "SELECT count(*) FROM pg_stat_activity \
+             WHERE datname = current_database() AND wait_event_type = 'Lock'",
+        )
+        .fetch_one(&h.pool)
+        .await
+        .expect("lock waiters");
+        if waiting > 0 {
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    panic!("the request never waited on the held lock");
+}
+
+/// Runs `request` while `lock_sql` (bound to `id`) holds a row lock in another
+/// transaction; once the request waits on it, advances the clock by `advance`
+/// and releases the lock.
+async fn with_lock_held<T>(
+    h: &Harness,
+    lock_sql: &'static str,
+    id: Uuid,
+    advance: TimeDelta,
+    request: impl std::future::Future<Output = T>,
+) -> T {
+    let mut holder = h.pool.begin().await.expect("holder transaction");
+    sqlx::query(lock_sql)
+        .bind(id)
+        .execute(&mut *holder)
+        .await
+        .expect("take the row lock");
+    let release = async move {
+        wait_for_lock_waiter(h).await;
+        h.clock.advance(advance);
+        holder.rollback().await.expect("release the row lock");
+    };
+    let (response, ()) = tokio::join!(request, release);
+    response
+}
+
+const LOCK_SESSION: &str = "SELECT 1 FROM sessions WHERE session_id = $1 FOR UPDATE";
+const LOCK_LOGIN_TRANSACTION: &str =
+    "SELECT 1 FROM login_transactions WHERE login_transaction_id = $1 FOR UPDATE";
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_refresh_that_waits_on_the_session_lock_past_expiry_is_refused() {
+    let h = Harness::start().await;
+
+    // Control: still inside the refresh lifetime after the wait.
+    let live = h.sign_in("lock-wait-refresh-live").await;
+    let response = with_lock_held(
+        &h,
+        LOCK_SESSION,
+        live.session_id,
+        TimeDelta::hours(24) - TimeDelta::minutes(1),
+        h.refresh(live.refresh_credential.expose()),
+    )
+    .await;
+    let refreshed: SessionCredentials = response.ok();
+    // Issued at the post-lock time, not at the arrival time.
+    assert_eq!(
+        refreshed.access_expires_at,
+        h.now() + TimeDelta::minutes(15)
+    );
+
+    // Valid when it arrived, expired by the time the session lock was free.
+    let expiring = h.sign_in("lock-wait-refresh-expired").await;
+    with_lock_held(
+        &h,
+        LOCK_SESSION,
+        expiring.session_id,
+        TimeDelta::hours(24),
+        h.refresh(expiring.refresh_credential.expose()),
+    )
+    .await
+    .assert_error(ErrorKind::Unauthenticated);
+    let rotated: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM session_credentials WHERE session_id = $1 AND state = 'rotated'",
+    )
+    .bind(expiring.session_id)
+    .fetch_one(&h.pool)
+    .await
+    .expect("rotated count");
+    assert_eq!(rotated, 0, "a refused refresh rotates nothing");
+    h.finish().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_protected_request_that_waits_on_the_session_lock_past_expiry_is_refused() {
+    let h = Harness::start().await;
+
+    // Control: the access credential is still live after the wait.
+    let live = h.sign_in("lock-wait-access-live").await;
+    let response = with_lock_held(
+        &h,
+        LOCK_SESSION,
+        live.session_id,
+        TimeDelta::minutes(14),
+        h.get("/v1/session", Some(live.access_credential.expose())),
+    )
+    .await;
+    let view: SessionView = response.ok();
+    assert_eq!(view.session_id, live.session_id);
+
+    let expiring = h.sign_in("lock-wait-access-expired").await;
+    with_lock_held(
+        &h,
+        LOCK_SESSION,
+        expiring.session_id,
+        TimeDelta::minutes(15),
+        h.get("/v1/session", Some(expiring.access_credential.expose())),
+    )
+    .await
+    .assert_error(ErrorKind::Unauthenticated);
+    h.finish().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_bootstrap_that_waits_on_the_transaction_lock_past_expiry_is_refused() {
+    let h = Harness::start().await;
+    let sessions = || h.count("SELECT count(*) FROM sessions");
+
+    // Control: the transaction and the ID token are both still live.
+    let live = h.create_transaction(Uuid::new_v4()).await;
+    let token = h.sign(&h.valid_fixture("lock-wait-bootstrap-live", &live));
+    let response = with_lock_held(
+        &h,
+        LOCK_LOGIN_TRANSACTION,
+        live.login_transaction_id,
+        TimeDelta::minutes(1),
+        h.bootstrap(&live, &token),
+    )
+    .await;
+    let credentials: SessionCredentials = response.ok();
+    // The session is issued at the post-lock time.
+    assert_eq!(
+        credentials.session_expires_at,
+        h.now() + TimeDelta::days(30)
+    );
+    assert_eq!(sessions().await, 1);
+
+    // The ID token, after its expiry but inside the clock-skew allowance, is
+    // still accepted after the wait.
+    let skewed = h.create_transaction(Uuid::new_v4()).await;
+    let token = h.sign(&h.valid_fixture("lock-wait-bootstrap-skew", &skewed));
+    with_lock_held(
+        &h,
+        LOCK_LOGIN_TRANSACTION,
+        skewed.login_transaction_id,
+        TimeDelta::minutes(5) + TimeDelta::seconds(30),
+        h.bootstrap(&skewed, &token),
+    )
+    .await
+    .ok::<SessionCredentials>();
+    assert_eq!(sessions().await, 2);
+
+    // The login transaction expires while the request waits. The ID token is
+    // given a longer life so only the transaction expiry can refuse it.
+    let expiring = h.create_transaction(Uuid::new_v4()).await;
+    let mut fixture = h.valid_fixture("lock-wait-bootstrap-transaction", &expiring);
+    fixture.expires_at = h.now() + TimeDelta::minutes(30);
+    let token = h.sign(&fixture);
+    with_lock_held(
+        &h,
+        LOCK_LOGIN_TRANSACTION,
+        expiring.login_transaction_id,
+        TimeDelta::minutes(10),
+        h.bootstrap(&expiring, &token),
+    )
+    .await
+    .assert_error(ErrorKind::Unauthenticated);
+
+    // The ID token passes its expiry and the skew allowance while the request
+    // waits; the transaction itself is still open.
+    let stale_token = h.create_transaction(Uuid::new_v4()).await;
+    let token = h.sign(&h.valid_fixture("lock-wait-bootstrap-token", &stale_token));
+    with_lock_held(
+        &h,
+        LOCK_LOGIN_TRANSACTION,
+        stale_token.login_transaction_id,
+        TimeDelta::minutes(6),
+        h.bootstrap(&stale_token, &token),
+    )
+    .await
+    .assert_error(ErrorKind::Unauthenticated);
+
+    assert_eq!(sessions().await, 2, "refused bootstraps create no session");
+    let open: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM login_transactions \
+         WHERE login_transaction_id = ANY($1) AND consumed_at IS NULL",
+    )
+    .bind(vec![
+        expiring.login_transaction_id,
+        stale_token.login_transaction_id,
+    ])
+    .fetch_one(&h.pool)
+    .await
+    .expect("open transactions");
+    assert_eq!(open, 2, "a refused bootstrap consumes nothing");
+    h.finish().await;
+}

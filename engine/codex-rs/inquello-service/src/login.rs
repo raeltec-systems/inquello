@@ -98,7 +98,10 @@ pub(crate) async fn bootstrap(
     state: &AppState,
     request: BootstrapRequest,
 ) -> Result<SessionCredentials, ApiError> {
-    let now = state.clock.now();
+    // `checked_at` serves the unlocked pre-checks and ID-token validation only.
+    // Expiry is enforced again, and every recorded time is taken, from a clock
+    // reading made after the transaction row lock below is held.
+    let checked_at = state.clock.now();
     let proof = proof_hash(request.transaction_proof.expose())?;
     let id_token = request.id_token.expose();
     if id_token.is_empty() || id_token.len() > MAX_ID_TOKEN_BYTES {
@@ -124,7 +127,7 @@ pub(crate) async fn bootstrap(
             "login transaction already consumed",
         ));
     }
-    if now >= expires_at {
+    if checked_at >= expires_at {
         return Err(ApiError::unauthenticated("login transaction expired"));
     }
     let open = OpenTransaction {
@@ -145,7 +148,7 @@ pub(crate) async fn bootstrap(
         .validate(
             id_token,
             &open.nonce,
-            now,
+            checked_at,
             state.lifetimes.id_token_clock_skew,
         )
         .map_err(|rejection| {
@@ -167,10 +170,18 @@ pub(crate) async fn bootstrap(
     .await?;
     let consumed_at: Option<DateTime<Utc>> = locked.try_get("consumed_at")?;
     let expires_at: DateTime<Utc> = locked.try_get("expires_at")?;
+    // Sampled after the lock: a bootstrap that waited on it past the
+    // transaction's expiry is refused, and the session is issued at this time.
+    let now = state.clock.now();
     if consumed_at.is_some() || now >= expires_at {
         return Err(ApiError::unauthenticated(
             "login transaction no longer open",
         ));
+    }
+    // The ID token keeps the same clock-skew allowance it was validated with.
+    let skew = i64::try_from(state.lifetimes.id_token_clock_skew.as_secs()).unwrap_or(i64::MAX);
+    if claims.expires_at.timestamp().saturating_add(skew) <= now.timestamp() {
+        return Err(ApiError::unauthenticated("ID token rejected"));
     }
 
     let token_recorded = sqlx::query(

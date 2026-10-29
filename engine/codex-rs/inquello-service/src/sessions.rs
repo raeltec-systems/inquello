@@ -6,6 +6,7 @@
 //! session or its credentials holds that session's row lock, so a reader holding
 //! `FOR SHARE` on the session sees a consistent, current state.
 
+use crate::clock::Clock;
 use crate::credentials;
 use crate::credentials::CredentialKind;
 use crate::credentials::MAX_CREDENTIAL_BYTES;
@@ -39,6 +40,10 @@ pub(crate) struct Authenticated {
     pub(crate) principal_id: Uuid,
     pub(crate) session_id: Uuid,
     pub(crate) family_id: Uuid,
+    /// The time expiry was checked against, sampled after the principal and
+    /// session locks were taken. Callers use it for the rest of the request so
+    /// later checks and recorded timestamps agree with that check.
+    pub(crate) now: DateTime<Utc>,
 }
 
 fn revision(value: i64) -> Result<Revision, ApiError> {
@@ -165,11 +170,12 @@ async fn read_credential(
 /// Resolves a bearer access credential inside the caller's transaction: locks the
 /// principal, then the session, then re-reads the credential under those locks.
 /// Anything but a current credential on a live session of an active principal is
-/// `unauthenticated`.
+/// `unauthenticated`. Expiry is checked against `clock` sampled after the locks
+/// are held, so a request that waited on a lock past an expiry is refused.
 pub(crate) async fn authenticate(
     conn: &mut PgConnection,
     access: &str,
-    now: DateTime<Utc>,
+    clock: &dyn Clock,
     principal_lock: LockMode,
     session_lock: LockMode,
 ) -> Result<Authenticated, ApiError> {
@@ -179,6 +185,7 @@ pub(crate) async fn authenticate(
     lock_active_principal(conn, principal_id, principal_lock).await?;
     let session = lock_session(conn, session_id, session_lock).await?;
     let credential = read_credential(conn, &hash).await?;
+    let now = clock.now();
     if credential.state != "current" {
         return Err(ApiError::unauthenticated("access credential not current"));
     }
@@ -192,6 +199,7 @@ pub(crate) async fn authenticate(
         principal_id,
         session_id,
         family_id: session.family_id,
+        now,
     })
 }
 
@@ -300,7 +308,6 @@ pub(crate) async fn refresh(
     state: &AppState,
     request: RefreshRequest,
 ) -> Result<SessionCredentials, ApiError> {
-    let now = state.clock.now();
     let hash = credential_hash(request.refresh_credential.expose())?;
     let mut tx = state.pool.begin().await?;
     let (principal_id, session_id) =
@@ -308,6 +315,10 @@ pub(crate) async fn refresh(
     lock_active_principal(&mut tx, principal_id, LockMode::Share).await?;
     let session = lock_session(&mut tx, session_id, LockMode::Update).await?;
     let credential = read_credential(&mut tx, &hash).await?;
+    // Sampled only now that the locks are held: a refresh that waited on the
+    // session lock past an expiry is refused, and the new pair is issued at the
+    // same instant the expiry was checked.
+    let now = state.clock.now();
 
     if credential.state == "rotated" {
         // Reuse of a rotated refresh credential: revoke the whole family, commit
@@ -366,7 +377,6 @@ pub(crate) async fn revoke_family(
     bearer: Option<&str>,
     request: RevokeFamilyRequest,
 ) -> Result<RevokeFamilyResponse, ApiError> {
-    let now = state.clock.now();
     let mut tx = state.pool.begin().await?;
     let (principal_id, family_id) = match (&request.refresh_credential, bearer) {
         (Some(refresh), _) => {
@@ -382,12 +392,20 @@ pub(crate) async fn revoke_family(
             (principal_id, session.family_id)
         }
         (None, Some(access)) => {
-            let auth =
-                authenticate(&mut tx, access, now, LockMode::Share, LockMode::Update).await?;
+            let auth = authenticate(
+                &mut tx,
+                access,
+                state.clock.as_ref(),
+                LockMode::Share,
+                LockMode::Update,
+            )
+            .await?;
             (auth.principal_id, auth.family_id)
         }
         (None, None) => return Err(ApiError::unauthenticated("no credential presented")),
     };
+    // The revocation time is taken after the family's session lock is held.
+    let now = state.clock.now();
     revoke_family_locked(&mut tx, principal_id, family_id, now, "family_revoke").await?;
     tx.commit()
         .await
@@ -416,9 +434,15 @@ async fn principal_view(
 
 /// `GET /v1/session`.
 pub(crate) async fn session_view(state: &AppState, access: &str) -> Result<SessionView, ApiError> {
-    let now = state.clock.now();
     let mut tx = state.pool.begin().await?;
-    let auth = authenticate(&mut tx, access, now, LockMode::Share, LockMode::Share).await?;
+    let auth = authenticate(
+        &mut tx,
+        access,
+        state.clock.as_ref(),
+        LockMode::Share,
+        LockMode::Share,
+    )
+    .await?;
     let principal = principal_view(&mut tx, auth.principal_id).await?;
     let row = sqlx::query(
         "SELECT device_id, issuer, subject, created_at, last_authenticated_at, expires_at, \
@@ -448,9 +472,15 @@ pub(crate) async fn memberships_view(
     state: &AppState,
     access: &str,
 ) -> Result<MembershipsView, ApiError> {
-    let now = state.clock.now();
     let mut tx = state.pool.begin().await?;
-    let auth = authenticate(&mut tx, access, now, LockMode::Share, LockMode::Share).await?;
+    let auth = authenticate(
+        &mut tx,
+        access,
+        state.clock.as_ref(),
+        LockMode::Share,
+        LockMode::Share,
+    )
+    .await?;
     let principal = principal_view(&mut tx, auth.principal_id).await?;
     // One displayable row per role binding of an active membership in an
     // enabled Workspace; `GET /v1/workspaces` is the full view.

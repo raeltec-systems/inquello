@@ -50,14 +50,20 @@ pub(crate) async fn handle_session_command(
     access: &str,
     envelope: SessionCommandEnvelope,
 ) -> Result<CommandResponse, ApiError> {
-    let now = state.clock.now();
     let digest = request_digest(
         &serde_json::to_value(&envelope)
             .map_err(|_| ApiError::unsupported_contract("envelope not serializable"))?,
     );
     let mut tx = state.pool.begin().await?;
-    let auth =
-        sessions::authenticate(&mut tx, access, now, LockMode::Update, LockMode::Share).await?;
+    let auth = sessions::authenticate(
+        &mut tx,
+        access,
+        state.clock.as_ref(),
+        LockMode::Update,
+        LockMode::Share,
+    )
+    .await?;
+    let now = auth.now;
 
     if envelope.command_epoch != current_epoch(&mut tx, true).await? {
         return Err(ApiError::unsupported_contract(

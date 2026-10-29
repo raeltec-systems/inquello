@@ -454,7 +454,6 @@ pub(crate) async fn handle(
     workspace_id: Uuid,
     envelope: WorkspaceCommandEnvelope,
 ) -> Result<CommandResponse, ApiError> {
-    let now = state.clock.now();
     if envelope.workspace_id != workspace_id {
         return Err(ApiError::unsupported_contract(
             "envelope workspace does not match the path",
@@ -465,9 +464,15 @@ pub(crate) async fn handle(
             .map_err(|_| ApiError::unsupported_contract("envelope not serializable"))?,
     );
     let mut tx = state.pool.begin().await?;
-    let auth = sessions::authenticate(&mut tx, access, now, LockMode::Update, LockMode::Share)
-        .await
-        .map_err(ApiError::on_workspace_route)?;
+    let auth = sessions::authenticate(
+        &mut tx,
+        access,
+        state.clock.as_ref(),
+        LockMode::Update,
+        LockMode::Share,
+    )
+    .await
+    .map_err(ApiError::on_workspace_route)?;
     if envelope.command_epoch != current_epoch(&mut tx, true).await? {
         return Err(ApiError::unsupported_contract(
             "command epoch is not current",
@@ -485,6 +490,9 @@ pub(crate) async fn handle(
         LockMode::Share
     };
     let authority = workspaces::resolve(&mut tx, &auth, workspace_id, lock).await?;
+    // Taken after the session and Workspace locks are held, so new invite
+    // expiries and recorded times are measured from when the command applies.
+    let now = state.clock.now();
 
     let scope = ScopeKind::Workspace.as_str();
     let existing = sqlx::query(

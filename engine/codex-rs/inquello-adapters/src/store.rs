@@ -122,6 +122,21 @@ impl WorkingStore for SqliteWorkingStore {
             .await
             .map_err(backend)?;
 
+        // A receipt recorded by a concurrent writer of the same operation wins
+        // over the revision check, so the caller replays it instead of seeing
+        // the revision that writer produced as a conflict.
+        let recorded: Option<i64> =
+            sqlx::query_scalar("SELECT 1 FROM operation_receipts WHERE operation_id = ?")
+                .bind(receipt.operation_id.as_str())
+                .fetch_optional(&mut *tx)
+                .await
+                .map_err(backend)?;
+        if recorded.is_some() {
+            return Err(StoreError::DuplicateOperation {
+                operation_id: receipt.operation_id,
+            });
+        }
+
         let actual: Option<i64> =
             sqlx::query_scalar("SELECT revision FROM store_info WHERE id = 1")
                 .fetch_optional(&mut *tx)

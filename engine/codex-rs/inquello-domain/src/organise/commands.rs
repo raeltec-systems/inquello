@@ -43,6 +43,7 @@ use crate::organise::ports::OrganiseChange;
 use crate::organise::ports::OrganiseStore;
 use crate::ports::Clock;
 use serde_json::json;
+use std::future::Future;
 use uuid::Uuid;
 
 /// The signed-in principal a command acts for, bound by the host from the
@@ -276,36 +277,36 @@ where
             "fields": fields.to_json(),
         }),
     )?;
-    if let Some(outcome) = replay(store, actor, &prepared).await? {
-        return Ok(outcome);
-    }
-    require_creation(prepared.expected)?;
-    if store
-        .find_engagement_by_service_id(service_engagement_id)
-        .await
-        .map_err(DomainError::Store)?
-        .is_some()
-    {
-        return Err(DomainError::InvalidCommand(
-            "the shared-service Engagement already has a local record".to_string(),
-        ));
-    }
-    let now = clock.now();
-    let record = OrganiseRecord::Engagement(Engagement {
-        engagement_id: EngagementId::new_random(),
-        workspace_id,
-        service_engagement_id,
-        name: fields.name,
-        objectives: fields.objectives,
-        scope: fields.scope,
-        client_entity: fields.client_entity,
-        period_start: fields.period_start,
-        period_end: fields.period_end,
-        revision: prepared.expected.next()?,
-        created_at: now,
-        updated_at: now,
-    });
-    commit(store, clock, actor, &prepared, record).await
+    settle(store, actor, &prepared, async {
+        require_creation(prepared.expected)?;
+        if store
+            .find_engagement_by_service_id(service_engagement_id)
+            .await
+            .map_err(DomainError::Store)?
+            .is_some()
+        {
+            return Err(DomainError::InvalidCommand(
+                "the shared-service Engagement already has a local record".to_string(),
+            ));
+        }
+        let now = clock.now();
+        let record = OrganiseRecord::Engagement(Engagement {
+            engagement_id: EngagementId::new_random(),
+            workspace_id,
+            service_engagement_id,
+            name: fields.name,
+            objectives: fields.objectives,
+            scope: fields.scope,
+            client_entity: fields.client_entity,
+            period_start: fields.period_start,
+            period_end: fields.period_end,
+            revision: prepared.expected.next()?,
+            created_at: now,
+            updated_at: now,
+        });
+        commit(store, clock, actor, &prepared, record).await
+    })
+    .await
 }
 
 /// Handles [`UpdateEngagement`].
@@ -339,28 +340,28 @@ where
             "fields": fields.to_json(),
         }),
     )?;
-    if let Some(outcome) = replay(store, actor, &prepared).await? {
-        return Ok(outcome);
-    }
-    let current = store
-        .load_engagement(engagement_id)
-        .await
-        .map_err(DomainError::Store)?
-        .filter(|engagement| engagement.workspace_id == workspace_id)
-        .ok_or(DomainError::NotFound)?;
-    check_revision(prepared.expected, current.revision)?;
-    let record = OrganiseRecord::Engagement(Engagement {
-        name: fields.name,
-        objectives: fields.objectives,
-        scope: fields.scope,
-        client_entity: fields.client_entity,
-        period_start: fields.period_start,
-        period_end: fields.period_end,
-        revision: prepared.expected.next()?,
-        updated_at: clock.now(),
-        ..current
-    });
-    commit(store, clock, actor, &prepared, record).await
+    settle(store, actor, &prepared, async {
+        let current = store
+            .load_engagement(engagement_id)
+            .await
+            .map_err(DomainError::Store)?
+            .filter(|engagement| engagement.workspace_id == workspace_id)
+            .ok_or(DomainError::NotFound)?;
+        check_revision(prepared.expected, current.revision)?;
+        let record = OrganiseRecord::Engagement(Engagement {
+            name: fields.name,
+            objectives: fields.objectives,
+            scope: fields.scope,
+            client_entity: fields.client_entity,
+            period_start: fields.period_start,
+            period_end: fields.period_end,
+            revision: prepared.expected.next()?,
+            updated_at: clock.now(),
+            ..current
+        });
+        commit(store, clock, actor, &prepared, record).await
+    })
+    .await
 }
 
 /// Handles [`CreateFolder`].
@@ -387,22 +388,22 @@ where
             "name": name,
         }),
     )?;
-    if let Some(outcome) = replay(store, actor, &prepared).await? {
-        return Ok(outcome);
-    }
-    require_creation(prepared.expected)?;
-    resolve_engagement(store, workspace_id, engagement_id).await?;
-    let now = clock.now();
-    let record = OrganiseRecord::Folder(Folder {
-        folder_id: FolderId::new_random(),
-        engagement_id,
-        workspace_id,
-        name,
-        revision: prepared.expected.next()?,
-        created_at: now,
-        updated_at: now,
-    });
-    commit(store, clock, actor, &prepared, record).await
+    settle(store, actor, &prepared, async {
+        require_creation(prepared.expected)?;
+        resolve_engagement(store, workspace_id, engagement_id).await?;
+        let now = clock.now();
+        let record = OrganiseRecord::Folder(Folder {
+            folder_id: FolderId::new_random(),
+            engagement_id,
+            workspace_id,
+            name,
+            revision: prepared.expected.next()?,
+            created_at: now,
+            updated_at: now,
+        });
+        commit(store, clock, actor, &prepared, record).await
+    })
+    .await
 }
 
 /// Handles [`CreateTask`].
@@ -431,28 +432,28 @@ where
             "title": title,
         }),
     )?;
-    if let Some(outcome) = replay(store, actor, &prepared).await? {
-        return Ok(outcome);
-    }
-    require_creation(prepared.expected)?;
-    resolve_target(store, workspace_id, engagement_id, folder_id).await?;
-    let now = clock.now();
-    let record = OrganiseRecord::Task(Task {
-        task_id: TaskId::new_random(),
-        workspace_id,
-        creator_principal_id: actor.principal_id,
-        engagement_id,
-        folder_id,
-        title,
-        runtime_thread_id: None,
-        source_refs: Vec::new(),
-        artifact_refs: Vec::new(),
-        visibility: Visibility::Private,
-        revision: prepared.expected.next()?,
-        created_at: now,
-        updated_at: now,
-    });
-    commit(store, clock, actor, &prepared, record).await
+    settle(store, actor, &prepared, async {
+        require_creation(prepared.expected)?;
+        resolve_target(store, workspace_id, engagement_id, folder_id).await?;
+        let now = clock.now();
+        let record = OrganiseRecord::Task(Task {
+            task_id: TaskId::new_random(),
+            workspace_id,
+            creator_principal_id: actor.principal_id,
+            engagement_id,
+            folder_id,
+            title,
+            runtime_thread_id: None,
+            source_refs: Vec::new(),
+            artifact_refs: Vec::new(),
+            visibility: Visibility::Private,
+            revision: prepared.expected.next()?,
+            created_at: now,
+            updated_at: now,
+        });
+        commit(store, clock, actor, &prepared, record).await
+    })
+    .await
 }
 
 /// Handles [`RenameTask`].
@@ -479,18 +480,18 @@ where
             "title": title,
         }),
     )?;
-    if let Some(outcome) = replay(store, actor, &prepared).await? {
-        return Ok(outcome);
-    }
-    let current = visible_task(store, actor, workspace_id, task_id).await?;
-    check_revision(prepared.expected, current.revision)?;
-    let record = OrganiseRecord::Task(Task {
-        title,
-        revision: prepared.expected.next()?,
-        updated_at: clock.now(),
-        ..current
-    });
-    commit(store, clock, actor, &prepared, record).await
+    settle(store, actor, &prepared, async {
+        let current = visible_task(store, actor, workspace_id, task_id).await?;
+        check_revision(prepared.expected, current.revision)?;
+        let record = OrganiseRecord::Task(Task {
+            title,
+            revision: prepared.expected.next()?,
+            updated_at: clock.now(),
+            ..current
+        });
+        commit(store, clock, actor, &prepared, record).await
+    })
+    .await
 }
 
 /// Handles [`MoveTask`]. Only the Engagement and folder change: the Task keeps
@@ -520,20 +521,20 @@ where
             "folder_id": folder_id.map(|id| id.to_string()),
         }),
     )?;
-    if let Some(outcome) = replay(store, actor, &prepared).await? {
-        return Ok(outcome);
-    }
-    let current = visible_task(store, actor, workspace_id, task_id).await?;
-    check_revision(prepared.expected, current.revision)?;
-    resolve_target(store, workspace_id, engagement_id, folder_id).await?;
-    let record = OrganiseRecord::Task(Task {
-        engagement_id,
-        folder_id,
-        revision: prepared.expected.next()?,
-        updated_at: clock.now(),
-        ..current
-    });
-    commit(store, clock, actor, &prepared, record).await
+    settle(store, actor, &prepared, async {
+        let current = visible_task(store, actor, workspace_id, task_id).await?;
+        check_revision(prepared.expected, current.revision)?;
+        resolve_target(store, workspace_id, engagement_id, folder_id).await?;
+        let record = OrganiseRecord::Task(Task {
+            engagement_id,
+            folder_id,
+            revision: prepared.expected.next()?,
+            updated_at: clock.now(),
+            ..current
+        });
+        commit(store, clock, actor, &prepared, record).await
+    })
+    .await
 }
 
 /// Handles [`AttachThread`].
@@ -560,18 +561,18 @@ where
             "runtime_thread_id": runtime_thread_id,
         }),
     )?;
-    if let Some(outcome) = replay(store, actor, &prepared).await? {
-        return Ok(outcome);
-    }
-    let current = visible_task(store, actor, workspace_id, task_id).await?;
-    check_revision(prepared.expected, current.revision)?;
-    let record = OrganiseRecord::Task(Task {
-        runtime_thread_id: Some(runtime_thread_id),
-        revision: prepared.expected.next()?,
-        updated_at: clock.now(),
-        ..current
-    });
-    commit(store, clock, actor, &prepared, record).await
+    settle(store, actor, &prepared, async {
+        let current = visible_task(store, actor, workspace_id, task_id).await?;
+        check_revision(prepared.expected, current.revision)?;
+        let record = OrganiseRecord::Task(Task {
+            runtime_thread_id: Some(runtime_thread_id),
+            revision: prepared.expected.next()?,
+            updated_at: clock.now(),
+            ..current
+        });
+        commit(store, clock, actor, &prepared, record).await
+    })
+    .await
 }
 
 /// Handles [`RememberWorkspace`].
@@ -596,23 +597,23 @@ where
             "name": name,
         }),
     )?;
-    if let Some(outcome) = replay(store, actor, &prepared).await? {
-        return Ok(outcome);
-    }
-    let actual = store
-        .load_workspace_label(actor.principal_id, workspace_id)
-        .await
-        .map_err(DomainError::Store)?
-        .map_or(Revision::ZERO, |label| label.revision);
-    check_revision(prepared.expected, actual)?;
-    let record = OrganiseRecord::WorkspaceLabel(WorkspaceLabel {
-        principal_id: actor.principal_id,
-        workspace_id,
-        name,
-        revision: prepared.expected.next()?,
-        updated_at: clock.now(),
-    });
-    commit(store, clock, actor, &prepared, record).await
+    settle(store, actor, &prepared, async {
+        let actual = store
+            .load_workspace_label(actor.principal_id, workspace_id)
+            .await
+            .map_err(DomainError::Store)?
+            .map_or(Revision::ZERO, |label| label.revision);
+        check_revision(prepared.expected, actual)?;
+        let record = OrganiseRecord::WorkspaceLabel(WorkspaceLabel {
+            principal_id: actor.principal_id,
+            workspace_id,
+            name,
+            revision: prepared.expected.next()?,
+            updated_at: clock.now(),
+        });
+        commit(store, clock, actor, &prepared, record).await
+    })
+    .await
 }
 
 /// One Workspace's Engagements and folders, and only the actor's own Tasks.
@@ -731,6 +732,37 @@ where
         }
     }
     Ok(())
+}
+
+/// Runs one command: answers a replay from its receipt, otherwise awaits
+/// `apply`. If `apply` is refused, the receipt is looked up again: a concurrent
+/// request with the same operation ID may have committed between the first
+/// lookup and the refusal (its new revision, record or service link is what
+/// refused this one). A matching receipt is then replayed and a different
+/// request under that operation ID is an [`DomainError::OperationConflict`];
+/// with no receipt the refusal stands.
+async fn settle<S, F>(
+    store: &S,
+    actor: Actor,
+    prepared: &Prepared,
+    apply: F,
+) -> Result<OrganiseOutcome, DomainError>
+where
+    S: OrganiseStore,
+    F: Future<Output = Result<OrganiseOutcome, DomainError>>,
+{
+    if let Some(outcome) = replay(store, actor, prepared).await? {
+        return Ok(outcome);
+    }
+    match apply.await {
+        Err(error) if crate::commands::may_follow_concurrent_apply(&error) => {
+            match replay(store, actor, prepared).await? {
+                Some(outcome) => Ok(outcome),
+                None => Err(error),
+            }
+        }
+        result => result,
+    }
 }
 
 /// Answers a repeated operation ID from its receipt and the record as it now is.
