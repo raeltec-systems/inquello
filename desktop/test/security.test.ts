@@ -228,6 +228,7 @@ describe('operation registry', () => {
   let providerCalls: string[];
   let organiseCalls: string[];
   let policyCalls: string[];
+  const environmentRead = vi.fn(async (_taskId: string) => ({ok:false as const,reason:'Private Task unavailable'}));
   let logger: ReturnType<typeof recordingLogger>;
 
   beforeEach(() => {
@@ -237,6 +238,7 @@ describe('operation registry', () => {
     providerCalls = [];
     organiseCalls = [];
     policyCalls = [];
+    environmentRead.mockClear();
     logger = recordingLogger();
     const operations = createOperations({
       runtimeState: () => {
@@ -249,6 +251,7 @@ describe('operation registry', () => {
       provider: fakeProvider(providerCalls),
       organise: fakeOrganise(organiseCalls),
       policy: fakePolicy(policyCalls),
+      environments: {forTask: environmentRead},
     });
     registerOperations(ipc, operations, { trustedWebContentsIds: new Set([1]), logger });
   });
@@ -364,6 +367,7 @@ describe('operation registry', () => {
 
   it('registers exactly one fixed channel per named operation', () => {
     expect(OPERATION_NAMES).toEqual([
+      'environments.forTask',
       'routes.list', 'routes.configure', 'routes.forTask', 'routes.select',
       'capabilities.getInventory',
       'capabilities.manage',
@@ -400,6 +404,19 @@ describe('operation registry', () => {
       'permissions.setUserRules',
     ]);
     expect([...ipc.handlers.keys()]).toEqual(OPERATION_NAMES.map((name) => `${CHANNEL_PREFIX}${name}`));
+  });
+
+  it('validates environment reads and rejects untrusted frames without dispatch', async () => {
+    for (const args of [[], [{ taskId: '../private' }], [{ taskId: '22222222-2222-4222-8222-222222222222', principalId: 'other' }]]) {
+      await expect(ipc.invoke(channelFor('environments.forTask'), trustedEvent, ...args)).rejects.toThrow('invalid payload');
+    }
+    expect(environmentRead).not.toHaveBeenCalled();
+    const foreign = { ...trustedEvent, sender: { id: 999, mainFrame } };
+    await expect(ipc.invoke(channelFor('environments.forTask'), foreign, {taskId:'22222222-2222-4222-8222-222222222222'})).rejects.toThrow();
+    expect(environmentRead).not.toHaveBeenCalled();
+    const taskId = '22222222-2222-4222-8222-222222222222';
+    await expect(ipc.invoke(channelFor('environments.forTask'), trustedEvent, {taskId})).resolves.toEqual({ok:false,reason:'Private Task unavailable'});
+    expect(environmentRead).toHaveBeenCalledExactlyOnceWith(taskId);
   });
 
   it('runtime.getStatus returns state and runtime version', async () => {
@@ -942,15 +959,15 @@ describe('host privilege source scan', () => {
     const body = preload.replace(/^import .* from 'electron';$/m, '');
     const uses = body.match(/ipcRenderer[^\n]*/g) ?? [];
     expect(uses.length).toBeGreaterThan(0);
-    for (const use of uses) expect(use).toMatch(/^ipcRenderer\.(?:invoke\([A-Z_]+_CHANNEL(?:, \.\.\.args)?\)|(?:on|removeListener)\((?:CAPABILITIES|ROUTES)_CHANGED_CHANNEL, handler\))/);
+    for (const use of uses) expect(use).toMatch(/^ipcRenderer\.(?:invoke\([A-Z_]+_CHANNEL(?:, \.\.\.args)?\)|(?:on|removeListener)\((?:CAPABILITIES|ROUTES|ENVIRONMENTS)_CHANGED_CHANNEL, handler\))/);
     // Only the data operations, the two provider operations that take what the user entered, and the organise, state, policy and permissions operations forward arguments.
-    expect((body.match(/_CHANNEL, \.\.\.args\)/g) ?? []).length).toBe(29);
+    expect((body.match(/_CHANNEL, \.\.\.args\)/g) ?? []).length).toBe(30);
     expect(
       body
         .match(/[A-Z_]+_CHANNEL, \.\.\.args\)/g)
-        ?.every((use) => use.startsWith('ROUTES_') || use.startsWith('CAPABILITIES_') || use.startsWith('DATA_') || use.startsWith('PROVIDER_SET_CLAUDE_KEY_') || use.startsWith('PROVIDER_CODEX_LOGIN_') || use.startsWith('ORGANISE_') || use.startsWith('STATE_') || use.startsWith('POLICY_') || use.startsWith('PERMISSIONS_')),
+        ?.every((use) => use.startsWith('ENVIRONMENTS_') || use.startsWith('ROUTES_') || use.startsWith('CAPABILITIES_') || use.startsWith('DATA_') || use.startsWith('PROVIDER_SET_CLAUDE_KEY_') || use.startsWith('PROVIDER_CODEX_LOGIN_') || use.startsWith('ORGANISE_') || use.startsWith('STATE_') || use.startsWith('POLICY_') || use.startsWith('PERMISSIONS_')),
     ).toBe(true);
-    expect(preload.replace('ipcRenderer.on(CAPABILITIES_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(ROUTES_CHANGED_CHANNEL, handler)', '')).not.toMatch(/\.on\(|\.send\(|sendSync|postMessage/);
+    expect(preload.replace('ipcRenderer.on(ENVIRONMENTS_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(CAPABILITIES_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(ROUTES_CHANGED_CHANNEL, handler)', '')).not.toMatch(/\.on\(|\.send\(|sendSync|postMessage/);
   });
 });
 

@@ -457,3 +457,18 @@ fn the_execution_sandbox_is_local_only_and_synthetic() {
             .all(|evidence| evidence.kind == EvidenceKind::Synthetic)
     );
 }
+
+#[test]
+fn remote_cloud_execution_remains_disabled() {
+    let register = CapabilityRegister::load_embedded().unwrap();
+    assert_eq!(
+        register.enablement("execution.remote-cloud"),
+        Enablement::Disabled
+    );
+    let entry = register
+        .entries()
+        .find(|entry| entry.id == "execution.remote-cloud")
+        .unwrap();
+    assert!(entry.limits.iter().any(|limit| limit.contains("Story 8.1")));
+    assert!(entry.limits.iter().any(|limit| limit.contains("OQ-13")));
+}

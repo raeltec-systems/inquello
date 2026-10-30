@@ -72,7 +72,18 @@ const ROUTES_TASK_CHANNEL = 'inquello:op:routes.forTask';
 const ROUTES_SELECT_CHANNEL = 'inquello:op:routes.select';
 const ROUTES_CHANGED_CHANNEL = 'inquello:routes-changed';
 
+const ENVIRONMENTS_TASK_CHANNEL = 'inquello:op:environments.forTask';
+const ENVIRONMENTS_CHANGED_CHANNEL = 'inquello:environments-changed';
+
 const api = Object.freeze({
+  environments: Object.freeze({
+    forTask: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ENVIRONMENTS_TASK_CHANNEL, ...args),
+    onChanged: (listener: () => void): (() => void) => {
+      if (typeof listener !== 'function') throw new Error('expected a listener');
+      const handler = () => listener(); ipcRenderer.on(ENVIRONMENTS_CHANGED_CHANNEL, handler);
+      return () => ipcRenderer.removeListener(ENVIRONMENTS_CHANGED_CHANNEL, handler);
+    },
+  }),
   routes: Object.freeze({
     list: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ROUTES_LIST_CHANNEL, ...args),
     configure: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ROUTES_CONFIGURE_CHANNEL, ...args),

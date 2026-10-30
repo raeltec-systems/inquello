@@ -52,3 +52,24 @@ it('shows candidate model, deployment, endpoint and evidence before Task selecti
  expect(screen.getByText('Not verified — Not enabled')).toBeTruthy();
  expect(h.select).not.toHaveBeenCalled();
 });
+
+it('never labels a stale empty selection as no route and sanitizes read errors',async()=>{
+ const h=setup();h.forTask.mockResolvedValueOnce({ok:true,value:{taskId,workspaceId:taskId,revision:1,configurationRevision:null,staleConfiguration:true,selected:null}});
+ render(<ProcessingRoutes taskId={taskId}/>);
+ await screen.findByText('Inference information stale — refresh and review the processing route');
+ expect(screen.queryByText('No processing route explicitly selected')).toBeNull();
+ h.list.mockRejectedValueOnce(new Error('secret transport credential'));act(()=>h.change());
+ await screen.findByText('Processing routes unavailable. Refresh to review the current route.');
+ expect(screen.queryByText(/secret transport credential/)).toBeNull();expect(screen.queryByText('No processing route explicitly selected')).toBeNull();
+});
+
+it('ordinary background refresh retains focused controls disabled until fresh facts arrive',async()=>{
+ const timer = vi.spyOn(globalThis,'setInterval'); const h=setup();render(<ProcessingRoutes taskId={taskId}/>);
+ const button=await screen.findByRole('button',{name:'Select Anthropic route for this Task'});button.focus();
+ let release!: (value: Awaited<ReturnType<typeof h.list>>) => void;
+ h.list.mockImplementationOnce(()=>new Promise(resolve=>{release=resolve;}));
+ const tick=timer.mock.calls.find(call=>call[1]===30000)![0] as ()=>void;
+ act(()=>tick());expect(document.activeElement).toBe(button);expect(button.isConnected).toBe(true);expect(button.getAttribute('aria-disabled')).toBe('true');
+ await act(async()=>release({ok:true,value:[route]}));await waitFor(()=>expect(button.getAttribute('aria-disabled')).not.toBe('true'));
+ expect(document.activeElement).toBe(button);expect(screen.getByRole('button',{name:'Select Anthropic route for this Task'})).toBe(button);timer.mockRestore();
+});

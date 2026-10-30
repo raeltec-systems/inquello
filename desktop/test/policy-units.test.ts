@@ -375,6 +375,11 @@ function pendingToolHarness() {
   const state = {
     principal: PRINCIPAL as string | null,
     instance: {} as object,
+    ready: true,
+    onEffective: null as (() => void) | null,
+    toolDispatches: 0,
+    requirePermission: true,
+    afterEffect: null as (() => void) | null,
     policy: { workspace_id: WORKSPACE, policy_revision: '1', authorization_epoch: '1', execution: { command_rules: [{ prefix: ['touch'], decision: 'prompt' }] } } as ExecutionPolicyView,
     serviceError: null as Error | null,
     broaden: false,
@@ -386,7 +391,7 @@ function pendingToolHarness() {
   const requestId = '4a1b2c3d-4e5f-4a6b-8c7d-8e9f0a1b2c3d';
   let requestedCommand: string[] = [];
   const runtime: OrganiseRuntime = {
-    ready: () => true,
+    ready: () => state.ready,
     instance: () => state.instance,
     request: async <T,>(method: string, input?: unknown): Promise<T> => {
       const params = input as Record<string, unknown>;
@@ -394,6 +399,7 @@ function pendingToolHarness() {
       if (method === 'inquello/broadMode/read') value = { taskId: TASK, workspaceId: WORKSPACE };
       else if (method === 'inquello/policy/effective') {
         state.effectiveReads += 1;
+        state.onEffective?.();
         const task = taskPart(state.broaden ? 'full_access' : 'standard', state.broaden ? 'active' : 'standard');
         if (!state.broaden) task.runtimeProfile = {
           sandbox: 'permission-profile', permissionProfileId: 'task-profile',
@@ -402,16 +408,20 @@ function pendingToolHarness() {
         };
         value = { ...response(), task };
       } else if (method === 'inquello/tools/exec') {
+        state.toolDispatches += 1;
         if (params.sandboxProbeTarget) value = { exitCode: 0, stdout: '', stderr: '' };
-        else if (params.permissionRequestId === null) throw new RpcResponseError(method, -32600, 'permission required', { inquello: { kind: 'permission_required' } });
+        else if (params.permissionRequestId === null && state.requirePermission) throw new RpcResponseError(method, -32600, 'permission required', { inquello: { kind: 'permission_required' } });
         else {
           // Stand in for the external effect. The caller must not reach this
           // boundary with a stale approval, even if this endpoint accepts it.
-          expect(params.permissionRequestId).toBe(requestId);
-          expect(params.command).toEqual(requestedCommand);
+          if (state.requirePermission) {
+            expect(params.permissionRequestId).toBe(requestId);
+            expect(params.command).toEqual(requestedCommand);
+          }
           state.executionLayers.push(params.workspacePolicy);
           state.commands.push(params.command as string[]);
           fs.writeFileSync(output, 'executed once');
+          state.afterEffect?.();
           value = { exitCode: 0, stdout: 'executed once', stderr: '' };
         }
       } else if (method === 'inquello/permissions/request') {
@@ -443,7 +453,7 @@ function pendingToolHarness() {
     sandboxProbeTarget: path.join(root, 'store'),
   });
   return {
-    state, output, policy,
+    state, output, policy, root,
     start: async (command = ['touch', 'output/result']) => {
       const result = policy.runTool(TASK, command);
       await vi.waitFor(() => expect(mediator.waiting(requestId)).toBe(true));
@@ -507,7 +517,95 @@ describe('runTool revalidates authority after permission', () => {
     if (change === 'principal') h.state.principal = OP;
     else h.state.instance = {};
     await h.allow();
-    await expect(result).resolves.toEqual({ ok: false, code: 'permission-denied', reason: POLICY_REASONS.permissionContextChanged });
+    await expect(result).resolves.toEqual(change === 'runtime'
+      ? { ok: false, code: 'runtime-unavailable', reason: POLICY_REASONS.runtimeUnavailable }
+      : { ok: false, code: 'permission-denied', reason: POLICY_REASONS.permissionContextChanged });
     expect(fs.existsSync(h.output)).toBe(false);
   });
+});
+
+
+describe('local environment inspection and actual tool preflight', () => {
+  it('inspects private policy without creating folders or probing the sandbox', async () => {
+    const h = pendingToolHarness();
+    await expect(h.policy.inspectEnvironment(TASK)).resolves.toEqual({ ok: true, value: { sandbox: 'not-checked' } });
+    expect(fs.existsSync(path.join(h.root, 'tasks'))).toBe(false);
+    expect(h.state.toolDispatches).toBe(0);
+  });
+
+  it.each(['starting', 'stopped', 'failed'])('names unavailable local execution when runtime is %s', async () => {
+    const h = pendingToolHarness();
+    h.state.ready = false;
+    await expect(h.policy.runTool(TASK, ['touch', 'output/result'])).resolves.toEqual({ ok: false, code: 'runtime-unavailable', reason: POLICY_REASONS.runtimeUnavailable });
+    expect(POLICY_REASONS.runtimeUnavailable).toContain('This device (local host)');
+    expect(h.state.toolDispatches).toBe(0);
+    expect(h.state.serviceReads).toBe(0);
+  });
+
+  it('dispatches neither probe nor tool if runtime changes during policy read', async () => {
+    const h = pendingToolHarness();
+    h.state.onEffective = () => { h.state.instance = {}; };
+    await expect(h.policy.runTool(TASK, ['touch', 'output/result'])).resolves.toMatchObject({ ok: false, code: 'runtime-unavailable' });
+    expect(h.state.toolDispatches).toBe(0);
+  });
+
+  it.each(['principal', 'runtime'] as const)('discards inspection if the %s changes during its read', async (change) => {
+    const h = pendingToolHarness();
+    h.state.onEffective = () => { if (change === 'principal') h.state.principal = OP; else h.state.instance = {}; };
+    await expect(h.policy.inspectEnvironment(TASK)).resolves.toMatchObject({ ok: false });
+    expect(h.state.toolDispatches).toBe(0);
+    expect(fs.existsSync(path.join(h.root, 'tasks'))).toBe(false);
+  });
+
+  it('rechecks readiness after permission without dispatching the authorized command', async () => {
+    const h = pendingToolHarness();
+    const { result } = await h.start();
+    const dispatched = h.state.toolDispatches;
+    h.state.ready = false;
+    await h.allow();
+    await expect(result).resolves.toEqual({ ok: false, code: 'runtime-unavailable', reason: POLICY_REASONS.runtimeUnavailable });
+    expect(h.state.toolDispatches).toBe(dispatched);
+    expect(fs.existsSync(h.output)).toBe(false);
+  });
+});
+
+
+describe('environment private boundaries and permitted Full access', () => {
+  it('does not disclose facts for an unknown private Task', async () => {
+    const h = harness({ runtime: () => { throw new RpcResponseError('inquello/broadMode/read', -32600, 'private metadata', { inquello: { kind: 'not_found' } }); } });
+    await expect(h.policy.inspectEnvironment(TASK)).resolves.toEqual({ ok: false, code: 'not-found', reason: POLICY_REASONS.notFound });
+    expect(h.serviceCalls).toEqual([]);
+  });
+
+  it('retains explicitly permitted Full access without requiring a sandbox probe', async () => {
+    const h = pendingToolHarness();
+    h.state.broaden = true;
+    const { result } = await h.start();
+    await h.allow();
+    await expect(result).resolves.toMatchObject({ ok: true });
+    expect(h.state.toolDispatches).toBe(2);
+    expect(h.state.commands).toEqual([['touch', 'output/result']]);
+  });
+});
+
+describe('post-dispatch uncertainty preserves effects and private outputs', () => {
+  for (const authorizedRetry of [false, true]) {
+    it.each(['success-replaced', 'rejected-disconnected', 'owner-changed'] as const)(`reports uncertain %s after effects (authorized retry: ${authorizedRetry})`, async outcome => {
+      const h = pendingToolHarness(); h.state.requirePermission = authorizedRetry;
+      h.state.afterEffect = () => {
+        if (outcome === 'owner-changed') h.state.principal = OP;
+        else h.state.instance = {};
+        if (outcome === 'rejected-disconnected') { h.state.ready = false; throw new Error('private transport detail'); }
+      };
+      let result;
+      if (authorizedRetry) { const pending = await h.start(); await h.allow(); result = await pending.result; }
+      else result = await h.policy.runTool(TASK, ['touch', 'output/result']);
+      expect(fs.readFileSync(h.output, 'utf8')).toBe('executed once');
+      expect(result).toEqual({ok:false,code:'failed',reason:POLICY_REASONS.executionOutcomeUncertain});
+      expect(JSON.stringify(result)).not.toContain('private transport detail');
+      expect(JSON.stringify(result)).not.toContain('executed once');
+      expect(JSON.stringify(result)).not.toContain('Nothing will run');
+      expect(h.state.commands).toHaveLength(1);
+    });
+  }
 });

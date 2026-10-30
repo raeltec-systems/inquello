@@ -186,6 +186,7 @@ const TAB_SETTLE_MS = 50;
 
 /** The tree `window.inquello` must expose, as `describe` renders it. */
 export const EXPECTED_BRIDGE_TREE = {
+  environments: { forTask: 'function', onChanged: 'function' },
   routes: { list: 'function', configure: 'function', forTask: 'function', select: 'function', onChanged: 'function' },
   capabilities: { onChanged: 'function', getInventory: 'function', manage: 'function' },
   runtime: { getStatus: 'function' },
@@ -3445,4 +3446,51 @@ export async function probeRoutes(contents:WebContents, options:Omit<OrganisePro
   }catch{report.failures.push('Route smoke could not finish; native runtime/topology required');}
   finally{if(report.configured){await options.routes.quiesce();await options.identity.session.signOut();await options.organise.syncPrincipal().catch(()=>{});options.routes.resume();}}
   report.ok=report.failures.length===0;return report;
+}
+
+// ---- local execution facts (Story 1.23), no probes or inference -----------------
+export async function probeEnvironments(contents: WebContents, options: Omit<OrganiseProbeOptions, 'runtimeRequest'> & {routes: import('./routes/service').RouteService}): Promise<{ok:boolean;failures:string[]}> {
+  const failures: string[] = [];
+  const configured = options.identity.config.kind === 'configured';
+  try {
+    if (!configured) throw new Error('Seeded topology unavailable');
+    const seed = JSON.parse(fs.readFileSync(options.seedFile ?? '', 'utf8')) as {workspace_id?:string};
+    if (!seed.workspace_id || !(await options.identity.session.signIn()).ok) throw new Error('Seeded identity unavailable');
+    await options.organise.syncPrincipal();
+    const created = await options.organise.createTask({operationId:randomUUID(),workspaceId:seed.workspace_id,engagementId:null,folderId:null,title:'Synthetic environment inspection smoke'});
+    if (!created.ok) throw new Error('Task unavailable');
+    const result = await contents.executeJavaScript(`globalThis.inquello.environments.forTask({taskId:${JSON.stringify(created.value.taskId)}})`) as import('./environments/types').TaskEnvironmentResult;
+    if (!result.ok || result.value.executionLabel !== 'This device (local host)' || result.value.readiness !== 'ready' || result.value.inference.status !== 'none' || !result.value.remoteGate.includes('Story 8.1') || result.value.hostedSandboxGate !== 'V2 revisit (OQ-13)') failures.push('Environment inspection did not preserve distinct local execution, empty inference and disabled remote gates');
+    const rendered = await contents.executeJavaScript(`(async () => {
+      ${SHELL_HELPERS}
+      location.hash = '#specimen'; await wait(() => !q('[data-shell]'), 5000);
+      if (!(await openShell())) return false;
+      const row = await wait(() => q('[data-task-id=${JSON.stringify(created.value.taskId)}] a'), ${SHELL_SETTLE_MS});
+      if (!row) return false; row.click();
+      const panel = await wait(() => { const node = q('[data-task-environment]'); return node?.textContent.includes('No processing route selected') ? node : null; }, ${POLICY_SETTLE_MS});
+      if (!panel) return false;
+      return panel.textContent.includes('This device (local host)') && panel.textContent.includes('runtime-owned configuration verified') && panel.textContent.includes('Story 8.1') && panel.textContent.includes('V2 revisit (OQ-13)') && [...panel.querySelectorAll('button[aria-disabled="true"]')].length >= 2;
+    })()`) as boolean;
+    if (!rendered) throw new Error('Environment panel did not render');
+    // Safe synthetic selection through the real service emits main/preload invalidation.
+    // No refresh click, renderer test event, credentials or inference call is used.
+    const catalog = await options.routes.list();
+    if (!catalog.ok) throw new Error('Routes unavailable');
+    const candidate = catalog.value.find(route => route.routeId === 'claude-api-key');
+    if (!candidate || candidate.enabled) throw new Error('Synthetic disabled route unavailable');
+    const configuredRoute = await options.routes.configure({operationId:randomUUID(),expectedRevision:candidate.revision,routeId:'claude-api-key',deployment:'anthropic-direct',model:'claude-sonnet-5-5',apiVersion:'2026-10-21',region:null});
+    if (!configuredRoute.ok) throw new Error('Synthetic configuration unavailable');
+    const route = configuredRoute.value.find(row => row.routeId === 'claude-api-key');
+    if (!route || route.enabled) throw new Error('Unexpected route eligibility');
+    const selected = await options.routes.select({operationId:randomUUID(),expectedRevision:0,taskId:created.value.taskId,routeId:'claude-api-key',configurationRevision:route.revision});
+    if (!selected.ok) throw new Error('Synthetic selection unavailable');
+    const updated = await contents.executeJavaScript(`(async () => {
+      ${SHELL_HELPERS}
+      return !!(await wait(() => { const panel = q('[data-task-environment]'); return panel?.textContent.includes('Explicit processing route') && panel.textContent.includes('claude-sonnet-5-5') && panel.textContent.includes('Unknown') && !panel.textContent.includes('No processing route selected') ? panel : null; }, ${POLICY_SETTLE_MS}));
+    })()`) as boolean;
+    if (!updated) failures.push('Mounted environment panel did not update via production route invalidation');
+
+  } catch { failures.push('Environment smoke could not finish; seeded identity and matching native runtime required'); }
+  finally { if (configured) { await options.identity.session.signOut(); await options.organise.syncPrincipal().catch(() => {}); } }
+  return {ok:failures.length===0,failures};
 }

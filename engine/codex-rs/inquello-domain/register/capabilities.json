@@ -82,7 +82,7 @@
         "tool-profile": "1.19"
       },
       "limits": [
-        "Execution sandbox: local OS sandbox on this device; no hosted sandbox — V2 revisit (OQ-13)",
+        "Execution sandbox: local OS sandbox on this device; no hosted sandbox \u2014 V2 revisit (OQ-13)",
         "Tools read and write only the Task's private working folder and its output folder, read the system locations they need, and contact only the Workspace's allowed domains through the runtime's network proxy",
         "If the local sandbox cannot be applied on this device, execution is refused; a permitted Full access broad mode is the only unsandboxed path",
         "Verified on Linux with the bundled bubblewrap only; macOS and Windows are not yet verified"
@@ -105,6 +105,26 @@
           "reference": "desktop/src/main/smoke-probe.ts#tool-bounds (keyring smoke, seeded topology)"
         }
       ]
+    },
+    {
+      "id": "execution.remote-cloud",
+      "owner": "Inquello execution boundary (Story 1.23; Story 8.1 owns enablement)",
+      "supply": "None: remote/cloud execution is not enabled",
+      "versions": {
+        "capability-contract": "1.23"
+      },
+      "limits": [
+        "Story 8.1 requires proven service, identity, context transfer, mutation ownership, policy eligibility and recovery",
+        "Collaboration hosting is not execution",
+        "Hosted browser/sandbox: V2 revisit (OQ-13)"
+      ],
+      "identity": "None: no remote execution identity or authority is granted",
+      "formats": [
+        "none"
+      ],
+      "processing_scope": "Not enabled. No dispatch, selection, transfer or automatic upload. Execution remains This device (local host), separately from inference.",
+      "eligibility": "disabled",
+      "evidence": []
     }
   ]
 }

@@ -1,3 +1,5 @@
+import { probeEnvironments } from './smoke-probe';
+import { EnvironmentService } from './environments/service';
 import { RouteService } from './routes/service';
 import { signOutWithCapabilities, providerLogoutWithCapabilities } from './capabilities/lifecycle';
 import { CapabilityService } from './capabilities/service';
@@ -159,11 +161,17 @@ let toolBoundsOk = false;
 let permissionsOk = false;
 let capabilitiesOk = false;
 let routesOk = false;
+let environmentsOk = false;
 let runtimeConfigurationVerified = false;
 let organise: OrganiseService | undefined;
 let policy: PolicyService | undefined;
 let capabilities: CapabilityService | undefined;
 let routes: RouteService | undefined;
+let environments: EnvironmentService | undefined;
+function environmentChanged(): void {
+  environments?.invalidate();
+  for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:environments-changed');
+}
 let permissionMediator: PermissionMediator | undefined;
 /** Escalations the runtime raises: pending authorization requests, declined in Story 1.19. */
 const escalations = new EscalationGate({ newId: randomUUID });
@@ -238,6 +246,7 @@ function startRuntime(): Promise<void> {
 /** Starts a new runtime child; local-data recovery calls this only after copying is complete. */
 async function startRuntimeNow(): Promise<void> {
   runtimeConfigurationVerified = false;
+  environmentChanged();
   if (quitting) throw new Error('the application is quitting; the runtime will not restart');
   if (!roots) throw new Error('local data roots were not set up');
   const runtimeHome = roots['runtime-home'];
@@ -267,13 +276,15 @@ async function startRuntimeNow(): Promise<void> {
     onServerRequest: (method, params) => escalations.answer(method, params),
   });
   runtime.on('state', ({ state, error }) => {
-    if (['disconnected','failed','stopped'].includes(state)) { runtimeConfigurationVerified = false; capabilities?.runtimeUnavailable(); routes?.runtimeUnavailable(); permissionMediator?.declineAll(); for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:capabilities-changed'); }
+    if (['disconnected','failed','stopped'].includes(state)) { runtimeConfigurationVerified = false;
+  environmentChanged(); capabilities?.runtimeUnavailable(); routes?.runtimeUnavailable(); permissionMediator?.declineAll(); for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:capabilities-changed'); }
     if (state === 'disconnected' && error) logger.error(`runtime disconnected; not restarting. ${error.message}`);
   });
   const handshake = await runtime.start();
   try { await verifyRuntimeOwnedConfig((method,params) => runtime!.request(method,params)); }
   catch (error) { await runtime.stop(); throw error; }
   runtimeConfigurationVerified = true;
+  environmentChanged();
   capabilities?.runtimeReset();
   routes?.runtimeReset();
   for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:capabilities-changed');
@@ -301,6 +312,7 @@ async function stopRuntimeNow(): Promise<void> {
   permissionMediator?.declineAll();
   await routes?.quiesce();
   runtimeConfigurationVerified = false;
+  environmentChanged();
   await capabilities?.quiesce();
   const current = runtime;
   if (!current) return;
@@ -418,12 +430,15 @@ async function runSmokeProbe(contents: WebContents): Promise<void> {
   const routesReport = await probeRoutes(contents, { identity, organise, routes, seedFile: process.env.INQUELLO_SMOKE_SEED ?? null });
   routesOk = routesReport.ok;
   process.stdout.write(`${JSON.stringify({ event: 'routes', ...routesReport })}\n`);
+  const environmentsReport = await probeEnvironments(contents, {identity, organise, routes, seedFile: process.env.INQUELLO_SMOKE_SEED ?? null});
+  environmentsOk = environmentsReport.ok;
+  process.stdout.write(`${JSON.stringify({event: 'environments', ...environmentsReport})}\n`);
   if (!capabilitiesReport.ok) logger.error(`capabilities probe failed: ${capabilitiesReport.failures.join('; ')}`);
 }
 
 function exitCodeFor(exit: ExitInfo | undefined): number {
   if (!smoke) return 0;
-  return handshakeOk && privilegesOk && designOk && identityOk && dataOk && providersOk && organiseOk && statesOk && shellLayoutOk && composerOk && policyOk && toolBoundsOk && permissionsOk && capabilitiesOk && routesOk && exit !== undefined && exit.exitCode === 0 && !exit.killed ? 0 : 1;
+  return handshakeOk && privilegesOk && designOk && identityOk && dataOk && providersOk && organiseOk && statesOk && shellLayoutOk && composerOk && policyOk && toolBoundsOk && permissionsOk && capabilitiesOk && routesOk && environmentsOk && exit !== undefined && exit.exitCode === 0 && !exit.killed ? 0 : 1;
 }
 
 app.on('before-quit', (event) => {
@@ -500,7 +515,14 @@ void app.whenReady().then(async () => {
   const policyRuntime = {
     ready: () => runtime?.state === 'ready' && runtimeConfigurationVerified,
     instance: () => runtime,
-    request: <T,>(method: string, params?: unknown) => (runtime ? runtime.request<T>(method, params) : Promise.reject(new Error('the runtime is not running'))),
+    request: <T,>(method: string, params?: unknown): Promise<T> => {
+      const pending = runtime ? runtime.request<T>(method, params) : Promise.reject<T>(new Error('the runtime is not running'));
+      if (method === 'inquello/tools/exec' && params && typeof params === 'object' && 'sandboxProbeTarget' in params) {
+        // Notify on the next turn, after PolicyService has settled its cached probe fact.
+        void pending.then(() => setImmediate(environmentChanged), () => setImmediate(environmentChanged));
+      }
+      return pending;
+    },
   };
   permissionMediator = new PermissionMediator({ runtime: policyRuntime, logger, newId: randomUUID, automatedReview: (taskId, requestId) => routes ? routes.review(taskId, requestId) : Promise.resolve(null) });
   const policyService = new PolicyService({
@@ -537,8 +559,9 @@ void app.whenReady().then(async () => {
   routes = new RouteService({
     runtime: { ...policyRuntime, privateRouteAuth: (params) => runtime ? runtime.privateRouteAuth(params) : Promise.reject(new Error('Runtime unavailable')), stop: async () => { await runtime?.stop(); } },
     identity: identitySession, syncPrincipal: () => organiseService.syncPrincipal(), providers: providerService, freshPolicy: (taskId) => policyService.reviewPolicy(taskId),
-    onChanged: () => { for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:routes-changed'); },
+    onChanged: () => { environmentChanged(); for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:routes-changed'); },
   });
+  environments = new EnvironmentService({runtime: policyRuntime, identity: identitySession, policy: policyService, routes});
   providerService.setRouteInvalidator((id) => routes!.invalidate(id));
   const policyLoad = loadShippedPolicy();
   if (!policyLoad.ok) logger.error(`local data policy did not load; local data actions are blocked: ${policyLoad.error}`);
@@ -584,6 +607,7 @@ void app.whenReady().then(async () => {
     createOperations({
       capabilities,
       routes,
+      environments,
       runtimeState: () => runtime?.state ?? 'stopped',
       runtimeVersion: schemaStamp.runtimeVersion,
       identity: {

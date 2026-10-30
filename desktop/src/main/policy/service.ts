@@ -107,12 +107,13 @@ export const POLICY_REASONS = {
   conflict: 'The mode was changed first. Review the current mode and try again.',
   operationReused: 'This request was already used for different input. Start it again.',
   invalid: 'The request was not valid.',
-  runtimeUnavailable: 'The local runtime is not running, so the policy cannot be computed right now.',
+  runtimeUnavailable: 'This device (local host) is unavailable: the local runtime is not ready or has changed. Nothing will run; refresh and try again.',
   storeUnavailable: 'Private work on this device could not be opened.',
   humanRequired: 'Only a person can choose a broader execution mode.',
   sandboxUnavailable: SANDBOX_UNAVAILABLE,
   noTaskFolders: 'Task folders are not set up on this device, so tools cannot run.',
   notPending: NO_LONGER_PENDING,
+  executionOutcomeUncertain: 'The command was dispatched to This device (local host), but its outcome cannot be confirmed. Effects may have occurred. Inspect the Task and affected resources before deciding what to do; do not blindly retry.',
   permissionContextChanged: 'The execution context changed while permission was pending. Nothing ran. Start the command again to review its current reach.',
   userRuleCannotAllow: 'Your own rules can only ask first or forbid; they never allow a command.',
   rulesConflict: 'Your rules were changed first. Review them and try again.',
@@ -200,6 +201,30 @@ export class PolicyService {
   private sandboxCheck: { runtime: unknown; available: Promise<boolean> } | null = null;
 
   constructor(private readonly options: PolicyServiceOptions) {}
+
+  /** Main-only reusable local execution boundary; never starts or relocates a runtime. */
+  localPreflight(expectedRuntime: unknown = this.options.runtime.instance()): PolicyResult<true> {
+    if (!this.options.runtime.ready() || this.options.runtime.instance() !== expectedRuntime) {
+      return fail('runtime-unavailable', POLICY_REASONS.runtimeUnavailable);
+    }
+    return { ok: true, value: true };
+  }
+
+  /** Private, read-only environment facts. No folders, grants, selections or probes. */
+  async inspectEnvironment(taskId: string): Promise<PolicyResult<{ sandbox: 'not-checked' | 'available' | 'unavailable' }>> {
+    const principal = this.options.identity.principalId();
+    const runtime = this.options.runtime.instance();
+    const context = await this.taskContext(taskId, false);
+    const preflight = this.localPreflight(runtime);
+    if (!preflight.ok) return preflight;
+    if (!principal || principal !== this.options.identity.principalId()) return fail('signed-out', POLICY_REASONS.signedOut);
+    if (!context.ok) return context;
+    const available = await this.capabilitySandboxAvailable();
+    const current = this.localPreflight(runtime);
+    if (!current.ok) return current;
+    if (principal !== this.options.identity.principalId()) return fail('signed-out', POLICY_REASONS.signedOut);
+    return { ok: true, value: { sandbox: available === null ? 'not-checked' : available ? 'available' : 'unavailable' } };
+  }
 
   private async prepare(): Promise<PolicyResult<string>> {
     const principal = this.options.identity.principalId();
@@ -295,11 +320,25 @@ export class PolicyService {
    * the tool profile in the runtime's own form.
    */
   private async taskContext(taskId: string, withFolder: boolean): Promise<PolicyResult<TaskContext>> {
+    const principal = this.options.identity.principalId();
+    const runtime = this.options.runtime.instance();
+    const current = (): PolicyResult<true> => {
+      const local = this.localPreflight(runtime);
+      if (!local.ok) return local;
+      return principal && principal === this.options.identity.principalId()
+        ? local : fail('signed-out', POLICY_REASONS.signedOut);
+    };
     const prepared = await this.prepare();
+    let checkpoint = current();
+    if (!checkpoint.ok) return checkpoint;
     if (!prepared.ok) return prepared;
     const task = await this.taskWorkspace(taskId);
+    checkpoint = current();
+    if (!checkpoint.ok) return checkpoint;
     if (!task.ok) return task;
     const layer = await this.workspacePolicy(task.value.workspaceId);
+    checkpoint = current();
+    if (!checkpoint.ok) return checkpoint;
     if (!layer.ok) return layer;
     let folders: TaskContext['folders'] = null;
     if (withFolder) {
@@ -312,6 +351,8 @@ export class PolicyService {
       }
     }
     const response = await this.effective(layer.value, taskId, folders?.working ?? null);
+    checkpoint = current();
+    if (!checkpoint.ok) return checkpoint;
     if (!response.ok) return response;
     if (!response.value.task) {
       this.options.logger.warn('policy: the runtime omitted the Task policy');
@@ -489,14 +530,23 @@ export class PolicyService {
     command = [...command];
     const principal = this.options.identity.principalId();
     const runtime = this.options.runtime.instance();
+    const local = this.localPreflight(runtime);
+    if (!local.ok) return local;
     let context = await this.taskContext(taskId, true);
     if (!context.ok) return context;
+    const afterContext = this.localPreflight(runtime);
+    if (!afterContext.ok) return afterContext;
     let settings = this.threadSettingsOf(context.value);
     if (!settings.ok) return settings;
     let { reach, folders } = settings.value;
     const approvedContext = structuredClone({ layer: context.value.layer, settings: settings.value });
     const sameOwnerAndRuntime = () => this.options.identity.principalId() === principal && this.options.runtime.instance() === runtime;
-    if (reach.bounded && !(await this.sandboxAvailable(context.value, taskId))) return fail('sandbox-unavailable', POLICY_REASONS.sandboxUnavailable);
+    if (!sameOwnerAndRuntime()) return fail('permission-denied', POLICY_REASONS.permissionContextChanged);
+    if (reach.bounded && !(await this.sandboxAvailable(context.value, taskId))) {
+      if (!this.localPreflight(runtime).ok) return fail('runtime-unavailable', POLICY_REASONS.runtimeUnavailable);
+      return fail('sandbox-unavailable', POLICY_REASONS.sandboxUnavailable);
+    }
+    if (!this.localPreflight(runtime).ok) return fail('runtime-unavailable', POLICY_REASONS.runtimeUnavailable);
     if (!sameOwnerAndRuntime()) return fail('permission-denied', POLICY_REASONS.permissionContextChanged);
     const exec = (current: TaskContext, permissionRequestId: string | null) =>
       this.options.runtime.request<CommandExecResponse>('inquello/tools/exec', {
@@ -507,14 +557,20 @@ export class PolicyService {
         timeoutMs: options.timeoutMs ?? 60_000,
         permissionRequestId,
       });
+    const uncertain = () => fail<ToolRunView>('failed', POLICY_REASONS.executionOutcomeUncertain);
+    const dispatchFailure = (error: unknown) => !this.localPreflight(runtime).ok || !sameOwnerAndRuntime() || !refusalOf(error) ? uncertain() : this.runtimeFailure<ToolRunView>(error);
     let result: CommandExecResponse;
     let permissionRequestId: string | null = null;
     try {
       result = await exec(context.value, null);
     } catch (error) {
-      if (refusalOf(error)?.kind !== 'permission_required') return this.runtimeFailure(error);
+      if (refusalOf(error)?.kind !== 'permission_required') return dispatchFailure(error);
+      if (!this.localPreflight(runtime).ok) return fail('runtime-unavailable', POLICY_REASONS.runtimeUnavailable);
+      if (!sameOwnerAndRuntime()) return fail('permission-denied', POLICY_REASONS.permissionContextChanged);
       // The rules ask: a pending request waits for the person (or declines by default).
       const asked = await this.options.permissions.ask({ workspacePolicy: context.value.layer, taskId, command, origin: 'tools_exec' });
+      if (!this.localPreflight(runtime).ok) return fail('runtime-unavailable', POLICY_REASONS.runtimeUnavailable);
+      if (!sameOwnerAndRuntime()) return fail('permission-denied', POLICY_REASONS.permissionContextChanged);
       if (!asked.ok) return this.runtimeFailure(asked.error);
       if (asked.outcome !== 'allowed') {
         this.options.logger.info(`policy: a command was ${asked.outcome === 'expired' ? 'declined by default' : 'denied'}; nothing ran`);
@@ -525,24 +581,31 @@ export class PolicyService {
       // authority again and refuse even a wider new context: the old approval
       // must never silently authorize a different reach. A fresh invocation
       // can ask the person again under the new context.
+      if (!this.localPreflight(runtime).ok) return fail('runtime-unavailable', POLICY_REASONS.runtimeUnavailable);
       if (!sameOwnerAndRuntime()) return fail('permission-denied', POLICY_REASONS.permissionContextChanged);
       context = await this.taskContext(taskId, true);
       if (!context.ok) return context;
       settings = this.threadSettingsOf(context.value);
       if (!settings.ok) return settings;
+      if (!this.localPreflight(runtime).ok) return fail('runtime-unavailable', POLICY_REASONS.runtimeUnavailable);
       if (!sameOwnerAndRuntime() || !isDeepStrictEqual(approvedContext, { layer: context.value.layer, settings: settings.value })) {
         return fail('permission-denied', POLICY_REASONS.permissionContextChanged);
       }
       ({ reach, folders } = settings.value);
-      if (reach.bounded && !(await this.sandboxAvailable(context.value, taskId))) return fail('sandbox-unavailable', POLICY_REASONS.sandboxUnavailable);
+      if (reach.bounded && !(await this.sandboxAvailable(context.value, taskId))) {
+        if (!this.localPreflight(runtime).ok) return fail('runtime-unavailable', POLICY_REASONS.runtimeUnavailable);
+        return fail('sandbox-unavailable', POLICY_REASONS.sandboxUnavailable);
+      }
+      if (!this.localPreflight(runtime).ok) return fail('runtime-unavailable', POLICY_REASONS.runtimeUnavailable);
       if (!sameOwnerAndRuntime()) return fail('permission-denied', POLICY_REASONS.permissionContextChanged);
       permissionRequestId = asked.requestId;
       try {
         result = await exec(context.value, permissionRequestId);
       } catch (retry) {
-        return this.runtimeFailure(retry);
+        return dispatchFailure(retry);
       }
     }
+    if (!this.localPreflight(runtime).ok || !sameOwnerAndRuntime()) return uncertain();
     const run = { exitCode: Number(result.exitCode), stdout: String(result.stdout ?? ''), stderr: String(result.stderr ?? '') };
     return {
       ok: true,

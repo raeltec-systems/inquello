@@ -25,6 +25,7 @@ import type { TaskPolicyItem } from '../policy-bridge';
 import type { TaskStatesItem } from './state-bridge';
 import { TaskPolicy } from './TaskPolicy';
 import { TaskStates } from './TaskStates';
+import { TaskEnvironment } from './TaskEnvironment';
 
 export interface MoveTarget {
   engagementId: string | null;
@@ -148,6 +149,7 @@ export function TaskView({
           {notice}
         </p>
       ) : null}
+      <TaskEnvironment taskId={task.taskId} />
       <ProcessingRoutes taskId={task.taskId} />
       <TaskStates states={states && states.taskId === task.taskId ? states : null} notice={statesNotice} />
       <TaskPolicy policy={policy && policy.taskId === task.taskId ? policy : null} notice={policyNotice} onSetMode={onSetMode} />
