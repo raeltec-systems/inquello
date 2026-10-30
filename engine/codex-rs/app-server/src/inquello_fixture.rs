@@ -14,6 +14,9 @@ use tokio_util::sync::CancellationToken;
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Params { endpoint: String, certificate: Vec<u8>, task_id: String, task_folder: String, workspace_policy: InquelloWorkspaceExecutionPolicy }
+#[derive(serde::Deserialize)]
+#[serde(rename_all="camelCase",deny_unknown_fields)]
+struct UsageLimitParams {scenario:String,phase:String,task_id:String,workspace_policy:InquelloWorkspaceExecutionPolicy}
 fn failed() -> JSONRPCErrorError { invalid_request("Synthetic in-runtime Messages fixture failed") }
 fn decode<T: serde::de::DeserializeOwned>(payload: Option<ClientResponsePayload>) -> Result<T, JSONRPCErrorError> {
     serde_json::from_value(serde_json::to_value(payload.ok_or_else(failed)?).map_err(|_| failed())?).map_err(|_| failed())
@@ -31,8 +34,15 @@ async fn collect(mut stream: ResponseStream) -> Result<Vec<ResponseItem>, JSONRP
 }
 impl MessageProcessor {
     pub(super) async fn inquello_fixture_turn(&self, connection: ConnectionId, request_id: &ConnectionRequestId,
-        params: Option<serde_json::Value>) -> Result<InquelloRoutePrivateAuthResponse, JSONRPCErrorError> {
-        let params: Params = serde_json::from_value(params.ok_or_else(failed)?).map_err(|_| failed())?;
+        params: Option<serde_json::Value>) -> Result<serde_json::Value, JSONRPCErrorError> {
+        let raw=params.ok_or_else(failed)?;
+        if raw.get("scenario").is_some() {
+            let params:UsageLimitParams=serde_json::from_value(raw).map_err(|_|failed())?;
+            if params.scenario!="usage-limit" || !matches!(params.phase.as_str(),"prepare"|"refuse"|"clear") {return Err(failed());}
+            let (device,user)=self.inquello_policy_layers().await?;
+            return self.inquello_processor.fixture_usage_limit(connection,&params.task_id,&params.phase,params.workspace_policy,device,user).await;
+        }
+        let params: Params = serde_json::from_value(raw).map_err(|_| failed())?;
         if params.certificate.len() > 8192 || params.endpoint.len() > 512 { return Err(failed()); }
         // Creator check through the real domain bridge, before opening TLS.
         let _: InquelloTaskRouteResponse = decode(self.inquello_processor.task_route_read(connection,
@@ -95,6 +105,6 @@ impl MessageProcessor {
         let stream = session.stream(context(binding, events, vec![call_id]), &params.endpoint, &params.certificate, history, vec![tool]).await.map_err(|_| failed())?;
         tokio::time::timeout(Duration::from_secs(15), collect(stream)).await.map_err(|_| failed())??;
         while recorded.recv().await.is_some() {}
-        Ok(InquelloRoutePrivateAuthResponse { accepted: true })
+        Ok(serde_json::json!({"accepted":true}))
     }
 }

@@ -483,7 +483,7 @@ impl MessageProcessor {
         // working store may never live inside it.
         let inquello_processor = Arc::new(InquelloRequestProcessor::new(vec![
             config.codex_home.to_path_buf(),
-        ]).with_route_provider(config.model_provider.clone(), auth_manager.clone(), config.http_client_factory()));
+        ]).with_route_provider(config.model_provider.clone(), auth_manager.clone(), config.http_client_factory()).with_usage_sources(account_processor.clone(), catalog_processor.clone()));
         let initialize_processor = InitializeRequestProcessor::new(
             gateway_login_control,
             outgoing.clone(),
@@ -998,6 +998,8 @@ impl MessageProcessor {
         request_id: &ConnectionRequestId,
         params: codex_app_server_protocol::InquelloToolsExecParams,
     ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        let usage_actor = self.inquello_processor.usage_actor(connection_id)?;
+        let usage_task = params.task_id.clone();
         let (device, user) = self.inquello_policy_layers().await?;
         let plan = self
             .inquello_processor
@@ -1021,8 +1023,9 @@ impl MessageProcessor {
                 })
                 .await?;
         }
+        let usage = self.inquello_processor.tool_usage_begin(connection_id, usage_actor, &usage_task).await?;
         self.command_exec_processor
-            .one_off_command_exec(request_id, plan.exec)
+            .inquello_command_exec(request_id, plan.exec, usage)
             .await
     }
 
@@ -2064,6 +2067,8 @@ impl MessageProcessor {
             }
             ClientRequest::InquelloRoutesList { params, .. } => self.inquello_processor.routes_list(connection_id, params).await,
             ClientRequest::InquelloRouteConfigure { params, .. } => self.inquello_processor.route_configure(connection_id, params).await,
+            ClientRequest::InquelloUsageRead { params, .. } => self.inquello_processor.usage_read(connection_id, params).await,
+            ClientRequest::InquelloUsageSet { params, .. } => self.inquello_processor.usage_set(connection_id, params).await,
             ClientRequest::InquelloTaskRouteRead { params, .. } => self.inquello_processor.task_route_read(connection_id, params).await,
             ClientRequest::InquelloTaskRouteSet { params, .. } => self.inquello_processor.task_route_set(connection_id, params).await,
             ClientRequest::InquelloRoutePrivateAuth { params, .. } => self.inquello_processor.route_private_auth(connection_id, params).await,

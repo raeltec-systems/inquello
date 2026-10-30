@@ -85,6 +85,7 @@ struct CommandControlRequest {
 }
 
 pub(crate) struct StartCommandExecParams {
+    pub(crate) usage: Option<crate::request_processors::ToolUsage>,
     pub(crate) outgoing: Arc<OutgoingMessageSender>,
     pub(crate) request_id: ConnectionRequestId,
     pub(crate) process_id: Option<String>,
@@ -98,6 +99,7 @@ pub(crate) struct StartCommandExecParams {
 }
 
 struct RunCommandParams {
+    usage: Option<crate::request_processors::ToolUsage>,
     outgoing: Arc<OutgoingMessageSender>,
     request_id: ConnectionRequestId,
     process_id: Option<String>,
@@ -145,6 +147,7 @@ impl CommandExecManager {
         params: StartCommandExecParams,
     ) -> Result<(), JSONRPCErrorError> {
         let StartCommandExecParams {
+            usage,
             outgoing,
             request_id,
             process_id,
@@ -156,6 +159,8 @@ impl CommandExecManager {
             output_bytes_cap,
             size,
         } = params;
+        let mut usage=usage;
+        let result=async {
         if process_id.is_none() && (tty || stream_stdin || stream_stdout_stderr) {
             return Err(invalid_request(
                 "command/exec tty or streaming requires a client-supplied processId",
@@ -199,13 +204,18 @@ impl CommandExecManager {
                     CommandExecSession::UnsupportedWindowsSandbox,
                 );
             }
+            if let Some(observer)=&usage {
+                if let Err(error)=observer.recheck().await {self.sessions.lock().await.remove(&process_key);return Err(error);}
+            }
             let sessions = Arc::clone(&self.sessions);
+            let usage=usage.take();
             tokio::spawn(async move {
                 let _started_network_proxy = started_network_proxy;
                 match codex_core::sandboxing::execute_env(exec_request, /*stdout_stream*/ None)
                     .await
                 {
                     Ok(output) => {
+                        if let Some(observer)=usage { observer.finish(if output.exit_code==0 {inquello_domain::usage::AttemptStatus::Completed} else {inquello_domain::usage::AttemptStatus::Failed}).await; }
                         outgoing
                             .send_response(
                                 request_id,
@@ -218,6 +228,7 @@ impl CommandExecManager {
                             .await;
                     }
                     Err(err) => {
+                        if let Some(observer)=usage { observer.finish(inquello_domain::usage::AttemptStatus::Uncertain).await; }
                         outgoing
                             .send_error(request_id, internal_error(format!("exec failed: {err}")))
                             .await;
@@ -267,6 +278,9 @@ impl CommandExecManager {
                 CommandExecSession::Active { control_tx },
             );
         }
+        if let Some(observer)=&usage {
+            if let Err(error)=observer.recheck().await {self.sessions.lock().await.remove(&process_key);return Err(error);}
+        }
         let spawned = if tty {
             codex_utils_pty::spawn_pty_process(
                 program,
@@ -299,9 +313,11 @@ impl CommandExecManager {
                 return Err(internal_error(format!("failed to spawn command: {err}")));
             }
         };
+        let usage=usage.take();
         tokio::spawn(async move {
             let _started_network_proxy = started_network_proxy;
             run_command(RunCommandParams {
+                usage,
                 outgoing,
                 request_id: request_id.clone(),
                 process_id: notification_process_id,
@@ -316,6 +332,9 @@ impl CommandExecManager {
             sessions.lock().await.remove(&process_key);
         });
         Ok(())
+        }.await;
+        if result.is_err() {if let Some(observer)=usage.take() {observer.finish(inquello_domain::usage::AttemptStatus::Uncertain).await;}}
+        result
     }
 
     pub(crate) async fn write(
@@ -454,6 +473,7 @@ impl CommandExecManager {
 
 async fn run_command(params: RunCommandParams) {
     let RunCommandParams {
+        usage,
         outgoing,
         request_id,
         process_id,
@@ -476,6 +496,8 @@ async fn run_command(params: RunCommandParams) {
     } = spawned;
     tokio::pin!(exit_rx);
     let mut expiration_outcome = None;
+    let mut cancelled = false;
+    let mut exit_known = true;
     let (stdio_timeout_tx, stdio_timeout_rx) = watch::channel(false);
 
     let stdout_handle = spawn_process_output(SpawnProcessOutputParams {
@@ -517,6 +539,7 @@ async fn run_command(params: RunCommandParams) {
                                 handle_process_resize(&session, size)
                             }
                             CommandControl::Terminate => {
+                                cancelled = true;
                                 session.request_terminate();
                                 Ok(())
                             }
@@ -527,6 +550,7 @@ async fn run_command(params: RunCommandParams) {
                     },
                     None => {
                         control_open = false;
+                        cancelled = true;
                         session.request_terminate();
                     }
                 }
@@ -536,6 +560,7 @@ async fn run_command(params: RunCommandParams) {
                 session.request_terminate();
             }
             exit = &mut exit_rx => {
+                exit_known = exit.is_ok();
                 if matches!(expiration_outcome, Some(ExecExpirationOutcome::TimedOut)) {
                     break EXEC_TIMEOUT_EXIT_CODE;
                 } else {
@@ -554,6 +579,7 @@ async fn run_command(params: RunCommandParams) {
     let stderr = stderr_handle.await.unwrap_or_default();
     timeout_handle.abort();
 
+    if let Some(observer)=usage { observer.finish(if !exit_known {inquello_domain::usage::AttemptStatus::Uncertain} else if cancelled {inquello_domain::usage::AttemptStatus::Cancelled} else if exit_code==0 {inquello_domain::usage::AttemptStatus::Completed} else {inquello_domain::usage::AttemptStatus::Failed}).await; }
     outgoing
         .send_response(
             request_id,
@@ -730,6 +756,7 @@ mod tests {
         let manager = CommandExecManager::default();
         let err = manager
             .start(StartCommandExecParams {
+                usage: None,
                 outgoing: Arc::new(OutgoingMessageSender::new(
                     tx,
                     codex_analytics::AnalyticsEventsClient::disabled(),
@@ -769,6 +796,7 @@ mod tests {
 
         manager
             .start(StartCommandExecParams {
+                usage: None,
                 outgoing: Arc::new(OutgoingMessageSender::new(
                     tx,
                     codex_analytics::AnalyticsEventsClient::disabled(),
@@ -819,6 +847,7 @@ mod tests {
 
         manager
             .start(StartCommandExecParams {
+                usage: None,
                 outgoing: Arc::new(OutgoingMessageSender::new(
                     tx,
                     codex_analytics::AnalyticsEventsClient::disabled(),
@@ -909,6 +938,7 @@ mod tests {
 
         manager
             .start(StartCommandExecParams {
+                usage: None,
                 outgoing: Arc::new(OutgoingMessageSender::new(
                     tx,
                     codex_analytics::AnalyticsEventsClient::disabled(),

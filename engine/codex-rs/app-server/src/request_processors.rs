@@ -742,3 +742,6 @@ pub(crate) fn build_legacy_api_turns_from_rollout_items(items: &[RolloutItem]) -
     }
     builder.finish()
 }
+
+// Native observer only; never exported over RPC.
+pub(crate) use inquello_processor::usage_bridge::ToolUsage;

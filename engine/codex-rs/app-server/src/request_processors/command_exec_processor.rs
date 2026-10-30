@@ -95,15 +95,26 @@ impl CommandExecRequestProcessor {
         request_id: &ConnectionRequestId,
         params: CommandExecParams,
     ) -> Result<(), JSONRPCErrorError> {
-        self.exec_one_off_command_inner(request_id.clone(), params)
+        self.exec_one_off_command_inner(request_id.clone(), params, None)
             .await
+    }
+
+    pub(crate) async fn inquello_command_exec(&self, request_id: &ConnectionRequestId, params: CommandExecParams, usage: crate::request_processors::ToolUsage) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        if let Err(error)=self.require_local_environment() {
+            usage.finish(inquello_domain::usage::AttemptStatus::Uncertain).await;
+            return Err(error);
+        }
+        self.exec_one_off_command_inner(request_id.clone(), params, Some(usage)).await.map(|()| None)
     }
 
     async fn exec_one_off_command_inner(
         &self,
         request_id: ConnectionRequestId,
         params: CommandExecParams,
+        usage: Option<crate::request_processors::ToolUsage>,
     ) -> Result<(), JSONRPCErrorError> {
+        let mut usage=usage;
+        let result=async {
         tracing::debug!("ExecOneOffCommand params: {params:?}");
 
         let request = request_id.clone();
@@ -326,8 +337,10 @@ impl CommandExecRequestProcessor {
         )
         .await
         .map_err(|err| internal_error(format!("exec failed: {err}")))?;
+        if let Some(observer)=&usage { observer.recheck().await?; }
         self.command_exec_manager
             .start(StartCommandExecParams {
+                usage: usage.take(),
                 outgoing,
                 request_id: request_for_task,
                 process_id,
@@ -340,5 +353,10 @@ impl CommandExecRequestProcessor {
                 size,
             })
             .await
+        }.await;
+        if result.is_err() {
+            if let Some(observer)=usage.take() {observer.finish(inquello_domain::usage::AttemptStatus::Uncertain).await;}
+        }
+        result
     }
 }

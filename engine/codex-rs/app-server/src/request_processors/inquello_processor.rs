@@ -187,9 +187,13 @@ fn configured_store_path() -> Option<PathBuf> {
 mod route_bridge;
 #[path = "inquello_reviewer.rs"]
 mod reviewer;
+#[path = "inquello_usage.rs"]
+pub(crate) mod usage_bridge;
 
 pub(crate) struct InquelloRequestProcessor {
     routes: reviewer::RouteRuntime,
+    runtime_id: String,
+    usage_sources: Option<(std::sync::Arc<super::AccountRequestProcessor>, super::CatalogRequestProcessor)>,
     store_path: Option<PathBuf>,
     /// Roots the agent can write; the store may not live inside one.
     agent_writable_roots: Vec<PathBuf>,
@@ -208,6 +212,8 @@ impl InquelloRequestProcessor {
     ) -> Self {
         Self {
             routes: reviewer::RouteRuntime::default(),
+            runtime_id: uuid::Uuid::new_v4().to_string(),
+            usage_sources: None,
             store_path,
             agent_writable_roots,
             store: tokio::sync::OnceCell::new(),

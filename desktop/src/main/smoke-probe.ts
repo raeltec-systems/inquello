@@ -186,6 +186,7 @@ const TAB_SETTLE_MS = 50;
 
 /** The tree `window.inquello` must expose, as `describe` renders it. */
 export const EXPECTED_BRIDGE_TREE = {
+  usage: { forTask: 'function', set: 'function', onChanged: 'function' },
   environments: { forTask: 'function', onChanged: 'function' },
   routes: { list: 'function', configure: 'function', forTask: 'function', select: 'function', onChanged: 'function' },
   capabilities: { onChanged: 'function', getInventory: 'function', manage: 'function' },
@@ -3449,7 +3450,7 @@ export async function probeRoutes(contents:WebContents, options:Omit<OrganisePro
 }
 
 // ---- local execution facts (Story 1.23), no probes or inference -----------------
-export async function probeEnvironments(contents: WebContents, options: Omit<OrganiseProbeOptions, 'runtimeRequest'> & {routes: import('./routes/service').RouteService}): Promise<{ok:boolean;failures:string[]}> {
+export async function probeEnvironments(contents: WebContents, options: OrganiseProbeOptions & {routes: import('./routes/service').RouteService; policy: PolicyService; usageChanged(privateScope:boolean):void}): Promise<{ok:boolean;failures:string[]}> {
   const failures: string[] = [];
   const configured = options.identity.config.kind === 'configured';
   try {
@@ -3489,6 +3490,70 @@ export async function probeEnvironments(contents: WebContents, options: Omit<Org
       return !!(await wait(() => { const panel = q('[data-task-environment]'); return panel?.textContent.includes('Explicit processing route') && panel.textContent.includes('claude-sonnet-5-5') && panel.textContent.includes('Unknown') && !panel.textContent.includes('No processing route selected') ? panel : null; }, ${POLICY_SETTLE_MS}));
     })()`) as boolean;
     if (!updated) failures.push('Mounted environment panel did not update via production route invalidation');
+    // Story 1.24: mounted choices follow the same real main/preload notification.
+    // Persist defaults explicitly; this does not enable the disabled route or call a provider.
+    const usageChoices = await contents.executeJavaScript(`(async () => {
+      ${SHELL_HELPERS}
+      const panel = await wait(() => { const node=q('[data-task-usage]'); return node?.querySelector('select[aria-label="Reasoning"]:not(:disabled)') ? node : null; }, ${POLICY_SETTLE_MS});
+      if (!panel || !panel.textContent.includes('Defaults are not saved yet')) return false;
+      const save=[...panel.querySelectorAll('button')].find(button=>button.textContent==='Save Task settings');
+      if (!save) return false; save.click();
+      return !!(await wait(() => { const node=q('[data-task-usage]'); return node?.querySelector('select[aria-label="Reasoning"]') && !node.textContent.includes('Defaults are not saved yet') ? node : null; }, ${POLICY_SETTLE_MS}));
+    })()`) as boolean;
+    if (!usageChoices) failures.push('Mounted usage choices did not save explicit defaults');
+    // Harmless local invocations, repeated and failed, are accounted at the real boundary.
+    for (const command of [['/bin/sh','-c','exit 0'],['/bin/sh','-c','exit 7'],['/bin/sh','-c','exit 0']]) {
+      const run=await options.policy.runTool(created.value.taskId,command,{timeoutMs:30_000});
+      if (!run.ok) throw new Error('Synthetic local invocation unavailable');
+    }
+    const history = await contents.executeJavaScript(`(async () => {
+      ${SHELL_HELPERS}
+      return !!(await wait(() => { const node=q('[data-task-usage]'); const rows=node?.querySelectorAll('[data-usage-attempt]'); return rows?.length>=3 && node.textContent.includes('Local tool invocation — completed') && node.textContent.includes('Local tool invocation — failed') && node.textContent.includes('Unknown / Unknown') ? node : null; }, ${POLICY_SETTLE_MS}));
+    })()`) as boolean;
+    if (!history) failures.push('Native repeated/failed tool history did not reach mounted usage through production notifications');
+    // Combined Story 1.24 gate: existing default-off debug fixture dispatcher,
+    // production native reviewer/ledger, then the real mounted preload panel.
+    // Default/release binaries reject the fixture method rather than bypass gates.
+    const latestCatalog=await options.routes.list();
+    if(!latestCatalog.ok)throw new Error('Fixture route catalog unavailable');
+    const codex=latestCatalog.value.find(row=>row.routeId==='codex-responses');
+    if(!codex)throw new Error('Fixture Codex route unavailable');
+    const configuredCodex=await options.routes.configure({operationId:randomUUID(),expectedRevision:codex.revision,routeId:'codex-responses',deployment:'openai-api',model:'fixture-model-20261030',apiVersion:'responses-v1',region:null});
+    if(!configuredCodex.ok)throw new Error('Fixture route configuration unavailable');
+    const codexRevision=configuredCodex.value.find(row=>row.routeId==='codex-responses')?.revision;
+    if(codexRevision===undefined)throw new Error('Fixture route revision unavailable');
+    const codexSelection=await options.routes.select({operationId:randomUUID(),expectedRevision:selected.value.revision,taskId:created.value.taskId,routeId:'codex-responses',configurationRevision:codexRevision});
+    if(!codexSelection.ok)throw new Error('Fixture route selection unavailable');
+    const workspacePolicy=await options.policy.reviewPolicy(created.value.taskId);
+    if(!workspacePolicy)throw new Error('Fixture private policy unavailable');
+    const fixture=(phase:'prepare'|'refuse'|'clear')=>options.runtimeRequest<{accepted?:boolean;providerCalls?:number;retainedAttempts?:number;refused?:boolean}>('inquello/fixture/messagesTurn',{scenario:'usage-limit',phase,taskId:created.value.taskId,workspacePolicy});
+    try {
+      const prepared=await fixture('prepare');
+      if(prepared.accepted!==true||prepared.providerCalls!==0)throw new Error('Isolated native quota fixture unavailable');
+      options.usageChanged(true);
+      const defaultsSaved=await contents.executeJavaScript(`(async()=>{
+        ${SHELL_HELPERS}
+        const panel=await wait(()=>{const node=q('[data-task-usage]');return node?.textContent.includes('synthetic fixture')&&node.querySelector('select[aria-label="Reasoning"]:not(:disabled)')?node:null;},${POLICY_SETTLE_MS});
+        if(!panel)return false;
+        const save=[...panel.querySelectorAll('button')].find(button=>button.textContent==='Save Task settings');if(!save)return false;save.click();
+        return !!(await wait(()=>{const node=q('[data-task-usage]');return node?.textContent.includes('synthetic fixture')&&!node.textContent.includes('older route revision')?node:null;},${POLICY_SETTLE_MS}));
+      })()`) as boolean;
+      if(!defaultsSaved)throw new Error('Mounted fixture defaults were not saved');
+      const retainedIds=await contents.executeJavaScript(`[...document.querySelectorAll('[data-task-usage] [data-usage-attempt]')].map(node=>node.getAttribute('data-usage-attempt'))`) as string[];
+      const refused=await fixture('refuse');
+      if(refused.accepted!==true||refused.refused!==true||refused.providerCalls!==0||(refused.retainedAttempts??0)<3)throw new Error('Native limit refusal did not prove zero provider calls and retained work');
+      // Same main/preload notification function used after native tool/reviewer settlement.
+      options.usageChanged(false);
+      const mountedRefusal=await contents.executeJavaScript(`(async()=>{
+        ${SHELL_HELPERS}
+        const retained=${JSON.stringify(retainedIds)};
+        return !!(await wait(()=>{const node=q('[data-task-usage]');if(!node)return null;const ids=[...node.querySelectorAll('[data-usage-attempt]')].map(row=>row.getAttribute('data-usage-attempt'));
+          return node.textContent.includes('Automated permission review — refused')&&node.textContent.includes('exhausted')&&node.textContent.includes('Codex plan/Workspace')&&node.textContent.includes('Use permitted human handling')&&retained.every(id=>ids.includes(id))?node:null;},${POLICY_SETTLE_MS}));
+      })()`) as boolean;
+      if(!mountedRefusal)failures.push('Native quota refusal did not reach mounted usage with retained prior work');
+    } finally {await fixture('clear').catch(()=>undefined);options.usageChanged(true);}
+
+
 
   } catch { failures.push('Environment smoke could not finish; seeded identity and matching native runtime required'); }
   finally { if (configured) { await options.identity.session.signOut(); await options.organise.syncPrincipal().catch(() => {}); } }

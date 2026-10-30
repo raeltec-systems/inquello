@@ -9,11 +9,12 @@ use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use tokio_util::sync::CancellationToken;
 use futures::StreamExt;
+use inquello_domain::usage::{self, UsageStore, AttemptStatus, FinishAttempt};
 
 pub(super) const LABEL: &str = "Automated permission review — not analytical review or Professional Approval";
 #[derive(Default)]
 pub(super) struct RouteRuntime {
-    pub(super) state: tokio::sync::Mutex<ReviewState>,
+    pub(super) state: std::sync::Arc<tokio::sync::Mutex<ReviewState>>,
     pub(super) auth: AuthStore,
     pub(super) responses: Option<InheritedResponses>,
 }
@@ -21,11 +22,25 @@ pub(super) struct RouteRuntime {
 pub(super) struct ReviewState {
     pub(super) credentials: HashMap<(PrincipalId, RouteId), (String, u64)>,
     pub(super) generations: HashMap<(PrincipalId, RouteId), u64>,
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    pub(super) usage_fixture: Option<super::usage_bridge::UsageLimitFixture>,
     authorities: HashMap<(PrincipalId, WorkspaceId), Authority>,
     pending: HashMap<String, Invocation>,
     ready: HashMap<String, ReadyReview>,
     #[cfg(test)]
     fixture_response: Option<String>,
+    #[cfg(test)]
+    fixture_limit: Option<Option<bool>>,
+    #[cfg(test)]
+    fixture_dispatches: usize,
+    #[cfg(test)]
+    fixture_failure: bool,
+    #[cfg(test)]
+    pub(super) fixture_capability_failure: bool,
+    #[cfg(test)]
+    pub(super) fixture_caps_pause: Option<(std::sync::Arc<tokio::sync::Notify>, std::sync::Arc<tokio::sync::Notify>)>,
+    #[cfg(test)]
+    fixture_bodies: Vec<serde_json::Value>,
     #[cfg(test)]
     fixture_pause: Option<(std::sync::Arc<tokio::sync::Notify>, std::sync::Arc<tokio::sync::Notify>)>,
 }
@@ -59,6 +74,8 @@ impl RouteRuntime {
         });
     }
     pub(super) fn invalidate_principal(&self, state: &mut ReviewState, principal: PrincipalId) {
+        #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+        if state.usage_fixture.as_ref().is_some_and(|f|f.principal==principal) {state.usage_fixture=None;}
         self.auth.invalidate_principal(&principal.to_string());
         self.cancel_principal_reviews(state, principal);
         state.credentials.retain(|(id, _), _| *id != principal);
@@ -95,7 +112,24 @@ pub(super) struct InheritedResponses {
     pub(super) provider: codex_model_provider::SharedModelProvider,
     pub(super) factory: codex_http_client::HttpClientFactory,
 }
+#[derive(Clone,Debug,PartialEq,Eq)]
+pub(super) struct InheritedAuthBinding {
+    pub(super) mode: codex_protocol::auth::AuthMode,
+    generation: u64,
+    pub(super) account_id: Option<String>,
+}
 impl InheritedResponses {
+    pub(super) fn auth_binding(&self) -> Result<InheritedAuthBinding, &'static str> {
+        let manager=self.provider.auth_manager().ok_or("Inherited authentication unavailable")?;
+        let auth=manager.auth_cached().ok_or("Inherited authentication unavailable")?;
+        let mode=auth.auth_mode();
+        if mode!=codex_protocol::auth::AuthMode::ApiKey && !mode.uses_codex_backend() {return Err("Unsupported inherited authentication mode");}
+        let revision=manager.auth_change_state_for(&auth).ok_or("Inherited authentication changed")?;
+        Ok(InheritedAuthBinding {mode,generation:revision.generation,account_id:auth.get_account_id()})
+    }
+    pub(super) fn binding_current(&self,expected:&InheritedAuthBinding)->bool {
+        self.auth_binding().as_ref()==Ok(expected)
+    }
     pub(super) fn check_configuration(&self, config: &routes::RouteConfiguration) -> Result<(), &'static str> {
         let info = self.provider.info();
         let inherited = codex_model_provider_info::ModelProviderInfo::create_openai_provider(info.base_url.clone());
@@ -113,7 +147,7 @@ impl InheritedResponses {
         if provider.url_for_path("responses") != config.endpoint() { return Err("Configured endpoint differs from inherited provider"); }
         Ok(())
     }
-    async fn stream(&self, request: InferenceRequest, cancellation: CancellationToken) -> Result<tokio::sync::mpsc::Receiver<Event>, &'static str> {
+    async fn stream(&self, request: InferenceRequest, cancellation: CancellationToken, expected_auth: Option<&InheritedAuthBinding>) -> Result<tokio::sync::mpsc::Receiver<Event>, &'static str> {
         // Use retained Responses authentication and HTTP machinery, never extract a key.
         let mut provider = self.provider.api_provider().await.map_err(|_| "Inherited provider unavailable")?;
         provider.retry.max_attempts = 0;
@@ -121,14 +155,24 @@ impl InheritedResponses {
         let client = codex_login::default_client::create_client_for_route(&self.factory,
             &provider.url_for_path("responses"), codex_http_client::ClientRouteClass::Api,
             codex_login::default_client::ClientRedirectPolicy::Reject).map_err(|_| "Inherited transport unavailable")?;
+        if !expected_auth.is_some_and(|binding| self.binding_current(binding)) || cancellation.is_cancelled() {
+            return Err("Current-account binding changed before model dispatch");
+        }
         let wire = responses_review_body(&request)?;
         let (tx, rx) = tokio::sync::mpsc::channel(16);
         let client = codex_api::ResponsesClient::new(codex_api::ReqwestTransport::from_http_client(client), provider, auth);
         let mut stream = tokio::select! { biased;
             _ = cancellation.cancelled() => return Err("Review cancelled before dispatch"),
-            result = client.stream(wire, Default::default(), codex_api::Compression::None, None) =>
-                result.map_err(|_| "Inherited review request failed")?,
+            result = client.stream(wire, Default::default(), codex_api::Compression::None, None) => match result {
+                Ok(stream)=>stream,
+                Err(error)=>{
+                    let event=review_error(&self.provider.map_api_error(error));
+                    let _=tx.send(Event {binding:request.binding.clone(),sequence:0,provider_request_id:None,provider_message_id:None,event}).await;
+                    return Ok(rx);
+                }
+            },
         };
+        let error_provider=self.provider.clone();
         tokio::spawn(async move {
             let mut sequence = 0;
             let mut provider_id = None;
@@ -137,6 +181,8 @@ impl InheritedResponses {
                 if let Some(Ok(codex_api::ResponseEvent::Completed { token_usage: Some(usage), .. })) = &item {
                     let usage = inquello_protocol::inference::Usage {
                         input_tokens: u64::try_from(usage.input_tokens).ok(), output_tokens: u64::try_from(usage.output_tokens).ok(),
+                        cache_read_tokens: reported_cache_tokens(usage.cached_input_tokens),
+                        cache_write_tokens: reported_cache_tokens(usage.cache_write_input_tokens),
                         origin: Some("provider".into()), ..Default::default()
                     };
                     if !review_send(&tx, &cancellation, Event { binding: request.binding.clone(), sequence, provider_request_id: None,
@@ -153,10 +199,11 @@ impl InheritedResponses {
                     Some(Ok(codex_api::ResponseEvent::Completed { end_turn: Some(true), response_id, .. })) => {
                         provider_id = Some(response_id); EventKind::Completed { reason: StopReason::EndTurn, provider_reason: None }
                     }
-                    Some(Ok(codex_api::ResponseEvent::Completed { .. })) | Some(Err(_)) | None => break,
+                    Some(Err(error)) => review_error(&error_provider.map_api_error(error)),
+                    Some(Ok(codex_api::ResponseEvent::Completed { .. })) | None => break,
                     Some(Ok(_)) => continue,
                 };
-                let terminal = matches!(kind, EventKind::Completed { .. });
+                let terminal = kind.terminal();
                 let event = Event { binding: request.binding.clone(), sequence, provider_request_id: None,
                     provider_message_id: provider_id.clone(), event: kind };
                 sequence += 1;
@@ -165,6 +212,22 @@ impl InheritedResponses {
         });
         Ok(rx)
     }
+}
+
+/// Preserve provider refusal categories instead of turning them into zero usage
+/// or a retry. Error text/prompt bodies never enter the history view.
+fn review_error(error:&codex_protocol::error::CodexErr)->EventKind {
+    use codex_protocol::error::CodexErrorDetails as E;
+    use inquello_protocol::inference::ErrorKind as K;
+    let kind=match error.details() {
+        E::RateLimitExceeded(_) | E::UsageLimitReached(_)=>K::RateLimit,
+        E::QuotaExceeded | E::UsageNotIncluded=>K::CreditLimit,
+        E::RefreshTokenFailed(_) | E::GatewayLoginRequired(_)=>K::Auth,
+        E::InvalidRequest(_) | E::InvalidPrompt {..} | E::ModelNotFound {..}=>K::InvalidRequest,
+        E::TurnAborted | E::Interrupted=>K::Cancelled,
+        _=>K::Transport,
+    };
+    EventKind::Failed {error:kind,retryable:false,completion_uncertain:true}
 }
 
 /// Exact reviewer body: no tools and the normalized bounded output budget is
@@ -178,9 +241,12 @@ fn responses_review_body(request: &InferenceRequest) -> Result<serde_json::Value
         }).collect::<Result<Vec<_>, _>>()?;
         Ok(serde_json::json!({"type":"message","role":role,"content":content}))
     }).collect::<Result<Vec<_>, &'static str>>()?;
-    Ok(serde_json::json!({"model":request.binding.model,"stream":true,"input":input,
+    let mut body = serde_json::json!({"model":request.binding.model,"stream":true,"input":input,
         "tools":[],"tool_choice":"none","parallel_tool_calls":false,"store":false,
-        "max_output_tokens":request.max_output_tokens}))
+        "max_output_tokens":request.max_output_tokens});
+    if let Some(effort)=request.settings.get("reasoning_effort").and_then(|v|v.as_str()).filter(|v|*v!="default") { body["reasoning"]=serde_json::json!({"effort":effort}); }
+    if let Some(tier)=request.settings.get("service_tier").and_then(|v|v.as_str()).filter(|v|*v!="default") { body["service_tier"]=serde_json::json!(tier); }
+    Ok(body)
 }
 
 /// Every bounded reviewer delivery is revocation-aware, including usage/terminal.
@@ -213,29 +279,47 @@ fn review_request(binding: Binding, evaluation: &CommandEvaluation) -> Inference
     ], tools: Vec::new(), max_output_tokens: 512, completed_tool_call_ids: Vec::new(), effects_reconciled: true, settings: serde_json::json!({}) }
 }
 async fn collect_verdict(mut events: tokio::sync::mpsc::Receiver<Event>, request: &InferenceRequest,
-    cancellation: &CancellationToken) -> Option<execution_policy::ReviewerVerdict> {
+    cancellation: &CancellationToken, store: &SqliteWorkingStore, actor: Actor, status: &mut AttemptStatus, output_ref: &mut Option<String>) -> Option<execution_policy::ReviewerVerdict> {
     let mut guard = EventGuard::new(request.binding.clone());
     let mut text = String::new();
     loop {
         let event = tokio::select! { biased; _ = cancellation.cancelled() => return None, event = events.recv() => event? };
         if guard.accept(&event).is_err() { return None; }
+        if event.provider_message_id.is_some() { *output_ref = event.provider_message_id.clone(); }
+        let sequence = event.sequence;
         match event.event {
+            EventKind::UsageUpdate { usage: native } => {
+                let cost = native.cost_microunits.map(|v| format!("{}.{:06}",v/1_000_000,v%1_000_000));
+                store.record_usage_event(actor.principal_id, TaskId::parse(&request.binding.task_id).ok()?, &request.binding.attempt_id,
+                    usage::UsageEvent {event_id:format!("native-{sequence}"),sequence,kind:usage::UsageEventKind::Cumulative,usage:usage::Consumption {
+                        input_tokens:native.input_tokens,output_tokens:native.output_tokens,cache_read_tokens:native.cache_read_tokens,cache_write_tokens:native.cache_write_tokens,
+                        cost,currency:native.currency,provenance:native.origin,
+                    }}).await.ok()?;
+            },
+            EventKind::Failed { error, completion_uncertain, .. } => {
+                *status = if matches!(error, inquello_protocol::inference::ErrorKind::RateLimit | inquello_protocol::inference::ErrorKind::CreditLimit) {AttemptStatus::Refused} else if completion_uncertain {AttemptStatus::Uncertain} else {AttemptStatus::Failed};
+                return None;
+            },
             EventKind::TextDelta { text: delta, .. } => { text.push_str(&delta); if text.len() > 4096 { return None; } },
-            EventKind::Started | EventKind::UsageUpdate { .. } => {},
-            EventKind::Completed { reason: StopReason::EndTurn, .. } => return parse_verdict(&text),
+            EventKind::Started => {},
+            EventKind::Completed { reason: StopReason::EndTurn, .. } => { let verdict = parse_verdict(&text); *status = if verdict.is_some() {AttemptStatus::Completed} else {AttemptStatus::Failed}; return verdict; },
             _ => return None,
         }
     }
 }
 
 impl InquelloRequestProcessor {
-    fn fixture_enabled(&self, state: &ReviewState) -> bool {
+    pub(super) fn fixture_enabled(&self, state: &ReviewState) -> bool {
         #[cfg(test)]
         { return state.fixture_response.is_some(); }
         #[cfg(not(test))]
         { let _ = state; false }
     }
     fn review_eligible(&self, state: &ReviewState, task: &routes::TaskRoute, credential: bool, tier: DataTier) -> bool {
+        #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+        if state.usage_fixture.as_ref().is_some_and(|f|f.task==task.task_id.to_string() && f.route_revision==task.revision.get()) {
+            return task.current.is_some() && !task.stale_configuration && credential && tier==DataTier::Synthetic;
+        }
         if self.fixture_enabled(state) {
             return task.current.is_some() && !task.stale_configuration && credential && tier == DataTier::Synthetic;
         }
@@ -292,10 +376,13 @@ impl InquelloRequestProcessor {
                 self.routes.cancel_task(&mut state, actor.principal_id, &original.task_id.to_string());
                 return Ok(Some(review_response("human_required", eligibility.gate.unwrap_or("Selected route unavailable"), &original, None).into()));
             }
+            // Cancelled futures cannot reserve capacity or block an explicit retry.
+            state.pending.retain(|_, invocation| !invocation.cancellation.is_cancelled());
+            state.ready.retain(|_, review| !review.cancellation.is_cancelled());
             if state.pending.values().any(|invocation| invocation.principal == actor.principal_id && invocation.request == params.request_id) {
                 return Ok(Some(review_response("human_required", "A review of this request is already pending; no duplicate invocation started", &original, None).into()));
             }
-            if selected.configuration.route_id() == RouteId::CodexResponses && !self.fixture_enabled(&state) {
+            if selected.configuration.route_id() == RouteId::CodexResponses && !self.fixture_enabled(&state) && !self.usage_fixture_for_task(&state,&original.task_id.to_string()) {
                 let Some(responses) = &self.routes.responses else { return Ok(Some(review_response("human_required", "Inherited route unavailable", &original, None).into())); };
                 if responses.check_configuration(&selected.configuration).is_err() {
                     return Ok(Some(review_response("human_required", "Inherited route authentication or endpoint changed", &original, None).into()));
@@ -321,9 +408,57 @@ impl InquelloRequestProcessor {
             let request = review_request(binding, &evaluated.evaluation);
             (store, actor, original, authority, invocation_id, attribution, request, cancellation)
         };
+        let pending_guard = PendingInvocation {state:self.routes.state.clone(),id:invocation_id.clone(),cancellation:cancellation.clone(),armed:true};
+        let result = async {
+        // Resolve authoritative choices, then recheck all lifecycle binding after waits.
+        let route = routes::task_route(&store, actor, &request.binding.task_id).await.map_err(|error| {cancellation.cancel();domain_error(error)})?;
+        let caps = self.usage_capabilities(&route).await.map_err(|error| {cancellation.cancel();error})?;
+        let settings = usage::task_usage(&store,actor,&request.binding.task_id).await.map_err(|error| {cancellation.cancel();domain_error(error)})?.settings
+            .ok_or_else(|| {cancellation.cancel();refusal("settings_required","Explicitly save Task reasoning/speed defaults before model work")})?;
+        if !caps.reasoning.contains(&settings.choices.reasoning) || !caps.speeds.contains(&settings.choices.speed) {
+            cancellation.cancel();
+            return Err(refusal("settings_incompatible","Selected settings are no longer supported; explicitly correct them"));
+        }
+        let effective = usage::Choices {
+            reasoning: if settings.choices.reasoning == "default" {caps.defaults.reasoning} else {settings.choices.reasoning.clone()},
+            speed: if settings.choices.speed == "default" {caps.defaults.speed} else {settings.choices.speed.clone()},
+        };
+        let mut request = request;
+        if request.binding.route_id == "codex-responses" {
+            request.settings = serde_json::json!({"reasoning_effort":effective.reasoning,"service_tier":effective.speed});
+        }
+        let snapshot = usage::AttemptSnapshot {attempt_id:request.binding.attempt_id.clone(),task_id:request.binding.task_id.clone(),principal_id:actor.principal_id.to_string(),
+            run_id:request.binding.run_id.clone(),runtime_id:self.runtime_id.clone(),operation_kind:usage::OperationKind::AutomatedPermissionReview,
+            route_id:Some(request.binding.route_id.clone()),model:Some(request.binding.model.clone()),api_version:Some(request.binding.api_version.clone()),configuration_revision:attribution.configuration_revision.get(),
+            route_revision:request.binding.route_revision,settings_revision:settings.revision,requested:settings.choices,effective,started_at_ms:SystemClock.now().unix_millis()};
+        store.begin_usage_attempt(snapshot).await.map_err(|error| {cancellation.cancel();domain_error(error)})?;
+        let began=std::time::Instant::now();
+        let mut usage_status=AttemptStatus::Uncertain;
+        let mut usage_output=None;
+        let mut usage_refusal=None;
         // The handle and verdict remain inside this invocation. Neither can be submitted by main.
         let run = async {
             request.validate().ok()?;
+            #[cfg(test)]
+            let fixture = self.fixture_enabled(&self.routes.state.lock().await);
+            #[cfg(not(test))]
+            let fixture = false;
+            #[cfg(test)]
+            if fixture {
+                if let Some(allowed)=self.routes.state.lock().await.fixture_limit {
+                    if allowed!=Some(true) {usage_status=AttemptStatus::Refused;usage_refusal=Some("Fixture Codex ordinary usage refused or unknown; use permitted human handling".into());return None;}
+                }
+            }
+            let expected_account = if fixture {None} else {match self.usage_limit_check(&request.binding.route_id,&request.binding.task_id).await {
+                Ok(account)=>account, Err(error)=>{usage_status=AttemptStatus::Refused;usage_refusal=Some(error.message);return None;}
+            }};
+            {
+                let state=self.routes.state.lock().await;
+                let current=routes::task_route(&store,actor,&request.binding.task_id).await.ok()?;
+                if self.actor(connection).ok()? != actor || cancellation.is_cancelled() || !state.pending.contains_key(&invocation_id)
+                    || current.revision.get()!=request.binding.route_revision || current.stale_configuration
+                    || current.current.as_ref().and_then(|s| state.credential(actor.principal_id,&s.configuration))!=Some(request.binding.credential_generation) { return None; }
+            }
             #[cfg(test)]
             let fixture_pause = self.routes.state.lock().await.fixture_pause.clone();
             #[cfg(test)]
@@ -334,33 +469,50 @@ impl InquelloRequestProcessor {
             let fixture_response = self.routes.state.lock().await.fixture_response.clone();
             #[cfg(test)]
             if let Some(text) = fixture_response {
+                let terminal = {let mut state=self.routes.state.lock().await;state.fixture_dispatches+=1;
+                    if request.binding.route_id=="codex-responses" {state.fixture_bodies.push(responses_review_body(&request).ok()?);}
+                    if state.fixture_failure {EventKind::Failed {error:inquello_protocol::inference::ErrorKind::Transport,retryable:true,completion_uncertain:true}}
+                    else {EventKind::Completed {reason:StopReason::EndTurn,provider_reason:Some("fixture".into())}}};
                 let (tx, rx) = tokio::sync::mpsc::channel(4);
                 for (sequence, event) in [EventKind::Started, EventKind::TextDelta { block_index: 0, text },
-                    EventKind::Completed { reason: StopReason::EndTurn, provider_reason: Some("fixture".into()) }].into_iter().enumerate() {
+                    EventKind::UsageUpdate {usage:inquello_protocol::inference::Usage {input_tokens:Some(3),output_tokens:Some(2),origin:Some("synthetic-fixture".into()),..Default::default()}},terminal].into_iter().enumerate() {
                     tx.send(Event { binding: request.binding.clone(), sequence: sequence as u64,
-                        provider_request_id: None, provider_message_id: None, event }).await.ok()?;
+                        provider_request_id: None, provider_message_id: Some(format!("fixture-output-{}",request.binding.attempt_id)), event }).await.ok()?;
                 }
                 drop(tx);
-                return collect_verdict(rx, &request, &cancellation).await;
+                return collect_verdict(rx, &request, &cancellation, &store, actor, &mut usage_status, &mut usage_output).await;
+            }
+            // A debug-fixture regression must fail, never reach a real provider.
+            #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+            {
+                let mut state=self.routes.state.lock().await;
+                if let Some(fixture)=state.usage_fixture.as_mut().filter(|f|f.task==request.binding.task_id) {
+                    fixture.provider_calls+=1;
+                    return None;
+                }
             }
             let events = match request.binding.route_id.as_str() {
                 "claude-api-key" => {
                     let lease = self.routes.auth.lease(&request.binding).ok()?;
                     MessagesClient::production().ok()?.stream_with_cancellation(request.clone(), lease, cancellation.clone()).await.ok()?
                 }
-                "codex-responses" => self.routes.responses.as_ref()?.stream(request.clone(), cancellation.clone()).await.ok()?,
+                "codex-responses" => self.routes.responses.as_ref()?.stream(request.clone(), cancellation.clone(), expected_account.as_ref()).await.ok()?,
                 _ => return None,
             };
-            collect_verdict(events, &request, &cancellation).await
+            collect_verdict(events, &request, &cancellation, &store, actor, &mut usage_status, &mut usage_output).await
         };
         let verdict = tokio::select! { biased; _ = cancellation.cancelled() => None,
             verdict = tokio::time::timeout(std::time::Duration::from_secs(30), run) => verdict.ok().flatten() };
+        let limit_refused = usage_status == AttemptStatus::Refused;
+        store.finish_usage_attempt(actor.principal_id,original.task_id,&request.binding.attempt_id,FinishAttempt {
+            status:usage_status,ended_at_ms:SystemClock.now().unix_millis(),elapsed_ms:began.elapsed().as_millis().try_into().unwrap_or(u64::MAX),output_ref:usage_output,
+        }).await.map_err(domain_error)?;
         let mut state = self.routes.state.lock().await;
         let current = execution_policy::permission_request(&store, actor, &original.request_id.to_string()).await.map_err(domain_error)?;
         let Some(verdict) = verdict else {
             state.pending.remove(&invocation_id);
             cancellation.cancel();
-            return Ok(Some(review_response("human_required", "Automatic review unavailable or malformed; human permission required", &current, None).into()));
+            return Ok(Some(review_response("human_required", if limit_refused {usage_refusal.as_deref().unwrap_or("Inherited provider limit refused further work; any partial usage is retained. Inspect provider account usage or use permitted human permission; no fallback or credit spend")} else {"Automatic review unavailable or malformed; human permission required. Uncertain work is retained and is not automatically retried"}, &current, None).into()));
         };
         if cancellation.is_cancelled() || !state.pending.contains_key(&invocation_id) {
             return Ok(Some(review_response("human_required", "Automatic review became stale; no verdict applied", &current, None).into()));
@@ -369,6 +521,9 @@ impl InquelloRequestProcessor {
         state.ready.insert(request_id, ReadyReview { actor, original, authority, invocation_id, attribution,
             cancellation, verdict, data_tier: params.data_tier, expires_at: SystemClock.now().unix_millis() + 30_000 });
         Ok(Some(review_response("ready", "Runtime review complete; fresh authority is required before applying its verdict", &current, None).into()))
+        }.await;
+        pending_guard.settle(result.is_ok()).await;
+        result
     }
 
     /// Phase two never takes a verdict or handle. Main refreshes its service
@@ -413,7 +568,7 @@ impl InquelloRequestProcessor {
             return Ok(Some(review_response("refused", "Current controlling policy refuses this action", &current, None).into()));
         }
         if let Some(selected) = &task.current
-            && selected.configuration.route_id() == RouteId::CodexResponses && !self.fixture_enabled(&state) {
+            && selected.configuration.route_id() == RouteId::CodexResponses && !self.fixture_enabled(&state) && !self.usage_fixture_for_task(&state,&current.task_id.to_string()) {
             let Some(responses) = &self.routes.responses else { return Ok(Some(review_response("human_required", "Inherited route unavailable", &current, None).into())); };
             if responses.check_configuration(&selected.configuration).is_err() {
                 return Ok(Some(review_response("human_required", "Inherited authentication changed; no verdict applied", &current, None).into()));
@@ -446,3 +601,37 @@ fn review_response(status: &str, reason: &str, request: &execution_policy::Permi
 #[cfg(test)]
 #[path = "inquello_reviewer_tests.rs"]
 mod tests;
+
+struct PendingInvocation {
+ state:std::sync::Arc<tokio::sync::Mutex<ReviewState>>, id:String, cancellation:CancellationToken, armed:bool,
+}
+impl PendingInvocation {
+ async fn settle(mut self,success:bool) {
+  let mut state=self.state.lock().await;
+  let ready=success&&state.ready.values().any(|r|r.invocation_id==self.id);
+  if !ready {self.cancellation.cancel();state.pending.remove(&self.id);state.ready.retain(|_,r|r.invocation_id!=self.id);}
+  self.armed=false;
+ }
+}
+impl Drop for PendingInvocation {
+ fn drop(&mut self) {
+  if !self.armed {return;}
+  self.cancellation.cancel();let state=self.state.clone();let id=self.id.clone();
+  if let Ok(runtime)=tokio::runtime::Handle::try_current() {runtime.spawn(async move {let mut state=state.lock().await;state.pending.remove(&id);state.ready.retain(|_,r|r.invocation_id!=id);});}
+ }
+}
+
+/// Retained Responses cache counters are non-null i64 values whose deserializer
+/// uses unwrap_or_default. Positive values prove reported consumption; zero does
+/// not distinguish an explicit zero from an omitted field, and remains unknown.
+fn reported_cache_tokens(value: i64) -> Option<u64> {
+    u64::try_from(value).ok().filter(|value| *value > 0)
+}
+#[cfg(test)]
+mod cache_counter_tests {
+    #[test] fn positive_is_reported_but_default_zero_and_negative_are_unknown() {
+        assert_eq!(super::reported_cache_tokens(42),Some(42));
+        assert_eq!(super::reported_cache_tokens(0),None);
+        assert_eq!(super::reported_cache_tokens(-1),None);
+    }
+}

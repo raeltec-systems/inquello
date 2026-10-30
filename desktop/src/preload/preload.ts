@@ -75,7 +75,20 @@ const ROUTES_CHANGED_CHANNEL = 'inquello:routes-changed';
 const ENVIRONMENTS_TASK_CHANNEL = 'inquello:op:environments.forTask';
 const ENVIRONMENTS_CHANGED_CHANNEL = 'inquello:environments-changed';
 
+const USAGE_TASK_CHANNEL = 'inquello:op:usage.forTask';
+const USAGE_SET_CHANNEL = 'inquello:op:usage.set';
+const USAGE_CHANGED_CHANNEL = 'inquello:usage-changed';
+
 const api = Object.freeze({
+  usage: Object.freeze({
+    forTask: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(USAGE_TASK_CHANNEL, ...args),
+    set: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(USAGE_SET_CHANNEL, ...args),
+    onChanged: (listener: (privateScope: boolean) => void): (() => void) => {
+      if (typeof listener !== 'function') throw new Error('expected a listener');
+      const handler = (_event: unknown, privateScope: unknown) => listener(privateScope === true); ipcRenderer.on(USAGE_CHANGED_CHANNEL, handler);
+      return () => ipcRenderer.removeListener(USAGE_CHANGED_CHANNEL, handler);
+    },
+  }),
   environments: Object.freeze({
     forTask: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ENVIRONMENTS_TASK_CHANNEL, ...args),
     onChanged: (listener: () => void): (() => void) => {

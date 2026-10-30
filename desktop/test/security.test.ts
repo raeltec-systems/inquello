@@ -228,6 +228,8 @@ describe('operation registry', () => {
   let providerCalls: string[];
   let organiseCalls: string[];
   let policyCalls: string[];
+  const usageRead = vi.fn(async (_taskId: string) => ({ok:false as const,code:'unavailable' as const,reason:'Private Task unavailable'}));
+  const usageSet = vi.fn(async (_input: import('../src/main/usage/types').SetUsageInput) => ({ok:false as const,code:'unavailable' as const,reason:'Private Task unavailable'}));
   const environmentRead = vi.fn(async (_taskId: string) => ({ok:false as const,reason:'Private Task unavailable'}));
   let logger: ReturnType<typeof recordingLogger>;
 
@@ -238,7 +240,7 @@ describe('operation registry', () => {
     providerCalls = [];
     organiseCalls = [];
     policyCalls = [];
-    environmentRead.mockClear();
+    environmentRead.mockClear(); usageRead.mockClear(); usageSet.mockClear();
     logger = recordingLogger();
     const operations = createOperations({
       runtimeState: () => {
@@ -252,6 +254,7 @@ describe('operation registry', () => {
       organise: fakeOrganise(organiseCalls),
       policy: fakePolicy(policyCalls),
       environments: {forTask: environmentRead},
+      usage: {forTask: usageRead, set: usageSet},
     });
     registerOperations(ipc, operations, { trustedWebContentsIds: new Set([1]), logger });
   });
@@ -367,6 +370,7 @@ describe('operation registry', () => {
 
   it('registers exactly one fixed channel per named operation', () => {
     expect(OPERATION_NAMES).toEqual([
+      'usage.forTask', 'usage.set',
       'environments.forTask',
       'routes.list', 'routes.configure', 'routes.forTask', 'routes.select',
       'capabilities.getInventory',
@@ -417,6 +421,19 @@ describe('operation registry', () => {
     const taskId = '22222222-2222-4222-8222-222222222222';
     await expect(ipc.invoke(channelFor('environments.forTask'), trustedEvent, {taskId})).resolves.toEqual({ok:false,reason:'Private Task unavailable'});
     expect(environmentRead).toHaveBeenCalledExactlyOnceWith(taskId);
+  });
+
+  it('usage read/set reject arbitrary recording and foreign frames before dispatch', async () => {
+    const taskId='22222222-2222-4222-8222-222222222222';
+    const input={taskId,operationId:taskId,expectedRevision:0,routeRevision:1,reasoning:'default',speed:'default'};
+    for(const bad of [{...input,usage:{input_tokens:3}},{...input,principalId:'other'},{...input,speed:'sk-secret'},{...input,expectedRevision:-1}]) await expect(ipc.invoke(channelFor('usage.set'),trustedEvent,bad)).rejects.toThrow('invalid payload');
+    await expect(ipc.invoke(channelFor('usage.forTask'),trustedEvent,{taskId,events:[]})).rejects.toThrow('invalid payload');
+    const foreign={...trustedEvent,sender:{id:999,mainFrame}};
+    await expect(ipc.invoke(channelFor('usage.set'),foreign,input)).rejects.toThrow();
+    await expect(ipc.invoke(channelFor('usage.forTask'),foreign,{taskId})).rejects.toThrow();
+    expect(usageRead).not.toHaveBeenCalled();expect(usageSet).not.toHaveBeenCalled();
+    await ipc.invoke(channelFor('usage.forTask'),trustedEvent,{taskId});await ipc.invoke(channelFor('usage.set'),trustedEvent,input);
+    expect(usageRead).toHaveBeenCalledExactlyOnceWith(taskId);expect(usageSet).toHaveBeenCalledExactlyOnceWith(input);
   });
 
   it('runtime.getStatus returns state and runtime version', async () => {
@@ -844,6 +861,13 @@ describe('preload', () => {
     expect(listener).toHaveBeenCalledWith();
     unsubscribe();
     expect(removeListener).toHaveBeenCalledWith('inquello:capabilities-changed',on.mock.calls[0]![1]);
+    const usageChanged = (api as {usage:{onChanged(listener:()=>void):()=>void}}).usage.onChanged;
+    const usageListener = vi.fn(); const unsubUsage = usageChanged(usageListener);
+    const usageHandler = on.mock.calls.find(call => call[0] === 'inquello:usage-changed')![1];
+    usageHandler({secret:'not forwarded'}, {prompt:'not forwarded'});
+    expect(usageListener).toHaveBeenCalledWith(false);
+    usageHandler({}, true); expect(usageListener).toHaveBeenLastCalledWith(true); unsubUsage();
+    expect(removeListener).toHaveBeenCalledWith('inquello:usage-changed', usageHandler);
     type Op = (...args: unknown[]) => Promise<unknown>;
     const typed = api as {
       runtime: { getStatus: Op };
@@ -959,15 +983,15 @@ describe('host privilege source scan', () => {
     const body = preload.replace(/^import .* from 'electron';$/m, '');
     const uses = body.match(/ipcRenderer[^\n]*/g) ?? [];
     expect(uses.length).toBeGreaterThan(0);
-    for (const use of uses) expect(use).toMatch(/^ipcRenderer\.(?:invoke\([A-Z_]+_CHANNEL(?:, \.\.\.args)?\)|(?:on|removeListener)\((?:CAPABILITIES|ROUTES|ENVIRONMENTS)_CHANGED_CHANNEL, handler\))/);
+    for (const use of uses) expect(use).toMatch(/^ipcRenderer\.(?:invoke\([A-Z_]+_CHANNEL(?:, \.\.\.args)?\)|(?:on|removeListener)\((?:CAPABILITIES|ROUTES|ENVIRONMENTS|USAGE)_CHANGED_CHANNEL, handler\))/);
     // Only the data operations, the two provider operations that take what the user entered, and the organise, state, policy and permissions operations forward arguments.
-    expect((body.match(/_CHANNEL, \.\.\.args\)/g) ?? []).length).toBe(30);
+    expect((body.match(/_CHANNEL, \.\.\.args\)/g) ?? []).length).toBe(32);
     expect(
       body
         .match(/[A-Z_]+_CHANNEL, \.\.\.args\)/g)
-        ?.every((use) => use.startsWith('ENVIRONMENTS_') || use.startsWith('ROUTES_') || use.startsWith('CAPABILITIES_') || use.startsWith('DATA_') || use.startsWith('PROVIDER_SET_CLAUDE_KEY_') || use.startsWith('PROVIDER_CODEX_LOGIN_') || use.startsWith('ORGANISE_') || use.startsWith('STATE_') || use.startsWith('POLICY_') || use.startsWith('PERMISSIONS_')),
+        ?.every((use) => use.startsWith('USAGE_') || use.startsWith('ENVIRONMENTS_') || use.startsWith('ROUTES_') || use.startsWith('CAPABILITIES_') || use.startsWith('DATA_') || use.startsWith('PROVIDER_SET_CLAUDE_KEY_') || use.startsWith('PROVIDER_CODEX_LOGIN_') || use.startsWith('ORGANISE_') || use.startsWith('STATE_') || use.startsWith('POLICY_') || use.startsWith('PERMISSIONS_')),
     ).toBe(true);
-    expect(preload.replace('ipcRenderer.on(ENVIRONMENTS_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(CAPABILITIES_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(ROUTES_CHANGED_CHANNEL, handler)', '')).not.toMatch(/\.on\(|\.send\(|sendSync|postMessage/);
+    expect(preload.replace('ipcRenderer.on(USAGE_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(ENVIRONMENTS_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(CAPABILITIES_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(ROUTES_CHANGED_CHANNEL, handler)', '')).not.toMatch(/\.on\(|\.send\(|sendSync|postMessage/);
   });
 });
 

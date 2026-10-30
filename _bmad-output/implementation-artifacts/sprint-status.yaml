@@ -33,7 +33,7 @@
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 
 generated: 10-27-2026 19:11
-last_updated: 2026-10-30
+last_updated: '2026-10-30'
 project: inquello
 project_key: INQUELLO
 tracking_system: file-system
@@ -75,7 +75,7 @@ development_status:
   1-22-configure-initial-processing-routes-without-silent-fallback: in-progress
   # Desktop implementation verified; native/generator/seeded Electron gates remain blocked (see spec).
   1-23-show-local-execution-separately-from-inference: in-progress
-  1-24-choose-reasoning-and-inspect-attributable-usage: backlog
+  1-24-choose-reasoning-and-inspect-attributable-usage: in-progress # desktop verified; native/generation/combined limit-smoke gates remain (see support record)
   1-25-start-a-real-plain-text-private-task-on-a-configured-route: backlog
   1-26-follow-actual-basic-progress-and-truthful-results: backlog
   1-27-reject-untrusted-instructions-in-initial-tool-output: backlog

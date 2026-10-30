@@ -18,7 +18,8 @@ fn policy(on: bool) -> InquelloWorkspaceExecutionPolicy {
 }
 struct Fixture { _dir: TempDir, processor: std::sync::Arc<InquelloRequestProcessor>, task: String, request: String, route: RouteId }
 impl Fixture {
-    async fn new(route: RouteId, verified: bool) -> Self {
+    async fn new(route: RouteId, verified: bool) -> Self {Self::with_settings(route,verified,true).await}
+    async fn with_settings(route: RouteId, verified: bool, save_settings: bool) -> Self {
         let dir = ok(TempDir::new());
         let processor = std::sync::Arc::new(InquelloRequestProcessor::with_store_path(Some(dir.path().join("working.sqlite")), Vec::new()));
         let _: InquelloSetPrincipalResponse = decode(processor.set_principal(CONNECTION, InquelloSetPrincipalParams { principal_id: Some(PRINCIPAL.into()) }).await);
@@ -32,6 +33,7 @@ impl Fixture {
         ok(routes::configure_route(&store, &SystemClock, actor, ConfigureRoute { operation_id: "configure".into(), expected_revision: Revision::ZERO, configuration }).await);
         ok(routes::set_task_route(&store, &SystemClock, actor, SetTaskRoute { operation_id: "select".into(), expected_revision: Revision::ZERO,
             task_id: task.clone(), route_id: route.as_str().into(), configuration_revision: Revision::new(1) }).await);
+        if save_settings {ok(usage::set_task_usage_settings(&store,actor,usage::SetUsageSettings {operation_id:"save-defaults".into(),task_id:task.clone(),expected_revision:0,route_revision:1,choices:usage::Choices::default()}, &["default".into()], &["default".into()]).await);}
         let evaluation = ok(evaluate_task_command(&store, actor, &ok(workspace_layer(&policy(true))), &DeviceRequirements::default(), &UserConfig::default(), &task, &["/usr/bin/true".into()]).await).evaluation;
         let request = uuid::Uuid::new_v4().to_string();
         ok(execution_policy::request_permission(&store, &SystemClock, actor, execution_policy::RequestPermission {
@@ -93,6 +95,11 @@ async fn malformed_verdict_is_not_an_authorization_and_real_data_never_enabled()
             let f = Fixture::new(route, true).await;
             f.processor.routes.state.lock().await.fixture_response = Some(text.into());
             assert_eq!(f.review().await.status, "human_required");
+            let (store,actor)=ok(f.processor.context(CONNECTION).await);
+            let history=ok(usage::task_usage(&store,actor,&f.task).await);
+            assert_eq!(history.attempts[0].status,AttemptStatus::Failed);
+            assert_eq!(history.attempts[0].usage.input_tokens,Some(3));
+            assert!(f.processor.routes.state.lock().await.pending.is_empty());
         }
         let f = Fixture::new(route, true).await;
         let mut params = f.params(); params.data_tier = "real".into();
@@ -324,4 +331,172 @@ async fn configuration_check_under_lifecycle_lock_never_refreshes_auth_or_blocks
     ok(inherited.check_configuration(&selected.configuration));
     f.processor.routes.invalidate_principal(&mut state, actor.principal_id);
     assert!(state.credentials.is_empty());
+}
+
+#[tokio::test]
+async fn reviewer_attempts_keep_changed_settings_and_uncertain_failures() {
+    let f=Fixture::new(RouteId::CodexResponses,true).await;
+    assert_eq!(f.review().await.status,"ready");
+    let (store,actor)=ok(f.processor.context(CONNECTION).await);
+    ok(usage::set_task_usage_settings(&store,actor,usage::SetUsageSettings {operation_id:"higher".into(),task_id:f.task.clone(),expected_revision:1,route_revision:1,choices:usage::Choices {reasoning:"high".into(),speed:"default".into()}}, &["default".into(),"high".into()], &["default".into()]).await);
+    {let mut state=f.processor.routes.state.lock().await;f.processor.routes.cancel_task(&mut state,actor.principal_id,&f.task);state.fixture_response=Some("not a verdict".into());}
+    assert_eq!(f.review().await.status,"human_required");
+    let history=ok(usage::task_usage(&store,actor,&f.task).await);
+    assert_eq!(history.attempts.len(),2);
+    assert!(history.attempts.iter().any(|a| a.snapshot.requested.reasoning=="high"));
+    assert!(history.attempts.iter().any(|a| a.snapshot.requested.reasoning=="default" && a.snapshot.effective.reasoning=="low"));
+    assert!(history.attempts.iter().all(|a| a.usage.input_tokens==Some(3) && a.output_ref.is_some()));
+    assert!(history.attempts.iter().all(|a| a.snapshot.operation_kind==usage::OperationKind::AutomatedPermissionReview));
+}
+
+#[tokio::test]
+async fn inherited_limit_and_unknown_required_check_dispatch_nothing() {
+    for allowed in [None,Some(false)] {
+        let f=Fixture::new(RouteId::CodexResponses,true).await;
+        f.processor.routes.state.lock().await.fixture_limit=Some(allowed);
+        let result=f.review().await;
+        assert_eq!(result.status,"human_required");
+        assert!(result.reason.unwrap().contains("Codex ordinary usage"));
+        assert_eq!(f.processor.routes.state.lock().await.fixture_dispatches,0);
+        let (store,actor)=ok(f.processor.context(CONNECTION).await);
+        let history=ok(usage::task_usage(&store,actor,&f.task).await);
+        assert_eq!(history.attempts.len(),1);assert_eq!(history.attempts[0].status,AttemptStatus::Refused);
+        assert_eq!(history.attempts[0].usage.input_tokens,None);
+    }
+}
+#[tokio::test]
+async fn partial_failure_keeps_native_usage_and_does_not_retry() {
+    let f=Fixture::new(RouteId::ClaudeApiKey,true).await;
+    f.processor.routes.state.lock().await.fixture_failure=true;
+    assert_eq!(f.review().await.status,"human_required");
+    assert_eq!(f.processor.routes.state.lock().await.fixture_dispatches,1);
+    let (store,actor)=ok(f.processor.context(CONNECTION).await);
+    let history=ok(usage::task_usage(&store,actor,&f.task).await);
+    assert_eq!(history.attempts[0].status,AttemptStatus::Uncertain);
+    assert_eq!(history.attempts[0].usage.input_tokens,Some(3));
+    assert_eq!(history.attempts[0].usage.output_tokens,Some(2));
+    assert!(history.attempts[0].output_ref.is_some());
+}
+
+#[tokio::test]
+async fn other_boot_inspection_is_uncertain_without_finalizing_concurrent_owner() {
+    let f=Fixture::new(RouteId::ClaudeApiKey,true).await;
+    let actor=ok(f.processor.usage_actor(CONNECTION));
+    let observer=ok(f.processor.tool_usage_begin(CONNECTION,actor,&f.task).await);
+    let current:InquelloUsageResponse=decode(f.processor.usage_read(CONNECTION,InquelloUsageReadParams {task_id:f.task.clone()}).await);
+    assert_eq!(current.usage["attempts"][0]["status"],"running");
+    let other=InquelloRequestProcessor::with_store_path(f.processor.store_path.clone(),vec![]);
+    let _:InquelloSetPrincipalResponse=decode(other.set_principal(CONNECTION,InquelloSetPrincipalParams {principal_id:Some(PRINCIPAL.into())}).await);
+    let reopened:InquelloUsageResponse=decode(other.usage_read(CONNECTION,InquelloUsageReadParams {task_id:f.task.clone()}).await);
+    assert_eq!(reopened.usage["attempts"][0]["status"],"uncertain");
+    let (store,actor)=ok(f.processor.context(CONNECTION).await);
+    assert_eq!(ok(usage::task_usage(&store,actor,&f.task).await).attempts[0].status,AttemptStatus::Running);
+    observer.finish(AttemptStatus::Completed).await;
+    let late:InquelloUsageResponse=decode(other.usage_read(CONNECTION,InquelloUsageReadParams {task_id:f.task.clone()}).await);
+    assert_eq!(late.usage["attempts"][0]["status"],"completed");
+    assert_eq!(late.usage["attempts"][0]["usage"]["input_tokens"],serde_json::Value::Null);
+}
+#[tokio::test]
+async fn tool_observer_rechecks_identity_after_wait_and_commits_before_completion() {
+    let f=Fixture::new(RouteId::ClaudeApiKey,true).await;
+    let actor=ok(f.processor.usage_actor(CONNECTION));
+    let observer=ok(f.processor.tool_usage_begin(CONNECTION,actor,&f.task).await);
+    ok(observer.recheck().await);
+    let _:InquelloSetPrincipalResponse=decode(f.processor.set_principal(CONNECTION,InquelloSetPrincipalParams {principal_id:None}).await);
+    assert!(observer.recheck().await.is_err());
+    observer.finish(AttemptStatus::Refused).await;
+    let store=ok(f.processor.store().await);
+    let history=ok(usage::task_usage(&store,actor,&f.task).await);
+    assert_eq!(history.attempts[0].status,AttemptStatus::Refused);
+    assert!(history.attempts[0].elapsed_ms.is_some());
+}
+
+#[tokio::test]
+async fn settings_change_affects_next_attempt_not_inflight_snapshot() {
+    let f=Fixture::new(RouteId::CodexResponses,true).await;
+    let started=std::sync::Arc::new(tokio::sync::Notify::new());
+    let release=std::sync::Arc::new(tokio::sync::Notify::new());
+    f.processor.routes.state.lock().await.fixture_pause=Some((started.clone(),release.clone()));
+    let processor=f.processor.clone();let params=f.params();
+    let review=tokio::spawn(async move {processor.permissions_review(CONNECTION,params,DeviceRequirements::default(),UserConfig::default()).await});
+    started.notified().await;
+    let _:InquelloUsageResponse=decode(f.processor.usage_set(CONNECTION,InquelloUsageSetParams {task_id:f.task.clone(),operation_id:"new-settings".into(),expected_revision:1,route_revision:1,reasoning:"high".into(),speed:"default".into()}).await);
+    release.notify_one();
+    let first:InquelloPermissionsReviewResponse=decode(ok(review.await));assert_eq!(first.status,"ready");
+    {let mut state=f.processor.routes.state.lock().await;state.fixture_pause=None;let actor=ok(f.processor.usage_actor(CONNECTION));f.processor.routes.cancel_task(&mut state,actor.principal_id,&f.task);}
+    assert_eq!(f.review().await.status,"ready");
+    let (store,actor)=ok(f.processor.context(CONNECTION).await);
+    let history=ok(usage::task_usage(&store,actor,&f.task).await);
+    assert_eq!(history.attempts.len(),2);
+    assert!(history.attempts.iter().any(|a|a.snapshot.requested.reasoning=="default"&&a.status==AttemptStatus::Completed));
+    assert!(history.attempts.iter().any(|a|a.snapshot.requested.reasoning=="high"&&a.status==AttemptStatus::Completed));
+}
+
+#[tokio::test]
+async fn failed_review_preparation_releases_pending_and_explicit_retry_works() {
+ let f=Fixture::with_settings(RouteId::CodexResponses,true,false).await;
+ assert!(f.processor.permissions_review(CONNECTION,f.params(),DeviceRequirements::default(),UserConfig::default()).await.is_err());
+ assert!(f.processor.routes.state.lock().await.pending.is_empty());
+ let (store,actor)=ok(f.processor.context(CONNECTION).await);
+ ok(usage::set_task_usage_settings(&store,actor,usage::SetUsageSettings {operation_id:"correct-defaults".into(),task_id:f.task.clone(),expected_revision:0,route_revision:1,choices:usage::Choices::default()}, &["default".into()], &["default".into()]).await);
+ f.processor.routes.state.lock().await.fixture_capability_failure=true;
+ assert!(f.processor.permissions_review(CONNECTION,f.params(),DeviceRequirements::default(),UserConfig::default()).await.is_err());
+ assert!(f.processor.routes.state.lock().await.pending.is_empty());
+ f.processor.routes.state.lock().await.fixture_capability_failure=false;
+ assert_eq!(f.review().await.status,"ready");
+ assert_eq!(f.processor.routes.state.lock().await.pending.len(),1);
+}
+#[tokio::test]
+async fn settings_capabilities_cannot_cross_route_revision_during_wait() {
+ let f=Fixture::new(RouteId::CodexResponses,true).await;
+ let started=std::sync::Arc::new(tokio::sync::Notify::new());let release=std::sync::Arc::new(tokio::sync::Notify::new());
+ f.processor.routes.state.lock().await.fixture_caps_pause=Some((started.clone(),release.clone()));
+ let processor=f.processor.clone();let task=f.task.clone();
+ let save=tokio::spawn(async move {processor.usage_set(CONNECTION,InquelloUsageSetParams {task_id:task,operation_id:"racing-settings".into(),expected_revision:1,route_revision:2,reasoning:"high".into(),speed:"default".into()}).await});
+ started.notified().await;
+ let (store,actor)=ok(f.processor.context(CONNECTION).await);
+ ok(routes::set_task_route(&store,&SystemClock,actor,SetTaskRoute {operation_id:"reselect-race".into(),expected_revision:Revision::new(1),task_id:f.task.clone(),route_id:"codex-responses".into(),configuration_revision:Revision::new(1)}).await);
+ release.notify_one();assert!(ok(save.await).is_err());
+ assert_eq!(ok(usage::task_usage(&store,actor,&f.task).await).settings.unwrap().revision,1);
+}
+#[tokio::test]
+async fn actual_responses_body_uses_snapshot_resolved_and_explicit_choices() {
+ let f=Fixture::new(RouteId::CodexResponses,true).await;assert_eq!(f.review().await.status,"ready");
+ // Retire the ready review without applying a verdict so a fresh explicit request can be made.
+ {let mut state=f.processor.routes.state.lock().await;let actor=ok(f.processor.usage_actor(CONNECTION));f.processor.routes.cancel_task(&mut state,actor.principal_id,&f.task);}
+ let (store,actor)=ok(f.processor.context(CONNECTION).await);
+ ok(usage::set_task_usage_settings(&store,actor,usage::SetUsageSettings {operation_id:"explicit-wire".into(),task_id:f.task.clone(),expected_revision:1,route_revision:1,choices:usage::Choices {reasoning:"high".into(),speed:"priority".into()}}, &["default".into(),"high".into()], &["default".into(),"priority".into()]).await);
+ assert_eq!(f.review().await.status,"ready");
+ let state=f.processor.routes.state.lock().await;assert_eq!(state.fixture_bodies.len(),2);
+ assert_eq!(state.fixture_bodies[0]["reasoning"]["effort"],"low");assert!(state.fixture_bodies[0].get("service_tier").is_none());
+ assert_eq!(state.fixture_bodies[1]["reasoning"]["effort"],"high");assert_eq!(state.fixture_bodies[1]["service_tier"],"priority");
+ let history=ok(usage::task_usage(&store,actor,&f.task).await);
+ for record in history.attempts {let body=if record.snapshot.requested.reasoning=="default" {&state.fixture_bodies[0]} else {&state.fixture_bodies[1]};assert_eq!(body["reasoning"]["effort"],record.snapshot.effective.reasoning);assert_eq!(body.get("service_tier").and_then(|v|v.as_str()).unwrap_or("default"),record.snapshot.effective.speed);assert_eq!(body["max_output_tokens"],512);}
+}
+
+#[tokio::test]
+async fn api_key_quota_is_unsupported_without_chatgpt_read_and_binding_is_generation_scoped() {
+ let mut f=Fixture::new(RouteId::CodexResponses,true).await;
+ let provider=codex_model_provider::create_model_provider(codex_model_provider_info::ModelProviderInfo::create_openai_provider(None),Some(codex_login::AuthManager::from_auth_for_testing(codex_login::CodexAuth::from_api_key("isolated-synthetic-key"))));
+ std::sync::Arc::get_mut(&mut f.processor).expect("unique fixture").routes.responses=Some(InheritedResponses {provider,factory:codex_http_client::HttpClientFactory::new(codex_http_client::OutboundProxyPolicy::ReqwestDefault)});
+ // No account request sources: accidentally querying ChatGPT would refuse.
+ let binding=ok(f.processor.usage_limit_check("codex-responses",&f.task).await).expect("binding");assert_eq!(binding.mode,codex_protocol::auth::AuthMode::ApiKey);assert_eq!(binding.account_id,None);
+ let inherited=f.processor.routes.responses.as_ref().unwrap();assert!(inherited.binding_current(&binding));
+ let mut changed=binding.clone();changed.generation+=1;assert!(!inherited.binding_current(&changed));changed=binding.clone();changed.mode=codex_protocol::auth::AuthMode::Chatgpt;assert!(!inherited.binding_current(&changed));
+ let view:InquelloUsageResponse=decode(f.processor.usage_read(CONNECTION,InquelloUsageReadParams {task_id:f.task.clone()}).await);assert_eq!(view.limits["status"],"unsupported");assert!(view.limits["source"].as_str().unwrap().contains("API key"));assert_eq!(f.processor.routes.state.lock().await.fixture_dispatches,0);
+}
+#[tokio::test]
+async fn missing_inherited_auth_refuses_instead_of_inventing_api_key_or_codex_quota() {
+ let f=Fixture::new(RouteId::CodexResponses,true).await;assert!(f.processor.usage_limit_check("codex-responses",&f.task).await.is_err());assert_eq!(f.processor.routes.state.lock().await.fixture_dispatches,0);
+}
+#[tokio::test]
+async fn tool_manager_setup_error_is_durable_before_error_response() {
+ let f=Fixture::new(RouteId::ClaudeApiKey,true).await;let actor=ok(f.processor.usage_actor(CONNECTION));let observer=ok(f.processor.tool_usage_begin(CONNECTION,actor,&f.task).await);
+ let cwd=ok(codex_utils_absolute_path::AbsolutePathBuf::current_dir());
+ let exec_request=codex_core::sandboxing::ExecRequest::new(vec!["never-executed".into()],cwd.clone(),std::collections::HashMap::new(),None,None,codex_core::exec::ExecExpiration::DefaultTimeout,codex_core::exec::ExecCapturePolicy::ShellTool,codex_sandboxing::SandboxType::WindowsRestrictedToken,vec![cwd],codex_protocol::config_types::WindowsSandboxLevel::Disabled,codex_protocol::models::PermissionProfile::read_only(),None);
+ let (tx,_rx)=tokio::sync::mpsc::channel(1);
+ let error=crate::command_exec::CommandExecManager::default().start(crate::command_exec::StartCommandExecParams {usage:Some(observer),outgoing:std::sync::Arc::new(crate::outgoing_message::OutgoingMessageSender::new(tx,codex_analytics::AnalyticsEventsClient::disabled())),request_id:crate::outgoing_message::ConnectionRequestId {connection_id:CONNECTION,request_id:RequestId::Integer(999)},process_id:None,exec_request,started_network_proxy:None,tty:true,stream_stdin:false,stream_stdout_stderr:false,output_bytes_cap:None,size:None}).await;
+ assert!(error.is_err());
+ // No eventual assertion: the same real manager error path must await persistence.
+ let (store,actor)=ok(f.processor.context(CONNECTION).await);let history=ok(usage::task_usage(&store,actor,&f.task).await);assert_eq!(history.attempts[0].status,AttemptStatus::Uncertain);assert!(history.attempts[0].ended_at_ms.is_some());assert_eq!(history.attempts[0].usage.input_tokens,None);
 }

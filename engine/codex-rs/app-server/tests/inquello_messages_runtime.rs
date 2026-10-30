@@ -96,3 +96,37 @@ async fn messages_turn_executes_inside_app_server_process_and_real_sandbox_bound
     assert_eq!(last["type"],"tool_result"); assert_eq!(requests[1]["system"],json!([]));
     server.shutdown_gracefully().await.expect("shutdown");
 }
+
+/// Same default-off native fixture scenario used by the seeded mounted desktop
+/// smoke. All transport traps remain inside the child; no paid provider is called.
+#[tokio::test(flavor="multi_thread", worker_threads=4)]
+async fn usage_limit_fixture_refuses_at_native_boundary_and_preserves_local_work() {
+    let directory=tempfile::tempdir().expect("directory");
+    let home=directory.path().join("runtime");std::fs::create_dir(&home).expect("home");
+    let database=directory.path().join("working.sqlite");
+    let binary=std::env::var_os("INQUELLO_FIXTURE_APP_SERVER_BIN").map(std::path::PathBuf::from).expect("separately built debug fixture binary");
+    let mut server=TestAppServer::builder().with_program(&binary).with_codex_home(&home).without_auto_env()
+        .with_env_overrides(&[("INQUELLO_WORKING_STORE",database.to_str()),("OPENAI_API_KEY",None),("ANTHROPIC_API_KEY",None)])
+        .build_initialized().await.expect("actual fixture child");
+    rpc(&mut server,"inquello/session/setPrincipal",json!({"principalId":ALICE})).await;
+    let created=rpc(&mut server,"inquello/task/create",json!({"operationId":"usage-create","expectedRevision":0,"workspaceId":WORKSPACE,"engagementId":null,"folderId":null,"title":"Synthetic quota fixture"})).await;
+    let task=created["task"]["taskId"].as_str().expect("Task").to_owned();
+    rpc(&mut server,"inquello/routes/configure",json!({"operationId":"usage-configure","expectedRevision":0,"configuration":{"routeId":"codex-responses","deployment":"openai-api","model":"fixture-model-20261030","apiVersion":"responses-v1","accountRef":ALICE,"region":null}})).await;
+    rpc(&mut server,"inquello/routes/task/set",json!({"operationId":"usage-select","expectedRevision":0,"taskId":task,"routeId":"codex-responses","configurationRevision":1})).await;
+    let policy=json!({"workspaceId":WORKSPACE,"policyRevision":1,"authorizationEpoch":1,"execution":{"command_rules":[{"prefix":["/usr/bin/true"],"decision":"allow"}]}});
+    let scenario=|phase:&str|json!({"scenario":"usage-limit","phase":phase,"taskId":task,"workspacePolicy":policy});
+    assert_eq!(rpc(&mut server,"inquello/fixture/messagesTurn",scenario("prepare")).await["providerCalls"],0);
+    rpc(&mut server,"inquello/usage/set",json!({"operationId":"usage-defaults","expectedRevision":0,"routeRevision":1,"taskId":task,"reasoning":"default","speed":"default"})).await;
+    let folder=directory.path().join("tasks").join(&task);std::fs::create_dir_all(folder.join("output")).expect("folder");
+    let tool=rpc(&mut server,"inquello/tools/exec",json!({"workspacePolicy":policy,"taskId":task,"taskFolder":folder,"command":["/usr/bin/true"],"timeoutMs":5000})).await;
+    assert_eq!(tool["exitCode"],0,"local tool is not blocked by model quota");
+    let refused=rpc(&mut server,"inquello/fixture/messagesTurn",scenario("refuse")).await;
+    assert_eq!(refused["refused"],true);assert_eq!(refused["providerCalls"],0);assert_eq!(refused["retainedAttempts"],1);
+    let usage=rpc(&mut server,"inquello/usage/read",json!({"taskId":task})).await;
+    assert_eq!(usage["limits"]["status"],"exhausted");
+    let attempts=usage["usage"]["attempts"].as_array().expect("history");assert_eq!(attempts.len(),2);
+    assert!(attempts.iter().any(|a|a["status"]=="completed"&&a["snapshot"]["operation_kind"]=="local-tool"));
+    assert!(attempts.iter().any(|a|a["status"]=="refused"&&a["usage"]["input_tokens"].is_null()));
+    assert_eq!(rpc(&mut server,"inquello/fixture/messagesTurn",scenario("clear")).await["accepted"],true);
+    server.shutdown_gracefully().await.expect("shutdown");
+}

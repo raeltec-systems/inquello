@@ -478,3 +478,28 @@ ran. Effects may already exist; the UI warns against blind retries and withholds
 private outputs. Ordinary route polling preserves focused controls, while Task
 invalidation clears private facts. Sandbox-probe settlement notifies the panel.
 The actual-panel/production-notification seeded smoke is authored but unrun here.
+
+
+## Story 1.24 — reasoning choices and attributable usage (2026-10-30)
+
+Source now includes private versioned settings, migration 0008 usage history,
+native reviewer and actual tool-completion accounting, authoritative selected-model
+choices and inherited current-account Codex quota checks. Messages exposes defaults
+only. Unknown consumption stays unknown; no budgets, prices, reserve fallback,
+automatic credit spending, provider fallback or billing reconciliation were added.
+The existing working-store governance/export/deletion boundary covers these records.
+
+The desktop named IPC and Task panel passed build/three TypeScript checks and 250
+focused/regression tests. Full suite had 1108 passing, 3 failing and 5 skipped tests;
+missing native binaries, design imports, Git metadata and incomplete generated files
+remain gates. Cargo/rustfmt are unavailable; native tests are authored but unrun.
+The genuine generator was attempted and refused the non-Git snapshot before writes;
+all 48 available generated files and schema stamp remain pinned-blob-identical.
+
+Native tool completion persistence precedes its RPC response/desktop notification.
+Other-boot unfinished records display uncertain without finalizing a concurrent
+owner or replaying work. Combined seeded native-quota-to-mounted-panel smoke and its native child fixture
+test are now authored using the existing default-off debug fixture dispatcher,
+with zero-provider-dispatch and retained-work assertions. Seeded mounted defaults,
+local-tool history and native limit-refusal smoke remain unrun. See `story-1-24-usage-support.md` for precise evidence and owner-run gates.
+Story stays **in-progress**; prior 1.21–1.23 eligibility/native gates are unchanged.

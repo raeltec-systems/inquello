@@ -1081,3 +1081,29 @@ pub struct InquelloPermissionsReviewResponse {
     pub request: InquelloPermissionRequest,
     pub receipt: Option<InquelloReceipt>,
 }
+
+// Story 1.24: only read and settings commands cross RPC. Native consumption is
+// never accepted from a renderer. The source-owned view is bounded and redacted.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct InquelloUsageReadParams { pub task_id: String }
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct InquelloUsageSetParams {
+    pub task_id: String, pub operation_id: String,
+    #[ts(type = "number")] pub expected_revision: u64,
+    #[ts(type = "number")] pub route_revision: u64,
+    pub reasoning: String, pub speed: String,
+}
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloUsageResponse {
+    pub task_id: String,
+    /// Source-owned bounded usage view; contains no prompts, keys or tool output.
+    pub usage: serde_json::Value,
+    pub capabilities: serde_json::Value,
+    pub limits: serde_json::Value,
+}

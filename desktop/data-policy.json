@@ -294,7 +294,7 @@
       "access": "runtime",
       "export": { "mode": "included" },
       "deletion": "Delete Private work organisation in Local data (the runtime is stopped, the files are removed, then the runtime restarts with an empty working store)",
-      "recovery": "Includes secret-free principal route configurations, Task selections and automated permission invocation attribution/receipts; never volatile provider credentials. Reimport an earlier export while no working store exists; shared-service Engagements remain on the service, but their local details, folders and private Tasks are not recoverable otherwise"
+      "recovery": "Includes secret-free principal route configurations, Task selections, reasoning/speed revisions, immutable attempt snapshots, native usage/events and automated permission invocation attribution/receipts; never prompts, tool output contents or volatile provider credentials. Unfinished attempts from another runtime remain uncertain; reimport does not replay work. Reimport an earlier export while no working store exists; shared-service Engagements remain on the service, but their local details, folders and private Tasks are not recoverable otherwise"
     },
     {
       "id": "task-folders",

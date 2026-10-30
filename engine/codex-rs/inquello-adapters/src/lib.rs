@@ -27,3 +27,5 @@ pub use sqlite::check_sqlite_version;
 pub use store::SqliteWorkingStore;
 
 pub mod anthropic;
+
+mod usage;

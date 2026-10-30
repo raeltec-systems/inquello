@@ -1611,6 +1611,17 @@ client_request_definitions! {
         serialization: None,
         response: v2::InquelloRouteConfigureResponse,
     },
+    InquelloUsageRead => "inquello/usage/read" {
+        params: v2::InquelloUsageReadParams,
+        serialization: None,
+        response: v2::InquelloUsageResponse,
+    },
+    InquelloUsageSet => "inquello/usage/set" {
+        params: v2::InquelloUsageSetParams,
+        serialization: None,
+        manual_payload_conversion: manual,
+        response: v2::InquelloUsageResponse,
+    },
     InquelloTaskRouteRead => "inquello/routes/task/read" {
         params: v2::InquelloTaskRouteReadParams,
         serialization: None,

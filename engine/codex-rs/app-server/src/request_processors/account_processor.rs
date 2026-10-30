@@ -1147,7 +1147,7 @@ impl AccountRequestProcessor {
         Ok(response)
     }
 
-    async fn get_account_rate_limits_response(
+    pub(crate) async fn get_account_rate_limits_response(
         &self,
         params: GetAccountRateLimitsParams,
     ) -> Result<GetAccountRateLimitsResponse, JSONRPCErrorError> {

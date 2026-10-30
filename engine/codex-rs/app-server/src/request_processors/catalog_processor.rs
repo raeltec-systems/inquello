@@ -1,4 +1,5 @@
 use super::*;
+use codex_app_server_protocol::Model;
 use crate::model_catalog::ModelCatalog;
 use codex_config::ConfigPathContext;
 use codex_core::config::permission_profile_catalog;
@@ -172,6 +173,19 @@ impl CatalogRequestProcessor {
         self.skills_extra_roots_set_response(params)
             .await
             .map(|response| Some(response.into()))
+    }
+
+    /// Native selected-model capabilities; never accept renderer-provided alternatives.
+    pub(crate) async fn inquello_usage_model(&self, model: &str) -> Result<Model, JSONRPCErrorError> {
+        let (config, manager) = self.model_catalog.current().await.map_err(|err| config_load_error(&err))?;
+        // Inquello's selected route retains the startup provider. Do not derive
+        // its choices from a newly configured, different provider's catalog.
+        if config.model_provider != self.config.model_provider {
+            return Err(invalid_request("Provider configuration changed; restart and explicitly correct the Task route/settings"));
+        }
+        let response = self.list_models(ModelListParams { cursor: None, limit: None, include_hidden: Some(true) }, config, manager).await?;
+        response.data.into_iter().find(|m| m.model == model)
+            .ok_or_else(|| invalid_request("Selected model capabilities unavailable; refresh configuration"))
     }
 
     pub(crate) async fn model_list(

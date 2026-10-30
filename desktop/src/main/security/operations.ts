@@ -1,3 +1,5 @@
+import type { UsageService } from '../usage/service';
+import { usageReadPayload, usageSetPayload } from '../usage/validators';
 import type { EnvironmentService } from '../environments/service';
 import type { RouteService } from '../routes/service';
 import { configureRoutePayload, taskRoutePayload, selectRoutePayload } from '../routes/validators';
@@ -61,6 +63,8 @@ import { describeSender, isTrustedSender, type InvokeEventLike } from './sender'
 
 /** Every operation the preload exposes, in `<namespace>.<name>` form. */
 export const OPERATION_NAMES = [
+  'usage.forTask',
+  'usage.set',
   'environments.forTask',
   'routes.list',
   'routes.configure',
@@ -285,6 +289,7 @@ export interface PolicyOperations {
 }
 
 export interface OperationDeps {
+  usage?: Pick<UsageService, 'forTask' | 'set'>;
   environments?: Pick<EnvironmentService, 'forTask'>;
   routes?: Pick<RouteService, 'list' | 'configure' | 'forTask' | 'select'>;
   capabilities?: {getInventory(workspaceId: string): Promise<CapabilityInventory>; manage(input: CapabilityInput): Promise<CapabilityResult>};
@@ -477,6 +482,8 @@ export function createOperations(deps: OperationDeps): Operation[] {
   const capabilityManage: Operation<CapabilityInput, CapabilityResult> = {name:'capabilities.manage',validate:capabilityPayload,handle:(input)=>{ if(!deps.capabilities) throw new Error('capabilities unavailable'); return deps.capabilities.manage(input); }};
   const routes = () => { if (!deps.routes) throw new Error('Processing routes unavailable'); return deps.routes; };
   const routeOps: Operation[] = [
+    { name: 'usage.forTask', validate: usageReadPayload, handle: input => { if (!deps.usage) throw new Error('Usage unavailable'); return deps.usage.forTask((input as {taskId:string}).taskId); } },
+    { name: 'usage.set', validate: usageSetPayload, handle: input => { if (!deps.usage) throw new Error('Usage unavailable'); return deps.usage.set(input as Parameters<UsageService['set']>[0]); } },
     { name: 'environments.forTask', validate: taskRoutePayload, handle: (input) => { if (!deps.environments) throw new Error('Environment information unavailable'); return deps.environments.forTask((input as {taskId:string}).taskId); } },
     { name: 'routes.list', validate: noPayload, handle: () => routes().list() },
     { name: 'routes.configure', validate: configureRoutePayload, handle: (input) => routes().configure(input as Parameters<RouteService['configure']>[0]) },

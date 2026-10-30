@@ -1,3 +1,5 @@
+import { notifySettledWork } from './usage/notifications';
+import { UsageService } from './usage/service';
 import { probeEnvironments } from './smoke-probe';
 import { EnvironmentService } from './environments/service';
 import { RouteService } from './routes/service';
@@ -168,7 +170,13 @@ let policy: PolicyService | undefined;
 let capabilities: CapabilityService | undefined;
 let routes: RouteService | undefined;
 let environments: EnvironmentService | undefined;
-function environmentChanged(): void {
+let usage: UsageService | undefined;
+function usageChanged(privateScope = false): void {
+  usage?.invalidate();
+  for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:usage-changed', privateScope);
+}
+function environmentChanged(privateScope = true): void {
+  usageChanged(privateScope);
   environments?.invalidate();
   for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:environments-changed');
 }
@@ -430,7 +438,7 @@ async function runSmokeProbe(contents: WebContents): Promise<void> {
   const routesReport = await probeRoutes(contents, { identity, organise, routes, seedFile: process.env.INQUELLO_SMOKE_SEED ?? null });
   routesOk = routesReport.ok;
   process.stdout.write(`${JSON.stringify({ event: 'routes', ...routesReport })}\n`);
-  const environmentsReport = await probeEnvironments(contents, {identity, organise, routes, seedFile: process.env.INQUELLO_SMOKE_SEED ?? null});
+  const environmentsReport = await probeEnvironments(contents, {identity, organise, routes, policy, seedFile: process.env.INQUELLO_SMOKE_SEED ?? null, usageChanged, runtimeRequest: <T,>(method: string, params?: unknown) => runtime ? runtime.request<T>(method, params) : Promise.reject(new Error('Runtime unavailable'))});
   environmentsOk = environmentsReport.ok;
   process.stdout.write(`${JSON.stringify({event: 'environments', ...environmentsReport})}\n`);
   if (!capabilitiesReport.ok) logger.error(`capabilities probe failed: ${capabilitiesReport.failures.join('; ')}`);
@@ -517,10 +525,7 @@ void app.whenReady().then(async () => {
     instance: () => runtime,
     request: <T,>(method: string, params?: unknown): Promise<T> => {
       const pending = runtime ? runtime.request<T>(method, params) : Promise.reject<T>(new Error('the runtime is not running'));
-      if (method === 'inquello/tools/exec' && params && typeof params === 'object' && 'sandboxProbeTarget' in params) {
-        // Notify on the next turn, after PolicyService has settled its cached probe fact.
-        void pending.then(() => setImmediate(environmentChanged), () => setImmediate(environmentChanged));
-      }
+      notifySettledWork(method, params, pending, {usageChanged, environmentChanged});
       return pending;
     },
   };
@@ -561,6 +566,7 @@ void app.whenReady().then(async () => {
     identity: identitySession, syncPrincipal: () => organiseService.syncPrincipal(), providers: providerService, freshPolicy: (taskId) => policyService.reviewPolicy(taskId),
     onChanged: () => { environmentChanged(); for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:routes-changed'); },
   });
+  usage = new UsageService({runtime: policyRuntime, identity: identitySession, policy: policyService, onChanged: usageChanged});
   environments = new EnvironmentService({runtime: policyRuntime, identity: identitySession, policy: policyService, routes});
   providerService.setRouteInvalidator((id) => routes!.invalidate(id));
   const policyLoad = loadShippedPolicy();
@@ -608,6 +614,7 @@ void app.whenReady().then(async () => {
       capabilities,
       routes,
       environments,
+      usage,
       runtimeState: () => runtime?.state ?? 'stopped',
       runtimeVersion: schemaStamp.runtimeVersion,
       identity: {
