@@ -106,6 +106,7 @@
  * `tool-bounds`, `--smoke` runs the permissions probe and prints a
  * `permissions` line, which the run also requires to pass.
  */
+import { RuntimeLifecycle } from './runtime/lifecycle';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -218,8 +219,16 @@ function runtimeEnv(runtimeHome: string, workingStore: string): NodeJS.ProcessEn
   return runtimeChildEnv(process.env, { serviceConfigEnv: SERVICE_CONFIG_ENV, codexHome: runtimeHome, workingStore, blocked: [PROVIDER_DEV_CONFIG_ENV, 'INQUELLO_SMOKE_SEED'] });
 }
 
-/** Starts a new runtime child in Inquello's own runtime home; also used to restart after import and delete. */
-async function startRuntime(): Promise<void> {
+const runtimeLifecycle = new RuntimeLifecycle();
+
+/** Runtime start/stop never overlap, including the initial asynchronous handshake. */
+function startRuntime(): Promise<void> {
+  return runtimeLifecycle.run(startRuntimeNow);
+}
+
+/** Starts a new runtime child; local-data recovery calls this only after copying is complete. */
+async function startRuntimeNow(): Promise<void> {
+  if (quitting) throw new Error('the application is quitting; the runtime will not restart');
   if (!roots) throw new Error('local data roots were not set up');
   const runtimeHome = roots['runtime-home'];
   fs.mkdirSync(runtimeHome, { recursive: true, mode: 0o700 });
@@ -265,7 +274,11 @@ async function startRuntime(): Promise<void> {
   await organise?.syncPrincipal().catch((error: unknown) => logger.warn(`organise: principal not bound after start (${(error as Error).message})`));
 }
 
-async function stopRuntime(): Promise<void> {
+function stopRuntime(): Promise<void> {
+  return runtimeLifecycle.run(stopRuntimeNow);
+}
+
+async function stopRuntimeNow(): Promise<void> {
   const current = runtime;
   if (!current) return;
   const exit = await current.stop();

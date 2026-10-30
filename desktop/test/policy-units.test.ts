@@ -4,7 +4,10 @@
  * views, the `policy.*` payload validators and the single thread-settings
  * path.
  */
-import { describe, expect, it } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
+
+import { afterAll, describe, expect, it, vi } from 'vitest';
 
 import { ServiceError } from '../src/main/identity/service-client';
 import type { ExecutionPolicyView } from '../src/main/identity/wire';
@@ -25,7 +28,9 @@ import {
 import { RpcResponseError } from '../src/main/runtime';
 import type { InquelloPolicyEffectiveResponse } from '../src/protocol/generated/v2/InquelloPolicyEffectiveResponse';
 import type { InquelloTaskPolicy } from '../src/protocol/generated/v2/InquelloTaskPolicy';
-import { recordingLogger, tempDir } from './helpers';
+import { recordingLogger, removeTempDirs, tempDir } from './helpers';
+
+afterAll(removeTempDirs);
 
 const PRINCIPAL = '11111111-1111-4111-8111-111111111111';
 const WORKSPACE = '5d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e';
@@ -349,5 +354,149 @@ describe('the policy smoke evaluation', () => {
     const configured = evaluatePolicy({ configured: true, seedRead: true, signedIn: true, taskCreated: true, signedOutAtEnd: true });
     expect(configured.ok).toBe(false);
     expect(configured.failures).toContain('S07 did not load the policy');
+  });
+});
+
+/** Real caller + mediator; only the service/runtime I/O boundaries are controlled. */
+function pendingToolHarness() {
+  const root = tempDir('policy-revalidation');
+  const output = path.join(root, 'effect.txt');
+  const state = {
+    principal: PRINCIPAL as string | null,
+    instance: {} as object,
+    policy: { workspace_id: WORKSPACE, policy_revision: '1', authorization_epoch: '1', execution: { command_rules: [{ prefix: ['touch'], decision: 'prompt' }] } } as ExecutionPolicyView,
+    serviceError: null as Error | null,
+    broaden: false,
+    serviceReads: 0,
+    effectiveReads: 0,
+    executionLayers: [] as unknown[],
+    commands: [] as string[][],
+  };
+  const requestId = '4a1b2c3d-4e5f-4a6b-8c7d-8e9f0a1b2c3d';
+  let requestedCommand: string[] = [];
+  const runtime: OrganiseRuntime = {
+    ready: () => true,
+    instance: () => state.instance,
+    request: async <T,>(method: string, input?: unknown): Promise<T> => {
+      const params = input as Record<string, unknown>;
+      let value: unknown;
+      if (method === 'inquello/broadMode/read') value = { taskId: TASK, workspaceId: WORKSPACE };
+      else if (method === 'inquello/policy/effective') {
+        state.effectiveReads += 1;
+        const task = taskPart(state.broaden ? 'full_access' : 'standard', state.broaden ? 'active' : 'standard');
+        if (!state.broaden) task.runtimeProfile = {
+          sandbox: 'permission-profile', permissionProfileId: 'task-profile',
+          permissionProfile: { filesystem: { ':project_roots': 'write' }, network: { enabled: false } },
+          readableRoots: [], writableRoots: [String(params.taskFolder)], networkAllowlist: [],
+        };
+        value = { ...response(), task };
+      } else if (method === 'inquello/tools/exec') {
+        if (params.sandboxProbeTarget) value = { exitCode: 0, stdout: '', stderr: '' };
+        else if (params.permissionRequestId === null) throw new RpcResponseError(method, -32600, 'permission required', { inquello: { kind: 'permission_required' } });
+        else {
+          // Stand in for the external effect. The caller must not reach this
+          // boundary with a stale approval, even if this endpoint accepts it.
+          expect(params.permissionRequestId).toBe(requestId);
+          expect(params.command).toEqual(requestedCommand);
+          state.executionLayers.push(params.workspacePolicy);
+          state.commands.push(params.command as string[]);
+          fs.writeFileSync(output, 'executed once');
+          value = { exitCode: 0, stdout: 'executed once', stderr: '' };
+        }
+      } else if (method === 'inquello/permissions/request') {
+        requestedCommand = [...params.command as string[]];
+        value = { request: { requestId }, receipt: {} };
+      } else if (method === 'inquello/permissions/decide') {
+        value = { request: { decision: { outcome: params.outcome }, evaluation: { controllingRule: null, command: requestedCommand } } };
+      } else throw new Error(`unexpected runtime request: ${method}`);
+      return value as T;
+    },
+  };
+  const mediator = new PermissionMediator({ runtime, logger: recordingLogger(), newId: () => requestId, setTimer: () => 0, clearTimer: () => undefined });
+  const policy = new PolicyService({
+    runtime,
+    identity: {
+      principalId: () => state.principal,
+      snapshot: () => ({ sharedService: 'available' }),
+      withAccess: async (request) => state.principal ? request('access') : null,
+    },
+    organise: { syncPrincipal: async () => undefined, getWorkspaces: async () => { throw new Error('not used'); } },
+    service: { executionPolicy: async () => {
+      state.serviceReads += 1;
+      if (state.serviceError) throw state.serviceError;
+      return state.policy;
+    } },
+    permissions: mediator,
+    logger: recordingLogger(),
+    taskFolders: path.join(root, 'tasks'),
+    sandboxProbeTarget: path.join(root, 'store'),
+  });
+  return {
+    state, output, policy,
+    start: async (command = ['touch', 'output/result']) => {
+      const result = policy.runTool(TASK, command);
+      await vi.waitFor(() => expect(mediator.waiting(requestId)).toBe(true));
+      return { result };
+    },
+    allow: () => mediator.decide(requestId, 'allowed', OP),
+  };
+}
+
+describe('runTool revalidates authority after permission', () => {
+  it('refetches unchanged policy and executes the exact authorized command once', async () => {
+    const h = pendingToolHarness();
+    const command = ['touch', 'output/result'];
+    const { result } = await h.start(command);
+    // Caller-owned arrays cannot change what the person authorized.
+    command[1] = 'output/different';
+    await h.allow();
+    await expect(result).resolves.toMatchObject({ ok: true, value: { exitCode: 0, stdout: 'executed once' } });
+    expect(fs.readFileSync(h.output, 'utf8')).toBe('executed once');
+    expect(h.state.serviceReads).toBe(2);
+    expect(h.state.effectiveReads).toBe(2);
+    expect(h.state.commands).toEqual([['touch', 'output/result']]);
+    expect(h.state.executionLayers).toEqual([{ workspaceId: WORKSPACE, policyRevision: 1, authorizationEpoch: 1, execution: h.state.policy.execution }]);
+  });
+
+  it.each(['forbid', 'read-only', 'epoch', 'wider-profile'] as const)('runs nothing when %s changes during the wait', async (change) => {
+    const h = pendingToolHarness();
+    const { result } = await h.start();
+    if (change === 'forbid') {
+      // Deliberately mutate a nested policy in place: the approved context
+      // must be a snapshot, not another alias of a service-owned object.
+      (h.state.policy.execution!.command_rules as Array<{ decision: string }>)[0]!.decision = 'forbid';
+      h.state.policy.policy_revision = '2';
+    } else if (change === 'read-only') {
+      h.state.policy = { ...h.state.policy, policy_revision: '2', execution: { sandbox: 'read_only' } };
+    } else if (change === 'epoch') h.state.policy.authorization_epoch = '2';
+    else h.state.broaden = true;
+    await h.allow();
+    await expect(result).resolves.toEqual({ ok: false, code: 'permission-denied', reason: POLICY_REASONS.permissionContextChanged });
+    expect(h.state.serviceReads).toBe(2);
+    expect(h.state.effectiveReads).toBe(2);
+    expect(fs.existsSync(h.output)).toBe(false);
+  });
+
+  it.each([
+    ['membership removed', 'denied', POLICY_REASONS.notAMember],
+    ['service unavailable', 'transport', POLICY_REASONS.policyUnavailable],
+  ] as const)('runs nothing when %s before approval', async (_label, kind, reason) => {
+    const h = pendingToolHarness();
+    const { result } = await h.start();
+    h.state.serviceError = new ServiceError(kind);
+    await h.allow();
+    await expect(result).resolves.toEqual({ ok: false, code: 'policy-unavailable', reason });
+    expect(h.state.serviceReads).toBe(2);
+    expect(fs.existsSync(h.output)).toBe(false);
+  });
+
+  it.each(['principal', 'runtime'] as const)('does not transfer approval to a new %s', async (change) => {
+    const h = pendingToolHarness();
+    const { result } = await h.start();
+    if (change === 'principal') h.state.principal = OP;
+    else h.state.instance = {};
+    await h.allow();
+    await expect(result).resolves.toEqual({ ok: false, code: 'permission-denied', reason: POLICY_REASONS.permissionContextChanged });
+    expect(fs.existsSync(h.output)).toBe(false);
   });
 });

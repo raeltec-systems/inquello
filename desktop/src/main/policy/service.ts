@@ -39,7 +39,11 @@
  *   a pending request (`PermissionMediator`): only the person's "Run …"
  *   lets that exact command run, once, still inside the Task's profile; a
  *   denial, or no decision in time, runs nothing and the Task continues.
+ *   After a decision, authority and the effective profile are read again;
+ *   changed policy or reach requires a fresh invocation and permission.
  */
+import { isDeepStrictEqual } from 'node:util';
+
 import { RpcResponseError } from '../runtime/errors';
 import type { Logger } from '../runtime/logger';
 import { ServiceError } from '../identity/service-client';
@@ -109,6 +113,7 @@ export const POLICY_REASONS = {
   sandboxUnavailable: SANDBOX_UNAVAILABLE,
   noTaskFolders: 'Task folders are not set up on this device, so tools cannot run.',
   notPending: NO_LONGER_PENDING,
+  permissionContextChanged: 'The execution context changed while permission was pending. Nothing ran. Start the command again to review its current reach.',
   userRuleCannotAllow: 'Your own rules can only ask first or forbid; they never allow a command.',
   rulesConflict: 'Your rules were changed first. Review them and try again.',
   failed: 'The request did not complete.',
@@ -466,17 +471,24 @@ export class PolicyService {
    */
   async runTool(taskId: string, command: readonly string[], options: { timeoutMs?: number } = {}): Promise<PolicyResult<ToolRunView>> {
     if (command.length === 0 || command.some((part) => typeof part !== 'string')) return fail('invalid', POLICY_REASONS.invalid);
-    const context = await this.taskContext(taskId, true);
+    // Keep the requested argv immutable across the human decision wait.
+    command = [...command];
+    const principal = this.options.identity.principalId();
+    const runtime = this.options.runtime.instance();
+    let context = await this.taskContext(taskId, true);
     if (!context.ok) return context;
-    const settings = this.threadSettingsOf(context.value);
+    let settings = this.threadSettingsOf(context.value);
     if (!settings.ok) return settings;
-    const { reach, folders } = settings.value;
+    let { reach, folders } = settings.value;
+    const approvedContext = structuredClone({ layer: context.value.layer, settings: settings.value });
+    const sameOwnerAndRuntime = () => this.options.identity.principalId() === principal && this.options.runtime.instance() === runtime;
     if (reach.bounded && !(await this.sandboxAvailable(context.value, taskId))) return fail('sandbox-unavailable', POLICY_REASONS.sandboxUnavailable);
-    const exec = (permissionRequestId: string | null) =>
+    if (!sameOwnerAndRuntime()) return fail('permission-denied', POLICY_REASONS.permissionContextChanged);
+    const exec = (current: TaskContext, permissionRequestId: string | null) =>
       this.options.runtime.request<CommandExecResponse>('inquello/tools/exec', {
-        workspacePolicy: context.value.layer,
+        workspacePolicy: current.layer,
         taskId,
-        taskFolder: folders.working,
+        taskFolder: current.folders!.working,
         command: [...command],
         timeoutMs: options.timeoutMs ?? 60_000,
         permissionRequestId,
@@ -484,7 +496,7 @@ export class PolicyService {
     let result: CommandExecResponse;
     let permissionRequestId: string | null = null;
     try {
-      result = await exec(null);
+      result = await exec(context.value, null);
     } catch (error) {
       if (refusalOf(error)?.kind !== 'permission_required') return this.runtimeFailure(error);
       // The rules ask: a pending request waits for the person (or declines by default).
@@ -494,9 +506,25 @@ export class PolicyService {
         this.options.logger.info(`policy: a command was ${asked.outcome === 'expired' ? 'declined by default' : 'denied'}; nothing ran`);
         return fail('permission-denied', asked.outcome === 'expired' ? EXPIRED_TEXT : DENIED_TEXT);
       }
+      // An allowed request binds only the creator, Task and exact argv in the
+      // runtime, not the policy/profile shown when it was requested. Fetch
+      // authority again and refuse even a wider new context: the old approval
+      // must never silently authorize a different reach. A fresh invocation
+      // can ask the person again under the new context.
+      if (!sameOwnerAndRuntime()) return fail('permission-denied', POLICY_REASONS.permissionContextChanged);
+      context = await this.taskContext(taskId, true);
+      if (!context.ok) return context;
+      settings = this.threadSettingsOf(context.value);
+      if (!settings.ok) return settings;
+      if (!sameOwnerAndRuntime() || !isDeepStrictEqual(approvedContext, { layer: context.value.layer, settings: settings.value })) {
+        return fail('permission-denied', POLICY_REASONS.permissionContextChanged);
+      }
+      ({ reach, folders } = settings.value);
+      if (reach.bounded && !(await this.sandboxAvailable(context.value, taskId))) return fail('sandbox-unavailable', POLICY_REASONS.sandboxUnavailable);
+      if (!sameOwnerAndRuntime()) return fail('permission-denied', POLICY_REASONS.permissionContextChanged);
       permissionRequestId = asked.requestId;
       try {
-        result = await exec(permissionRequestId);
+        result = await exec(context.value, permissionRequestId);
       } catch (retry) {
         return this.runtimeFailure(retry);
       }

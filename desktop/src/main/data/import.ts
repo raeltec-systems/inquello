@@ -10,12 +10,17 @@
  * - The runtime home must be empty: it may hold no file of a category the
  *   export restores there, and no unclassified file. Rebuildable runtime state
  *   and runtime logs, which the runtime writes on every start, do not count.
+ * - A working-store restore requires an empty store family and publishes the
+ *   fully verified DB/WAL/SHM directory together, never a partial family.
+ * - Linked destination ancestry is refused. Linux pins directory descriptors;
+ *   other platforms require a quiescent owner-controlled destination tree.
  * - Nothing is overwritten. A file whose target already exists, or that could
  *   not be copied intact, is listed as not restored.
  *
  * The caller (main) runs this only while no Task runs and with the runtime
  * stopped, then restarts the runtime.
  */
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -110,6 +115,12 @@ export async function importData(options: ImportOptions): Promise<ImportResult> 
     }
   }
 
+  // Reject linked destination ancestry before restoring any category. A lexical
+  // manifest path alone does not constrain writes through existing directories.
+  for (const entry of manifest.included) {
+    for (const file of entry.files) checkDestinationAncestry(roots[file.root], file.path);
+  }
+
   // 2. Verify every digest before writing anything.
   for (const entry of manifest.included) {
     for (const file of entry.files) {
@@ -133,13 +144,28 @@ export async function importData(options: ImportOptions): Promise<ImportResult> 
     throw new ImportError(`the runtime home already holds data (${occupied.length} file(s), for example ${occupied[0]!.rel}); import restores only into an empty runtime home`);
   }
 
-  // 4. Restore without overwriting.
+  // The working store is one SQLite family, not independent replaceable files.
+  // Even if the manifest only restores a WAL (or a differently named database),
+  // no existing DB/WAL/SHM from this category may be mixed with it. Check before
+  // restoring *any* category, not after earlier session files have been copied.
+  if (manifest.included.some((entry) => entry.category === 'working-store' && entry.files.length > 0)
+      && inventory.files.some((file) => file.category === 'working-store')) {
+    throw new ImportError('the working store already holds data; remove the entire Private work organisation category before importing it');
+  }
+
+  // 4. Publish the working-store category as one complete directory. Restoring
+  // SQLite files independently could leave a new DB with a missing/foreign WAL
+  // when a later copy fails and the caller restarts the runtime.
+  const workingFiles = manifest.included.filter((entry) => entry.category === 'working-store').flatMap((entry) => entry.files);
+  const workingOutcome = workingFiles.length > 0 ? await restoreWorkingStore(source, roots, workingFiles) : null;
+
+  // Other categories retain per-file, no-overwrite restoration.
   const restored: ImportResult['restored'] = [];
   const notRestored: ImportResult['notRestored'] = [];
   for (const entry of manifest.included) {
     let count = 0;
     for (const file of entry.files) {
-      const outcome = await restoreFile(source, roots, file);
+      const outcome = entry.category === 'working-store' ? workingOutcome : await restoreFile(source, roots, file);
       if (outcome === null) count += 1;
       else notRestored.push({ category: entry.category, path: `${file.root}:${file.path}`, reason: outcome });
     }
@@ -148,26 +174,180 @@ export async function importData(options: ImportOptions): Promise<ImportResult> 
   return { restored, notRestored, omissions: manifest.omissions, createdAt: manifest.createdAt };
 }
 
-/** Restores one file; returns null on success or the reason it was not restored. */
-async function restoreFile(source: string, roots: GovernedRoots, file: ManifestFile): Promise<string | null> {
-  const rootDir = path.resolve(roots[file.root as DataRoot]);
-  const target = path.join(rootDir, ...file.path.split('/'));
-  if (fs.existsSync(target)) return 'A file already exists there; it was not overwritten';
-  const temp = `${target}.import-${process.pid}.tmp`;
+/**
+ * Checks existing directory components, including the governed root's ancestors.
+ * Missing components are allowed and created later. lstat rejects symlinks and
+ * Windows junctions, rather than following them as stat/recursive mkdir would.
+ */
+function checkDestinationAncestry(root: string, relative: string): void {
+  const parent = path.dirname(path.join(path.resolve(root), ...relative.split('/')));
+  const parsed = path.parse(parent);
+  let current = parsed.root;
+  for (const component of parent.slice(parsed.root.length).split(path.sep).filter(Boolean)) {
+    current = path.join(current, component);
+    let stat: fs.Stats;
+    try {
+      stat = fs.lstatSync(current);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
+      throw error;
+    }
+    if (!stat.isDirectory() || stat.isSymbolicLink()) throw new ImportError('the import destination contains a linked or non-directory ancestor');
+  }
+}
+
+interface DestinationDirectory {
+  path: string;
+  check(): void;
+  close(): void;
+}
+
+/**
+ * Linux: walk one component at a time with O_NOFOLLOW and keep the destination
+ * directory pinned through /proc/self/fd. A swapped ancestor cannot redirect
+ * copy, publication or cleanup into the replacement directory. No pathname
+ * fallback is used if this support is unavailable on Linux.
+ *
+ * Other platforms: reject linked ancestry and check it again before publication.
+ * Node has no portable openat API; those checks do NOT eliminate concurrent
+ * ancestor replacement. Import requires a quiescent, owner-controlled data tree.
+ */
+function destinationDirectory(root: string, relative: string): DestinationDirectory {
+  const parent = path.dirname(path.join(path.resolve(root), ...relative.split('/')));
+  checkDestinationAncestry(root, relative);
+  if (process.platform === 'linux') {
+    const flags = fs.constants.O_RDONLY | fs.constants.O_DIRECTORY | fs.constants.O_NOFOLLOW;
+    let fd = fs.openSync(path.parse(parent).root, flags);
+    try {
+      for (const component of parent.slice(path.parse(parent).root.length).split(path.sep).filter(Boolean)) {
+        const child = `/proc/self/fd/${fd}/${component}`;
+        try {
+          fs.mkdirSync(child, { mode: 0o700 });
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+        }
+        const next = fs.openSync(child, flags);
+        fs.closeSync(fd);
+        fd = next;
+      }
+      const pinned = `/proc/self/fd/${fd}`;
+      const identity = fs.fstatSync(fd);
+      const check = () => {
+        checkDestinationAncestry(root, relative);
+        const current = fs.lstatSync(parent);
+        if (current.dev !== identity.dev || current.ino !== identity.ino) throw new ImportError('the import destination changed during the copy');
+      };
+      return { path: pinned, check, close: () => fs.closeSync(fd) };
+    } catch (error) {
+      fs.closeSync(fd);
+      throw error;
+    }
+  }
+  fs.mkdirSync(parent, { recursive: true, mode: 0o700 });
+  checkDestinationAncestry(root, relative);
+  const identity = fs.lstatSync(parent);
+  return {
+    path: parent,
+    check: () => {
+      checkDestinationAncestry(root, relative);
+      const current = fs.lstatSync(parent);
+      if (current.dev !== identity.dev || current.ino !== identity.ino) throw new ImportError('the import destination changed during the copy');
+    },
+    close: () => undefined,
+  };
+}
+
+/**
+ * The working store's DB/WAL/SHM files are one publication unit. Stage every
+ * file, verify all bytes, then rename the complete sibling directory into
+ * place. rename cannot replace a nonempty directory, so a competing store
+ * created after preflight refuses the whole publication instead of mixing
+ * families. Unclassified files in `working` are also preserved by refusal.
+ *
+ * POSIX can replace an existing empty directory atomically. If a platform
+ * refuses that replacement, remove only a verified empty real directory with
+ * rmdir and retry the directory rename. No prior data can be lost in that gap;
+ * a newly nonempty target still refuses publication. Never publish SQLite
+ * files individually.
+ */
+async function restoreWorkingStore(source: string, roots: GovernedRoots, files: ManifestFile[]): Promise<string | null> {
+  if (files.some((file) => file.root !== 'user-data' || path.posix.dirname(file.path) !== 'working')) {
+    return 'The working-store layout is not supported; no working-store file was restored';
+  }
+  let directory: DestinationDirectory | undefined;
+  let staging: string | undefined;
+  let ownsStaging = false;
   try {
-    const copied = await copyWithDigest(exportedFilePath(source, file.root, file.path), temp);
-    if (copied.sha256 !== file.sha256 || copied.size !== file.size) {
-      fs.rmSync(temp, { force: true });
-      return 'The copy did not match its digest';
+    directory = destinationDirectory(roots['user-data'], 'working');
+    staging = path.join(directory.path, `.import-working-${randomUUID()}`);
+    fs.mkdirSync(staging, { mode: 0o700 });
+    ownsStaging = true;
+    for (const file of files) {
+      const copied = await copyWithDigest(exportedFilePath(source, file.root, file.path), path.join(staging, path.posix.basename(file.path)));
+      if (copied.sha256 !== file.sha256 || copied.size !== file.size) return 'The working-store copy did not match its digest; no working-store file was restored';
     }
-    if (fs.existsSync(target)) {
-      fs.rmSync(temp, { force: true });
-      return 'A file already exists there; it was not overwritten';
+    directory.check();
+    checkDestinationAncestry(roots['user-data'], 'working/placeholder');
+    const destination = path.join(directory.path, 'working');
+    try {
+      if (fs.readdirSync(destination).length > 0) return 'The working-store folder is not empty; no working-store file was restored';
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     }
-    fs.renameSync(temp, target);
+    try {
+      fs.renameSync(staging, destination);
+    } catch (error) {
+      if (!['EEXIST', 'EPERM', 'ENOTEMPTY'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error;
+      directory.check();
+      const target = fs.lstatSync(destination);
+      if (!target.isDirectory() || target.isSymbolicLink() || fs.readdirSync(destination).length !== 0) throw error;
+      // Windows commonly refuses replacing even an empty directory. rmdir is
+      // intentionally nonrecursive: a DB appearing meanwhile prevents removal.
+      fs.rmdirSync(destination);
+      fs.renameSync(staging, destination);
+    }
+    ownsStaging = false;
     return null;
   } catch (error) {
-    fs.rmSync(temp, { force: true });
+    if (error instanceof ImportError) return error.message;
+    return `The working store could not be restored (${(error as NodeJS.ErrnoException).code ?? 'error'}); no working-store file was restored`;
+  } finally {
+    try {
+      if (ownsStaging && staging) fs.rmSync(staging, { recursive: true, force: true });
+    } finally {
+      directory?.close();
+    }
+  }
+}
+
+/** Restores one file; returns null on success or the reason it was not restored. */
+async function restoreFile(source: string, roots: GovernedRoots, file: ManifestFile): Promise<string | null> {
+  let directory: DestinationDirectory | undefined;
+  let temp: string | undefined;
+  let staged = false;
+  try {
+    directory = destinationDirectory(roots[file.root as DataRoot], file.path);
+    const target = path.join(directory.path, path.posix.basename(file.path));
+    temp = path.join(directory.path, `.import-${randomUUID()}.tmp`);
+    directory.check();
+    const copied = await copyWithDigest(exportedFilePath(source, file.root, file.path), temp);
+    staged = true;
+    if (copied.sha256 !== file.sha256 || copied.size !== file.size) return 'The copy did not match its digest';
+    directory.check();
+    // Atomic no-replace publication: rename would overwrite a target created
+    // between existsSync and rename, including an existing SQLite family file.
+    // Filesystems that do not support hard links fail closed, never fall back.
+    fs.linkSync(temp, target);
+    return null;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') return 'A file already exists there; it was not overwritten';
+    if (error instanceof ImportError) return error.message;
     return `It could not be written (${(error as NodeJS.ErrnoException).code ?? 'error'})`;
+  } finally {
+    try {
+      if (staged && temp) fs.rmSync(temp, { force: true });
+    } finally {
+      directory?.close();
+    }
   }
 }

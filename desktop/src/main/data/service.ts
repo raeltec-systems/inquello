@@ -5,7 +5,9 @@
  *   counts, and every real-data blocker (unknown rules, unclassified files,
  *   files in disabled categories, or a register that did not load).
  * - `exportData` asks main's save dialog for a new folder (the renderer never
- *   supplies a path), writes the export and journals it.
+ *   supplies a path), refuses active Tasks, stops the runtime so its SQLite
+ *   database/WAL family is quiescent, writes and journals the export, and
+ *   restarts the runtime even when copying fails.
  * - `importData` asks main's folder dialog for an export, refuses while a Task
  *   runs, stops the runtime, restores into an empty runtime home and restarts
  *   the runtime.
@@ -33,7 +35,10 @@ export const IDENTITY_SESSION = 'identity-session';
 export const CLAUDE_KEY_VAULT = 'claude-key-vault';
 
 export interface RuntimeControl {
+  /** Resolves only once all runtime writers have exited. The host serializes
+   * initial startup/shutdown and reserves restart to this exclusive data action. */
   stop(): Promise<void>;
+  /** Starts the runtime only after the exclusive data action finishes. */
   start(): Promise<void>;
   /** Tasks currently running in the runtime. */
   activeTasks(): number;
@@ -133,6 +138,8 @@ export const DATA_REASONS = {
   cancelled: 'No folder was chosen.',
   policyInvalid: 'The local data policy did not load, so local data actions are blocked.',
   taskRunning: 'A Task is running. Stop it before importing or deleting local data.',
+  exportTaskRunning: 'A Task is running. Stop it before exporting local data.',
+  runtimeStop: 'The runtime could not be stopped safely. The local data action was not completed.',
   runtimeRestart: 'The local data action ran, but the runtime did not restart afterwards. Restart Inquello.',
 } as const;
 
@@ -197,37 +204,42 @@ export class DataService {
 
   exportData(): Promise<ExportActionResult> {
     return this.exclusive(async () => {
+      if (this.options.runtime.activeTasks() > 0) return { ok: false, reason: DATA_REASONS.exportTaskRunning };
       const destination = await this.options.chooseExportDestination();
       if (!destination) return { ok: false, reason: DATA_REASONS.cancelled };
-      try {
-        const result = await exportData({
-          policy: this.policy!,
-          roots: this.options.roots,
-          destination,
-          journal: this.options.journal,
-          attribution: { principal: await this.options.identity.principal(), appVersion: this.options.appVersion, runtimeVersion: this.options.runtimeVersion },
-        });
-        const { manifest } = result;
-        this.options.logger.info(`data: exported ${manifest.included.length} categories`);
-        return {
-          ok: true,
-          export: {
-            path: result.path,
-            createdAt: manifest.createdAt,
-            included: manifest.included.map((entry) => ({ category: entry.category, label: entry.label, files: entry.files.length })),
-            omissions: manifest.omissions.map(omissionView),
-            notice: manifest.notice,
-            attribution: {
-              principal: manifest.attribution.principal ? { ...manifest.attribution.principal } : null,
-              appVersion: manifest.attribution.appVersion,
-              runtimeVersion: manifest.attribution.runtimeVersion,
+      // The chooser can stay open while another operation starts work.
+      if (this.options.runtime.activeTasks() > 0) return { ok: false, reason: DATA_REASONS.exportTaskRunning };
+      return this.withRuntimeStopped<ExportActionResult>(async () => {
+        try {
+          const result = await exportData({
+            policy: this.policy!,
+            roots: this.options.roots,
+            destination,
+            journal: this.options.journal,
+            attribution: { principal: await this.options.identity.principal(), appVersion: this.options.appVersion, runtimeVersion: this.options.runtimeVersion },
+          });
+          const { manifest } = result;
+          this.options.logger.info(`data: exported ${manifest.included.length} categories`);
+          return {
+            ok: true,
+            export: {
+              path: result.path,
+              createdAt: manifest.createdAt,
+              included: manifest.included.map((entry) => ({ category: entry.category, label: entry.label, files: entry.files.length })),
+              omissions: manifest.omissions.map(omissionView),
+              notice: manifest.notice,
+              attribution: {
+                principal: manifest.attribution.principal ? { ...manifest.attribution.principal } : null,
+                appVersion: manifest.attribution.appVersion,
+                runtimeVersion: manifest.attribution.runtimeVersion,
+              },
             },
-          },
-        };
-      } catch (error) {
-        this.options.logger.warn(`data: export failed (${(error as Error).message})`);
-        return { ok: false, reason: error instanceof ExportError ? sentence(error.message) : 'The export could not be written; nothing was kept.' };
-      }
+          };
+        } catch (error) {
+          this.options.logger.warn(`data: export failed (${(error as Error).message})`);
+          return { ok: false, reason: error instanceof ExportError ? sentence(error.message) : 'The export could not be written; nothing was kept.' };
+        }
+      });
     });
   }
 
@@ -336,7 +348,12 @@ export class DataService {
 
   /** Stops the runtime, runs `fn`, then restarts the runtime whatever happened. */
   private async withRuntimeStopped<T extends { ok: boolean }>(fn: () => Promise<T>): Promise<T | { ok: false; reason: string }> {
-    await this.options.runtime.stop();
+    try {
+      await this.options.runtime.stop();
+    } catch (error) {
+      this.options.logger.error(`data: the runtime could not be stopped (${(error as Error).message})`);
+      return { ok: false, reason: DATA_REASONS.runtimeStop };
+    }
     let result: T | undefined;
     try {
       result = await fn();

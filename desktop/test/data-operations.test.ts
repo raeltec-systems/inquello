@@ -269,7 +269,7 @@ describe('short writes (review R07)', () => {
   it('import restores complete files despite short writes', async () => {
     const { roots, destination, manifest } = await exported();
     const target = emptyRoots();
-    shortWrites(/\.import-\d+\.tmp$/);
+    shortWrites(/\.import-[\da-f-]+\.tmp$/);
     const result = await importData({ policy, roots: target, source: destination });
     vi.restoreAllMocks();
     expect(result.notRestored).toEqual([]);
@@ -281,7 +281,7 @@ describe('short writes (review R07)', () => {
   it('import never restores a truncated file when a write makes no progress', async () => {
     const { destination } = await exported();
     const target = emptyRoots();
-    shortWrites(/\.import-\d+\.tmp$/, true);
+    shortWrites(/\.import-[\da-f-]+\.tmp$/, true);
     const result = await importData({ policy, roots: target, source: destination });
     vi.restoreAllMocks();
     expect(result.restored.every((entry) => entry.files === 0)).toBe(true);
@@ -570,9 +570,77 @@ describe('data service', () => {
       { category: 'working-store', label: 'Private work organisation', files: 0 },
       { category: 'task-folders', label: 'Task working folders', files: 0 },
     ]);
-    expect(h.events).toEqual([]); // Export never stops the runtime.
+    expect(h.events).toEqual(['runtime:stop', 'runtime:start']);
+    h.events.length = 0;
     h.setExport(null);
     await expect(h.service.exportData()).resolves.toEqual({ ok: false, reason: 'No folder was chosen.' });
+    expect(h.events).toEqual([]);
+  });
+
+  it('refuses export while a Task runs, including work started while the chooser was open', async () => {
+    const h = harness();
+    h.setTasks(1);
+    expect(await h.service.exportData()).toEqual({ ok: false, reason: 'A Task is running. Stop it before exporting local data.' });
+    h.setTasks(0);
+    const options = (h.service as unknown as { options: DataServiceOptions }).options;
+    options.chooseExportDestination = async () => {
+      h.setTasks(1);
+      return path.join(tempDir('export-dialog-race'), 'export');
+    };
+    expect(await h.service.exportData()).toEqual({ ok: false, reason: 'A Task is running. Stop it before exporting local data.' });
+    expect(h.events).toEqual([]);
+  });
+
+  it('waits for runtime exit before copying and never copies after a failed stop', async () => {
+    const h = harness();
+    const options = (h.service as unknown as { options: DataServiceOptions }).options;
+    const destination = path.join(tempDir('export-stop-failure'), 'export');
+    h.setExport(destination);
+    let failStop!: (error: Error) => void;
+    options.runtime.stop = () => new Promise<void>((_resolve, reject) => { failStop = reject; });
+    const pending = h.service.exportData();
+    await vi.waitFor(() => expect(failStop).toBeTypeOf('function'));
+    expect(fs.existsSync(destination)).toBe(false);
+    failStop(new Error('still running'));
+    expect(await pending).toEqual({ ok: false, reason: 'The runtime could not be stopped safely. The local data action was not completed.' });
+    expect(fs.existsSync(destination)).toBe(false);
+    expect(h.events).toEqual([]);
+    expect(h.journal.read()).toEqual([]);
+  });
+
+  it('holds the runtime stopped until export manifest writing finishes', async () => {
+    const h = harness();
+    const original = fs.promises.writeFile;
+    let release!: () => void;
+    const blocked = new Promise<void>((resolve) => { release = resolve; });
+    let manifestStarted = false;
+    vi.spyOn(fs.promises, 'writeFile').mockImplementation(async (...args) => {
+      if (String(args[0]).endsWith(MANIFEST_FILE)) {
+        manifestStarted = true;
+        await blocked;
+      }
+      return original(...args);
+    });
+    const pending = h.service.exportData();
+    await vi.waitFor(() => expect(manifestStarted).toBe(true));
+    expect(h.events).toEqual(['runtime:stop']);
+    expect(await h.service.importData()).toEqual({ ok: false, reason: 'Another local data action is in progress.' });
+    release();
+    expect((await pending).ok).toBe(true);
+    expect(h.events).toEqual(['runtime:stop', 'runtime:start']);
+  });
+
+  it('restarts after an export write failure and reports a failed restart after export', async () => {
+    const h = harness();
+    vi.spyOn(fs.promises, 'writeFile').mockRejectedValueOnce(Object.assign(new Error('disk full'), { code: 'ENOSPC' }));
+    expect((await h.service.exportData()).ok).toBe(false);
+    expect(h.events).toEqual(['runtime:stop', 'runtime:start']);
+    expect(h.journal.read()).toEqual([]);
+    vi.restoreAllMocks();
+    const options = (h.service as unknown as { options: DataServiceOptions }).options;
+    options.runtime.start = async () => { throw new Error('spawn failed'); };
+    expect(await h.service.exportData()).toEqual({ ok: false, reason: 'The local data action ran, but the runtime did not restart afterwards. Restart Inquello.' });
+    expect(h.journal.read()).toHaveLength(1);
   });
 
   it('round trip: export, delete everything, reimport; restarts the runtime around delete and import (matrix: Round trip, Delete)', async () => {
@@ -580,6 +648,7 @@ describe('data service', () => {
     const before = fs.readFileSync(path.join(h.roots['runtime-home'], 'sessions/2026/10/28/rollout-2026-10-28-a.jsonl'));
     const exportedResult = await h.service.exportData();
     if (!exportedResult.ok) throw new Error(exportedResult.reason);
+    h.events.length = 0;
     const enabled = h.service.deletableCategories();
     const deleted = await h.service.deleteData(enabled);
     if (!deleted.ok) throw new Error(deleted.reason);
@@ -611,6 +680,7 @@ describe('data service', () => {
     const h = harness();
     const exportedResult = await h.service.exportData();
     if (!exportedResult.ok) throw new Error(exportedResult.reason);
+    h.events.length = 0;
     h.setImport(exportedResult.export.path);
     const result = await h.service.importData();
     expect(result).toEqual({ ok: false, reason: expect.stringMatching(/^The runtime home already holds data .*only into an empty runtime home\.$/) });
