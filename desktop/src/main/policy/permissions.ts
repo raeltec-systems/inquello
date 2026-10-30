@@ -208,6 +208,8 @@ export interface PermissionMediatorOptions {
   logger: Logger;
   newId: () => string;
   ttlMs?: number;
+  /** Returns null for permitted human handling; no external verdict input exists. */
+  automatedReview?: (taskId: string, requestId: string) => Promise<'allowed' | 'denied' | null>;
   setTimer?: (callback: () => void, ms: number) => unknown;
   clearTimer?: (handle: unknown) => void;
 }
@@ -258,8 +260,24 @@ export class PermissionMediator {
       const setTimer = this.options.setTimer ?? ((callback: () => void, ms: number) => setTimeout(callback, ms));
       const timer = setTimer(() => void this.expire(id), this.ttlMs);
       this.waiters.set(id, { resolve, timer });
+      if (this.options.automatedReview) void this.options.automatedReview(input.taskId, id).then((decision) => {
+        if (decision === 'denied') void this.declineByHost(id);
+        else if (decision === 'allowed') this.wake(id, decision);
+      }, () => { /* unavailable review leaves the existing human mediator pending */ });
     });
     return { ok: true, requestId: id, outcome };
+  }
+
+  /** Refused/stale authority must not leave a human-action card pending. */
+  private async declineByHost(requestId: string): Promise<void> {
+    if (!this.waiters.has(requestId)) return;
+    try {
+      await this.options.runtime.request('inquello/permissions/decide', {
+        operationId: this.options.newId(), requestId, expectedRevision: 1, outcome: 'denied',
+        actorKind: 'system', actorRef: HOST_ACTOR_REF,
+      });
+    } catch { /* A concurrent human/runtime decision may already have won. No action is authorized here. */ }
+    this.wake(requestId, 'denied');
   }
 
   /** Whether a waiter holds this request. */

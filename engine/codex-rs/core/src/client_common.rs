@@ -127,6 +127,12 @@ impl Stream for ResponseStream {
     type Item = Result<ResponseEvent>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        // Bound Inquello streams use a child of the authority cancellation token.
+        // Discard already-buffered output after cancellation, not just new sends.
+        if self.consumer_dropped.is_cancelled() {
+            self.rx_event.close();
+            return Poll::Ready(None);
+        }
         self.rx_event.poll_recv(cx)
     }
 }

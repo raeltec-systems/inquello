@@ -1,3 +1,4 @@
+import { ProcessingRoutes } from '../ProcessingRoutes';
 /**
  * The open Task (Story 1.14): a placeholder thread area, the Task's privacy,
  * and the two organisation commands a Task has today: rename and move.
@@ -147,6 +148,7 @@ export function TaskView({
           {notice}
         </p>
       ) : null}
+      <ProcessingRoutes taskId={task.taskId} />
       <TaskStates states={states && states.taskId === task.taskId ? states : null} notice={statesNotice} />
       <TaskPolicy policy={policy && policy.taskId === task.taskId ? policy : null} notice={policyNotice} onSetMode={onSetMode} />
       <div className="iq-thread-placeholder" data-thread-placeholder>

@@ -9,13 +9,13 @@ license.workspace = true
 # conformance fixtures under fixtures/ are shared by the service and its clients.
 
 [dependencies]
+serde_json = { workspace = true }
 chrono = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 uuid = { workspace = true, features = ["serde"] }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }
-serde_json = { workspace = true }
 
 [lints]
 workspace = true

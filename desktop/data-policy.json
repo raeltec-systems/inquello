@@ -18,7 +18,7 @@
       "access": "runtime",
       "export": { "mode": "included" },
       "deletion": "Delete Task history in Local data (the runtime is stopped, the files are removed, then the runtime restarts)",
-      "recovery": "Reimport an earlier export into an empty runtime home; nothing else restores it"
+      "recovery": "Includes ordered inference messages and provider-native opaque continuation/signature blocks bound to the exact route, model and API version, never credentials or proof of analytical acceptance. Incompatible model history is refused, not translated silently. Reimport an earlier export into an empty runtime home; nothing else restores it"
     },
     {
       "id": "runtime-logs",
@@ -234,7 +234,7 @@
       "access": "main-process-only",
       "export": {
         "mode": "excluded",
-        "reason": "Holds the Claude API key, which is never exported"
+        "reason": "Holds the Claude API key, which is never exported. The dedicated private stdio handoff holds only a volatile generation-bound runtime copy; no credential is written to route metadata, history, logs or runtime config"
       },
       "deletion": "Remove the Claude API key in Providers (or delete the Claude API key in Local data); either removes the encrypted file. Inquello sign-out does not remove it",
       "recovery": "Not recoverable; enter the key again"
@@ -294,7 +294,7 @@
       "access": "runtime",
       "export": { "mode": "included" },
       "deletion": "Delete Private work organisation in Local data (the runtime is stopped, the files are removed, then the runtime restarts with an empty working store)",
-      "recovery": "Reimport an earlier export while no working store exists; shared-service Engagements remain on the service, but their local details, folders and private Tasks are not recoverable otherwise"
+      "recovery": "Includes secret-free principal route configurations, Task selections and automated permission invocation attribution/receipts; never volatile provider credentials. Reimport an earlier export while no working store exists; shared-service Engagements remain on the service, but their local details, folders and private Tasks are not recoverable otherwise"
     },
     {
       "id": "task-folders",

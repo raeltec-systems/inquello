@@ -12,6 +12,8 @@ path = "src/lib.rs"
 workspace = true
 
 [dependencies]
+inquello-adapters = { workspace = true }
+inquello-protocol = { workspace = true }
 codex-utils-process = { workspace = true }
 anyhow = { workspace = true }
 arc-swap = { workspace = true }
@@ -183,3 +185,7 @@ windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_System_
 [package.metadata.cargo-shear]
 ignored = ["openssl-sys"]
 ignored-paths = ["tests/remote_env_windows/*.rs"]
+
+# Test-only loopback TLS seam. Never enable in release/package builds.
+[features]
+inference-fixtures = ["inquello-adapters/inference-fixtures"]

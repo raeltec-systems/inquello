@@ -552,3 +552,46 @@ fn to_db(revision: Revision) -> Result<i64, StoreError> {
 fn from_db(value: i64, column: &str) -> Result<u64, StoreError> {
     u64::try_from(value).map_err(|_| corrupt(format!("{column} is negative")))
 }
+
+impl inquello_domain::execution_policy::AutomatedReviewStore for SqliteWorkingStore {
+    async fn commit_automated_review(&self, change: inquello_domain::execution_policy::AutomatedReviewChange) -> Result<(), StoreError> {
+        let inquello_domain::execution_policy::AutomatedReviewChange { request, decision, receipt, attribution } = change;
+        let stale = || StoreError::RevisionConflict { expected: Revision::new(1), actual: Revision::new(2) };
+        if receipt.request_id != request.request_id || receipt.principal_id != request.principal_id
+            || decision.actor_kind != DeciderKind::AutomatedReviewer || decision.actor_ref != attribution.invocation_id {
+            return Err(StoreError::Backend("invalid automated review change".into()));
+        }
+        let mut tx = self.pool().begin_with("BEGIN IMMEDIATE").await.map_err(backend)?;
+        // The same write lock covers all DB freshness checks and all three writes.
+        let row = sqlx::query(sqlx::AssertSqlSafe(format!("SELECT {REQUEST_COLUMNS} FROM {REQUEST_FROM} WHERE r.request_id = ?")))
+            .bind(request.request_id.to_string()).fetch_optional(&mut *tx).await.map_err(backend)?.ok_or_else(stale)?;
+        let current = request_from_row(&row)?;
+        let now: i64 = sqlx::query_scalar("SELECT CAST(unixepoch('subsec') * 1000 AS INTEGER)")
+            .fetch_one(&mut *tx).await.map_err(backend)?;
+        if current != request || current.decision.is_some() || current.used_at.is_some() || current.expires_at.unix_millis() <= now { return Err(stale()); }
+        let creator: Option<String> = sqlx::query_scalar("SELECT creator_principal_id FROM tasks WHERE task_id = ?")
+            .bind(request.task_id.to_string()).fetch_optional(&mut *tx).await.map_err(backend)?;
+        if creator.as_deref() != Some(&request.principal_id.to_string()) { return Err(stale()); }
+        let revisions: (i64, i64, i64, i64) = sqlx::query_as(
+            "SELECT (SELECT COALESCE(MAX(revision),0) FROM task_processing_routes WHERE task_id = ?), \
+            (SELECT COALESCE(MAX(revision),0) FROM processing_route_candidates WHERE principal_id = ? AND route_id = ?), \
+            (SELECT COALESCE(MAX(revision),0) FROM user_command_rules WHERE principal_id = ?), \
+            (SELECT COALESCE(MAX(revision),0) FROM task_broad_modes WHERE task_id = ?)")
+            .bind(request.task_id.to_string()).bind(request.principal_id.to_string()).bind(&attribution.route_id)
+            .bind(request.principal_id.to_string()).bind(request.task_id.to_string())
+            .fetch_one(&mut *tx).await.map_err(backend)?;
+        if revisions != (to_db(attribution.route_revision)?, to_db(attribution.configuration_revision)?,
+            to_db(attribution.user_rules_revision)?, to_db(attribution.broad_mode_revision)?) { return Err(stale()); }
+        let selected: Option<(String, i64)> = sqlx::query_as("SELECT route_id, configuration_revision FROM task_processing_routes WHERE task_id = ? ORDER BY revision DESC LIMIT 1")
+            .bind(request.task_id.to_string()).fetch_optional(&mut *tx).await.map_err(backend)?;
+        if selected != Some((attribution.route_id.clone(), to_db(attribution.configuration_revision)?)) { return Err(stale()); }
+        sqlx::query("INSERT INTO automated_permission_reviews (invocation_id, request_id, attempt_id, attribution, recorded_at_ms) VALUES (?, ?, ?, ?, ?)")
+            .bind(&attribution.invocation_id).bind(request.request_id.to_string()).bind(&attribution.attempt_id)
+            .bind(attribution.to_value().to_string()).bind(now).execute(&mut *tx).await.map_err(backend)?;
+        sqlx::query("INSERT INTO permission_decisions (request_id,outcome,actor_kind,actor_ref,decided_at_ms) VALUES (?, ?, 'automated_reviewer', ?, ?)")
+            .bind(request.request_id.to_string()).bind(decision.outcome.as_str()).bind(&decision.actor_ref).bind(now)
+            .execute(&mut *tx).await.map_err(backend)?;
+        insert_receipt(&mut tx, &receipt).await?;
+        tx.commit().await.map_err(backend)
+    }
+}

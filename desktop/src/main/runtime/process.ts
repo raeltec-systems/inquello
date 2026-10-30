@@ -211,6 +211,18 @@ export class AppServerRuntime extends EventEmitter<{ state: [StateChange] }> {
   }
 
   /** Sends a request. Rejected locally, never forwarded, unless the runtime is `ready`. */
+  /** Main-only, dedicated bounded credential channel. */
+  privateRouteAuth(params: unknown): Promise<unknown> {
+    if (this.state !== 'ready' || !this.rpc) return Promise.reject(new Error('Private route handoff unavailable'));
+    const rpc = this.rpc;
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        void this.stop().finally(() => reject(new Error('Private route handoff timed out; runtime stopped')));
+      }, 5_000);
+      rpc.privateRouteAuth(params).then(value => { clearTimeout(timer); resolve(value); }, () => { clearTimeout(timer); reject(new Error('Private route handoff refused')); });
+    });
+  }
+
   request<T = unknown>(method: string, params?: unknown): Promise<T> {
     if (this.currentState !== 'ready' || this.exitSeen || !this.rpc) {
       return Promise.reject(new NotReadyError(this.notReadyState()));

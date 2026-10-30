@@ -361,3 +361,87 @@ Build output and disk use:
 - Free space on C: went from 6,670,249,984 to 6,576,173,056 bytes, a drop of about 94 MB. About 62 MB of that is the nested npm cache (deviation 6). The rest is unrelated system and tooling activity.
 
 AC 1.1.2 status: both binaries build and report a version, and the SDK build exits 0.
+
+
+## Story 1.22 focused fork patch — authored 2026-10-30, native gates unmet
+
+Canonical source commit: `7cae5f3aceeec3f84b5eca6e3fb57cf774553b8e`, tree
+`7b05db4595ea7f20126ba918b06042c2065cd07c`. This materialized workspace has no local
+Git metadata (`NO_VCS`). Missing source context was fetched read-only at that exact
+commit through the connected repository and checked against Git blob SHA where
+materialized; no remote writes, dependencies/toolchains installed, or live inference.
+
+- Additive route domain/store: principal-private candidate configurations, exact
+  candidate-revision Task selections, independent route revisions and atomic
+  receipts (migration 0006). Compiled route/model/API/deployment evidence gates
+  remain fail-closed; **no passing capability evidence was added**.
+- Shared versioned CR-1 contracts, Messages request/SSE translation and volatile
+  scoped auth live in the Inquello protocol/adapters. `WireApi::Messages` dispatch
+  at the retained model client is explicit; no Messages prewarm, automatic retry,
+  provider fallback, environment credential or configurable production endpoint.
+  Existing Responses WebSocket→HTTP recovery remains on the same route.
+- Private stdio credential handoff is bounded and excluded from generic request
+  analytics/raw error diagnostics. Key, session and runtime transitions invalidate principal/credential scope;
+  Task selection invalidates only that Task, without rebinding unchanged credentials. Codex continues using inherited keyring authentication.
+- Scoped reviewer invocations are runtime-created, hidden, one-use and attributed.
+  Main refreshes authority/policy and trusted data classification on both sides of inference; `reviewApply` receives
+  no verdict/handle and atomically checks pending request, expiry and current local
+  revisions with decision/receipt attribution (migration 0007). Public automated
+  actor references are refused and the global reviewer remains `user`.
+- Desktop configuration/selection and permission mediation use named operations,
+  stale-result protection and truthful separate credential/adapter/evidence states.
+  Applicable Task data tier defaults to unknown, hence human permission handling;
+  only trusted isolated fixtures provide synthetic classification. No UI enablement
+  toggle or real-data route was introduced.
+- A default-off, debug-only `inference-fixtures` native target invokes actual
+  inference inside an app-server child through a private stdio fixture method.
+  Emitted tools traverse that same child's real permission/sandbox executor;
+  the parent only serves loopback TLS fixtures and checks results. This is not
+  production Task-start orchestration (Story 1.25). **Never ship that feature.** See
+  `engine/codex-rs/app-server/tests/INQUELLO-MESSAGES-FIXTURES.md` for exact commands,
+  assertions and the explicitly required Linux fixture target.
+
+### Verification and release gate
+
+Corrected loop-1 desktop build/types passed; focused tests **494 passed / 12 files**.
+Final full suite: **1035 passed, 3 failed, 5 skipped; 38 files passed, 12 failed,
+1 skipped**. Runtime-dependent collection, reference assets and generated/Git
+metadata are absent. Five font assets remain unresolved. Logs:
+`desktop/validation/story122-loop1-*.log`. Seven migrations applied together in
+isolated Python SQLite 3.53.1; this validates SQL schema only, not Rust transaction
+or concurrency behavior. Round-1 results in the spec remain historical only.
+
+All cargo verification/build attempts failed before execution (`cargo: command not
+found`, exit 127). Native API compatibility, fixture behavior, formatting, clippy,
+full source exhaustiveness, packaged integration and keyring smoke are **unverified**.
+Targeted pinned WireApi consumers were inspected and the remote-config test-helper
+match corrected to refuse representing Messages as remote Responses; this is not
+an exhaustive complete-checkout compiler result. Genuine protocol generation fails
+without Git metadata/runtime; generated files and Cargo.lock were not hand-edited.
+Cargo must genuinely resolve the new workspace dependency edges/features; do not
+blindly discard its lockfile changes as the older version-only deviation did.
+
+In a complete checkout with the approved pinned toolchain and isolated database:
+run the Story 1.22 spec's cargo fmt/tests/clippy commands, the explicit native fixture
+runbook, and separate CLI then app-server default-feature builds. Review and retain
+genuine lock/schema changes; build and commit the reviewed engine source before
+`pnpm generate:protocol`. Then run desktop build/full tests and the sandbox-enabled,
+seeded keyring smoke with all earlier reports. The routes smoke here is deliberately
+configuration-only, not evidence that inference is verified. Keep Story 1.22
+in progress until every required gate is established; no release/merge is implied.
+
+### Corrected lifecycle and continuation contracts
+
+Configuration drafts retain their loaded expected revision until an explicit reload;
+refresh cannot turn stale edits into current writes. Task selection epochs are
+independent of global principal/credential/runtime epochs. Credentials are checked
+against both generation and vault identity after asynchronous invalidation waits.
+Unknown or changed Task classification invalidates staged review; current forbid and
+cannot-ask rules are checked before permitting human handling.
+
+Responses opaque history has its own exact route/model/API-bound continuation
+representation rather than Messages parsing. Native Responses items are reconstructed
+without rewriting encrypted content. Messages signed/redacted blocks retain exact
+roundtrips. Core/adapter bounded sends and transport headers observe cancellation;
+receiver closure cancels local transport. No remote rollback or billing reversal is
+claimed. Added native regression sources remain unexecuted until cargo is available.

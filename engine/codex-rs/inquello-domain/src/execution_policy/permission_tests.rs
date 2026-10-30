@@ -417,7 +417,7 @@ fn the_reviewer_is_off_by_default_and_not_available_without_a_route() {
     assert_eq!(state.runtime_setting(), "user");
     assert_eq!(
         permission_reviewer(&on, true).runtime_setting(),
-        "auto_review"
+        "user"
     );
 }
 

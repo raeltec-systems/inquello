@@ -65,6 +65,25 @@ export class ProviderService {
   private codexBusy = false;
   private readonly secrets = new Set<string>();
 
+  private routeInvalidator: ((route: 'claude-api-key' | 'codex-responses') => Promise<void>) | null = null;
+
+  routeCredentialChanging(route: 'claude-api-key' | 'codex-responses'): boolean { return route === 'claude-api-key' ? this.claudeBusy : this.codexBusy; }
+  setRouteInvalidator(invalidate: (route: 'claude-api-key' | 'codex-responses') => Promise<void>): void { this.routeInvalidator = invalidate; }
+
+  /** The vault and generation must both still identify the acquired credential. */
+  private sameClaude(generation: number, key: string | undefined): boolean {
+    return generation === this.claudeGeneration && this.options.vault.load()?.key === key;
+  }
+
+  /** Main-only secret handoff. No credential is returned, queued or persisted here. */
+  async handoffClaude(send: (key: string) => Promise<unknown>): Promise<unknown> {
+    const generation = this.claudeGeneration, record = this.options.vault.load();
+    if (!record || record.state === 'rejected' || this.claudeBusy) throw new Error('Claude credential unavailable');
+    const response = await send(record.key);
+    if (!this.sameClaude(generation, record.key)) throw new Error('Claude credential changed');
+    return response;
+  }
+
   constructor(private readonly options: ProviderServiceOptions) {}
 
   get vault(): ClaudeKeyVault {
@@ -132,6 +151,10 @@ export class ProviderService {
       this.remember(key);
       const problem = claudeKeyProblem(key);
       if (problem) return { ok: false, reason: problem };
+      const generation = ++this.claudeGeneration, previousKey = this.options.vault.load()?.key;
+      await this.routeInvalidator?.('claude-api-key');
+      // Local data deletion is allowed while invalidation waits; it always wins.
+      if (!this.sameClaude(generation, previousKey)) return { ok: false, reason: CLAUDE_REASONS.changed };
       try {
         this.options.vault.save({ version: 1, key, state: 'stored-unverified' });
       } catch (error) {
@@ -158,6 +181,9 @@ export class ProviderService {
       if (generation !== this.claudeGeneration || !current || current.key !== record.key) return { ok: false, reason: CLAUDE_REASONS.changed };
       // Not reaching Anthropic says nothing about the key: a known rejection stands.
       if (outcome === 'unreachable' && current.state === 'rejected') return { ok: false, reason: CLAUDE_REASONS.unreachableRejected };
+      if (outcome === 'rejected') await this.routeInvalidator?.('claude-api-key');
+      // Every asynchronous boundary before persistence requires a new vault check.
+      if (!this.sameClaude(generation, record.key)) return { ok: false, reason: CLAUDE_REASONS.changed };
       this.options.vault.save({ version: 1, key: record.key, state: outcome });
       if (outcome === 'verified') return { ok: true };
       return { ok: false, reason: outcome === 'rejected' ? CLAUDE_REASONS.rejected : CLAUDE_REASONS.unreachable };
@@ -168,6 +194,7 @@ export class ProviderService {
     return this.claudeAction(async () => {
       this.claudeGeneration += 1;
       this.options.vault.clear();
+      await this.routeInvalidator?.('claude-api-key');
       this.options.logger.info('providers: Claude API key removed');
       return { ok: true };
     });
@@ -178,9 +205,10 @@ export class ProviderService {
    * is held (memory-only or the encrypted file), even while another Claude
    * action runs; a check in flight then cannot restore or relabel it.
    */
-  forgetClaudeKey(): void {
+  async forgetClaudeKey(): Promise<void> {
     this.claudeGeneration += 1;
     this.options.vault.clear();
+    await this.routeInvalidator?.('claude-api-key');
     this.options.logger.info('providers: Claude API key removed by local data deletion');
   }
 
@@ -191,13 +219,14 @@ export class ProviderService {
 
   codexLogin(request: CodexLoginRequest): Promise<ProviderActionResult> {
     return this.codexAction(async () => {
+      await this.routeInvalidator?.('codex-responses');
       if (request.type === 'apiKey') this.remember(request.apiKey);
       return this.options.codex.login(request);
     });
   }
 
   codexLogout(): Promise<ProviderActionResult> {
-    return this.codexAction(() => this.options.codex.logout());
+    return this.codexAction(async () => { await this.routeInvalidator?.('codex-responses'); return this.options.codex.logout(); });
   }
 }
 

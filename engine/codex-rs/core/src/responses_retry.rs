@@ -64,6 +64,11 @@ pub(crate) async fn handle_response_stream_error(
     request: ResponsesStreamRequest,
 ) -> Result<(), CodexErr> {
     let turn_context = &step_context.turn;
+    // Messages recovery is explicit: a new attributable attempt follows effects
+    // reconciliation, never Responses retry/model fallback.
+    if turn_context.provider.info().wire_api == codex_model_provider_info::WireApi::Messages {
+        return Err(err);
+    }
     if matches!(request, ResponsesStreamRequest::Sampling)
         && matches!(err.details(), CodexErrorDetails::ContentFilter)
     {

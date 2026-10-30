@@ -33,7 +33,7 @@
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 
 generated: 10-27-2026 19:11
-last_updated: 10-30-2026 09:30
+last_updated: 10-30-2026 12:18
 project: inquello
 project_key: INQUELLO
 tracking_system: file-system
@@ -72,7 +72,7 @@ development_status:
   1-19-bound-initial-tool-reads-writes-and-network-access: done
   1-20-authorize-specific-actions-without-granting-professional-app: done
   1-21-discover-current-tools-and-connection-states-honestly: in-progress # implementation authored; native/runtime acceptance unverified
-  1-22-configure-initial-processing-routes-without-silent-fallback: backlog
+  1-22-configure-initial-processing-routes-without-silent-fallback: in-progress
   1-23-show-local-execution-separately-from-inference: backlog
   1-24-choose-reasoning-and-inspect-attributable-usage: backlog
   1-25-start-a-real-plain-text-private-task-on-a-configured-route: backlog

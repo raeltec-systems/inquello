@@ -183,7 +183,13 @@ fn configured_store_path() -> Option<PathBuf> {
     }
 }
 
+#[path = "inquello_routes.rs"]
+mod route_bridge;
+#[path = "inquello_reviewer.rs"]
+mod reviewer;
+
 pub(crate) struct InquelloRequestProcessor {
+    routes: reviewer::RouteRuntime,
     store_path: Option<PathBuf>,
     /// Roots the agent can write; the store may not live inside one.
     agent_writable_roots: Vec<PathBuf>,
@@ -201,6 +207,7 @@ impl InquelloRequestProcessor {
         agent_writable_roots: Vec<PathBuf>,
     ) -> Self {
         Self {
+            routes: reviewer::RouteRuntime::default(),
             store_path,
             agent_writable_roots,
             store: tokio::sync::OnceCell::new(),
@@ -208,8 +215,11 @@ impl InquelloRequestProcessor {
         }
     }
 
-    pub(crate) fn connection_closed(&self, connection_id: ConnectionId) {
-        self.principals_guard().remove(&connection_id);
+    pub(crate) async fn connection_closed(&self, connection_id: ConnectionId) {
+        let mut state = self.routes.state.lock().await;
+        if let Some(principal) = self.principals_guard().remove(&connection_id) {
+            self.routes.invalidate_principal(&mut state, principal);
+        }
     }
 
     fn principals_guard(&self) -> std::sync::MutexGuard<'_, HashMap<ConnectionId, PrincipalId>> {
@@ -220,12 +230,16 @@ impl InquelloRequestProcessor {
 
     // ---- session -------------------------------------------------------------
 
-    pub(crate) fn set_principal(
+    pub(crate) async fn set_principal(
         &self,
         connection_id: ConnectionId,
         params: InquelloSetPrincipalParams,
     ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        let mut state = self.routes.state.lock().await;
         let mut principals = self.principals_guard();
+        if let Some(principal) = principals.get(&connection_id).copied() {
+            self.routes.invalidate_principal(&mut state, principal);
+        }
         match params.principal_id {
             Some(value) => {
                 let principal = PrincipalId::parse(&value).map_err(domain_error)?;
@@ -623,9 +637,16 @@ impl InquelloRequestProcessor {
         device: DeviceRequirements,
         user: UserConfig,
     ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        self.observe_review_authority(connection_id, &params.workspace_policy, &device, &user).await?;
         let actor = self.actor(connection_id)?;
         let layer = workspace_layer(&params.workspace_policy)?;
         let policy = execution_policy::effective_policy(&layer, &device, &user);
+        let route_available = if let Some(task_id) = &params.task_id {
+            let state = self.routes.state.lock().await;
+            let selected = inquello_domain::routes::task_route(&self.store().await?, actor, task_id).await.map_err(domain_error)?;
+            let credential = selected.current.as_ref().is_some_and(|record| state.credential(actor.principal_id, &record.configuration).is_some());
+            selected.eligibility(credential, true, inquello_domain::routes::DataTier::Synthetic).enabled
+        } else { false };
         let task = match params.task_id {
             Some(task_id) => {
                 let store = self.store().await?;
@@ -664,7 +685,7 @@ impl InquelloRequestProcessor {
                     .iter()
                     .map(sourced_rule_view)
                     .collect(),
-                reviewer: reviewer_view(&policy),
+                reviewer: reviewer_view(&policy, route_available),
                 task,
             }
             .into(),
@@ -698,7 +719,10 @@ impl InquelloRequestProcessor {
         device: DeviceRequirements,
         user: UserConfig,
     ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        let mut review_state = self.routes.state.lock().await;
         let (store, actor) = self.context(connection_id).await?;
+        self.routes.cancel_principal_reviews(&mut review_state, actor.principal_id);
+
         let writer = state_writer(&params.actor_kind, params.actor_ref)?;
         let layer = workspace_layer(&params.workspace_policy)?;
         let policy = execution_policy::effective_policy(&layer, &device, &user);
@@ -854,7 +878,7 @@ impl InquelloRequestProcessor {
         let reviewer = (
             "approvals_reviewer".to_string(),
             json!(
-                execution_policy::permission_reviewer(policy, PROCESSING_ROUTE_AVAILABLE)
+                execution_policy::permission_reviewer(policy, false)
                     .runtime_setting()
             ),
         );
@@ -899,11 +923,6 @@ impl InquelloRequestProcessor {
 }
 
 // ---- Command rules and permission to act (Story 1.20) ----------------------------
-
-/// Whether a processing route exists for the automatic permission reviewer.
-/// None does before Story 1.22, so the reviewer is never active and the
-/// runtime's `approvals_reviewer` stays `user`.
-pub(crate) const PROCESSING_ROUTE_AVAILABLE: bool = false;
 
 /// The justification prefix that carries a rule's index through the
 /// runtime's matcher.
@@ -1032,7 +1051,10 @@ impl InquelloRequestProcessor {
         connection_id: ConnectionId,
         params: InquelloUserRulesSetParams,
     ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        let mut review_state = self.routes.state.lock().await;
         let (store, actor) = self.context(connection_id).await?;
+        self.routes.cancel_principal_reviews(&mut review_state, actor.principal_id);
+
         let outcome = execution_policy::set_user_rules(
             &store,
             &SystemClock,
@@ -1163,18 +1185,11 @@ impl InquelloRequestProcessor {
                 ));
             }
             ("system", Some(reference)) => execution_policy::Decider::System { reference },
-            ("automated_reviewer", _) if !PROCESSING_ROUTE_AVAILABLE => {
-                return Err(refusal(
-                    "reviewer_not_available",
-                    "Automated permission review: not available (no processing route)",
-                ));
+            ("automated_reviewer", _) => {
+                return Err(refusal("reviewer_not_available",
+                    "Only a trusted runtime-created invocation can record automated permission review"));
             }
-            ("automated_reviewer", Some(reference)) => {
-                execution_policy::Decider::AutomatedReviewer { reference }
-            }
-            ("system" | "automated_reviewer", None) => {
-                return Err(invalid("this actor needs an actor reference"));
-            }
+            ("system", None) => return Err(invalid("this actor needs an actor reference")),
             _ => {
                 return Err(invalid(
                     "actor_kind must be human, system or automated_reviewer",
@@ -1231,12 +1246,14 @@ fn sourced_rule_view(sourced: &SourcedRule) -> InquelloCommandRuleView {
     }
 }
 
-fn reviewer_view(policy: &EffectivePolicy) -> InquelloPermissionReviewer {
-    let state = execution_policy::permission_reviewer(policy, PROCESSING_ROUTE_AVAILABLE);
+fn reviewer_view(policy: &EffectivePolicy, route_available: bool) -> InquelloPermissionReviewer {
+    let state = execution_policy::permission_reviewer(policy, route_available);
     InquelloPermissionReviewer {
         enabled: policy.automatic_permission_review.value,
         state: state.kind().to_string(),
-        label: state.label().to_string(),
+        label: if state == execution_policy::ReviewerState::NotAvailable {
+            "Automated permission review: not available (no verified eligible Task route)".into()
+        } else { state.label().to_string() },
         runtime_setting: state.runtime_setting().to_string(),
     }
 }
@@ -1905,3 +1922,10 @@ fn domain_error(error: DomainError) -> JSONRPCErrorError {
 #[cfg(test)]
 #[path = "inquello_processor_tests.rs"]
 mod tests;
+
+#[cfg(all(feature = "inference-fixtures", debug_assertions))]
+impl InquelloRequestProcessor {
+    pub(crate) fn fixture_principal(&self, connection: ConnectionId) -> Result<String, JSONRPCErrorError> {
+        self.actor(connection).map(|actor| actor.principal_id.to_string())
+    }
+}

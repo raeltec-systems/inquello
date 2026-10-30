@@ -1,3 +1,5 @@
+import type { RouteService } from '../routes/service';
+import { configureRoutePayload, taskRoutePayload, selectRoutePayload } from '../routes/validators';
 import { capabilityPayload, inventoryPayload, type CapabilityInput, type CapabilityInventory, type CapabilityResult } from '../capabilities/types';
 /**
  * Named renderer operations (AD-5).
@@ -58,6 +60,10 @@ import { describeSender, isTrustedSender, type InvokeEventLike } from './sender'
 
 /** Every operation the preload exposes, in `<namespace>.<name>` form. */
 export const OPERATION_NAMES = [
+  'routes.list',
+  'routes.configure',
+  'routes.forTask',
+  'routes.select',
   'capabilities.getInventory',
   'capabilities.manage',
   'runtime.getStatus',
@@ -277,6 +283,7 @@ export interface PolicyOperations {
 }
 
 export interface OperationDeps {
+  routes?: Pick<RouteService, 'list' | 'configure' | 'forTask' | 'select'>;
   capabilities?: {getInventory(workspaceId: string): Promise<CapabilityInventory>; manage(input: CapabilityInput): Promise<CapabilityResult>};
   runtimeState: () => RuntimeState;
   runtimeVersion: string;
@@ -465,8 +472,15 @@ export function createOperations(deps: OperationDeps): Operation[] {
   };
   const capabilityInventory: Operation<{workspaceId:string}, CapabilityInventory> = {name:'capabilities.getInventory',validate:inventoryPayload,handle:({workspaceId})=>{ if(!deps.capabilities) throw new Error('capabilities unavailable'); return deps.capabilities.getInventory(workspaceId); }};
   const capabilityManage: Operation<CapabilityInput, CapabilityResult> = {name:'capabilities.manage',validate:capabilityPayload,handle:(input)=>{ if(!deps.capabilities) throw new Error('capabilities unavailable'); return deps.capabilities.manage(input); }};
+  const routes = () => { if (!deps.routes) throw new Error('Processing routes unavailable'); return deps.routes; };
+  const routeOps: Operation[] = [
+    { name: 'routes.list', validate: noPayload, handle: () => routes().list() },
+    { name: 'routes.configure', validate: configureRoutePayload, handle: (input) => routes().configure(input as Parameters<RouteService['configure']>[0]) },
+    { name: 'routes.forTask', validate: taskRoutePayload, handle: (input) => routes().forTask((input as {taskId:string}).taskId) },
+    { name: 'routes.select', validate: selectRoutePayload, handle: (input) => routes().select(input as Parameters<RouteService['select']>[0]) },
+  ];
   return [
-    capabilityInventory, capabilityManage,
+    ...routeOps, capabilityInventory, capabilityManage,
     getStatus,
     identityStatus,
     signIn,

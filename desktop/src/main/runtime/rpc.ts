@@ -55,7 +55,6 @@ interface QueuedLine {
   requestId?: number;
 }
 
-const MAX_LOGGED_LINE_CHARS = 200;
 
 export class ConnectionClosedError extends Error {
   constructor(method: string) {
@@ -100,6 +99,20 @@ export class RpcConnection {
   }
 
   request<T = unknown>(method: string, params?: unknown): Promise<T> {
+    if (method === 'inquello/routes/privateAuth') return Promise.reject(new Error('Use the private route handoff'));
+    return this.requestInternal<T>(method, params);
+  }
+
+  /** Secret-bearing route handoffs bypass queues and raw diagnostics. Never retried. */
+  privateRouteAuth(params: unknown): Promise<unknown> {
+    if (this.waitingForDrain || this.queue.length > 0 || Buffer.byteLength(JSON.stringify(params)) > 7000) return Promise.reject(new Error('Private route handoff unavailable'));
+    return this.requestInternal('inquello/routes/privateAuth', params).then((value) => {
+      if (!value || typeof value !== 'object' || (value as { accepted?: unknown }).accepted !== true) throw new Error('Private route handoff refused');
+      return { accepted: true };
+    }, () => { throw new Error('Private route handoff refused'); });
+  }
+
+  private requestInternal<T = unknown>(method: string, params?: unknown): Promise<T> {
     if (this.closed) return Promise.reject(new ConnectionClosedError(method));
     const id = this.nextId++;
     const message: { id: number; method: string; params?: unknown } = { id, method };
@@ -116,6 +129,7 @@ export class RpcConnection {
   }
 
   notify(method: string, params?: unknown): void {
+    if (method === 'inquello/routes/privateAuth') throw new Error('Use the private route handoff');
     if (this.closed) throw new ConnectionClosedError(method);
     const message: { method: string; params?: unknown } = { method };
     if (params !== undefined) message.params = params;
@@ -190,11 +204,11 @@ export class RpcConnection {
     try {
       message = JSON.parse(line);
     } catch {
-      this.options.logger.warn(`skipping invalid JSON line from app-server (${line.length} chars): ${preview(line)}`);
+      this.options.logger.warn('skipping invalid JSON line from app-server');
       return;
     }
     if (typeof message !== 'object' || message === null || Array.isArray(message)) {
-      this.options.logger.warn(`skipping non-object message from app-server: ${preview(line)}`);
+      this.options.logger.warn('skipping non-object message from app-server');
       return;
     }
     const record = message as Record<string, unknown>;
@@ -223,7 +237,7 @@ export class RpcConnection {
         );
       });
     } else {
-      this.options.logger.warn(`skipping unrecognised message from app-server: ${preview(line)}`);
+      this.options.logger.warn('skipping unrecognised message from app-server');
     }
   }
 
@@ -293,8 +307,4 @@ function isErrorBody(value: unknown): value is { code: number; message: string; 
   if (typeof value !== 'object' || value === null) return false;
   const body = value as Record<string, unknown>;
   return typeof body.code === 'number' && typeof body.message === 'string';
-}
-
-function preview(line: string): string {
-  return line.length > MAX_LOGGED_LINE_CHARS ? `${line.slice(0, MAX_LOGGED_LINE_CHARS)}...` : line;
 }

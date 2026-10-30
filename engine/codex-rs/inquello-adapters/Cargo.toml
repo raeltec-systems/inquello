@@ -8,6 +8,12 @@ license.workspace = true
 # store lives here, together with its embedded migrations.
 
 [dependencies]
+inquello-protocol = { workspace = true }
+reqwest = { workspace = true, features = ["json", "stream", "rustls-tls"] }
+futures = { workspace = true }
+eventsource-stream = { workspace = true }
+tokio = { workspace = true, features = ["sync", "time", "rt", "macros"] }
+tokio-util = { workspace = true, features = ["rt"] }
 inquello-domain = { workspace = true }
 sqlx = { workspace = true }
 sqlx-macros = { workspace = true }
@@ -16,9 +22,16 @@ thiserror = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
+rcgen = { workspace = true }
+rustls = { workspace = true }
+tokio-rustls = { workspace = true }
 pretty_assertions = { workspace = true }
 tempfile = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt", "sync"] }
+tokio = { workspace = true, features = ["macros", "rt", "sync", "net", "io-util"] }
 
 [lints]
 workspace = true
+
+# Test-only loopback TLS seam. Never enable in release/package builds.
+[features]
+inference-fixtures = []

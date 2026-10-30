@@ -100,6 +100,8 @@ codex-utils-json-to-toml = { workspace = true }
 codex-utils-path-uri = { workspace = true }
 inquello-adapters = { workspace = true }
 inquello-domain = { workspace = true }
+inquello-protocol = { workspace = true }
+codex-api = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 futures = { workspace = true }
@@ -168,3 +170,7 @@ tokio-rustls = { workspace = true }
 tokio-tungstenite = { workspace = true }
 tracing-opentelemetry = { workspace = true }
 wiremock = { workspace = true }
+
+# Test-only loopback TLS seam. Never enable in release/package builds.
+[features]
+inference-fixtures = ["codex-core/inference-fixtures"]

@@ -57,7 +57,7 @@ export interface IdentityControl {
 
 export interface ProviderControl {
   /** Removes the Claude API key from memory and disk; a check in flight cannot restore it. */
-  forgetClaudeKey(): void;
+  forgetClaudeKey(): void | Promise<void>;
   /** Whether a Claude API key is still held. */
   holdsClaudeKey(): boolean;
 }
@@ -313,7 +313,7 @@ export class DataService {
         try {
           if (categories.includes(CLAUDE_KEY_VAULT)) {
             try {
-              this.options.providers.forgetClaudeKey();
+              await this.options.providers.forgetClaudeKey();
             } catch (error) {
               // The file deletion below retries; the check after it decides.
               this.options.logger.warn(`data: the Claude API key could not be cleared (${(error as NodeJS.ErrnoException).code ?? 'error'})`);

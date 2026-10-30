@@ -97,3 +97,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-17-compose-plain-private-request.md`
   summary: Detect a change of principal for Composer draft clearing from a stable principal reference, not display name and issuer.
   evidence: The renderer is never given a principal ID, so the draft store detects a principal change from display name plus issuer, and clears all drafts on every sign-in or sign-out seen in the window. The gap is a session switch made in main between two principals with the same display name and issuer that the window does not observe. Resolve when main exposes an opaque per-principal fingerprint to the renderer (at latest when drafts gain real sends in Story 1.25).
+
+- source_spec: `spec-1-22-configure-initial-processing-routes-without-silent-fallback.md`
+  summary: Native locked build and genuine generated protocol remain an owner-run acceptance gate (unverified high impact).
+  evidence: Cargo, complete Git checkout and matching runtime unavailable; authored RPC/dependency changes require real compilation, lock resolution and generation before acceptance.

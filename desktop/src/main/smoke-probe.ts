@@ -186,6 +186,7 @@ const TAB_SETTLE_MS = 50;
 
 /** The tree `window.inquello` must expose, as `describe` renders it. */
 export const EXPECTED_BRIDGE_TREE = {
+  routes: { list: 'function', configure: 'function', forTask: 'function', select: 'function', onChanged: 'function' },
   capabilities: { onChanged: 'function', getInventory: 'function', manage: 'function' },
   runtime: { getStatus: 'function' },
   identity: { getStatus: 'function', signIn: 'function', signOut: 'function' },
@@ -3420,4 +3421,28 @@ export async function probeCapabilities(contents: WebContents, options: Capabili
   }
   report.ok = report.failures.length === 0;
   return report;
+}
+
+// ---- governed processing routes (Story 1.22) ------------------------------------
+export interface RoutesReport { ok:boolean; failures:string[]; configured:boolean; verification:'configuration-only'; inferenceFixture:'not-run'; renderer?:{present:boolean;noDefault:boolean;unknownRegion:boolean}; selected?:boolean; reopened?:boolean }
+/** No provider call or credential verification. Packaged inference fixtures remain a separate required gate. */
+export async function probeRoutes(contents:WebContents, options:Omit<OrganiseProbeOptions,'runtimeRequest'> & {routes: import('./routes/service').RouteService}):Promise<RoutesReport>{
+  const report:RoutesReport={ok:false,failures:[],configured:options.identity.config.kind==='configured',verification:'configuration-only',inferenceFixture:'not-run'};
+  try{
+    if(!report.configured){report.failures.push('Seeded identity/runtime topology unavailable; route smoke unmet');return report;}
+    const seed=JSON.parse(fs.readFileSync(options.seedFile??'','utf8')) as {workspace_id?:string};if(!seed.workspace_id)throw new Error('Missing seed');
+    if(!(await options.identity.session.signIn()).ok)throw new Error('Sign-in unavailable');await options.organise.syncPrincipal();options.routes.resume();
+    const initial=await options.routes.list();if(!initial.ok)throw new Error('Routes unavailable');
+    const candidate=initial.value.find(r=>r.routeId==='claude-api-key');if(!candidate)throw new Error('Missing Claude route');
+    const saved=await options.routes.configure({operationId:randomUUID(),expectedRevision:candidate.revision,routeId:'claude-api-key',deployment:'anthropic-direct',model:'claude-sonnet-5-5',apiVersion:'2026-10-21',region:null});if(!saved.ok)throw new Error('Configuration refused');
+    const route=saved.value.find(r=>r.routeId==='claude-api-key');if(!route?.configuration||route.configuration.region!==null||route.enabled)report.failures.push('Configuration or unknown region falsely established eligibility');
+    const created=await options.organise.createTask({operationId:randomUUID(),workspaceId:seed.workspace_id,engagementId:null,folderId:null,title:'Synthetic processing route smoke'});if(!created.ok)throw new Error('Task unavailable');
+    const before=await options.routes.forTask(created.value.taskId);if(!before.ok||before.value.selected!==null)report.failures.push('A new Task had an implicit default route');
+    const selected=await options.routes.select({operationId:randomUUID(),expectedRevision:0,taskId:created.value.taskId,routeId:'claude-api-key',configurationRevision:route!.revision});report.selected=selected.ok;
+    const reopened=await options.routes.forTask(created.value.taskId);report.reopened=reopened.ok&&reopened.value.selected?.configuration?.model==='claude-sonnet-5-5';if(!report.selected||!report.reopened)report.failures.push('Explicit Task route did not reopen');
+    report.renderer=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}location.hash='#specimen';const section=await wait(()=>q('[data-processing-route="claude-api-key"]'),${POLICY_SETTLE_MS});const text=section?.closest('[data-processing-routes]')?.textContent??'';return{present:!!section,noDefault:text.includes('No implicit default'),unknownRegion:text.includes('Unknown')};})()`);
+    if(!report.renderer?.present||!report.renderer.noDefault||!report.renderer.unknownRegion)report.failures.push('Processing routes did not render truthful states');
+  }catch{report.failures.push('Route smoke could not finish; native runtime/topology required');}
+  finally{if(report.configured){await options.routes.quiesce();await options.identity.session.signOut();await options.organise.syncPrincipal().catch(()=>{});options.routes.resume();}}
+  report.ok=report.failures.length===0;return report;
 }

@@ -1601,6 +1601,49 @@ client_request_definitions! {
         serialization: global("inquello"),
         response: v2::InquelloBroadModeSetResponse,
     },
+    InquelloRoutesList => "inquello/routes/list" {
+        params: v2::InquelloRoutesListParams,
+        serialization: None,
+        response: v2::InquelloRoutesListResponse,
+    },
+    InquelloRouteConfigure => "inquello/routes/configure" {
+        params: v2::InquelloRouteConfigureParams,
+        serialization: None,
+        response: v2::InquelloRouteConfigureResponse,
+    },
+    InquelloTaskRouteRead => "inquello/routes/task/read" {
+        params: v2::InquelloTaskRouteReadParams,
+        serialization: None,
+        response: v2::InquelloTaskRouteResponse,
+    },
+    InquelloTaskRouteSet => "inquello/routes/task/set" {
+        params: v2::InquelloTaskRouteSetParams,
+        serialization: None,
+        manual_payload_conversion: manual,
+        response: v2::InquelloTaskRouteResponse,
+    },
+    InquelloRoutePrivateAuth => "inquello/routes/privateAuth" {
+        params: v2::InquelloRoutePrivateAuthParams,
+        serialization: None,
+        response: v2::InquelloRoutePrivateAuthResponse,
+    },
+    InquelloRoutesInvalidate => "inquello/routes/invalidate" {
+        params: v2::InquelloRoutesInvalidateParams,
+        serialization: None,
+        manual_payload_conversion: manual,
+        response: v2::InquelloRoutePrivateAuthResponse,
+    },
+    InquelloPermissionsReviewApply => "inquello/permissions/reviewApply" {
+        params: v2::InquelloPermissionsReviewParams,
+        serialization: None,
+        response: v2::InquelloPermissionsReviewResponse,
+    },
+    InquelloPermissionsReview => "inquello/permissions/review" {
+        params: v2::InquelloPermissionsReviewParams,
+        serialization: None,
+        manual_payload_conversion: manual,
+        response: v2::InquelloPermissionsReviewResponse,
+    },
     /// Inquello (Story 1.19): runs one command inside a Task's tool profile;
     /// the result is the runtime's own `command/exec` result.
     InquelloToolsExec => "inquello/tools/exec" {

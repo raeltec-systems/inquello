@@ -803,3 +803,48 @@ describe('Local data deletion of the Claude API key (review R03)', () => {
     expect(result).toEqual({ ok: false, reason: 'The Claude API key could not be removed and is still stored. Remove it in Providers.' });
   });
 });
+
+describe('Story 1.22 private route credential lifecycle', () => {
+  it('invalidates the old route before replacing or removing a Claude key', async () => {
+    const {service:s}=service();await s.setClaudeKey(KEY);
+    const seen:string[]=[];s.setRouteInvalidator(async()=>{seen.push(s.vault.load()?.key??'absent');});
+    const replacement=KEY+'new';await s.setClaudeKey(replacement);await s.removeClaudeKey();
+    expect(seen).toEqual([KEY,'absent']);expect(s.holdsClaudeKey()).toBe(false);
+  });
+  it('hands a key only to the private callback, not its return or provider state', async () => {
+    const {service:s}=service();await s.setClaudeKey(KEY);let received='';
+    const result=await s.handoffClaude(async key=>{received=key;return{accepted:true};});
+    expect(received).toBe(KEY);expect(JSON.stringify([result,s.snapshot()])).not.toContain(KEY);
+  });
+  it('blocks replacement if cancellation cannot establish safe invalidation', async () => {
+    const {service:s}=service();await s.setClaudeKey(KEY);s.setRouteInvalidator(async()=>{throw new Error('runtime stop unavailable');});
+    await expect(s.setClaudeKey(KEY+'new')).rejects.toThrow();expect(s.vault.load()?.key).toBe(KEY);
+  });
+});
+
+// Only isolated synthetic sentinels: deletion wins at every awaited invalidation boundary.
+describe('Story 1.22 credential invalidation races', () => {
+  for (const backend of [null, 'gnome_libsecret']) {
+    for (const action of ['replace', 'rejected verification'] as const) {
+      it(`${action} cannot restore a ${backend ?? 'memory-only'} key deleted during invalidation`, async () => {
+        const { service: s } = service({ vault: vault(backend), verify: async () => 'rejected' });
+        await s.setClaudeKey(KEY);
+        let release!: () => void;
+        let entered!: () => void;
+        const started = new Promise<void>(resolve => { entered = resolve; });
+        let calls = 0;
+        s.setRouteInvalidator(async () => { if (++calls === 1) { entered(); await new Promise<void>(resolve => { release = resolve; }); } });
+        const pending = action === 'replace' ? s.setClaudeKey(OTHER_KEY) : s.verifyClaudeKey();
+        await started;
+        await s.forgetClaudeKey();
+        release();
+        expect(await pending).toMatchObject({ ok: false, reason: CLAUDE_REASONS.changed });
+        expect(s.holdsClaudeKey()).toBe(false);
+      });
+    }
+  }
+  it('handoff checks vault identity, not generation alone', async () => {
+    const { service: s } = service(); await s.setClaudeKey(KEY);
+    await expect(s.handoffClaude(async () => { s.vault.clear(); return { accepted: true }; })).rejects.toThrow('changed');
+  });
+});

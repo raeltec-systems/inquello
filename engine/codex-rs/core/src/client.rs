@@ -1145,6 +1145,7 @@ impl ModelClient {
     ///
     /// WebSocket use is controlled by provider capability and session-scoped fallback state.
     pub fn responses_websocket_enabled(&self) -> bool {
+        if self.state.provider.info().wire_api == WireApi::Messages { return false; }
         if !self.state.provider.info().supports_websockets
             || self.state.disable_websockets.load(Ordering::Relaxed)
         {
@@ -1321,6 +1322,7 @@ impl ModelClient {
     }
 
     pub(crate) async fn prewarm_auth(&self) -> Result<()> {
+        if self.state.provider.info().wire_api == WireApi::Messages { return Ok(()); }
         self.current_client_setup(ClientRouting::Workspace)
             .await
             .map(|_| ())
@@ -2402,10 +2404,44 @@ impl ModelClientSession {
     ) -> Result<ResponseStream> {
         let wire_api = self.client.state.provider.info().wire_api;
         match wire_api {
+            WireApi::Messages => {
+                let context = crate::inquello_inference::take_attempt(&self.client.state.thread_id.to_string())?
+                    .ok_or_else(|| CodexErr::Fatal("Messages requires a trusted current Task-route binding; no fallback".into()))?;
+                let provider = self.client.state.provider.info();
+                if context.binding.route_id != "claude-api-key" || context.binding.model != model_info.slug
+                    || effort.is_some() || !matches!(summary, ReasoningSummaryConfig::None)
+                    || service_tier.is_some() || self.client.state.model_verbosity.is_some()
+                    || provider.base_url.as_deref().is_some_and(|url| url != "https://api.anthropic.com/v1")
+                    || provider.env_key.is_some() || provider.experimental_bearer_token.is_some()
+                    || provider.auth.is_some() || provider.gateway_oauth.is_some() || provider.aws.is_some()
+                    || provider.http_headers.is_some() || provider.env_http_headers.is_some()
+                    || provider.query_params.is_some() || provider.requires_openai_auth
+                {
+                    return Err(CodexErr::Fatal("Unsupported selected Messages settings, endpoint or model; no fallback".into()));
+                }
+                crate::inquello_inference::messages(prompt, context).await
+            }
             WireApi::Responses => {
+                let context = crate::inquello_inference::take_attempt(&self.client.state.thread_id.to_string())?;
+                let request = context.as_ref().map(|context| {
+                    if context.binding.route_id != "codex-responses" || context.binding.model != model_info.slug
+                        || context.binding.api_version != "responses-v1" {
+                        return Err(CodexErr::Fatal("Selected Responses route/model changed; no fallback".into()));
+                    }
+                    let mut request = crate::inquello_inference::request(prompt, context)?;
+                    request.settings = serde_json::json!({
+                        "reasoning_effort": effort,
+                        "reasoning_summary": summary,
+                        "service_tier": service_tier,
+                        "verbosity": self.client.state.model_verbosity,
+                    });
+                    Ok(request)
+                }).transpose()?;
+                let native_prompt = context.as_ref().map(|context| crate::inquello_inference::responses_prompt(prompt, context)).transpose()?;
+                let prompt = native_prompt.as_ref().unwrap_or(prompt);
                 if self.client.responses_websocket_enabled() {
                     let request_trace = current_span_w3c_trace_context();
-                    match self
+                    match crate::inquello_inference::await_dispatch(self
                         .stream_responses_websocket(
                             prompt,
                             model_info,
@@ -2417,17 +2453,20 @@ impl ModelClientSession {
                             /*warmup*/ false,
                             request_trace,
                             inference_trace,
-                        )
+                        ), context.as_ref())
                         .await?
                     {
-                        WebsocketStreamOutcome::Stream(stream) => return Ok(stream),
+                        WebsocketStreamOutcome::Stream(stream) => return Ok(match (context, request) {
+                            (Some(context), Some(request)) => crate::inquello_inference::responses(stream, context, request),
+                            _ => stream,
+                        }),
                         WebsocketStreamOutcome::FallbackToHttp => {
                             self.try_switch_fallback_transport(session_telemetry, model_info);
                         }
                     }
                 }
 
-                ResponsesHttpExecutor::new(&self.client)
+                let stream = crate::inquello_inference::await_dispatch(ResponsesHttpExecutor::new(&self.client)
                     .stream_responses_http(
                         &self.turn_state,
                         /*expected_auth_owner*/ None,
@@ -2440,8 +2479,12 @@ impl ModelClientSession {
                         service_tier,
                         responses_metadata,
                         inference_trace,
-                    )
-                    .await
+                    ), context.as_ref())
+                    .await?;
+                Ok(match (context, request) {
+                    (Some(context), Some(request)) => crate::inquello_inference::responses(stream, context, request),
+                    _ => stream,
+                })
             }
         }
     }
@@ -3135,3 +3178,4 @@ impl WebsocketTelemetry for ApiTelemetry {
 #[cfg(test)]
 #[path = "client_tests.rs"]
 mod tests;
+

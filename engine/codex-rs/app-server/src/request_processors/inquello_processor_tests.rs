@@ -48,13 +48,13 @@ fn kind(result: Result<Option<ClientResponsePayload>, JSONRPCErrorError>) -> Str
         .unwrap_or_default()
 }
 
-fn sign_in(processor: &InquelloRequestProcessor, connection: ConnectionId, principal: &str) {
+async fn sign_in(processor: &InquelloRequestProcessor, connection: ConnectionId, principal: &str) {
     let bound: InquelloSetPrincipalResponse = decode(processor.set_principal(
         connection,
         InquelloSetPrincipalParams {
             principal_id: Some(principal.to_string()),
         },
-    ));
+    ).await);
     assert_eq!(bound.principal_id.as_deref(), Some(principal));
 }
 
@@ -111,7 +111,7 @@ async fn calls_before_set_principal_are_unauthenticated() {
             InquelloSetPrincipalParams {
                 principal_id: Some("not-a-uuid".to_string()),
             },
-        )),
+        ).await),
         "invalid"
     );
 }
@@ -119,7 +119,7 @@ async fn calls_before_set_principal_are_unauthenticated() {
 #[tokio::test]
 async fn without_a_store_path_methods_answer_store_not_configured() {
     let processor = InquelloRequestProcessor::with_store_path(None, Vec::new());
-    sign_in(&processor, DESKTOP, ALICE);
+    sign_in(&processor, DESKTOP, ALICE).await;
     assert_eq!(
         kind(processor.workspace_list(DESKTOP).await),
         "store_not_configured"
@@ -134,7 +134,7 @@ async fn a_store_inside_the_runtime_home_is_refused() {
         Some(dir.path().join("working.sqlite")),
         vec![dir.path().to_path_buf()],
     );
-    sign_in(&processor, DESKTOP, ALICE);
+    sign_in(&processor, DESKTOP, ALICE).await;
     assert_eq!(
         kind(processor.workspace_list(DESKTOP).await),
         "store_unavailable"
@@ -147,7 +147,7 @@ async fn organise_engagement_folder_and_task_then_move_it() {
         dir: _dir,
         processor,
     } = fixture();
-    sign_in(&processor, DESKTOP, ALICE);
+    sign_in(&processor, DESKTOP, ALICE).await;
     let created: InquelloEngagementResponse = decode(
         processor
             .engagement_create(DESKTOP, engagement_params("op-e", WORKSPACE))
@@ -247,7 +247,7 @@ async fn refusals_carry_kinds_stale_revisions_and_replays() {
         dir: _dir,
         processor,
     } = fixture();
-    sign_in(&processor, DESKTOP, ALICE);
+    sign_in(&processor, DESKTOP, ALICE).await;
     let elsewhere: InquelloEngagementResponse = decode(
         processor
             .engagement_create(DESKTOP, engagement_params("op-e", OTHER_WORKSPACE))
@@ -315,8 +315,8 @@ async fn tasks_are_listed_only_for_their_creator() {
         dir: _dir,
         processor,
     } = fixture();
-    sign_in(&processor, DESKTOP, ALICE);
-    sign_in(&processor, OTHER, BOB);
+    sign_in(&processor, DESKTOP, ALICE).await;
+    sign_in(&processor, OTHER, BOB).await;
     let shared: InquelloEngagementResponse = decode(
         processor
             .engagement_create(DESKTOP, engagement_params("op-e", WORKSPACE))
@@ -364,9 +364,9 @@ async fn tasks_are_listed_only_for_their_creator() {
 
     // Signing out (or closing the connection) unbinds the principal.
     let _: InquelloSetPrincipalResponse =
-        decode(processor.set_principal(DESKTOP, InquelloSetPrincipalParams { principal_id: None }));
+        decode(processor.set_principal(DESKTOP, InquelloSetPrincipalParams { principal_id: None }).await);
     assert_eq!(kind(tree(DESKTOP).await), "unauthenticated");
-    processor.connection_closed(OTHER);
+    processor.connection_closed(OTHER).await;
     assert_eq!(kind(tree(OTHER).await), "unauthenticated");
 }
 
@@ -417,7 +417,7 @@ async fn task_states_are_recorded_and_listed_by_dimension() {
         dir: _dir,
         processor,
     } = fixture();
-    sign_in(&processor, DESKTOP, ALICE);
+    sign_in(&processor, DESKTOP, ALICE).await;
     let task_id = new_task(&processor, DESKTOP, "op-t").await;
     let list = || {
         processor.state_list(
@@ -505,8 +505,8 @@ async fn state_refusals_carry_their_kinds() {
         dir: _dir,
         processor,
     } = fixture();
-    sign_in(&processor, DESKTOP, ALICE);
-    sign_in(&processor, OTHER, BOB);
+    sign_in(&processor, DESKTOP, ALICE).await;
+    sign_in(&processor, OTHER, BOB).await;
     let task_id = new_task(&processor, DESKTOP, "op-t").await;
     let refused = |params| processor.state_record(DESKTOP, params);
     assert_eq!(
@@ -723,7 +723,7 @@ async fn the_effective_policy_names_its_sources_and_the_capability_contract() {
         dir: _dir,
         processor,
     } = fixture();
-    sign_in(&processor, DESKTOP, ALICE);
+    sign_in(&processor, DESKTOP, ALICE).await;
 
     // No policy, no device requirements: the Inquello defaults.
     let response: InquelloPolicyEffectiveResponse = decode(
@@ -925,7 +925,7 @@ async fn a_broad_mode_is_explicit_permitted_per_task_and_suspended_by_policy() {
         dir: _dir,
         processor,
     } = fixture();
-    sign_in(&processor, DESKTOP, ALICE);
+    sign_in(&processor, DESKTOP, ALICE).await;
     let task_id = new_task(&processor, DESKTOP, "task-1").await;
     let open = || workspace_policy(WORKSPACE, 2, Some(permissive()));
     let closed = || workspace_policy(WORKSPACE, 3, Some(json!({ "allow_full_access": false })));
@@ -1093,7 +1093,7 @@ async fn a_broad_mode_is_explicit_permitted_per_task_and_suspended_by_policy() {
     assert_eq!(task.thread_settings.approval_policy, "on-request");
 
     // Another creator cannot read or set it; it looks like an unknown Task.
-    sign_in(&processor, OTHER, BOB);
+    sign_in(&processor, OTHER, BOB).await;
     assert_eq!(
         kind(
             processor
@@ -1184,7 +1184,7 @@ fn exec_params(
 #[tokio::test]
 async fn a_standard_task_profile_names_its_boundaries_and_runtime_form() {
     let Fixture { dir, processor } = fixture();
-    sign_in(&processor, DESKTOP, ALICE);
+    sign_in(&processor, DESKTOP, ALICE).await;
     let task_id = new_task(&processor, DESKTOP, "task-1").await;
     let folder = make_folder(&dir, &task_id);
     let policy = || {
@@ -1321,7 +1321,7 @@ async fn a_standard_task_profile_names_its_boundaries_and_runtime_form() {
 #[tokio::test]
 async fn a_permitted_full_access_profile_states_no_filesystem_limits() {
     let Fixture { dir, processor } = fixture();
-    sign_in(&processor, DESKTOP, ALICE);
+    sign_in(&processor, DESKTOP, ALICE).await;
     let task_id = new_task(&processor, DESKTOP, "task-1").await;
     let folder = make_folder(&dir, &task_id);
     let open = || workspace_policy(WORKSPACE, 2, Some(permissive()));
@@ -1378,8 +1378,8 @@ async fn a_permitted_full_access_profile_states_no_filesystem_limits() {
 #[tokio::test]
 async fn tools_exec_plans_the_bounded_profile_for_the_creator_only() {
     let Fixture { dir, processor } = fixture();
-    sign_in(&processor, DESKTOP, ALICE);
-    sign_in(&processor, OTHER, BOB);
+    sign_in(&processor, DESKTOP, ALICE).await;
+    sign_in(&processor, OTHER, BOB).await;
     let task_id = new_task(&processor, DESKTOP, "task-1").await;
     let policy = || workspace_policy(WORKSPACE, 1, None);
     let folder = dir.path().join("tasks").join(&task_id);
@@ -1632,8 +1632,8 @@ async fn set_rules(
 #[tokio::test]
 async fn a_prompt_rule_needs_one_allowed_request_for_exactly_that_command() {
     let Fixture { dir, processor } = fixture();
-    sign_in(&processor, DESKTOP, ALICE);
-    sign_in(&processor, OTHER, BOB);
+    sign_in(&processor, DESKTOP, ALICE).await;
+    sign_in(&processor, OTHER, BOB).await;
     let task_id = new_task(&processor, DESKTOP, "task-1").await;
     let folder = make_folder(&dir, &task_id);
     let policy = || {
@@ -1925,7 +1925,7 @@ fn kind_of(result: Result<Option<ClientResponsePayload>, JSONRPCErrorError>) -> 
 #[tokio::test]
 async fn user_rules_only_ask_or_forbid_and_win_over_a_workspace_allow() {
     let Fixture { dir, processor } = fixture();
-    sign_in(&processor, DESKTOP, ALICE);
+    sign_in(&processor, DESKTOP, ALICE).await;
     let task_id = new_task(&processor, DESKTOP, "task-1").await;
     let folder = make_folder(&dir, &task_id);
     let policy = || {
@@ -2057,7 +2057,7 @@ async fn the_effective_policy_lists_rules_and_the_reviewer_state() {
         dir: _dir,
         processor,
     } = fixture();
-    sign_in(&processor, DESKTOP, ALICE);
+    sign_in(&processor, DESKTOP, ALICE).await;
     let default: InquelloPolicyEffectiveResponse = decode(
         effective(
             &processor,
@@ -2108,7 +2108,7 @@ async fn the_effective_policy_lists_rules_and_the_reviewer_state() {
 #[tokio::test]
 async fn an_untrusted_asking_behaviour_asks_before_an_unmatched_command() {
     let Fixture { dir, processor } = fixture();
-    sign_in(&processor, DESKTOP, ALICE);
+    sign_in(&processor, DESKTOP, ALICE).await;
     let task_id = new_task(&processor, DESKTOP, "task-1").await;
     let folder = make_folder(&dir, &task_id);
     let policy = workspace_policy(WORKSPACE, 1, Some(json!({ "approvals": ["untrusted"] })));

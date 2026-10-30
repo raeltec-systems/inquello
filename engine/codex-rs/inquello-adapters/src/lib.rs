@@ -15,6 +15,7 @@ mod error;
 mod location;
 mod organise;
 mod permissions;
+mod routes;
 mod sqlite;
 mod states;
 mod store;
@@ -24,3 +25,5 @@ pub use error::OpenError;
 pub use sqlite::MINIMUM_SQLITE_VERSION;
 pub use sqlite::check_sqlite_version;
 pub use store::SqliteWorkingStore;
+
+pub mod anthropic;

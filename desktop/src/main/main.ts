@@ -1,3 +1,4 @@
+import { RouteService } from './routes/service';
 import { signOutWithCapabilities, providerLogoutWithCapabilities } from './capabilities/lifecycle';
 import { CapabilityService } from './capabilities/service';
 /**
@@ -134,7 +135,7 @@ import {
 import { OrganiseService } from './organise';
 import { EscalationGate, PermissionMediator, PolicyService, taskFoldersRoot } from './policy';
 import { createProviders, loadProviderDevConfig, PROVIDER_DEV_CONFIG_ENV, providersDir, type ProviderService } from './providers';
-import { probeCapabilities, probeComposer, probeData, probeIdentity, probeOrganise, probePermissions, probePolicy, probeProviders, probeRenderer, probeShellLayout, probeStates, probeToolBounds, SHELL_LAYOUT } from './smoke-probe';
+import { probeRoutes, probeCapabilities, probeComposer, probeData, probeIdentity, probeOrganise, probePermissions, probePolicy, probeProviders, probeRenderer, probeShellLayout, probeStates, probeToolBounds, SHELL_LAYOUT } from './smoke-probe';
 
 const smoke = process.argv.includes('--smoke');
 // The smoke run keeps what main logs, so the providers probe can scan it for a leaked key.
@@ -157,10 +158,13 @@ let composerOk = false;
 let toolBoundsOk = false;
 let permissionsOk = false;
 let capabilitiesOk = false;
+let routesOk = false;
 let runtimeConfigurationVerified = false;
 let organise: OrganiseService | undefined;
 let policy: PolicyService | undefined;
 let capabilities: CapabilityService | undefined;
+let routes: RouteService | undefined;
+let permissionMediator: PermissionMediator | undefined;
 /** Escalations the runtime raises: pending authorization requests, declined in Story 1.19. */
 const escalations = new EscalationGate({ newId: randomUUID });
 let identity: IdentityWiring | undefined;
@@ -243,7 +247,7 @@ async function startRuntimeNow(): Promise<void> {
   // Preserve runtime management edits; immutable startup overrides enforce credential safety.
   writeRuntimeConfig(runtimeHome);
   providers?.codex.runtimeReset();
-  capabilities?.runtimeUnavailable();
+  capabilities?.runtimeUnavailable(); routes?.runtimeUnavailable(); permissionMediator?.declineAll();
   const binary = resolveAppServerBinary({
     env: process.env,
     isPackaged: app.isPackaged,
@@ -259,11 +263,11 @@ async function startRuntimeNow(): Promise<void> {
     schemaStamp,
     stderrLogPath: path.join(app.getPath('logs'), 'app-server-stderr.log'),
     logger,
-    onNotification: ({ method, params }) => { providers?.codex.handleNotification(method, params); capabilities?.handleNotification(method, params); if (['app/list/updated','skills/changed','mcpServer/startupStatus/updated','mcpServerStatus','mcpServer/oauthLogin/completed','account/updated'].includes(method)) for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:capabilities-changed'); },
+    onNotification: ({ method, params }) => { providers?.codex.handleNotification(method, params); if (method === 'account/updated') void routes?.invalidate('codex-responses'); capabilities?.handleNotification(method, params); if (['app/list/updated','skills/changed','mcpServer/startupStatus/updated','mcpServerStatus','mcpServer/oauthLogin/completed','account/updated'].includes(method)) for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:capabilities-changed'); },
     onServerRequest: (method, params) => escalations.answer(method, params),
   });
   runtime.on('state', ({ state, error }) => {
-    if (['disconnected','failed','stopped'].includes(state)) { runtimeConfigurationVerified = false; capabilities?.runtimeUnavailable(); for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:capabilities-changed'); }
+    if (['disconnected','failed','stopped'].includes(state)) { runtimeConfigurationVerified = false; capabilities?.runtimeUnavailable(); routes?.runtimeUnavailable(); permissionMediator?.declineAll(); for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:capabilities-changed'); }
     if (state === 'disconnected' && error) logger.error(`runtime disconnected; not restarting. ${error.message}`);
   });
   const handshake = await runtime.start();
@@ -271,6 +275,7 @@ async function startRuntimeNow(): Promise<void> {
   catch (error) { await runtime.stop(); throw error; }
   runtimeConfigurationVerified = true;
   capabilities?.runtimeReset();
+  routes?.runtimeReset();
   for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:capabilities-changed');
   if (smoke && !handshakeOk) {
     process.stdout.write(
@@ -293,6 +298,8 @@ function stopRuntime(): Promise<void> {
 }
 
 async function stopRuntimeNow(): Promise<void> {
+  permissionMediator?.declineAll();
+  await routes?.quiesce();
   runtimeConfigurationVerified = false;
   await capabilities?.quiesce();
   const current = runtime;
@@ -407,12 +414,16 @@ async function runSmokeProbe(contents: WebContents): Promise<void> {
   const capabilitiesReport = await probeCapabilities(contents, {identity, organise, capabilities, seedFile: process.env.INQUELLO_SMOKE_SEED ?? null});
   capabilitiesOk = capabilitiesReport.ok;
   process.stdout.write(`${JSON.stringify({event: 'capabilities', ...capabilitiesReport})}\n`);
+  if (!routes) throw new Error('processing routes not wired');
+  const routesReport = await probeRoutes(contents, { identity, organise, routes, seedFile: process.env.INQUELLO_SMOKE_SEED ?? null });
+  routesOk = routesReport.ok;
+  process.stdout.write(`${JSON.stringify({ event: 'routes', ...routesReport })}\n`);
   if (!capabilitiesReport.ok) logger.error(`capabilities probe failed: ${capabilitiesReport.failures.join('; ')}`);
 }
 
 function exitCodeFor(exit: ExitInfo | undefined): number {
   if (!smoke) return 0;
-  return handshakeOk && privilegesOk && designOk && identityOk && dataOk && providersOk && organiseOk && statesOk && shellLayoutOk && composerOk && policyOk && toolBoundsOk && permissionsOk && capabilitiesOk && exit !== undefined && exit.exitCode === 0 && !exit.killed ? 0 : 1;
+  return handshakeOk && privilegesOk && designOk && identityOk && dataOk && providersOk && organiseOk && statesOk && shellLayoutOk && composerOk && policyOk && toolBoundsOk && permissionsOk && capabilitiesOk && routesOk && exit !== undefined && exit.exitCode === 0 && !exit.killed ? 0 : 1;
 }
 
 app.on('before-quit', (event) => {
@@ -491,6 +502,7 @@ void app.whenReady().then(async () => {
     instance: () => runtime,
     request: <T,>(method: string, params?: unknown) => (runtime ? runtime.request<T>(method, params) : Promise.reject(new Error('the runtime is not running'))),
   };
+  permissionMediator = new PermissionMediator({ runtime: policyRuntime, logger, newId: randomUUID, automatedReview: (taskId, requestId) => routes ? routes.review(taskId, requestId) : Promise.resolve(null) });
   const policyService = new PolicyService({
     runtime: policyRuntime,
     identity: identitySession,
@@ -499,7 +511,7 @@ void app.whenReady().then(async () => {
     logger,
     taskFolders: taskFoldersRoot(userData),
     sandboxProbeTarget: path.dirname(workingStorePath(userData)),
-    permissions: new PermissionMediator({ runtime: policyRuntime, logger, newId: randomUUID }),
+    permissions: permissionMediator,
   });
   policy = policyService;
   capabilities = new CapabilityService({runtime: policyRuntime, policy: policyService, runtimeVersion: schemaStamp.runtimeVersion, openBrowser: openSystemBrowser});
@@ -522,6 +534,12 @@ void app.whenReady().then(async () => {
     recordSecrets: smoke,
   });
   const providerService = providers;
+  routes = new RouteService({
+    runtime: { ...policyRuntime, privateRouteAuth: (params) => runtime ? runtime.privateRouteAuth(params) : Promise.reject(new Error('Runtime unavailable')), stop: async () => { await runtime?.stop(); } },
+    identity: identitySession, syncPrincipal: () => organiseService.syncPrincipal(), providers: providerService, freshPolicy: (taskId) => policyService.reviewPolicy(taskId),
+    onChanged: () => { for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:routes-changed'); },
+  });
+  providerService.setRouteInvalidator((id) => routes!.invalidate(id));
   const policyLoad = loadShippedPolicy();
   if (!policyLoad.ok) logger.error(`local data policy did not load; local data actions are blocked: ${policyLoad.error}`);
   const service = new DataService({
@@ -565,12 +583,13 @@ void app.whenReady().then(async () => {
     ipcMain,
     createOperations({
       capabilities,
+      routes,
       runtimeState: () => runtime?.state ?? 'stopped',
       runtimeVersion: schemaStamp.runtimeVersion,
       identity: {
         getStatus: () => identitySession.getStatus(),
-        signIn: async () => { if (capabilities && !(await capabilities.quiesce())) await stopRuntime(); const result = await afterIdentityChange(await identitySession.signIn()); capabilities?.resume(); return result; },
-        signOut: () => signOutWithCapabilities({capabilities, stopRuntime, signOut: () => identitySession.signOut(), afterIdentityChange}),
+        signIn: async () => { permissionMediator?.declineAll(); await routes?.quiesce(); if (capabilities && !(await capabilities.quiesce())) await stopRuntime(); const result = await afterIdentityChange(await identitySession.signIn()); capabilities?.resume(); routes?.resume(); return result; },
+        signOut: async () => { permissionMediator?.declineAll(); await routes?.quiesce(); const result = await signOutWithCapabilities({capabilities, stopRuntime, signOut: () => identitySession.signOut(), afterIdentityChange}); routes?.resume(); return result; },
       },
       data: {
         getPolicy: () => service.getPolicy(),

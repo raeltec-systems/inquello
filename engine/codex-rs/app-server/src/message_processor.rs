@@ -112,10 +112,14 @@ use crate::turn_admission::TurnAdmission;
 const CONNECTION_RPC_DRAIN_TIMEOUT: Duration = Duration::from_secs(/*secs*/ 30);
 
 fn deserialize_client_request(request: JSONRPCRequest) -> Result<ClientRequest, JSONRPCErrorError> {
+    let private_auth = request.method == "inquello/routes/privateAuth";
+    if private_auth && request.params.as_ref().is_some_and(|p| p.to_string().len() > 8192) {
+        return Err(invalid_request("Invalid private provider handoff"));
+    }
     reject_obsolete_request_fields(&request)?;
 
     ClientRequest::try_from(request)
-        .map_err(|err| invalid_request(format!("Invalid request: {err}")))
+        .map_err(|err| if private_auth { invalid_request("Invalid private provider handoff") } else { invalid_request(format!("Invalid request: {err}")) })
 }
 
 fn reject_obsolete_request_fields(request: &JSONRPCRequest) -> Result<(), JSONRPCErrorError> {
@@ -479,7 +483,7 @@ impl MessageProcessor {
         // working store may never live inside it.
         let inquello_processor = Arc::new(InquelloRequestProcessor::new(vec![
             config.codex_home.to_path_buf(),
-        ]));
+        ]).with_route_provider(config.model_provider.clone(), auth_manager.clone(), config.http_client_factory()));
         let initialize_processor = InitializeRequestProcessor::new(
             gateway_login_control,
             outgoing.clone(),
@@ -656,6 +660,26 @@ impl MessageProcessor {
         transport: &AppServerTransport,
         session: Arc<ConnectionSessionState>,
     ) {
+        // This branch does not exist in default or release binaries. Synthetic
+        // loopback harness dispatches inference AND tools in this app-server process.
+        #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+        if request.method == "inquello/fixture/messagesTurn" {
+            let id = ConnectionRequestId { connection_id, request_id: request.id };
+            let result = if session.initialized() && matches!(transport, AppServerTransport::Stdio)
+                && session.origin == crate::transport::ConnectionOrigin::Stdio {
+                self.inquello_fixture_turn(connection_id, &id, request.params).await
+            } else { Err(invalid_request("Fixture requires private stdio")) };
+            match result {
+                Ok(response) => self.outgoing.send_response(id, response).await,
+                Err(error) => self.outgoing.send_error(id, error).await,
+            }
+            return;
+        }
+        if request.method == "inquello/routes/privateAuth" && (!matches!(transport, AppServerTransport::Stdio) || session.origin != crate::transport::ConnectionOrigin::Stdio) {
+            self.outgoing.send_error(ConnectionRequestId { connection_id, request_id: request.id },
+                invalid_request("Private provider handoff requires stdio")).await;
+            return;
+        }
         let request_method = request.method.as_str();
         tracing::trace!(
             ?connection_id,
@@ -720,6 +744,11 @@ impl MessageProcessor {
         outbound_initialized: &AtomicBool,
         cancellation: tokio_util::sync::CancellationToken,
     ) {
+        if matches!(&request, ClientRequest::InquelloRoutePrivateAuth { .. }) {
+            self.outgoing.send_error(ConnectionRequestId { connection_id, request_id: request.id().clone() },
+                invalid_request("Private provider handoff requires stdio")).await;
+            return;
+        }
         let request_id = ConnectionRequestId {
             connection_id,
             request_id: request.id().clone(),
@@ -923,7 +952,7 @@ impl MessageProcessor {
             .connection_closed(connection_id)
             .await;
         self.thread_processor.connection_closed(connection_id).await;
-        self.inquello_processor.connection_closed(connection_id);
+        self.inquello_processor.connection_closed(connection_id).await;
     }
 
     pub(crate) fn subscribe_running_assistant_turn_count(&self) -> watch::Receiver<usize> {
@@ -1071,11 +1100,15 @@ impl MessageProcessor {
             return Err(invalid_request(experimental_required_message(reason)));
         }
         let connection_id = connection_request_id.connection_id;
-        self.initialize_processor.track_initialized_request(
-            connection_id,
-            connection_request_id.request_id.clone(),
-            &codex_request,
-        );
+        // Private provider credentials never enter general request analytics,
+        // even when an analytics implementation serializes typed params.
+        if !matches!(&codex_request, ClientRequest::InquelloRoutePrivateAuth { .. }) {
+            self.initialize_processor.track_initialized_request(
+                connection_id,
+                connection_request_id.request_id.clone(),
+                &codex_request,
+            );
+        }
 
         let (turn_admission, recheck_turn_admission) = match &codex_request {
             ClientRequest::ThreadStart { .. }
@@ -1863,6 +1896,7 @@ impl MessageProcessor {
                     .await
             }
             ClientRequest::LoginAccount { params, .. } => {
+                self.inquello_processor.provider_auth_changing().await;
                 self.account_processor
                     .login_account(request_id.clone(), params)
                     .await
@@ -1906,6 +1940,7 @@ impl MessageProcessor {
                     .map(|response| Some(response.into()))
             }
             ClientRequest::LogoutAccount { .. } => {
+                self.inquello_processor.provider_auth_changing().await;
                 self.account_processor
                     .logout_account(request_id.clone())
                     .await
@@ -1942,7 +1977,7 @@ impl MessageProcessor {
                 self.git_processor.git_diff_to_remote(params).await
             }
             ClientRequest::InquelloSessionSetPrincipal { params, .. } => {
-                self.inquello_processor.set_principal(connection_id, params)
+                self.inquello_processor.set_principal(connection_id, params).await
             }
             ClientRequest::InquelloWorkspaceList { .. } => {
                 self.inquello_processor.workspace_list(connection_id).await
@@ -2024,6 +2059,24 @@ impl MessageProcessor {
                             .broad_mode_set(connection_id, params, device, user)
                             .await
                     }
+                    Err(error) => Err(error),
+                }
+            }
+            ClientRequest::InquelloRoutesList { params, .. } => self.inquello_processor.routes_list(connection_id, params).await,
+            ClientRequest::InquelloRouteConfigure { params, .. } => self.inquello_processor.route_configure(connection_id, params).await,
+            ClientRequest::InquelloTaskRouteRead { params, .. } => self.inquello_processor.task_route_read(connection_id, params).await,
+            ClientRequest::InquelloTaskRouteSet { params, .. } => self.inquello_processor.task_route_set(connection_id, params).await,
+            ClientRequest::InquelloRoutePrivateAuth { params, .. } => self.inquello_processor.route_private_auth(connection_id, params).await,
+            ClientRequest::InquelloRoutesInvalidate { params, .. } => self.inquello_processor.routes_invalidate(connection_id, params).await,
+            ClientRequest::InquelloPermissionsReviewApply { params, .. } => {
+                match self.inquello_policy_layers().await {
+                    Ok((device, user)) => self.inquello_processor.permissions_review_apply(connection_id, params, device, user).await,
+                    Err(error) => Err(error),
+                }
+            }
+            ClientRequest::InquelloPermissionsReview { params, .. } => {
+                match self.inquello_policy_layers().await {
+                    Ok((device, user)) => self.inquello_processor.permissions_review(connection_id, params, device, user).await,
                     Err(error) => Err(error),
                 }
             }
@@ -2157,3 +2210,7 @@ mod thread_lifecycle_tests;
 #[cfg(test)]
 #[path = "message_processor_workspace_routing_tests.rs"]
 mod workspace_routing_tests;
+
+#[cfg(all(feature = "inference-fixtures", debug_assertions))]
+#[path = "inquello_fixture.rs"]
+mod inquello_fixture;

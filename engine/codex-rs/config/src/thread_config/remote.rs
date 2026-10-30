@@ -315,6 +315,8 @@ fn proto_string_map(values: HashMap<String, RedactedString>) -> proto::StringMap
 fn proto_wire_api(wire_api: WireApi) -> proto::WireApi {
     match wire_api {
         WireApi::Responses => proto::WireApi::Responses,
+        // Messages is local-only: the remote decoder rejects Unspecified.
+        WireApi::Messages => proto::WireApi::Unspecified,
     }
 }
 
@@ -594,4 +596,10 @@ mod tests {
             .expect("current dir")
             .join("workspace")
     }
+}
+
+#[cfg(test)]
+#[test]
+fn local_messages_is_not_misrepresented_as_remote_responses() {
+    assert_eq!(proto_wire_api(WireApi::Messages), proto::WireApi::Unspecified);
 }

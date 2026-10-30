@@ -1,3 +1,4 @@
+import { ProcessingRoutes } from './ProcessingRoutes';
 /**
  * S07, "Capabilities and processing" in Settings (Story 1.18).
  *
@@ -132,6 +133,7 @@ export function Capabilities(): ReactElement {
       ))}
       <CapabilityContract capabilities={capabilities} />
     </div>
+    <ProcessingRoutes />
     {(view?.workspaces ?? []).map(workspace => <CapabilityInventory key={workspace.workspaceId} workspaceId={workspace.workspaceId} workspaceName={workspace.name} />)}
     </>
   );

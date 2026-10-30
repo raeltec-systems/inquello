@@ -37,3 +37,5 @@ pub const PROTOCOL_MAJOR: u32 = 1;
 
 /// The `schema_version` every SC-2 envelope in this contract carries.
 pub const SCHEMA_VERSION: u32 = 1;
+
+pub mod inference;

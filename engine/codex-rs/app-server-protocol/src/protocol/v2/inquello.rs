@@ -942,3 +942,142 @@ pub struct InquelloPermissionsDecideResponse {
     pub request: InquelloPermissionRequest,
     pub receipt: InquelloReceipt,
 }
+
+// Story 1.22: configuration is not credential presence, support or evidence.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct InquelloRouteConfiguration {
+    pub route_id: String,
+    pub deployment: String,
+    pub model: String,
+    pub api_version: String,
+    pub account_ref: String,
+    pub region: Option<String>,
+}
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct InquelloRoutesListParams {}
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloRouteView {
+    pub route_id: String,
+    pub provider: String,
+    pub configurable: bool,
+    pub configuration: Option<InquelloRouteConfiguration>,
+    pub endpoint: Option<String>,
+    #[ts(type = "number")]
+    pub revision: u64,
+    pub credential_present: bool,
+    pub adapter_supported: bool,
+    pub verification: String,
+    pub enabled: bool,
+    pub gate: Option<String>,
+    pub limits: Vec<String>,
+    pub evidence: Vec<String>,
+    pub execution_flow: String,
+    pub inference_flow: String,
+    pub connector_flow: String,
+}
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloRoutesListResponse { pub routes: Vec<InquelloRouteView> }
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct InquelloRouteConfigureParams {
+    pub operation_id: String,
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+    pub configuration: InquelloRouteConfiguration,
+}
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloRouteConfigureResponse { pub route: InquelloRouteView, pub receipt: InquelloReceipt }
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct InquelloTaskRouteReadParams { pub task_id: String }
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct InquelloTaskRouteSetParams {
+    pub operation_id: String,
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+    pub task_id: String,
+    pub route_id: String,
+    #[ts(type = "number")]
+    pub configuration_revision: u64,
+}
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloTaskRouteResponse {
+    pub task_id: String,
+    pub workspace_id: String,
+    #[ts(type = "number")]
+    pub revision: u64,
+    #[ts(type = "number | null")]
+    pub configuration_revision: Option<u64>,
+    pub stale_configuration: bool,
+    pub selected: Option<InquelloRouteView>,
+    pub receipt: Option<InquelloReceipt>,
+}
+/// Private main-to-runtime only. Never accepted on a socket or exported to a renderer.
+/// Deliberately redacts Debug; parse failures also use a fixed diagnostic.
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct InquelloRoutePrivateAuthParams {
+    pub route_id: String,
+    pub account_ref: String,
+    #[ts(type = "number")]
+    pub generation: u64,
+    pub api_key: Option<String>,
+}
+impl std::fmt::Debug for InquelloRoutePrivateAuthParams {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("InquelloRoutePrivateAuthParams([private])")
+    }
+}
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloRoutePrivateAuthResponse { pub accepted: bool }
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct InquelloRoutesInvalidateParams {
+    /// Null invalidates all route auth and pending reviews for the bound principal.
+    pub route_id: Option<String>,
+    #[ts(type = "number")]
+    pub generation: u64,
+    pub task_id: Option<String>,
+}
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct InquelloPermissionsReviewParams {
+    pub request_id: String,
+    pub workspace_policy: InquelloWorkspaceExecutionPolicy,
+    #[ts(type = "number")]
+    pub authority_epoch: u64,
+    /// Only "synthetic" is eligible in Story 1.22.
+    pub data_tier: String,
+}
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloPermissionsReviewResponse {
+    /// human_required, refused, or decided. No alternate provider is ever selected.
+    pub status: String,
+    pub label: String,
+    pub reason: Option<String>,
+    pub request: InquelloPermissionRequest,
+    pub receipt: Option<InquelloReceipt>,
+}

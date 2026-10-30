@@ -619,13 +619,10 @@ impl ReviewerState {
         }
     }
 
-    /// The runtime's inherited reviewer setting (`approvals_reviewer`):
-    /// `auto_review` only while active, otherwise `user`.
+    /// Global runtime review remains human; active automation uses only a
+    /// scoped, trusted Story 1.22 invocation at the permission boundary.
     pub const fn runtime_setting(self) -> &'static str {
-        match self {
-            ReviewerState::Active => "auto_review",
-            ReviewerState::Off | ReviewerState::NotAvailable => "user",
-        }
+        "user"
     }
 }
 

@@ -271,6 +271,14 @@ export class PolicyService {
     }
   }
 
+  /** Fresh authority and policy for each phase of a scoped runtime review. */
+  async reviewPolicy(taskId: string): Promise<InquelloWorkspaceExecutionPolicy | null> {
+    const principal = this.options.identity.principalId(), instance = this.options.runtime.instance();
+    const context = await this.taskContext(taskId, false);
+    if (!context.ok || !principal || principal !== this.options.identity.principalId() || instance !== this.options.runtime.instance()) return null;
+    return context.value.layer;
+  }
+
   private async effective(workspacePolicy: InquelloWorkspaceExecutionPolicy, taskId: string | null, taskFolder: string | null = null): Promise<PolicyResult<InquelloPolicyEffectiveResponse>> {
     try {
       const params = taskFolder === null ? { workspacePolicy, taskId } : { workspacePolicy, taskId, taskFolder };

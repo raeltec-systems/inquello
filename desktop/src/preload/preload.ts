@@ -66,7 +66,24 @@ const CAPABILITIES_CHANGED_CHANNEL = 'inquello:capabilities-changed';
 const CAPABILITIES_INVENTORY_CHANNEL = 'inquello:op:capabilities.getInventory';
 const CAPABILITIES_MANAGE_CHANNEL = 'inquello:op:capabilities.manage';
 
+const ROUTES_LIST_CHANNEL = 'inquello:op:routes.list';
+const ROUTES_CONFIGURE_CHANNEL = 'inquello:op:routes.configure';
+const ROUTES_TASK_CHANNEL = 'inquello:op:routes.forTask';
+const ROUTES_SELECT_CHANNEL = 'inquello:op:routes.select';
+const ROUTES_CHANGED_CHANNEL = 'inquello:routes-changed';
+
 const api = Object.freeze({
+  routes: Object.freeze({
+    list: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ROUTES_LIST_CHANNEL, ...args),
+    configure: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ROUTES_CONFIGURE_CHANNEL, ...args),
+    forTask: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ROUTES_TASK_CHANNEL, ...args),
+    select: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ROUTES_SELECT_CHANNEL, ...args),
+    onChanged: (listener: () => void): (() => void) => {
+      if (typeof listener !== 'function') throw new Error('expected a listener');
+      const handler = () => listener(); ipcRenderer.on(ROUTES_CHANGED_CHANNEL, handler);
+      return () => ipcRenderer.removeListener(ROUTES_CHANGED_CHANNEL, handler);
+    },
+  }),
   capabilities: Object.freeze({
     onChanged: (listener: () => void): (() => void) => {
       if (typeof listener !== 'function') throw new Error('expected a listener');
