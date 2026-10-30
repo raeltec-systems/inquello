@@ -82,7 +82,7 @@ impl EnterpriseLoginState {
         clippy::await_holding_invalid_type,
         reason = "serialize start/cancel through callback shutdown; the worker uses a separate state lock"
     )]
-    pub(super) async fn cancel(&self, login_id: Option<&str>) -> bool {
+    pub(crate) async fn cancel(&self, login_id: Option<&str>) -> bool {
         if login_id.is_none() {
             let mut setup_cancel = self.setup_cancel.lock().await;
             setup_cancel.cancel();

@@ -90,6 +90,7 @@ use crate::store::error_context_sub_error_type;
 use crate::tool_suggest_metadata::ToolSuggestMetadataCache;
 use codex_analytics::AnalyticsEventsClient;
 use codex_analytics::PluginInstallSource;
+use codex_app_server_protocol::PluginMcpAdmissionPolicy;
 use codex_config::ConfigLayerStack;
 use codex_config::SkillConfigRules;
 use codex_config::clear_user_plugin;
@@ -484,6 +485,7 @@ pub struct PluginDetail {
     pub apps: Vec<AppConnectorId>,
     pub app_category_by_id: HashMap<String, String>,
     pub mcp_server_names: Vec<String>,
+    pub mcp_server_admissions: Option<Vec<codex_app_server_protocol::PluginMcpServerAdmission>>,
     pub details_unavailable_reason: Option<PluginDetailsUnavailableReason>,
 }
 
@@ -2079,9 +2081,18 @@ impl PluginsManager {
         config_layer_stack: &ConfigLayerStack,
         request: PluginInstallRequest,
     ) -> Result<PluginInstallOutcome, PluginInstallError> {
+        self.install_plugin_with_mcp_admission(config_layer_stack, request, None).await
+    }
+
+    pub async fn install_plugin_with_mcp_admission(
+        &self,
+        config_layer_stack: &ConfigLayerStack,
+        request: PluginInstallRequest,
+        admission: Option<PluginMcpAdmissionPolicy>,
+    ) -> Result<PluginInstallOutcome, PluginInstallError> {
         let resolved = self.resolve_installable_plugin(config_layer_stack, &request)?;
         let plugin_id = resolved.plugin_id.clone();
-        match self.install_resolved_plugin(resolved).await {
+        match self.install_resolved_plugin(resolved, admission).await {
             Ok(outcome) => Ok(outcome),
             Err(err) => {
                 self.track_plugin_install_failed(
@@ -2156,7 +2167,7 @@ impl PluginsManager {
             return Err(err);
         }
         let plugin_id = resolved.plugin_id.clone();
-        match self.install_resolved_plugin(resolved).await {
+        match self.install_resolved_plugin(resolved, None).await {
             Ok(outcome) => Ok(outcome),
             Err(err) => {
                 self.track_plugin_install_failed(
@@ -2257,6 +2268,7 @@ impl PluginsManager {
     async fn install_resolved_plugin(
         &self,
         resolved: ResolvedMarketplacePlugin,
+        admission: Option<PluginMcpAdmissionPolicy>,
     ) -> Result<PluginInstallOutcome, PluginInstallError> {
         let auth_policy = resolved.policy.authentication;
         let plugin_version =
@@ -2271,7 +2283,7 @@ impl PluginsManager {
             } else {
                 None
             };
-        let store = self.store.clone();
+        let store = self.store.clone().with_mcp_admission(admission);
         let codex_home = self.codex_home.clone();
         let manifest_fallback_contents = resolved
             .manifest_fallback
@@ -2660,6 +2672,7 @@ impl PluginsManager {
                 apps: Vec::new(),
                 app_category_by_id: HashMap::new(),
                 mcp_server_names: Vec::new(),
+                mcp_server_admissions: None,
                 details_unavailable_reason: Some(
                     PluginDetailsUnavailableReason::InstallRequiredForRemoteSource,
                 ),
@@ -2794,6 +2807,7 @@ impl PluginsManager {
                 app_category_by_id.insert(app.connector_id.0.clone(), category.clone());
             }
         }
+        let mcp_server_admissions = crate::mcp_admission::inspect_plugin_mcp_admissions(source_path.as_path()).ok();
         let mut mcp_server_names = mcp_servers.into_keys().collect::<Vec<_>>();
         mcp_server_names.sort_unstable();
         mcp_server_names.dedup();
@@ -2816,6 +2830,7 @@ impl PluginsManager {
             apps,
             app_category_by_id,
             mcp_server_names,
+            mcp_server_admissions,
             details_unavailable_reason: None,
         })
     }
@@ -3810,6 +3825,7 @@ fn plugin_store_error_type(err: &PluginStoreError) -> &'static str {
     match err {
         PluginStoreError::Io { .. } => "store_io",
         PluginStoreError::Invalid(_) => "store_invalid",
+        PluginStoreError::Admission(_) => "workspace_capability_admission",
     }
 }
 

@@ -1557,6 +1557,8 @@ async fn mcp_server_statuses(
 ) -> Result<Vec<McpServerStatus>> {
     let request_id = app_server
         .send_list_mcp_server_status_request(ListMcpServerStatusParams {
+            expected_plugin_id: None,
+            mcp_admission: None,
             server_name: None,
             cursor: None,
             limit: None,

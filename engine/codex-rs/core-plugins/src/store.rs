@@ -4,6 +4,7 @@ use crate::manifest::PluginManifest;
 use crate::manifest::PluginManifestFormat;
 use crate::manifest::load_plugin_manifest;
 use crate::manifest::parse_plugin_manifest;
+use codex_app_server_protocol::PluginMcpAdmissionPolicy;
 use codex_plugin::PluginId;
 use codex_plugin::validate_plugin_segment;
 use codex_utils_absolute_path::AbsolutePathBuf;
@@ -45,6 +46,7 @@ pub struct PluginStore {
     codex_home: AbsolutePathBuf,
     root: AbsolutePathBuf,
     data_root: AbsolutePathBuf,
+    mcp_admission: Option<PluginMcpAdmissionPolicy>,
 }
 
 pub(crate) struct ActivePluginInstallation {
@@ -98,7 +100,14 @@ impl PluginStore {
             codex_home,
             root,
             data_root,
+            mcp_admission: None,
         })
+    }
+
+    /// Admission belongs to this install's private clone, never global Store state.
+    pub(crate) fn with_mcp_admission(mut self, policy: Option<PluginMcpAdmissionPolicy>) -> Self {
+        self.mcp_admission = policy;
+        self
     }
 
     pub fn root(&self) -> &AbsolutePathBuf {
@@ -330,6 +339,7 @@ impl PluginStore {
             self.plugin_base_root(&plugin_id).as_path(),
             &plugin_version,
             manifest,
+            self.mcp_admission.as_ref(),
         )?;
         self.remove_remote_plugin_install_metadata(&plugin_id)?;
 
@@ -376,6 +386,9 @@ pub enum PluginStoreError {
 
     #[error("{0}")]
     Invalid(String),
+
+    #[error(transparent)]
+    Admission(#[from] crate::PluginMcpAdmissionError),
 }
 
 impl PluginStoreError {
@@ -387,6 +400,7 @@ impl PluginStoreError {
         match self {
             Self::Io { context, .. } => Some(error_context_sub_error_type(context)),
             Self::Invalid(_) => None,
+            Self::Admission(error) => Some(error.code.to_string()),
         }
     }
 }
@@ -556,6 +570,7 @@ fn replace_plugin_root_atomically(
     target_root: &Path,
     plugin_version: &str,
     manifest: InstallManifest<'_>,
+    admission: Option<&PluginMcpAdmissionPolicy>,
 ) -> Result<(), PluginStoreError> {
     let Some(parent) = target_root.parent() else {
         return Err(PluginStoreError::Invalid(format!(
@@ -643,6 +658,14 @@ fn replace_plugin_root_atomically(
         });
     if !is_agent_plugin && let Err(err) = migrate_plugin_commands(&staged_version_root) {
         tracing::warn!(%err, "failed to migrate plugin commands into skills");
+    }
+
+    // Validate the exact private staged copy that will be atomically published,
+    // including same-version replacements. No cache activation, config enablement,
+    // hook refresh, provider registration or OAuth can precede this check.
+    if let Some(policy) = admission {
+        crate::mcp_admission::validate_staged_plugin(&staged_version_root, policy)
+            .map_err(PluginStoreError::Admission)?;
     }
 
     let target_version_root = target_root.join(plugin_version);

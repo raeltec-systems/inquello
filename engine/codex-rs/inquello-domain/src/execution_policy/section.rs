@@ -110,12 +110,16 @@ pub struct ExecutionPolicy {
     /// permission requests (Story 1.20). Absent means off. It becomes usable
     /// only once a processing route exists.
     pub automatic_permission_review: Option<bool>,
+    /// Whether people may add local (stdio) MCP servers (Story 1.21). A local
+    /// server runs a program on the device outside the Task sandbox, so it
+    /// needs `mcp_tools` allowed. Absent means not allowed.
+    pub allow_local_mcp_servers: Option<bool>,
 }
 
 /// The most patterns `allowed_domains` may list.
 pub const MAX_ALLOWED_DOMAINS: usize = 100;
 
-const FIELDS: [&str; 10] = [
+const FIELDS: [&str; 11] = [
     "sandbox",
     "approvals",
     "network",
@@ -126,6 +130,7 @@ const FIELDS: [&str; 10] = [
     "allowed_domains",
     "command_rules",
     "automatic_permission_review",
+    "allow_local_mcp_servers",
 ];
 
 const AT: &str = "the execution policy";
@@ -316,7 +321,13 @@ impl ExecutionPolicy {
                 }
             },
             automatic_permission_review: flag(object, "automatic_permission_review")?,
+            allow_local_mcp_servers: flag(object, "allow_local_mcp_servers")?,
         };
+        if policy.allow_local_mcp_servers == Some(true) && policy.mcp_tools != Some(true) {
+            return Err(invalid(
+                "`allow_local_mcp_servers` needs `mcp_tools` allowed: a local MCP server provides MCP tools",
+            ));
+        }
         if policy
             .allowed_domains
             .as_ref()
@@ -416,12 +427,20 @@ impl ExecutionPolicy {
                 Value::Bool(value),
             );
         }
+        if let Some(value) = self.allow_local_mcp_servers {
+            object.insert("allow_local_mcp_servers".to_string(), Value::Bool(value));
+        }
         Value::Object(object)
     }
 
     /// The Workspace command rules; empty when none are listed.
     pub fn command_rules(&self) -> &[CommandRule] {
         self.command_rules.as_deref().unwrap_or_default()
+    }
+
+    /// Whether local (stdio) MCP servers may be added; false when absent.
+    pub fn local_mcp_servers_allowed(&self) -> bool {
+        self.allow_local_mcp_servers == Some(true)
     }
 
     /// The listed destinations; empty when none are listed.

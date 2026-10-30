@@ -1558,6 +1558,11 @@ fn settings_view(policy: &EffectivePolicy) -> Vec<InquelloPolicySetting> {
             allowed(policy.extensions.value),
         ),
         setting_view(
+            "allow_local_mcp_servers",
+            policy.allow_local_mcp_servers,
+            allowed(policy.allow_local_mcp_servers.value),
+        ),
+        setting_view(
             "full_access",
             policy.full_access,
             permitted(policy.full_access.value),

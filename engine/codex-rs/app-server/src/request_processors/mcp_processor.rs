@@ -2,6 +2,9 @@ use super::account_processor::EnterpriseLoginCompletion;
 use super::account_processor::EnterpriseLoginTarget;
 use super::thread_input::ensure_direct_input_allowed;
 use super::*;
+use codex_app_server_protocol::McpServerOauthCancelParams;
+use codex_app_server_protocol::McpServerOauthCancelResponse;
+use codex_app_server_protocol::McpServerOauthCancelStatus;
 use codex_config::types::McpServerAuth;
 use codex_mcp::McpServerSource;
 use codex_mcp::ReadResourceRequestParams;
@@ -9,11 +12,91 @@ use codex_mcp::ema_auth_scope;
 use codex_mcp::resolve_oauth_callback;
 use codex_otel::auth_storage::AuthStorageOriginator;
 use codex_rmcp_client::EnterpriseOAuthLoginRequest;
+use codex_rmcp_client::OAuthLoginCancellation;
+use codex_rmcp_client::OAuthLoginState;
+use std::collections::HashMap;
 use std::future::Future;
+use tokio::sync::Mutex as McpLoginMutex;
+use tokio::sync::watch as login_watch;
 
 use crate::thread_state::ThreadStateManager;
 
 const MCP_TOOL_THREAD_ID_META_KEY: &str = "threadId";
+
+fn mcp_admission_refusal(code: &'static str) -> JSONRPCErrorError {
+    let mut error = invalid_request("MCP request refused by Workspace capability admission");
+    error.data = Some(serde_json::json!({ "inquelloCapabilityAdmission": { "code": code } }));
+    error
+}
+
+fn validate_mcp_admission_request(
+    thread_id: Option<&str>,
+    server_name: Option<&str>,
+    expected_plugin_id: Option<&str>,
+    admission: Option<&codex_app_server_protocol::PluginMcpAdmissionPolicy>,
+) -> Result<(), JSONRPCErrorError> {
+    if expected_plugin_id.is_some() && admission.is_none() {
+        return Err(mcp_admission_refusal("inspection_unavailable"));
+    }
+    if admission.is_some() && (thread_id.is_some() || server_name.is_none()) {
+        // S07 owns global management; never accidentally probe every server or
+        // a thread whose configuration can change independently of this read.
+        return Err(mcp_admission_refusal("inspection_unavailable"));
+    }
+    Ok(())
+}
+
+fn mcp_source_matches(source: Option<&McpServerSource>, expected_plugin_id: Option<&str>) -> bool {
+    match (source, expected_plugin_id) {
+        (Some(McpServerSource::Config), None) => true,
+        (Some(McpServerSource::Plugin(plugin) | McpServerSource::SelectedPlugin(plugin)), Some(expected)) => plugin.plugin_id() == expected,
+        _ => false,
+    }
+}
+
+fn admit_mcp_target(
+    source: Option<&McpServerSource>,
+    server: &codex_config::types::McpServerConfig,
+    name: &str,
+    expected_plugin_id: Option<&str>,
+    admission: &codex_app_server_protocol::PluginMcpAdmissionPolicy,
+) -> Result<(), JSONRPCErrorError> {
+    if !mcp_source_matches(source, expected_plugin_id) {
+        return Err(mcp_admission_refusal("source_mismatch"));
+    }
+    codex_core_plugins::validate_mcp_server_admission(name, server, admission).map_err(|refusal| {
+        let mut error = mcp_admission_refusal(refusal.code);
+        if let Some(host) = refusal.host {
+            if let Some(data) = error.data.as_mut() {
+                data["inquelloCapabilityAdmission"]["host"] = serde_json::json!(host);
+            }
+        }
+        error
+    })
+}
+
+#[derive(Clone)]
+enum McpLoginControl {
+    Standard(OAuthLoginCancellation),
+    Enterprise(login_watch::Receiver<EnterpriseLoginCompletion>),
+}
+
+impl McpLoginControl {
+    async fn is_pending(&self) -> bool {
+        match self {
+            Self::Standard(control) => control.state().await == OAuthLoginState::Pending,
+            Self::Enterprise(completion) => !completion.borrow().is_complete(),
+        }
+    }
+}
+
+type McpLoginRegistry = HashMap<String, (String, McpLoginControl)>;
+
+fn matching_login(registry: &McpLoginRegistry, name: &str, login_id: &str) -> Option<McpLoginControl> {
+    registry.get(name)
+        .filter(|(id, _)| id == login_id)
+        .map(|(_, control)| control.clone())
+}
 
 #[derive(Clone)]
 pub(crate) struct McpRequestProcessor {
@@ -22,6 +105,7 @@ pub(crate) struct McpRequestProcessor {
     pub(super) outgoing: Arc<OutgoingMessageSender>,
     config_manager: ConfigManager,
     account_processor: Arc<AccountRequestProcessor>,
+    oauth_logins: Arc<McpLoginMutex<McpLoginRegistry>>,
     pub(super) thread_state_manager: ThreadStateManager,
 }
 
@@ -40,6 +124,7 @@ impl McpRequestProcessor {
             outgoing,
             config_manager,
             account_processor,
+            oauth_logins: Arc::new(McpLoginMutex::new(HashMap::new())),
             thread_state_manager,
         }
     }
@@ -51,6 +136,35 @@ impl McpRequestProcessor {
         self.mcp_server_oauth_login_response(params)
             .await
             .map(|response| Some(response.into()))
+    }
+
+    pub(crate) async fn mcp_server_oauth_cancel(
+        &self,
+        params: McpServerOauthCancelParams,
+    ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        let control = matching_login(&self.oauth_logins.lock().await, &params.name, &params.login_id);
+        let status = match control {
+            None => McpServerOauthCancelStatus::NotFound,
+            Some(McpLoginControl::Standard(control)) => match control.cancel().await {
+                OAuthLoginState::Cancelled => McpServerOauthCancelStatus::Cancelled,
+                OAuthLoginState::Completed => McpServerOauthCancelStatus::Completed,
+                OAuthLoginState::Failed => McpServerOauthCancelStatus::Failed,
+                OAuthLoginState::Pending => {
+                    return Err(internal_error("MCP cancellation did not settle"));
+                }
+            },
+            Some(McpLoginControl::Enterprise(mut completion)) => {
+                if self.account_processor.enterprise_login.cancel(Some(&params.login_id)).await {
+                    McpServerOauthCancelStatus::Cancelled
+                } else {
+                    match completion.wait_for(|state| state.is_complete()).await {
+                        Ok(state) if *state == EnterpriseLoginCompletion::Succeeded => McpServerOauthCancelStatus::Completed,
+                        _ => McpServerOauthCancelStatus::Failed,
+                    }
+                }
+            }
+        };
+        Ok(Some(McpServerOauthCancelResponse { status }.into()))
     }
 
     pub(crate) fn mcp_server_refresh(
@@ -139,7 +253,16 @@ impl McpRequestProcessor {
             client_registration,
             scopes,
             timeout_secs,
+            expected_plugin_id,
+            mcp_admission,
         } = params;
+        validate_mcp_admission_request(thread_id.as_deref(), Some(&name), expected_plugin_id.as_deref(), mcp_admission.as_ref())?;
+        let previous = self.oauth_logins.lock().await.get(&name).cloned();
+        if let Some((_, control)) = previous {
+            if control.is_pending().await {
+                return Err(invalid_request("MCP sign-in already pending; cancel that attempt first"));
+            }
+        }
         let auth = self.auth_manager.auth().await;
         let (mcp_config, runtime_context) = match thread_id.as_deref() {
             Some(thread_id) => {
@@ -168,6 +291,15 @@ impl McpRequestProcessor {
                 "No MCP server named '{name}' found."
             )));
         };
+        if let Some(admission) = &mcp_admission {
+            admit_mcp_target(
+                mcp_config.mcp_server_catalog.server(&name).map(|entry| entry.source()),
+                server.config(),
+                &name,
+                expected_plugin_id.as_deref(),
+                admission,
+            )?;
+        }
         let redirect_mode = if server.is_agent_plugin() {
             StreamableHttpRedirectMode::AgentPluginV1
         } else {
@@ -175,9 +307,10 @@ impl McpRequestProcessor {
         };
         let server = server.config();
         let enterprise = matches!(server.auth, McpServerAuth::EmaAuth);
-        let (authorization_url, login_id, completion): (
+        let (authorization_url, login_id, control, completion): (
             String,
             String,
+            McpLoginControl,
             futures::future::BoxFuture<'static, anyhow::Result<()>>,
         ) = if enterprise {
             let thread_id = thread_id.clone().ok_or_else(|| {
@@ -247,10 +380,12 @@ impl McpRequestProcessor {
                     },
                 )
                 .await?;
+            let control = McpLoginControl::Enterprise(login.completion.clone());
             let mut completion = login.completion;
             (
                 login.authorization_url,
                 login.login_id,
+                control,
                 Box::pin(async move {
                     match completion.wait_for(|state| state.is_complete()).await {
                         Ok(result) => match *result {
@@ -336,9 +471,14 @@ impl McpRequestProcessor {
             (
                 handle.authorization_url().to_string(),
                 Uuid::now_v7().to_string(),
+                McpLoginControl::Standard(handle.cancellation()),
                 Box::pin(handle.wait()),
             )
         };
+        self.oauth_logins
+            .lock()
+            .await
+            .insert(name.clone(), (login_id.clone(), control));
         let notification_name = name.clone();
         let notification_thread_id = thread_id;
         let notification_login_id = login_id.clone();
@@ -400,6 +540,7 @@ impl McpRequestProcessor {
         params: ListMcpServerStatusParams,
         thread: Option<Arc<codex_core::CodexThread>>,
     ) -> Result<ListMcpServerStatusResponse, JSONRPCErrorError> {
+        validate_mcp_admission_request(params.thread_id.as_deref(), params.server_name.as_deref(), params.expected_plugin_id.as_deref(), params.mcp_admission.as_ref())?;
         let detail = match params.detail.unwrap_or(McpServerStatusDetail::Full) {
             McpServerStatusDetail::Full => McpSnapshotDetail::Full,
             McpServerStatusDetail::ToolsAndAuthOnly => McpSnapshotDetail::ToolsAndAuthOnly,
@@ -440,6 +581,18 @@ impl McpRequestProcessor {
                     ),
                 ),
             };
+            if let Some(admission) = &params.mcp_admission {
+                let name = params.server_name.as_deref().ok_or_else(|| invalid_request("Guarded MCP discovery requires a target server"))?;
+                let effective_servers = codex_mcp::effective_mcp_servers(&mcp_config, auth.as_ref());
+                let server = effective_servers.get(name).ok_or_else(|| mcp_admission_refusal("source_mismatch"))?;
+                admit_mcp_target(
+                    mcp_config.mcp_server_catalog.server(name).map(|entry| entry.source()),
+                    server.config(),
+                    name,
+                    params.expected_plugin_id.as_deref(),
+                    admission,
+                )?;
+            }
             let mut snapshot = collect_mcp_server_status_snapshot_with_detail(
                 &mcp_config,
                 auth.as_ref(),
@@ -793,4 +946,70 @@ fn with_mcp_tool_call_thread_id_meta(
         }
         other => other,
     }
+}
+
+#[cfg(test)]
+mod oauth_cancellation_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn stale_attempt_ids_and_other_servers_cannot_cancel_a_new_login() {
+        let control = OAuthLoginCancellation::default();
+        let mut registry = McpLoginRegistry::new();
+        registry.insert(
+            "isolated-fixture".to_string(),
+            ("new-attempt".to_string(), McpLoginControl::Standard(control.clone())),
+        );
+        assert!(matching_login(&registry, "isolated-fixture", "old-attempt").is_none());
+        assert!(matching_login(&registry, "another-fixture", "new-attempt").is_none());
+        assert_eq!(control.state().await, OAuthLoginState::Pending);
+        let selected = matching_login(&registry, "isolated-fixture", "new-attempt");
+        let Some(McpLoginControl::Standard(selected)) = selected else {
+            panic!("the exact attempt must be selected");
+        };
+        assert_eq!(selected.cancel().await, OAuthLoginState::Cancelled);
+        assert!(!McpLoginControl::Standard(control).is_pending().await);
+    }
+
+    #[test]
+    fn guarded_discovery_never_accepts_a_colliding_registration_or_new_transport() {
+        let policy = codex_app_server_protocol::PluginMcpAdmissionPolicy {
+            allow_tools: true,
+            allow_local_servers: false,
+            local_confirmed: true,
+            allowed_domains: vec!["api.example.com".to_string()],
+        };
+        let remote: codex_config::types::McpServerConfig = serde_json::from_value(serde_json::json!({
+            "url": "https://api.example.com/mcp",
+        })).unwrap_or_else(|error| panic!("{error}"));
+        let local: codex_config::types::McpServerConfig = serde_json::from_value(serde_json::json!({
+            "command": "never-executed-fixture",
+        })).unwrap_or_else(|error| panic!("{error}"));
+        let plugin = McpServerSource::Plugin(codex_mcp::McpPluginAttribution::new(
+            "fixture@marketplace".to_string(), "Fixture".to_string(),
+        ));
+        assert!(admit_mcp_target(Some(&plugin), &remote, "collision", Some("fixture@marketplace"), &policy).is_ok());
+        for (source, expected) in [
+            (Some(&McpServerSource::Config), Some("fixture@marketplace")),
+            (Some(&plugin), Some("other@marketplace")),
+            (Some(&plugin), None),
+            (None, None),
+        ] {
+            let result = admit_mcp_target(source, &remote, "collision", expected, &policy);
+            let error = result.err().unwrap_or_else(|| panic!("source mismatch must refuse before discovery"));
+            assert_eq!(error.data, Some(serde_json::json!({
+                "inquelloCapabilityAdmission": { "code": "source_mismatch" },
+            })));
+        }
+        assert!(admit_mcp_target(Some(&McpServerSource::Config), &remote, "fixture", None, &policy).is_ok());
+        let error = admit_mcp_target(Some(&McpServerSource::Config), &local, "fixture", None, &policy)
+            .err().unwrap_or_else(|| panic!("actual changed stdio transport must be refused"));
+        assert_eq!(error.data, Some(serde_json::json!({
+            "inquelloCapabilityAdmission": { "code": "local_servers_denied" },
+        })));
+        assert!(validate_mcp_admission_request(None, None, None, Some(&policy)).is_err());
+        assert!(validate_mcp_admission_request(Some("thread"), Some("fixture"), None, Some(&policy)).is_err());
+        assert!(validate_mcp_admission_request(None, Some("fixture"), Some("plugin"), None).is_err());
+    }
+
 }

@@ -1815,6 +1815,9 @@ impl MessageProcessor {
                 // Keep MCP discovery's large future from inflating every request.
                 Box::pin(self.mcp_processor.mcp_server_oauth_login(params)).await
             }
+            ClientRequest::McpServerOauthCancel { params, .. } => {
+                self.mcp_processor.mcp_server_oauth_cancel(params).await
+            }
             ClientRequest::McpServerRefresh { params, .. } => {
                 self.mcp_processor.mcp_server_refresh(params).await
             }

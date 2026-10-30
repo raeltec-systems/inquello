@@ -748,6 +748,7 @@ async fn the_effective_policy_names_its_sources_and_the_capability_contract() {
             "network",
             "mcp_tools",
             "extensions",
+            "allow_local_mcp_servers",
             "full_access",
             "no_prompt"
         ]
@@ -761,6 +762,7 @@ async fn the_effective_policy_names_its_sources_and_the_capability_contract() {
     assert_eq!(setting(&response, "sandbox").value, "workspace_write");
     assert_eq!(setting(&response, "approval").value, "on_request");
     assert_eq!(setting(&response, "full_access").value, "not_permitted");
+    assert_eq!(setting(&response, "allow_local_mcp_servers").value, "denied");
     assert!(!response.device.configured);
     assert_eq!(response.device.sandbox_modes, None);
     assert!(response.task.is_none());
@@ -791,6 +793,26 @@ async fn the_effective_policy_names_its_sources_and_the_capability_contract() {
                 .iter()
                 .any(|l| l == "Eligibility verification required before enablement")
     }));
+
+    // Local MCP is an explicit Workspace exception, separate from Task sandbox reach.
+    let response: InquelloPolicyEffectiveResponse = decode(
+        effective(
+            &processor,
+            DESKTOP,
+            workspace_policy(WORKSPACE, 4, Some(json!({
+                "mcp_tools": "allowed", "allow_local_mcp_servers": true,
+            }))),
+            None,
+            DeviceRequirements::default(),
+            UserConfig::default(),
+        )
+        .await,
+    );
+    let local_mcp = setting(&response, "allow_local_mcp_servers");
+    assert_eq!(local_mcp.value, "allowed");
+    assert!(!local_mcp.restricted);
+    assert_eq!(local_mcp.source.kind, "workspace_policy");
+    assert_eq!(local_mcp.source.revision, Some(4));
 
     // Workspace restricts; device and user layers stricter still.
     let response: InquelloPolicyEffectiveResponse = decode(

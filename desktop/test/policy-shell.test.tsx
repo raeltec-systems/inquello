@@ -8,12 +8,12 @@
  * broader mode needs an explicit confirmation that states its reach. Nothing
  * reads as review or approval, and nothing is green.
  */
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { Capabilities } from '../src/renderer/Capabilities';
-import { parseSettingsPolicy, parseTaskPolicy, type TaskPolicyItem } from '../src/renderer/policy-bridge';
+import { parsePolicy, parseSettingsPolicy, parseTaskPolicy, type TaskPolicyItem } from '../src/renderer/policy-bridge';
 import { TaskPolicy } from '../src/renderer/Shell/TaskPolicy';
 
 const WORKSPACE = '5d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e';
@@ -49,6 +49,7 @@ function policy(sandboxSource = 'Inquello default') {
       setting('network', 'Network access in the sandbox', 'Denied', 'Inquello default'),
       setting('mcp_tools', 'MCP and connector tools', 'Denied', 'Inquello default'),
       setting('extensions', 'Plugins and extensions', 'Denied', 'Inquello default'),
+      setting('allow_local_mcp_servers', 'Local MCP servers (outside the Task sandbox)', 'Denied', 'Inquello default'),
       setting('full_access', 'Full access mode', 'Not available', 'Inquello default'),
       setting('no_prompt', 'No-prompt mode', 'Not available', 'Inquello default'),
     ],
@@ -204,4 +205,26 @@ describe('the Task policy and execution mode', () => {
     expect(document.querySelector('[data-broad-mode-suspended]')!.textContent).toContain('This Task runs in Standard mode.');
     expect(document.querySelector('[data-broad-mode-reach]')).toBeNull();
   });
+});
+
+it('preserves the local MCP outside-sandbox rule in the renderer policy bridge', () => {
+  expect(parsePolicy(policy())?.settings.find((row) => row.name === 'allow_local_mcp_servers')).toEqual({
+    name: 'allow_local_mcp_servers', label: 'Local MCP servers (outside the Task sandbox)', valueLabel: 'Denied', sourceLabel: 'Inquello default', restricted: true,
+  });
+});
+
+
+it('keeps exact pending cancellation mounted when a known Workspace policy becomes unavailable',async()=>{
+  let unavailable=false;const callbacks:Array<()=>void>=[];
+  const interval=vi.spyOn(globalThis,'setInterval').mockImplementation(((fn:()=>void)=>{callbacks.push(fn);return 1;}) as typeof setInterval);
+  const inv={workspaceId:WORKSPACE,refreshedAt:null,stale:true,available:false,reason:'Policy unavailable',entries:[{kind:'mcp_server',id:'pending',display_name:'Pending server',source:'Runtime',version:null,dependencies:[],installed:true,enabled:false,callable_now:false,reason_not_callable:'Pending sign-in',effective_permission:'Cancellation only',next_action:'Cancel',actions:['cancel']}],provider:{provider:'Codex',accountType:'Unavailable',effectiveRoute:'None',limits:[]}};
+  const manage=vi.fn(async()=>({ok:true,reason:'Sign-in cancelled',inventory:{...inv,entries:[]}}));
+  (globalThis as {inquello?:unknown}).inquello={policy:{getSettings:async()=>({signedIn:true,environmentLabel:'Local device',workspaces:[{workspaceId:WORKSPACE,name:'Known Workspace',policy:unavailable?null:policy(),reason:unavailable?'Policy unavailable':null}],capabilities,reason:null})},capabilities:{getInventory:async()=>inv,manage}};
+  try {
+    render(<Capabilities/>);await screen.findByRole('button',{name:'Cancel sign-in for Pending server'});
+    unavailable=true;await act(async()=>{for(const callback of callbacks)callback();});
+    await waitFor(()=>expect(document.querySelector('[data-policy-workspace] [data-policy-reason]')?.textContent).toBe('Policy unavailable'));
+    await userEvent.click(screen.getByRole('button',{name:'Cancel sign-in for Pending server'}));
+    expect(manage).toHaveBeenCalledWith({workspaceId:WORKSPACE,kind:'mcp_server',id:'pending',action:'cancel'});
+  } finally { interval.mockRestore(); }
 });

@@ -347,6 +347,8 @@ fn install_remote_plugin(client: &mut CodexClient, plugin: &RemotePluginExpectat
         ClientRequest::PluginInstall {
             request_id: request_id.clone(),
             params: PluginInstallParams {
+                skip_authentication: false,
+                mcp_admission: None,
                 marketplace_path: None,
                 remote_marketplace_name: Some(plugin.marketplace_name.clone()),
                 install_attempt_id: None,

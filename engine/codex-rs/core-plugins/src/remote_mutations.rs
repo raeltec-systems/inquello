@@ -17,6 +17,7 @@ use crate::remote_bundle::RemotePluginBundleInstallError;
 use codex_app_server_protocol::PluginAuthPolicy;
 use codex_app_server_protocol::PluginAvailability;
 use codex_app_server_protocol::PluginInstallPolicy;
+use codex_app_server_protocol::PluginMcpAdmissionPolicy;
 use codex_login::CodexAuth;
 use codex_plugin::PluginId;
 use codex_plugin::PluginTelemetryMetadata;
@@ -89,6 +90,17 @@ impl PluginsManager {
         request: RemotePluginInstallRequest,
         on_effective_plugins_changed: Option<EffectivePluginsChangedCallback>,
     ) -> Result<RemotePluginInstallOutcome, RemotePluginOperationError> {
+        self.install_remote_plugin_with_mcp_admission(config, auth, request, on_effective_plugins_changed, None).await
+    }
+
+    pub async fn install_remote_plugin_with_mcp_admission(
+        self: &Arc<Self>,
+        config: &PluginsConfigInput,
+        auth: Option<&CodexAuth>,
+        request: RemotePluginInstallRequest,
+        on_effective_plugins_changed: Option<EffectivePluginsChangedCallback>,
+        admission: Option<PluginMcpAdmissionPolicy>,
+    ) -> Result<RemotePluginInstallOutcome, RemotePluginOperationError> {
         use RemotePluginOperationErrorKind as Error;
         let unresolved = |kind| RemotePluginOperationError {
             plugin_id: None,
@@ -160,10 +172,11 @@ impl PluginsManager {
             &detail.summary.name,
         );
         // Materialize first: a failed download must never leave a backend installation behind.
-        let installed = remote_bundle::download_and_install_remote_plugin_bundle(
+        let installed = remote_bundle::download_and_install_remote_plugin_bundle_with_mcp_admission(
             &service,
             self.codex_home.clone(),
             bundle,
+            admission,
         )
         .await
         .map_err(|err| resolved(Error::Bundle(err)))?;

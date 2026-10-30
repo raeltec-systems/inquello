@@ -22,6 +22,7 @@ import { useCallback, useEffect, useState, type ReactElement } from 'react';
 
 import { parseSettingsPolicy, policyBridge, type CapabilityItem, type PolicyItem, type SettingsPolicyItem } from './policy-bridge';
 import { StatusChip } from './primitives';
+import { CapabilityInventory } from './CapabilityInventory';
 import { ReachList } from './Shell/TaskPolicy';
 
 const REFRESH_MS = 30_000;
@@ -102,7 +103,7 @@ export function Capabilities(): ReactElement {
 
   const capabilities = view?.capabilities ?? FALLBACK_CAPABILITIES;
   return (
-    <div className="specimen-policy" data-policy-section="" data-policy-loaded={view ? 'true' : 'false'} data-signed-in={view ? String(view.signedIn) : 'unknown'}>
+    <><div className="specimen-policy" data-policy-section="" data-policy-loaded={view ? 'true' : 'false'} data-signed-in={view ? String(view.signedIn) : 'unknown'}>
       <p className="specimen-account-note" data-policy-environment>
         {`Environment: ${view?.environmentLabel ?? 'Local device'}. Tasks run on this device only.`}
       </p>
@@ -131,5 +132,7 @@ export function Capabilities(): ReactElement {
       ))}
       <CapabilityContract capabilities={capabilities} />
     </div>
+    {(view?.workspaces ?? []).map(workspace => <CapabilityInventory key={workspace.workspaceId} workspaceId={workspace.workspaceId} workspaceName={workspace.name} />)}
+    </>
   );
 }

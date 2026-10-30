@@ -35,7 +35,7 @@ import {
   type ProviderStatus,
   type VerifyOutcome,
 } from '../src/main/providers';
-import { isProviderCredentialVar, RpcResponseError, RUNTIME_CONFIG_TOML, runtimeChildEnv, writeRuntimeConfig } from '../src/main/runtime';
+import { isProviderCredentialVar, RpcResponseError, RUNTIME_CONFIG_TOML, RUNTIME_OWNED_CONFIG_ARGS, verifyRuntimeOwnedConfig, runtimeChildEnv, writeRuntimeConfig } from '../src/main/runtime';
 import { fakeSafeStorage } from './identity-fakes';
 import { recordingLogger, removeTempDirs, tempDir } from './helpers';
 
@@ -468,10 +468,9 @@ describe('runtime environment (matrix: Inherited env key)', () => {
 });
 
 describe('runtime config.toml', () => {
-  it('sets the keyring credential store and direct keyring storage, 0600, replacing what was there', () => {
+  it('initializes keyring credential defaults with 0600 permissions', () => {
     const home = path.join(tempDir('providers-rh'), 'runtime-home');
     fs.mkdirSync(home);
-    fs.writeFileSync(path.join(home, 'config.toml'), 'cli_auth_credentials_store = "file"\nmodel = "x"\n');
     const file = writeRuntimeConfig(home);
     expect(file).toBe(path.join(home, 'config.toml'));
     const text = fs.readFileSync(file, 'utf8');
@@ -481,6 +480,39 @@ describe('runtime config.toml', () => {
     expect(text).not.toMatch(/"file"|model/);
     expect(fs.statSync(file).mode & 0o777).toBe(0o600);
     expect(fs.readdirSync(home)).toEqual(['config.toml']);
+  });
+});
+
+describe('runtime-managed configuration restart persistence', () => {
+  it('preserves MCP/plugin/app/skill changes and enforces owned values through CLI overrides', () => {
+    const home = tempDir('persistent-runtime-config');
+    const file = writeRuntimeConfig(home);
+    const managed = 'cli_auth_credentials_store = "file"\n[mcp_servers.fixture]\nurl = "https://example.com/mcp"\nenabled = false\n[plugins."test@market"]\nenabled = false\n[apps.github]\nenabled = false\n';
+    fs.writeFileSync(file, managed);
+    expect(writeRuntimeConfig(home)).toBe(file);
+    expect(fs.readFileSync(file,'utf8')).toBe(managed);
+    expect(RUNTIME_OWNED_CONFIG_ARGS).toEqual(['-c','cli_auth_credentials_store="keyring"','-c','mcp_oauth_credentials_store="keyring"','-c','approvals_reviewer="user"','-c','features.secret_auth_storage=false','-c','features.network_proxy=true']);
+  });
+  it('refuses a symlink rather than following an external config', () => {
+    const home = tempDir('symlink-runtime-config');
+    const target = path.join(home,'other'); fs.writeFileSync(target,'untouched');
+    fs.symlinkSync(target,path.join(home,'config.toml'));
+    expect(()=>writeRuntimeConfig(home)).toThrow('regular file');
+    expect(fs.readFileSync(target,'utf8')).toBe('untouched');
+  });
+});
+
+describe('runtime owned-setting readiness gate', () => {
+  const safe = {cli_auth_credentials_store:'keyring',mcp_oauth_credentials_store:'keyring',features:{secret_auth_storage:false,network_proxy:true},approvals_reviewer:'user'};
+  it('accepts only runtime-confirmed protected settings',async()=>{
+    await expect(verifyRuntimeOwnedConfig(async()=>({config:safe,layers:[]}))).resolves.toBeUndefined();
+  });
+  it.each([{...safe,cli_auth_credentials_store:'file'},{...safe,mcp_oauth_credentials_store:'auto'},{...safe,features:{secret_auth_storage:true,network_proxy:false}},{...safe,approvals_reviewer:'guardian'},{}])('fails closed for a conflicting or missing effective setting',async config=>{
+    await expect(verifyRuntimeOwnedConfig(async()=>({config,layers:[]}))).rejects.toThrow('protections');
+  });
+  it('refuses higher-priority legacy reviewer override even when field is elided',async()=>{
+    const {approvals_reviewer,...config}=safe;
+    await expect(verifyRuntimeOwnedConfig(async()=>({config,layers:[{name:{type:'legacyManagedConfigTomlFromFile'},config:{approvals_reviewer:'guardian'}}]}))).rejects.toThrow('protections');
   });
 });
 
@@ -604,7 +636,7 @@ describe('data policy: provider categories', () => {
     });
     expect(byId('claude-key-vault').deletion).toMatch(/Remove the Claude API key/);
     expect(byId('runtime-config')).toMatchObject({ enabled: true, credentials: false, export: { mode: 'excluded' }, location: { root: 'runtime-home', globs: expect.arrayContaining(['config.toml']) } });
-    expect(byId('runtime-config').deletion).toMatch(/rewrites/);
+    expect(byId('runtime-config').deletion).toMatch(/initializes safe defaults/);
     expect(byId('codex-keyring-entry')).toMatchObject({ enabled: true, credentials: true, export: { mode: 'excluded' }, location: { store: 'os-credential-store' } });
     expect(byId('codex-keyring-entry').deletion).toMatch(/logout removes the keyring entry/);
     expect(byId('provider-credentials')).toMatchObject({ enabled: false, credentials: true, location: { root: 'runtime-home', globs: expect.arrayContaining(['auth.json']) } });

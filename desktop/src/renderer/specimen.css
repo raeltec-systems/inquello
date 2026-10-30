@@ -261,3 +261,15 @@
   font: var(--type-ui);
   color: var(--text-primary);
 }
+
+/* Story 1.21: current runtime inventory. Status remains textual, not colour-coded. */
+[data-capabilities-section] { min-width: 0; font: var(--type-ui); }
+[data-capabilities-section] p { color: var(--text-secondary); overflow-wrap: anywhere; }
+[data-capabilities-section] h4, [data-capabilities-section] h5 { font: var(--type-label); }
+[data-capability-kind] > ul { list-style: none; padding: 0; }
+[data-inventory-entry] { padding: var(--space-3) 0; border-top: 1px solid var(--border-default); }
+[data-inventory-entry] dl, [data-provider-session] dl { display: grid; grid-template-columns: minmax(7rem, 1fr) minmax(0, 3fr); gap: var(--space-1) var(--space-3); }
+[data-inventory-entry] dd, [data-provider-session] dd { margin: 0; overflow-wrap: anywhere; }
+[data-inventory-entry] .iq-action { margin: 0 var(--space-2) var(--space-2) 0; }
+[data-capabilities-section] select { font: inherit; max-width: 100%; color: var(--text-primary); background: var(--surface-app); padding: var(--space-2); }
+[data-capabilities-section] input[type='checkbox'] { margin-right: var(--space-2); }

@@ -205,6 +205,50 @@ Changes the Inquello crates and the same upstream points as Patches 7 and 9 to 1
 - **`app-server`** (upstream crate): in `src/request_processors/inquello_processor.rs`, `matched_rules` (each rule becomes one `codex-execpolicy` prefix rule through `codex_config::RequirementsExecPolicyToml`, its index carried in the justification; `Policy::matches_for_command` decides which match), the rule check in `tools_exec_plan` (forbid refused; prompt needs an allowed request for exactly that command, used once; allow still runs inside the Task's profile; the sandbox check is a fixed probe the processor builds and rules do not apply to), `approvals_reviewer` written with every run's configuration edits (`user` while no processing route exists, `PROCESSING_ROUTE_AVAILABLE = false`), and `user_rules_read`, `user_rules_set`, `permissions_request`, `permissions_pending` and `permissions_decide` (a `human` decider is the bound principal; the reviewer is refused as `reviewer_not_available`), with tests. `src/message_processor.rs` gains five dispatch arms.
 - **Workspace manifest and lockfile**: unchanged.
 
+### Patch 13: Runtime capability management (Story 1.21, 2026-10-30; unverified Rust build)
+
+- Inquello domain/service policy adds `execution.allow_local_mcp_servers`, denied by default, with source attribution and service wire coverage.
+- `app-server-protocol` adds `mcpServer/oauth/cancel {name, loginId}` and result status `cancelled | completed | failed | notFound`, serialized per MCP server like login. `plugin/install` gains backward-compatible optional `skipAuthentication` (default false); Inquello sends true.
+- `app-server` tracks exact MCP OAuth attempts, exposes cancellation, delegates enterprise cancellation to its existing arbitration, and suppresses automatic/silent local and remote plugin OAuth when requested. Plugin installation no longer implies connector credential acquisition for Inquello callers.
+- `rmcp-client` standard OAuth now has a cancellation/persistence gate. A successful cancellation cannot be followed by token persistence; if persistence already won, cancellation reports completed/failed rather than falsely claiming cancellation. Isolated callback/late-write/race tests are authored.
+- `core-plugins` and protocol add credential-free MCP admission metadata, strict staged-content admission and structured refusal codes. Both install and enable check actual copied content before activation. Guarded targeted MCP status/login verify the winning config/plugin source and current transport before any process/network discovery; no name-collision fallback. Legacy upstream callers remain compatible when admission is omitted.
+- No workspace dependency or lockfile changes; curated marketplace sync remains unchanged. Pinned source was read before extending these paths.
+- Round 1 strict admission also checks the selected raw legacy manifest: malformed explicit `mcpServers` (including null), or a declaration discarded by path resolution, is refused rather than treated as no dependencies. Tests cover malformed values with and without a default MCP file. Agent-plugin parser inspection used upstream cut **commit** `360319d8dee62d87e2d59fc0c21805d79519cfed`, file `codex-rs/core-plugins/src/agent_plugin_manifest.rs`, **blob** `4b9d1e6356e803e2c0bb40eabe98f75eafdd5fde`. The recorded full tree for fork baseline **commit** `3c7b4e9931e14ebb692f3f93f55fa396cf2941f4` independently lists the same blob at `engine/codex-rs/core-plugins/src/agent_plugin_manifest.rs`; thus the inspected file matches baseline exactly. Its MCP location is fixed `mcp.json`, not the legacy declaration. The missing file was inspected, not installed into this snapshot.
+- Round 1 boundary tests issue real `plugin/install` RPCs for both local and downloaded bundles: `skipAuthentication: true` yields an actual installed cache/config without OAuth requests; blocked host/stdio contents yield a structured refusal without cache publication, config change or provider installation. Fixtures explicitly select temporary file credentials (not a real keyring).
+- Round 1 OAuth boundary test issues actual login/cancel RPCs, rejects stale IDs, cancels while a fixture token response is delayed, checks no late persistence, then completes a second isolated flow as a positive credential-store oracle and verifies cancellation reports `completed` after success. These are authored tests, not executed native evidence.
+- **Not validated in this snapshot:** Rust tests/build/clippy/fmt, generated bindings/schema/stamp and native/keyring smoke. `cargo` and the built runtime are absent; protocol generation fails without Git metadata. See Story 1.21's validation log. Do not treat this patch as release-ready before those checks.
+
+#### Story 1.21 remaining native/protocol completion gate
+
+In the owner's complete checkout with its pinned toolchain and isolated test database, run these commands (not executed successfully in this materialized snapshot):
+
+```sh
+cd engine/codex-rs
+CARGO_INCREMENTAL=0 cargo test -j 4 -p inquello-domain -p inquello-service -p inquello-protocol
+CARGO_INCREMENTAL=0 cargo test -j 4 -p codex-rmcp-client oauth
+CARGO_INCREMENTAL=0 cargo test -j 4 -p codex-core-plugins mcp_admission
+CARGO_INCREMENTAL=0 cargo test -j 4 -p codex-app-server plugin_install_rpc
+CARGO_INCREMENTAL=0 cargo test -j 4 -p codex-app-server oauth_cancel_rpc
+CARGO_INCREMENTAL=0 cargo test -j 4 -p codex-app-server guarded_mcp_rpcs
+CARGO_INCREMENTAL=0 cargo clippy -j 4 -p inquello-domain -p inquello-service --all-targets -- -D warnings
+cargo fmt --all -- --check
+CARGO_INCREMENTAL=0 cargo build -j 4 -p codex-cli -p codex-app-server
+CARGO_INCREMENTAL=0 cargo build -j 4 -p inquello-service --bin inquello-dev-topology
+cd ../..
+# After review: commit the reviewed engine source locally so HEAD:engine is
+# exactly the tree built above; review any Cargo.lock version-only changes.
+git add engine FORK-CUT.md
+git commit -m "Implement reviewed Story 1.21 runtime capability boundaries"
+cd desktop
+pnpm generate:protocol
+pnpm run build
+pnpm test
+```
+
+For a **Linux** runtime build only, also run `CARGO_INCREMENTAL=0 cargo build -j 4 -p codex-bwrap` alongside the CLI/app-server build. This helper is not part of the native Windows build instructions. The pinned `bwrap/build.rs` returns immediately for non-Linux targets; Linux compilation requires the existing libcap/pkg-config prerequisites. Baseline-tree blobs match the inspected upstream-cut files exactly: `bwrap/Cargo.toml` = `ed7010c8fdaea270f028ceb9a053e60c278d2b4c`, `bwrap/build.rs` = `d9d87932b2db8150e4bdcf663e2de32b7d100f9f`. The shell block above uses POSIX environment-assignment syntax; in Windows PowerShell set `$env:CARGO_INCREMENTAL = '0'` first and run the same cargo commands without their `CARGO_INCREMENTAL=0` prefix. No additional toolchain/package installation is authorized by this handoff.
+
+Set `INQUELLO_TEST_DATABASE_URL` to the isolated topology before tests. This snapshot also lacks portions of the native source/test-support tree. Regeneration must use the real matching binaries and committed engine tree; never hand-write generated schemas, counts or stamps. Then run the specified seeded native/keyring smoke and confirm every report, including `capabilities`, is OK. Story remains in progress until all these gates pass.
+
 ## Toolchain setup (Windows, everything on D:)
 
 The owner authorized these installs on 2026-10-28. Toolchains, caches and build output stay on D:. The Microsoft C++ build tools were already present and were not installed.

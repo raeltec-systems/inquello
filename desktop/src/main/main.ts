@@ -1,3 +1,5 @@
+import { signOutWithCapabilities, providerLogoutWithCapabilities } from './capabilities/lifecycle';
+import { CapabilityService } from './capabilities/service';
 /**
  * Inquello desktop main process.
  *
@@ -42,8 +44,8 @@
  * from the Inquello identity (`providers/`). The Claude API key lives in the
  * provider vault (`<userData>/providers/claude.bin`, OS-backed `safeStorage`
  * or memory-only); the inherited Codex login lives in the OS keyring, which
- * the runtime uses because main writes `config.toml` with
- * `cli_auth_credentials_store = "keyring"` before every start. The runtime
+ * the runtime uses because main enforces startup overrides and verifies the
+ * effective keyring-only configuration before enabling credential operations. The runtime
  * child gets no inherited provider credential variable. The renderer reaches
  * both routes through the six `provider.*` operations. In `--smoke` the
  * providers probe connects and disconnects both routes with a sentinel key
@@ -118,7 +120,7 @@ import schemaStamp from '../protocol/schema-stamp.json';
 import { DataService, ExportJournal, governedRoots, JOURNAL_DIR, loadShippedPolicy, type GovernedRoots } from './data';
 import { createIdentity, headlessOpener, identityDir, SERVICE_CONFIG_ENV, type IdentityWiring } from './identity';
 import { openSystemBrowser } from './identity/browser';
-import { AppServerRuntime, consoleLogger, isProviderCredentialVar, recordingConsoleLogger, resolveAppServerBinary, runtimeChildEnv, writeRuntimeConfig, type ExitInfo } from './runtime';
+import { AppServerRuntime, consoleLogger, isProviderCredentialVar, recordingConsoleLogger, resolveAppServerBinary, runtimeChildEnv, writeRuntimeConfig, RUNTIME_OWNED_CONFIG_ARGS, verifyRuntimeOwnedConfig, type ExitInfo } from './runtime';
 import { APP_SCHEME_PRIVILEGES, handleAppProtocol } from './security/app-protocol';
 import { createOperations, registerOperations } from './security/operations';
 import {
@@ -132,7 +134,7 @@ import {
 import { OrganiseService } from './organise';
 import { EscalationGate, PermissionMediator, PolicyService, taskFoldersRoot } from './policy';
 import { createProviders, loadProviderDevConfig, PROVIDER_DEV_CONFIG_ENV, providersDir, type ProviderService } from './providers';
-import { probeComposer, probeData, probeIdentity, probeOrganise, probePermissions, probePolicy, probeProviders, probeRenderer, probeShellLayout, probeStates, probeToolBounds, SHELL_LAYOUT } from './smoke-probe';
+import { probeCapabilities, probeComposer, probeData, probeIdentity, probeOrganise, probePermissions, probePolicy, probeProviders, probeRenderer, probeShellLayout, probeStates, probeToolBounds, SHELL_LAYOUT } from './smoke-probe';
 
 const smoke = process.argv.includes('--smoke');
 // The smoke run keeps what main logs, so the providers probe can scan it for a leaked key.
@@ -154,8 +156,11 @@ let shellLayoutOk = false;
 let composerOk = false;
 let toolBoundsOk = false;
 let permissionsOk = false;
+let capabilitiesOk = false;
+let runtimeConfigurationVerified = false;
 let organise: OrganiseService | undefined;
 let policy: PolicyService | undefined;
+let capabilities: CapabilityService | undefined;
 /** Escalations the runtime raises: pending authorization requests, declined in Story 1.19. */
 const escalations = new EscalationGate({ newId: randomUUID });
 let identity: IdentityWiring | undefined;
@@ -228,15 +233,17 @@ function startRuntime(): Promise<void> {
 
 /** Starts a new runtime child; local-data recovery calls this only after copying is complete. */
 async function startRuntimeNow(): Promise<void> {
+  runtimeConfigurationVerified = false;
   if (quitting) throw new Error('the application is quitting; the runtime will not restart');
   if (!roots) throw new Error('local data roots were not set up');
   const runtimeHome = roots['runtime-home'];
   fs.mkdirSync(runtimeHome, { recursive: true, mode: 0o700 });
   const workingStore = workingStorePath(app.getPath('userData'));
   fs.mkdirSync(path.dirname(workingStore), { recursive: true, mode: 0o700 });
-  // The Codex login lives in the OS keyring only; written before every start.
+  // Preserve runtime management edits; immutable startup overrides enforce credential safety.
   writeRuntimeConfig(runtimeHome);
   providers?.codex.runtimeReset();
+  capabilities?.runtimeUnavailable();
   const binary = resolveAppServerBinary({
     env: process.env,
     isPackaged: app.isPackaged,
@@ -246,18 +253,25 @@ async function startRuntimeNow(): Promise<void> {
   logger.info(`starting app-server (${binary.source}): ${binary.path}`);
   runtime = new AppServerRuntime({
     command: binary.path,
+    commandArgsPrefix: RUNTIME_OWNED_CONFIG_ARGS,
     env: runtimeEnv(runtimeHome, workingStore),
     clientInfo: { name: 'inquello_desktop', title: 'Inquello', version: app.getVersion() },
     schemaStamp,
     stderrLogPath: path.join(app.getPath('logs'), 'app-server-stderr.log'),
     logger,
-    onNotification: ({ method, params }) => providers?.codex.handleNotification(method, params),
+    onNotification: ({ method, params }) => { providers?.codex.handleNotification(method, params); capabilities?.handleNotification(method, params); if (['app/list/updated','skills/changed','mcpServer/startupStatus/updated','mcpServerStatus','mcpServer/oauthLogin/completed','account/updated'].includes(method)) for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:capabilities-changed'); },
     onServerRequest: (method, params) => escalations.answer(method, params),
   });
   runtime.on('state', ({ state, error }) => {
+    if (['disconnected','failed','stopped'].includes(state)) { runtimeConfigurationVerified = false; capabilities?.runtimeUnavailable(); for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:capabilities-changed'); }
     if (state === 'disconnected' && error) logger.error(`runtime disconnected; not restarting. ${error.message}`);
   });
   const handshake = await runtime.start();
+  try { await verifyRuntimeOwnedConfig((method,params) => runtime!.request(method,params)); }
+  catch (error) { await runtime.stop(); throw error; }
+  runtimeConfigurationVerified = true;
+  capabilities?.runtimeReset();
+  for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:capabilities-changed');
   if (smoke && !handshakeOk) {
     process.stdout.write(
       `${JSON.stringify({
@@ -279,9 +293,12 @@ function stopRuntime(): Promise<void> {
 }
 
 async function stopRuntimeNow(): Promise<void> {
+  runtimeConfigurationVerified = false;
+  await capabilities?.quiesce();
   const current = runtime;
   if (!current) return;
   const exit = await current.stop();
+  capabilities?.clearConnectionTracking();
   logger.info(`app-server stopped (code ${exit.exitCode}, signal ${exit.signal}, killed ${exit.killed})`);
 }
 
@@ -386,11 +403,16 @@ async function runSmokeProbe(contents: WebContents): Promise<void> {
   permissionsOk = permissionsReport.ok;
   process.stdout.write(`${JSON.stringify({ event: 'permissions', ...permissionsReport })}\n`);
   if (!permissionsReport.ok) logger.error(`permissions probe failed: ${permissionsReport.failures.join('; ')}`);
+  if (!capabilities) throw new Error('capabilities was not wired');
+  const capabilitiesReport = await probeCapabilities(contents, {identity, organise, capabilities, seedFile: process.env.INQUELLO_SMOKE_SEED ?? null});
+  capabilitiesOk = capabilitiesReport.ok;
+  process.stdout.write(`${JSON.stringify({event: 'capabilities', ...capabilitiesReport})}\n`);
+  if (!capabilitiesReport.ok) logger.error(`capabilities probe failed: ${capabilitiesReport.failures.join('; ')}`);
 }
 
 function exitCodeFor(exit: ExitInfo | undefined): number {
   if (!smoke) return 0;
-  return handshakeOk && privilegesOk && designOk && identityOk && dataOk && providersOk && organiseOk && statesOk && shellLayoutOk && composerOk && policyOk && toolBoundsOk && permissionsOk && exit !== undefined && exit.exitCode === 0 && !exit.killed ? 0 : 1;
+  return handshakeOk && privilegesOk && designOk && identityOk && dataOk && providersOk && organiseOk && statesOk && shellLayoutOk && composerOk && policyOk && toolBoundsOk && permissionsOk && capabilitiesOk && exit !== undefined && exit.exitCode === 0 && !exit.killed ? 0 : 1;
 }
 
 app.on('before-quit', (event) => {
@@ -455,7 +477,7 @@ void app.whenReady().then(async () => {
   const identitySession = identity.session;
   const organiseService = new OrganiseService({
     runtime: {
-      ready: () => runtime?.state === 'ready',
+      ready: () => runtime?.state === 'ready' && runtimeConfigurationVerified,
       instance: () => runtime,
       request: <T,>(method: string, params?: unknown) => (runtime ? runtime.request<T>(method, params) : Promise.reject(new Error('the runtime is not running'))),
     },
@@ -465,7 +487,7 @@ void app.whenReady().then(async () => {
   });
   organise = organiseService;
   const policyRuntime = {
-    ready: () => runtime?.state === 'ready',
+    ready: () => runtime?.state === 'ready' && runtimeConfigurationVerified,
     instance: () => runtime,
     request: <T,>(method: string, params?: unknown) => (runtime ? runtime.request<T>(method, params) : Promise.reject(new Error('the runtime is not running'))),
   };
@@ -480,6 +502,7 @@ void app.whenReady().then(async () => {
     permissions: new PermissionMediator({ runtime: policyRuntime, logger, newId: randomUUID }),
   });
   policy = policyService;
+  capabilities = new CapabilityService({runtime: policyRuntime, policy: policyService, runtimeVersion: schemaStamp.runtimeVersion, openBrowser: openSystemBrowser});
   /** Rebinds the runtime's principal after a sign-in change. */
   const afterIdentityChange = async <T,>(result: T): Promise<T> => {
     await organiseService.syncPrincipal().catch((error: unknown) => logger.warn(`organise: principal not rebound (${(error as Error).message})`));
@@ -490,7 +513,7 @@ void app.whenReady().then(async () => {
     platform: process.platform,
     userDataDir: userData,
     runtime: {
-      ready: () => runtime?.state === 'ready',
+      ready: () => runtime?.state === 'ready' && runtimeConfigurationVerified,
       request: <T,>(method: string, params?: unknown) => (runtime ? runtime.request<T>(method, params) : Promise.reject(new Error('the runtime is not running'))),
     },
     openBrowser: openSystemBrowser,
@@ -541,12 +564,13 @@ void app.whenReady().then(async () => {
   registerOperations(
     ipcMain,
     createOperations({
+      capabilities,
       runtimeState: () => runtime?.state ?? 'stopped',
       runtimeVersion: schemaStamp.runtimeVersion,
       identity: {
         getStatus: () => identitySession.getStatus(),
-        signIn: async () => afterIdentityChange(await identitySession.signIn()),
-        signOut: async () => afterIdentityChange(await identitySession.signOut()),
+        signIn: async () => { if (capabilities && !(await capabilities.quiesce())) await stopRuntime(); const result = await afterIdentityChange(await identitySession.signIn()); capabilities?.resume(); return result; },
+        signOut: () => signOutWithCapabilities({capabilities, stopRuntime, signOut: () => identitySession.signOut(), afterIdentityChange}),
       },
       data: {
         getPolicy: () => service.getPolicy(),
@@ -561,7 +585,7 @@ void app.whenReady().then(async () => {
         verifyClaudeKey: () => providerService.verifyClaudeKey(),
         removeClaudeKey: () => providerService.removeClaudeKey(),
         codexLogin: (request) => providerService.codexLogin(request),
-        codexLogout: () => providerService.codexLogout(),
+        codexLogout: () => providerLogoutWithCapabilities({capabilities, stopRuntime, logout: () => providerService.codexLogout(), getStatus: () => providerService.getStatus()}),
       },
       organise: {
         getWorkspaces: () => organiseService.getWorkspaces(),

@@ -133,6 +133,8 @@ import type { WebContents } from 'electron';
 
 import { digestFile, exportedFilePath, governedRoots, importData, isInside, readManifest, ruleBlockers, takeInventory, type DataService, type GovernedRoots } from './data';
 import type { IdentityWiring } from './identity';
+import type { CapabilityService } from './capabilities/service';
+import type { CapabilityInventory, CapabilityResult } from './capabilities/types';
 import type { OrganiseService, TaskView } from './organise';
 import { EXECUTION_SANDBOX_STATUS, networkDenialText, outsideDenialText, type PolicyService, type ToolDenial } from './policy';
 import type { ProviderService } from './providers';
@@ -184,6 +186,7 @@ const TAB_SETTLE_MS = 50;
 
 /** The tree `window.inquello` must expose, as `describe` renders it. */
 export const EXPECTED_BRIDGE_TREE = {
+  capabilities: { onChanged: 'function', getInventory: 'function', manage: 'function' },
   runtime: { getStatus: 'function' },
   identity: { getStatus: 'function', signIn: 'function', signOut: 'function' },
   data: { getPolicy: 'function', export: 'function', import: 'function', delete: 'function' },
@@ -3355,4 +3358,66 @@ export async function probePermissions(contents: WebContents, options: Permissio
     read.signedOutAtEnd = signOut.ok;
   }
   return evaluatePermissions(read, command);
+}
+
+
+// ---- honest runtime capability inventory (Story 1.21) ------------------------------
+export interface CapabilitiesReport {
+  ok: boolean; failures: string[]; configured: boolean;
+  inventory?: CapabilityInventory; refusal?: CapabilityResult;
+  renderer?: { kinds: string[]; builtins: number; providerSeparate: boolean; providerText: string; text: string };
+  signedOutAtEnd?: boolean;
+}
+export interface CapabilitiesProbeOptions extends Omit<OrganiseProbeOptions, 'runtimeRequest'> { capabilities: CapabilityService }
+
+/** No install is performed: the default seed must refuse before target resolution. */
+export async function probeCapabilities(contents: WebContents, options: CapabilitiesProbeOptions): Promise<CapabilitiesReport> {
+  const configured = options.identity.config.kind === 'configured';
+  const report: CapabilitiesReport = {ok:false, failures:[], configured};
+  try {
+    if (!configured) {
+      report.inventory = await options.capabilities.getInventory('00000000-0000-4000-8000-000000000000');
+      if (report.inventory.available) report.failures.push('capability inventory became available without Inquello authority');
+    } else {
+      const seed = JSON.parse(fs.readFileSync(options.seedFile ?? '', 'utf8')) as {workspace_id?: string};
+      if (!seed.workspace_id) throw new Error('the seeded Workspace is unavailable');
+      if (!(await options.identity.session.signIn()).ok) throw new Error('could not sign in for the capability probe');
+      await options.organise.syncPrincipal(); await options.organise.getWorkspaces();
+      report.inventory = await options.capabilities.getInventory(seed.workspace_id);
+      if (!report.inventory.available || report.inventory.stale) report.failures.push('runtime inventory was not current');
+      if (!report.inventory.entries.some(entry => entry.kind === 'built_in')) report.failures.push('built-in tools were not listed');
+      for (const entry of report.inventory.entries.filter(entry => entry.kind === 'plugin')) {
+        if (entry.callable_now || !entry.reason_not_callable?.includes('extensions not allowed')) report.failures.push('a marketplace plugin did not name the blocking extensions rule');
+      }
+      report.refusal = await options.capabilities.manage({workspaceId:seed.workspace_id,kind:'plugin',id:'inquello-smoke-no-install',action:'install'});
+      if (report.refusal.ok || !report.refusal.reason?.includes('extensions not allowed')) report.failures.push('plugin install was not refused with the extensions rule named');
+      report.renderer = await contents.executeJavaScript(`(async () => {
+        ${SHELL_HELPERS}
+        location.hash = '#specimen';
+        await wait(() => !q('[data-shell]'), 5000);
+        const section = await wait(() => q('[data-capabilities-section][data-capabilities-loaded="true"]'), ${POLICY_SETTLE_MS});
+        if (!section) return {kinds:[],builtins:0,providerSeparate:false,providerText:'',text:''};
+        const provider = q('[data-provider-session]', section);
+        return {
+          kinds:[...section.querySelectorAll('[data-capability-kind]')].map(node => node.getAttribute('data-capability-kind')),
+          builtins:section.querySelectorAll('[data-capability-kind="built_in"] [data-inventory-entry]').length,
+          providerSeparate:!!provider && !provider.closest('[data-identity-section]') && /separate from your Inquello identity/.test(provider.textContent),
+          providerText:provider ? provider.textContent : '', text:section.textContent
+        };
+      })()`) as CapabilitiesReport['renderer'];
+      for (const kind of ['built_in','app','mcp_server','plugin','skill']) if (!report.renderer?.kinds.includes(kind)) report.failures.push(`inventory kind ${kind} did not render`);
+      if (!report.renderer?.builtins) report.failures.push('built-in tools did not render');
+      if (!report.renderer?.providerSeparate) report.failures.push('provider session was not separate from Inquello identity');
+      if (!report.renderer?.providerText.includes('Account type') || !report.renderer.providerText.includes('Effective route')) report.failures.push('provider account type or effective route was missing');
+    }
+  } catch { report.failures.push('capabilities smoke could not finish; inspect local runtime availability and seeded topology'); }
+  finally {
+    if (configured) {
+      report.signedOutAtEnd = (await options.identity.session.signOut().catch(() => ({ok:false}))).ok;
+      await options.organise.syncPrincipal().catch(() => undefined);
+      if (!report.signedOutAtEnd) report.failures.push('could not sign out after the capabilities probe');
+    }
+  }
+  report.ok = report.failures.length === 0;
+  return report;
 }

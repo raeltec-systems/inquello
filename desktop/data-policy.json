@@ -254,10 +254,10 @@
       "access": "runtime",
       "export": {
         "mode": "excluded",
-        "reason": "Written by Inquello before every runtime start (and with each Task's tool profile while it runs); it holds settings and folder locations, no credential"
+        "reason": "Initialized by Inquello, then maintained by the runtime configuration writer; plugin/MCP enablement and Task profiles persist across restart. Startup overrides enforce keyring-only credentials; this file holds no credential"
       },
-      "deletion": "Delete Runtime configuration in Local data (the runtime is stopped, the file is removed, then Inquello rewrites it before the runtime restarts)",
-      "recovery": "Rewritten by Inquello before every runtime start"
+      "deletion": "Delete Runtime configuration in Local data (the runtime is stopped, the file is removed, then Inquello initializes safe defaults before the runtime restarts)",
+      "recovery": "Safe defaults are recreated after deletion; deleted capability settings must be configured again"
     },
     {
       "id": "codex-keyring-entry",

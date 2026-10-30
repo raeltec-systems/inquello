@@ -256,6 +256,8 @@ export const parseExecutionSection = object({
   command_rules: optional(array(object({ prefix: array(str), decision: oneOf(['allow', 'prompt', 'forbid'] as const), note: optional(str) }))),
   /** Story 1.20: the automatic permission reviewer switch. */
   automatic_permission_review: optional(bool),
+  /** Story 1.21: local programs outside the Task sandbox; off when absent. */
+  allow_local_mcp_servers: optional(bool),
 });
 export type ExecutionSection = ReturnType<typeof parseExecutionSection>;
 /** `GET /v1/workspaces/{id}/execution-policy` (Story 1.18). */

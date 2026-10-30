@@ -1,4 +1,5 @@
 use super::shared::v2_enum_from_core;
+use super::PluginMcpAdmissionPolicy;
 use crate::JsonSchema;
 use crate::TS;
 use codex_experimental_api_macros::ExperimentalApi;
@@ -63,6 +64,15 @@ pub struct ListMcpServerStatusParams {
     /// Limit discovery to one server. With a thread ID, reuse that thread's MCP connection.
     #[ts(optional = nullable)]
     pub server_name: Option<String>,
+    /// Require this exact effective plugin registration, never a colliding name.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub expected_plugin_id: Option<String>,
+    /// Current Workspace admission; omission preserves legacy runtime behavior.
+    /// With no expectedPluginId, an admitted request requires config source.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub mcp_admission: Option<PluginMcpAdmissionPolicy>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema, TS)]
@@ -306,6 +316,15 @@ pub struct McpServerOauthLoginParams {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
     pub timeout_secs: Option<i64>,
+    /// Require this exact effective plugin registration, never a colliding name.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub expected_plugin_id: Option<String>,
+    /// Current Workspace admission; omission preserves legacy runtime behavior.
+    /// With no expectedPluginId, an admitted request requires config source.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub mcp_admission: Option<PluginMcpAdmissionPolicy>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default, JsonSchema, TS)]
@@ -329,6 +348,32 @@ pub struct McpServerOauthLoginResponse {
     #[ts(optional)]
     pub login_id: Option<String>,
 }
+/// Cancel exactly one runtime-owned MCP sign-in attempt, not a provider account.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct McpServerOauthCancelParams {
+    pub name: String,
+    pub login_id: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub enum McpServerOauthCancelStatus {
+    Cancelled,
+    Completed,
+    Failed,
+    NotFound,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct McpServerOauthCancelResponse {
+    pub status: McpServerOauthCancelStatus,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
@@ -926,6 +971,36 @@ impl From<rmcp::model::ElicitResult> for McpServerElicitationRequestResponse {
             action: value.action.into(),
             content: value.content,
             meta: None,
+        }
+    }
+}
+
+#[cfg(test)]
+mod cancellation_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn cancellation_targets_exact_attempt_and_has_truthful_terminal_results() {
+        let params: McpServerOauthCancelParams = serde_json::from_value(json!({
+            "name": "isolated-fixture", "loginId": "attempt-1",
+        })).unwrap_or_else(|error| panic!("{error}"));
+        assert_eq!(params.login_id, "attempt-1");
+        assert!(serde_json::from_value::<McpServerOauthCancelParams>(json!({
+            "name": "isolated-fixture",
+        })).is_err());
+        assert!(serde_json::from_value::<McpServerOauthCancelParams>(json!({
+            "name": "isolated-fixture", "loginId": "attempt-1", "token": "not-accepted",
+        })).is_err());
+        for (status, expected) in [
+            (McpServerOauthCancelStatus::Cancelled, "cancelled"),
+            (McpServerOauthCancelStatus::Completed, "completed"),
+            (McpServerOauthCancelStatus::Failed, "failed"),
+            (McpServerOauthCancelStatus::NotFound, "notFound"),
+        ] {
+            let value = serde_json::to_value(McpServerOauthCancelResponse { status })
+                .unwrap_or_else(|error| panic!("{error}"));
+            assert_eq!(value, json!({ "status": expected }));
         }
     }
 }

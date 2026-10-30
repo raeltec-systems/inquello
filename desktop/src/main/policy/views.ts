@@ -19,7 +19,7 @@ import { OperationError, type PayloadValidator } from '../security/operations';
 import { reviewerView, type ReviewerView } from './permissions';
 import { OUTPUT_FOLDER_LABEL, SANDBOX_UNAVAILABLE, WORKING_FOLDER_LABEL, type ReachBoundary } from './tools';
 
-export const SETTING_NAMES = ['sandbox', 'approval', 'network', 'mcp_tools', 'extensions', 'full_access', 'no_prompt'] as const;
+export const SETTING_NAMES = ['sandbox', 'approval', 'network', 'mcp_tools', 'extensions', 'allow_local_mcp_servers', 'full_access', 'no_prompt'] as const;
 export type SettingName = (typeof SETTING_NAMES)[number];
 
 export const BROAD_MODES = ['standard', 'no_prompt', 'full_access'] as const;
@@ -50,6 +50,7 @@ export const SETTING_LABEL: Record<SettingName, string> = {
   network: 'Network access in the sandbox',
   mcp_tools: 'MCP and connector tools',
   extensions: 'Plugins and extensions',
+  allow_local_mcp_servers: 'Local MCP servers (outside the Task sandbox)',
   full_access: 'Full access mode',
   no_prompt: 'No-prompt mode',
 };

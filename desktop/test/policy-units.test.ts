@@ -47,6 +47,7 @@ function response(overrides: Partial<Record<string, { value: string; source?: So
     network: { value: 'denied', source: DEFAULT, restricted: true },
     mcp_tools: { value: 'denied', source: DEFAULT, restricted: true },
     extensions: { value: 'denied', source: DEFAULT, restricted: true },
+    allow_local_mcp_servers: { value: 'denied', source: DEFAULT, restricted: true },
     full_access: { value: 'not_permitted', source: DEFAULT, restricted: true },
     no_prompt: { value: 'not_permitted', source: DEFAULT, restricted: true },
   };
@@ -151,7 +152,7 @@ describe('policy views', () => {
   it('shows the Inquello defaults with their sources and no device requirements', () => {
     const view = policyView(response());
     expect(view.environmentLabel).toBe('Local device');
-    expect(view.settings.map((setting) => setting.name)).toEqual(['sandbox', 'approval', 'network', 'mcp_tools', 'extensions', 'full_access', 'no_prompt']);
+    expect(view.settings.map((setting) => setting.name)).toEqual(['sandbox', 'approval', 'network', 'mcp_tools', 'extensions', 'allow_local_mcp_servers', 'full_access', 'no_prompt']);
     expect(view.settings.every((setting) => setting.sourceLabel === 'Inquello default')).toBe(true);
     expect(view.settings.find((setting) => setting.name === 'sandbox')!.valueLabel).toBe('Workspace write');
     expect(view.device).toEqual({ configured: false, label: DEVICE_NONE });
@@ -161,6 +162,16 @@ describe('policy views', () => {
       ['Execution sandbox', 'Local OS sandbox on this device; no hosted sandbox — V2 revisit (OQ-13)'],
     ]);
     expect(view.capabilities.map((capability) => capability.enabled)).toEqual([false, false, true]);
+  });
+
+  it('shows the explicit local MCP exception separately and refuses a missing runtime setting', () => {
+    const view = policyView(response({ allow_local_mcp_servers: { value: 'allowed', source: { kind: 'workspace_policy', revision: 3 }, restricted: false } }));
+    expect(view.settings.find((setting) => setting.name === 'allow_local_mcp_servers')).toMatchObject({
+      valueLabel: 'Allowed', label: 'Local MCP servers (outside the Task sandbox)', sourceLabel: 'Set by Workspace policy, revision 3',
+    });
+    const incomplete = response();
+    incomplete.settings = incomplete.settings.filter((setting) => setting.name !== 'allow_local_mcp_servers');
+    expect(() => policyView(incomplete)).toThrow('the runtime omitted the allow_local_mcp_servers setting');
   });
 
   it('names each governing rule in plain words', () => {

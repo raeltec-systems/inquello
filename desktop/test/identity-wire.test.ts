@@ -18,6 +18,7 @@ import {
   parseCreateLoginTransactionRequest,
   parseErrorBody,
   parseExecutionPolicyView,
+  parseExecutionSection,
   parseLoginTransaction,
   parseMembershipsView,
   parseRefreshRequest,
@@ -159,4 +160,14 @@ describe('Workspace wire mirrors', () => {
     const roles = readWorkspace('roles_view.json') as { roles: Array<Record<string, unknown>> };
     expect(() => parseRolesView({ ...roles, roles: [{ ...roles.roles[0], kind: 'guest' }] }, '')).toThrow(WireError);
   });
+});
+
+it('parses the local MCP switch without coercion and preserves omission', () => {
+  expect(parseExecutionSection({}, '$')).toEqual({});
+  for (const allowed of [true, false]) {
+    expect(parseExecutionSection({ allow_local_mcp_servers: allowed }, '$')).toEqual({ allow_local_mcp_servers: allowed });
+  }
+  for (const invalid of ['true', 1, null, [], {}]) {
+    expect(() => parseExecutionSection({ allow_local_mcp_servers: invalid }, '$')).toThrow(WireError);
+  }
 });

@@ -1801,3 +1801,41 @@ async fn members_read_the_command_rules_and_the_reviewer_switch() {
         inquello_protocol::workspace::RuleDecision::Forbid
     );
 }
+
+#[tokio::test]
+async fn members_read_whether_local_mcp_servers_are_allowed() {
+    let h = Harness::start().await;
+    let ws = workspace_with_admin(&h, "Local MCP Co", "ada").await;
+    let rita = join(&h, &ws, "rita", &["reviewer"]).await;
+    // Refused without MCP tools allowed: the policy is unchanged.
+    let refused = update_policy(
+        &h,
+        ws.id,
+        policy_with(|policy| {
+            policy["execution"] = json!({ "allow_local_mcp_servers": true });
+        }),
+    )
+    .await;
+    assert!(
+        refused.is_err(),
+        "a local MCP flag without MCP tools must be refused"
+    );
+    let before: ExecutionPolicyView = execution_view(&h, ws.id, &rita).await.ok();
+    assert_eq!(before.execution, None);
+    update_policy(
+        &h,
+        ws.id,
+        policy_with(|policy| {
+            policy["execution"] = json!({ "mcp_tools": "allowed", "allow_local_mcp_servers": true });
+        }),
+    )
+    .await
+    .expect("operator updates the policy");
+    let view: ExecutionPolicyView = execution_view(&h, ws.id, &rita).await.ok();
+    let execution = view.execution.expect("an execution section");
+    assert_eq!(execution.allow_local_mcp_servers, Some(true));
+    assert_eq!(
+        execution.mcp_tools,
+        Some(inquello_protocol::workspace::Access::Allowed)
+    );
+}

@@ -344,6 +344,12 @@ export class PolicyService {
     return available;
   }
 
+  /** Read-only state of the Story 1.19 probe; does not run a model or a command. */
+  async capabilitySandboxAvailable(): Promise<boolean | null> {
+    if (!this.sandboxCheck || this.sandboxCheck.runtime !== this.options.runtime.instance()) return null;
+    return this.sandboxCheck.available;
+  }
+
   /** One Workspace's effective policy on this device. */
   async forWorkspace(workspaceId: string): Promise<PolicyResult<PolicyView>> {
     const prepared = await this.prepare();

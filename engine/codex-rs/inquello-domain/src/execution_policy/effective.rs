@@ -134,6 +134,8 @@ pub struct EffectivePolicy {
     pub allowed_domains: Setting<Vec<String>>,
     pub mcp_tools: Setting<bool>,
     pub extensions: Setting<bool>,
+    /// Local MCP programs run outside the Task sandbox; denied unless explicitly allowed.
+    pub allow_local_mcp_servers: Setting<bool>,
     /// Whether a Task may use the full-access broad mode.
     pub full_access: Setting<bool>,
     /// Whether a Task may use the no-prompt broad mode.
@@ -318,6 +320,7 @@ pub fn effective_policy(
         allowed_domains,
         mcp_tools: toggle(execution.mcp_tools),
         extensions: toggle(execution.extensions),
+        allow_local_mcp_servers: toggle(execution.allow_local_mcp_servers),
         full_access: broad(
             execution.allow_full_access,
             device_allows_full && device_allows_never,

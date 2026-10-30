@@ -1268,6 +1268,12 @@ client_request_definitions! {
         response: v2::McpServerOauthLoginResponse,
     },
 
+    McpServerOauthCancel => "mcpServer/oauth/cancel" {
+        params: v2::McpServerOauthCancelParams,
+        serialization: mcp_oauth_server(params.name),
+        response: v2::McpServerOauthCancelResponse,
+    },
+
     McpServerRefresh => "config/mcpServer/reload" {
         params: #[ts(type = "undefined")] #[serde(skip_serializing_if = "Option::is_none")] Option<()>,
         serialization: global("mcp-registry"),
@@ -2557,6 +2563,8 @@ mod tests {
                 remote_marketplace_name: None,
                 install_attempt_id: None,
                 plugin_name: "plugin-a".to_string(),
+                skip_authentication: false,
+                mcp_admission: None,
             },
         };
         assert_eq!(
@@ -2639,6 +2647,8 @@ mod tests {
         let mcp_oauth = ClientRequest::McpServerOauthLogin {
             request_id: request_id(),
             params: v2::McpServerOauthLoginParams {
+                expected_plugin_id: None,
+                mcp_admission: None,
                 name: "server-a".to_string(),
                 thread_id: None,
                 client_registration: None,

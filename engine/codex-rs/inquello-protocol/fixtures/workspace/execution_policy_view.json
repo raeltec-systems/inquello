@@ -16,6 +16,7 @@
       { "prefix": ["rm"], "decision": "forbid" },
       { "prefix": ["ls"], "decision": "allow" }
     ],
-    "automatic_permission_review": false
+    "automatic_permission_review": false,
+    "allow_local_mcp_servers": false
   }
 }

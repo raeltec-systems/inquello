@@ -313,3 +313,18 @@ fn credential_debug_output_is_redacted() {
         "Credential(<redacted>)"
     );
 }
+
+#[test]
+fn local_mcp_switch_round_trips_without_coercion() {
+    for enabled in [false, true] {
+        let value = json!({ "allow_local_mcp_servers": enabled });
+        let parsed: ExecutionSection = serde_json::from_value(value.clone()).expect("boolean switch");
+        assert_eq!(parsed.allow_local_mcp_servers, Some(enabled));
+        assert_eq!(serde_json::to_value(parsed).expect("serialize switch"), value);
+    }
+    for invalid in [json!("true"), json!(1), json!([]), json!({})] {
+        assert!(serde_json::from_value::<ExecutionSection>(json!({
+            "allow_local_mcp_servers": invalid,
+        })).is_err());
+    }
+}

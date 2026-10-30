@@ -49,6 +49,17 @@ mod local;
 mod reconcile;
 mod search;
 
+/// Authentication is a separate permission from installing plugin code. Do not
+/// even poll the login future when the caller requests an unauthenticated install.
+async fn authenticate_plugin_install(
+    skip_authentication: bool,
+    authentication: impl std::future::Future<Output = ()>,
+) {
+    if !skip_authentication {
+        authentication.await;
+    }
+}
+
 fn plugin_redirect_mode(plugin_root: &Path) -> StreamableHttpRedirectMode {
     if is_agent_plugin_manifest(plugin_root) {
         StreamableHttpRedirectMode::AgentPluginV1
@@ -1175,6 +1186,7 @@ impl PluginRequestProcessor {
                     apps: app_summaries,
                     app_templates: Vec::new(),
                     mcp_servers: outcome.plugin.mcp_server_names,
+                    mcp_server_admissions: outcome.plugin.mcp_server_admissions,
                     scheduled_tasks: None,
                 }
             }
@@ -1487,6 +1499,8 @@ impl PluginRequestProcessor {
             remote_marketplace_name,
             install_attempt_id,
             plugin_name,
+            skip_authentication,
+            mcp_admission,
         } = params;
         let marketplace_path = match (marketplace_path, remote_marketplace_name) {
             (Some(marketplace_path), None) => marketplace_path,
@@ -1496,6 +1510,8 @@ impl PluginRequestProcessor {
                         remote_marketplace_name,
                         plugin_name,
                         install_attempt_id,
+                        skip_authentication,
+                        mcp_admission,
                     )
                     .await;
             }
@@ -1524,7 +1540,7 @@ impl PluginRequestProcessor {
         };
 
         let result = match plugins_manager
-            .install_plugin(&config.config_layer_stack, request)
+            .install_plugin_with_mcp_admission(&config.config_layer_stack, request, mcp_admission)
             .await
         {
             Ok(result) => result,
@@ -1566,11 +1582,14 @@ impl PluginRequestProcessor {
         .await;
         if !plugin_mcp_servers.is_empty() {
             let redirect_mode = plugin_redirect_mode(result.installed_path.as_path());
-            self.start_plugin_mcp_oauth_logins(
-                &config,
-                &result.plugin_id,
-                plugin_mcp_servers,
-                redirect_mode,
+            authenticate_plugin_install(
+                skip_authentication,
+                self.start_plugin_mcp_oauth_logins(
+                    &config,
+                    &result.plugin_id,
+                    plugin_mcp_servers,
+                    redirect_mode,
+                ),
             )
             .await;
         }
@@ -1597,6 +1616,8 @@ impl PluginRequestProcessor {
         remote_marketplace_name: String,
         remote_plugin_id: String,
         install_attempt_id: Option<String>,
+        skip_authentication: bool,
+        mcp_admission: Option<codex_app_server_protocol::PluginMcpAdmissionPolicy>,
     ) -> Result<PluginInstallResponse, JSONRPCErrorError> {
         let mut config = self.load_latest_config(/*fallback_cwd*/ None).await?;
         let auth = match self.auth_manager.auth_with_http_client_factory().await {
@@ -1608,7 +1629,7 @@ impl PluginRequestProcessor {
         };
         let plugins_manager = self.thread_manager.plugins_manager();
         let installation = plugins_manager
-            .install_remote_plugin(
+            .install_remote_plugin_with_mcp_admission(
                 &config.plugins_config_input(),
                 auth.as_ref(),
                 RemotePluginInstallRequest {
@@ -1617,6 +1638,7 @@ impl PluginRequestProcessor {
                     install_attempt_id,
                 },
                 Some(self.effective_plugins_changed_callback()),
+                mcp_admission,
             )
             .await
             .map_err(|err| {
@@ -1707,11 +1729,14 @@ impl PluginRequestProcessor {
         .await;
         if !plugin_mcp_servers.is_empty() {
             let redirect_mode = plugin_redirect_mode(result.installed_path.as_path());
-            self.start_plugin_mcp_oauth_logins(
-                &config,
-                &result.plugin_id,
-                plugin_mcp_servers,
-                redirect_mode,
+            authenticate_plugin_install(
+                skip_authentication,
+                self.start_plugin_mcp_oauth_logins(
+                    &config,
+                    &result.plugin_id,
+                    plugin_mcp_servers,
+                    redirect_mode,
+                ),
             )
             .await;
         }
@@ -2041,6 +2066,9 @@ impl PluginRequestProcessor {
     }
 
     fn plugin_install_error(err: CorePluginInstallError) -> JSONRPCErrorError {
+        if let CorePluginInstallError::Store(codex_core_plugins::store::PluginStoreError::Admission(admission)) = &err {
+            return plugin_admission_error_to_jsonrpc(admission);
+        }
         if err.is_invalid_request() {
             return invalid_request(err.to_string());
         }
@@ -2361,6 +2389,7 @@ fn remote_plugin_detail_to_info(
         apps,
         app_templates,
         mcp_servers: detail.mcp_servers,
+        mcp_server_admissions: None,
         scheduled_tasks: detail.scheduled_tasks,
     }
 }
@@ -2472,7 +2501,20 @@ fn remote_plugin_catalog_error_to_jsonrpc(
 fn remote_plugin_bundle_install_error_to_jsonrpc(
     err: codex_core_plugins::remote_bundle::RemotePluginBundleInstallError,
 ) -> JSONRPCErrorError {
+    if let RemotePluginBundleInstallError::Store(codex_core_plugins::store::PluginStoreError::Admission(admission)) = &err {
+        return plugin_admission_error_to_jsonrpc(admission);
+    }
     internal_error(format!("install remote plugin bundle: {err}"))
+}
+
+fn plugin_admission_error_to_jsonrpc(admission: &codex_core_plugins::PluginMcpAdmissionError) -> JSONRPCErrorError {
+    let mut error = invalid_request("Plugin refused by Workspace capability admission");
+    let mut detail = serde_json::json!({ "code": admission.code });
+    if let Some(host) = &admission.host {
+        detail["host"] = serde_json::json!(host);
+    }
+    error.data = Some(serde_json::json!({ "inquelloCapabilityAdmission": detail }));
+    error
 }
 
 fn remote_plugin_operation_error_to_jsonrpc(err: RemotePluginOperationError) -> JSONRPCErrorError {
@@ -2491,4 +2533,61 @@ fn remote_plugin_operation_error_to_jsonrpc(err: RemotePluginOperationError) -> 
         | RemotePluginOperationErrorKind::InvalidRequest(_)) => invalid_request(err.to_string()),
         RemotePluginOperationErrorKind::Internal(message) => internal_error(message),
     }
+}
+
+#[cfg(test)]
+mod install_authentication_tests {
+    use super::authenticate_plugin_install;
+    use std::sync::atomic::AtomicUsize;
+    use std::sync::atomic::Ordering;
+
+    #[tokio::test]
+    async fn skipped_install_never_polls_silent_or_interactive_authentication() {
+        let grants = AtomicUsize::new(0);
+        authenticate_plugin_install(true, async {
+            grants.fetch_add(1, Ordering::SeqCst);
+            // Would represent waiting for a real user grant if it were polled.
+            std::future::pending::<()>().await;
+        }).await;
+        assert_eq!(grants.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn legacy_install_still_runs_its_requested_authentication_path() {
+        let grants = AtomicUsize::new(0);
+        authenticate_plugin_install(false, async {
+            grants.fetch_add(1, Ordering::SeqCst);
+        }).await;
+        assert_eq!(grants.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn local_and_remote_admission_errors_have_safe_structured_rule_data() {
+        let admission = codex_core_plugins::PluginMcpAdmissionError {
+            code: "host_not_allowed",
+            host: Some("api.example.com".to_string()),
+        };
+        let local = super::PluginRequestProcessor::plugin_install_error(
+            super::CorePluginInstallError::Store(
+                codex_core_plugins::store::PluginStoreError::Admission(admission.clone()),
+            ),
+        );
+        let remote = super::remote_plugin_operation_error_to_jsonrpc(
+            super::RemotePluginOperationError {
+                plugin_id: None,
+                kind: Box::new(super::RemotePluginOperationErrorKind::Bundle(
+                    super::RemotePluginBundleInstallError::Store(
+                        codex_core_plugins::store::PluginStoreError::Admission(admission),
+                    ),
+                )),
+            },
+        );
+        for error in [local, remote] {
+            assert_eq!(error.message, "Plugin refused by Workspace capability admission");
+            assert_eq!(error.data, Some(serde_json::json!({
+                "inquelloCapabilityAdmission": { "code": "host_not_allowed", "host": "api.example.com" },
+            })));
+        }
+    }
+
 }

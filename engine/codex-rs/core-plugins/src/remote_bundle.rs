@@ -8,6 +8,7 @@ use crate::store::PluginStore;
 use crate::store::PluginStoreError;
 use crate::store::error_context_sub_error_type;
 use crate::store::validate_plugin_version_segment;
+use codex_app_server_protocol::PluginMcpAdmissionPolicy;
 use codex_http_client::HttpResponse;
 use codex_http_client::RouteAwareRequestError;
 use codex_plugin::PluginId;
@@ -259,9 +260,18 @@ pub async fn download_and_install_remote_plugin_bundle(
     codex_home: PathBuf,
     bundle: ValidatedRemotePluginBundle,
 ) -> Result<PluginInstallResult, RemotePluginBundleInstallError> {
+    download_and_install_remote_plugin_bundle_with_mcp_admission(config, codex_home, bundle, None).await
+}
+
+pub(crate) async fn download_and_install_remote_plugin_bundle_with_mcp_admission(
+    config: &RemotePluginServiceConfig,
+    codex_home: PathBuf,
+    bundle: ValidatedRemotePluginBundle,
+    admission: Option<PluginMcpAdmissionPolicy>,
+) -> Result<PluginInstallResult, RemotePluginBundleInstallError> {
     let bundle_bytes = download_remote_plugin_bundle(config, &bundle).await?;
     tokio::task::spawn_blocking(move || {
-        install_remote_plugin_bundle(codex_home, bundle, bundle_bytes)
+        install_remote_plugin_bundle_with_mcp_admission(codex_home, bundle, bundle_bytes, admission)
     })
     .await
     .map_err(|err| {
@@ -413,6 +423,15 @@ pub(crate) fn install_remote_plugin_bundle(
     bundle: ValidatedRemotePluginBundle,
     bundle_bytes: Vec<u8>,
 ) -> Result<PluginInstallResult, RemotePluginBundleInstallError> {
+    install_remote_plugin_bundle_with_mcp_admission(codex_home, bundle, bundle_bytes, None)
+}
+
+fn install_remote_plugin_bundle_with_mcp_admission(
+    codex_home: PathBuf,
+    bundle: ValidatedRemotePluginBundle,
+    bundle_bytes: Vec<u8>,
+    admission: Option<PluginMcpAdmissionPolicy>,
+) -> Result<PluginInstallResult, RemotePluginBundleInstallError> {
     let staging_root = codex_home.join(REMOTE_PLUGIN_INSTALL_STAGING_DIR);
     fs::create_dir_all(&staging_root).map_err(|source| {
         RemotePluginBundleInstallError::io(
@@ -439,7 +458,7 @@ pub(crate) fn install_remote_plugin_bundle(
         ))
     })?;
 
-    let store = PluginStore::try_new(codex_home)?;
+    let store = PluginStore::try_new(codex_home)?.with_mcp_admission(admission);
     let remote_plugin_id = bundle.remote_plugin_id;
     let result = store
         .install_with_version(plugin_root, bundle.plugin_id, bundle.plugin_version)

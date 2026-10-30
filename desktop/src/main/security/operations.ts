@@ -1,3 +1,4 @@
+import { capabilityPayload, inventoryPayload, type CapabilityInput, type CapabilityInventory, type CapabilityResult } from '../capabilities/types';
 /**
  * Named renderer operations (AD-5).
  *
@@ -57,6 +58,8 @@ import { describeSender, isTrustedSender, type InvokeEventLike } from './sender'
 
 /** Every operation the preload exposes, in `<namespace>.<name>` form. */
 export const OPERATION_NAMES = [
+  'capabilities.getInventory',
+  'capabilities.manage',
   'runtime.getStatus',
   'identity.getStatus',
   'identity.signIn',
@@ -274,6 +277,7 @@ export interface PolicyOperations {
 }
 
 export interface OperationDeps {
+  capabilities?: {getInventory(workspaceId: string): Promise<CapabilityInventory>; manage(input: CapabilityInput): Promise<CapabilityResult>};
   runtimeState: () => RuntimeState;
   runtimeVersion: string;
   identity: IdentityOperations;
@@ -459,7 +463,10 @@ export function createOperations(deps: OperationDeps): Operation[] {
     validate: setUserRulesPayload,
     handle: (input) => deps.policy.setUserRules(input),
   };
+  const capabilityInventory: Operation<{workspaceId:string}, CapabilityInventory> = {name:'capabilities.getInventory',validate:inventoryPayload,handle:({workspaceId})=>{ if(!deps.capabilities) throw new Error('capabilities unavailable'); return deps.capabilities.getInventory(workspaceId); }};
+  const capabilityManage: Operation<CapabilityInput, CapabilityResult> = {name:'capabilities.manage',validate:capabilityPayload,handle:(input)=>{ if(!deps.capabilities) throw new Error('capabilities unavailable'); return deps.capabilities.manage(input); }};
   return [
+    capabilityInventory, capabilityManage,
     getStatus,
     identityStatus,
     signIn,

@@ -769,7 +769,42 @@ pub struct PluginDetail {
     pub apps: Vec<AppSummary>,
     pub app_templates: Vec<AppTemplateSummary>,
     pub mcp_servers: Vec<String>,
+    /// Safe resolved transport metadata. Null/absent means inspection was unavailable,
+    /// never that the plugin has no MCP dependencies.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub mcp_server_admissions: Option<Vec<PluginMcpServerAdmission>>,
     pub scheduled_tasks: Option<Vec<ScheduledTaskSummary>>,
+}
+
+/// No command, arguments, credentials, headers, or device paths cross this boundary.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct PluginMcpServerAdmission {
+    pub name: String,
+    pub transport: PluginMcpAdmissionTransport,
+    pub http_origin: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export_to = "v2/")]
+pub enum PluginMcpAdmissionTransport {
+    Stdio,
+    Http,
+    Unknown,
+}
+
+/// Main supplies its current effective Workspace policy, never renderer claims.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct PluginMcpAdmissionPolicy {
+    pub allow_tools: bool,
+    pub allow_local_servers: bool,
+    pub local_confirmed: bool,
+    pub allowed_domains: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
@@ -960,6 +995,15 @@ pub struct PluginInstallParams {
     #[ts(optional = nullable)]
     pub install_attempt_id: Option<String>,
     pub plugin_name: String,
+    /// Install the plugin without starting connector authentication, including
+    /// silent MCP OAuth. Connections must then be authorized explicitly.
+    #[serde(default)]
+    #[ts(optional, as = "Option<bool>")]
+    pub skip_authentication: bool,
+    /// Validate actual staged plugin content before any cache activation or enablement.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub mcp_admission: Option<PluginMcpAdmissionPolicy>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
@@ -1056,3 +1100,45 @@ impl From<CoreSkillScope> for SkillScope {
 /// Treat this as an invalidation signal and re-run `skills/list` with the
 /// client's current parameters when refreshed skill metadata is needed.
 pub struct SkillsChangedNotification {}
+
+#[cfg(test)]
+mod install_authentication_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn install_authentication_is_backward_compatible_and_explicitly_skippable() {
+        let value = json!({
+            "remoteMarketplaceName": "fixture", "pluginName": "fixture-plugin",
+        });
+        let legacy: PluginInstallParams = serde_json::from_value(value.clone())
+            .unwrap_or_else(|error| panic!("{error}"));
+        assert!(!legacy.skip_authentication);
+        let mut isolated = value.clone();
+        isolated["skipAuthentication"] = json!(true);
+        let isolated: PluginInstallParams = serde_json::from_value(isolated)
+            .unwrap_or_else(|error| panic!("{error}"));
+        assert!(isolated.skip_authentication);
+        let mut invalid = value;
+        invalid["skipAuthentication"] = json!("true");
+        assert!(serde_json::from_value::<PluginInstallParams>(invalid).is_err());
+    }
+
+    #[test]
+    fn admission_policy_requires_explicit_booleans_and_only_known_fields() {
+        let policy = json!({
+            "allowTools": true, "allowLocalServers": false,
+            "localConfirmed": false, "allowedDomains": ["api.example.com"],
+        });
+        let parsed: PluginMcpAdmissionPolicy = serde_json::from_value(policy.clone())
+            .unwrap_or_else(|error| panic!("{error}"));
+        assert!(parsed.allow_tools);
+        let mut missing = policy.clone();
+        missing.as_object_mut().unwrap_or_else(|| panic!("object")).remove("localConfirmed");
+        assert!(serde_json::from_value::<PluginMcpAdmissionPolicy>(missing).is_err());
+        let mut extra = policy;
+        extra["command"] = json!("not accepted");
+        assert!(serde_json::from_value::<PluginMcpAdmissionPolicy>(extra).is_err());
+    }
+
+}

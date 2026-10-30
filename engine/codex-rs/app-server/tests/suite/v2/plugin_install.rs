@@ -124,6 +124,8 @@ async fn plugin_install_rejects_missing_install_source() -> Result<()> {
 
     let request_id = mcp
         .send_plugin_install_request(PluginInstallParams {
+            skip_authentication: false,
+            mcp_admission: None,
             marketplace_path: None,
             remote_marketplace_name: None,
             install_attempt_id: None,
@@ -156,6 +158,8 @@ async fn plugin_install_rejects_multiple_install_sources() -> Result<()> {
 
     let request_id = mcp
         .send_plugin_install_request(PluginInstallParams {
+            skip_authentication: false,
+            mcp_admission: None,
             marketplace_path: Some(AbsolutePathBuf::try_from(
                 codex_home.path().join("marketplace.json"),
             )?),
@@ -196,6 +200,8 @@ plugins = false
 
     let request_id = mcp
         .send_plugin_install_request(PluginInstallParams {
+            skip_authentication: false,
+            mcp_admission: None,
             marketplace_path: None,
             remote_marketplace_name: Some("openai-curated-remote".to_string()),
             install_attempt_id: None,
@@ -546,6 +552,8 @@ async fn plugin_install_rejects_invalid_remote_plugin_name() -> Result<()> {
 
     let request_id = mcp
         .send_plugin_install_request(PluginInstallParams {
+            skip_authentication: false,
+            mcp_admission: None,
             marketplace_path: None,
             remote_marketplace_name: Some("openai-curated-remote".to_string()),
             install_attempt_id: None,
@@ -809,6 +817,8 @@ async fn plugin_install_returns_invalid_request_for_missing_marketplace_file() -
 
     let request_id = mcp
         .send_plugin_install_request(PluginInstallParams {
+            skip_authentication: false,
+            mcp_admission: None,
             marketplace_path: Some(AbsolutePathBuf::try_from(
                 codex_home.path().join("missing-marketplace.json"),
             )?),
@@ -853,6 +863,8 @@ async fn plugin_install_tracks_analytics_when_marketplace_file_cannot_be_read() 
 
     let request_id = mcp
         .send_plugin_install_request(PluginInstallParams {
+            skip_authentication: false,
+            mcp_admission: None,
             marketplace_path: Some(AbsolutePathBuf::try_from(marketplace_path)?),
             remote_marketplace_name: None,
             install_attempt_id: None,
@@ -912,6 +924,8 @@ async fn plugin_install_returns_invalid_request_for_not_available_plugin() -> Re
 
     let request_id = mcp
         .send_plugin_install_request(PluginInstallParams {
+            skip_authentication: false,
+            mcp_admission: None,
             marketplace_path: Some(marketplace_path),
             remote_marketplace_name: None,
             install_attempt_id: None,
@@ -965,6 +979,8 @@ async fn plugin_install_returns_invalid_request_for_disallowed_product_plugin() 
 
     let request_id = mcp
         .send_plugin_install_request(PluginInstallParams {
+            skip_authentication: false,
+            mcp_admission: None,
             marketplace_path: Some(marketplace_path),
             remote_marketplace_name: None,
             install_attempt_id: None,
@@ -1017,6 +1033,8 @@ async fn plugin_install_tracks_analytics_event() -> Result<()> {
 
     let request_id = mcp
         .send_plugin_install_request(PluginInstallParams {
+            skip_authentication: false,
+            mcp_admission: None,
             marketplace_path: Some(marketplace_path),
             remote_marketplace_name: None,
             install_attempt_id: None,
@@ -1083,6 +1101,8 @@ async fn plugin_install_failure_tracks_analytics_event() -> Result<()> {
 
     let request_id = mcp
         .send_plugin_install_request(PluginInstallParams {
+            skip_authentication: false,
+            mcp_admission: None,
             marketplace_path: Some(marketplace_path),
             remote_marketplace_name: None,
             install_attempt_id: None,
@@ -1331,6 +1351,8 @@ async fn plugin_install_returns_apps_needing_auth() -> Result<()> {
 
     let request_id = mcp
         .send_plugin_install_request(PluginInstallParams {
+            skip_authentication: false,
+            mcp_admission: None,
             marketplace_path: Some(marketplace_path),
             remote_marketplace_name: None,
             install_attempt_id: None,
@@ -1423,6 +1445,8 @@ async fn plugin_install_skips_mcp_oauth_for_chatgpt_dual_surface_plugin() -> Res
 
     let request_id = mcp
         .send_plugin_install_request(PluginInstallParams {
+            skip_authentication: false,
+            mcp_admission: None,
             marketplace_path: Some(marketplace_path),
             remote_marketplace_name: None,
             install_attempt_id: None,
@@ -1476,6 +1500,8 @@ url = "https://example.com/allowed-mcp"
 
     let request_id = mcp
         .send_plugin_install_request(PluginInstallParams {
+            skip_authentication: false,
+            mcp_admission: None,
             marketplace_path: Some(marketplace_path),
             remote_marketplace_name: None,
             install_attempt_id: None,
@@ -1533,6 +1559,8 @@ plugins = true
 
     let request_id = mcp
         .send_plugin_install_request(PluginInstallParams {
+            skip_authentication: false,
+            mcp_admission: None,
             marketplace_path: Some(marketplace_path),
             remote_marketplace_name: None,
             install_attempt_id: None,
@@ -1632,6 +1660,8 @@ url = {executor_url}
 
     let request_id = mcp
         .send_plugin_install_request(PluginInstallParams {
+            skip_authentication: false,
+            mcp_admission: None,
             marketplace_path: Some(marketplace_path),
             remote_marketplace_name: None,
             install_attempt_id: None,
@@ -1693,6 +1723,8 @@ async fn plugin_install_starts_mcp_oauth_with_formerly_disallowed_plugin_app() -
 
     let request_id = mcp
         .send_plugin_install_request(PluginInstallParams {
+            skip_authentication: false,
+            mcp_admission: None,
             marketplace_path: Some(marketplace_path),
             remote_marketplace_name: None,
             install_attempt_id: None,
@@ -1821,6 +1853,8 @@ async fn plugin_install_starts_mcp_oauth_through_configured_http_proxy() -> Resu
 
     let request_id = mcp
         .send_plugin_install_request(PluginInstallParams {
+            skip_authentication: false,
+            mcp_admission: None,
             marketplace_path: Some(marketplace_path),
             remote_marketplace_name: None,
             install_attempt_id: None,
@@ -1935,6 +1969,8 @@ async fn plugin_oauth_login_preserves_registered_callbacks_or_uses_legacy_fallba
         .await?;
     let install_id = mcp
         .send_plugin_install_request(PluginInstallParams {
+            skip_authentication: false,
+            mcp_admission: None,
             marketplace_path: Some(marketplace_path),
             remote_marketplace_name: None,
             install_attempt_id: None,
@@ -2097,6 +2133,8 @@ connectors = true
 
     let request_id = mcp
         .send_plugin_install_request(PluginInstallParams {
+            skip_authentication: false,
+            mcp_admission: None,
             marketplace_path: Some(marketplace_path),
             remote_marketplace_name: None,
             install_attempt_id: None,
@@ -2451,6 +2489,8 @@ async fn plugin_install_includes_formerly_disallowed_apps_needing_auth() -> Resu
 
     let request_id = mcp
         .send_plugin_install_request(PluginInstallParams {
+            skip_authentication: false,
+            mcp_admission: None,
             marketplace_path: Some(marketplace_path),
             remote_marketplace_name: None,
             install_attempt_id: None,
@@ -2543,6 +2583,8 @@ async fn plugin_install_makes_bundled_mcp_servers_available_to_followup_requests
 
     let request_id = mcp
         .send_plugin_install_request(PluginInstallParams {
+            skip_authentication: false,
+            mcp_admission: None,
             marketplace_path: Some(marketplace_path),
             remote_marketplace_name: None,
             install_attempt_id: None,
@@ -2573,6 +2615,8 @@ async fn plugin_install_makes_bundled_mcp_servers_available_to_followup_requests
 
     let request_id = mcp
         .send_list_mcp_server_status_request(ListMcpServerStatusParams {
+            expected_plugin_id: None,
+            mcp_admission: None,
             server_name: None,
             cursor: None,
             limit: None,
@@ -3252,6 +3296,8 @@ async fn send_remote_plugin_install_request(
     remote_plugin_id: &str,
 ) -> Result<i64> {
     mcp.send_plugin_install_request(PluginInstallParams {
+            skip_authentication: false,
+            mcp_admission: None,
         marketplace_path: None,
         remote_marketplace_name: Some("caller-marketplace-is-ignored".to_string()),
         install_attempt_id: None,
@@ -3266,6 +3312,8 @@ async fn send_remote_plugin_install_request_with_attempt_id(
     install_attempt_id: &str,
 ) -> Result<i64> {
     mcp.send_plugin_install_request(PluginInstallParams {
+            skip_authentication: false,
+            mcp_admission: None,
         marketplace_path: None,
         remote_marketplace_name: Some("caller-marketplace-is-ignored".to_string()),
         install_attempt_id: Some(install_attempt_id.to_string()),
@@ -3506,4 +3554,120 @@ fn remote_plugin_bundle_tar_gz_bytes_with_entries(
         tar.append_data(&mut header, path, contents)?;
     }
     Ok(tar.into_inner()?.finish()?)
+}
+
+#[test_case(false; "local staged bundle")]
+#[test_case(true; "remote staged bundle")]
+#[tokio::test]
+async fn plugin_install_rpc_skip_authentication_never_contacts_oauth(remote: bool) -> Result<()> {
+    let home = TempDir::new()?;
+    let repo = TempDir::new()?;
+    let catalog = MockServer::start().await;
+    let oauth = MockServer::start().await;
+    let marketplace = if remote {
+        configure_remote_plugin_test(home.path(), &catalog)?;
+        let bundle = mount_remote_plugin_bundle(&catalog, 200,
+            remote_plugin_bundle_tar_gz_bytes_with_mcp_config("linear", &oauth.uri())?).await;
+        mount_remote_plugin_detail(&catalog, REMOTE_PLUGIN_ID, "1.2.3", Some(&bundle)).await;
+        mount_empty_remote_installed_plugins(&catalog).await;
+        mount_remote_plugin_install(&catalog, REMOTE_PLUGIN_ID).await;
+        None
+    } else {
+        std::fs::write(home.path().join("config.toml"), "[features]\nplugins = true\n")?;
+        write_plugin_marketplace(repo.path(), "debug", "sample-plugin", "./sample-plugin", None, None)?;
+        write_plugin_source(repo.path(), "sample-plugin", &[])?;
+        write_plugin_mcp_config(repo.path(), "sample-plugin", &oauth.uri())?;
+        Some(AbsolutePathBuf::try_from(repo.path().join(".agents/plugins/marketplace.json"))?)
+    };
+    // Force the disposable fixture store; no test may consult a real keyring.
+    let config_path = home.path().join("config.toml");
+    let config_text = std::fs::read_to_string(&config_path)?;
+    std::fs::write(&config_path, format!("mcp_oauth_credentials_store = \"file\"\n{config_text}"))?;
+    let mut app = TestAppServer::builder().with_codex_home(home.path())
+        .with_env_overrides(&[(TEST_ALLOW_HTTP_REMOTE_PLUGIN_BUNDLE_DOWNLOADS, Some("1"))])
+        .build_initialized_with_timeout(DEFAULT_TIMEOUT).await?;
+    let id = app.send_plugin_install_request(PluginInstallParams {
+        marketplace_path: marketplace,
+        remote_marketplace_name: remote.then(|| "openai-curated-remote".to_string()),
+        install_attempt_id: None,
+        plugin_name: if remote { REMOTE_PLUGIN_ID } else { "sample-plugin" }.to_string(),
+        skip_authentication: true,
+        mcp_admission: None,
+    }).await?;
+    let response: PluginInstallResponse = timeout(DEFAULT_TIMEOUT, app.read_response(id)).await??;
+    assert_eq!(response.auth_policy, if remote { PluginAuthPolicy::OnUse } else { PluginAuthPolicy::OnInstall });
+    let store = codex_core_plugins::store::PluginStore::new(home.path().to_path_buf());
+    let plugin_id = codex_plugin::PluginId::new(
+        if remote { "linear" } else { "sample-plugin" }.to_string(),
+        if remote { "openai-curated-remote" } else { "debug" }.to_string(),
+    ).expect("valid isolated fixture plugin identity");
+    assert!(store.plugin_base_root(&plugin_id).as_path().exists());
+    let config = std::fs::read_to_string(home.path().join("config.toml"))?;
+    assert!(config.contains(if remote { "linear@openai-curated-remote" } else { "sample-plugin@debug" }));
+    assert!(oauth.received_requests().await.unwrap_or_default().is_empty());
+    assert!(!home.path().join(".credentials.json").exists());
+    Ok(())
+}
+
+#[test_case(false, false; "local blocked host")]
+#[test_case(true, false; "remote blocked host")]
+#[test_case(false, true; "local forbidden program")]
+#[test_case(true, true; "remote forbidden program")]
+#[tokio::test]
+async fn plugin_install_rpc_admission_checks_actual_staged_contents(remote: bool, stdio: bool) -> Result<()> {
+    let home = TempDir::new()?;
+    let repo = TempDir::new()?;
+    let catalog = MockServer::start().await;
+    let config = json!({"mcpServers": {"hidden-in-bundle": if stdio {
+        json!({"command": "must-never-execute-inquello-admission-fixture"})
+    } else {
+        json!({"type": "http", "url": "https://blocked.invalid/mcp"})
+    }}}).to_string();
+    let marketplace = if remote {
+        configure_remote_plugin_test(home.path(), &catalog)?;
+        let bundle = mount_remote_plugin_bundle(&catalog, 200,
+            remote_plugin_bundle_tar_gz_bytes_with_entries(r#"{"name":"linear"}"#, None, Some(&config))?).await;
+        // The catalog has no transport declaration; admission must examine the
+        // downloaded bytes, not trust the earlier harmless catalog response.
+        mount_remote_plugin_detail(&catalog, REMOTE_PLUGIN_ID, "1.2.3", Some(&bundle)).await;
+        mount_empty_remote_installed_plugins(&catalog).await;
+        mount_remote_plugin_install(&catalog, REMOTE_PLUGIN_ID).await;
+        None
+    } else {
+        std::fs::write(home.path().join("config.toml"), "[features]\nplugins = true\n")?;
+        write_plugin_marketplace(repo.path(), "debug", "sample-plugin", "./sample-plugin", None, None)?;
+        write_plugin_source(repo.path(), "sample-plugin", &[])?;
+        std::fs::write(repo.path().join("sample-plugin/.mcp.json"), config)?;
+        Some(AbsolutePathBuf::try_from(repo.path().join(".agents/plugins/marketplace.json"))?)
+    };
+    // Force the disposable fixture store; no test may consult a real keyring.
+    let config_path = home.path().join("config.toml");
+    let config_text = std::fs::read_to_string(&config_path)?;
+    std::fs::write(&config_path, format!("mcp_oauth_credentials_store = \"file\"\n{config_text}"))?;
+    let before = std::fs::read(&config_path)?;
+    let mut app = TestAppServer::builder().with_codex_home(home.path())
+        .with_env_overrides(&[(TEST_ALLOW_HTTP_REMOTE_PLUGIN_BUNDLE_DOWNLOADS, Some("1"))])
+        .build_initialized_with_timeout(DEFAULT_TIMEOUT).await?;
+    let id = app.send_raw_request("plugin/install", Some(json!({
+        "marketplacePath": marketplace,
+        "remoteMarketplaceName": if remote { Some("openai-curated-remote") } else { None },
+        "pluginName": if remote { REMOTE_PLUGIN_ID } else { "sample-plugin" },
+        "skipAuthentication": true,
+        "mcpAdmission": {"allowTools": true, "allowLocalServers": false,
+            "localConfirmed": false, "allowedDomains": []},
+    }))).await?;
+    let error = timeout(DEFAULT_TIMEOUT, app.read_stream_until_error_message(RequestId::Integer(id))).await??;
+    assert_eq!(error.error.data.as_ref().expect("structured admission error")
+        ["inquelloCapabilityAdmission"]["code"], if stdio { "local_servers_denied" } else { "host_not_allowed" });
+    assert_eq!(std::fs::read(home.path().join("config.toml"))?, before);
+    let store = codex_core_plugins::store::PluginStore::new(home.path().to_path_buf());
+    let plugin_id = codex_plugin::PluginId::new(
+        if remote { "linear" } else { "sample-plugin" }.to_string(),
+        if remote { "openai-curated-remote" } else { "debug" }.to_string(),
+    ).expect("valid isolated fixture plugin identity");
+    assert!(!store.plugin_base_root(&plugin_id).as_path().exists());
+    assert!(!home.path().join(".credentials.json").exists());
+    assert!(!catalog.received_requests().await.unwrap_or_default().iter().any(|request|
+        request.method == "POST" && request.url.path().ends_with("/install")));
+    Ok(())
 }

@@ -364,6 +364,8 @@ describe('operation registry', () => {
 
   it('registers exactly one fixed channel per named operation', () => {
     expect(OPERATION_NAMES).toEqual([
+      'capabilities.getInventory',
+      'capabilities.manage',
       'runtime.getStatus',
       'identity.getStatus',
       'identity.signIn',
@@ -798,10 +800,11 @@ describe('preload', () => {
   it('exposes exactly the frozen runtime, identity, data and provider operations over fixed channels', async () => {
     const exposed: Array<[string, unknown]> = [];
     const invoke = vi.fn(async (...args: unknown[]) => ({ args }));
+    const on = vi.fn(); const removeListener = vi.fn();
     vi.resetModules();
     vi.doMock('electron', () => ({
       contextBridge: { exposeInMainWorld: (key: string, api: unknown) => exposed.push([key, api]) },
-      ipcRenderer: { invoke, send: vi.fn(), on: vi.fn(), sendSync: vi.fn() },
+      ipcRenderer: { invoke, send: vi.fn(), on, removeListener, sendSync: vi.fn() },
     }));
     await import('../src/preload/preload');
     vi.doUnmock('electron');
@@ -816,6 +819,13 @@ describe('preload', () => {
           ? Object.fromEntries(Reflect.ownKeys(value).map((k) => [String(k), describe((value as any)[k])]))
           : typeof value;
     expect(describe(api)).toEqual(EXPECTED_BRIDGE_TREE);
+    const changed = (api as {capabilities:{onChanged(listener:()=>void):()=>void}}).capabilities.onChanged;
+    const listener = vi.fn(); const unsubscribe = changed(listener);
+    expect(on).toHaveBeenCalledWith('inquello:capabilities-changed', expect.any(Function));
+    on.mock.calls[0]![1]({ sender: 'must not leak' }, { token: 'must not leak' });
+    expect(listener).toHaveBeenCalledWith();
+    unsubscribe();
+    expect(removeListener).toHaveBeenCalledWith('inquello:capabilities-changed',on.mock.calls[0]![1]);
     type Op = (...args: unknown[]) => Promise<unknown>;
     const typed = api as {
       runtime: { getStatus: Op };
@@ -931,15 +941,15 @@ describe('host privilege source scan', () => {
     const body = preload.replace(/^import .* from 'electron';$/m, '');
     const uses = body.match(/ipcRenderer[^\n]*/g) ?? [];
     expect(uses.length).toBeGreaterThan(0);
-    for (const use of uses) expect(use).toMatch(/^ipcRenderer\.invoke\([A-Z_]+_CHANNEL(?:, \.\.\.args)?\)/);
+    for (const use of uses) expect(use).toMatch(/^ipcRenderer\.(?:invoke\([A-Z_]+_CHANNEL(?:, \.\.\.args)?\)|(?:on|removeListener)\(CAPABILITIES_CHANGED_CHANNEL, handler\))/);
     // Only the data operations, the two provider operations that take what the user entered, and the organise, state, policy and permissions operations forward arguments.
-    expect((body.match(/_CHANNEL, \.\.\.args\)/g) ?? []).length).toBe(23);
+    expect((body.match(/_CHANNEL, \.\.\.args\)/g) ?? []).length).toBe(25);
     expect(
       body
         .match(/[A-Z_]+_CHANNEL, \.\.\.args\)/g)
-        ?.every((use) => use.startsWith('DATA_') || use.startsWith('PROVIDER_SET_CLAUDE_KEY_') || use.startsWith('PROVIDER_CODEX_LOGIN_') || use.startsWith('ORGANISE_') || use.startsWith('STATE_') || use.startsWith('POLICY_') || use.startsWith('PERMISSIONS_')),
+        ?.every((use) => use.startsWith('CAPABILITIES_') || use.startsWith('DATA_') || use.startsWith('PROVIDER_SET_CLAUDE_KEY_') || use.startsWith('PROVIDER_CODEX_LOGIN_') || use.startsWith('ORGANISE_') || use.startsWith('STATE_') || use.startsWith('POLICY_') || use.startsWith('PERMISSIONS_')),
     ).toBe(true);
-    expect(preload).not.toMatch(/\.on\(|\.send\(|sendSync|postMessage/);
+    expect(preload.replace('ipcRenderer.on(CAPABILITIES_CHANGED_CHANNEL, handler)', '')).not.toMatch(/\.on\(|\.send\(|sendSync|postMessage/);
   });
 });
 

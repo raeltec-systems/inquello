@@ -166,6 +166,47 @@ fn malformed_execution_values_are_refused() {
     }
 }
 
+#[test]
+fn local_mcp_servers_need_their_flag_and_mcp_tools() {
+    // Absent: not allowed (Story 1.21).
+    let none = ExecutionPolicy::from_value(&json!({})).unwrap_or_else(|error| panic!("{error}"));
+    assert_eq!(none.allow_local_mcp_servers, None);
+    assert!(!none.local_mcp_servers_allowed());
+    // Allowed with MCP tools, and round-tripped canonically.
+    let policy = policy_with(json!({ "mcp_tools": "allowed", "allow_local_mcp_servers": true }))
+        .unwrap_or_else(|error| panic!("{error}"));
+    assert_eq!(
+        policy.to_value()["execution"],
+        json!({ "mcp_tools": "allowed", "allow_local_mcp_servers": true })
+    );
+    assert_eq!(
+        policy
+            .execution()
+            .map(ExecutionPolicy::local_mcp_servers_allowed),
+        Some(true)
+    );
+    let off = policy_with(json!({ "allow_local_mcp_servers": false }))
+        .unwrap_or_else(|error| panic!("{error}"));
+    assert_eq!(
+        off.to_value()["execution"],
+        json!({ "allow_local_mcp_servers": false })
+    );
+    // Refused: without MCP tools allowed, or not a boolean.
+    for execution in [
+        json!({ "allow_local_mcp_servers": true }),
+        json!({ "mcp_tools": "denied", "allow_local_mcp_servers": true }),
+        json!({ "mcp_tools": "allowed", "allow_local_mcp_servers": "yes" }),
+    ] {
+        assert!(
+            matches!(
+                policy_with(execution.clone()),
+                Err(PolicyError::InvalidExecution(_))
+            ),
+            "{execution} must be refused"
+        );
+    }
+}
+
 // ---- the effective computation -------------------------------------------------
 
 #[test]
@@ -877,4 +918,33 @@ fn a_concurrent_commit_of_the_same_operation_is_replayed() {
     .unwrap_or_else(|error| panic!("{error}"));
     assert!(outcome.replayed);
     assert_eq!(store.with(|s| s.records.len()), 1);
+}
+
+#[test]
+fn local_mcp_effective_setting_is_deny_by_default_and_names_the_workspace_rule() {
+    let defaults = effective_policy(
+        &layer(None, 3),
+        &DeviceRequirements::default(),
+        &UserConfig::default(),
+    );
+    assert!(!defaults.allow_local_mcp_servers.value);
+    assert_eq!(
+        defaults.allow_local_mcp_servers.source,
+        SettingSource::InquelloDefault
+    );
+    assert!(defaults.allow_local_mcp_servers.restricted);
+    for enabled in [false, true] {
+        let execution = ExecutionPolicy::from_value(&json!({
+            "mcp_tools": "allowed", "allow_local_mcp_servers": enabled,
+        }))
+        .unwrap_or_else(|error| panic!("{error}"));
+        let policy = effective_policy(
+            &layer(Some(execution), 4),
+            &DeviceRequirements::default(),
+            &UserConfig::default(),
+        );
+        assert_eq!(policy.allow_local_mcp_servers.value, enabled);
+        assert_eq!(policy.allow_local_mcp_servers.source, workspace_rule(4));
+        assert_eq!(policy.allow_local_mcp_servers.restricted, !enabled);
+    }
 }

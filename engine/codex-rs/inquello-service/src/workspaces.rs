@@ -484,6 +484,7 @@ fn execution_view(policy: &ExecutionPolicy) -> wire::ExecutionSection {
                 .collect()
         }),
         automatic_permission_review: policy.automatic_permission_review,
+        allow_local_mcp_servers: policy.allow_local_mcp_servers,
     }
 }
 

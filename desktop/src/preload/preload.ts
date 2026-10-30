@@ -62,7 +62,21 @@ const PERMISSIONS_DECIDE_CHANNEL = 'inquello:op:permissions.decide';
 const PERMISSIONS_GET_RULES_CHANNEL = 'inquello:op:permissions.getRules';
 const PERMISSIONS_SET_USER_RULES_CHANNEL = 'inquello:op:permissions.setUserRules';
 
+const CAPABILITIES_CHANGED_CHANNEL = 'inquello:capabilities-changed';
+const CAPABILITIES_INVENTORY_CHANNEL = 'inquello:op:capabilities.getInventory';
+const CAPABILITIES_MANAGE_CHANNEL = 'inquello:op:capabilities.manage';
+
 const api = Object.freeze({
+  capabilities: Object.freeze({
+    onChanged: (listener: () => void): (() => void) => {
+      if (typeof listener !== 'function') throw new Error('expected a listener');
+      const handler = () => listener();
+      ipcRenderer.on(CAPABILITIES_CHANGED_CHANNEL, handler);
+      return () => { ipcRenderer.removeListener(CAPABILITIES_CHANGED_CHANNEL, handler); };
+    },
+    getInventory: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(CAPABILITIES_INVENTORY_CHANNEL, ...args),
+    manage: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(CAPABILITIES_MANAGE_CHANNEL, ...args),
+  }),
   runtime: Object.freeze({
     /** Resolves with `{ state, runtimeVersion }` from main. Takes no arguments. */
     getStatus: (): Promise<unknown> => ipcRenderer.invoke(GET_STATUS_CHANNEL),

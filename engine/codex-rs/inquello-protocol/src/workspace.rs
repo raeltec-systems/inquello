@@ -174,6 +174,10 @@ pub struct ExecutionSection {
     /// Story 1.20: the automatic permission reviewer switch (off when absent).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub automatic_permission_review: Option<bool>,
+    /// Story 1.21: whether local (stdio) MCP servers may be added; they run
+    /// on the device outside the Task sandbox (not allowed when absent).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub allow_local_mcp_servers: Option<bool>,
 }
 
 /// One Workspace command rule (Story 1.20): a literal command prefix and its

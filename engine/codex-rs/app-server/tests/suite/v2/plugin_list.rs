@@ -202,6 +202,8 @@ async fn plugin_rpcs_reject_repository_spoofing_openai_curated() -> Result<()> {
 
     let request_id = mcp
         .send_plugin_install_request(PluginInstallParams {
+            skip_authentication: false,
+            mcp_admission: None,
             marketplace_path: Some(marketplace_path),
             remote_marketplace_name: None,
             install_attempt_id: None,
