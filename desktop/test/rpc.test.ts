@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { OverloadedError, QueueFullError, RpcConnection, RpcResponseError, StoppingError } from '../src/main/runtime';
 import { recordingLogger } from './helpers';
+import {TaskService} from '../src/main/tasks/service';
 
 /** A writable whose writes complete immediately, or (hold) only when the test releases them. */
 class HeldWritable extends Writable {
@@ -163,4 +164,15 @@ describe('private input request correlation',()=>{
   expect(seen).toEqual(['001',1]);expect(JSON.stringify(logger)).not.toContain('PRIVATE');
   expect(output.written.map(v=>JSON.parse(v).id)).toEqual(['001',1]);
  });
+});
+
+// Native final writer replaces only the invalidated private response, retaining ID.
+// This exercises the real desktop pending map and task submission semantics.
+it('a content-free final-fence error settles a pending Task RPC without replay or false refusal',async()=>{
+ const {rpc,reply,sent}=connection();const id='11111111-1111-4111-8111-111111111111';
+ const command={workspaceId:id,routeId:'codex-responses' as const,configurationRevision:1,operationId:id,engagementId:null,folderId:null,request:'Preserve this fictional draft',reasoning:'default',speed:'default'};
+ const tasks=new TaskService({runtime:{ready:()=>true,instance:()=>rpc,request:(method,params)=>rpc.request(method,params)},identity:{principalId:()=>id},syncPrincipal:async()=>{},prepareRoutes:async()=>({ok:true}),freshPolicy:async()=>({workspaceId:id} as never)});
+ const pending=tasks.start(command);await tick();expect(rpc.pendingCount).toBe(1);
+ await reply({id:sent()[0]!.id,error:{code:-32001,message:'Private work unavailable'}});
+ expect(await pending).toMatchObject({ok:false,code:'uncertain'});expect(rpc.pendingCount).toBe(0);expect(sent()).toHaveLength(1);expect(command.request).toBe('Preserve this fictional draft');expect(tasks.activeTasks()).toBe(1);
 });

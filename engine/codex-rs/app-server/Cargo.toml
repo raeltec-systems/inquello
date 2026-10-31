@@ -174,3 +174,7 @@ wiremock = { workspace = true }
 # Test-only loopback TLS seam. Never enable in release/package builds.
 [features]
 inference-fixtures = ["codex-core/inference-fixtures"]
+
+[build-dependencies]
+sha2 = { workspace = true }
+serde_json = { workspace = true }

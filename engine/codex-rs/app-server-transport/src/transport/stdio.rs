@@ -80,17 +80,17 @@ pub async fn start_stdio_connection(
     // Keep stdout's blocking writes off Tokio's pool too. The forwarding future
     // owns writer_rx so cancelling it also releases producers stuck on a full queue.
     let (stdout_tx, mut stdout_rx) =
-        mpsc::channel::<(String, oneshot::Sender<()>)>(/*buffer*/ 1);
+        mpsc::channel::<(String, oneshot::Sender<()>, Option<crate::PrivateOutputFence>)>(/*buffer*/ 1);
     std::thread::Builder::new()
         .name("app-server-stdout".to_string())
         .spawn(move || {
             let mut stdout = std::io::stdout().lock();
-            while let Some((json, written_tx)) = stdout_rx.blocking_recv() {
-                if let Err(err) = stdout.write_all(json.as_bytes()) {
-                    error!("Failed to write to stdout: {err}");
-                    break;
+            while let Some((json, written_tx, private_fence)) = stdout_rx.blocking_recv() {
+                match write_admitted(&mut stdout, &json, private_fence.as_ref()) {
+                    Ok(true) => { let _ = written_tx.send(()); }
+                    Ok(false) => {} // Dropping the receipt is not successful delivery.
+                    Err(err) => { error!("Failed to write to stdout: {err}"); break; }
                 }
-                let _ = written_tx.send(());
             }
         })?;
 
@@ -140,9 +140,10 @@ pub async fn start_stdio_connection(
             };
             json.push('\n');
             let (written_tx, written_rx) = oneshot::channel();
-            if stdout_tx.send((json, written_tx)).await.is_err() || written_rx.await.is_err() {
+            if stdout_tx.send((json, written_tx, queued_message.private_fence)).await.is_err() {
                 break;
             }
+            if written_rx.await.is_err() { continue; }
             if let Some(write_complete_tx) = queued_message.write_complete_tx {
                 let _ = write_complete_tx.send(());
             }
@@ -191,4 +192,64 @@ fn stdio_initialize_client_name(line: &str) -> Option<String> {
     }
     let params = serde_json::from_value::<InitializeParams>(params?).ok()?;
     Some(params.client_info.name)
+}
+
+/// Final synchronous admission point after every async/channel wait.
+fn write_admitted(writer: &mut impl std::io::Write, json: &str, fence: Option<&crate::PrivateOutputFence>) -> std::io::Result<bool> {
+    if fence.is_some_and(|f| !f.is_current()) {
+        if let Some(mut unavailable) = crate::outgoing_message::unavailable_private_response(json) {
+            unavailable.push('\n');
+            writer.write_all(unavailable.as_bytes())?;
+        }
+        // The original protected payload was not delivered, even if its RPC settled.
+        return Ok(false);
+    }
+    writer.write_all(json.as_bytes())?;
+    Ok(true)
+}
+
+#[cfg(test)]
+mod private_final_write_tests {
+    use super::*;
+    #[tokio::test]
+    async fn serialized_stdout_queue_never_writes_observed_invalidated_payload_or_receipt() {
+        let token = CancellationToken::new();
+        let fence = crate::PrivateOutputFence::new(token.clone());
+        let (tx, mut rx) = mpsc::channel(1);
+        let (receipt, completion) = oneshot::channel::<()>();
+        tx.send(("private-final-payload\n".to_string(), fence, receipt)).await.unwrap();
+        token.cancel(); // Invalidation after serialization/enqueue, before blocking writer.
+        let (json, fence, receipt) = rx.recv().await.unwrap();
+        let mut bytes = Vec::new();
+        assert!(!write_admitted(&mut bytes, &json, Some(&fence)).unwrap());
+        drop(receipt);
+        assert!(completion.await.is_err());
+        assert!(bytes.is_empty());
+        // A later fresh decision cannot mutate the old queued fence.
+        let fresh = crate::PrivateOutputFence::new(CancellationToken::new());
+        assert!(!write_admitted(&mut bytes, &json, Some(&fence)).unwrap());
+        assert!(write_admitted(&mut bytes, &json, Some(&fresh)).unwrap());
+        assert_eq!(bytes, json.as_bytes());
+    }
+    #[test]
+    fn invalidated_response_settles_exact_request_without_protected_fields() {
+        let token = CancellationToken::new();
+        let fence = crate::PrivateOutputFence::new(token.clone());
+        token.cancel();
+        let mut bytes = Vec::new();
+        assert!(!write_admitted(&mut bytes, r#"{"id":"pending-17","result":{"title":"protected title","request":"protected request"}}"#, Some(&fence)).unwrap());
+        let actual: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(actual, serde_json::json!({"id":"pending-17","error":{"code":-32001,"message":"Private work unavailable"}}));
+        let mut notification = Vec::new();
+        assert!(!write_admitted(&mut notification, r#"{"method":"thread/updated","params":{"text":"protected"}}"#, Some(&fence)).unwrap());
+        assert!(notification.is_empty());
+    }
+    #[test]
+    fn unchanged_terminal_payload_and_public_control_are_not_suppressed() {
+        let fence = crate::PrivateOutputFence::new(CancellationToken::new());
+        let mut bytes = Vec::new();
+        assert!(write_admitted(&mut bytes,"terminal",Some(&fence)).unwrap());
+        assert!(write_admitted(&mut bytes,"control",None).unwrap());
+        assert_eq!(bytes,b"terminalcontrol");
+    }
 }

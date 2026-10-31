@@ -491,6 +491,7 @@ impl MessageProcessor {
         let inquello_processor = Arc::new(InquelloRequestProcessor::new(vec![
             config.codex_home.to_path_buf(),
         ]).with_route_provider(config.model_provider.clone(), auth_manager.clone(), config.http_client_factory()).with_usage_sources(account_processor.clone(), catalog_processor.clone()).with_task_outgoing(outgoing.clone()).with_task_config(config_processor.clone()));
+        outgoing.bind_private_authority(&inquello_processor);
         let initialize_processor = InitializeRequestProcessor::new(
             gateway_login_control,
             outgoing.clone(),
@@ -1227,7 +1228,12 @@ impl MessageProcessor {
             connection_id,
             request_id: codex_request.id().clone(),
         };
+        let private_fence = self.outgoing.capture_private_fence(connection_id);
         let private_thread = self.inquello_processor.guard_retained_request(connection_id,&codex_request).await?;
+        let private_scope = self.inquello_processor.guard_private_scope(connection_id,&codex_request).await?;
+        if private_thread.is_some() || private_scope.is_some() || matches!(codex_request.method_name(), "inquello/workspace/list" | "inquello/tasks/reconcile" | "inquello/tasks/forThread" | "inquello/tasks/progress") {
+            self.outgoing.fence_request(&request_id, private_fence).await;
+        }
         let result: Result<Option<ClientResponsePayload>, JSONRPCErrorError> = match codex_request {
             ClientRequest::Initialize { .. } => {
                 panic!("Initialize should be handled before initialized request dispatch");
@@ -2218,7 +2224,13 @@ impl MessageProcessor {
             }
         };
 
+        // Capture before the final fresh authority check, while the response is
+        // still local. Never renew this fence once it enters either output queue.
+        if private_thread.is_some() || private_scope.is_some() {
+            self.outgoing.fence_request(&request_id, self.outgoing.capture_private_fence(connection_id)).await;
+        }
         if let Some(thread) = private_thread { self.inquello_processor.require_task_thread(connection_id,&thread).await?; }
+        if result.is_ok() { if let Some(scope) = private_scope { self.inquello_processor.guard_private_scope_after(connection_id,&scope).await?; } }
         match result {
             Ok(Some(response)) => {
                 self.outgoing

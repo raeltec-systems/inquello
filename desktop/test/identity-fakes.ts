@@ -76,6 +76,12 @@ interface FakeSession {
 }
 
 export class FakeService implements SharedService {
+  // Identity fixtures do not manufacture route approval or recovery authority.
+  createExportReceipt: SharedService['createExportReceipt'] = async () => { throw new ServiceError('denied', false, 403); };
+  validateExportReceipt: SharedService['validateExportReceipt'] = async () => { throw new ServiceError('denied', false, 403); };
+  workspaceAccess: SharedService['workspaceAccess'] = async () => { throw new ServiceError('denied', false, 403); };
+  routeApproval: SharedService['routeApproval'] = async () => { throw new ServiceError('denied', false, 403); };
+  routeEligibilityCheck: SharedService['routeEligibilityCheck'] = async () => { throw new ServiceError('denied', false, 403); };
   /** No answer at all (topology stopped, or an untrusted certificate). */
   down = false;
   /** The next bootstrap commits but its response is lost. */

@@ -80,7 +80,9 @@ development_status:
   # Final desktop focused 392 passing; native/protocol/Windows/provider gates remain open.
   1-26-follow-actual-basic-progress-and-truthful-results: in-progress
   1-27-reject-untrusted-instructions-in-initial-tool-output: in-progress # review correction authored; desktop 77 focused pass; native refusal projection/replay corrections authored; native/provider/Windows gates open
-  1-28-gate-current-route-real-data-use-on-negative-authorization-e: backlog
+  # Review loop 1 source corrections implemented; native/generated/owner gates remain open.
+  # Loop 2 source corrections implemented; native/generated/owner acceptance and independent review remain open.
+  1-28-gate-current-route-real-data-use-on-negative-authorization-e: in-progress
   1-29-steer-stop-and-recover-the-same-private-task: backlog
   1-30-find-and-reopen-only-permitted-saved-work: backlog
   2-1-understand-an-existing-work-folder-with-precise-references: backlog

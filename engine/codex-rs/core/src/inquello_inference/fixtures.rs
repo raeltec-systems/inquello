@@ -81,7 +81,9 @@ impl Default for FixtureSession { fn default() -> Self { Self::new() } }
 static REQUIRED_TASK_ATTEMPTS: OnceLock<Mutex<std::collections::HashSet<String>>> = OnceLock::new();
 pub fn bind_task_transport(binding:&Binding,endpoint:&str,certificate:&[u8])->Result<()> {
     binding.validate().map_err(failure)?;
-    if binding.route_id!="claude-api-key" {return Err(failure("retained Task fixture requires Messages"));}
+    #[cfg(debug_assertions)]
+    if binding.route_id=="codex-responses" {return bind_responses_transport(binding,endpoint,certificate);}
+    if binding.route_id!="claude-api-key" {return Err(failure("retained Task fixture requires a supported route"));}
     let client=MessagesClient::fixture_from_der(endpoint,certificate).map_err(failure)?;
     let mut required=REQUIRED_TASK_ATTEMPTS.get_or_init(||Mutex::new(std::collections::HashSet::new())).lock().map_err(|_|failure("fixture unavailable"))?;
     if required.len()>=128 || !required.insert(binding.attempt_id.clone()){return Err(failure("fixture attempt reused or capacity reached"));}
@@ -90,4 +92,50 @@ pub fn bind_task_transport(binding:&Binding,endpoint:&str,certificate:&[u8])->Re
 }
 pub(super) fn task_transport_required(attempt:&str)->bool {
     REQUIRED_TASK_ATTEMPTS.get().is_some_and(|set|set.lock().map(|set|set.contains(attempt)).unwrap_or(true))
+}
+
+/// One-use no-auth transport, only for an exact retained Responses attempt.
+/// This changes transport, not the ordinary request encoder/parser/tool runtime.
+#[cfg(debug_assertions)]
+#[derive(Clone)]
+pub(crate) struct ResponsesTransport { pub(crate) endpoint:String, pub(crate) client:codex_http_client::HttpClient }
+#[cfg(debug_assertions)]
+static RESPONSE_TRANSPORTS:OnceLock<Mutex<HashMap<String,(Binding,ResponsesTransport)>>>=OnceLock::new();
+#[cfg(debug_assertions)]
+static RESPONSE_REQUIRED:OnceLock<Mutex<std::collections::HashSet<String>>>=OnceLock::new();
+#[cfg(debug_assertions)]
+pub fn validate_responses_transport(endpoint:&str,certificate:&[u8])->Result<()> {
+    responses_transport(endpoint,certificate).map(|_|())
+}
+#[cfg(debug_assertions)]
+fn responses_transport(endpoint:&str,certificate:&[u8])->Result<ResponsesTransport> {
+    let url=reqwest::Url::parse(endpoint).map_err(|_|failure("invalid Responses fixture endpoint"))?;
+    if url.scheme()!="https" || !matches!(url.host_str(),Some("127.0.0.1"|"[::1]"))
+        || url.path()!="/v1/responses" || url.query().is_some() || url.fragment().is_some()
+        || !url.username().is_empty() || url.password().is_some() || certificate.len()>8192 {
+        return Err(failure("only pinned literal-loopback Responses TLS fixture is permitted"));
+    }
+    let cert=reqwest::Certificate::from_der(certificate).map_err(|_|failure("invalid fixture CA"))?;
+    let client=reqwest::Client::builder().https_only(true).no_proxy().redirect(reqwest::redirect::Policy::none())
+        .retry(reqwest::retry::never()).add_root_certificate(cert).timeout(std::time::Duration::from_secs(30))
+        .build().map_err(|_|failure("fixture transport unavailable"))?;
+    Ok(ResponsesTransport {endpoint:endpoint.into(),client:codex_http_client::HttpClient::new_without_request_logging(client)})
+}
+#[cfg(debug_assertions)]
+fn bind_responses_transport(binding:&Binding,endpoint:&str,certificate:&[u8])->Result<()> {
+    let client=responses_transport(endpoint,certificate)?;
+    let mut required=RESPONSE_REQUIRED.get_or_init(||Mutex::new(std::collections::HashSet::new())).lock().map_err(|_|failure("fixture unavailable"))?;
+    if required.len()>=128 || !required.insert(binding.attempt_id.clone()) {return Err(failure("Responses fixture attempt reused or capacity reached"));}
+    RESPONSE_TRANSPORTS.get_or_init(||Mutex::new(HashMap::new())).lock().map_err(|_|failure("fixture unavailable"))?.insert(binding.attempt_id.clone(),(binding.clone(),client));
+    Ok(())
+}
+#[cfg(debug_assertions)]
+pub(crate) fn take_responses_transport(binding:&Binding)->Result<Option<ResponsesTransport>> {
+    let required=RESPONSE_REQUIRED.get().is_some_and(|set|set.lock().map(|set|set.contains(&binding.attempt_id)).unwrap_or(true));
+    if !required {return Ok(None);}
+    if binding.route_id!="codex-responses" {return Err(failure("fixture route mismatch"));}
+    let (expected,transport)=RESPONSE_TRANSPORTS.get_or_init(||Mutex::new(HashMap::new())).lock().map_err(|_|failure("fixture unavailable"))?
+        .remove(&binding.attempt_id).ok_or_else(||failure("Responses fixture consumed; production fallback forbidden"))?;
+    if expected!=*binding {return Err(failure("Responses fixture exact attempt binding changed"));}
+    Ok(Some(transport))
 }

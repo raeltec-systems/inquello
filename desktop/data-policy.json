@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "policy_owner": "Organisation data-policy owner (OQ-2)",
-  "notice": "This export is a copy of local data for its owner. It transfers no permissions and is not an accepted audit record.",
+  "notice": "This export is a copy of local data for its owner. It transfers no permissions and is not an accepted audit record. Current authority is required for every protected export/recovery use. Already exported copies cannot be recalled. Service-held immutable provenance receipts contain hashes and principal/Workspace identifiers, no source bytes or credentials; service receipt retention follows the existing service policy, not an invented local duration.",
   "categories": [
     {
       "id": "task-history",
@@ -25,7 +25,7 @@
         "mode": "included"
       },
       "deletion": "Delete Task history in Local data (the runtime is stopped, the files are removed, then the runtime restarts). This does not remove the submitted request and Task/run/thread binding copy retained separately in Private work organisation. To remove that copy, also delete Private work organisation in Local data; that separately clears the entire working store",
-      "recovery": "Includes ordered inference messages and provider-native opaque continuation/signature blocks bound to the exact route, model and API version, never credentials or proof of analytical acceptance. Incompatible model history is refused, not translated silently. Reimport an earlier export into an empty runtime home; nothing else restores it. Story 1.26 retains versioned model-authored plan/result publications and scoped question answers in this same governed native history. Authorized progress projects bounded messages, commands, supported edits, plan/result text and pending questions into main/renderer memory only; no new persistent cache or database is created. Hidden reasoning and opaque continuation blocks are never projected. Memory views and pending answers are cleared or suppressed on identity, membership, runtime or refresh failure; secret-answer drafts are not saved by the desktop. Display-only sanitation/clipping marks incomplete history without changing retained source. User/agent role and artifact-reference availability remain explicit. Task-local read failure suppresses the affected Task; unknown Workspace authority suppresses that Workspace, while principal/runtime/session invalidation suppresses the entire scope. Freeform answers have a 4096 UTF-8 byte limit before submission; oversized drafts remain editable. Native serialized progress projections have a 640 KiB final display ceiling including metadata; this does not bound the upstream retained history store. Command diagnostics retain a bounded output tail, citation identity is distinct from successful work proof, and omitted rows/references disclose incomplete history. Pending-Start discovery is read-only for the exact current operation. Hydration hints coalesce, and scoped consumed-question IDs are bounded transient memory. Invalid pasted controls remain editable before submission."
+      "recovery": "Includes ordered inference messages and provider-native opaque continuation/signature blocks bound to the exact route, model and API version, never credentials or proof of analytical acceptance. Incompatible model history is refused, not translated silently. Reimport an earlier export into an empty runtime home; nothing else restores it. Story 1.26 retains versioned model-authored plan/result publications and scoped question answers in this same governed native history. Authorized progress projects bounded messages, commands, supported edits, plan/result text and pending questions into main/renderer memory only; no new persistent cache or database is created. Hidden reasoning and opaque continuation blocks are never projected. Memory views and pending answers are cleared or suppressed on identity, membership, runtime or refresh failure; secret-answer drafts are not saved by the desktop. Display-only sanitation/clipping marks incomplete history without changing retained source. User/agent role and artifact-reference availability remain explicit. Task-local read failure suppresses the affected Task; unknown Workspace authority suppresses that Workspace, while principal/runtime/session invalidation suppresses the entire scope. Freeform answers have a 4096 UTF-8 byte limit before submission; oversized drafts remain editable. Native serialized progress projections have a 640 KiB final display ceiling including metadata; this does not bound the upstream retained history store. Command diagnostics retain a bounded output tail, citation identity is distinct from successful work proof, and omitted rows/references disclose incomplete history. Pending-Start discovery is read-only for the exact current operation. Hydration hints coalesce, and scoped consumed-question IDs are bounded transient memory. Invalid pasted controls remain editable before submission. Story 1.28: native ownership and category provenance plus current Workspace/route authority are mandatory. Recovery stages exact service-receipted bytes and rechecks current access before publication/reopen; historical sessions, approval receipts and manifest attribution never restore permission. Unknown legacy/mixed provenance remains unavailable with an explicit reason."
     },
     {
       "id": "runtime-logs",
@@ -40,13 +40,13 @@
       },
       "enabled": true,
       "credentials": false,
-      "owner": "The signed-in creator, on this device",
+      "owner": "Original native owners; opaque mixed log ownership is not established",
       "rule_owner": "Organisation data-policy owner (OQ-2)",
       "retention": "until-owner-deletes",
       "access": "runtime",
       "export": {
         "mode": "excluded",
-        "reason": "The runtime writes its log database while it runs, so a copy taken without stopping it is not consistent"
+        "reason": "Opaque logs have no provable per-Task ownership or category lineage; stopping the runtime does not grant export rights"
       },
       "deletion": "Delete Runtime logs in Local data (the runtime is stopped, the files are removed, then the runtime restarts)",
       "recovery": "Not recoverable once deleted; the runtime starts a new log on its next start"
@@ -92,12 +92,13 @@
       },
       "enabled": true,
       "credentials": false,
-      "owner": "The signed-in creator, on this device",
+      "owner": "Original native owners; opaque mixed log ownership is not established",
       "rule_owner": "Organisation data-policy owner (OQ-2)",
       "retention": "until-owner-deletes",
       "access": "main-process-only",
       "export": {
-        "mode": "included"
+        "mode": "excluded",
+        "reason": "Opaque logs have no provable per-Task ownership or category lineage; stopping the runtime does not grant export rights"
       },
       "deletion": "Delete the Desktop runtime error log in Local data (the runtime is stopped so the log is closed, the file is removed, then the runtime restarts)",
       "recovery": "Reimport an earlier export while no current log exists; otherwise not recoverable"
@@ -133,7 +134,8 @@
         "globs": [
           "identity/device-id",
           "identity/device-id.*.tmp",
-          ".inquello-fictional-audit-session"
+          ".inquello-fictional-audit-session",
+          "data/recovery-unvalidated"
         ]
       },
       "enabled": true,
@@ -146,7 +148,7 @@
         "mode": "excluded",
         "reason": "Identifies this installation; restoring it on another device would clone the installation identity"
       },
-      "deletion": "Delete the Device ID in Local data; a new one is created at the next sign-in. Deletion also removes the internal fictional-session marker while the runtime is stopped, revoking that setup",
+      "deletion": "Delete the Device ID in Local data; a new one is created at the next sign-in. Deletion also removes the internal fictional-session marker while the runtime is stopped, revoking that setup An interrupted-recovery marker is preserved until validated recovery or successful deletion of all protected recovery categories; clearing Device ID alone never reopens unvalidated data.",
       "recovery": "Not recoverable; a new device ID is created at the next sign-in. The internal fictional-session marker is installation-owned, nonportable authority metadata, excluded from exports; only explicit isolated setup can recreate it"
     },
     {
@@ -329,7 +331,7 @@
         "mode": "included"
       },
       "deletion": "Delete Private work organisation in Local data (the runtime is stopped, the files are removed, then the runtime restarts with an empty working store)",
-      "recovery": "Includes creator-private submitted plain-text Task request history and durable operation/run/runtime-thread associations, as well as secret-free route configurations, settings, immutable attempt snapshots, usage/events and bounded permission receipts. Operation receipts contain only private immutable record references; submitted content is not copied into usage or diagnostic records. Never includes volatile provider credentials. Unfinished or other-runtime work remains uncertain; reimport does not replay work. Reimport an earlier export while no working store exists; shared-service Engagements remain on the service, but their local details, folders and private Tasks are not recoverable otherwise"
+      "recovery": "Includes creator-private submitted plain-text Task request history and durable operation/run/runtime-thread associations, as well as secret-free route configurations, settings, immutable attempt snapshots, usage/events and bounded permission receipts. Operation receipts contain only private immutable record references; submitted content is not copied into usage or diagnostic records. Never includes volatile provider credentials. Unfinished or other-runtime work remains uncertain; reimport does not replay work. Reimport an earlier export while no working store exists; shared-service Engagements remain on the service, but their local details, folders and private Tasks are not recoverable otherwise Story 1.28: native ownership and category provenance plus current Workspace/route authority are mandatory. Recovery stages exact service-receipted bytes and rechecks current access before publication/reopen; historical sessions, approval receipts and manifest attribution never restore permission. Unknown legacy/mixed provenance remains unavailable with an explicit reason. Native-created draft metadata has creator/Workspace provenance independent of inference data tier; current Export/Read and local-data policy still apply. No model-route permission is implied."
     },
     {
       "id": "task-folders",
@@ -350,7 +352,7 @@
         "mode": "included"
       },
       "deletion": "Delete Task working folders in Local data (the runtime is stopped, every Task's working folder and Output folder is removed, then the runtime restarts)",
-      "recovery": "Reimport an earlier export while no Task working folders exist; otherwise not recoverable"
+      "recovery": "Reimport an earlier export while no Task working folders exist; otherwise not recoverable Story 1.28: native ownership and category provenance plus current Workspace/route authority are mandatory. Recovery stages exact service-receipted bytes and rechecks current access before publication/reopen; historical sessions, approval receipts and manifest attribution never restore permission. Unknown legacy/mixed provenance remains unavailable with an explicit reason."
     },
     {
       "id": "provider-credentials",
@@ -463,6 +465,28 @@
       },
       "deletion": "Not held: the desktop never writes it",
       "recovery": "Not applicable"
+    },
+    {
+      "id": "recovery-quarantine",
+      "label": "Unvalidated recovery data",
+      "location": {
+        "root": "user-data",
+        "globs": [
+          "data/quarantine/**"
+        ]
+      },
+      "enabled": true,
+      "credentials": false,
+      "owner": "The original native owner; unavailable until current validation",
+      "rule_owner": "Organisation data-policy owner (OQ-2)",
+      "retention": "until-owner-deletes",
+      "access": "main-process-only",
+      "export": {
+        "mode": "excluded",
+        "reason": "Unvalidated recovery content remains quarantined and is never exported or reopened as permitted data"
+      },
+      "deletion": "Delete Unvalidated recovery data in Local data; this does not delete exported copies or service-held provenance receipts",
+      "recovery": "No automatic reuse. Repeat recovery from the original export with current authorization and its immutable service-held byte receipt"
     }
   ]
 }

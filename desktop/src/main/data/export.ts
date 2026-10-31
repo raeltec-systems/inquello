@@ -75,6 +75,7 @@ export interface ExportManifest {
   attribution: Attribution;
   included: ManifestCategory[];
   omissions: ManifestOmission[];
+  provenance?:{receiptId:string;manifestDigest:string};
 }
 
 export interface ExportOptions {
@@ -83,8 +84,11 @@ export interface ExportOptions {
   /** The directory the user chose. It must not exist yet, or be empty. */
   destination: string;
   attribution: Attribution;
-  journal: ExportJournal;
+  journal: Pick<ExportJournal,'append'>;
   now?: () => Date;
+  /** Trusted main-only native provenance; absent only in low-level filesystem fixtures. */
+  provenFiles?:ReadonlyMap<string,{sha256:string;size:number;category:string}>;
+  authorize?():Promise<void>;
 }
 
 export interface ExportResult {
@@ -145,9 +149,10 @@ async function writeFully(output: fs.promises.FileHandle, chunk: Buffer): Promis
  * the root boundary). Every chunk is written completely before it counts;
  * an incomplete copy removes `target` and throws.
  */
-export async function copyWithDigest(source: string, target: string, options: { within?: string } = {}): Promise<{ size: number; sha256: string }> {
+export async function copyWithDigest(source: string, target: string, options: { within?: string; authorize?:()=>Promise<void> } = {}): Promise<{ size: number; sha256: string }> {
   await fs.promises.mkdir(path.dirname(target), { recursive: true, mode: 0o700 });
   const hash = createHash('sha256');
+  await options.authorize?.();
   const input = await openRegular(source, options.within);
   try {
     const output = await fs.promises.open(target, 'wx', 0o600);
@@ -156,9 +161,11 @@ export async function copyWithDigest(source: string, target: string, options: { 
       const buffer = Buffer.allocUnsafe(CHUNK);
       let size = 0;
       for (;;) {
+        await options.authorize?.();
         const { bytesRead } = await input.read(buffer, 0, CHUNK, null);
         if (bytesRead === 0) break;
         const chunk = buffer.subarray(0, bytesRead);
+        await options.authorize?.();
         await writeFully(output, chunk);
         hash.update(chunk);
         size += bytesRead;
@@ -176,13 +183,15 @@ export async function copyWithDigest(source: string, target: string, options: { 
 }
 
 /** The SHA-256 and size of a file. */
-export async function digestFile(file: string): Promise<{ size: number; sha256: string }> {
+export async function digestFile(file: string,authorize?:()=>Promise<void>): Promise<{ size: number; sha256: string }> {
   const hash = createHash('sha256');
-  const input = await fs.promises.open(file, 'r');
+  await authorize?.();
+  const input = await openRegular(file);
   try {
     const buffer = Buffer.allocUnsafe(CHUNK);
     let size = 0;
     for (;;) {
+      await authorize?.();
       const { bytesRead } = await input.read(buffer, 0, CHUNK, null);
       if (bytesRead === 0) break;
       hash.update(buffer.subarray(0, bytesRead));
@@ -242,10 +251,14 @@ export async function exportData(options: ExportOptions): Promise<ExportResult> 
       if (category.export.mode === 'included' && category.enabled && !category.credentials) {
         const files: ManifestFile[] = [];
         let unsafe = 0;
+        let unproven = 0;
         for (const file of held) {
+          const proof=options.provenFiles?.get(path.resolve(file.abs));
+          if(options.provenFiles&&(!proof||proof.category!==category.id)){unproven++;continue;}
+          await options.authorize?.();
           let copied: { size: number; sha256: string };
           try {
-            copied = await copyWithDigest(file.abs, exportedFilePath(destination, file.root, file.rel), { within: roots[file.root] });
+            copied = await copyWithDigest(file.abs, exportedFilePath(destination, file.root, file.rel), { within: roots[file.root],authorize:options.authorize });
           } catch (error) {
             if (error instanceof UnsafeSourceError || (error as NodeJS.ErrnoException).code === 'ELOOP') {
               unsafe += 1;
@@ -254,9 +267,12 @@ export async function exportData(options: ExportOptions): Promise<ExportResult> 
             if ((error as NodeJS.ErrnoException).code === 'ENOENT' && !fs.existsSync(file.abs)) continue; // Removed since the inventory.
             throw error;
           }
+          if(proof&&(proof.sha256!==copied.sha256||proof.size!==copied.size))throw new ExportError('Native provenance changed during export; the incomplete copy is unavailable');
+          await options.authorize?.();
           files.push({ root: file.root, path: file.rel, ...copied });
         }
         included.push({ category: category.id, label: category.label, files });
+        if(unproven>0)omissions.push({category:category.id,label:category.label,reason:'Ownership or category provenance is unavailable; these files were not exported',files:unproven});
         if (unsafe > 0) omissions.push({ category: category.id, label: `${category.label}: links and special files`, reason: UNSAFE_SOURCE_REASON, files: unsafe });
       } else {
         const reason =
@@ -276,6 +292,7 @@ export async function exportData(options: ExportOptions): Promise<ExportResult> 
         files: inventory.unclassified.length,
       });
     }
+    if(options.provenFiles&&!included.some(entry=>entry.files.length>0))throw new ExportError('No currently authorized known-provenance content is available to export');
     const manifest: ExportManifest = {
       format: MANIFEST_FORMAT,
       version: 1,
@@ -291,6 +308,7 @@ export async function exportData(options: ExportOptions): Promise<ExportResult> 
       omissions,
     };
     await fs.promises.writeFile(path.join(destination, MANIFEST_FILE), `${JSON.stringify(manifest, null, 2)}\n`, { mode: 0o600, flag: 'wx' });
+    await options.authorize?.();
     options.journal.append({ path: destination, exportedAt: manifest.createdAt, categories: included.map((entry) => entry.category) });
     return { path: destination, manifest };
   } catch (error) {

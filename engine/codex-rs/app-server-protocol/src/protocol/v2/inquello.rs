@@ -104,7 +104,14 @@ pub struct InquelloWorkspaceTreeResponse {
     pub engagements: Vec<InquelloEngagement>,
     pub folders: Vec<InquelloFolder>,
     pub tasks: Vec<InquelloTask>,
+    #[serde(default)]
+    pub unavailable_tasks: Vec<InquelloUnavailableTask>,
 }
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloUnavailableTask { pub task_id:String, pub reason:String }
+
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
@@ -1178,21 +1185,34 @@ pub struct InquelloTasksForThreadParams { pub thread_id: String }
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
-pub struct InquelloTasksForThreadResponse { pub task_id: String, pub run_id: String, pub workspace_id:String, pub thread_id: String, pub turn_id:Option<String>, pub runtime_id:String, pub status: String }
+pub struct InquelloTasksForThreadResponse { pub data_tier:String, pub task_id: String, pub run_id: String, pub workspace_id:String, pub thread_id: String, pub turn_id:Option<String>, pub runtime_id:String, pub status: String }
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[ts(export_to = "v2/")]
-pub struct InquelloTasksBootstrapParams { pub workspace_id: String, pub isolated_root: String }
+pub struct InquelloTasksBootstrapParams { pub workspace_id: String, pub isolated_root: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub real_session: Option<serde_json::Value>,
+}
 
 /// Native-to-main authority refresh, never a renderer-controlled verdict.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all="camelCase", deny_unknown_fields)]
 #[ts(export_to="v2/")]
-pub struct InquelloTaskAuthorityParams {pub workspace_id:String}
+pub struct InquelloTaskAuthorityParams {pub workspace_id:String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub route_discovery: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub route_check: Option<serde_json::Value>,
+}
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
 #[serde(rename_all="camelCase", deny_unknown_fields)]
 #[ts(export_to="v2/")]
-pub struct InquelloTaskAuthorityResponse {pub workspace_policy:Option<InquelloWorkspaceExecutionPolicy>}
+pub struct InquelloTaskAuthorityResponse {pub workspace_policy:Option<InquelloWorkspaceExecutionPolicy>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub route_approval: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub route_authority: Option<serde_json::Value>,
+}
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, TS)]
 #[serde(rename_all="camelCase", deny_unknown_fields)]
 #[ts(export_to="v2/")]

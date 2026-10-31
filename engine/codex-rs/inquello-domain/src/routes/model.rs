@@ -149,7 +149,7 @@ pub struct RouteEligibility {
 
 /// Credentials/adapter facts may reduce availability; only compiled, exact
 /// route/model/API/deployment-matched evidence can establish verification.
-/// Story 1.22 never enables real data, even if a future register is more lenient.
+/// Without current per-operation organization authority this entry point cannot enable real data.
 pub fn route_eligibility(
     configuration: Option<&RouteConfiguration>,
     credential_present: bool,
@@ -198,7 +198,7 @@ fn eligibility(
     } else if result.verification == RouteVerification::NotVerified {
         Some("Selected route has no passing evidence for this exact deployment, model and API version")
     } else if tier == DataTier::Real {
-        Some("Real-data processing is not enabled in this story")
+        Some("Real-data use requires complete exact-build evidence and fresh organization approval")
     } else {
         result.enabled = true;
         None

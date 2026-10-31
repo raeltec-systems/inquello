@@ -17,6 +17,9 @@
  * Messages carry no request or response content: values may be credentials.
  */
 import https from 'node:https';
+import {parseExportProvenanceReceipt,type ExportProvenanceReceipt} from './wire';
+import {parseWorkspaceAccess,type WorkspaceAccess} from './wire';
+import {parseRouteApprovalView,parseRouteEligibilityCheckResponse,type RouteApprovalView,type RouteEligibilityCheckRequest,type RouteEligibilityCheckResponse} from './wire';
 
 import {
   ERROR_KINDS,
@@ -173,6 +176,11 @@ function json(text: string): unknown {
 
 /** The shared service's `/v1` API. */
 export interface SharedService {
+  createExportReceipt(accessCredential:string,request:{command_epoch:string;operation_id:string;manifest_digest:string;workspace_ids:string[]}):Promise<ExportProvenanceReceipt>;
+  validateExportReceipt(accessCredential:string,receiptId:string,digest:string):Promise<ExportProvenanceReceipt>;
+  workspaceAccess(accessCredential:string,workspaceId:string,action:'read'|'export'):Promise<WorkspaceAccess>;
+  routeApproval(accessCredential:string,workspaceId:string,routeId:string):Promise<RouteApprovalView>;
+  routeEligibilityCheck(accessCredential:string,workspaceId:string,request:RouteEligibilityCheckRequest):Promise<RouteEligibilityCheckResponse>;
   capabilities(): Promise<Capabilities>;
   createLoginTransaction(request: CreateLoginTransactionRequest): Promise<LoginTransaction>;
   bootstrap(request: BootstrapRequest): Promise<SessionCredentials>;
@@ -193,6 +201,11 @@ export interface SharedService {
 }
 
 export class SharedServiceClient implements SharedService {
+  createExportReceipt(accessCredential:string,request:{command_epoch:string;operation_id:string;manifest_digest:string;workspace_ids:string[]}):Promise<ExportProvenanceReceipt>{return this.call('POST','/v1/local-data/export-receipts',parseExportProvenanceReceipt,{body:request,bearer:accessCredential});}
+  validateExportReceipt(accessCredential:string,receiptId:string,digest:string):Promise<ExportProvenanceReceipt>{return this.call('POST',`/v1/local-data/export-receipts/${encodeURIComponent(receiptId)}/validate`,parseExportProvenanceReceipt,{body:{manifest_digest:digest},bearer:accessCredential});}
+  workspaceAccess(accessCredential:string,workspaceId:string,action:'read'|'export'):Promise<WorkspaceAccess>{return this.call('POST',`/v1/workspaces/${encodeURIComponent(workspaceId)}/access-checks`,parseWorkspaceAccess,{body:{action},bearer:accessCredential});}
+  routeApproval(accessCredential:string,workspaceId:string,routeId:string):Promise<RouteApprovalView>{return this.call('GET',`/v1/workspaces/${encodeURIComponent(workspaceId)}/route-approvals/${encodeURIComponent(routeId)}`,parseRouteApprovalView,{bearer:accessCredential});}
+  routeEligibilityCheck(accessCredential:string,workspaceId:string,request:RouteEligibilityCheckRequest):Promise<RouteEligibilityCheckResponse>{return this.call('POST',`/v1/workspaces/${encodeURIComponent(workspaceId)}/route-eligibility-checks`,parseRouteEligibilityCheckResponse,{body:request,bearer:accessCredential});}
   constructor(
     private readonly baseUrl: string,
     private readonly transport: HttpsTransport,

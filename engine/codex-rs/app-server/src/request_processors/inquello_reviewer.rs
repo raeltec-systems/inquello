@@ -14,6 +14,7 @@ use inquello_domain::usage::{self, UsageStore, AttemptStatus, FinishAttempt};
 pub(super) const LABEL: &str = "Automated permission review — not analytical review or Professional Approval";
 #[derive(Default)]
 pub(super) struct RouteRuntime {
+    disclosure_tokens: std::sync::Mutex<HashMap<PrincipalId,CancellationToken>>,
     pub(super) state: std::sync::Arc<tokio::sync::Mutex<ReviewState>>,
     pub(super) auth: AuthStore,
     pub(super) responses: Option<InheritedResponses>,
@@ -65,7 +66,17 @@ impl ReviewState {
     }
 }
 impl RouteRuntime {
+    pub(super) fn disclosure_fence(&self, principal: PrincipalId) -> codex_app_server_transport::PrivateOutputFence {
+        let mut tokens = self.disclosure_tokens.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        codex_app_server_transport::PrivateOutputFence::new(tokens.entry(principal).or_default().clone())
+    }
+    pub(super) fn invalidate_disclosure(&self, principal: PrincipalId) {
+        let mut tokens = self.disclosure_tokens.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(old) = tokens.insert(principal, CancellationToken::new()) { old.cancel(); }
+    }
+
     pub(super) fn cancel_principal_reviews(&self, state: &mut ReviewState, principal: PrincipalId) {
+        self.invalidate_disclosure(principal);
         state.pending.retain(|_, invocation| {
             if invocation.principal == principal { invocation.cancellation.cancel(); false } else { true }
         });
@@ -82,6 +93,7 @@ impl RouteRuntime {
         state.authorities.retain(|(id, _), _| *id != principal);
     }
     pub(super) fn cancel_task(&self, state: &mut ReviewState, principal: PrincipalId, task: &str) {
+        self.invalidate_disclosure(principal);
         self.auth.cancel_task(&principal.to_string(), task);
         state.ready.retain(|_, review| {
             if review.actor.principal_id == principal && review.original.task_id.to_string() == task { review.cancellation.cancel(); false } else { true }
@@ -653,5 +665,28 @@ impl InquelloRequestProcessor {
         let current=state.authorities.get(&(principal,workspace)).is_some_and(|a|a.policy==*policy);
         if !current {self.routes.cancel_principal_reviews(&mut state,principal);}
         current
+    }
+}
+
+#[cfg(test)]
+mod observed_disclosure_invalidation_tests {
+    use super::*;
+    #[test]
+    fn task_and_identity_invalidation_cancel_old_principal_payloads_not_other_recipients() {
+        let runtime = RouteRuntime::default();
+        let mut state = ReviewState::default();
+        let owner = PrincipalId::parse("11111111-1111-4111-8111-111111111111").unwrap();
+        let peer = PrincipalId::parse("22222222-2222-4222-8222-222222222222").unwrap();
+        let old = runtime.disclosure_fence(owner);
+        let other = runtime.disclosure_fence(peer);
+        runtime.cancel_task(&mut state,owner,"task-fixture");
+        assert!(!old.is_current());
+        assert!(other.is_current());
+        let fresh = runtime.disclosure_fence(owner);
+        assert!(fresh.is_current());
+        assert!(!old.is_current());
+        runtime.invalidate_principal(&mut state,owner);
+        assert!(!fresh.is_current());
+        assert!(other.is_current());
     }
 }

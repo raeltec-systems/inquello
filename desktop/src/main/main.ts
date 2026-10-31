@@ -1,3 +1,4 @@
+import {createDataAuthority} from './data/authority';
 import { taskBootstrap } from './tasks/bootstrap';
 import { TaskService } from './tasks/service';
 import { notifySettledWork } from './usage/notifications';
@@ -267,6 +268,7 @@ async function startRuntimeNow(): Promise<void> {
   environmentChanged();
   if (quitting) throw new Error('the application is quitting; the runtime will not restart');
   if (!roots) throw new Error('local data roots were not set up');
+  if(fs.existsSync(path.join(roots['user-data'],'data','recovery-unvalidated')))throw new Error('Recovered data awaits current validation; the runtime remains stopped');
   const runtimeHome = roots['runtime-home'];
   fs.mkdirSync(runtimeHome, { recursive: true, mode: 0o700 });
   const workingStore = workingStorePath(app.getPath('userData'));
@@ -336,6 +338,7 @@ async function stopRuntimeNow(): Promise<void> {
   const current = runtime;
   if (!current) return;
   const exit = await current.stop();
+  tasks?.runtimeStopped(current);
   capabilities?.clearConnectionTracking();
   logger.info(`app-server stopped (code ${exit.exitCode}, signal ${exit.signal}, killed ${exit.killed})`);
 }
@@ -523,6 +526,7 @@ void app.whenReady().then(async () => {
     recordSecrets: smoke,
   });
   const identitySession = identity.session;
+  const sharedAuthority=identity.service;
   const organiseService = new OrganiseService({
     runtime: {
       ready: () => runtime?.state === 'ready' && runtimeConfigurationVerified,
@@ -580,23 +584,25 @@ void app.whenReady().then(async () => {
     identity: identitySession, syncPrincipal: () => organiseService.syncPrincipal(), providers: providerService, freshPolicy: (taskId) => policyService.reviewPolicy(taskId), applicableDataTier: taskId => tasks?.applicableDataTier(taskId) ?? Promise.resolve('unknown'),
     onChanged: () => { environmentChanged(); for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:routes-changed'); },
   });
-  tasks = new TaskService({runtime: policyRuntime, identity: identitySession, bootstrap: taskBootstrap({env: process.env, packaged: app.isPackaged, userData, runtime: policyRuntime, identity: identitySession}), syncPrincipal: () => organiseService.syncPrincipal(), prepareRoutes: () => routes!.list(), freshPolicy: workspaceId => policyService.startPolicy(workspaceId), askPermission: (taskId, command) => policyService.askRuntimePermission(taskId, command), onProgressChanged: () => { for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:tasks-progress-changed'); }, onAccepted: () => usageChanged()});
+  tasks = new TaskService({runtime: policyRuntime, identity: identitySession, bootstrap: taskBootstrap({env: process.env, packaged: app.isPackaged, userData, runtime: policyRuntime, identity: identitySession,currentSession:()=>sharedAuthority?identitySession.withAccess(access=>sharedAuthority.session(access)):Promise.resolve(null)}), syncPrincipal: () => organiseService.syncPrincipal(), prepareRoutes: () => routes!.list(), freshPolicy: workspaceId => policyService.startPolicy(workspaceId), askPermission: (taskId, command) => policyService.askRuntimePermission(taskId, command), routeApproval:(workspaceId,routeId)=>sharedAuthority?identitySession.withAccess(access=>sharedAuthority.routeApproval(access,workspaceId,routeId)):Promise.resolve(null),routeCheck:(workspaceId,request)=>sharedAuthority?identitySession.withAccess(access=>sharedAuthority.routeEligibilityCheck(access,workspaceId,request)):Promise.resolve(null),onAuthorityUnavailable:()=>{taskSessionChanged();usageChanged(true);}, onProgressChanged: () => { for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:tasks-progress-changed'); }, onAccepted: () => usageChanged()});
   usage = new UsageService({runtime: policyRuntime, identity: identitySession, policy: policyService, onChanged: usageChanged});
   environments = new EnvironmentService({runtime: policyRuntime, identity: identitySession, policy: policyService, routes});
   providerService.setRouteInvalidator((id) => routes!.invalidate(id));
   const policyLoad = loadShippedPolicy();
   if (!policyLoad.ok) logger.error(`local data policy did not load; local data actions are blocked: ${policyLoad.error}`);
   const service = new DataService({
+    authority:createDataAuthority({identity:identitySession,service:sharedAuthority,storeName:path.basename(workingStorePath(userData)),binary:()=>resolveAppServerBinary({env:process.env,isPackaged:app.isPackaged,resourcesPath:process.resourcesPath,appPath:app.getAppPath()}).path,env:()=>runtimeEnv(roots!['runtime-home'],workingStorePath(userData))}),
     load: policyLoad,
     roots,
     journal: new ExportJournal(userData),
     runtime: {
       stop: stopRuntime,
       start: startRuntime,
-      // No Task can run before Story 1.25 adds them; this is where their count will come from.
-      activeTasks: () => 0,
+      activeTasks: () => tasks?.activeTasks() ?? 0,
+      canQuiesceUncertainActivity: () => tasks?.canQuiesceUncertainActivity() ?? false,
     },
     identity: {
+      principalId:()=>identitySession.principalId(),
       principal: async () => {
         const state = identitySession.snapshot().identity;
         return state.state === 'signed-in' ? { displayName: state.displayName, issuerLabel: state.issuerLabel } : null;

@@ -143,7 +143,9 @@ async fn send_message_to_connection(
     connection_id: ConnectionId,
     message: OutgoingMessage,
     write_complete_tx: Option<tokio::sync::oneshot::Sender<()>>,
+    private_fence: Option<codex_app_server_transport::PrivateOutputFence>,
 ) -> bool {
+    // Carry invalidated responses to final admission so the RPC still settles.
     let Some(connection_state) = connections.get(&connection_id) else {
         warn!("dropping message for disconnected connection: {connection_id:?}");
         return false;
@@ -156,6 +158,7 @@ async fn send_message_to_connection(
     let writer = connection_state.writer.clone();
     let queued_message = QueuedOutgoingMessage {
         message,
+        private_fence,
         write_complete_tx,
     };
     if connection_state.can_disconnect() {
@@ -211,9 +214,10 @@ pub(crate) async fn route_outgoing_envelope(
             connection_id,
             message,
             write_complete_tx,
+            private_fence,
         } => {
             let _ =
-                send_message_to_connection(connections, connection_id, message, write_complete_tx)
+                send_message_to_connection(connections, connection_id, message, write_complete_tx, private_fence)
                     .await;
         }
         OutgoingEnvelope::Broadcast { message } => {
@@ -237,6 +241,7 @@ pub(crate) async fn route_outgoing_envelope(
                     connection_id,
                     message,
                     /*write_complete_tx*/ None,
+                    None,
                 )
                 .await;
             }
@@ -247,3 +252,31 @@ pub(crate) async fn route_outgoing_envelope(
 #[cfg(test)]
 #[path = "transport_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+mod private_queue_tests {
+    use super::*;
+    fn envelope(connection_id: ConnectionId, token: CancellationToken) -> OutgoingEnvelope {
+        OutgoingEnvelope::ToConnection { connection_id, private_fence: Some(codex_app_server_transport::PrivateOutputFence::new(token)), write_complete_tx: None,
+            message: OutgoingMessage::Error(codex_app_server_transport::OutgoingError { id: codex_app_server_protocol::RequestId::Integer(1),
+                error: codex_app_server_protocol::JSONRPCErrorError { code: -32000, message: "private fixture".into(), data: None } }) }
+    }
+    #[tokio::test]
+    async fn router_preserves_recipient_fences_through_both_queue_stages() {
+        let (writer, mut rx) = mpsc::channel(4);
+        let state = || OutboundConnectionState::new(writer.clone(),Arc::new(AtomicBool::new(true)),Arc::new(AtomicBool::new(false)),Arc::new(RwLock::new(HashSet::new())),None);
+        let mut connections = HashMap::from([(ConnectionId(1),state()),(ConnectionId(2),state())]);
+        let old = CancellationToken::new();
+        let queued = envelope(ConnectionId(1),old.clone());
+        old.cancel(); // Already in the first envelope queue.
+        route_outgoing_envelope(&mut connections,queued).await;
+        assert!(!rx.recv().await.unwrap().private_fence.unwrap().is_current());
+        let first = CancellationToken::new();
+        let second = CancellationToken::new();
+        route_outgoing_envelope(&mut connections,envelope(ConnectionId(1),first.clone())).await;
+        route_outgoing_envelope(&mut connections,envelope(ConnectionId(2),second)).await;
+        first.cancel(); // Already in the per-connection writer queue.
+        assert!(!rx.recv().await.unwrap().private_fence.unwrap().is_current());
+        assert!(rx.recv().await.unwrap().private_fence.unwrap().is_current());
+    }
+}

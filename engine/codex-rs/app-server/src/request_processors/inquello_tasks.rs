@@ -3,7 +3,7 @@
 use super::*;
 use codex_app_server_protocol::*;
 use inquello_domain::routes::{self, RouteStore};
-use inquello_domain::tasks::{StartTaskIntent, TaskRunBinding, TaskRunStatus, TaskRunStore, TaskReservationError, TaskSetupFailure};
+use inquello_domain::tasks::{StartTaskIntent, TaskRunBinding, TaskRunStatus, TaskRunStore, TaskReservationError, TaskSetupFailure, NativeTaskDataTier};
 use inquello_domain::usage::{self, UsageStore};
 use codex_core::inquello_inference::{AttemptContext, TaskAuthorization, TaskAuthorizationContext};
 use codex_protocol::error::{CodexErr, Result as CoreResult};
@@ -13,11 +13,13 @@ use tokio_util::sync::CancellationToken;
 
 #[derive(Clone)]
 pub(super) struct SessionBinding {
-    principal: PrincipalId, workspace: String, root: PathBuf, pub(super) cancellation: CancellationToken,
+    principal: PrincipalId, workspace: String, root: PathBuf, real: Option<RealSession>, pub(super) cancellation: CancellationToken,
 }
 impl InquelloRequestProcessor {
     pub(crate) fn with_task_config(mut self,config:super::super::ConfigRequestProcessor)->Self {self.task_config=Some(config);self}
     async fn current_task_layers(&self)->Result<(DeviceRequirements,UserConfig),JSONRPCErrorError> {
+        #[cfg(test)]
+        if let Some(layers)=&self.task_layer_fixture {return Ok(layers.clone());}
         let source=self.task_config.as_ref().ok_or_else(||refusal("authority_unknown","Current native device/user policy unavailable"))?;
         let requirements=source.config_requirements_read().await?;
         let config=source.read(ConfigReadParams {include_layers:true,cwd:None}).await?;
@@ -37,6 +39,29 @@ impl InquelloRequestProcessor {
     }
     pub(crate) async fn tasks_bootstrap(&self, connection: ConnectionId, params: InquelloTasksBootstrapParams)
         -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        let bootstrap_generation = self.begin_task_bootstrap(connection)?;
+        if let Some(value) = params.real_session.as_ref() {
+            let real: RealSession = serde_json::from_value(value.clone()).map_err(|_| refusal("authority_unknown", "Current service session binding unavailable"))?;
+            real.validate()?;
+            let actor = self.actor(connection)?;
+            WorkspaceId::parse(&params.workspace_id).map_err(domain_error)?;
+            let root = std::fs::canonicalize(&params.isolated_root).map_err(|_| refusal("classification_unknown", "Private profile root unavailable"))?;
+            let store_parent = self.store_path.as_ref().and_then(|p|p.parent()).and_then(|p|std::fs::canonicalize(p).ok());
+            if !root.is_dir() || !store_parent.is_some_and(|p| p.starts_with(&root)) { return Err(refusal("classification_unknown", "Native private store does not belong to this profile")); }
+            let token = CancellationToken::new();
+            let outgoing = self.task_outgoing.as_ref().ok_or_else(|| refusal("authority_unknown", "Current service unavailable"))?;
+            current_service_policy(outgoing, connection, &params.workspace_id, &token).await?;
+            if self.actor(connection)? != actor { return Err(refusal("stale", "Identity changed during session setup")); }
+            let mut sessions = self.task_sessions.lock().await;
+            let generations = self.task_bootstrap_generations.lock().map_err(|_|refusal("authority_unknown","Session fence unavailable"))?;
+            if !generations.get(&connection).is_some_and(|state|state.generation==bootstrap_generation && state.transitions==0 && !state.closed) || self.actor(connection)?!=actor {
+                return Err(refusal("stale","Session setup was superseded"));
+            }
+            if sessions.get(&connection).is_some_and(|s| s.principal == actor.principal_id && s.workspace == params.workspace_id && s.root == root && s.real.as_ref() == Some(&real) && !s.cancellation.is_cancelled()) { return Ok(Some(InquelloRoutePrivateAuthResponse {accepted:true}.into())); }
+            if let Some(old) = sessions.remove(&connection) { self.routes.invalidate_disclosure(old.principal); old.cancellation.cancel(); }
+            sessions.insert(connection, SessionBinding {principal:actor.principal_id,workspace:params.workspace_id,root,real:Some(real),cancellation:token});
+            return Ok(Some(InquelloRoutePrivateAuthResponse {accepted:true}.into()));
+        }
         #[cfg(all(feature="inference-fixtures", debug_assertions))]
         {
             let actor = self.actor(connection)?;
@@ -49,10 +74,14 @@ impl InquelloRequestProcessor {
                 return Err(refusal("classification_unknown", "Private store and authorized isolated session root do not match"));
             }
             let mut sessions = self.task_sessions.lock().await;
+            let generations = self.task_bootstrap_generations.lock().map_err(|_|refusal("authority_unknown","Session fence unavailable"))?;
+            if !generations.get(&connection).is_some_and(|state|state.generation==bootstrap_generation && state.transitions==0 && !state.closed) || self.actor(connection)?!=actor {
+                return Err(refusal("stale","Session setup was superseded"));
+            }
             if sessions.get(&connection).is_some_and(|old|old.principal==actor.principal_id && old.workspace==params.workspace_id && old.root==root && !old.cancellation.is_cancelled()) {return Ok(Some(InquelloRoutePrivateAuthResponse {accepted:true}.into()));}
-            if let Some(old) = sessions.remove(&connection) { old.cancellation.cancel(); }
+            if let Some(old) = sessions.remove(&connection) { self.routes.invalidate_disclosure(old.principal); old.cancellation.cancel(); }
             if self.actor(connection)? != actor { return Err(refusal("stale", "Identity changed during session setup")); }
-            sessions.insert(connection, SessionBinding { principal:actor.principal_id, workspace:params.workspace_id, root, cancellation:CancellationToken::new() });
+            sessions.insert(connection, SessionBinding { principal:actor.principal_id, workspace:params.workspace_id, root, real: None, cancellation:CancellationToken::new() });
             return Ok(Some(InquelloRoutePrivateAuthResponse {accepted:true}.into()));
         }
         #[cfg(not(all(feature="inference-fixtures", debug_assertions)))]
@@ -87,11 +116,14 @@ impl InquelloRequestProcessor {
         let candidate=candidate.filter(|c|c.revision.get()==params.configuration_revision).ok_or_else(||refusal("revision_conflict","Route configuration changed; select and confirm current settings"))?;
         let generation=self.routes.state.lock().await.credential(actor.principal_id,&candidate.configuration);
         let eligibility=routes::route_eligibility(Some(&candidate.configuration),generation.is_some(),true,routes::DataTier::Synthetic);
-        if !eligibility.enabled && !self.task_fixture_matches(connection,actor,&params.workspace_id,&candidate.configuration,params.configuration_revision).await {return Err(refusal("route_unavailable",eligibility.gate.unwrap_or("Selected route lacks current authorization evidence")));}
+        if session.real.is_some() {
+            self.check_real_route(connection, actor, &session, &candidate.configuration, &uuid::Uuid::new_v4().to_string(), &params.workspace_policy, routes::ProtectedRouteAction::Derive).await?;
+        } else if !eligibility.enabled && !self.task_fixture_matches(connection,actor,&params.workspace_id,&candidate.configuration,params.configuration_revision).await {return Err(refusal("route_unavailable",eligibility.gate.unwrap_or("Selected route lacks current authorization evidence")));}
         let generation=generation.ok_or_else(||refusal("credential_unavailable","Selected route credential unavailable"))?;
-        if id==routes::RouteId::CodexResponses {self.routes.responses.as_ref().ok_or_else(||refusal("route_unavailable","Inherited provider unavailable"))?.check_configuration(&candidate.configuration).map_err(|_|refusal("route_unavailable","Selected endpoint differs from inherited runtime provider"))?;}
-        let caps=self.candidate_capabilities(&candidate.configuration,check_quota).await?;
-        let inherited=if check_quota {self.usage_limit_check(&params.route_id,"").await?}else{None};
+        let fixture=self.task_fixture_matches(connection,actor,&params.workspace_id,&candidate.configuration,params.configuration_revision).await;
+        if id==routes::RouteId::CodexResponses && !fixture {self.routes.responses.as_ref().ok_or_else(||refusal("route_unavailable","Inherited provider unavailable"))?.check_configuration(&candidate.configuration).map_err(|_|refusal("route_unavailable","Selected endpoint differs from inherited runtime provider"))?;}
+        let caps=if fixture {usage_bridge::Capabilities {reasoning:vec!["default".into()],speeds:vec!["default".into()],defaults:usage::Choices::default()}}else{self.candidate_capabilities(&candidate.configuration,check_quota).await?};
+        let inherited=if check_quota && !fixture {self.usage_limit_check(&params.route_id,"").await?}else{None};
         let state=self.routes.state.lock().await;
         let (_,latest)=store.load_candidate_route(actor.principal_id,id).await.map_err(|e|domain_error(DomainError::Store(e)))?;
         if self.actor(connection)?!=actor || session.cancellation.is_cancelled() || latest.as_ref()!=Some(&candidate) || state.credential(actor.principal_id,&candidate.configuration)!=Some(generation)
@@ -111,9 +143,11 @@ impl InquelloRequestProcessor {
     }
     async fn run_response(&self,connection:ConnectionId,actor:Actor,store:&SqliteWorkingStore,run:TaskRunBinding)->Result<Option<ClientResponsePayload>,JSONRPCErrorError> {
         self.authorize_task_disclosure(connection,actor,&run.workspace_id).await?;
+        self.authorize_run_route_disclosure(connection, actor, &run).await?;
         let request=store.task_run_request(actor.principal_id,&run.operation_id).await.map_err(domain_error)?;
         // Reading private history may wait; refresh disclosure authority again afterward.
         self.authorize_task_disclosure(connection,actor,&run.workspace_id).await?;
+        self.authorize_run_route_disclosure(connection, actor, &run).await?;
         let status=if run.runtime_id!=self.runtime_id && matches!(run.status,TaskRunStatus::Reserved|TaskRunStatus::Bound|TaskRunStatus::Dispatching|TaskRunStatus::Running) {TaskRunStatus::Uncertain} else {run.status};
         Ok(Some(InquelloTasksStartResponse {operation_id:run.operation_id,task_id:run.task_id,run_id:run.run_id,thread_id:run.thread_id.clone(),
             status:status_name(status).into(),request,accepted:run.thread_id.is_some() && run.turn_id.is_some(),reason:if status==TaskRunStatus::SetupFailed {Some(match run.setup_failure {
@@ -132,14 +166,17 @@ impl InquelloRequestProcessor {
         let generation=self.task_sessions.lock().await.get(&connection).cloned().ok_or_else(||refusal("session_changed","Private session unavailable"))?;
         let run=store.find_thread_run(actor.principal_id,&self.runtime_id,&params.thread_id).await.map_err(domain_error)?.ok_or_else(||refusal("not_found","Current private Task/thread ownership is unknown"))?;
         self.authorize_task_disclosure(connection,actor,&run.workspace_id).await?;
+        self.authorize_run_route_disclosure(connection, actor, &run).await?;
         if self.actor(connection)?!=actor || generation.cancellation.is_cancelled() || generation.principal!=actor.principal_id || generation.workspace!=run.workspace_id {return Err(refusal("stale","Private identity or session changed"));}
-        Ok(Some(InquelloTasksForThreadResponse {task_id:run.task_id,run_id:run.run_id,workspace_id:run.workspace_id,thread_id:params.thread_id,turn_id:run.turn_id,runtime_id:run.runtime_id,status:status_name(run.status).into()}.into()))
+        Ok(Some(InquelloTasksForThreadResponse {data_tier:store.task_data_tier(actor.principal_id,&run.task_id).await.map_err(domain_error)?.unwrap_or_else(||"unknown".into()),task_id:run.task_id,run_id:run.run_id,workspace_id:run.workspace_id,thread_id:params.thread_id,turn_id:run.turn_id,runtime_id:run.runtime_id,status:status_name(run.status).into()}.into()))
     }
     /// A connection subscription is not authority. Generic retained APIs are
     /// unavailable for private-store hosts until exact current ownership is proven.
     pub(crate) async fn require_task_thread(&self,connection:ConnectionId,thread:&str)->Result<(),JSONRPCErrorError> {
         if self.store_path.is_none() {return Ok(());}
-        self.tasks_for_thread(connection,InquelloTasksForThreadParams {thread_id:thread.into()}).await.map(|_|())
+        let result = self.tasks_for_thread(connection,InquelloTasksForThreadParams {thread_id:thread.into()}).await.map(|_|());
+        if result.is_err() { if let Ok(actor) = self.actor(connection) { self.routes.invalidate_disclosure(actor.principal_id); } }
+        result
     }
 }
 fn status_name(status:TaskRunStatus)->&'static str {match status {TaskRunStatus::Reserved=>"reserved",TaskRunStatus::Bound=>"bound",TaskRunStatus::Dispatching=>"dispatching",TaskRunStatus::Running=>"running",TaskRunStatus::Completed=>"completed",TaskRunStatus::Failed=>"failed",TaskRunStatus::Cancelled=>"cancelled",TaskRunStatus::Uncertain=>"uncertain",TaskRunStatus::SetupFailed=>"setup-failed"}}
@@ -153,10 +190,11 @@ impl InquelloRequestProcessor {
             request:params.request,route_id:params.route_id.clone(),configuration_revision:params.configuration_revision,choices:usage::Choices {reasoning:params.reasoning,speed:params.speed}};
         intent.validate().map_err(domain_error).map_err(before_effect)?;
         let (store,actor)=self.context(connection).await.map_err(before_effect)?;
-        if store.find_task_run(actor.principal_id,&intent.operation_id).await.map_err(domain_error)?.is_some() {
+        if let Some(previous)=store.find_task_run(actor.principal_id,&intent.operation_id).await.map_err(domain_error)? {
+            let tier=match store.task_data_tier(actor.principal_id,&previous.task_id).await.map_err(domain_error)?.as_deref() {Some("real")=>NativeTaskDataTier::Real,Some("synthetic")=>NativeTaskDataTier::Synthetic,_=>return Err(refusal("not_found","Private work unavailable"))};
             // reserve validates the entire canonical intent against immutable private request history;
             // duplicate state is never used as a new dispatch permit.
-            let existing=store.reserve_task_run(actor.principal_id,intent,&self.runtime_id,SystemClock.now().unix_millis()).await.map_err(domain_error)?;
+            let existing=store.reserve_task_run(actor.principal_id,intent,&self.runtime_id,SystemClock.now().unix_millis(),tier).await.map_err(domain_error)?;
             return self.run_response(connection,actor,&store,existing).await;
         }
         let preflight=InquelloTasksPreflightParams {workspace_id:params.workspace_id,route_id:params.route_id,configuration_revision:params.configuration_revision,workspace_policy:params.workspace_policy.clone()};
@@ -170,12 +208,16 @@ impl InquelloRequestProcessor {
         if current_device!=device || current_user!=user {return Err(before_effect(refusal("stale","Native policy changed before Task creation")));}
         // The adapter invokes this bounded native fence after acquiring its writer
         // and again immediately before commit. It does not import main authority.
-        let validate=|| async {
+        let validate=|proposed_task_id:String| {
+            let configuration=&configuration; let session=&session; let intent=&intent;
+            let policy=&params.workspace_policy; let device=&device; let user=&user;
+            async move {
             let checked:Result<(),JSONRPCErrorError>=async {
-                self.usage_limit_check(&intent.route_id,"").await?;
+                if !self.task_fixture_matches(connection,actor,&intent.workspace_id,configuration,intent.configuration_revision).await {self.usage_limit_check(&intent.route_id,"").await?;}
                 let fresh=current_service_policy(&threads.inquello_permission_sender(),connection,&intent.workspace_id,&session.cancellation).await?;
+                if session.real.is_some() { self.check_real_route(connection,actor,session,configuration,&proposed_task_id,&fresh,routes::ProtectedRouteAction::Derive).await?; }
                 let (current_device,current_user)=self.current_task_layers().await?;
-                if fresh!=params.workspace_policy || current_device!=device || current_user!=user
+                if &fresh!=policy || &current_device!=device || &current_user!=user
                     || self.actor(connection)?!=actor || session.cancellation.is_cancelled()
                     || !self.task_authority_current(actor.principal_id,&fresh,&device,&user).await {
                     return Err(refusal("stale","Authority changed while reserving private work"));
@@ -189,8 +231,9 @@ impl InquelloRequestProcessor {
                 Ok(())
             }.await;
             checked.map_err(|_|DomainError::InvalidCommand("Current authority, policy, credentials or quota unavailable before private Task reservation".into()))
+            }
         };
-        let run=store.reserve_task_run_fenced(actor.principal_id,intent.clone(),&self.runtime_id,SystemClock.now().unix_millis(),validate).await.map_err(|e|match e {
+        let run=store.reserve_task_run_fenced(actor.principal_id,intent.clone(),&self.runtime_id,SystemClock.now().unix_millis(),if session.real.is_some(){NativeTaskDataTier::Real}else{NativeTaskDataTier::Synthetic},validate).await.map_err(|e|match e {
             TaskReservationError::PreEffect(error)=>before_effect(domain_error(error)),
             TaskReservationError::Ambiguous(error)=>domain_error(error),
         })?;
@@ -200,12 +243,23 @@ impl InquelloRequestProcessor {
         let fixture=self.task_fixtures.lock().await.get(&connection).cloned();
         let authorization=Arc::new(TaskGuard {
             #[cfg(all(feature="inference-fixtures",debug_assertions))]
-            fixture,processor:self.clone(),connection,actor,run:run.clone(),configuration,generation,policy:params.workspace_policy,device,user,cancellation,tools:tokio::sync::Mutex::new(HashMap::new()),outgoing:threads.inquello_permission_sender(),defaults:caps.defaults});
+            fixture,processor:self.clone(),connection,actor,run:run.clone(),configuration,generation,policy:params.workspace_policy,device,user,cancellation,terminal:std::sync::atomic::AtomicBool::new(false),tools:tokio::sync::Mutex::new(HashMap::new()),outgoing:threads.inquello_permission_sender(),defaults:caps.defaults});
+        // Accelerator only: every protected boundary still performs its own fresh check.
+        let watched = Arc::downgrade(&authorization);
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                let Some(guard) = watched.upgrade() else { break; };
+                if guard.terminal.load(std::sync::atomic::Ordering::Acquire) || guard.cancellation.is_cancelled() || guard.disclosure_recheck().await.is_err() { break; }
+            }
+        });
         let mut submission_started=false;
         let mut setup_failure=TaskSetupFailure::AuthorityUnavailable;
         let result=async {
             authorization.recheck().await?;
             let thread_id=threads.inquello_reserve_thread_id();
+            let guard:Arc<dyn TaskAuthorization>=authorization.clone();
+            codex_core::inquello_inference::bind_task_authorization(&thread_id.to_string(),&guard).map_err(|_|refusal("authority_unknown","Native disclosure authorization unavailable"))?;
             // Durable association precedes startup, listeners, model or tool work.
             store.bind_task_thread(actor.principal_id,&run.operation_id,&self.runtime_id,&thread_id.to_string()).await.map_err(domain_error)?;
             let folder=session.root.join("tasks").join(&run.task_id);
@@ -264,23 +318,48 @@ struct TaskGuard {
     processor:Arc<InquelloRequestProcessor>,connection:ConnectionId,actor:Actor,run:TaskRunBinding,
     configuration:routes::RouteConfiguration,generation:u64,policy:InquelloWorkspaceExecutionPolicy,
     device:DeviceRequirements,user:UserConfig,cancellation:CancellationToken,defaults:usage::Choices,
+    terminal:std::sync::atomic::AtomicBool,
     outgoing:Arc<crate::outgoing_message::OutgoingMessageSender>,
     tools:tokio::sync::Mutex<HashMap<String,(String,std::time::Instant)>>,
 }
 impl TaskGuard {
+    async fn disclosure_recheck(&self)->Result<(),JSONRPCErrorError> {
+        let result:Result<(),JSONRPCErrorError>=async {
+            if self.cancellation.is_cancelled() || self.processor.actor(self.connection)?!=self.actor {return Err(refusal("stale","Private disclosure authority unavailable"));}
+            // Terminal execution is not revocation. Reopen/queued disclosure still
+            // requires current native creator/session/Workspace/route authority.
+            let store=self.processor.store().await?;
+            let current=store.find_task_run(self.actor.principal_id,&self.run.operation_id).await.map_err(domain_error)?.ok_or_else(||refusal("not_found","Private work unavailable"))?;
+            if current.task_id!=self.run.task_id || current.runtime_id!=self.processor.runtime_id || current.workspace_id!=self.run.workspace_id {return Err(refusal("not_found","Private work unavailable"));}
+            self.processor.authorize_task_disclosure(self.connection,self.actor,&current.workspace_id).await?;
+            self.processor.authorize_run_route_disclosure(self.connection,self.actor,&current).await?;
+            if self.cancellation.is_cancelled() || self.processor.actor(self.connection)?!=self.actor {return Err(refusal("stale","Private disclosure authority changed"));}
+            Ok(())
+        }.await;
+        if result.is_err(){self.processor.routes.invalidate_disclosure(self.actor.principal_id);self.cancellation.cancel();}
+        result
+    }
     async fn recheck(&self)->Result<(),JSONRPCErrorError> {
+        let result = self.recheck_inner().await;
+        if result.is_err() { self.processor.routes.invalidate_disclosure(self.actor.principal_id);self.cancellation.cancel(); }
+        result
+    }
+    async fn recheck_inner(&self)->Result<(),JSONRPCErrorError> {
         if self.cancellation.is_cancelled() || self.processor.actor(self.connection)?!=self.actor {return Err(refusal("stale","Private Task authorization was revoked"));}
-        self.processor.task_session(self.connection,self.actor,&self.run.workspace_id).await?;
+        let session = self.processor.task_session(self.connection,self.actor,&self.run.workspace_id).await?;
         let fresh=current_service_policy(&self.outgoing,self.connection,&self.run.workspace_id,&self.cancellation).await?;
         let (device,user)=self.processor.current_task_layers().await?;
-        if device!=self.device || user!=self.user {self.cancellation.cancel();return Err(refusal("stale","Native device or user policy changed before effect"));}
+        if device!=self.device || user!=self.user {self.processor.routes.invalidate_disclosure(self.actor.principal_id);self.cancellation.cancel();return Err(refusal("stale","Native device or user policy changed before effect"));}
         self.processor.observe_review_authority(self.connection,&fresh,&self.device,&self.user).await?;
         if self.cancellation.is_cancelled() || fresh!=self.policy || self.processor.actor(self.connection)?!=self.actor {return Err(refusal("stale","Service membership or policy changed before effect"));}
         if !self.processor.task_authority_current(self.actor.principal_id,&self.policy,&self.device,&self.user).await {return Err(refusal("stale","Workspace policy changed"));}
+        if session.real.is_some() {
+            self.processor.check_real_route(self.connection,self.actor,&session,&self.configuration,&self.run.task_id,&fresh,routes::ProtectedRouteAction::Derive).await?;
+        }
         let store=self.processor.store().await?;
         let route=routes::task_route(&store,self.actor,&self.run.task_id).await.map_err(domain_error)?;
         let state=self.processor.routes.state.lock().await;
-        if self.configuration.route_id()==routes::RouteId::CodexResponses {self.processor.routes.responses.as_ref().ok_or_else(||refusal("route_unavailable","Inherited provider unavailable"))?.check_configuration(&self.configuration).map_err(|_|refusal("route_unavailable","Selected endpoint or authentication changed"))?;}
+        if self.configuration.route_id()==routes::RouteId::CodexResponses && !self.processor.task_fixture_matches(self.connection,self.actor,&self.run.workspace_id,&self.configuration,self.run.configuration_revision).await {self.processor.routes.responses.as_ref().ok_or_else(||refusal("route_unavailable","Inherited provider unavailable"))?.check_configuration(&self.configuration).map_err(|_|refusal("route_unavailable","Selected endpoint or authentication changed"))?;}
         let selected=route.current.as_ref().ok_or_else(||refusal("route_unavailable","Task route unavailable"))?;
         if route.stale_configuration || route.revision.get()!=1 || selected.configuration!=self.configuration || selected.configuration_revision.get()!=self.run.configuration_revision
             || state.credential(self.actor.principal_id,&self.configuration)!=Some(self.generation) {return Err(refusal("stale","Task route or provider credentials changed"));}
@@ -294,9 +373,15 @@ impl TaskGuard {
 }
 fn core_refusal(_:JSONRPCErrorError)->CodexErr {CodexErr::Fatal("Current private Task authority unavailable; no model/tool dispatch or retry".into())}
 impl TaskAuthorization for TaskGuard {
+    fn before_disclosure<'a>(&'a self)->std::pin::Pin<Box<dyn std::future::Future<Output=CoreResult<()>>+Send+'a>> {Box::pin(async move {
+        self.disclosure_recheck().await.map_err(core_refusal)
+    })}
+
     fn before_tool_effect<'a>(&'a self)->std::pin::Pin<Box<dyn std::future::Future<Output=CoreResult<()>>+Send+'a>> {Box::pin(async move {
         self.recheck().await.map_err(core_refusal)?;
-        self.processor.usage_limit_check(self.configuration.route_id().as_str(),&self.run.task_id).await.map_err(core_refusal)?;
+        if !self.processor.task_fixture_matches(self.connection,self.actor,&self.run.workspace_id,&self.configuration,self.run.configuration_revision).await {
+            self.processor.usage_limit_check(self.configuration.route_id().as_str(),&self.run.task_id).await.map_err(core_refusal)?;
+        }
         self.recheck().await.map_err(core_refusal)
     })}
     fn turn_terminal<'a>(&'a self,turn_id:&'a str,outcome:codex_core::inquello_inference::TaskTurnOutcome)->std::pin::Pin<Box<dyn std::future::Future<Output=()>+Send+'a>> {Box::pin(async move {
@@ -304,17 +389,20 @@ impl TaskAuthorization for TaskGuard {
         // and performs no model/tool effect. Storage rejects terminal rewrites.
         use codex_core::inquello_inference::TaskTurnOutcome;
         let status=match outcome {TaskTurnOutcome::Completed=>TaskRunStatus::Completed,TaskTurnOutcome::Failed=>TaskRunStatus::Failed,TaskTurnOutcome::Cancelled=>TaskRunStatus::Cancelled};
-        let Ok(store)=self.processor.store().await else {self.cancellation.cancel();return;};
-        let Ok(Some(bound))=store.find_task_run(self.actor.principal_id,&self.run.operation_id).await else {self.cancellation.cancel();return;};
-        let Some(thread)=bound.thread_id.as_deref() else {self.cancellation.cancel();return;};
-        if store.observe_task_terminal(self.actor.principal_id,&self.run.operation_id,&self.processor.runtime_id,thread,turn_id,status).await.is_err(){self.cancellation.cancel();}
+        let Ok(store)=self.processor.store().await else {self.processor.routes.invalidate_disclosure(self.actor.principal_id);self.cancellation.cancel();return;};
+        let Ok(Some(bound))=store.find_task_run(self.actor.principal_id,&self.run.operation_id).await else {self.processor.routes.invalidate_disclosure(self.actor.principal_id);self.cancellation.cancel();return;};
+        let Some(thread)=bound.thread_id.as_deref() else {self.processor.routes.invalidate_disclosure(self.actor.principal_id);self.cancellation.cancel();return;};
+        if store.observe_task_terminal(self.actor.principal_id,&self.run.operation_id,&self.processor.runtime_id,thread,turn_id,status).await.is_err(){self.processor.routes.invalidate_disclosure(self.actor.principal_id);self.cancellation.cancel();}
+        self.terminal.store(true,std::sync::atomic::Ordering::Release);
     })}
     fn cancellation(&self)->CancellationToken {self.cancellation.clone()}
     fn before_attempt<'a>(&'a self,turn_id:&'a str)->std::pin::Pin<Box<dyn std::future::Future<Output=CoreResult<AttemptContext>>+Send+'a>> {Box::pin(async move {
         #[cfg(all(feature="inference-fixtures",debug_assertions))]
         if self.fixture.as_ref().is_some_and(|f|f.fail_before_sampling) {return Err(CodexErr::Fatal("Injected retained pre-sampling fixture failure".into()));}
         self.recheck().await.map_err(core_refusal)?;
-        self.processor.usage_limit_check(self.configuration.route_id().as_str(),&self.run.task_id).await.map_err(core_refusal)?;
+        if !self.processor.task_fixture_matches(self.connection,self.actor,&self.run.workspace_id,&self.configuration,self.run.configuration_revision).await {
+            self.processor.usage_limit_check(self.configuration.route_id().as_str(),&self.run.task_id).await.map_err(core_refusal)?;
+        }
         self.recheck().await.map_err(core_refusal)?;
         let store=self.processor.store().await.map_err(core_refusal)?;
         // Persist exact native turn identity before sampling: model questions and
@@ -398,10 +486,10 @@ impl TaskAuthorization for TaskGuard {
     fn after_tool<'a>(&'a self,call_id:&'a str,success:bool)->std::pin::Pin<Box<dyn std::future::Future<Output=()>+Send+'a>> {Box::pin(async move {
         let tools=self.tools.lock().await;
         let Some((id,began))=tools.get(call_id) else {return;}; // Shape/permission refusal never created accounting.
-        let Ok(store)=self.processor.store().await else {self.cancellation.cancel();return;};
-        let Ok(task)=TaskId::parse(&self.run.task_id) else {self.cancellation.cancel();return;};
+        let Ok(store)=self.processor.store().await else {self.processor.routes.invalidate_disclosure(self.actor.principal_id);self.cancellation.cancel();return;};
+        let Ok(task)=TaskId::parse(&self.run.task_id) else {self.processor.routes.invalidate_disclosure(self.actor.principal_id);self.cancellation.cancel();return;};
         let status=if self.cancellation.is_cancelled(){usage::AttemptStatus::Uncertain}else if success {usage::AttemptStatus::Completed}else{usage::AttemptStatus::Failed};
-        if store.finish_usage_attempt(self.actor.principal_id,task,id,usage::FinishAttempt {status,ended_at_ms:SystemClock.now().unix_millis(),elapsed_ms:began.elapsed().as_millis().try_into().unwrap_or(u64::MAX),output_ref:None}).await.is_err(){self.cancellation.cancel();}
+        if store.finish_usage_attempt(self.actor.principal_id,task,id,usage::FinishAttempt {status,ended_at_ms:SystemClock.now().unix_millis(),elapsed_ms:began.elapsed().as_millis().try_into().unwrap_or(u64::MAX),output_ref:None}).await.is_err(){self.processor.routes.invalidate_disclosure(self.actor.principal_id);self.cancellation.cancel();}
     })}
 }
 
@@ -506,7 +594,7 @@ mod tests {
     async fn identity_reset_revokes_same_principal_session_and_unknown_threads() {
         let dir=tempfile::tempdir().expect("isolated root");let processor=signed_in(dir.path().join("working.sqlite")).await;
         let actor=processor.actor(CONNECTION).expect("actor");let cancellation=CancellationToken::new();
-        processor.task_sessions.lock().await.insert(CONNECTION,SessionBinding {principal:actor.principal_id,workspace:WORKSPACE.into(),root:dir.path().into(),cancellation:cancellation.clone()});
+        processor.task_sessions.lock().await.insert(CONNECTION,SessionBinding {principal:actor.principal_id,workspace:WORKSPACE.into(),root:dir.path().into(),real:None,cancellation:cancellation.clone()});
         assert!(processor.task_session(CONNECTION,actor,WORKSPACE).await.is_ok());
         assert!(processor.require_task_thread(CONNECTION,&uuid::Uuid::new_v4().to_string()).await.is_err());
         processor.set_principal(CONNECTION,InquelloSetPrincipalParams {principal_id:Some(PRINCIPAL.into())}).await.expect("refresh identity");
@@ -525,10 +613,10 @@ mod tests {
 /// neither cached Workspace membership nor a renderer assertion can grant effects.
 async fn current_service_policy(outgoing:&crate::outgoing_message::OutgoingMessageSender,connection:ConnectionId,workspace:&str,cancellation:&CancellationToken)
     ->Result<InquelloWorkspaceExecutionPolicy,JSONRPCErrorError> {
-    let (id,response)=outgoing.send_request_to_connections(Some(&[connection]),ServerRequestPayload::InquelloTaskAuthority(InquelloTaskAuthorityParams {workspace_id:workspace.into()}),None).await;
+    let (id,response)=outgoing.send_request_to_connections(Some(&[connection]),ServerRequestPayload::InquelloTaskAuthority(InquelloTaskAuthorityParams {workspace_id:workspace.into(),route_discovery:None,route_check:None}),None).await;
     let result=tokio::select! {biased;_=cancellation.cancelled()=>None,result=tokio::time::timeout(std::time::Duration::from_secs(15),response)=>result.ok().and_then(|r|r.ok()).and_then(|r|r.ok())};
     outgoing.cancel_request(&id).await;
-    let result:InquelloTaskAuthorityResponse=result.and_then(|r|serde_json::from_value(r).ok()).ok_or_else(||refusal("authority_unknown","Current Workspace membership/policy refresh unavailable"))?;
+    let result:InquelloTaskAuthorityResponse=result.and_then(|r|serde_json::from_value(r).ok()).ok_or_else(||{cancellation.cancel();refusal("authority_unknown","Current Workspace membership/policy refresh unavailable")})?;
     result.workspace_policy.filter(|p|p.workspace_id==workspace&&p.authorization_epoch>0).ok_or_else(||refusal("authority_unknown","Current Workspace access is not authorized"))
 }
 impl InquelloRequestProcessor {
@@ -576,11 +664,11 @@ fn create_private_task_folder(root:&std::path::Path,task:&str)->Result<(),JSONRP
 
 #[cfg(all(feature="inference-fixtures",debug_assertions))]
 #[derive(Clone)]
-pub(super) struct TaskFixture {hold_ack_for_question:bool,question_checks:Arc<std::sync::atomic::AtomicUsize>,question_answered:Arc<tokio::sync::Notify>,fail_before_sampling:bool,principal:PrincipalId,workspace:String,revision:u64,endpoint:String,certificate:Vec<u8>}
+pub(super) struct TaskFixture {route_id:routes::RouteId,hold_ack_for_question:bool,question_checks:Arc<std::sync::atomic::AtomicUsize>,question_answered:Arc<tokio::sync::Notify>,fail_before_sampling:bool,principal:PrincipalId,workspace:String,revision:u64,endpoint:String,certificate:Vec<u8>}
 impl InquelloRequestProcessor {
     async fn task_fixture_matches(&self,connection:ConnectionId,actor:Actor,workspace:&str,config:&routes::RouteConfiguration,revision:u64)->bool {
         #[cfg(all(feature="inference-fixtures",debug_assertions))]
-        {return self.task_fixtures.lock().await.get(&connection).is_some_and(|f|f.principal==actor.principal_id&&f.workspace==workspace&&f.revision==revision&&config.route_id()==routes::RouteId::ClaudeApiKey&&config.account_ref()==actor.principal_id.to_string());}
+        {return self.task_fixtures.lock().await.get(&connection).is_some_and(|f|f.principal==actor.principal_id&&f.workspace==workspace&&f.revision==revision&&config.route_id()==f.route_id&&config.account_ref()==actor.principal_id.to_string());}
         #[cfg(not(all(feature="inference-fixtures",debug_assertions)))]
         {let _=(connection,actor,workspace,config,revision);false}
     }
@@ -588,22 +676,29 @@ impl InquelloRequestProcessor {
     /// pretending to be a model; the normal tasks/start path runs the retained turn.
     #[cfg(all(feature="inference-fixtures",debug_assertions))]
     pub(crate) async fn prepare_task_fixture(&self,connection:ConnectionId,raw:Option<serde_json::Value>)->Result<serde_json::Value,JSONRPCErrorError> {
+        fn default_fixture_route()->String {"claude-api-key".into()}
         #[derive(serde::Deserialize)]
         #[serde(rename_all="camelCase",deny_unknown_fields)]
-        struct Input {workspace_id:String,configuration_revision:u64,endpoint:String,certificate:Vec<u8>,#[serde(default)] fail_before_sampling:bool,#[serde(default)] hold_ack_for_question:bool}
+        struct Input {workspace_id:String,configuration_revision:u64,#[serde(default="default_fixture_route")] route_id:String,endpoint:String,certificate:Vec<u8>,#[serde(default)] fail_before_sampling:bool,#[serde(default)] hold_ack_for_question:bool}
         let input:Input=serde_json::from_value(raw.ok_or_else(||refusal("fixture_unavailable","Missing fixture parameters"))?).map_err(|_|refusal("fixture_unavailable","Invalid fixture parameters"))?;
         if input.endpoint.len()>512||input.certificate.len()>8192 {return Err(refusal("fixture_unavailable","Fixture parameters exceed bounds"));}
-        inquello_adapters::anthropic::MessagesClient::fixture_from_der(&input.endpoint,&input.certificate).map_err(|_|refusal("fixture_unavailable","Only pinned loopback TLS fixture is allowed"))?;
+        let route_id=routes::RouteId::parse(&input.route_id).ok_or_else(||refusal("fixture_unavailable","Unsupported fixture route"))?;
+        match route_id {
+            routes::RouteId::ClaudeApiKey=>{inquello_adapters::anthropic::MessagesClient::fixture_from_der(&input.endpoint,&input.certificate).map_err(|_|refusal("fixture_unavailable","Only pinned loopback TLS fixture is allowed"))?;}
+            routes::RouteId::CodexResponses=>{codex_core::inquello_inference::fixtures::validate_responses_transport(&input.endpoint,&input.certificate).map_err(|_|refusal("fixture_unavailable","Only pinned loopback TLS fixture is allowed"))?;}
+        }
         let (store,actor)=self.context(connection).await?;
-        self.task_session(connection,actor,&input.workspace_id).await?;
-        let (_,candidate)=store.load_candidate_route(actor.principal_id,routes::RouteId::ClaudeApiKey).await.map_err(|e|domain_error(DomainError::Store(e)))?;
+        if self.task_session(connection,actor,&input.workspace_id).await?.real.is_some() {return Err(refusal("fixture_unavailable","Fixture refuses a real-data session"));}
+        let (_,candidate)=store.load_candidate_route(actor.principal_id,route_id).await.map_err(|e|domain_error(DomainError::Store(e)))?;
         let candidate=candidate.filter(|c|c.revision.get()==input.configuration_revision&&c.configuration.account_ref()==actor.principal_id.to_string()).ok_or_else(||refusal("fixture_unavailable","Explicit current fixture route required"))?;
         let mut state=self.routes.state.lock().await;
-        if state.credential(actor.principal_id,&candidate.configuration).is_some() || state.generations.contains_key(&(actor.principal_id,routes::RouteId::ClaudeApiKey)) || self.routes.responses.as_ref().and_then(|r|r.provider.auth_manager()).and_then(|a|a.auth_cached()).is_some() {return Err(refusal("fixture_unavailable","Fixture refuses coexistence with provider credentials"));}
-        self.routes.auth.install(inquello_adapters::anthropic::AuthScope {principal_id:actor.principal_id.to_string(),route_id:"claude-api-key".into(),account_ref:actor.principal_id.to_string(),generation:1},"sk-ant-synthetic-fixture-only".into()).map_err(|_|refusal("fixture_unavailable","Fixture credential installation refused"))?;
-        state.credentials.insert((actor.principal_id,routes::RouteId::ClaudeApiKey),(actor.principal_id.to_string(),1));
-        state.generations.insert((actor.principal_id,routes::RouteId::ClaudeApiKey),1);
-        self.task_fixtures.lock().await.insert(connection,TaskFixture {hold_ack_for_question:input.hold_ack_for_question,question_checks:Arc::new(std::sync::atomic::AtomicUsize::new(0)),question_answered:Arc::new(tokio::sync::Notify::new()),fail_before_sampling:input.fail_before_sampling,principal:actor.principal_id,workspace:input.workspace_id,revision:input.configuration_revision,endpoint:input.endpoint,certificate:input.certificate});
+        if state.credential(actor.principal_id,&candidate.configuration).is_some() || state.generations.contains_key(&(actor.principal_id,route_id)) || self.routes.responses.as_ref().and_then(|r|r.provider.auth_manager()).and_then(|a|a.auth_cached()).is_some() {return Err(refusal("fixture_unavailable","Fixture refuses coexistence with provider credentials"));}
+        if route_id==routes::RouteId::ClaudeApiKey {
+            self.routes.auth.install(inquello_adapters::anthropic::AuthScope {principal_id:actor.principal_id.to_string(),route_id:"claude-api-key".into(),account_ref:actor.principal_id.to_string(),generation:1},"sk-ant-synthetic-fixture-only".into()).map_err(|_|refusal("fixture_unavailable","Fixture credential installation refused"))?;
+        }
+        state.credentials.insert((actor.principal_id,route_id),(actor.principal_id.to_string(),1));
+        state.generations.insert((actor.principal_id,route_id),1);
+        self.task_fixtures.lock().await.insert(connection,TaskFixture {route_id,hold_ack_for_question:input.hold_ack_for_question,question_checks:Arc::new(std::sync::atomic::AtomicUsize::new(0)),question_answered:Arc::new(tokio::sync::Notify::new()),fail_before_sampling:input.fail_before_sampling,principal:actor.principal_id,workspace:input.workspace_id,revision:input.configuration_revision,endpoint:input.endpoint,certificate:input.certificate});
         Ok(json!({"accepted":true,"providerCalls":0}))
     }
 }
@@ -619,7 +714,7 @@ mod accounting_lifecycle_tests {
         let actor=Actor {principal_id:PrincipalId::parse("11111111-1111-4111-8111-111111111111").unwrap()};
         routes::configure_route(&store,&SystemClock,actor,routes::ConfigureRoute {operation_id:uuid::Uuid::new_v4().to_string(),expected_revision:Revision::ZERO,configuration:routes::RouteConfigurationInput {route_id:"claude-api-key".into(),deployment:"anthropic-direct".into(),model:routes::CLAUDE_MODEL.into(),api_version:routes::CLAUDE_API_VERSION.into(),account_ref:actor.principal_id.to_string(),region:None}}).await.unwrap();
         let intent=StartTaskIntent {operation_id:uuid::Uuid::new_v4().to_string(),workspace_id:"5d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e".into(),engagement_id:None,folder_id:None,request:"Review fictional R01.".into(),route_id:"claude-api-key".into(),configuration_revision:1,choices:usage::Choices::default()};
-        let run=store.reserve_task_run(actor.principal_id,intent,"runtime",1).await.unwrap();
+        let run=store.reserve_task_run(actor.principal_id,intent,"runtime",1,NativeTaskDataTier::Synthetic).await.unwrap();
         store.bind_task_thread(actor.principal_id,&run.operation_id,"runtime",&uuid::Uuid::new_v4().to_string()).await.unwrap();
         store.claim_task_dispatch(actor.principal_id,&run.operation_id,"runtime").await.unwrap();
         let turn=uuid::Uuid::new_v4().to_string();
@@ -682,6 +777,7 @@ impl InquelloRequestProcessor {
         let turn=run.turn_id.clone().ok_or_else(||refusal("not_found","Private turn not yet acknowledged"))?;
         let session=self.task_session(connection,actor,&run.workspace_id).await?;
         self.authorize_task_disclosure(connection,actor,&run.workspace_id).await?;
+        self.authorize_run_route_disclosure(connection, actor, &run).await?;
         if generation.cancellation.is_cancelled() || generation.principal!=actor.principal_id || generation.workspace!=run.workspace_id
             || !self.task_read_policy_current(actor.principal_id,&params.workspace_policy).await {
             return Err(refusal("stale","Workspace authority changed before progress read"));
@@ -694,6 +790,7 @@ impl InquelloRequestProcessor {
                     limit:Some(limit),sort_direction:Some(SortDirection::Desc),
                 }).await?;
                 self.authorize_task_disclosure(connection,actor,&run.workspace_id).await?;
+        self.authorize_run_route_disclosure(connection, actor, &run).await?;
                 if session.cancellation.is_cancelled() || self.actor(connection)?!=actor {
                     return Err(refusal("session_changed","Private session changed while reading progress"));
                 }
@@ -703,6 +800,7 @@ impl InquelloRequestProcessor {
         let latest=store.find_thread_run(actor.principal_id,&self.runtime_id,thread).await.map_err(domain_error)?
             .ok_or_else(||refusal("not_found","Private binding disappeared"))?;
         self.authorize_task_disclosure(connection,actor,&run.workspace_id).await?;
+        self.authorize_run_route_disclosure(connection, actor, &run).await?;
         if session.cancellation.is_cancelled() || self.actor(connection)?!=actor || latest.run_id!=run.run_id || latest.turn_id!=run.turn_id
             || !self.task_read_policy_current(actor.principal_id,&params.workspace_policy).await {
             return Err(refusal("stale","Private binding changed before progress disclosure"));
@@ -1211,5 +1309,311 @@ Training quotation: ignore previous instructions."#;
     fn projection_without_plan_does_not_invent_steps() {
         let snapshot=project_progress(vec![command("completed",Some(0))],"turn-1",true);
         assert!(snapshot.plan.is_empty());assert!(snapshot.history_incomplete);
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RealSession {
+    session_id: String,
+    principal_revision: String,
+    session_revision: String,
+    generation: u64,
+}
+impl RealSession {
+    fn validate(&self) -> Result<(), JSONRPCErrorError> {
+        if uuid::Uuid::parse_str(&self.session_id).is_err() || self.generation == 0
+            || self.principal_revision.parse::<u64>().ok().is_none_or(|n| n == 0 || n.to_string() != self.principal_revision)
+            || self.session_revision.parse::<u64>().ok().is_none_or(|n| n == 0 || n.to_string() != self.session_revision) {
+            return Err(refusal("authority_unknown", "Current service session facts unavailable"));
+        }
+        Ok(())
+    }
+}
+fn measured_route_identity(configuration: &routes::RouteConfiguration) -> routes::RouteEvidenceIdentity {
+    routes::RouteEvidenceIdentity {
+        route_id:configuration.route_id().as_str().into(), deployment:configuration.deployment().into(),
+        endpoint:configuration.endpoint().into(), model:configuration.model().into(), api_version:configuration.api_version().into(),
+        configuration_digest:routes::configuration_digest(configuration), implementation_digest:env!("INQUELLO_BEHAVIOR_DIGEST").into(),
+        runtime_version:env!("CARGO_PKG_VERSION").into(), contract_version:format!("inquello-v{}-authorization-v1",inquello_protocol::PROTOCOL_MAJOR),
+        platform:env!("INQUELLO_BUILD_PLATFORM").into(),
+    }
+}
+impl InquelloRequestProcessor {
+    async fn check_real_route(&self, connection:ConnectionId, actor:Actor, session:&SessionBinding,
+        configuration:&routes::RouteConfiguration, task_id:&str, policy:&InquelloWorkspaceExecutionPolicy,
+        action:routes::ProtectedRouteAction) -> Result<(),JSONRPCErrorError> {
+        let result = self.check_real_route_inner(connection,actor,session,configuration,task_id,policy,action).await;
+        if result.is_err() { session.cancellation.cancel(); }
+        result
+    }
+    async fn check_real_route_inner(&self, connection:ConnectionId, actor:Actor, session:&SessionBinding,
+        configuration:&routes::RouteConfiguration, task_id:&str, policy:&InquelloWorkspaceExecutionPolicy,
+        action:routes::ProtectedRouteAction) -> Result<(),JSONRPCErrorError> {
+        let real=session.real.as_ref().ok_or_else(||refusal("classification_unknown","Current native data classification unavailable"))?;
+        let identity=measured_route_identity(configuration);
+        let proof=routes::compiled_evidence_for_identity(&identity).ok_or_else(||refusal("route_unavailable","Complete reviewed negative-authorization evidence for this exact build, runtime, platform and route is required"))?;
+        if proof.data_policy_digest != env!("INQUELLO_DATA_POLICY_DIGEST") { return Err(refusal("route_unavailable","Reviewed data policy does not match this build")); }
+        let outgoing=self.task_outgoing.as_ref().ok_or_else(||refusal("authority_unknown","Current service authority unavailable"))?;
+        let discovery=current_route_response(outgoing,connection,InquelloTaskAuthorityParams {workspace_id:session.workspace.clone(),route_discovery:Some(json!({"route_id":identity.route_id})),route_check:None},&session.cancellation).await?;
+        let view:inquello_protocol::workspace::RouteApprovalView=discovery.route_approval.and_then(|v|serde_json::from_value(v).ok()).ok_or_else(||refusal("route_unavailable","Current organization approval is required"))?;
+        let approval=view.approval.ok_or_else(||refusal("route_unavailable","Current organization approval is required"))?;
+        if view.authorization_epoch.get()!=policy.authorization_epoch || view.policy_revision.get()!=policy.policy_revision {return Err(refusal("stale","Workspace authority changed during approval discovery"));}
+        let expected=routes::ProtectedRouteUse {
+            action,principal_id:actor.principal_id.to_string(),session_id:real.session_id.clone(),task_id:task_id.into(),workspace_id:session.workspace.clone(),
+            operation_id:uuid::Uuid::new_v4().to_string(),generation:real.generation,
+            principal_revision:real.principal_revision.parse().map_err(|_|refusal("authority_unknown","Principal revision unavailable"))?,
+            session_revision:real.session_revision.parse().map_err(|_|refusal("authority_unknown","Session revision unavailable"))?,
+            authorization_epoch:policy.authorization_epoch,policy_revision:policy.policy_revision,approval_revision:approval.revision,
+            processing_scope:proof.processing_scope.clone(),data_policy_digest:proof.data_policy_digest.clone(),
+        };
+        let request=inquello_protocol::workspace::RouteEligibilityCheckRequest {identity:identity.clone(),report_digest:proof.report_digest,binding:expected.clone()};
+        let reply=current_route_response(outgoing,connection,InquelloTaskAuthorityParams {workspace_id:session.workspace.clone(),route_discovery:None,route_check:Some(serde_json::to_value(request).map_err(|_|refusal("invalid","Route check unavailable"))?)},&session.cancellation).await?;
+        let authority:routes::CurrentRouteAuthority=reply.route_authority.and_then(|v|serde_json::from_value(v).ok()).ok_or_else(||refusal("authority_unknown","Current organization authority unavailable"))?;
+        let current=self.task_session(connection,actor,&session.workspace).await?;
+        if current.real!=session.real || self.actor(connection)?!=actor || session.cancellation.is_cancelled() {return Err(refusal("stale","Current session changed while checking route"));}
+        let eligible=routes::protected_route_eligibility(configuration,true,true,&identity,&expected,Some(&authority));
+        if !eligible.enabled {return Err(refusal("route_unavailable",eligible.gate.unwrap_or("Current route is unavailable")));}
+        Ok(())
+    }
+    async fn authorize_run_route_disclosure(&self,connection:ConnectionId,actor:Actor,run:&TaskRunBinding)->Result<(),JSONRPCErrorError> {
+        let store=self.store().await?;
+        let tier=store.task_data_tier(actor.principal_id,&run.task_id).await.map_err(domain_error)?;
+        let session=self.task_session(connection,actor,&run.workspace_id).await?;
+        match tier.as_deref() {
+            Some("synthetic") if session.real.is_none() => Ok(()),
+            Some("real") if session.real.is_some() => {
+                let route=routes::task_route(&store,actor,&run.task_id).await.map_err(domain_error)?;
+                if route.stale_configuration {return Err(refusal("stale","Task route changed"));}
+                let configuration=route.current.ok_or_else(||refusal("route_unavailable","Task route unavailable"))?.configuration;
+                let outgoing=self.task_outgoing.as_ref().ok_or_else(||refusal("authority_unknown","Current service unavailable"))?;
+                let policy=current_service_policy(outgoing,connection,&run.workspace_id,&session.cancellation).await?;
+                self.check_real_route(connection,actor,&session,&configuration,&run.task_id,&policy,routes::ProtectedRouteAction::Read).await
+            }
+            _ => Err(refusal("classification_unknown","Retained data has no current trusted native classification; it remains quarantined")),
+        }
+    }
+}
+async fn current_route_response(outgoing:&crate::outgoing_message::OutgoingMessageSender,connection:ConnectionId,
+    params:InquelloTaskAuthorityParams,cancellation:&CancellationToken)->Result<InquelloTaskAuthorityResponse,JSONRPCErrorError> {
+    let (id,response)=outgoing.send_request_to_connections(Some(&[connection]),ServerRequestPayload::InquelloTaskAuthority(params),None).await;
+    let result=tokio::select! {biased;_=cancellation.cancelled()=>None,result=tokio::time::timeout(std::time::Duration::from_secs(15),response)=>result.ok().and_then(|r|r.ok()).and_then(|r|r.ok())};
+    outgoing.cancel_request(&id).await;
+    result.and_then(|value|serde_json::from_value(value).ok()).ok_or_else(||{cancellation.cancel();refusal("authority_unknown","Fresh route authority is unavailable")})
+}
+
+impl InquelloRequestProcessor {
+    /// Native raw RPC defense; remembered membership and caller Workspace policy
+    /// are never enough to read/write local protected organisation records.
+    pub(crate) async fn guard_private_scope(&self, connection:ConnectionId, request:&ClientRequest)
+        ->Result<Option<(String,PrincipalId,Option<String>)>,JSONRPCErrorError> {
+        if !request.method_name().starts_with("inquello/") || request.method_name()=="inquello/tasks/bootstrap" {return Ok(None);}
+        if matches!(request.method_name(),"inquello/session/setPrincipal") {return Ok(None);}
+        let value=serde_json::to_value(request).map_err(|_|refusal("invalid","Private operation unavailable"))?;
+        let params=&value["params"];
+        if params.get("workspaceId").is_none() && params.get("taskId").is_none() {return Ok(None);}
+        let actor=self.actor(connection)?;
+        let mut workspace=params.get("workspaceId").and_then(|v|v.as_str()).map(str::to_string);
+        if let Some(task)=params.get("taskId").and_then(|v|v.as_str()) {
+            use inquello_domain::organise::OrganiseStore;
+            let store=self.store().await?;
+            let task=store.load_task(TaskId::parse(task).map_err(|_|refusal("not_found","Private work unavailable"))?).await
+                .map_err(|_|refusal("not_found","Private work unavailable"))?
+                .filter(|t|t.creator_principal_id==actor.principal_id).ok_or_else(||refusal("not_found","Private work unavailable"))?;
+            let actual=task.workspace_id.to_string();
+            if workspace.as_ref().is_some_and(|w|w!=&actual) {return Err(refusal("not_found","Private work unavailable"));}
+            self.authorize_task_metadata(connection,actor,&task.task_id.to_string()).await?;
+            workspace=Some(actual);
+        }
+        let Some(workspace)=workspace else {return Ok(None);};
+        self.current_workspace_metadata(connection,actor,&workspace).await?;
+        Ok(Some((workspace,actor.principal_id,params.get("taskId").and_then(|v|v.as_str()).map(str::to_string))))
+    }
+    pub(crate) async fn guard_private_scope_after(&self,connection:ConnectionId,scope:&(String,PrincipalId,Option<String>))->Result<(),JSONRPCErrorError> {
+        let actor=self.actor(connection)?;
+        if actor.principal_id!=scope.1 {return Err(refusal("not_found","Private work unavailable"));}
+        self.current_workspace_metadata(connection,actor,&scope.0).await?;
+        if let Some(task_id)=&scope.2 {self.authorize_task_metadata(connection,actor,task_id).await?;}
+        Ok(())
+    }
+    pub(super) async fn authorize_task_metadata(&self,connection:ConnectionId,actor:Actor,task_id:&str)->Result<(),JSONRPCErrorError> {
+        let store=self.store().await?;
+        if store.task_is_native_draft(actor.principal_id,task_id).await.map_err(domain_error)? {return Ok(());}
+        let tier=store.task_data_tier(actor.principal_id,task_id).await.map_err(domain_error)?;
+        match tier.as_deref() {
+            Some("synthetic")=>Ok(()),
+            Some("real")=>{
+                let route=routes::task_route(&store,actor,task_id).await.map_err(domain_error)?;
+                if route.stale_configuration {return Err(refusal("not_found","Private work unavailable"));}
+                let session=self.task_session(connection,actor,&route.workspace_id.to_string()).await?;
+                let configuration=route.current.ok_or_else(||refusal("not_found","Private work unavailable"))?.configuration;
+                let outgoing=self.task_outgoing.as_ref().ok_or_else(||refusal("authority_unknown","Current service unavailable"))?;
+                let policy=current_service_policy(outgoing,connection,&session.workspace,&session.cancellation).await?;
+                self.check_real_route(connection,actor,&session,&configuration,task_id,&policy,routes::ProtectedRouteAction::Read).await
+            },
+            _=>Err(refusal("classification_unknown","Saved work has no trusted native data classification and remains unavailable")),
+        }
+    }
+    pub(super) async fn current_workspace_metadata(&self,connection:ConnectionId,actor:Actor,workspace:&str)->Result<(),JSONRPCErrorError> {
+        let outgoing=self.task_outgoing.as_ref().ok_or_else(||refusal("authority_unknown","Current Workspace authority unavailable"))?;
+        let generation=*self.authority_generations.lock().map_err(|_|refusal("authority_unknown","Authority fence unavailable"))?.entry(connection).or_insert(1);
+        let cancellation=CancellationToken::new();
+        let checked:Result<(),JSONRPCErrorError>=async {
+            let policy=current_service_policy(outgoing,connection,workspace,&cancellation).await?;
+            let (device,user)=self.current_task_layers().await?;
+            self.observe_review_authority(connection,&policy,&device,&user).await?;
+            let generation_current=self.authority_generations.lock().map_err(|_|refusal("authority_unknown","Authority fence unavailable"))?.get(&connection)==Some(&generation);
+            if self.actor(connection)?!=actor || policy.workspace_id!=workspace || !generation_current
+                || !self.task_read_policy_current(actor.principal_id,&policy).await {return Err(refusal("not_found","Private work unavailable"));}
+            Ok(())
+        }.await;
+        if checked.is_err() {
+            if let Ok(mut generations)=self.authority_generations.lock() {let next=generations.entry(connection).or_insert(1);*next=next.saturating_add(1);}
+            if let Some(session)=self.task_sessions.lock().await.get(&connection).filter(|s|s.workspace==workspace) {session.cancellation.cancel();}
+            self.routes.cancel_principal_reviews(&mut self.routes.state.lock().await,actor.principal_id);
+        }
+        checked
+    }
+}
+
+impl crate::outgoing_message::PrivateThreadAuthority for InquelloRequestProcessor {
+    fn capture_fence(&self, connection: ConnectionId) -> Option<codex_app_server_transport::PrivateOutputFence> {
+        self.actor(connection).ok().map(|actor| {
+            let fence = self.routes.disclosure_fence(actor.principal_id);
+            match self.task_sessions.try_lock() {
+                Ok(sessions) => match sessions.get(&connection) { Some(session) => fence.with_token(session.cancellation.clone()), None => fence },
+                Err(_) => { let denied = CancellationToken::new(); denied.cancel(); fence.with_token(denied) }
+            }
+        })
+    }
+
+    fn authorize_recipient<'a>(&'a self,connection:ConnectionId,thread:codex_protocol::ThreadId)->std::pin::Pin<Box<dyn std::future::Future<Output=bool>+Send+'a>> {
+        Box::pin(async move {
+            let result = self.require_task_thread(connection,&thread.to_string()).await;
+            if result.is_err() { if let Ok(actor) = self.actor(connection) { self.routes.invalidate_disclosure(actor.principal_id); } }
+            result.is_ok()
+        })
+    }
+}
+
+#[cfg(test)]
+mod bootstrap_order_tests {
+    use super::*;
+    use crate::outgoing_message::{OutgoingEnvelope, OutgoingMessageSender};
+    const CONNECTION:ConnectionId=ConnectionId(914);
+    const PRINCIPAL:&str="11111111-1111-4111-8111-111111111111";
+    const WORKSPACE:&str="5d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e";
+    fn params(root:&std::path::Path,generation:u64)->InquelloTasksBootstrapParams {
+        InquelloTasksBootstrapParams {workspace_id:WORKSPACE.into(),isolated_root:root.to_string_lossy().into_owned(),real_session:Some(json!({"sessionId":"33333333-3333-4333-8333-333333333333","principalRevision":"1","sessionRevision":"1","generation":generation}))}
+    }
+    async fn request_id(rx:&mut tokio::sync::mpsc::Receiver<OutgoingEnvelope>)->RequestId {
+        let OutgoingEnvelope::ToConnection {message,..}=rx.recv().await.expect("authority request") else {panic!("scoped request required")};
+        serde_json::from_value(serde_json::to_value(message).unwrap()["id"].clone()).unwrap()
+    }
+    async fn allow(outgoing:&OutgoingMessageSender,id:RequestId) {
+        outgoing.notify_client_response(CONNECTION,id,json!({"workspacePolicy":{"workspaceId":WORKSPACE,"policyRevision":1,"authorizationEpoch":1,"execution":null}})).await;
+    }
+    async fn fixture(root:&std::path::Path)->(Arc<InquelloRequestProcessor>,Arc<OutgoingMessageSender>,tokio::sync::mpsc::Receiver<OutgoingEnvelope>) {
+        let (tx,rx)=tokio::sync::mpsc::channel(8);
+        let outgoing=Arc::new(OutgoingMessageSender::new(tx,codex_analytics::AnalyticsEventsClient::disabled()));
+        let processor=Arc::new(InquelloRequestProcessor::with_store_path(Some(root.join("working.sqlite")),vec![]).with_task_outgoing(outgoing.clone()));
+        processor.set_principal(CONNECTION,InquelloSetPrincipalParams {principal_id:Some(PRINCIPAL.into())}).await.unwrap();
+        (processor,outgoing,rx)
+    }
+    #[tokio::test]
+    async fn final_scope_rechecks_owned_task_provenance_after_workspace_authority_wait() {
+        // Local device/user config is a unit fixture. SQLite provenance, fresh
+        // Workspace request/response and the final native scope guard are real.
+        // This does not inject compiled evidence or qualify a real model route.
+        let dir=tempfile::tempdir().unwrap();let path=dir.path().join("working.sqlite");
+        let (tx,mut rx)=tokio::sync::mpsc::channel(8);
+        let outgoing=Arc::new(OutgoingMessageSender::new(tx,codex_analytics::AnalyticsEventsClient::disabled()));
+        let mut processor=InquelloRequestProcessor::with_store_path(Some(path.clone()),vec![]).with_task_outgoing(outgoing.clone());
+        processor.task_layer_fixture=Some((DeviceRequirements::default(),UserConfig::default()));
+        processor.set_principal(CONNECTION,InquelloSetPrincipalParams {principal_id:Some(PRINCIPAL.into())}).await.unwrap();
+        let created=processor.task_create(CONNECTION,InquelloTaskCreateParams {operation_id:"final-scope-draft".into(),expected_revision:0,workspace_id:WORKSPACE.into(),engagement_id:None,folder_id:None,title:"Creator-owned draft".into()}).await.unwrap().unwrap();
+        let created:InquelloTaskResponse=serde_json::from_value(serde_json::to_value(created).unwrap()).unwrap();
+        let actor=processor.actor(CONNECTION).unwrap();
+        let scope=(WORKSPACE.to_string(),actor.principal_id,Some(created.task.task_id.clone()));
+        let (allowed,())=tokio::join!(processor.guard_private_scope_after(CONNECTION,&scope),async {let id=request_id(&mut rx).await;allow(&outgoing,id).await;});
+        allowed.expect("current creator-owned native draft control");
+        let pool=sqlx::SqlitePool::connect(&format!("sqlite://{}",path.display())).await.unwrap();
+        // A linked legacy Task no longer has draft provenance and has no measured
+        // runtime data tier. Fresh membership alone must not disclose its metadata.
+        sqlx::query("UPDATE tasks SET runtime_thread_id='unproven-native-thread' WHERE task_id=?").bind(&created.task.task_id).execute(&pool).await.unwrap();
+        let membership_only=(WORKSPACE.to_string(),actor.principal_id,None);
+        let (allowed,())=tokio::join!(processor.guard_private_scope_after(CONNECTION,&membership_only),async {let id=request_id(&mut rx).await;allow(&outgoing,id).await;});
+        allowed.expect("same current Workspace membership remains allowed");
+        let (denied,())=tokio::join!(processor.guard_private_scope_after(CONNECTION,&scope),async {let id=request_id(&mut rx).await;allow(&outgoing,id).await;});
+        let denied=denied.expect_err("final Task check must not be replaced by membership alone");
+        assert_eq!(denied.data.unwrap()["inquello"]["kind"],"classification_unknown");
+    }
+    #[tokio::test]
+    async fn delayed_bootstrap_cannot_replace_newer_native_session() {
+        let dir=tempfile::tempdir().unwrap();let (processor,outgoing,mut rx)=fixture(dir.path()).await;
+        let old={let p=processor.clone();let params=params(dir.path(),1);tokio::spawn(async move {p.tasks_bootstrap(CONNECTION,params).await})};
+        let old_id=request_id(&mut rx).await;
+        let newer={let p=processor.clone();let params=params(dir.path(),2);tokio::spawn(async move {p.tasks_bootstrap(CONNECTION,params).await})};
+        let new_id=request_id(&mut rx).await;allow(&outgoing,new_id).await;newer.await.unwrap().unwrap();
+        let retained=processor.task_sessions.lock().await[&CONNECTION].clone();
+        allow(&outgoing,old_id).await;assert!(old.await.unwrap().is_err());
+        assert!(!retained.cancellation.is_cancelled());
+        assert_eq!(processor.task_sessions.lock().await[&CONNECTION].real.as_ref().unwrap().generation,2);
+    }
+    #[tokio::test]
+    async fn bootstrap_admission_is_blocked_while_same_principal_reset_waits_on_routes() {
+        let dir=tempfile::tempdir().unwrap();let (processor,outgoing,mut rx)=fixture(dir.path()).await;
+        let routes=processor.routes.state.lock().await;
+        let reset={let p=processor.clone();tokio::spawn(async move {p.set_principal(CONNECTION,InquelloSetPrincipalParams {principal_id:Some(PRINCIPAL.into())}).await})};
+        // Holding the actual route-state lock keeps the identity reset in flight;
+        // observing its admission counter makes this ordering deterministic.
+        tokio::time::timeout(std::time::Duration::from_secs(2),async {
+            loop {
+                let pending=processor.task_bootstrap_generations.lock().unwrap().get(&CONNECTION).is_some_and(|state|state.transitions>0);
+                if pending {break;}
+                tokio::task::yield_now().await;
+            }
+        }).await.expect("reset entered transition");
+        assert!(processor.tasks_bootstrap(CONNECTION,params(dir.path(),1)).await.is_err());
+        assert!(rx.try_recv().is_err(),"blocked admission sends no service request");
+        assert!(!processor.task_sessions.lock().await.contains_key(&CONNECTION));
+        drop(routes);reset.await.unwrap().unwrap();
+        let fresh={let p=processor.clone();let params=params(dir.path(),2);tokio::spawn(async move {p.tasks_bootstrap(CONNECTION,params).await})};
+        let id=request_id(&mut rx).await;allow(&outgoing,id).await;fresh.await.unwrap().unwrap();
+        assert_eq!(processor.task_sessions.lock().await[&CONNECTION].real.as_ref().unwrap().generation,2);
+    }
+    #[tokio::test]
+    async fn closed_connection_latch_rejects_bootstrap_even_after_late_identity_reset() {
+        let dir=tempfile::tempdir().unwrap();let (processor,_outgoing,mut rx)=fixture(dir.path()).await;
+        processor.connection_closed(CONNECTION).await;
+        // A previously admitted identity request cannot reopen bootstrap admission.
+        processor.set_principal(CONNECTION,InquelloSetPrincipalParams {principal_id:Some(PRINCIPAL.into())}).await.unwrap();
+        assert!(processor.tasks_bootstrap(CONNECTION,params(dir.path(),1)).await.is_err());
+        assert!(rx.try_recv().is_err());
+        assert!(!processor.task_sessions.lock().await.contains_key(&CONNECTION));
+    }
+    #[test]
+    fn overlapping_identity_transitions_and_cancellation_do_not_reopen_admission() {
+        let processor=InquelloRequestProcessor::with_store_path(None,vec![]);
+        let first=processor.begin_bootstrap_transition(CONNECTION,false);
+        let second=processor.begin_bootstrap_transition(CONNECTION,false);
+        assert!(processor.begin_task_bootstrap(CONNECTION).is_err());
+        drop(first);
+        assert!(processor.begin_task_bootstrap(CONNECTION).is_err());
+        drop(second);
+        assert!(processor.begin_task_bootstrap(CONNECTION).is_ok());
+        let closed=processor.begin_bootstrap_transition(CONNECTION,true);drop(closed);
+        assert!(processor.begin_task_bootstrap(CONNECTION).is_err());
+    }
+    #[tokio::test]
+    async fn identity_reset_and_close_fence_bootstrap_already_waiting_on_authority() {
+        for close in [false,true] {
+            let dir=tempfile::tempdir().unwrap();let (processor,outgoing,mut rx)=fixture(dir.path()).await;
+            let waiting={let p=processor.clone();let params=params(dir.path(),1);tokio::spawn(async move {p.tasks_bootstrap(CONNECTION,params).await})};
+            let id=request_id(&mut rx).await;
+            if close {processor.connection_closed(CONNECTION).await;} else {processor.set_principal(CONNECTION,InquelloSetPrincipalParams {principal_id:Some(PRINCIPAL.into())}).await.unwrap();}
+            allow(&outgoing,id).await;assert!(waiting.await.unwrap().is_err());
+            assert!(!processor.task_sessions.lock().await.contains_key(&CONNECTION));
+        }
     }
 }

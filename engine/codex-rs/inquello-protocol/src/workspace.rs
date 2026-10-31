@@ -339,3 +339,59 @@ pub struct AccessCheckResponse {
     /// The Workspace authorization epoch the decision was made at.
     pub authorization_epoch: Revision,
 }
+
+
+/// Shared strict evidence/approval schemas: domain owns the gate, protocol carries
+/// its inputs. These objects are not credentials or offline authorization leases.
+pub use inquello_domain::routes::{CurrentRouteAuthority, OrganizationRouteApproval,
+    ProtectedRouteAction, ProtectedRouteUse, RouteEvidenceIdentity};
+
+/// POST /v1/workspaces/{workspace_id}/route-eligibility-checks.
+/// The service resolves principal/session independently and matches the binding;
+/// Task creator ownership remains an additional mandatory native-runtime check.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RouteEligibilityCheckRequest {
+    pub identity: RouteEvidenceIdentity,
+    pub report_digest: String,
+    pub binding: ProtectedRouteUse,
+}
+
+/// A current Workspace route check for ONE operation, not private Task authority.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RouteEligibilityCheckResponse {
+    pub authority: CurrentRouteAuthority,
+}
+
+/// Discovery metadata only: never permits processing without a fresh check.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RouteApprovalView {
+    pub approval: Option<OrganizationRouteApproval>,
+    pub authorization_epoch: Revision,
+    pub policy_revision: Revision,
+}
+
+/// Durable corroboration of an export's canonical byte manifest, not permission
+/// to read/process/recover those bytes. Native ownership and current route checks
+/// remain mandatory before and after every application-mediated use.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CreateExportReceiptRequest {
+    pub command_epoch: CommandEpoch,
+    pub operation_id: Uuid,
+    pub manifest_digest: String,
+    pub workspace_ids: Vec<Uuid>,
+}
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ValidateExportReceiptRequest { pub manifest_digest: String }
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExportReceiptView {
+    pub receipt_id: Uuid,
+    pub principal_id: Uuid,
+    pub manifest_digest: String,
+    pub workspace_ids: Vec<Uuid>,
+}

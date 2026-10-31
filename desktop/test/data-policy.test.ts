@@ -88,6 +88,7 @@ describe('shipped register', () => {
       'codex-keyring-entry',
       'working-store',
       'task-folders',
+      'recovery-quarantine',
     ]);
     const disabled = policy.categories.filter((category) => !category.enabled).map((category) => category.id);
     expect(disabled).toEqual(expect.arrayContaining(['source-extracts', 'artifacts', 'shared-caches', 'unattended-work']));
@@ -99,7 +100,7 @@ describe('shipped register', () => {
     for (const category of policy.categories.filter((c) => c.enabled)) {
       expect(category.retention).toBe('until-owner-deletes');
       expect(category.rule_owner).toBe('Organisation data-policy owner (OQ-2)');
-      expect(category.owner).toMatch(/signed-in creator/);
+      if(['runtime-logs','desktop-stderr-log','recovery-quarantine'].includes(category.id)){expect(category.owner).toMatch(/original native owner/i);expect(category.export.mode).toBe('excluded');}else expect(category.owner).toMatch(/signed-in creator/);
       expect(category.export.mode).not.toBe('unknown');
       expect(category.deletion.length).toBeGreaterThan(0);
       expect(category.recovery.length).toBeGreaterThan(0);

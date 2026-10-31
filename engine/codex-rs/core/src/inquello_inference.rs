@@ -44,6 +44,12 @@ pub struct AttemptContext {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TaskTurnOutcome { Completed, Failed, Cancelled }
 pub trait TaskAuthorization: Send + Sync {
+    /// Fresh authorization before output/context disclosure or protected persistence.
+    /// The service decision orders the later local effect; this is not a lease.
+    fn before_disclosure<'a>(&'a self) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + 'a>> {
+        self.before_tool_effect()
+    }
+
     /// Called from the retained turn's terminal event, not from any model stream.
     fn turn_terminal<'a>(&'a self, turn_id: &'a str, outcome: TaskTurnOutcome) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>>;
     fn before_attempt<'a>(&'a self, turn_id: &'a str) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<AttemptContext>> + Send + 'a>>;
@@ -69,6 +75,16 @@ pub(crate) async fn observe_task_turn_terminal(authorization:&dyn TaskAuthorizat
     };
     if let Some(outcome)=outcome {authorization.turn_terminal(turn_id,outcome).await;}
 }
+/// A denied event still closes its content-free durable lifecycle. This helper
+/// is used at every send_event disclosure boundary, including later queue waits.
+pub(crate) async fn authorize_task_event_disclosure(authorization:&dyn TaskAuthorization,turn_id:&str,event:&codex_protocol::protocol::EventMsg)->bool {
+    if authorization.before_disclosure().await.is_err() {
+        authorization.cancellation().cancel();
+        observe_task_turn_terminal(authorization,turn_id,event).await;
+        return false;
+    }
+    true
+}
 #[derive(Clone)]
 pub struct TaskAuthorizationContext(pub std::sync::Arc<dyn TaskAuthorization>);
 
@@ -80,6 +96,23 @@ pub fn mark_task_thread(thread_id: &str) -> std::result::Result<(), &'static str
     if threads.len() >= 10000 && !threads.contains(thread_id) { return Err("Task ownership capacity reached"); }
     threads.insert(thread_id.to_owned());
     Ok(())
+}
+static TASK_AUTHORIZATIONS: OnceLock<Mutex<HashMap<String, std::sync::Weak<dyn TaskAuthorization>>>> = OnceLock::new();
+pub fn bind_task_authorization(thread_id: &str, authorization: &std::sync::Arc<dyn TaskAuthorization>) -> std::result::Result<(), &'static str> {
+    mark_task_thread(thread_id)?;
+    let mut map=TASK_AUTHORIZATIONS.get_or_init(Default::default).lock().map_err(|_| "authorization registry unavailable")?;
+    map.retain(|_,guard|guard.strong_count()>0);
+    if map.len()>=10000 || map.contains_key(thread_id) {return Err("authorization registry already bound or full");}
+    map.insert(thread_id.into(),std::sync::Arc::downgrade(authorization)); Ok(())
+}
+/// The final native writer/disclosure boundary, including raw runtime event paths.
+pub(crate) async fn authorize_thread_disclosure(thread_id: &str) -> bool {
+    if !is_task_thread(thread_id) {return true;}
+    let guard=TASK_AUTHORIZATIONS.get_or_init(Default::default).lock().ok()
+        .and_then(|map|map.get(thread_id).and_then(std::sync::Weak::upgrade));
+    let Some(guard)=guard else {return false;};
+    if guard.cancellation().is_cancelled() || guard.before_disclosure().await.is_err() {guard.cancellation().cancel(); return false;}
+    true
 }
 pub fn is_task_thread(thread_id: &str) -> bool {
     TASK_THREADS.get_or_init(Default::default).lock().map(|threads| threads.contains(thread_id)).unwrap_or(true)
@@ -904,6 +937,27 @@ mod task_turn_lifecycle_tests {
         fn after_tool<'a>(&'a self,_:&'a str,_:bool)->std::pin::Pin<Box<dyn std::future::Future<Output=()>+Send+'a>> {panic!("lifecycle is not tool accounting")}
         fn cancellation(&self)->CancellationToken {CancellationToken::new()}
     }
+    struct EventFence { observer:Observer, checks:std::sync::atomic::AtomicUsize, deny_at:usize, cancelled:CancellationToken }
+    impl TaskAuthorization for EventFence {
+        fn before_disclosure<'a>(&'a self)->std::pin::Pin<Box<dyn std::future::Future<Output=Result<()>>+Send+'a>> {Box::pin(async move {if self.checks.fetch_add(1,std::sync::atomic::Ordering::SeqCst)+1>=self.deny_at {Err(failure("observed withdrawal"))}else{Ok(())}})}
+        fn turn_terminal<'a>(&'a self,id:&'a str,outcome:TaskTurnOutcome)->std::pin::Pin<Box<dyn std::future::Future<Output=()>+Send+'a>> {self.observer.turn_terminal(id,outcome)}
+        fn before_attempt<'a>(&'a self,_:&'a str)->std::pin::Pin<Box<dyn std::future::Future<Output=Result<AttemptContext>>+Send+'a>> {panic!("no inference")}
+        fn before_tool_effect<'a>(&'a self)->std::pin::Pin<Box<dyn std::future::Future<Output=Result<()>>+Send+'a>> {panic!("no effects")}
+        fn before_tool<'a>(&'a self,_:&'a str,_:&'a str,_:&'a str)->std::pin::Pin<Box<dyn std::future::Future<Output=Result<()>>+Send+'a>> {panic!("no tools")}
+        fn after_tool<'a>(&'a self,_:&'a str,_:bool)->std::pin::Pin<Box<dyn std::future::Future<Output=()>+Send+'a>> {panic!("no tools")}
+        fn cancellation(&self)->CancellationToken {self.cancelled.clone()}
+    }
+    #[tokio::test]
+    async fn withdrawal_at_each_event_boundary_suppresses_payload_but_records_terminal_once() {
+        for deny_at in 1..=3 {
+            let guard=EventFence {observer:Observer(Mutex::new(Vec::new())),checks:std::sync::atomic::AtomicUsize::new(0),deny_at,cancelled:CancellationToken::new()};
+            let event=EventMsg::TurnComplete(TurnCompleteEvent {root_turn_id:None,turn_id:"turn-race".into(),last_agent_message:Some("WITHHELD PRIVATE OUTPUT".into()),error:None,started_at:None,completed_at:None,duration_ms:None,time_to_first_token_ms:None});
+            for _ in 1..deny_at {assert!(authorize_task_event_disclosure(&guard,"turn-race",&event).await);assert!(guard.observer.0.lock().unwrap().is_empty(),"success cannot mark terminal before final disclosure");}
+            assert!(!authorize_task_event_disclosure(&guard,"turn-race",&event).await);
+            assert!(guard.cancelled.is_cancelled());
+            assert_eq!(*guard.observer.0.lock().unwrap(),vec![("turn-race".into(),TaskTurnOutcome::Completed)]);
+        }
+    }
     #[tokio::test]
     async fn failure_before_sampling_and_cancellation_between_attempts_use_retained_terminal_events() {
         let observer=Observer(Mutex::new(Vec::new()));
@@ -962,5 +1016,25 @@ pub(crate) mod effect_test_support {
         fn after_tool<'a>(&'a self,_:&'a str,_:bool)->std::pin::Pin<Box<dyn std::future::Future<Output=()>+Send+'a>> {
             Box::pin(async move {self.finalized.fetch_add(1,Ordering::SeqCst);})
         }
+    }
+}
+
+#[cfg(test)]
+mod current_writer_boundary_tests {
+    use super::*;
+    use std::sync::{Arc,atomic::Ordering};
+    #[tokio::test]
+    async fn actual_guard_requires_live_current_authority_and_never_revives_after_denial() {
+        let id=uuid::Uuid::new_v4().to_string();
+        let authority=Arc::new(effect_test_support::Authority::new());
+        let guard:Arc<dyn TaskAuthorization>=authority.clone();
+        bind_task_authorization(&id,&guard).expect("bind native ownership");
+        assert!(authorize_thread_disclosure(&id).await);
+        authority.current.store(false,Ordering::SeqCst);
+        assert!(!authorize_thread_disclosure(&id).await);
+        authority.current.store(true,Ordering::SeqCst);
+        assert!(!authorize_thread_disclosure(&id).await,"late allowed state cannot undo cancellation");
+        let unknown=uuid::Uuid::new_v4().to_string();mark_task_thread(&unknown).expect("mark");
+        assert!(!authorize_thread_disclosure(&unknown).await);
     }
 }

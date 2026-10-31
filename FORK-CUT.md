@@ -665,3 +665,46 @@ Desktop typecheck/build and 77 focused tests pass; full suite: 48 files pass,
 12 fail, 1 skipped (1,236 tests pass, 3 fail, 5 skipped). Cargo remains absent:
 native tests/check/fmt/fixture build are unrun, not passing. Actual model analytical
 resistance, Windows and prior eligibility gates remain open. See story support.
+
+## Story 1.28 — current-route authorization gates (2026-10-31)
+
+Exact compiled route/build evidence and independent fresh organization approval
+are conjunctive, with native creator privacy, observed-invalidation cancellation,
+terminal-safe reads/persistence, and non-serialized final-output queue fences.
+Native draft metadata provenance is separate from inference tier. Quiescent
+export/recovery requires native category/byte ownership and fresh authority;
+service-held hash receipts preserve delete-all roundtrip without retaining a
+hidden local journal. Interrupted recovery cannot reopen by deleting Device ID.
+
+Both enabled adapters have isolated retained-child and service-coupled synthetic
+fixture source, including model/tool/permission wait withdrawal. All 34 native
+report rows remain not-run; no actual passing proof, organization approval,
+deployment, paid inference or eligibility promotion. Native compile/test/fmt,
+PostgreSQL, matching generated protocol, Windows and actual-provider controls
+remain gates. Remote private replay is refused, not enabled. See
+`_bmad-output/implementation-artifacts/story-1-28-authorization-support.md` for
+exact final desktop results, commands, source coverage and owner acceptance.
+Story/tracker remain **in-progress**.
+
+### Story 1.28 review loop 1
+
+Corrected recovery-plan pinning and post-publication receipt validation, atomic
+native Task/tier reservation, successful-list ordering, native bootstrap/reset
+admission, safe uncertain-work quiescence, final RPC settlement and Task-scoped
+final metadata authorization. Added deterministic negative and permitted controls;
+real-content main authority tests use explicitly labeled fake service/native seams.
+No generated schema edits, actual organization approval or route promotion.
+See story support for exact current verification; native/owner gates remain open.
+
+### Story 1.28 review loop 2 — source correction, not eligibility promotion
+
+Recovery rollback now uses an actual-publication identity ledger and atomically
+quarantines SQLite families; skipped/replaced competing destinations are never
+inferred to belong to recovery. Inspector failure waits for actual close, with
+bounded termination escalation and a retained quiescence gate if close is
+unknown. Isolated desktop process/rollback and actual TaskService route-envelope
+regressions accompany authored native store-bound inventory and actual-shell
+cancellation controls. See `story-1-28-authorization-support.md` and
+`validation/story128-loop2/` for exact results. Cargo, native/model/Windows and
+matching generated-protocol acceptance remain open; no real-data route is
+promoted and no paid inference or organization approval occurred.

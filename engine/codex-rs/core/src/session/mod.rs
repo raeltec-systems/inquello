@@ -2515,9 +2515,7 @@ impl Session {
         // Bind durable Task completion to the actual retained lifecycle, including
         // failure before sampling and cancellation between tool continuations.
         // Never infer success from a closed/missing provider event stream.
-        if let Some(authorization) = turn_context.extension_data.get::<crate::inquello_inference::TaskAuthorizationContext>() {
-            crate::inquello_inference::observe_task_turn_terminal(authorization.0.as_ref(), &turn_context.sub_id, &msg).await;
-        }
+        if !self.private_event_disclosure_current(turn_context, &msg).await { return; }
         let legacy_source = msg.clone();
         if let EventMsg::Error(error) = &legacy_source
             && error
@@ -2559,6 +2557,7 @@ impl Session {
                 .analytics_events_client
                 .track_guardian_session_event(self.thread_id, &event);
         }
+        if !self.private_event_disclosure_current(turn_context, &legacy_source).await { return; }
         self.send_event_raw(event).await;
         self.maybe_notify_parent_of_terminal_turn(turn_context, &legacy_source)
             .await;
@@ -2569,6 +2568,7 @@ impl Session {
 
         let show_raw_agent_reasoning = self.show_raw_agent_reasoning();
         for legacy in legacy_source.as_legacy_events(show_raw_agent_reasoning) {
+            if !self.private_event_disclosure_current(turn_context, &legacy_source).await { return; }
             self.services
                 .rollout_thread_trace
                 .record_tool_call_event(turn_context.sub_id.clone(), &legacy);
@@ -2578,6 +2578,23 @@ impl Session {
             };
             self.send_event_raw(legacy_event).await;
         }
+        if let Some(authorization) = turn_context.extension_data.get::<crate::inquello_inference::TaskAuthorizationContext>() {
+            crate::inquello_inference::observe_task_turn_terminal(authorization.0.as_ref(), &turn_context.sub_id, &legacy_source).await;
+        }
+    }
+
+    async fn private_event_disclosure_current(&self, turn_context:&TurnContext,event:&EventMsg)->bool {
+        if let Some(authorization)=turn_context.extension_data.get::<crate::inquello_inference::TaskAuthorizationContext>() {
+            return crate::inquello_inference::authorize_task_event_disclosure(authorization.0.as_ref(),&turn_context.sub_id,event).await;
+        }
+        !crate::inquello_inference::is_task_thread(&self.thread_id.to_string())
+    }
+
+    async fn private_disclosure_current(&self, turn_context: &TurnContext) -> bool {
+        if let Some(authorization) = turn_context.extension_data.get::<crate::inquello_inference::TaskAuthorizationContext>() {
+            if authorization.0.before_disclosure().await.is_err() { authorization.0.cancellation().cancel(); return false; }
+        } else if crate::inquello_inference::is_task_thread(&self.thread_id.to_string()) { return false; }
+        true
     }
 
     /// Forwards terminal turn events from spawned MultiAgentV2 children to their direct parent.
@@ -2730,6 +2747,7 @@ impl Session {
     }
 
     async fn send_event_raw_with_persistence(&self, event: Event, persist: bool) {
+        if !crate::inquello_inference::authorize_thread_disclosure(&self.thread_id.to_string()).await { return; }
         let flush_guardian_completion = persist
             && matches!(event.msg, EventMsg::TurnComplete(_))
             && self.is_private_guardian_reviewer().await;
@@ -2781,6 +2799,7 @@ impl Session {
     }
 
     async fn deliver_event_raw(&self, event: Event) {
+        if !crate::inquello_inference::authorize_thread_disclosure(&self.thread_id.to_string()).await { return; }
         if let Some(parent_tx) = self.parent_observer_event_tx.get() {
             let forwarded = match &event.msg {
                 EventMsg::RawResponseItem(item) => {
@@ -3746,6 +3765,7 @@ impl Session {
         mut items: Vec<ResponseItemEnvelope>,
         image_preparations: Vec<ImagePreparationMetadata>,
     ) {
+        if !self.private_disclosure_current(turn_context).await { return; }
         // Save the originating history budget for replay.
         // Preserve any existing tool-specific override.
         let policy: codex_utils_output_truncation::TruncationPolicy =
@@ -3861,6 +3881,7 @@ impl Session {
             .map(RolloutItem::EventMsg)
             .chain(items.into_iter().map(RolloutItem::ResponseItem))
             .collect::<Vec<_>>();
+        if !self.private_disclosure_current(turn_context).await { return; }
         let persisted = self.persist_rollout_items(&rollout_items).await;
         drop(settings_guard);
         if persisted && let Some(revision) = mcp_revision {
@@ -3875,6 +3896,7 @@ impl Session {
         {
             mark_thread_memory_mode_polluted_if_external_context(self, turn_context, item).await;
         }
+        if !self.private_disclosure_current(turn_context).await { return; }
         self.send_raw_response_items(turn_context, &response_items)
             .await;
     }
@@ -4906,6 +4928,7 @@ impl Session {
 
     #[tracing::instrument(level = "trace", skip_all, fields(item_count = items.len()))]
     pub(crate) async fn persist_rollout_items(&self, items: &[RolloutItem]) -> bool {
+        if !crate::inquello_inference::authorize_thread_disclosure(&self.thread_id.to_string()).await { return false; }
         if let Some(live_thread) = self.live_thread()
             && let Err(e) = live_thread.append_items(items).await
         {

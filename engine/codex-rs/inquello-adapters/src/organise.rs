@@ -167,6 +167,17 @@ impl OrganiseStore for SqliteWorkingStore {
             });
         }
         write_record(&mut tx, &record, expected_revision).await?;
+        if expected_revision == Revision::ZERO && receipt.command == OrganiseCommandKind::CreateTask {
+            if let OrganiseRecord::Task(task) = &record {
+                if task.creator_principal_id != receipt.principal_id || task.runtime_thread_id.is_some() || !task.source_refs.is_empty() || !task.artifact_refs.is_empty() {
+                    return Err(StoreError::Backend("native draft provenance is inconsistent".into()));
+                }
+                sqlx::query("INSERT INTO task_metadata_provenance(task_id,principal_id,workspace_id,provenance_kind) VALUES(?,?,?,'draft_metadata')")
+                    .bind(task.task_id.to_string()).bind(task.creator_principal_id.to_string()).bind(task.workspace_id.to_string())
+                    .execute(&mut *tx).await.map_err(backend)?;
+            }
+        }
+
 
         sqlx::query(
             "INSERT INTO organise_receipts (operation_id, principal_id, command, resource_id, \

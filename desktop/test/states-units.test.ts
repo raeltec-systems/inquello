@@ -13,6 +13,7 @@ import {
   stateListPayload,
   type OrganiseIdentity,
   type OrganiseRuntime,
+  type WorkspaceRoutes,
 } from '../src/main/organise';
 import { RpcResponseError } from '../src/main/runtime';
 import { OPERATION_NAMES } from '../src/main/security/operations';
@@ -48,10 +49,10 @@ function harness(handler: (method: string, params: unknown) => unknown) {
   };
   const organiseIdentity: OrganiseIdentity = {
     principalId: () => identity.principal,
-    snapshot: () => ({ sharedService: 'not-configured' }),
-    withAccess: async () => null,
+    snapshot: () => ({ sharedService: 'available' }),
+    withAccess: async fn => fn('synthetic-fixture-access'),
   };
-  const service = new OrganiseService({ runtime, identity: organiseIdentity, service: null, logger: recordingLogger() });
+  const service = new OrganiseService({ runtime, identity: organiseIdentity, service: {workspaces:async()=>({principal_id:PRINCIPAL,workspaces:[]})} as unknown as WorkspaceRoutes, logger: recordingLogger() });
   return { service, calls, identity };
 }
 

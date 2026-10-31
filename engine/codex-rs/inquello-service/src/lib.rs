@@ -42,10 +42,12 @@ pub mod config;
 mod credentials;
 mod digest;
 mod error;
+mod export_receipts;
 mod login;
 mod oidc;
 pub mod postgres;
 mod routes;
+pub mod route_eligibility;
 mod server;
 mod sessions;
 #[cfg(feature = "test-issuer")]
@@ -75,3 +77,9 @@ pub use server::RunningService;
 pub use server::StartError;
 pub use server::start;
 pub use tls::TlsSetupError;
+
+#[cfg(all(test,feature="test-issuer"))]
+extern crate self as inquello_service;
+#[cfg(all(test,feature="test-issuer"))]
+#[path="../tests/support/mod.rs"]
+mod route_test_support;

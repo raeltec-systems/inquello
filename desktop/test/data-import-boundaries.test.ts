@@ -208,3 +208,50 @@ describe('import destination boundaries', () => {
     expect(fs.readdirSync(moved)).toEqual([]);
   });
 });
+
+describe('publication-owned rollback ledger',()=>{
+ it.each(['ordinary','family'] as const)('never quarantines competing skipped %s data after later denial',async kind=>{
+  const {quarantinePublications}=await import('../src/main/data/import');
+  const f=fixture(kind==='family'?[database,wal,task]:[task,database]);const publications:import('../src/main/data/import').ImportPublication[]=[];
+  const link=fs.linkSync,rename=fs.renameSync;
+  if(kind==='ordinary')vi.spyOn(fs,'linkSync').mockImplementation((from,to)=>{write(String(to),'competitor');link(from,to);});
+  else vi.spyOn(fs,'renameSync').mockImplementation((from,to)=>{if(String(from).includes('.import-working-'))write(path.join(String(to),'working.sqlite'),'competitor');rename(from,to);});
+  const result=await importData({policy,roots:f.roots,source:f.source,onPublished:p=>publications.push(p)});
+  expect(result.notRestored.length).toBeGreaterThan(0);
+  quarantinePublications(publications,path.join(f.base,'quarantine'));
+  expect(fs.readFileSync(path.join(f.userData,kind==='family'?database.path:task.path),'utf8')).toBe('competitor');
+  expect(publications).toHaveLength(1);
+  expect(fs.existsSync(path.join(f.userData,kind==='family'?task.path:database.path))).toBe(false);
+ });
+ it.each(['ordinary','family'] as const)('refuses cleanup of a replaced published %s identity',async kind=>{
+  const {quarantinePublications}=await import('../src/main/data/import');const f=fixture(kind==='family'?[database,wal]:[task]);const publications:import('../src/main/data/import').ImportPublication[]=[];
+  await importData({policy,roots:f.roots,source:f.source,onPublished:p=>publications.push(p)});
+  const target=publications[0]!.target;fs.renameSync(target,`${target}.old`);if(kind==='family')write(path.join(target,'other.sqlite'),'competitor');else write(target,'competitor');
+  expect(()=>quarantinePublications(publications,path.join(f.base,'quarantine'))).toThrow(/changed/);
+  expect(fs.readFileSync(kind==='family'?path.join(target,'other.sqlite'):target,'utf8')).toBe('competitor');
+ });
+});
+
+it.skipIf(process.platform!=='linux').each(['ordinary','family'] as const)('rejects a moved %s destination during final authority wait before publication',async kind=>{
+ const f=fixture(kind==='family'?[database,wal]:[task]);const publications:unknown[]=[];let moved=false;
+ const parent=kind==='family'?f.userData:path.dirname(path.join(f.userData,task.path));const displaced=path.join(f.base,'displaced');
+ let copyClosed=false;const open=fs.promises.open;
+ vi.spyOn(fs.promises,'open').mockImplementation(async(...args:Parameters<typeof fs.promises.open>)=>{
+  const handle=await open(...args);const name=String(args[0]);
+  if(name.includes('.import-')&&(kind==='ordinary'||name.endsWith('working.sqlite-wal'))){const close=handle.close.bind(handle);handle.close=async()=>{await close();copyClosed=true;};}
+  return handle;
+ });
+ const result=await importData({policy,roots:f.roots,source:f.source,onPublished:p=>publications.push(p),authorize:async()=>{
+  if(moved||!copyClosed||!fs.existsSync(parent))return;
+  const stage=fs.readdirSync(parent).find(name=>kind==='family'?name.startsWith('.import-working-'):name.startsWith('.import-'));
+  if(!stage)return;
+  // The family has copied all members (ordinary file has all bytes): this is
+  // the final pre-publication authority callback, not an earlier chunk check.
+  if(kind==='family'&&(!fs.existsSync(path.join(parent,stage,'working.sqlite-wal'))||fs.statSync(path.join(parent,stage,'working.sqlite-wal')).size!==Buffer.byteLength(wal.content)))return;
+  if(kind==='ordinary'&&fs.statSync(path.join(parent,stage)).size!==Buffer.byteLength(task.content))return;
+  fs.renameSync(parent,displaced);fs.mkdirSync(parent);moved=true;
+ }});
+ expect(moved).toBe(true);expect(publications).toEqual([]);expect(result.notRestored.length).toBeGreaterThan(0);
+ expect(fs.existsSync(path.join(displaced,kind==='family'?'working':path.basename(task.path)))).toBe(false);
+ expect(fs.readdirSync(displaced)).toEqual([]);
+});

@@ -3916,6 +3916,7 @@ impl ThreadRequestProcessor {
         }
 
         for connection_id in connection_ids {
+            if !self.outgoing.authorize_thread_recipient(connection_id,thread_id).await {continue;}
             log_listener_attach_result(
                 self.ensure_conversation_listener(thread_id, connection_id, raw_events_enabled)
                     .await,

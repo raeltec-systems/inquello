@@ -372,9 +372,17 @@ async fn run_websocket_outbound_loop<M, SinkError>(
                 let Some(queued_message) = queued_message else {
                     break;
                 };
-                let Some(json) = serialize_outgoing_message(queued_message.message) else {
+                let Some(mut json) = serialize_outgoing_message(queued_message.message) else {
                     continue;
                 };
+                // Wait before encoding too: dropping an encoded streaming frame
+                // after invalidation would desynchronize compression state.
+                if std::future::poll_fn(|cx| websocket_writer.as_mut().poll_ready(cx)).await.is_err() { break; }
+                let invalidated = queued_message.private_fence.as_ref().is_some_and(|f| !f.is_current());
+                if invalidated {
+                    let Some(unavailable) = crate::outgoing_message::unavailable_private_response(&json) else { continue; };
+                    json = unavailable;
+                }
                 let message = if let Some(encoder) = &mut encoder {
                     match encoder.encode(&json) {
                         Ok(payload) => M::binary(payload.into()),
@@ -386,9 +394,8 @@ async fn run_websocket_outbound_loop<M, SinkError>(
                 } else {
                     M::text(json)
                 };
-                if websocket_writer.send(message).await.is_err() {
-                    break;
-                }
+                if websocket_writer.as_mut().start_send(message).is_err() || websocket_writer.flush().await.is_err() { break; }
+                if invalidated { continue; }
                 if let Some(write_complete_tx) = queued_message.write_complete_tx {
                     let _ = write_complete_tx.send(());
                 }

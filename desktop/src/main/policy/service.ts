@@ -197,6 +197,8 @@ function workspaceLayer(view: ExecutionPolicyView): InquelloWorkspaceExecutionPo
 }
 
 export class PolicyService {
+  private authorityGeneration=0;
+  private readonly highest=new Map<string,{epoch:bigint;policy:bigint}>();
   /** The sandbox check per runtime process. */
   private sandboxCheck: { runtime: unknown; available: Promise<boolean> } | null = null;
 
@@ -280,12 +282,16 @@ export class PolicyService {
   private async workspacePolicy(workspaceId: string): Promise<PolicyResult<InquelloWorkspaceExecutionPolicy>> {
     const service = this.options.service;
     if (!service) return fail('policy-unavailable', POLICY_REASONS.notConfigured);
+    const generation=this.authorityGeneration,principal=this.options.identity.principalId(),runtime=this.options.runtime.instance();
     try {
       const view = await this.options.identity.withAccess((access) => service.executionPolicy(access, workspaceId));
-      if (!view) return fail('signed-out', POLICY_REASONS.signedOut);
-      if (view.workspace_id !== workspaceId) return fail('policy-unavailable', POLICY_REASONS.policyUnavailable);
+      if (!view||!principal||generation!==this.authorityGeneration||principal!==this.options.identity.principalId()||runtime!==this.options.runtime.instance()||view.workspace_id!==workspaceId)throw new Error('Authority changed');
+      const epoch=BigInt(view.authorization_epoch),policy=BigInt(view.policy_revision),key=`${principal}:${workspaceId}`,prior=this.highest.get(key);
+      if(epoch<1n||policy<1n||epoch>BigInt(Number.MAX_SAFE_INTEGER)||policy>BigInt(Number.MAX_SAFE_INTEGER)||(prior&&(epoch<prior.epoch||policy<prior.policy)))throw new Error('Stale authority');
+      this.highest.set(key,{epoch,policy});
       return { ok: true, value: workspaceLayer(view) };
     } catch (error) {
+      this.authorityGeneration++;
       if (error instanceof ServiceError) {
         if (error.kind === 'unauthenticated') return fail('signed-out', POLICY_REASONS.signedOut);
         if (error.kind === 'denied') return fail('policy-unavailable', POLICY_REASONS.notAMember);

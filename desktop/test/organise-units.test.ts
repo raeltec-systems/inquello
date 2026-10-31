@@ -164,7 +164,7 @@ describe('organise service', () => {
     expect(binds().at(-1)).toEqual({ principalId: null });
   });
 
-  it('lists service Workspaces, remembers changed names, and enables Engagement creation', async () => {
+  it('lists current service Workspaces without trusting or mutating remembered labels', async () => {
     const h = harness();
     h.handlers.set('inquello/workspace/list', () => ({ workspaces: [{ workspaceId: WORKSPACE, name: 'Old name', labelRevision: 3 }] }));
     const view = await h.service.getWorkspaces();
@@ -174,21 +174,21 @@ describe('organise service', () => {
       workspaces: [{ workspaceId: WORKSPACE, name: 'Synthetic Audit Co', source: 'service' }],
       engagementCreation: { enabled: true },
     });
-    expect(h.calls.find((call) => call.method === 'inquello/workspace/remember')?.params).toMatchObject({ expectedRevision: 3, workspaceId: WORKSPACE, name: 'Synthetic Audit Co' });
+    expect(h.calls.find((call) => call.method === 'inquello/workspace/remember')).toBeUndefined();
   });
 
-  it('with the service down, lists remembered Workspaces and disables Engagement creation with its reason', async () => {
+  it('with the service down, withholds remembered Workspaces and private trees', async () => {
     const h = harness();
     h.routes.workspaces.mockRejectedValue(new ServiceError('transport'));
     const view = await h.service.getWorkspaces();
     expect(view).toEqual({
       signedIn: true,
       sharedService: 'unavailable',
-      workspaces: [{ workspaceId: WORKSPACE, name: 'Synthetic Audit Co', source: 'local' }],
+      workspaces: [],
       engagementCreation: { enabled: false, reason: ORGANISE_REASONS.serviceDown },
     });
     const tree = await h.service.getTree(WORKSPACE);
-    expect(tree.ok && tree.value.tasks.map((item) => item.taskId)).toEqual([task.taskId]);
+    expect(tree.ok).toBe(false);
   });
 
   it('refuses a tree for a Workspace the principal was not given', async () => {
@@ -266,11 +266,11 @@ describe('organise service', () => {
     });
   });
 
-  it('without a shared-service configuration, keeps local work and says why Engagements cannot be created', async () => {
+  it('without shared-service configuration, withholds private local work', async () => {
     const h = harness({ configured: false });
     const view = await h.service.getWorkspaces();
-    expect(view.engagementCreation).toEqual({ enabled: false, reason: ORGANISE_REASONS.notConfigured });
-    expect(view.workspaces.map((workspace) => workspace.source)).toEqual(['local']);
+    expect(view.engagementCreation).toEqual({ enabled: false, reason: ORGANISE_REASONS.serviceDown });
+    expect(view.workspaces.map((workspace) => workspace.source)).toEqual([]);
   });
 
   it('returns only the published Task fields to the renderer', async () => {
@@ -323,4 +323,38 @@ describe('runtime env', () => {
     expect(runtimeChildEnv(inherited, { serviceConfigEnv: 'INQUELLO_SERVICE_CONFIG' })[WORKING_STORE_ENV]).toBeUndefined();
     expect(runtimeChildEnv(inherited, { serviceConfigEnv: 'INQUELLO_SERVICE_CONFIG', workingStore: '/data/working/working.sqlite' })[WORKING_STORE_ENV]).toBe('/data/working/working.sqlite');
   });
+});
+
+ it('does not revive a Workspace listing after a newer authority failure during binding',async()=>{
+  const h=harness();let release!:(v:unknown)=>void;
+  h.handlers.set('inquello/session/setPrincipal',()=>new Promise(resolve=>{release=resolve;}));
+  const old=h.service.getWorkspaces();await vi.waitFor(()=>expect(release).toBeDefined());
+  h.routes.workspaces.mockRejectedValueOnce(new ServiceError('transport'));
+  expect((await h.service.getWorkspaces()).workspaces).toEqual([]);release({});expect((await old).workspaces).toEqual([]);
+ });
+ it('projects only safe unavailable Task IDs and reason codes',async()=>{
+  const h=harness();h.handlers.set('inquello/workspace/tree',()=>({workspaceId:WORKSPACE,engagements:[],folders:[],tasks:[],unavailableTasks:[{taskId:task.taskId,reason:'current_authority_unavailable',title:'WITHHELD SECRET'}]}));
+  await h.service.getWorkspaces();const result=await h.service.getTree(WORKSPACE);expect(result).toMatchObject({ok:true,value:{unavailableTasks:[{taskId:task.taskId,reason:'current_authority_unavailable'}]}});expect(JSON.stringify(result)).not.toContain('WITHHELD SECRET');
+ });
+
+describe('ordered successful Workspace observations',()=>{
+ it('a delayed allowed list cannot republish a Workspace removed by a newer successful list',async()=>{
+  const h=harness();const allowed=await (h.routes.workspaces as unknown as WorkspaceRoutes['workspaces'])('fixture');let release!:(v:unknown)=>void;
+  h.routes.workspaces.mockImplementationOnce(()=>new Promise(resolve=>{release=resolve;}));
+  const old=h.service.getWorkspaces();
+  h.routes.workspaces.mockResolvedValueOnce({...allowed,workspaces:[]});
+  expect((await h.service.getWorkspaces()).workspaces).toEqual([]);
+  release(allowed);expect((await old).workspaces).toEqual([]);
+  h.routes.workspaces.mockResolvedValue({...allowed,workspaces:[]});
+  expect(await h.service.getTree(WORKSPACE)).toMatchObject({ok:false});
+  expect(h.calls.some(c=>c.method==='inquello/workspace/tree')).toBe(false);
+ });
+ it('an older failed list cannot erase newer successful authority during native hydration',async()=>{
+  const h=harness();let reject!:(error:Error)=>void;
+  h.routes.workspaces.mockImplementationOnce(()=>new Promise((_,r)=>{reject=r;}));
+  const old=h.service.getWorkspaces();expect((await h.service.getWorkspaces()).workspaces).toHaveLength(1);
+  reject(new Error('older outage'));expect((await old).workspaces).toEqual([]);
+  expect((await h.service.getTree(WORKSPACE)).ok).toBe(true);
+  expect(h.routes.workspaces).toHaveBeenCalledTimes(4);
+ });
 });

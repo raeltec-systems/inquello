@@ -1,3 +1,4 @@
+import {fixtureDataAuthority} from './authorization-fixtures';
 /**
  * Story 1.12: export, reimport and delete over temp roots, and the main-side
  * data service with fake runtime and identity controls. Covers the "Export",
@@ -81,11 +82,10 @@ describe('export (matrix: Export)', () => {
     const destination = path.join(tempDir('data-export'), 'export');
     const { manifest, path: written } = await exportData({ policy, roots, destination, attribution: ATTRIBUTION, journal, now: () => new Date('2026-10-28T12:00:00Z') });
     expect(written).toBe(destination);
-    expect(manifest.notice).toBe('This export is a copy of local data for its owner. It transfers no permissions and is not an accepted audit record.');
+    expect(manifest.notice).toBe(policy.notice);
     expect(manifest.attribution).toEqual(ATTRIBUTION);
     expect(manifest.included.map((entry) => [entry.category, entry.files.length])).toEqual([
       ['task-history', 3],
-      ['desktop-stderr-log', 1],
       ['working-store', 0],
       ['task-folders', 0],
     ]);
@@ -105,7 +105,7 @@ describe('export (matrix: Export)', () => {
     // No credential anywhere in the export.
     for (const file of allFiles(destination)) expect(fs.readFileSync(file, 'utf8')).not.toContain(SESSION_SECRET);
     expect(fs.existsSync(path.join(destination, MANIFEST_FILE))).toBe(true);
-    expect(journal.read()).toEqual([{ path: destination, exportedAt: '2026-10-28T12:00:00.000Z', categories: ['task-history', 'desktop-stderr-log', 'working-store', 'task-folders'] }]);
+    expect(journal.read()).toEqual([{ path: destination, exportedAt: '2026-10-28T12:00:00.000Z', categories: ['task-history', 'working-store', 'task-folders'] }]);
     expect(fs.statSync(journal.file).mode & 0o777).toBe(0o600);
     expect(journal.file).toBe(path.join(userData, 'data', 'export-journal.json'));
   });
@@ -285,7 +285,7 @@ describe('short writes (review R07)', () => {
     const result = await importData({ policy, roots: target, source: destination });
     vi.restoreAllMocks();
     expect(result.restored.every((entry) => entry.files === 0)).toBe(true);
-    expect(result.notRestored).toHaveLength(4);
+    expect(result.notRestored).toHaveLength(3);
     for (const entry of result.notRestored) expect(entry.reason).toBe('It could not be written (EIO)');
     // Nothing restored, and no temporary file left behind.
     for (const dir of [target['runtime-home'], target.logs]) expect(fs.existsSync(dir) ? allFiles(dir) : []).toEqual([]);
@@ -337,7 +337,6 @@ describe('reimport (matrix: Round trip, Import into non-empty)', () => {
     const result = await importData({ policy, roots: target, source: destination });
     expect(result.restored).toEqual([
       { category: 'task-history', label: 'Task history', files: 3 },
-      { category: 'desktop-stderr-log', label: 'Desktop runtime error log', files: 1 },
       { category: 'working-store', label: 'Private work organisation', files: 0 },
       { category: 'task-folders', label: 'Task working folders', files: 0 },
     ]);
@@ -385,7 +384,7 @@ describe('reimport (matrix: Round trip, Import into non-empty)', () => {
     const result = await importData({ policy, roots: target, source: destination });
     expect(result.restored[0]).toMatchObject({ category: 'task-history', files: 3 });
     // The current log is never overwritten; it is listed instead.
-    expect(result.notRestored).toEqual([{ category: 'desktop-stderr-log', path: 'logs:app-server-stderr.log', reason: 'A file already exists there; it was not overwritten' }]);
+    expect(result.notRestored).toEqual([]);
     expect(fs.readFileSync(path.join(target.logs, 'app-server-stderr.log'), 'utf8')).toBe('current run\n');
   });
 
@@ -430,7 +429,7 @@ describe('delete (matrix: Delete)', () => {
         { category: 'export-journal', label: 'Export journal', files: 1 },
       ]),
     );
-    expect(report.survivingExports).toEqual([{ path: destination, exportedAt: expect.any(String), categories: ['task-history', 'desktop-stderr-log', 'working-store', 'task-folders'], outsideInquelloControl: true }]);
+    expect(report.survivingExports).toEqual([{ path: destination, exportedAt: expect.any(String), categories: ['task-history', 'working-store', 'task-folders'], outsideInquelloControl: true }]);
     expect(clearBrowserProfile).not.toHaveBeenCalled();
     // Emptied directories are pruned; the export itself is untouched.
     expect(fs.existsSync(path.join(roots['runtime-home'], 'sessions'))).toBe(false);
@@ -480,6 +479,7 @@ function harness(): Harness {
   let exportDest: string | null = path.join(tempDir('data-service-export'), 'export');
   let importSource: string | null = null;
   const options: DataServiceOptions = {
+    authority: fixtureDataAuthority(),
     load: loadShippedPolicy(),
     roots,
     journal,
@@ -546,14 +546,14 @@ describe('data service', () => {
       recovery: expect.any(String),
       held: { files: 3, bytes: expect.any(Number) },
     });
-    expect(view.blockers).toEqual([{ kind: 'unclassified', path: 'runtime-home:unexpected.bin', detail: 'runtime-home:unexpected.bin matches no category in the local data policy' }]);
+    expect(view.blockers).toEqual([{ kind: 'unclassified', detail: 'Local data policy inspection found a blocker; private file names are withheld.' }]);
     // No absolute path reaches the renderer.
     expect(JSON.stringify(view)).not.toContain(h.roots['user-data']);
   });
 
   it('blocks every action when the register did not load', async () => {
     const h = harness();
-    const broken = new DataService({ ...(h.service as unknown as { options: DataServiceOptions }).options, load: { ok: false, error: 'bad' } });
+    const broken = new DataService({authority:fixtureDataAuthority(), ...(h.service as unknown as { options: DataServiceOptions }).options, load: { ok: false, error: 'bad' } });
     expect(broken.getPolicy()).toMatchObject({ loaded: false, categories: [], blockers: [{ kind: 'policy-invalid' }] });
     await expect(broken.exportData()).resolves.toEqual({ ok: false, reason: 'The local data policy did not load, so local data actions are blocked.' });
   });
@@ -566,7 +566,6 @@ describe('data service', () => {
     expect(result.export.attribution.principal).toEqual({ displayName: 'Alice Synthetic', issuerLabel: 'Synthetic test issuer' });
     expect(result.export.included).toEqual([
       { category: 'task-history', label: 'Task history', files: 3 },
-      { category: 'desktop-stderr-log', label: 'Desktop runtime error log', files: 1 },
       { category: 'working-store', label: 'Private work organisation', files: 0 },
       { category: 'task-folders', label: 'Task working folders', files: 0 },
     ]);
@@ -656,7 +655,8 @@ describe('data service', () => {
     expect(deleted.delete.serverRevocation).toBe('confirmed');
     // Only the keyring entry stays: Local data never deletes from the OS credential store.
     expect(deleted.delete.retained).toEqual([{ category: 'codex-keyring-entry', label: 'Codex login (OS keyring)', files: 0 }]);
-    expect(deleted.delete.survivingExports).toEqual([expect.objectContaining({ path: exportedResult.export.path, outsideInquelloControl: true })]);
+    expect(deleted.delete.survivingExports).toEqual([]);
+    expect(deleted.delete.otherExportCopiesMayRemain).toBe(true); // signed out: no previous-owner paths
     expect(deleted.delete.removed.find((entry) => entry.category === 'identity-session')!.note).toMatch(/confirmed/);
     expect(fs.existsSync(h.journal.file)).toBe(false);
 
@@ -667,7 +667,6 @@ describe('data service', () => {
     expect(h.events).toEqual(['runtime:stop', 'runtime:start']);
     expect(imported.import.restored).toEqual([
       { category: 'task-history', label: 'Task history', files: 3 },
-      { category: 'desktop-stderr-log', label: 'Desktop runtime error log', files: 1 },
       { category: 'working-store', label: 'Private work organisation', files: 0 },
       { category: 'task-folders', label: 'Task working folders', files: 0 },
     ]);

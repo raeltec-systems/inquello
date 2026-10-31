@@ -947,6 +947,7 @@ impl CodexThread {
         patch: ThreadMetadataPatch,
         include_archived: bool,
     ) -> ThreadStoreResult<StoredThread> {
+        require_current_private_write(&self.session.thread_id.to_string()).await?;
         let live_thread = self
             .session
             .live_thread_for_persistence("update thread metadata")
@@ -958,6 +959,7 @@ impl CodexThread {
 
     /// Appends rollout items through the live thread so derived metadata stays in sync.
     pub async fn append_rollout_items(&self, items: &[RolloutItem]) -> ThreadStoreResult<()> {
+        require_current_private_write(&self.session.thread_id.to_string()).await?;
         let live_thread = self
             .session
             .live_thread_for_persistence("append rollout items")
@@ -1284,5 +1286,35 @@ impl CodexThread {
             .multi_agent_version()
             .unwrap_or_else(|| config.multi_agent_version_from_features());
         control.check_turn_admission(multi_agent_version, &self.session_source)
+    }
+}
+
+
+/// Shared by the direct metadata and rollout append APIs, before either obtains
+/// its live-thread writer. Ordinary non-Inquello threads retain their behavior.
+async fn require_current_private_write(thread_id:&str)->ThreadStoreResult<()> {
+    if !crate::inquello_inference::authorize_thread_disclosure(thread_id).await {
+        return Err(ThreadStoreError::Internal{message:"Current private Task authority unavailable".into()});
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod private_direct_writer_tests {
+    use super::*;
+    use std::sync::{Arc,atomic::Ordering};
+    #[tokio::test]
+    async fn direct_write_boundary_allows_current_owner_and_denies_unknown_revoked_and_late_allow() {
+        let id=uuid::Uuid::new_v4().to_string();
+        let authority=Arc::new(crate::inquello_inference::effect_test_support::Authority::new());
+        let guard:Arc<dyn crate::inquello_inference::TaskAuthorization>=authority.clone();
+        crate::inquello_inference::bind_task_authorization(&id,&guard).expect("bind");
+        assert!(require_current_private_write(&id).await.is_ok());
+        authority.current.store(false,Ordering::SeqCst);
+        assert!(require_current_private_write(&id).await.is_err());
+        authority.current.store(true,Ordering::SeqCst);
+        assert!(require_current_private_write(&id).await.is_err());
+        let missing=uuid::Uuid::new_v4().to_string();crate::inquello_inference::mark_task_thread(&missing).expect("mark");
+        assert!(require_current_private_write(&missing).await.is_err());
     }
 }

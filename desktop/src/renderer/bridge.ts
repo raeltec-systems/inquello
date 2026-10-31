@@ -216,6 +216,7 @@ export function parseDataAction(value: unknown, action: 'export' | 'import' | 'd
       lines.push(`Removed: ${text(entry.label) ?? '?'} (${plural(count(entry.filesRemoved), 'file')}${remaining > 0 ? `, ${remaining} remaining` : ''}).${note ? ` ${note}` : ''}`);
     }
     for (const entry of list(report.retained).map(record)) if (entry) lines.push(`Retained: ${text(entry.label) ?? '?'} (${plural(count(entry.files), 'file')}).`);
+    if(report.otherExportCopiesMayRemain===true)lines.push('Other exported copies may remain outside Inquello. Their paths are withheld because current ownership is unavailable.');
     for (const entry of list(report.survivingExports).map(record)) {
       if (entry) lines.push(`Exported copy outside Inquello's control, not deleted: ${text(entry.path) ?? '?'} (${text(entry.exportedAt) ?? ''}).`);
     }

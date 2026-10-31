@@ -58,6 +58,8 @@ export interface DeleteOptions {
   categories: readonly string[];
   /** The export journal's entries, read before anything is removed. */
   journalEntries: readonly JournalEntry[];
+  /** Main-owned recovery fences must outlive incomplete category deletion. */
+  protectedPaths?:ReadonlySet<string>;
   /** Clears Chromium storage and caches through Electron. */
   clearBrowserProfile?: () => Promise<void>;
   /** Extra text per category (main adds the identity revocation outcome). */
@@ -126,7 +128,7 @@ export async function deleteCategories(options: DeleteOptions): Promise<DeleteRe
   const removedCounts = new Map<string, number>();
   if (chosen.has(CHROMIUM_PROFILE)) await options.clearBrowserProfile?.();
   for (const file of before.files) {
-    if (!file.category || !chosen.has(file.category) || file.category === CHROMIUM_PROFILE) continue;
+    if (options.protectedPaths?.has(path.resolve(file.abs)) || !file.category || !chosen.has(file.category) || file.category === CHROMIUM_PROFILE) continue;
     try {
       fs.rmSync(file.abs, { force: true });
       removedCounts.set(file.category, (removedCounts.get(file.category) ?? 0) + 1);

@@ -16,10 +16,13 @@ export const JOURNAL_FILE = 'export-journal.json';
 export interface JournalEntry {
   /** The export directory, as chosen by the user. */
   path: string;
+  /** Presentation ownership only; never recovery authority. */
+  ownerPrincipalId?:string;
   /** ISO-8601 time the export finished. */
   exportedAt: string;
   /** Category ids the export includes. */
   categories: string[];
+
 }
 
 export function journalPath(userDataDir: string): string {
@@ -31,6 +34,7 @@ function isEntry(value: unknown): value is JournalEntry {
   const record = value as Record<string, unknown>;
   return (
     typeof record.path === 'string' &&
+    (record.ownerPrincipalId===undefined||(typeof record.ownerPrincipalId==='string'&&/^[0-9a-f-]{36}$/.test(record.ownerPrincipalId))) &&
     typeof record.exportedAt === 'string' &&
     Array.isArray(record.categories) &&
     record.categories.every((category) => typeof category === 'string')
@@ -57,7 +61,7 @@ export class ExportJournal {
     if (typeof parsed !== 'object' || parsed === null || (parsed as { version?: unknown }).version !== 1) throw new Error('the export journal has an unknown format');
     const entries = (parsed as { entries?: unknown }).entries;
     if (!Array.isArray(entries) || !entries.every(isEntry)) throw new Error('the export journal has an unknown format');
-    return entries.map((entry) => ({ path: entry.path, exportedAt: entry.exportedAt, categories: [...entry.categories] }));
+    return entries.map((entry) => ({ ...(entry.ownerPrincipalId?{ownerPrincipalId:entry.ownerPrincipalId}:{}), path: entry.path, exportedAt: entry.exportedAt, categories: [...entry.categories] }));
   }
 
   append(entry: JournalEntry): void {

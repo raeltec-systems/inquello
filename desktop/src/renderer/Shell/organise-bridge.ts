@@ -37,6 +37,7 @@ export interface TaskItem {
 }
 
 export interface WorkspaceTree {
+  unavailableTasks?:Array<{taskId:string;reason:'current_authority_unavailable'}>;
   workspaceId: string;
   engagements: EngagementItem[];
   folders: FolderItem[];
@@ -158,8 +159,9 @@ export function parseTree(value: unknown): WorkspaceTree | null {
   const engagements = all(r?.engagements, parseEngagement);
   const folders = all(r?.folders, parseFolder);
   const tasks = all(r?.tasks, parseTask);
-  if (workspaceId === null || !engagements || !folders || !tasks) return null;
-  return { workspaceId, engagements, folders, tasks };
+  const unavailableTasks=all(r?.unavailableTasks??[],item=>{const x=record(item);return x&&typeof x.taskId==='string'&&x.reason==='current_authority_unavailable'?{taskId:x.taskId,reason:'current_authority_unavailable' as const}:null;});
+  if (workspaceId === null || !engagements || !folders || !tasks || !unavailableTasks || unavailableTasks.length>10000) return null;
+  return { workspaceId, engagements, folders, tasks, unavailableTasks };
 }
 
 export function parseWorkspaces(value: unknown): WorkspacesState | null {

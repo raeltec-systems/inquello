@@ -38,6 +38,8 @@ type SharedState = State<Arc<AppState>>;
 pub(crate) fn router(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/v1/capabilities", get(capabilities))
+        .route("/v1/local-data/export-receipts", post(create_export_receipt))
+        .route("/v1/local-data/export-receipts/{receipt_id}/validate", post(validate_export_receipt))
         .route("/v1/login/transactions", post(create_login_transaction))
         .route("/v1/login/bootstrap", post(bootstrap))
         .route("/v1/login/abandon", post(abandon))
@@ -60,6 +62,8 @@ pub(crate) fn router(state: Arc<AppState>) -> Router {
             "/v1/workspaces/{workspace_id}/access-checks",
             post(access_check),
         )
+        .route("/v1/workspaces/{workspace_id}/route-eligibility-checks", post(route_eligibility_check))
+        .route("/v1/workspaces/{workspace_id}/route-approvals/{route_id}", get(route_approval_view))
         .route("/v1/invites/{invite_id}/accept", post(accept_invite))
         .layer(axum::middleware::map_response(no_store))
         .with_state(state)
@@ -261,4 +265,36 @@ async fn accept_invite(
     }
     .await;
     respond(result)
+}
+
+async fn route_eligibility_check(
+    State(state): SharedState, Path(workspace_id): Path<String>, headers: HeaderMap, body: Bytes,
+) -> Response {
+    respond(async {
+        let access = required_bearer(&headers).map_err(ApiError::on_workspace_route)?;
+        crate::route_eligibility::check(&state, access, workspaces::path_id(&workspace_id)?, parse(&body)?).await
+    }.await)
+}
+
+async fn route_approval_view(
+    State(state): SharedState, Path((workspace_id, route_id)): Path<(String, String)>, headers: HeaderMap,
+) -> Response {
+    respond(async {
+        let access = required_bearer(&headers).map_err(ApiError::on_workspace_route)?;
+        crate::route_eligibility::view(&state, access, workspaces::path_id(&workspace_id)?, &route_id).await
+    }.await)
+}
+
+async fn create_export_receipt(State(state): SharedState, headers: HeaderMap, body: Bytes) -> Response {
+    respond(async {
+        let access=required_bearer(&headers).map_err(ApiError::on_workspace_route)?;
+        crate::export_receipts::create(&state,access,parse(&body)?).await
+    }.await)
+}
+async fn validate_export_receipt(State(state): SharedState, Path(receipt_id): Path<String>, headers: HeaderMap, body: Bytes) -> Response {
+    respond(async {
+        let access=required_bearer(&headers).map_err(ApiError::on_workspace_route)?;
+        let receipt_id=workspaces::path_id(&receipt_id)?;
+        crate::export_receipts::validate(&state,access,receipt_id,parse(&body)?).await
+    }.await)
 }

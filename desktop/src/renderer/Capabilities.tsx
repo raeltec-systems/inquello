@@ -62,6 +62,7 @@ export function PolicySettings({ policy }: { policy: PolicyItem }): ReactElement
 export function CapabilityContract({ capabilities }: { capabilities: readonly CapabilityItem[] }): ReactElement {
   return (
     <section className="specimen-policy-contract" aria-labelledby="specimen-policy-contract-heading" data-capability-contract>
+      <p>Real-data use needs exact-build reviewed authorization evidence and independent current organization approval. Provider credentials and local action permission do not replace either requirement.</p>
       <h3 id="specimen-policy-contract-heading" className="specimen-policy-heading">
         Capability Contract
       </h3>

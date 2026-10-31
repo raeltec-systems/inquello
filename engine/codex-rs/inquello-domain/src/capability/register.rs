@@ -95,6 +95,8 @@ pub struct CapabilityEntry {
     /// not support.
     pub eligibility: Enablement,
     pub evidence: Vec<EvidenceRef>,
+    #[serde(default)]
+    pub negative_authorization: Option<crate::routes::NegativeAuthorizationEvidence>,
 }
 
 impl CapabilityEntry {
@@ -110,7 +112,8 @@ impl CapabilityEntry {
         let passes = |kind| self.evidence.iter().any(|evidence| evidence.passes(kind));
         if !passes(EvidenceKind::Synthetic) {
             Enablement::Disabled
-        } else if passes(EvidenceKind::NegativeAuthorization) {
+        } else if passes(EvidenceKind::NegativeAuthorization)
+            && self.negative_authorization.as_ref().is_some_and(|proof| proof.complete()) {
             Enablement::RealDataEligible
         } else {
             Enablement::SyntheticOnly
@@ -215,6 +218,11 @@ impl CapabilityEntry {
                 "declares RealDataEligible without a passing negative-authorization reference"
                     .to_string(),
             ));
+        }
+        if self.eligibility == Enablement::RealDataEligible
+            && self.negative_authorization.as_ref().is_none_or(|proof| !proof.complete())
+        {
+            return Err(invalid("declares RealDataEligible without complete exact-build negative-authorization evidence".into()));
         }
         Ok(())
     }

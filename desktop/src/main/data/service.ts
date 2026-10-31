@@ -1,3 +1,8 @@
+import {inspectorsQuiescent} from '../runtime/data-inspector';
+import fs from 'node:fs';
+import path from 'node:path';
+import {randomUUID,createHash} from 'node:crypto';
+import {DataAuthorityError,DATA_AUTHORITY_UNAVAILABLE,type DataAuthority,type DataProvenance} from './authority';
 /**
  * The main-process local data service behind the `data.*` operations.
  *
@@ -26,7 +31,8 @@
 import type { Logger } from '../runtime/logger';
 import { deleteCategories, DeleteError, validateDeletion, type DeleteReport } from './delete';
 import { exportData, ExportError, type Attribution, type ManifestOmission } from './export';
-import { importData, ImportError } from './import';
+import { importData, pinImportPlan, ImportError,readManifest, type ImportPublication, quarantinePublications } from './import';
+import {FILES_DIR,type ExportManifest} from './export';
 import { takeInventory, type GovernedRoots, type Inventory } from './inventory';
 import type { ExportJournal } from './journal';
 import { isStoreCategory, realDataBlockers, type BlockerKind, type DataPolicy, type PolicyLoad } from './policy';
@@ -42,9 +48,12 @@ export interface RuntimeControl {
   start(): Promise<void>;
   /** Tasks currently running in the runtime. */
   activeTasks(): number;
+  /** Main-only hint: uncertain work may be stopped, never presumed stopped. */
+  canQuiesceUncertainActivity?(): boolean;
 }
 
 export interface IdentityControl {
+  principalId?():string|null;
   /** The signed-in principal for attribution, or null. */
   principal(): Promise<{ displayName: string; issuerLabel: string } | null>;
   /** Whether a session is held (signed in, or a sign-out is pending). */
@@ -64,6 +73,7 @@ export interface ProviderControl {
 
 export interface DataServiceOptions {
   load: PolicyLoad;
+  authority?:DataAuthority;
   roots: GovernedRoots;
   journal: ExportJournal;
   runtime: RuntimeControl;
@@ -126,6 +136,7 @@ export interface ImportReportView {
 export type ServerRevocation = 'confirmed' | 'not-confirmed' | 'not-signed-in';
 
 export interface DeleteReportView extends DeleteReport {
+  otherExportCopiesMayRemain?:boolean;
   serverRevocation?: ServerRevocation;
 }
 
@@ -147,8 +158,11 @@ const omissionView = (omission: ManifestOmission) => ({ category: omission.categ
 
 export class DataService {
   private busy = false;
+  private recoveryUnsafe=false;
 
-  constructor(private readonly options: DataServiceOptions) {}
+  constructor(private readonly options: DataServiceOptions) {this.recoveryUnsafe=fs.existsSync(this.recoveryMarker());}
+  private activityBlocks(){return this.options.runtime.activeTasks()>0&&!this.options.runtime.canQuiesceUncertainActivity?.();}
+  private recoveryMarker(){return path.join(this.options.roots['user-data'],'data','recovery-unvalidated');}
 
   get policy(): DataPolicy | null {
     return this.options.load.ok ? this.options.load.policy : null;
@@ -202,23 +216,40 @@ export class DataService {
     }
   }
 
+  private manifestFiles(manifest:ExportManifest){return manifest.included.flatMap(entry=>entry.files.map(file=>({...file,category:entry.category}))).sort((a,b)=>`${a.root}:${a.path}`.localeCompare(`${b.root}:${b.path}`));}
+  private manifestDigest(manifest:ExportManifest){return createHash('sha256').update(JSON.stringify({version:1,files:this.manifestFiles(manifest).map(f=>({root:f.root,path:f.path,sha256:f.sha256,size:String(f.size),category:f.category}))})).digest('hex');}
+  private async inspect(roots=this.options.roots){if(!this.options.authority)throw new DataAuthorityError();return this.options.authority.inspect(roots);}
+  private async authorize(provenance:DataProvenance,action:'export'|'recover'){if(!this.options.authority)throw new DataAuthorityError();await this.options.authority.check(provenance,action);}
   exportData(): Promise<ExportActionResult> {
     return this.exclusive(async () => {
-      if (this.options.runtime.activeTasks() > 0) return { ok: false, reason: DATA_REASONS.exportTaskRunning };
+      if (this.activityBlocks()) return { ok: false, reason: DATA_REASONS.exportTaskRunning };
       const destination = await this.options.chooseExportDestination();
       if (!destination) return { ok: false, reason: DATA_REASONS.cancelled };
       // The chooser can stay open while another operation starts work.
-      if (this.options.runtime.activeTasks() > 0) return { ok: false, reason: DATA_REASONS.exportTaskRunning };
+      if (this.activityBlocks()) return { ok: false, reason: DATA_REASONS.exportTaskRunning };
       return this.withRuntimeStopped<ExportActionResult>(async () => {
+        let createdDestination: string | undefined;
         try {
+          if(fs.existsSync(this.recoveryMarker())){this.recoveryUnsafe=true;throw new DataAuthorityError();}
+          const provenance=await this.inspect();
+          await this.authorize(provenance,'export');
           const result = await exportData({
             policy: this.policy!,
             roots: this.options.roots,
             destination,
-            journal: this.options.journal,
+            journal: {append:()=>{}},
+            provenFiles:new Map(provenance.files.map(file=>[path.resolve(file.path),file])),
+            authorize:()=>this.authorize(provenance,'export'),
             attribution: { principal: await this.options.identity.principal(), appVersion: this.options.appVersion, runtimeVersion: this.options.runtimeVersion },
           });
+          createdDestination = result.path;
           const { manifest } = result;
+          await this.authorize(provenance,'export');
+          const digest=this.manifestDigest(manifest),receipt=await this.options.authority!.createReceipt(provenance,digest);
+          manifest.provenance={receiptId:receipt.receipt_id,manifestDigest:digest};
+          await this.authorize(provenance,'export');
+          fs.writeFileSync(path.join(result.path,'manifest.json'),`${JSON.stringify(manifest,null,2)}\n`,{mode:0o600});
+          this.options.journal.append({path:result.path,exportedAt:manifest.createdAt,categories:manifest.included.map(entry=>entry.category),ownerPrincipalId:provenance.principalId});
           this.options.logger.info(`data: exported ${manifest.included.length} categories`);
           return {
             ok: true,
@@ -236,33 +267,53 @@ export class DataService {
             },
           };
         } catch (error) {
-          this.options.logger.warn(`data: export failed (${(error as Error).message})`);
-          return { ok: false, reason: error instanceof ExportError ? sentence(error.message) : 'The export could not be written; nothing was kept.' };
+          if (createdDestination) { try { fs.rmSync(createdDestination, {recursive:true,force:true}); } catch { /* The owner may already have copied bytes; no recall claim. */ } }
+          this.options.logger.warn('data: export failed; protected details withheld');
+          return { ok: false, reason: error instanceof DataAuthorityError?DATA_AUTHORITY_UNAVAILABLE:error instanceof ExportError ? sentence(error.message) : 'The export could not be completed. Already exported copies cannot be recalled.' };
         }
       });
     });
   }
 
   importData(): Promise<ImportActionResult> {
-    return this.exclusive(async () => {
-      if (this.options.runtime.activeTasks() > 0) return { ok: false, reason: DATA_REASONS.taskRunning };
-      const source = await this.options.chooseImportSource();
-      if (!source) return { ok: false, reason: DATA_REASONS.cancelled };
-      return this.withRuntimeStopped(async () => {
-        try {
-          const result = await importData({ policy: this.policy!, roots: this.options.roots, source });
-          this.options.logger.info(`data: imported ${result.restored.reduce((sum, entry) => sum + entry.files, 0)} files`);
-          return {
-            ok: true as const,
-            import: {
-              restored: result.restored.map((entry) => ({ category: entry.category, label: entry.label, files: entry.files })),
-              notRestored: result.notRestored.map((entry) => ({ category: entry.category, path: entry.path, reason: entry.reason })),
-              omissions: result.omissions.map(omissionView),
-            },
-          };
-        } catch (error) {
-          this.options.logger.warn(`data: import refused (${(error as Error).message})`);
-          return { ok: false as const, reason: error instanceof ImportError ? sentence(error.message) : 'The import could not be completed.' };
+    return this.exclusive(async()=>{
+      if(this.activityBlocks())return{ok:false,reason:DATA_REASONS.taskRunning};
+      const source=await this.options.chooseImportSource();if(!source)return{ok:false,reason:DATA_REASONS.cancelled};
+      if(this.activityBlocks())return{ok:false,reason:DATA_REASONS.taskRunning};
+      return this.withRuntimeStopped(async()=>{
+        const marker=this.recoveryMarker();
+        if(fs.existsSync(marker)){this.recoveryUnsafe=true;return{ok:false as const,reason:'An interrupted recovery remains unvalidated. Delete the protected local data categories before restoring again; the runtime stays stopped.'};}
+        const publications: ImportPublication[]=[];
+        let manifest:ExportManifest|undefined;
+        try{
+          manifest=pinImportPlan(readManifest(source));
+          const files=this.manifestFiles(manifest);
+          const reference=manifest.provenance,digest=this.manifestDigest(manifest);
+          if(!reference||reference.manifestDigest!==digest||typeof reference.receiptId!=='string'||! /^[0-9a-f-]{36}$/.test(reference.receiptId)||files.length===0)throw new DataAuthorityError();
+          const stagedRoots:GovernedRoots={'user-data':path.join(source,FILES_DIR,'user-data'),'runtime-home':path.join(source,FILES_DIR,'runtime-home'),logs:path.join(source,FILES_DIR,'logs')};
+          const provenance=await this.inspect(stagedRoots);
+          await this.options.authority!.validateReceipt(provenance,reference.receiptId,digest);
+          const proven=new Map(provenance.files.map(file=>[path.resolve(file.path),file]));
+          for(const file of files){const proof=proven.get(path.resolve(stagedRoots[file.root],file.path));if(!proof||proof.category!==file.category||proof.sha256!==file.sha256||proof.size!==file.size)throw new DataAuthorityError();}
+          await this.authorize(provenance,'recover');
+          fs.mkdirSync(path.dirname(marker),{recursive:true,mode:0o700});fs.writeFileSync(marker,'Current validation required before runtime reopen\n',{mode:0o600});
+          const result=await importData({policy:this.policy!,roots:this.options.roots,source,plan:manifest,onPublished:publication=>publications.push(publication),authorize:()=>this.authorize(provenance,'recover')});
+          // The immutable receipt authenticates this exact plan, never a restored lease.
+          await this.options.authority!.validateReceipt(provenance,reference.receiptId,digest);
+          await this.authorize(provenance,'recover');
+          fs.rmSync(marker,{force:true});this.recoveryUnsafe=false;
+          return{ok:true as const,import:{restored:result.restored,notRestored:result.notRestored,omissions:result.omissions.map(omissionView)}};
+        }catch(error){
+          // Runtime is still stopped. Quarantine only new files from this attempt;
+          // never mix/remove an earlier database family or restore old authority.
+          try{
+            if(fs.existsSync(marker)&&manifest){
+              const quarantine=path.join(this.options.roots['user-data'],'data','quarantine',randomUUID());
+              quarantinePublications(publications,quarantine);
+              fs.rmSync(marker,{force:true});
+            }
+          }catch{this.recoveryUnsafe=true;}
+          return{ok:false as const,reason:this.recoveryUnsafe?'Recovered data could not be safely quarantined. The runtime remains stopped; current validation is required before reopening.':error instanceof DataAuthorityError?DATA_AUTHORITY_UNAVAILABLE:error instanceof ImportError?sentence(error.message):'Recovery did not complete; unvalidated new data was quarantined.'};
         }
       });
     });
@@ -271,12 +322,15 @@ export class DataService {
   deleteData(categories: readonly string[]): Promise<DeleteActionResult> {
     return this.exclusive(async () => {
       const policy = this.policy!;
+      const journalPrincipal=this.options.identity.principalId?.()??null;
+      const marker=this.recoveryMarker(),interrupted=fs.existsSync(marker);
+      if(interrupted)this.recoveryUnsafe=true;
       try {
         validateDeletion(policy, categories);
       } catch (error) {
         return { ok: false, reason: sentence((error as Error).message) };
       }
-      if (this.options.runtime.activeTasks() > 0) return { ok: false, reason: DATA_REASONS.taskRunning };
+      if (this.activityBlocks()) return { ok: false, reason: DATA_REASONS.taskRunning };
       let journalEntries;
       try {
         journalEntries = this.options.journal.read();
@@ -324,17 +378,30 @@ export class DataService {
             roots: this.options.roots,
             categories,
             journalEntries,
+            protectedPaths:new Set([path.resolve(marker)]),
             clearBrowserProfile: this.options.clearBrowserProfile,
             notes,
           });
           if (categories.includes(CLAUDE_KEY_VAULT) && this.options.providers.holdsClaudeKey()) {
             return { ok: false as const, reason: 'The Claude API key could not be removed and is still stored. Remove it in Providers.' };
           }
+          if(interrupted){
+            const protectedCategories=policy.categories.filter(c=>c.enabled&&c.export.mode==='included').map(c=>c.id);
+            const remaining=takeInventory(policy,this.options.roots);
+            if(protectedCategories.every(id=>categories.includes(id))&&!remaining.files.some(f=>f.category&&protectedCategories.includes(f.category))){
+              fs.rmSync(marker,{force:true});this.recoveryUnsafe=false;
+              const removed=report.removed.find(e=>e.category==='device-id');if(removed){removed.filesRemoved++;removed.filesRemaining=Math.max(0,removed.filesRemaining-1);}
+              const retained=report.retained.find(e=>e.category==='device-id');if(retained)retained.files=Math.max(0,retained.files-1);
+            }
+          }
           this.options.logger.info(`data: deleted ${categories.join(', ')}`);
+          const currentPrincipal=this.options.identity.principalId?.()??null;
+          const visibleExports=report.survivingExports.filter(e=>!!journalPrincipal&&currentPrincipal===journalPrincipal&&e.ownerPrincipalId===journalPrincipal);
           const view: DeleteReportView = {
             removed: report.removed.map((entry) => ({ ...entry })),
             retained: report.retained.map((entry) => ({ ...entry })),
-            survivingExports: report.survivingExports.map((entry) => ({ path: entry.path, exportedAt: entry.exportedAt, categories: [...entry.categories], outsideInquelloControl: true })),
+            otherExportCopiesMayRemain:visibleExports.length!==report.survivingExports.length,
+            survivingExports: visibleExports.map((entry) => ({ path: entry.path, exportedAt: entry.exportedAt, categories: [...entry.categories], outsideInquelloControl: true })),
           };
           if (serverRevocation) view.serverRevocation = serverRevocation;
           return { ok: true as const, delete: view };
@@ -348,6 +415,7 @@ export class DataService {
 
   /** Stops the runtime, runs `fn`, then restarts the runtime whatever happened. */
   private async withRuntimeStopped<T extends { ok: boolean }>(fn: () => Promise<T>): Promise<T | { ok: false; reason: string }> {
+    if(!inspectorsQuiescent())return{ok:false,reason:'Native inspector exit is not yet confirmed. Local data changes and runtime reopening remain blocked.'};
     try {
       await this.options.runtime.stop();
     } catch (error) {
@@ -359,21 +427,24 @@ export class DataService {
       result = await fn();
     } finally {
       try {
+        if(this.recoveryUnsafe || !inspectorsQuiescent())throw new Error('Protected data or inspector exit remains unvalidated');
         await this.options.runtime.start();
       } catch (error) {
         this.options.logger.error(`data: the runtime did not restart (${(error as Error).message})`);
         result = undefined;
       }
     }
+    if(!inspectorsQuiescent())return{ok:false,reason:'Native inspector exit is not yet confirmed. Local data changes and runtime reopening remain blocked.'};
+    if(this.recoveryUnsafe)return{ok:false,reason:'Recovered data remains quarantined or unvalidated. The runtime stays stopped; current validation is required before reopening.'};
     if (result === undefined) return { ok: false, reason: DATA_REASONS.runtimeRestart };
     return result;
   }
 }
 
 function blockerView(blocker: { kind: BlockerKind; category?: string; path?: string; detail: string }): BlockerView {
-  const view: BlockerView = { kind: blocker.kind, detail: blocker.detail };
+  const view: BlockerView = { kind: blocker.kind, detail: 'Local data policy inspection found a blocker; private file names are withheld.' };
   if (blocker.category !== undefined) view.category = blocker.category;
-  if (blocker.path !== undefined) view.path = blocker.path;
+  // File names can themselves disclose private content; only category-level reasons cross IPC.
   return view;
 }
 

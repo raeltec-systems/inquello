@@ -261,10 +261,20 @@ impl ClientTracker {
                     let Some(queued_message) = queued_message else {
                         break;
                     };
-                    let event = ServerEvent::ServerMessage {
-                        message: Box::new(queued_message.message),
-                    };
-                    (event, queued_message.write_complete_tx)
+                    // Story 1.28 does not certify remote replay of private data.
+                    // Settle RPCs without ever buffering protected content for replay.
+                    let (message, receipt) = if queued_message.private_fence.is_some() {
+                        let id = match queued_message.message {
+                            crate::OutgoingMessage::Response(response) => response.id,
+                            crate::OutgoingMessage::Error(error) => error.id,
+                            _ => continue,
+                        };
+                        (crate::OutgoingMessage::Error(crate::OutgoingError { id, error: codex_app_server_protocol::JSONRPCErrorError {
+                            code: -32001, message: "Private work unavailable".into(), data: None,
+                        }}), None)
+                    } else { (queued_message.message, queued_message.write_complete_tx) };
+                    let event = ServerEvent::ServerMessage { message: Box::new(message) };
+                    (event, receipt)
                 }
                 changed = status_rx.changed() => {
                     if changed.is_err() {
@@ -491,6 +501,64 @@ mod tests {
             method: "initialized".to_string(),
             params: None,
         })
+    }
+
+    #[tokio::test]
+    async fn actual_outbound_consumer_refuses_private_replay_and_never_acknowledges_it() {
+        for cancelled in [false,true] {
+            let (server_tx,mut server_rx)=mpsc::channel(8);
+            let (writer_tx,writer_rx)=mpsc::channel(8);
+            let (_status_tx,status_rx)=watch::channel(PongStatus::Unknown);
+            let token=CancellationToken::new();
+            if cancelled {token.cancel();}
+            let client=ClientId("fixture-client".into());let stream=StreamId("fixture-stream".into());
+            let outbound=tokio::spawn(ClientTracker::run_client_outbound(client.clone(),stream.clone(),server_tx,writer_rx,status_rx,CancellationToken::new()));
+            let private_messages=vec![
+                OutgoingMessage::Response(crate::outgoing_message::OutgoingResponse {
+                    id:RequestId::Integer(41),result:Box::new(codex_app_server_protocol::ClientResponsePayload::ThreadArchive(codex_app_server_protocol::ThreadArchiveResponse {})),
+                }),
+                OutgoingMessage::Error(crate::outgoing_message::OutgoingError {
+                    id:RequestId::String("private-error-id".into()),error:codex_app_server_protocol::JSONRPCErrorError {
+                        code:-32000,message:"protected error content".into(),data:Some(json!({"secret":"protected data"})),
+                    },
+                }),
+                OutgoingMessage::AppServerNotification(ServerNotificationEnvelope {
+                    notification:ServerNotification::ConfigWarning(ConfigWarningNotification {
+                        summary:"protected notification content".into(),details:None,path:None,range:None,
+                    }),emitted_at_ms:Some(1234),
+                }),
+            ];
+            let mut receipts=Vec::new();
+            for message in private_messages {
+                let (receipt_tx,receipt_rx)=tokio::sync::oneshot::channel();receipts.push(receipt_rx);
+                writer_tx.send(QueuedOutgoingMessage {message,private_fence:Some(crate::outgoing_message::PrivateOutputFence::new(token.clone())),write_complete_tx:Some(receipt_tx)}).await.unwrap();
+            }
+            // A public message after the notification is a deterministic drain barrier.
+            let public=OutgoingMessage::Error(crate::outgoing_message::OutgoingError {
+                id:RequestId::Integer(99),error:codex_app_server_protocol::JSONRPCErrorError {code:-32000,message:"public control".into(),data:None},
+            });
+            let expected_public=serde_json::to_value(&public).unwrap();
+            let (receipt_tx,receipt_rx)=tokio::sync::oneshot::channel();
+            writer_tx.send(QueuedOutgoingMessage {message:public,private_fence:None,write_complete_tx:Some(receipt_tx)}).await.unwrap();
+            drop(writer_tx);
+            assert_eq!(timeout(Duration::from_secs(1),outbound).await.expect("outbound drains").unwrap(),(client.clone(),stream.clone()));
+            for id in [json!(41),json!("private-error-id")] {
+                let envelope=server_rx.recv().await.unwrap();
+                assert_eq!(envelope.client_id,client);assert_eq!(envelope.stream_id,stream);
+                assert!(envelope.write_complete_tx.is_none(),"refused private payload has no successful-write receipt");
+                let ServerEvent::ServerMessage {message}=envelope.event else {panic!("bounded RPC settlement required");};
+                let OutgoingMessage::Error(error)=*message else {panic!("private response must become unavailable error");};
+                assert_eq!(serde_json::to_value(error.id).unwrap(),id);
+                assert_eq!(error.error.code,-32001);assert_eq!(error.error.message,"Private work unavailable");assert!(error.error.data.is_none());
+            }
+            let envelope=server_rx.recv().await.unwrap();
+            let ServerEvent::ServerMessage {message}=envelope.event else {panic!("public message required");};
+            assert_eq!(serde_json::to_value(message).unwrap(),expected_public);
+            envelope.write_complete_tx.expect("public receipt retained").send(()).unwrap();
+            assert!(receipt_rx.await.is_ok());
+            assert!(server_rx.recv().await.is_none(),"private notification never enters replay queue");
+            for receipt in receipts {assert!(receipt.await.is_err(),"suppression is not a successful write");}
+        }
     }
 
     #[tokio::test]

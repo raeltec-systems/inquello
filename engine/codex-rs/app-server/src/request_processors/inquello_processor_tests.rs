@@ -2125,3 +2125,23 @@ async fn an_untrusted_asking_behaviour_asks_before_an_unmatched_command() {
     assert_eq!(evaluation["source"]["kind"], json!("approval_behaviour"));
     assert_eq!(evaluation["controllingRule"], serde_json::Value::Null);
 }
+
+#[tokio::test]
+async fn actual_native_create_keeps_draft_and_mixed_tree_projection_never_exposes_foreign_ids() {
+    use inquello_domain::organise::OrganiseStore;
+    let f=fixture();let processor=&f.processor;sign_in(processor,DESKTOP,ALICE).await;
+    let own:InquelloTaskResponse=decode(processor.task_create(DESKTOP,task_params("owned-draft-projection",None,None)).await);
+    let unavailable:InquelloTaskResponse=decode(processor.task_create(DESKTOP,task_params("unavailable-draft-projection",None,None)).await);
+    sign_in(processor,OTHER,BOB).await;
+    let peer:InquelloTaskResponse=decode(processor.task_create(OTHER,task_params("peer-draft-projection",None,None)).await);
+    let (store,actor)=processor.context(DESKTOP).await.expect("context");
+    assert!(store.task_is_native_draft(actor.principal_id,&own.task.task_id).await.expect("provenance"));
+    assert_eq!(store.task_data_tier(actor.principal_id,&own.task.task_id).await.expect("tier"),None);
+    let load=|id:String| {let store=store.clone();async move {store.load_task(TaskId::parse(&id).expect("id")).await.expect("load").expect("task")}};
+    let own=load(own.task.task_id).await;let unavailable=load(unavailable.task.task_id).await;let peer=load(peer.task.task_id).await;
+    assert!(matches!(private_task_tree_item(&own,actor,WORKSPACE,true),Some(Ok(_))));
+    let denied=private_task_tree_item(&unavailable,actor,WORKSPACE,false).expect("owned unavailable").expect_err("no protected task");
+    let json=serde_json::to_value(denied).expect("safe item");assert_eq!(json.as_object().expect("object").len(),2);assert!(json.get("title").is_none());
+    assert!(private_task_tree_item(&peer,actor,WORKSPACE,false).is_none());
+    assert!(private_task_tree_item(&own,actor,OTHER_WORKSPACE,false).is_none());
+}

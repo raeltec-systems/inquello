@@ -9,6 +9,7 @@ license.workspace = true
 # conformance fixtures under fixtures/ are shared by the service and its clients.
 
 [dependencies]
+inquello-domain = { path = "../inquello-domain" }
 serde_json = { workspace = true }
 chrono = { workspace = true }
 serde = { workspace = true, features = ["derive"] }

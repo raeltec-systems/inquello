@@ -32,7 +32,7 @@ const USAGE: &str = "usage:
   inquello-service admin update-policy --workspace ID --policy FILE \\
       [--operator NAME] [--database-url URL]
 
-The database URL defaults to INQUELLO_DATABASE_URL.";
+  inquello-service admin route-approval --request FILE [--database-url URL]\n\nThe database URL defaults to INQUELLO_DATABASE_URL.";
 
 #[derive(Debug)]
 enum CliError {
@@ -166,6 +166,19 @@ async fn run(args: &[String]) -> Result<String, CliError> {
             let config = database(&mut flags)?;
             let pool = admin::open(&config).await?;
             let outcome = admin::update_policy(&pool, request, now()).await;
+            pool.close().await;
+            Ok(serde_json::to_string(&outcome?).unwrap_or_default())
+        }
+        [admin, command, rest @ ..] if admin == "admin" && command == "route-approval" => {
+            let mut flags = flags(rest, &["request", "database-url"])?;
+            // Explicit operator, issuer, validity, scope, epoch and revision are
+            // mandatory in this strict request; no environment-derived approval.
+            let document = read_policy(&take(&mut flags, "request")?)?;
+            let request: admin::RouteApprovalCommand = serde_json::from_str(&document)
+                .map_err(|_| CliError::Usage("invalid route approval request".into()))?;
+            let config = database(&mut flags)?;
+            let pool = admin::open(&config).await?;
+            let outcome = admin::route_approval(&pool, request, now()).await;
             pool.close().await;
             Ok(serde_json::to_string(&outcome?).unwrap_or_default())
         }

@@ -24,7 +24,7 @@ fn register_json(eligibility: &str, evidence: &[(&str, &str)]) -> String {
             )
         })
         .collect();
-    format!(
+    let json = format!(
         r#"{{
   "schema_version": 1,
   "entries": [{{
@@ -41,7 +41,30 @@ fn register_json(eligibility: &str, evidence: &[(&str, &str)]) -> String {
   }}]
 }}"#,
         evidence.join(", ")
-    )
+    );
+    let mut value: Value = serde_json::from_str(&json).unwrap();
+    if eligibility == "real-data-eligible" {
+        // Strict domain fixture only: never shipped evidence or executed suite evidence.
+        value["entries"][0]["negative_authorization"] = serde_json::json!({
+            "suite": inquello_domain::routes::AUTHORIZATION_SUITE,
+            "tested_artifact_digest": "c".repeat(64),
+            "processing_scope": "local", "data_policy_digest": "e".repeat(64),
+            "identity": {
+                "route_id": "codex-responses", "deployment": "openai-api",
+                "endpoint": "https://api.openai.com/v1/responses", "model": "fixture-model",
+                "api_version": "fixture-api", "configuration_digest": "a".repeat(64),
+                "implementation_digest": "b".repeat(64), "runtime_version": "fixture-runtime",
+                "contract_version": "fixture-contract", "platform": "fixture-platform"
+            },
+            "scenarios": inquello_domain::routes::REQUIRED_AUTHORIZATION_SCENARIOS.iter()
+                .map(|name| (name.to_string(), "passed")).collect::<std::collections::BTreeMap<_, _>>(),
+            "passed": inquello_domain::routes::REQUIRED_AUTHORIZATION_SCENARIOS.len(),
+            "failed": 0, "skipped": 0, "command": "domain fixture only",
+            "environment": "unit fixture", "report_digest": "d".repeat(64),
+            "limitations": ["Not execution evidence; unit fixture only"]
+        });
+    }
+    if eligibility == "real-data-eligible" { value.to_string() } else { json }
 }
 
 fn load(
@@ -471,4 +494,12 @@ fn remote_cloud_execution_remains_disabled() {
         .unwrap();
     assert!(entry.limits.iter().any(|limit| limit.contains("Story 8.1")));
     assert!(entry.limits.iter().any(|limit| limit.contains("OQ-13")));
+}
+
+#[test]
+fn unbound_negative_reference_no_longer_enables_real_data() {
+    let mut value: Value = serde_json::from_str(&register_json("real-data-eligible",
+        &[("synthetic", "passed"), ("negative-authorization", "passed")])).unwrap();
+    value["entries"][0].as_object_mut().unwrap().remove("negative_authorization");
+    assert_invalid_entry(CapabilityRegister::from_json(&value.to_string()), "exact-build");
 }

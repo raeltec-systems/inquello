@@ -7,7 +7,7 @@
  *   here can list another creator's). There is no Share control.
  * - Engagement and folder creation use the Story 1.6 inputs. Creating an
  *   Engagement needs the shared service: while it is unavailable the button is
- *   disabled with main's reason, and existing Tasks still list and open.
+ *   disabled with main's reason; private work requires current authority.
  * - A failed creation keeps the draft and its operation ID, so a retry cannot
  *   create a second Engagement or folder.
  * - Story 1.16: the 20px lockup with a Collapse control, NavRows (Task rows
@@ -341,6 +341,7 @@ function SidebarContent(props: SidebarProps & { collapseLabel: string }): ReactE
           <p className="iq-sidebar-empty">No Workspace is available to you yet.</p>
         )}
       </div>
+      {(tree?.unavailableTasks?.length??0)>0?<p className="iq-sidebar-empty" role="status">Some of your Tasks are unavailable until current authority can be verified. Your drafts are kept.</p>:null}
       <Button variant="primary" size="sm" icon="plus" onPress={onNewThread} disabledReason={noWorkspace} pending={busy} data-action="new-thread">
         New thread
       </Button>

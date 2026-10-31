@@ -42,6 +42,7 @@ pub const REDIRECT_URI: &str = "http://127.0.0.1:53682/callback";
 /// Every table the service owns, for the raw-credential scan.
 const TABLES: &[&str] = &[
     "service_state",
+    "export_provenance_receipts",
     "principals",
     "login_transactions",
     "consumed_id_tokens",
@@ -60,6 +61,9 @@ const TABLES: &[&str] = &[
     "workspace_events",
     "resource_registrations",
     "grants",
+    "route_approvals",
+    "route_approval_history",
+    "route_approval_receipts",
 ];
 
 pub fn lifetimes() -> Lifetimes {
@@ -180,7 +184,7 @@ pub struct TestDatabase {
 }
 
 impl TestDatabase {
-    async fn create() -> Self {
+    pub(crate) async fn create() -> Self {
         let admin = admin_pool().await;
         assert_postgres_18(&admin).await;
         let name = format!("inquello_t_{}", Uuid::new_v4().simple());

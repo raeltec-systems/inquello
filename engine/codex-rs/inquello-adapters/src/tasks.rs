@@ -23,17 +23,19 @@ async fn write(tx:&mut Tx<'_>,b:&TaskRunBinding)->Result<(),DomainError>{
  sqlx::query("UPDATE task_runs SET thread_id=?,record=? WHERE principal_id=? AND operation_id=?").bind(&b.thread_id).bind(encode_binding(b)?).bind(&b.principal_id).bind(&b.operation_id).execute(&mut **tx).await.map_err(backend)?;Ok(())
 }
 impl TaskRunStore for SqliteWorkingStore {
- async fn reserve_task_run(&self,p:PrincipalId,intent:StartTaskIntent,runtime:&str,now:i64)->Result<TaskRunBinding,DomainError>{
-  self.reserve_task_run_fenced(p,intent,runtime,now,||async {Ok(())}).await.map_err(TaskReservationError::into_domain)
+ async fn reserve_task_run(&self,p:PrincipalId,intent:StartTaskIntent,runtime:&str,now:i64,tier:NativeTaskDataTier)->Result<TaskRunBinding,DomainError>{
+  self.reserve_task_run_fenced(p,intent,runtime,now,tier,|_|async {Ok(())}).await.map_err(TaskReservationError::into_domain)
  }
- async fn reserve_task_run_fenced<F,Fut>(&self,p:PrincipalId,intent:StartTaskIntent,runtime:&str,now:i64,validate:F)->Result<TaskRunBinding,TaskReservationError>
- where F:Fn()->Fut+Send+Sync,Fut:std::future::Future<Output=Result<(),DomainError>>+Send {
+ async fn reserve_task_run_fenced<F,Fut>(&self,p:PrincipalId,intent:StartTaskIntent,runtime:&str,now:i64,tier:NativeTaskDataTier,validate:F)->Result<TaskRunBinding,TaskReservationError>
+ where F:Fn(String)->Fut+Send+Sync,Fut:std::future::Future<Output=Result<(),DomainError>>+Send {
   intent.validate().map_err(TaskReservationError::PreEffect)?;reference(runtime).map_err(TaskReservationError::PreEffect)?;
+  let proposed_task_id=Uuid::new_v4().to_string();
   let mut tx=self.pool().begin_with("BEGIN IMMEDIATE").await.map_err(backend)?;
-  if let Err(error)=validate().await {tx.rollback().await.map_err(backend)?;return Err(TaskReservationError::PreEffect(error));}
+  if let Err(error)=validate(proposed_task_id.clone()).await {tx.rollback().await.map_err(backend)?;return Err(TaskReservationError::PreEffect(error));}
   if let Some(old)=load(&mut tx,p,&intent.operation_id).await?{
    let raw:String=sqlx::query_scalar("SELECT intent FROM task_start_history WHERE task_id=?").bind(&old.task_id).fetch_one(&mut *tx).await.map_err(backend)?;
-   if decode_intent(&raw)?!=intent{return Err(TaskReservationError::PreEffect(DomainError::OperationConflict{operation_id:OperationId::parse(&intent.operation_id)?}))}return Ok(old)
+   let original_tier:Option<String>=sqlx::query_scalar("SELECT data_tier FROM task_data_provenance WHERE task_id=? AND principal_id=?").bind(&old.task_id).bind(p.to_string()).fetch_optional(&mut *tx).await.map_err(backend)?;
+   if original_tier.as_deref()!=Some(tier.as_str()) || decode_intent(&raw)?!=intent{return Err(TaskReservationError::PreEffect(DomainError::OperationConflict{operation_id:OperationId::parse(&intent.operation_id)?}))}return Ok(old)
   }
   let latest:Option<i64>=sqlx::query_scalar("SELECT MAX(revision) FROM processing_route_candidates WHERE principal_id=? AND route_id=?").bind(p.to_string()).bind(&intent.route_id).fetch_one(&mut *tx).await.map_err(backend)?;
   if latest!=Some(intent.configuration_revision as i64){return Err(TaskReservationError::PreEffect(invalid("route configuration changed; explicitly reconfirm route and settings")))}
@@ -45,14 +47,15 @@ impl TaskRunStore for SqliteWorkingStore {
    let engagement:Option<String>=sqlx::query_scalar("SELECT engagement_id FROM folders WHERE folder_id=? AND workspace_id=?").bind(id).bind(&intent.workspace_id).fetch_optional(&mut *tx).await.map_err(backend)?;
    if engagement!=intent.engagement_id{return Err(TaskReservationError::PreEffect(DomainError::NotFound))}
   }
-  let b=TaskRunBinding{operation_id:intent.operation_id.clone(),task_id:Uuid::new_v4().to_string(),run_id:Uuid::new_v4().to_string(),principal_id:p.to_string(),workspace_id:intent.workspace_id.clone(),runtime_id:runtime.into(),thread_id:None,turn_id:None,status:TaskRunStatus::Reserved,route_id:intent.route_id.clone(),configuration_revision:intent.configuration_revision,choices:intent.choices.clone(),setup_failure:None};
+  let b=TaskRunBinding{operation_id:intent.operation_id.clone(),task_id:proposed_task_id.clone(),run_id:Uuid::new_v4().to_string(),principal_id:p.to_string(),workspace_id:intent.workspace_id.clone(),runtime_id:runtime.into(),thread_id:None,turn_id:None,status:TaskRunStatus::Reserved,route_id:intent.route_id.clone(),configuration_revision:intent.configuration_revision,choices:intent.choices.clone(),setup_failure:None};
   sqlx::query("INSERT INTO tasks(task_id,workspace_id,creator_principal_id,engagement_id,folder_id,title,source_refs,artifact_refs,visibility,revision,created_at_ms,updated_at_ms) VALUES(?,?,?,?,?,'Private task','[]','[]','private',1,?,?)").bind(&b.task_id).bind(&b.workspace_id).bind(&b.principal_id).bind(&intent.engagement_id).bind(&intent.folder_id).bind(now).bind(now).execute(&mut *tx).await.map_err(backend)?;
   sqlx::query("INSERT INTO task_start_history(task_id,intent) VALUES(?,?)").bind(&b.task_id).bind(encode_intent(&intent)?).execute(&mut *tx).await.map_err(backend)?;
   sqlx::query("INSERT INTO task_runs(principal_id,operation_id,task_id,runtime_id,record) VALUES(?,?,?,?,?)").bind(&b.principal_id).bind(&b.operation_id).bind(&b.task_id).bind(runtime).bind(encode_binding(&b)?).execute(&mut *tx).await.map_err(backend)?;
   sqlx::query("INSERT INTO task_processing_routes(task_id,revision,principal_id,route_id,configuration_revision,recorded_at_ms) VALUES(?,1,?,?,?,?)").bind(&b.task_id).bind(&b.principal_id).bind(&b.route_id).bind(b.configuration_revision as i64).bind(now).execute(&mut *tx).await.map_err(backend)?;
+  sqlx::query("INSERT INTO task_data_provenance(task_id,principal_id,workspace_id,data_tier,recorded_at_ms) VALUES(?,?,?,?,?)").bind(&b.task_id).bind(&b.principal_id).bind(&b.workspace_id).bind(tier.as_str()).bind(now).execute(&mut *tx).await.map_err(backend)?;
   let settings=TaskUsageSettings{revision:1,route_revision:1,choices:b.choices.clone()};
   sqlx::query("INSERT INTO task_usage_settings(task_id,revision,record) VALUES(?,1,?)").bind(&b.task_id).bind(encode_settings(&settings)?).execute(&mut *tx).await.map_err(backend)?;
-  if let Err(error)=validate().await {tx.rollback().await.map_err(backend)?;return Err(TaskReservationError::PreEffect(error));}
+  if let Err(error)=validate(proposed_task_id.clone()).await {tx.rollback().await.map_err(backend)?;return Err(TaskReservationError::PreEffect(error));}
   tx.commit().await.map_err(backend)?;Ok(b)
  }
  async fn find_task_run(&self,p:PrincipalId,op:&str)->Result<Option<TaskRunBinding>,DomainError>{OperationId::parse(op)?;let mut tx=self.pool().begin().await.map_err(backend)?;load(&mut tx,p,op).await}
@@ -107,4 +110,20 @@ impl TaskRunStore for SqliteWorkingStore {
   let mut count=0;for raw in rows{let mut b:TaskRunBinding=decode_binding(&raw)?;if matches!(b.status,TaskRunStatus::Reserved|TaskRunStatus::Bound|TaskRunStatus::Dispatching|TaskRunStatus::Running){b.status=TaskRunStatus::Uncertain;write(&mut tx,&b).await?;count+=1}}
   tx.commit().await.map_err(backend)?;Ok(count)
  }
+}
+
+impl SqliteWorkingStore {
+    pub async fn task_data_tier(&self,principal:PrincipalId,task:&str)->Result<Option<String>,DomainError> {
+        sqlx::query_scalar("SELECT p.data_tier FROM task_data_provenance p JOIN tasks t ON t.task_id=p.task_id AND t.creator_principal_id=p.principal_id AND t.workspace_id=p.workspace_id WHERE p.task_id=? AND p.principal_id=?")
+            .bind(task).bind(principal.to_string()).fetch_optional(self.pool()).await.map_err(backend)
+    }
+}
+
+impl SqliteWorkingStore {
+    /// Current native metadata provenance, never a data tier or inference grant.
+    pub async fn task_is_native_draft(&self,principal:PrincipalId,task:&str)->Result<bool,DomainError> {
+        let exists:Option<i64>=sqlx::query_scalar("SELECT 1 FROM task_metadata_provenance p JOIN tasks t ON t.task_id=p.task_id AND t.creator_principal_id=p.principal_id AND t.workspace_id=p.workspace_id WHERE p.task_id=? AND p.principal_id=? AND p.provenance_kind='draft_metadata' AND t.runtime_thread_id IS NULL AND t.source_refs='[]' AND t.artifact_refs='[]' AND NOT EXISTS(SELECT 1 FROM task_runs r WHERE r.task_id=t.task_id) AND NOT EXISTS(SELECT 1 FROM task_start_history h WHERE h.task_id=t.task_id) AND NOT EXISTS(SELECT 1 FROM task_data_provenance d WHERE d.task_id=t.task_id) AND NOT EXISTS(SELECT 1 FROM task_usage_attempts u WHERE u.task_id=t.task_id)")
+            .bind(task).bind(principal.to_string()).fetch_optional(self.pool()).await.map_err(backend)?;
+        Ok(exists.is_some())
+    }
 }

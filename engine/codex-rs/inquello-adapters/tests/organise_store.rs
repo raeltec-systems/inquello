@@ -398,3 +398,35 @@ async fn receipts_found(store: &SqliteWorkingStore, ops: &[&str]) -> usize {
     }
     count
 }
+
+#[tokio::test]
+async fn actual_draft_creation_is_owned_metadata_not_synthetic_or_inference_authority() {
+    let f=fixture();let store=open(&f).await;
+    let draft=task_of(&ok(create_task(&store,&SystemClock,actor(1),task_command("draft-native",None,None)).await));
+    assert!(ok(store.task_is_native_draft(actor(1).principal_id,&draft.task_id.to_string()).await));
+    assert!(!ok(store.task_is_native_draft(actor(2).principal_id,&draft.task_id.to_string()).await));
+    assert_eq!(ok(store.task_data_tier(actor(1).principal_id,&draft.task_id.to_string()).await),None);
+    let renamed=task_of(&ok(rename_task(&store,&SystemClock,actor(1),RenameTask{operation_id:"draft-rename".into(),expected_revision:draft.revision,workspace_id:WORKSPACE.into(),task_id:draft.task_id.to_string(),title:"Company information is not synthetic".into()}).await));
+    assert!(ok(store.task_is_native_draft(actor(1).principal_id,&draft.task_id.to_string()).await));
+    store.close().await;
+    let inspected=inquello_adapters::data_provenance::inspect(inquello_adapters::data_provenance::InspectRequest{version:1,store_path:f.path.clone(),principal_id:actor(1).principal_id.to_string(),task_root:None,runtime_home:None}).await;
+    assert!(inspected.available,"{:?}",inspected.reason);
+    assert_eq!(inspected.workspaces[0].tasks[0].provenance_kind,"draft_metadata");
+    assert_eq!(inspected.workspaces[0].tasks[0].data_tier,"not-applicable");
+    assert!(inspected.workspaces[0].tasks[0].route_configuration.is_none());
+    let store=open(&f).await;
+    ok(attach_thread(&store,&SystemClock,actor(1),AttachThread{operation_id:"attach-invalidates-draft".into(),expected_revision:renamed.revision,workspace_id:WORKSPACE.into(),task_id:draft.task_id.to_string(),runtime_thread_id:Uuid::new_v4().to_string()}).await);
+    assert!(!ok(store.task_is_native_draft(actor(1).principal_id,&draft.task_id.to_string()).await));
+}
+
+#[tokio::test]
+async fn actual_creation_tree_keeps_own_draft_but_never_returns_peer_or_company_ids() {
+    let f=fixture();let store=open(&f).await;
+    let own=task_of(&ok(create_task(&store,&SystemClock,actor(1),task_command("own-draft",None,None)).await));
+    let peer=task_of(&ok(create_task(&store,&SystemClock,actor(2),task_command("peer-draft",None,None)).await));
+    let mut command=task_command("foreign-company-draft",None,None);command.workspace_id=OTHER_WORKSPACE.into();
+    let foreign=task_of(&ok(create_task(&store,&SystemClock,actor(1),command).await));
+    let tree=ok(workspace_tree(&store,actor(1),WORKSPACE).await);
+    assert_eq!(tree.tasks.len(),1);assert_eq!(tree.tasks[0].task_id,own.task_id);
+    assert!(tree.tasks.iter().all(|task|task.task_id!=peer.task_id&&task.task_id!=foreign.task_id));
+}

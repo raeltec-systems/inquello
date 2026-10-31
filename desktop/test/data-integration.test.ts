@@ -8,6 +8,7 @@
  *   with the real runtime stopped and restarted around delete and import.
  */
 import fs from 'node:fs';
+import {fixtureDataAuthority,PRINCIPAL} from './authorization-fixtures';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
@@ -34,7 +35,7 @@ afterAll(async () => {
 });
 
 /** Starts the real runtime the way main does: own runtime home, stderr log in the logs root. */
-async function startRuntime(roots: GovernedRoots, base: NodeJS.ProcessEnv, workingStore?: string): Promise<AppServerRuntime> {
+async function startRuntime(roots: GovernedRoots, base: NodeJS.ProcessEnv, workingStore?: string, fixtureWorkspace?: string): Promise<AppServerRuntime> {
   fs.mkdirSync(roots['runtime-home'], { recursive: true, mode: 0o700 });
   if (workingStore) fs.mkdirSync(path.dirname(workingStore), { recursive: true, mode: 0o700 });
   const runtime = new AppServerRuntime({
@@ -44,6 +45,8 @@ async function startRuntime(roots: GovernedRoots, base: NodeJS.ProcessEnv, worki
     schemaStamp,
     stderrLogPath: path.join(roots.logs, 'app-server-stderr.log'),
     logger: recordingLogger(),
+    // Explicit fake service policy: this test proves lifecycle/filesystem only.
+    onServerRequest: (method,params) => method==='inquello/tasks/authority'&&(params as {workspaceId?:string})?.workspaceId===fixtureWorkspace ? {workspacePolicy:{workspaceId:fixtureWorkspace,policyRevision:1,authorizationEpoch:1,execution:null}} : undefined,
   });
   runtimes.push(runtime);
   await runtime.start();
@@ -118,6 +121,8 @@ describe('a real runtime home', () => {
     const exportParent = tempDir('data-real-export');
     let importSource: string | null = null;
     const service = new DataService({
+      // Fake ownership/current authority. Not negative-authorization or route evidence.
+      authority: fixtureDataAuthority(),
       load: loadShippedPolicy(),
       roots,
       journal: new ExportJournal(userData),
@@ -132,7 +137,7 @@ describe('a real runtime home', () => {
         },
         activeTasks: () => 0,
       },
-      identity: { principal: async () => null, holdsSession: () => false, signOut: async () => ({ ok: true }), forgetLocally: () => {} },
+      identity: { principalId: () => PRINCIPAL, principal: async () => null, holdsSession: () => false, signOut: async () => ({ ok: true }), forgetLocally: () => {} },
       providers: { forgetClaudeKey: () => undefined, holdsClaudeKey: () => false },
       chooseExportDestination: async () => path.join(exportParent, 'export'),
       chooseImportSource: async () => importSource,
@@ -146,12 +151,11 @@ describe('a real runtime home', () => {
     if (!exported.ok) throw new Error(exported.reason);
     expect(exported.export.included).toEqual([
       { category: 'task-history', label: 'Task history', files: 2 },
-      { category: 'desktop-stderr-log', label: 'Desktop runtime error log', files: 1 },
       { category: 'working-store', label: 'Private work organisation', files: 0 },
       { category: 'task-folders', label: 'Task working folders', files: 0 },
     ]);
     expect(exported.export.attribution).toEqual({ principal: null, appVersion: '0.0.0-test', runtimeVersion: schemaStamp.runtimeVersion });
-    expect(exported.export.omissions.map((omission) => omission.category)).toEqual(expect.arrayContaining(['identity-session', 'chromium-profile', 'runtime-state']));
+    expect(exported.export.omissions.map((omission) => omission.category)).toEqual(expect.arrayContaining(['identity-session', 'chromium-profile', 'runtime-state', 'desktop-stderr-log']));
 
     expect(events).toEqual(['stop', 'start']);
     events.length = 0;
@@ -171,12 +175,11 @@ describe('a real runtime home', () => {
     expect(runtime.state).toBe('ready');
     expect(imported.import.restored).toEqual([
       { category: 'task-history', label: 'Task history', files: 2 },
-      { category: 'desktop-stderr-log', label: 'Desktop runtime error log', files: 0 },
       { category: 'working-store', label: 'Private work organisation', files: 0 },
       { category: 'task-folders', label: 'Task working folders', files: 0 },
     ]);
-    // The restarted runtime has already begun a new log; it is never overwritten, and the report says so.
-    expect(imported.import.notRestored).toEqual([{ category: 'desktop-stderr-log', path: 'logs:app-server-stderr.log', reason: 'A file already exists there; it was not overwritten' }]);
+    // Opaque stderr logs are excluded, never restored or attributed as owned content.
+    expect(imported.import.notRestored).toEqual([]);
     expect(fs.readFileSync(path.join(roots['runtime-home'], SESSION_REL), 'utf8')).toBe(SESSION_BYTES);
     expect(fs.readFileSync(path.join(roots['runtime-home'], ARCHIVED_REL), 'utf8')).toBe(SESSION_BYTES.replace('000000000001', '000000000002'));
     await runtime.stop();
@@ -186,7 +189,8 @@ describe('a real runtime home', () => {
 
 // R9: the expected content comes from commands and bytes created before export,
 // not from the export manifest. No shared-service topology is required: this
-// test binds a synthetic principal through the trusted main-to-runtime API.
+// test binds a synthetic principal and fake service policy through the trusted host API.
+// DataAuthority below is deliberately fake: this is NOT native ownership/eligibility evidence.
 describe('populated working-store recovery (R2/R9)', () => {
   it('preserves Task identity, state history, receipts and output across export/delete/import/reopen', async () => {
     const userData = tempDir('data-populated-roundtrip');
@@ -194,7 +198,7 @@ describe('populated working-store recovery (R2/R9)', () => {
     const workingStore = path.join(userData, 'working', 'working.sqlite');
     const principalId = randomUUID();
     const workspaceId = randomUUID();
-    let runtime = await startRuntime(roots, process.env, workingStore);
+    let runtime = await startRuntime(roots, process.env, workingStore, workspaceId);
     const bind = () => runtime.request('inquello/session/setPrincipal', { principalId });
     await bind();
     const remember = { operationId: randomUUID(), expectedRevision: 0, workspaceId, name: 'Recovery fixture Workspace' };
@@ -216,15 +220,17 @@ describe('populated working-store recovery (R2/R9)', () => {
     const destination = path.join(tempDir('data-populated-export'), 'export');
     const events: string[] = [];
     const service = new DataService({
+      // Fake ownership/current authority. Not negative-authorization or route evidence.
+      authority: fixtureDataAuthority(),
       load: loadShippedPolicy(), roots, journal: new ExportJournal(userData),
       runtime: {
         stop: async () => { events.push('stop'); await runtime.stop(); },
         // Main binds its principal on restart. Binding alone does not open a
         // fresh database, so reimport can restore the deleted working store.
-        start: async () => { events.push('start'); runtime = await startRuntime(roots, process.env, workingStore); await bind(); },
+        start: async () => { events.push('start'); runtime = await startRuntime(roots, process.env, workingStore, workspaceId); await bind(); },
         activeTasks: () => 0,
       },
-      identity: { principal: async () => null, holdsSession: () => false, signOut: async () => ({ ok: true }), forgetLocally: () => {} },
+      identity: { principalId: () => PRINCIPAL, principal: async () => null, holdsSession: () => false, signOut: async () => ({ ok: true }), forgetLocally: () => {} },
       providers: { forgetClaudeKey: () => undefined, holdsClaudeKey: () => false },
       chooseExportDestination: async () => destination,
       chooseImportSource: async () => destination,
@@ -254,7 +260,7 @@ describe('populated working-store recovery (R2/R9)', () => {
     expect(await runtime.request('inquello/task/create', create)).toEqual({ ...taskBefore, receipt: { ...taskBefore.receipt, replayed: true } });
     expect(await runtime.request('inquello/state/record', firstState)).toEqual({ ...stateReceiptBefore, receipt: { ...stateReceiptBefore.receipt, replayed: true } });
     await runtime.stop();
-    runtime = await startRuntime(roots, process.env, workingStore);
+    runtime = await startRuntime(roots, process.env, workingStore, workspaceId);
     await bind();
     expect(await runtime.request('inquello/workspace/tree', { workspaceId })).toEqual(expectedTree);
     expect(await runtime.request('inquello/state/list', { taskId })).toEqual(expectedStates);

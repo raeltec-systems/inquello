@@ -192,12 +192,38 @@ pub(crate) mod tasks_bridge;
 #[path = "inquello_usage.rs"]
 pub(crate) mod usage_bridge;
 
+#[derive(Default)]
+struct BootstrapAdmission {
+    generation: u64,
+    transitions: usize,
+    closed: bool,
+}
+/// Counts identity transitions even when they overlap or their future is dropped.
+/// This owns no mutex guard across an await.
+struct BootstrapTransition<'a> {
+    states: &'a Mutex<HashMap<ConnectionId, BootstrapAdmission>>,
+    connection: ConnectionId,
+}
+impl Drop for BootstrapTransition<'_> {
+    fn drop(&mut self) {
+        let mut states = self.states.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let state = states.entry(self.connection).or_default();
+        state.transitions = state.transitions.checked_sub(1).expect("balanced identity transition");
+        state.generation = state.generation.checked_add(1).expect("bootstrap generation exhausted");
+    }
+}
+
 pub(crate) struct InquelloRequestProcessor {
     task_config: Option<super::ConfigRequestProcessor>,
+    // Unit fixtures replace local policy I/O only, never route evidence/approval.
+    #[cfg(test)]
+    task_layer_fixture: Option<(DeviceRequirements,UserConfig)>,
+    authority_generations: Mutex<HashMap<ConnectionId,u64>>,
     #[cfg(all(feature="inference-fixtures",debug_assertions))]
     task_fixtures: tokio::sync::Mutex<HashMap<ConnectionId,tasks_bridge::TaskFixture>>,
     task_outgoing: Option<std::sync::Arc<crate::outgoing_message::OutgoingMessageSender>>,
     task_start_lock: tokio::sync::Mutex<()>,
+    task_bootstrap_generations: Mutex<HashMap<ConnectionId,BootstrapAdmission>>,
     task_sessions: tokio::sync::Mutex<HashMap<ConnectionId, tasks_bridge::SessionBinding>>,
     routes: reviewer::RouteRuntime,
     runtime_id: String,
@@ -220,10 +246,14 @@ impl InquelloRequestProcessor {
     ) -> Self {
         Self {
             task_config: None,
+            #[cfg(test)]
+            task_layer_fixture: None,
+            authority_generations: Mutex::new(HashMap::new()),
             #[cfg(all(feature="inference-fixtures",debug_assertions))]
             task_fixtures: tokio::sync::Mutex::new(HashMap::new()),
             task_outgoing: None,
             task_start_lock: tokio::sync::Mutex::new(()),
+            task_bootstrap_generations: Mutex::new(HashMap::new()),
             task_sessions: tokio::sync::Mutex::new(HashMap::new()),
             routes: reviewer::RouteRuntime::default(),
             runtime_id: uuid::Uuid::new_v4().to_string(),
@@ -235,7 +265,29 @@ impl InquelloRequestProcessor {
         }
     }
 
+    // Closed entries are retained: delayed requests cannot reopen a connection.
+    fn begin_task_bootstrap(&self, connection: ConnectionId) -> Result<u64, JSONRPCErrorError> {
+        let mut states = self.task_bootstrap_generations.lock().map_err(|_|refusal("authority_unknown","Session fence unavailable"))?;
+        let state = states.entry(connection).or_default();
+        if state.closed || state.transitions != 0 {
+            return Err(refusal("stale","Identity transition or closed connection prevents session setup"));
+        }
+        state.generation = state.generation.checked_add(1).expect("bootstrap generation exhausted");
+        Ok(state.generation)
+    }
+
+    fn begin_bootstrap_transition(&self, connection: ConnectionId, close: bool) -> BootstrapTransition<'_> {
+        let mut states = self.task_bootstrap_generations.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let state = states.entry(connection).or_default();
+        state.generation = state.generation.checked_add(1).expect("bootstrap generation exhausted");
+        state.transitions = state.transitions.checked_add(1).expect("identity transition count exhausted");
+        state.closed |= close;
+        BootstrapTransition { states: &self.task_bootstrap_generations, connection }
+    }
+
     pub(crate) async fn connection_closed(&self, connection_id: ConnectionId) {
+        let _transition = self.begin_bootstrap_transition(connection_id, true);
+        if let Ok(mut generations)=self.authority_generations.lock() {let generation=generations.entry(connection_id).or_insert(1);*generation=generation.saturating_add(1);}
         #[cfg(all(feature="inference-fixtures",debug_assertions))]
         self.task_fixtures.lock().await.remove(&connection_id);
         if let Some(session)=self.task_sessions.lock().await.remove(&connection_id) {session.cancellation.cancel();}
@@ -258,6 +310,8 @@ impl InquelloRequestProcessor {
         connection_id: ConnectionId,
         params: InquelloSetPrincipalParams,
     ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        let _transition = self.begin_bootstrap_transition(connection_id, false);
+        if let Ok(mut generations)=self.authority_generations.lock() {let generation=generations.entry(connection_id).or_insert(1);*generation=generation.saturating_add(1);}
         #[cfg(all(feature="inference-fixtures",debug_assertions))]
         self.task_fixtures.lock().await.remove(&connection_id);
         if let Some(session) = self.task_sessions.lock().await.remove(&connection_id) { session.cancellation.cancel(); }
@@ -325,6 +379,12 @@ impl InquelloRequestProcessor {
         let known = organise::known_workspaces(&store, actor)
             .await
             .map_err(domain_error)?;
+        let mut current = Vec::new();
+        for workspace in known {
+            if self.current_workspace_metadata(connection_id, actor, &workspace.workspace_id.to_string()).await.is_ok() { current.push(workspace); }
+        }
+        if self.actor(connection_id)? != actor { return Err(refusal("not_found", "Private work unavailable")); }
+        let known = current;
         Ok(Some(
             InquelloWorkspaceListResponse {
                 workspaces: known
@@ -346,15 +406,24 @@ impl InquelloRequestProcessor {
         params: InquelloWorkspaceTreeParams,
     ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
         let (store, actor) = self.context(connection_id).await?;
+        self.current_workspace_metadata(connection_id,actor,&params.workspace_id).await?;
         let tree = organise::workspace_tree(&store, actor, &params.workspace_id)
             .await
             .map_err(domain_error)?;
+        let mut tasks=Vec::new(); let mut unavailable_tasks=Vec::new();
+        for task in &tree.tasks {
+            let available=self.authorize_task_metadata(connection_id,actor,&task.task_id.to_string()).await.is_ok();
+            match private_task_tree_item(task,actor,&params.workspace_id,available) {
+                Some(Ok(task))=>tasks.push(task),Some(Err(task))=>unavailable_tasks.push(task),None=>{},
+            }
+        }
+        self.current_workspace_metadata(connection_id,actor,&params.workspace_id).await?;
         Ok(Some(
             InquelloWorkspaceTreeResponse {
                 workspace_id: params.workspace_id,
                 engagements: tree.engagements.iter().map(engagement_view).collect(),
                 folders: tree.folders.iter().map(folder_view).collect(),
-                tasks: tree.tasks.iter().map(task_view).collect(),
+                tasks, unavailable_tasks,
             }
             .into(),
         ))
@@ -1805,6 +1874,12 @@ fn folder_view(folder: &organise::Folder) -> InquelloFolder {
     }
 }
 
+/// Only current creator/Workspace ownership permits even an unavailable item ID.
+fn private_task_tree_item(task:&organise::Task,actor:Actor,workspace:&str,available:bool)
+    ->Option<Result<InquelloTask,codex_app_server_protocol::InquelloUnavailableTask>> {
+    if task.creator_principal_id!=actor.principal_id || task.workspace_id.to_string()!=workspace {return None;}
+    Some(if available {Ok(task_view(task))}else{Err(codex_app_server_protocol::InquelloUnavailableTask{task_id:task.task_id.to_string(),reason:"current_authority_unavailable".into()})})
+}
 fn task_view(task: &organise::Task) -> InquelloTask {
     InquelloTask {
         task_id: task.task_id.to_string(),

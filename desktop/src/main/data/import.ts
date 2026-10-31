@@ -20,6 +20,7 @@
  * The caller (main) runs this only while no Task runs and with the runtime
  * stopped, then restarts the runtime.
  */
+import {DataAuthorityError} from './authority';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -37,6 +38,12 @@ export interface ImportOptions {
   roots: GovernedRoots;
   /** The export directory the user chose. */
   source: string;
+  /** Immutable plan already inspected and service-receipted by main. */
+  plan?: ExportManifest;
+  /** Main fresh authority before each slow copy/read/publication boundary. */
+  authorize?():Promise<void>;
+  /** Synchronous main-only publication ledger. */
+  onPublished?(publication:ImportPublication):void;
 }
 
 export interface ImportResult {
@@ -97,10 +104,28 @@ export function readManifest(source: string): ExportManifest {
   return raw as ExportManifest;
 }
 
+/** Pin the complete recovery plan before any authority wait. */
+export function pinImportPlan(manifest: ExportManifest): ExportManifest {
+  const snapshot = structuredClone(manifest);
+  const freeze = (value: unknown): void => {
+    if (value !== null && typeof value === 'object') {
+      for (const child of Object.values(value)) freeze(child);
+      Object.freeze(value);
+    }
+  };
+  freeze(snapshot);
+  return snapshot;
+}
+
 export async function importData(options: ImportOptions): Promise<ImportResult> {
   const { policy, roots } = options;
   const source = path.resolve(options.source);
-  const manifest = readManifest(source);
+  const manifest = pinImportPlan(options.plan ?? readManifest(source));
+  // Do not adopt a changed archive as a new plan after receipt/authority waits.
+  if (options.plan && JSON.stringify(readManifest(source)) !== JSON.stringify(manifest)) {
+    throw new ImportError('the export manifest changed after current validation');
+  }
+  await options.authorize?.();
 
   // 1. Every listed file must belong to an importable category under this register.
   for (const entry of manifest.included) {
@@ -126,8 +151,10 @@ export async function importData(options: ImportOptions): Promise<ImportResult> 
     for (const file of entry.files) {
       let actual: { size: number; sha256: string };
       try {
-        actual = await digestFile(exportedFilePath(source, file.root, file.path));
-      } catch {
+        await options.authorize?.();
+        actual = await digestFile(exportedFilePath(source, file.root, file.path),options.authorize);
+      } catch(error) {
+        if(error instanceof DataAuthorityError)throw error;
         throw new ImportError(`${file.root}:${file.path} is missing from the export`);
       }
       if (actual.sha256 !== file.sha256 || actual.size !== file.size) {
@@ -141,7 +168,7 @@ export async function importData(options: ImportOptions): Promise<ImportResult> 
   const inventory = takeInventory(policy, roots);
   const occupied = inventory.files.filter((file) => file.root === 'runtime-home' && (file.category === null || restoring.has(file.category)));
   if (occupied.length > 0) {
-    throw new ImportError(`the runtime home already holds data (${occupied.length} file(s), for example ${occupied[0]!.rel}); import restores only into an empty runtime home`);
+    throw new ImportError(`the runtime home already holds data (${occupied.length} file(s); private names withheld); import restores only into an empty runtime home`);
   }
 
   // The working store is one SQLite family, not independent replaceable files.
@@ -157,7 +184,7 @@ export async function importData(options: ImportOptions): Promise<ImportResult> 
   // SQLite files independently could leave a new DB with a missing/foreign WAL
   // when a later copy fails and the caller restarts the runtime.
   const workingFiles = manifest.included.filter((entry) => entry.category === 'working-store').flatMap((entry) => entry.files);
-  const workingOutcome = workingFiles.length > 0 ? await restoreWorkingStore(source, roots, workingFiles) : null;
+  const workingOutcome = workingFiles.length > 0 ? await restoreWorkingStore(source, roots, workingFiles,options.authorize,options.onPublished) : null;
 
   // Other categories retain per-file, no-overwrite restoration.
   const restored: ImportResult['restored'] = [];
@@ -165,12 +192,13 @@ export async function importData(options: ImportOptions): Promise<ImportResult> 
   for (const entry of manifest.included) {
     let count = 0;
     for (const file of entry.files) {
-      const outcome = entry.category === 'working-store' ? workingOutcome : await restoreFile(source, roots, file);
+      const outcome = entry.category === 'working-store' ? workingOutcome : await restoreFile(source, roots, file,options.authorize,options.onPublished);
       if (outcome === null) count += 1;
       else notRestored.push({ category: entry.category, path: `${file.root}:${file.path}`, reason: outcome });
     }
     restored.push({ category: entry.category, label: entry.label, files: count });
   }
+  await options.authorize?.();
   return { restored, notRestored, omissions: manifest.omissions, createdAt: manifest.createdAt };
 }
 
@@ -270,7 +298,7 @@ function destinationDirectory(root: string, relative: string): DestinationDirect
  * a newly nonempty target still refuses publication. Never publish SQLite
  * files individually.
  */
-async function restoreWorkingStore(source: string, roots: GovernedRoots, files: ManifestFile[]): Promise<string | null> {
+async function restoreWorkingStore(source: string, roots: GovernedRoots, files: ManifestFile[],authorize?:()=>Promise<void>,onPublished?:(publication:ImportPublication)=>void): Promise<string | null> {
   if (files.some((file) => file.root !== 'user-data' || path.posix.dirname(file.path) !== 'working')) {
     return 'The working-store layout is not supported; no working-store file was restored';
   }
@@ -283,17 +311,21 @@ async function restoreWorkingStore(source: string, roots: GovernedRoots, files: 
     fs.mkdirSync(staging, { mode: 0o700 });
     ownsStaging = true;
     for (const file of files) {
-      const copied = await copyWithDigest(exportedFilePath(source, file.root, file.path), path.join(staging, path.posix.basename(file.path)));
+      const copied = await copyWithDigest(exportedFilePath(source, file.root, file.path), path.join(staging, path.posix.basename(file.path)),{authorize});
       if (copied.sha256 !== file.sha256 || copied.size !== file.size) return 'The working-store copy did not match its digest; no working-store file was restored';
     }
     directory.check();
     checkDestinationAncestry(roots['user-data'], 'working/placeholder');
     const destination = path.join(directory.path, 'working');
+    await authorize?.();
+    directory.check();
+    checkDestinationAncestry(roots['user-data'], 'working/placeholder');
     try {
       if (fs.readdirSync(destination).length > 0) return 'The working-store folder is not empty; no working-store file was restored';
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     }
+    const published={...publication(staging,'user-data/working',true),target:path.join(roots['user-data'],'working')};
     try {
       fs.renameSync(staging, destination);
     } catch (error) {
@@ -307,8 +339,10 @@ async function restoreWorkingStore(source: string, roots: GovernedRoots, files: 
       fs.renameSync(staging, destination);
     }
     ownsStaging = false;
+    onPublished?.(published);
     return null;
   } catch (error) {
+    if (error instanceof DataAuthorityError) throw error;
     if (error instanceof ImportError) return error.message;
     return `The working store could not be restored (${(error as NodeJS.ErrnoException).code ?? 'error'}); no working-store file was restored`;
   } finally {
@@ -321,7 +355,7 @@ async function restoreWorkingStore(source: string, roots: GovernedRoots, files: 
 }
 
 /** Restores one file; returns null on success or the reason it was not restored. */
-async function restoreFile(source: string, roots: GovernedRoots, file: ManifestFile): Promise<string | null> {
+async function restoreFile(source: string, roots: GovernedRoots, file: ManifestFile,authorize?:()=>Promise<void>,onPublished?:(publication:ImportPublication)=>void): Promise<string | null> {
   let directory: DestinationDirectory | undefined;
   let temp: string | undefined;
   let staged = false;
@@ -330,16 +364,21 @@ async function restoreFile(source: string, roots: GovernedRoots, file: ManifestF
     const target = path.join(directory.path, path.posix.basename(file.path));
     temp = path.join(directory.path, `.import-${randomUUID()}.tmp`);
     directory.check();
-    const copied = await copyWithDigest(exportedFilePath(source, file.root, file.path), temp);
+    const copied = await copyWithDigest(exportedFilePath(source, file.root, file.path), temp,{authorize});
     staged = true;
     if (copied.sha256 !== file.sha256 || copied.size !== file.size) return 'The copy did not match its digest';
     directory.check();
     // Atomic no-replace publication: rename would overwrite a target created
     // between existsSync and rename, including an existing SQLite family file.
     // Filesystems that do not support hard links fail closed, never fall back.
+    await authorize?.();
+    directory.check();
+    const published={...publication(temp,`${file.root}/${file.path}`,false),target:path.join(roots[file.root],file.path)};
     fs.linkSync(temp, target);
+    onPublished?.(published);
     return null;
   } catch (error) {
+    if (error instanceof DataAuthorityError) throw error;
     if ((error as NodeJS.ErrnoException).code === 'EEXIST') return 'A file already exists there; it was not overwritten';
     if (error instanceof ImportError) return error.message;
     return `It could not be written (${(error as NodeJS.ErrnoException).code ?? 'error'})`;
@@ -350,4 +389,24 @@ async function restoreFile(source: string, roots: GovernedRoots, file: ManifestF
       directory?.close();
     }
   }
+}
+
+/** Private identity ledger: never reconstructed from archive names/initial absence. */
+export interface ImportPublication { readonly target:string; readonly relative:string; readonly identity:fs.Stats; readonly members:ReadonlyArray<{name:string;identity:fs.Stats}>|null }
+function publication(target:string,relative:string,family:boolean):ImportPublication {
+ return {target,relative,identity:fs.lstatSync(target),members:family?fs.readdirSync(target).map(name=>({name,identity:fs.lstatSync(path.join(target,name))})):null};
+}
+function sameIdentity(a:fs.Stats,b:fs.Stats):boolean {
+ return !a.isSymbolicLink()&&!b.isSymbolicLink()&&a.dev===b.dev&&a.ino===b.ino&&a.birthtimeMs===b.birthtimeMs&&a.size===b.size&&a.mtimeMs===b.mtimeMs;
+}
+/** Synchronous validation/move; ambiguity retains marker and stopped runtime. */
+export function quarantinePublications(publications:readonly ImportPublication[],quarantine:string):void {
+ for(const item of publications){
+  if(!sameIdentity(item.identity,fs.lstatSync(item.target)))throw new ImportError('A published destination changed; safe recovery cleanup is unavailable');
+  if(item.members){
+   const names=fs.readdirSync(item.target).sort();
+   if(JSON.stringify(names)!==JSON.stringify(item.members.map(m=>m.name).sort())||item.members.some(m=>!sameIdentity(m.identity,fs.lstatSync(path.join(item.target,m.name)))))throw new ImportError('A published database family changed; safe recovery cleanup is unavailable');
+  }
+  const destination=path.join(quarantine,item.relative);fs.mkdirSync(path.dirname(destination),{recursive:true,mode:0o700});fs.renameSync(item.target,destination);
+ }
 }

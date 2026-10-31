@@ -1,3 +1,4 @@
+import {fixtureDataAuthority} from './authorization-fixtures';
 /**
  * R9 supplemental recovery witness using real SQLite, not the app-server.
  * Tables below are deliberately a minimal fixture schema, NOT domain migrations.
@@ -44,7 +45,7 @@ it('recovers populated SQLite Task/state/receipt fixtures and output through the
   fs.writeFileSync(output, expectedOutput);
   const destination = path.join(tempDir('data-sqlite-export'), 'export');
   const events: string[] = [];
-  const service = new DataService({
+  const service = new DataService({authority:fixtureDataAuthority(),
     load: loadShippedPolicy(), roots, journal: new ExportJournal(userData),
     runtime: {
       stop: async () => { events.push('stop'); db?.close(); db = null; },

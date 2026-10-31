@@ -330,7 +330,10 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
       if (chosenWorkspace.current !== id || !authorizedWorkspaces.current.includes(id)) return;
       if (result.ok) {
         // A Task that is gone (deleted) takes its draft with it.
-        draftStore.retain(result.value.workspaceId, result.value.tasks.map((item) => item.taskId));
+        const unavailable=new Set((result.value.unavailableTasks??[]).map(item=>item.taskId));
+        draftStore.retain(result.value.workspaceId, [...result.value.tasks.map((item) => item.taskId),...unavailable]);
+        setAcceptedTasks(previous=>Object.fromEntries(Object.entries(previous).filter(([taskId])=>!unavailable.has(taskId))));
+        if(openTask.current&&unavailable.has(openTask.current)){setOpenTaskId(null);openTask.current=null;setStates(null);setTaskPolicy(null);setNotice('This Task is currently unavailable. Your draft is kept.');}
         setTree(result.value);
       } else {
         setTree(null); setAcceptedTasks({}); setStates(null); setTaskPolicy(null);
@@ -420,7 +423,7 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
     const api = (globalThis as {inquello?:{tasks?:{onSessionChanged?:(listener:(identityChanged:boolean)=>void)=>()=>void}}}).inquello?.tasks;
     return api?.onSessionChanged?.((identityChanged) => {
       authorityGeneration.current++; authorizedWorkspaces.current=[];
-      setAcceptedTasks({}); setTree(null); setOpenTaskId(null);
+      setAcceptedTasks({}); setTree(null); setOpenTaskId(null); setState(null); setStates(null); setTaskPolicy(null);
       if (identityChanged) { draftStore.clear(); setPendingStart(false); setStartLocation(null); setShowStart(false); setState(null); setPerson(null); }
       else setRuntimeEpoch(n => n + 1);
       void load();

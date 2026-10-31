@@ -45,6 +45,7 @@ export interface TaskView {
 }
 
 export interface WorkspaceTreeView {
+  unavailableTasks?:Array<{taskId:string;reason:'current_authority_unavailable'}>;
   workspaceId: string;
   engagements: EngagementView[];
   folders: FolderView[];

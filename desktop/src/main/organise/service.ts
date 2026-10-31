@@ -12,9 +12,8 @@
  *   runtime restart. The principal comes from the identity session, never
  *   from a renderer payload.
  * - **Workspaces.** The shared service lists the principal's Workspaces;
- *   their names are remembered locally (`inquello/workspace/remember`) so that,
- *   while the service is down, private Tasks stay listable and openable under
- *   the remembered Workspaces.
+ *   remembered labels never substitute for current authority. An outage
+ *   withholds private listings and results until current checks succeed.
  * - **Engagement creation** runs the Story 1.11 `create_engagement` command at
  *   the shared service first, then `inquello/engagement/create` with the
  *   returned service Engagement ID, both under the renderer's operation ID. A
@@ -57,7 +56,7 @@ import { DESKTOP_STATE_ACTOR, DESKTOP_STATE_DIMENSIONS, stateRecordView, taskSta
 export const ORGANISE_REASONS = {
   signedOut: 'Sign in to see your Workspaces and private Tasks.',
   notConfigured: 'The shared service is not configured, so new Engagements cannot be created.',
-  serviceDown: 'The shared service is unavailable, so new Engagements cannot be created. Your private Tasks stay available.',
+  serviceDown: 'Current Workspace authority is unavailable. Private work remains inaccessible until it can be checked again.',
   noWorkspace: 'Choose a Workspace first.',
   unknownWorkspace: 'That Workspace is not available to you.',
   serviceUnreachable: 'The shared service could not be reached. Nothing was created.',
@@ -177,6 +176,32 @@ function refusalOf(error: unknown): { kind: string; actual?: number } | null {
 }
 
 export class OrganiseService {
+  private authorityGeneration=0;
+  private listSequence=0;
+  private settledListSequence=0;
+  private readonly listTickets=new WeakMap<ServiceWorkspacesView,number>();
+  private readonly observed=new Map<string,bigint>();
+  private async freshWorkspaces(principal:string):Promise<ServiceWorkspacesView>{
+    const generation=this.authorityGeneration,instance=this.options.runtime.instance(),sequence=++this.listSequence;
+    try{
+      if(!this.options.service)throw new Error('Authority unavailable');
+      const view=await this.options.identity.withAccess(access=>this.options.service!.workspaces(access));
+      if(sequence<this.settledListSequence)throw new Error('Superseded authority');
+      if(!view||view.principal_id!==principal||principal!==this.options.identity.principalId()||generation!==this.authorityGeneration||instance!==this.options.runtime.instance())throw new Error('Authority changed');
+      for(const workspace of view.workspaces){const key=`${principal}:${workspace.workspace_id}`,epoch=BigInt(workspace.authorization_epoch);if(workspace.membership.status!=='active'||epoch<1n||epoch<(this.observed.get(key)??0n))throw new Error('Authority stale');this.observed.set(key,epoch);}
+      // Empty successful lists are observations too: older membership cannot return.
+      this.settledListSequence=sequence;
+      this.listTickets.set(view,sequence);
+      return view;
+    }catch{
+      // An older rejection must not erase a newer successful observation.
+      if(sequence>=this.settledListSequence&&generation===this.authorityGeneration){
+        this.settledListSequence=sequence;this.authorityGeneration++;this.allowed=null;
+      }
+      throw new Error(ORGANISE_REASONS.serviceDown);
+    }
+  }
+
   private bound: { instance: unknown; principal: string | null } | null = null;
   /** Workspaces the principal may open, from the last listing. */
   private allowed: { principal: string; ids: Set<string> } | null = null;
@@ -242,8 +267,15 @@ export class OrganiseService {
   private async call<R, T>(method: string, params: unknown, map: (response: R) => T): Promise<OrganiseResult<T>> {
     const prepared = await this.prepare();
     if (!prepared.ok) return prepared;
+    const instance=this.options.runtime.instance(),generation=this.authorityGeneration;
     try {
-      return { ok: true, value: map(await this.options.runtime.request<R>(method, params)) };
+      const workspaceId=typeof params==='object'&&params!==null?'workspaceId' in params?String(params.workspaceId):null:null;
+      const before=await this.freshWorkspaces(prepared.value);
+      if(workspaceId&&!before.workspaces.some(w=>w.workspace_id===workspaceId))throw new Error('Unavailable');
+      const response=await this.options.runtime.request<R>(method, params);
+      const after=await this.freshWorkspaces(prepared.value);
+      if(generation!==this.authorityGeneration||instance!==this.options.runtime.instance()||prepared.value!==this.options.identity.principalId()||JSON.stringify(before)!==JSON.stringify(after))throw new Error('Authority changed');
+      return { ok: true, value: map(response) };
     } catch (error) {
       return this.runtimeFailure(error);
     }
@@ -252,60 +284,18 @@ export class OrganiseService {
   // ---- Workspaces ------------------------------------------------------------
 
   /**
-   * The principal's Workspaces: from the shared service when it answers (and
-   * remembered locally), otherwise the ones remembered on this device.
+   * Current service Workspaces only; remembered labels never grant access.
    */
   async getWorkspaces(): Promise<WorkspacesView> {
-    const sharedConfigured = this.options.service !== null;
-    const signedOut: WorkspacesView = {
-      signedIn: false,
-      sharedService: this.options.identity.snapshot().sharedService,
-      workspaces: [],
-      engagementCreation: { enabled: false, reason: ORGANISE_REASONS.signedOut },
-    };
-    const prepared = await this.prepare();
-    if (!prepared.ok && prepared.code === 'signed-out') return signedOut;
-    const principal = prepared.ok ? prepared.value : this.options.identity.principalId();
-
-    let local: InquelloWorkspaceListResponse | null = null;
-    if (prepared.ok) {
-      try {
-        local = await this.options.runtime.request<InquelloWorkspaceListResponse>('inquello/workspace/list', {});
-      } catch (error) {
-        this.options.logger.warn(`organise: local Workspaces could not be listed (${(error as Error).message})`);
-      }
-    }
-
-    let fromService: ServiceWorkspacesView | null = null;
-    if (sharedConfigured) {
-      try {
-        fromService = await this.options.identity.withAccess((access) => this.options.service!.workspaces(access));
-      } catch (error) {
-        if (!(error instanceof ServiceError)) throw error;
-        fromService = null;
-      }
-    }
-
-    let workspaces: WorkspaceEntryView[];
-    let engagementCreation: WorkspacesView['engagementCreation'];
-    let sharedService: WorkspacesView['sharedService'];
-    if (fromService) {
-      sharedService = 'available';
-      workspaces = fromService.workspaces.map((workspace) => ({ workspaceId: workspace.workspace_id, name: workspace.name, source: 'service' as const }));
-      engagementCreation = workspaces.length > 0 ? { enabled: true } : { enabled: false, reason: ORGANISE_REASONS.notAMember };
-      if (local) await this.rememberLabels(fromService, local);
-    } else {
-      sharedService = sharedConfigured ? 'unavailable' : 'not-configured';
-      workspaces = (local?.workspaces ?? []).map((workspace) => ({
-        workspaceId: workspace.workspaceId,
-        name: workspace.name ?? 'Workspace (name not yet known)',
-        source: 'local' as const,
-      }));
-      engagementCreation = { enabled: false, reason: sharedConfigured ? ORGANISE_REASONS.serviceDown : ORGANISE_REASONS.notConfigured };
-    }
-    if (principal) this.allowed = { principal, ids: new Set(workspaces.map((workspace) => workspace.workspaceId)) };
-    if (!prepared.ok && prepared.code === 'runtime-unavailable') engagementCreation = { enabled: false, reason: ORGANISE_REASONS.runtimeUnavailable };
-    return { signedIn: true, sharedService, workspaces, engagementCreation };
+    const principal=this.options.identity.principalId(),generation=this.authorityGeneration,instance=this.options.runtime.instance();
+    if(!principal)return{signedIn:false,sharedService:this.options.identity.snapshot().sharedService,workspaces:[],engagementCreation:{enabled:false,reason:ORGANISE_REASONS.signedOut}};
+    try{
+      const fromService=await this.freshWorkspaces(principal);
+      await this.syncPrincipal();
+      if(generation!==this.authorityGeneration||instance!==this.options.runtime.instance()||principal!==this.options.identity.principalId()||this.listTickets.get(fromService)!==this.settledListSequence)throw new Error();
+      this.allowed={principal,ids:new Set(fromService.workspaces.map(w=>w.workspace_id))};
+      return{signedIn:true,sharedService:'available',workspaces:fromService.workspaces.map(w=>({workspaceId:w.workspace_id,name:w.name,source:'service'})),engagementCreation:fromService.workspaces.length?{enabled:true}:{enabled:false,reason:ORGANISE_REASONS.notAMember}};
+    }catch{return{signedIn:true,sharedService:this.options.service?'unavailable':'not-configured',workspaces:[],engagementCreation:{enabled:false,reason:ORGANISE_REASONS.serviceDown}};}
   }
 
   private async rememberLabels(fromService: ServiceWorkspacesView, local: InquelloWorkspaceListResponse): Promise<void> {
@@ -343,6 +333,7 @@ export class OrganiseService {
       engagements: response.engagements.map(engagementView),
       folders: response.folders.map(folderView),
       tasks: response.tasks.map(taskView),
+      unavailableTasks: unavailableTaskViews((response as InquelloWorkspaceTreeResponse & {unavailableTasks?:unknown}).unavailableTasks),
     }));
   }
 
@@ -527,4 +518,9 @@ export class OrganiseService {
       (response) => taskView(response.task),
     );
   }
+}
+
+function unavailableTaskViews(value:unknown):Array<{taskId:string;reason:'current_authority_unavailable'}>{
+ if(value===undefined)return[];if(!Array.isArray(value)||value.length>10000)throw new Error('Invalid unavailable Task projection');
+ const seen=new Set<string>();return value.map(raw=>{if(!raw||typeof raw!=='object'||typeof raw.taskId!=='string'||! /^[0-9a-f-]{36}$/.test(raw.taskId)||raw.reason!=='current_authority_unavailable'||seen.has(raw.taskId))throw new Error('Invalid unavailable Task projection');seen.add(raw.taskId);return{taskId:raw.taskId,reason:'current_authority_unavailable'};});
 }

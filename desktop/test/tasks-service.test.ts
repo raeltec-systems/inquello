@@ -32,8 +32,35 @@ describe('fresh native authority callback',()=>{
 });
 
 it('registers reconciled accepted bindings and triggers the same acceptance callback',async()=>{
- const accepted=vi.fn();const request=vi.fn(async(method:string)=>method==='inquello/tasks/forThread'?{taskId:id,threadId:id}:{operationId:op,taskId:id,runId:op,threadId:id,status:'running',request:command.request,accepted:true});
+ const accepted=vi.fn();const request=vi.fn(async(method:string)=>method==='inquello/tasks/forThread'?{taskId:id,threadId:id,dataTier:'synthetic'}:{operationId:op,taskId:id,runId:op,threadId:id,status:'running',request:command.request,accepted:true});
  const service=new TaskService({runtime:{ready:()=>true,instance:()=>1,request:request as never},identity:{principalId:()=>id},syncPrincipal:async()=>{},prepareRoutes:async()=>({ok:true}),freshPolicy:async()=>null,onAccepted:accepted});
  expect((await service.reconcile(op)).ok).toBe(true);expect(accepted).toHaveBeenCalledTimes(1);expect(await service.applicableDataTier(id)).toBe('synthetic');
  service.invalidate();expect(await service.applicableDataTier(id)).toBe('unknown');
+});
+
+it('keeps uncertain activity fenced until the actual native instance changes',async()=>{
+ let instance=1;const request=vi.fn(async()=>{throw new Error('lost acknowledgment');});
+ const service=new TaskService({runtime:{ready:()=>true,instance:()=>instance,request},identity:{principalId:()=>id},syncPrincipal:async()=>{},prepareRoutes:async()=>({ok:true}),freshPolicy:async()=>({workspaceId:id} as never)});
+ expect((await service.start(command)).ok).toBe(false);expect(service.activeTasks()).toBe(1);service.invalidate();expect(service.activeTasks()).toBe(1);instance=2;expect(service.activeTasks()).toBe(0);
+});
+
+describe('activity ordering and native quiescence',()=>{
+ it('completion before the delayed start acknowledgment cannot resurrect activity',async()=>{
+  const x=setup();let release!:(value:unknown)=>void;
+  x.request.mockImplementationOnce(()=>new Promise(resolve=>{release=resolve;}));
+  const pending=x.service.start(command);await vi.waitFor(()=>expect(x.request).toHaveBeenCalledOnce());
+  x.service.notification('turn/completed',{threadId:id});
+  release({operationId:op,taskId:id,runId:op,threadId:id,status:'running',request:command.request,accepted:true});
+  expect((await pending).ok).toBe(true);expect(x.service.activeTasks()).toBe(0);
+  // A genuinely later operation is not blocked by an old completion on this thread.
+  const next={...command,operationId:'33333333-3333-4333-8333-333333333333'};
+  x.setAnswer({operationId:next.operationId,taskId:id,runId:next.operationId,threadId:id,status:'running',request:next.request,accepted:true});
+  expect((await x.service.start(next)).ok).toBe(true);expect(x.service.activeTasks()).toBe(1);
+ });
+ it('unready or transient missing runtime is not quiescence; only exact stopped process clears activity',async()=>{
+  let ready=true,instance:unknown=1;
+  const service=new TaskService({runtime:{ready:()=>ready,instance:()=>instance,request:async()=>{throw new Error('ack lost');}},identity:{principalId:()=>id},syncPrincipal:async()=>{},prepareRoutes:async()=>({ok:true}),freshPolicy:async()=>({workspaceId:id} as never)});
+  await service.start(command);expect(service.activeTasks()).toBe(1);ready=false;instance=null;expect(service.activeTasks()).toBe(1);
+  service.runtimeStopped(2);expect(service.activeTasks()).toBe(1);service.runtimeStopped(1);expect(service.activeTasks()).toBe(0);
+ });
 });

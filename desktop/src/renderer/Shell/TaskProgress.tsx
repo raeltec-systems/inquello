@@ -36,7 +36,7 @@ export function TaskProgress({taskId,workspaceId,pollMs=1000}:{taskId:string;wor
  const current=useRef<ProgressSnapshot|null>(null),generation=useRef(0),refresh=useRef<()=>void>(()=>{}),answerEpoch=useRef(0),consumed=useRef(new Set<string>());
  useEffect(()=>{
   let live=true,inFlight=false,queued=false;let scheduled:ReturnType<typeof setTimeout>|undefined;let lastLoad=0;const api=tasksBridge();const gen=++generation.current;current.current=null;consumed.current.clear();setSnapshot(null);setNotice('Reading progress…');setAnnouncement('');
-  const clear=()=>{current.current=null;setSnapshot(null);};
+  const clear=()=>{current.current=null;setSnapshot(null);setAnnouncement('');consumed.current.clear();};
   const load=async()=>{
    if(!live)return;if(inFlight){queued=true;return;}inFlight=true;lastLoad=Date.now();const readEpoch=answerEpoch.current;
    try{if(!api?.progress)throw new Error();const next=parseProgress(taskValue(await api.progress({taskId,workspaceId})));if(!live||gen!==generation.current||readEpoch!==answerEpoch.current)return;next.questions=next.questions.filter(q=>!consumed.current.has(`${scope(next)}:${questionKey(q)}`));if(next.taskId!==taskId||next.workspaceId!==workspaceId)throw new Error();

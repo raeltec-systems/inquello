@@ -61,11 +61,17 @@ pub struct TaskRunBinding {
 }
 /// No public request field in receipts/diagnostic bindings. Request lives only in
 /// governed private Task history, readable through creator-scoped reconciliation.
+/// Supplied only by the native coordinator, never deserialized from user input.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NativeTaskDataTier { Real, Synthetic }
+impl NativeTaskDataTier {
+    pub fn as_str(self) -> &'static str { match self { Self::Real => "real", Self::Synthetic => "synthetic" } }
+}
 pub trait TaskRunStore: Send + Sync {
-    fn reserve_task_run(&self, principal: PrincipalId, intent: StartTaskIntent, runtime_id: &str, now_ms: i64) -> impl Future<Output=Result<TaskRunBinding,DomainError>> + Send;
+    fn reserve_task_run(&self, principal: PrincipalId, intent: StartTaskIntent, runtime_id: &str, now_ms: i64, tier: NativeTaskDataTier) -> impl Future<Output=Result<TaskRunBinding,DomainError>> + Send;
     /// Called after the SQLite write wait and again immediately before commit.
-    fn reserve_task_run_fenced<F, Fut>(&self, principal: PrincipalId, intent: StartTaskIntent, runtime_id: &str, now_ms: i64, validate: F) -> impl Future<Output=Result<TaskRunBinding,TaskReservationError>> + Send
-        where F: Fn() -> Fut + Send + Sync, Fut: Future<Output=Result<(),DomainError>> + Send;
+    fn reserve_task_run_fenced<F, Fut>(&self, principal: PrincipalId, intent: StartTaskIntent, runtime_id: &str, now_ms: i64, tier: NativeTaskDataTier, validate: F) -> impl Future<Output=Result<TaskRunBinding,TaskReservationError>> + Send
+        where F: Fn(String) -> Fut + Send + Sync, Fut: Future<Output=Result<(),DomainError>> + Send;
     fn fail_task_setup(&self, principal: PrincipalId, operation: &str, failure: TaskSetupFailure) -> impl Future<Output=Result<TaskRunBinding,DomainError>> + Send;
     /// Trusted retained-lifecycle observation only; not a dispatch or generic status mutation.
     fn observe_task_terminal(&self, principal: PrincipalId, operation: &str, runtime: &str, thread: &str, turn: &str, status: TaskRunStatus) -> impl Future<Output=Result<TaskRunBinding,DomainError>> + Send;

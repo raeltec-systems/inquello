@@ -24,7 +24,7 @@ const ACCESS_TEXT = {
 } as const;
 
 function exportText(category: DataCategoryView): string {
-  if (category.export.mode === 'included') return 'Included in exports';
+  if (category.export.mode === 'included') return 'Included only with trusted native ownership and current access';
   if (category.export.mode === 'unknown') return 'Export rule unknown';
   return `Not exported: ${category.export.reason ?? 'excluded'}`;
 }
@@ -94,9 +94,10 @@ export function LocalData(): ReactElement {
       <p className="specimen-account-note">
         {policy?.policyOwner ? `You own your private local data on this device. ${policy.policyOwner} sets the rules.` : 'Checking the local data policy.'}
       </p>
+      <p>Export and recovery require current Workspace access and proven native ownership. Unknown or mixed content stays unavailable. Recovery validates a service-held byte receipt and current access; an imported manifest never grants permission. Deleting local data removes the local export journal, not service receipts. Receipts hold no source bytes and grant no access.</p>
       <div className="specimen-local-data-blockers">
         {policy && policy.blockers.length === 0 ? (
-          <StatusChip status="data-no-blockers" label="No real-data blockers" />
+          <StatusChip status="data-no-blockers" label="No local policy blockers — route evidence and approval are checked separately" />
         ) : policy ? (
           <>
             <StatusChip status="data-blocked" label={`Real data blocked (${policy.blockers.length})`} />

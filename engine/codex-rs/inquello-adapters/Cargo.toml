@@ -8,6 +8,7 @@ license.workspace = true
 # store lives here, together with its embedded migrations.
 
 [dependencies]
+sha2 = { workspace = true }
 inquello-protocol = { workspace = true }
 reqwest = { workspace = true, features = ["json", "stream", "rustls-tls"] }
 futures = { workspace = true }

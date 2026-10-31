@@ -110,7 +110,7 @@ describe('Local data block', () => {
     expect(rows.length).toBeGreaterThanOrEqual(3);
     const history = document.querySelector<HTMLElement>('[data-local-data-category="task-history"]')!;
     expect(within(history).getByText('Kept until you delete it; no automatic expiry')).toBeTruthy();
-    expect(within(history).getByText('Included in exports')).toBeTruthy();
+    expect(within(history).getByText('Included only with trusted native ownership and current access')).toBeTruthy();
     expect(within(history).getByText('2 files held')).toBeTruthy();
     expect(within(history).getAllByText('Organisation data-policy owner (OQ-2)')).toHaveLength(1);
     const identity = document.querySelector<HTMLElement>('[data-local-data-category="identity-session"]')!;
@@ -118,7 +118,7 @@ describe('Local data block', () => {
     const artifacts = document.querySelector<HTMLElement>('[data-local-data-category="artifacts"]')!;
     expect(within(artifacts).getByText('Disabled; never written')).toBeTruthy();
     expect(within(artifacts).queryByRole('checkbox')).toBeNull();
-    expect(screen.getByText('No real-data blockers')).toBeTruthy();
+    expect(screen.getByText('No local policy blockers — route evidence and approval are checked separately')).toBeTruthy();
   });
 
   it('shows real-data blockers', async () => {

@@ -8,9 +8,10 @@ const evidence:Record<RouteView['verification'],string>={not_verified:'Not verif
 function values(value:unknown):unknown { const r=record(value);if(r.ok!==true)throw new Error(typeof r.reason==='string'?r.reason:'Processing routes unavailable');return r.value; }
 function RouteFacts({route}:{route:RouteView}):ReactElement {
   const c=route.configuration;
-  return <><p>{evidence[route.verification]} — {route.enabled?'Enabled for synthetic data only':'Not enabled'}</p><p>{route.gate}</p>
+  return <><p>{evidence[route.verification]} — {route.enabled?'Configured capability available; each protected use is checked separately':'Not enabled'}</p><p>{route.gate}</p>
     <dl className="specimen-policy-settings"><dt>Route ID</dt><dd>{route.routeId}</dd><dt>Provider</dt><dd>{route.provider}</dd><dt>Deployment / endpoint</dt><dd>{c?.deployment??'Not configured'} / {route.endpoint??'Not configured'}</dd><dt>Exact model / API version</dt><dd>{c?.model??'Not configured'} / {c?.apiVersion??'Not configured'}</dd><dt>Account reference (not a credential)</dt><dd>{c?.accountRef??'Not configured'}</dd><dt>Region</dt><dd>{c?.region??'Unknown'}</dd><dt>Credential</dt><dd>{route.credentialPresent?'Present — not evidence of eligibility':'Unavailable'}</dd><dt>Adapter support</dt><dd>{route.adapterSupported?'Implemented — evidence is separate':'Unavailable'}</dd></dl>
     <ul>{route.limits.map((limit,i)=><li key={i}>{limit}</li>)}</ul><p>Evidence: {route.evidence.join('; ')||'No passing evidence recorded'}</p>
+    <p>Real data requires both complete reviewed negative-authorization evidence for this exact build and route, and current organization approval for this Workspace and data policy. A provider login, administrator role or tool permission cannot supply either. Ask your service operator to review the missing requirement; no alternate route is selected.</p>
     <p>Execution: {route.executionFlow}</p><p>Inference: {route.inferenceFlow}</p><p>Connectors: {route.connectorFlow}</p></>;
 }
 function Configure({route,disabled,save}:{route:RouteView;disabled:boolean;save:(v:ConfigureRouteInput)=>Promise<void>}):ReactElement {

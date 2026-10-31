@@ -16,7 +16,8 @@
         "newline-delimited JSON framing with a 64 MiB line limit; child stderr is captured separately and never parsed as protocol",
         "upstream labels the app-server command experimental; no production eligibility is claimed",
         "Story 1.26 adds authorized bounded retained progress and exact scoped question responses, not raw notifications: 256 native items / 256 KiB projected text; 16 pending desktop requests / 128 KiB. Publisher metadata is model-authored, result checks remain unchecked, and exact native evidence alone can confirm an action. Native compilation/fixture, matching protocol, Windows and authorized provider validation remain pending; synthetic transport evidence does not discharge those gates or promote eligibility. Pass-1 correction prioritizes latest structured findings and terminal/recent activity after canonical assembly, preserves speaker roles, sanitizes display controls with explicit loss, scopes local failures, and derives artifact absence only from empty actual refs. Answers use 4096 UTF-8 bytes; plan updates are cumulative. The 301-item native paging regression remains authored but unexecuted.",
-        "Story 1.27 adds shared host-owned source guidance on private Messages and Responses routes and source/status distinction in progress. Review-corrected native tests cover actual mock HTTP/WebSocket payloads, externally seeded procurement, exact tool identity/content, nonempty unchecked publication, pre-execution refusal and one-use changed-command denial. Native tests remain uncompiled/unrun: cargo absent. Review correction 2 emits existing native failed command completion on pre-execution refusal for retained authorized progress; shared native/renderer projection, coordinated replay observer and exact finding assertions are authored. Desktop 77 focused tests pass; full suite retains partial-checkout failures. Actual provider useful-finding and Windows gates remain open. No detector, independent check or real-data eligibility established. See story-1-27-untrusted-output-support.md."
+        "Story 1.27 adds shared host-owned source guidance on private Messages and Responses routes and source/status distinction in progress. Review-corrected native tests cover actual mock HTTP/WebSocket payloads, externally seeded procurement, exact tool identity/content, nonempty unchecked publication, pre-execution refusal and one-use changed-command denial. Native tests remain uncompiled/unrun: cargo absent. Review correction 2 emits existing native failed command completion on pre-execution refusal for retained authorized progress; shared native/renderer projection, coordinated replay observer and exact finding assertions are authored. Desktop 77 focused tests pass; full suite retains partial-checkout failures. Actual provider useful-finding and Windows gates remain open. No detector, independent check or real-data eligibility established. See story-1-27-untrusted-output-support.md.",
+        "Story 1.28 adds exact-build reviewed-evidence AND current independent organization-approval gates, current private disclosure/persistence/export/recovery checks, native draft provenance and queued-output fences. Both-route/service-coupled synthetic fixture source is authored but native compilation, execution, PostgreSQL, matching protocol and Windows/provider acceptance remain unverified. No passing negative-authorization proof or real-data eligibility is established; service export receipts authenticate prior requests/hashes, not native remote attestation. See story-1-28-authorization-support.md."
       ],
       "identity": "No user identity: the runtime runs as the desktop user's own process and carries no Inquello or provider identity",
       "formats": [
@@ -35,6 +36,11 @@
           "kind": "synthetic",
           "status": "passed",
           "reference": "desktop/src/main/main.ts#--smoke handshake (pnpm smoke, temporary CODEX_HOME)"
+        },
+        {
+          "kind": "record",
+          "status": "pending",
+          "reference": "_bmad-output/implementation-artifacts/story-1-28-authorization-support.md"
         }
       ]
     },

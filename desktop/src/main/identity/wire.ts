@@ -326,3 +326,26 @@ export const parseAccessCheckResponse = object({ decision: literal('allowed'), a
 /** The protocol major and envelope schema version this desktop speaks. */
 export const PROTOCOL_MAJOR = 1;
 export const SCHEMA_VERSION = 1;
+
+// Story 1.28: service observations are operation-bound, never offline leases.
+const digest: Parser<string> = (value, path) => {
+  const text = str(value, path);
+  return /^[0-9a-f]{64}$/.test(text) ? text : fail(path, 'expected SHA-256');
+};
+const integer: Parser<number> = (value, path) => typeof value === 'number' && Number.isSafeInteger(value) ? value : fail(path, 'expected safe integer');
+const generation: Parser<number> = (value, path) => { const number = integer(value, path); return number > 0 ? number : fail(path, 'expected current generation'); };
+export const parseRouteEvidenceIdentity = object({ route_id: oneOf(['codex-responses','claude-api-key']), deployment: str, endpoint: str, model: str, api_version: str, configuration_digest: digest, implementation_digest: digest, runtime_version: str, contract_version: str, platform: str });
+export const parseOrganizationRouteApproval = object({ workspace_id: uuid, route_id: oneOf(['codex-responses','claude-api-key']), evidence_digest: digest, processing_scope: str, data_policy_digest: digest, issuer: str, operator_reference: str, valid_from: integer, expires_at: integer, review_at: integer, revision: decimal, policy_revision: decimal, revoked: (value: unknown, path: string) => typeof value === 'boolean' ? value : fail(path, 'expected boolean') });
+export const parseProtectedRouteUse = object({ action: oneOf(['read','derive','export']), principal_id: uuid, session_id: uuid, task_id: uuid, workspace_id: uuid, operation_id: uuid, generation, principal_revision: decimal, session_revision: decimal, authorization_epoch: decimal, policy_revision: decimal, approval_revision: decimal, processing_scope: str, data_policy_digest: digest });
+export const parseCurrentRouteAuthority = object({ binding: parseProtectedRouteUse, approval: parseOrganizationRouteApproval, checked_at: integer });
+export const parseRouteEligibilityCheckRequest = object({ identity: parseRouteEvidenceIdentity, report_digest: digest, binding: parseProtectedRouteUse });
+export const parseRouteEligibilityCheckResponse = object({ authority: parseCurrentRouteAuthority });
+export const parseRouteApprovalView = object({ approval: nullable(parseOrganizationRouteApproval), authorization_epoch: decimal, policy_revision: decimal });
+export type RouteEvidenceIdentity = ReturnType<typeof parseRouteEvidenceIdentity>;
+export type RouteEligibilityCheckRequest = ReturnType<typeof parseRouteEligibilityCheckRequest>;
+export type RouteEligibilityCheckResponse = ReturnType<typeof parseRouteEligibilityCheckResponse>;
+export type RouteApprovalView = ReturnType<typeof parseRouteApprovalView>;
+export const parseWorkspaceAccess = object({decision:literal('allowed'),authorization_epoch:decimal});
+export type WorkspaceAccess = ReturnType<typeof parseWorkspaceAccess>;
+export const parseExportProvenanceReceipt = object({receipt_id:uuid,principal_id:uuid,manifest_digest:digest,workspace_ids:array(uuid)});
+export type ExportProvenanceReceipt = ReturnType<typeof parseExportProvenanceReceipt>;

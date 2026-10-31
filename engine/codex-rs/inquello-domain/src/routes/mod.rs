@@ -10,3 +10,6 @@ mod ports;
 pub use commands::*;
 pub use model::*;
 pub use ports::*;
+
+mod authorization;
+pub use authorization::*;

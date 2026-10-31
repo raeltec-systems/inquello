@@ -63,6 +63,7 @@ async fn to_connection_notification_respects_opt_out_filters() {
                     range: None,
                 },
             )),
+            private_fence: None,
             write_complete_tx: None,
         },
     )
@@ -103,6 +104,7 @@ async fn to_connection_notifications_are_dropped_for_opted_out_clients() {
                     range: None,
                 },
             )),
+            private_fence: None,
             write_complete_tx: None,
         },
     )
@@ -143,6 +145,7 @@ async fn to_connection_notifications_are_preserved_for_non_opted_out_clients() {
                     range: None,
                 },
             )),
+            private_fence: None,
             write_complete_tx: None,
         },
     )
@@ -183,6 +186,7 @@ async fn experimental_notifications_are_dropped_without_capability() {
         OutgoingEnvelope::ToConnection {
             connection_id,
             message: app_server_notification(thread_realtime_started_notification()),
+            private_fence: None,
             write_complete_tx: None,
         },
     )
@@ -215,7 +219,8 @@ async fn experimental_notifications_are_dropped_without_capability() {
             OutgoingEnvelope::ToConnection {
                 connection_id,
                 message: app_server_notification(notification),
-                write_complete_tx: None,
+                private_fence: None,
+            write_complete_tx: None,
             },
         )
         .await;
@@ -253,6 +258,7 @@ async fn experimental_notifications_are_preserved_with_capability() {
         OutgoingEnvelope::ToConnection {
             connection_id,
             message: app_server_notification(thread_realtime_started_notification()),
+            private_fence: None,
             write_complete_tx: None,
         },
     )
@@ -325,6 +331,7 @@ async fn command_execution_request_approval_strips_additional_permissions_withou
                     available_decisions: None,
                 },
             }),
+            private_fence: None,
             write_complete_tx: None,
         },
     )
@@ -392,6 +399,7 @@ async fn command_execution_request_approval_keeps_additional_permissions_with_ca
                     available_decisions: None,
                 },
             }),
+            private_fence: None,
             write_complete_tx: None,
         },
     )
@@ -595,7 +603,8 @@ async fn to_connection_stdio_waits_instead_of_disconnecting_when_writer_queue_is
                         range: None,
                     },
                 )),
-                write_complete_tx: None,
+                private_fence: None,
+            write_complete_tx: None,
             },
         )
         .await

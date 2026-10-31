@@ -14,6 +14,8 @@ license.workspace = true
 # binary.
 
 [features]
+# Only selects cfg(test) retained-child coupling; never exposes a runtime route.
+retained-fixtures = ["test-issuer"]
 # The synthetic OIDC test issuer and the synthetic-test deployment. Without this
 # feature no test issuer can be configured at all; with it, a production
 # deployment still refuses one.
@@ -49,6 +51,8 @@ url = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
 
 [dev-dependencies]
+app_test_support = { workspace = true }
+codex-app-server-protocol = { workspace = true }
 pretty_assertions = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
 tempfile = { workspace = true }
@@ -79,3 +83,7 @@ required-features = ["test-issuer"]
 
 [lints]
 workspace = true
+
+[[test]]
+name = "route_eligibility"
+required-features = ["test-issuer"]

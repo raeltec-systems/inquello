@@ -115,3 +115,35 @@
 - source_spec: `spec-1-27-reject-untrusted-instructions-in-initial-tool-output.md`
   summary: Actual model resistance to analytical suppression remains unverified, high impact if a duplicate is hidden.
   evidence: Scripted fixtures cannot establish model behavior; owner-authorized real-provider procurement variants on both supported routes must retain the expected finding and reject unauthorized effects.
+
+- source_spec: `spec-1-28-gate-current-route-real-data-use-on-negative-authorization-evidence.md`
+  summary: Unverified SQLite-family deleted-byte remanence
+  evidence: No supported foreign-row deletion/transfer precursor or effective bundled secure_delete behavior demonstrated; settle with a native supported-lifecycle byte witness. Likelihood unknown; impact high if established.
+
+- source_spec: `spec-1-28-gate-current-route-real-data-use-on-negative-authorization-evidence.md`
+  summary: Unverified external build-input fingerprint collision
+  evidence: Need two supported enforcement-distinct builds with equal measured fingerprint; manifests, lockfile, target/Rust flags and compiler are already measured. Likelihood unknown; impact high if established.
+
+- source_spec: `spec-1-28-gate-current-route-real-data-use-on-negative-authorization-evidence.md`
+  summary: Native Story 1.28 compilation and complete authorization suite remain unrun
+  evidence: Cargo absent; run documented fmt/check/domain/adapters/service/native fixture commands and full owner matrix. Likelihood unknown; impact high if native enforcement fails.
+
+- source_spec: `spec-1-28-gate-current-route-real-data-use-on-negative-authorization-evidence.md`
+  summary: Unverified arbitrary digest receipt issuance outside trusted main
+  evidence: Supported renderer exposes no arbitrary receipt endpoint; establish an allowed caller with independently usable bearer and forged archive before treating this as supported bypass. Likelihood unknown; impact high if established.
+
+- source_spec: `spec-1-28-gate-current-route-real-data-use-on-negative-authorization-evidence.md`
+  summary: Unverified unproven-byte transient export with external file mutation
+  evidence: Runtime is quiescent and chunk authorization fresh; establish supported concurrent source producer/destination reader and leakage before adding transactional staging. Likelihood unknown; impact high if established.
+
+- source_spec: `spec-1-28-gate-current-route-real-data-use-on-negative-authorization-evidence.md`
+  summary: Unverified recovery marker power-loss durability bypass
+  evidence: Need crash image showing published protected data durable without marker and actual current-authority bypass. Marker persistence alone does not establish disclosure. Likelihood unknown; impact high if established.
+
+- source_spec: `spec-1-28-gate-current-route-real-data-use-on-negative-authorization-evidence.md`
+  summary: Unverified large-inventory export authorization latency
+  evidence: Measure representative native Task/file inventory against actual service latency and acceptance budget; current per-chunk/per-Task checks may be costly but no measured failure. Likelihood unknown; impact medium if established.
+
+- source_spec: `spec-1-28-gate-current-route-real-data-use-on-negative-authorization-evidence.md`
+  summary: Unverified native read-only WAL/SHM inspection byte stability
+  evidence: Run populated SQLite WAL/SHM native fixture on supported platforms; establish whether read-only inspection mutates shared bookkeeping or rejects valid archive. Likelihood unknown; impact medium availability if established.

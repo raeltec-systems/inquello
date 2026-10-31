@@ -133,7 +133,8 @@ describe('S07 Capabilities and processing', () => {
     expect(within(contract).getByText('Specialist cyber access')).toBeTruthy();
     expect(within(contract).getAllByText('Not enabled — eligibility verification required')).toHaveLength(2);
     const section = document.querySelector<HTMLElement>('[data-policy-section]')!;
-    expect(section.textContent).not.toMatch(/approv|review|accept/i);
+    expect(section.textContent).toContain('Real-data use needs exact-build reviewed authorization evidence and independent current organization approval.');
+    expect(section.textContent).not.toContain('real-data eligible');
     for (const chip of section.querySelectorAll('.iq-status-chip')) expect(chip.className).not.toMatch(GREEN);
   });
 

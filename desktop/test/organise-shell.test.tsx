@@ -36,10 +36,10 @@ function fakeMain(options: { serviceUp?: boolean; signedIn?: boolean } = {}): Fa
     getWorkspaces: vi.fn(async () => ({
       signedIn: options.signedIn ?? true,
       sharedService: main.serviceUp ? 'available' : 'unavailable',
-      workspaces: options.signedIn === false ? [] : [{ workspaceId: WORKSPACE, name: 'Synthetic Audit Co', source: main.serviceUp ? 'service' : 'local' }],
+      workspaces: options.signedIn === false || !main.serviceUp ? [] : [{ workspaceId: WORKSPACE, name: 'Synthetic Audit Co', source: main.serviceUp ? 'service' : 'local' }],
       engagementCreation: main.serviceUp
         ? { enabled: true }
-        : { enabled: false, reason: 'The shared service is unavailable, so new Engagements cannot be created. Your private Tasks stay available.' },
+        : { enabled: false, reason: 'The shared service is unavailable. Private work requires current authority.' },
     })),
     getTree: vi.fn(async () => ok({ workspaceId: WORKSPACE, engagements: main.engagements, folders: main.folders, tasks: main.tasks })),
     createEngagement: vi.fn(async (request: Record<string, string | null>) => {
@@ -180,7 +180,7 @@ describe('Shell', () => {
     expect(second).toBe(first);
   });
 
-  it('with the shared service down, existing Tasks still list and open, and Engagement creation says why it is disabled', async () => {
+  it('with the shared service down, remembered Tasks and titles stay unavailable', async () => {
     const main = fakeMain({ serviceUp: false });
     main.tasks.push({ taskId: uuid(1), workspaceId: WORKSPACE, engagementId: null, folderId: null, title: 'Bank confirmations', runtimeThreadId: null, sourceRefs: [], artifactRefs: [], visibility: 'private', revision: 1 });
     const user = userEvent.setup();
@@ -188,11 +188,10 @@ describe('Shell', () => {
     await waitFor(() => expect(sidebar().dataset.sharedService).toBe('unavailable'));
     const create = screen.getByRole('button', { name: 'New Engagement' });
     expect(create.getAttribute('aria-disabled')).toBe('true');
-    expect(screen.getByText(/shared service is unavailable/)).toBeTruthy();
+    expect(screen.queryByRole('link', {name:'Bank confirmations'})).toBeNull();
     await user.click(create);
     expect(document.querySelector('[data-engagement-form]')).toBeNull();
-    await user.click(screen.getByRole('link', { name: 'Bank confirmations' }));
-    expect(header().querySelector('[data-header-title]')!.textContent).toBe('Bank confirmations');
+    expect(document.body.textContent).not.toContain('Bank confirmations');
   });
 
   it('shows a stale rename as a conflict and keeps the typed draft', async () => {
@@ -388,3 +387,9 @@ it('suppresses delayed discovery and Start acknowledgement after Workspace revoc
  await user.click(await screen.findByRole('link',{name:'Private task'}));
  expect(screen.queryByRole('region',{name:'Accepted request'})).toBeNull();
 });
+
+ it('keeps authorized Tasks visible beside title-free unavailable work',async()=>{
+  const main=fakeMain();main.tasks.push({taskId:uuid(10),workspaceId:WORKSPACE,engagementId:null,folderId:null,title:'Authorized draft',runtimeThreadId:null,sourceRefs:[],artifactRefs:[],visibility:'private',revision:1});
+  main.bridge.getTree!.mockResolvedValue({ok:true,value:{workspaceId:WORKSPACE,engagements:[],folders:[],tasks:main.tasks,unavailableTasks:[{taskId:uuid(11),reason:'current_authority_unavailable',title:'WITHHELD SECRET'}]}});
+  renderShell();expect(await screen.findByRole('link',{name:'Authorized draft'})).toBeTruthy();expect(await screen.findByText(/Some of your Tasks are unavailable/)).toBeTruthy();expect(document.body.textContent).not.toContain('WITHHELD SECRET');
+ });
