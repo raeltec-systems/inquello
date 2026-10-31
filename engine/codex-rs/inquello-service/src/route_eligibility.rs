@@ -197,7 +197,7 @@ async fn check_with_evidence(state: &AppState, access: &str, workspace_id: Uuid,
     let authority = workspaces::resolve(&mut tx, &auth, workspace_id, LockMode::Share).await?;
     authority.require(match request.binding.action {
         ProtectedRouteAction::Read => Action::Read,
-        ProtectedRouteAction::Derive => Action::Derive,
+        ProtectedRouteAction::Derive | ProtectedRouteAction::Resume => Action::Derive,
         ProtectedRouteAction::Export => Action::Export,
     })?;
     let binding = &request.binding;

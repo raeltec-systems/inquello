@@ -147,3 +147,11 @@
 - source_spec: `spec-1-28-gate-current-route-real-data-use-on-negative-authorization-evidence.md`
   summary: Unverified native read-only WAL/SHM inspection byte stability
   evidence: Run populated SQLite WAL/SHM native fixture on supported platforms; establish whether read-only inspection mutates shared bookkeeping or rejects valid archive. Likelihood unknown; impact medium availability if established.
+
+- source_spec: `spec-1-29-steer-stop-and-recover-the-same-private-task.md`
+  summary: Existing plan presentation retains at most64 steps; add authorized plan-history retrieval in a separately scoped follow-up.
+  evidence: R3-B4: pre-existing Story1.26 bound marks history incomplete and suppresses exact interruption counts. Likelihood low for ordinary audit plans, impact medium for long goals; no false completion claim.
+
+- source_spec: `spec-1-29-steer-stop-and-recover-the-same-private-task.md`
+  summary: Verify genuine Electron IPC pre-registration rejection while Task controls remain mounted.
+  evidence: R3-B10, medium impact unverified/low likelihood. Main failures normally return typed outcomes and session invalidation unmounts controls; a real transport reproduction is needed before changing recovery authority or risking replay.

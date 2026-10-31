@@ -6,13 +6,16 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use sha2::{Digest, Sha256};
 
-pub const AUTHORIZATION_SUITE: &str = "inquello-current-route-negative-authorization-v1";
+pub const AUTHORIZATION_SUITE: &str = "inquello-current-route-negative-authorization-v2";
 pub const REQUIRED_AUTHORIZATION_SCENARIOS: &[&str] = &[
     "cross-workspace", "peer-private", "foreign-thread", "foreign-tool",
     "revoked-before-dispatch", "revoked-during-model", "revoked-during-tool",
     "revoked-during-permission", "late-output", "authority-unavailable",
     "retained-output", "reopen", "export", "recovery", "authorized-procurement",
     "authorized-export", "authorized-recovery",
+    "resume", "authorized-resume", "revoked-before-resume", "revoked-during-resume",
+    "resume-missing-linkage", "resume-peer-private", "resume-cross-company",
+    "resume-after-runtime-loss", "lifecycle-lost-ack", "stop-finish", "steer-finish",
 ];
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -138,7 +141,7 @@ pub struct OrganizationRouteApproval {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum ProtectedRouteAction { Read, Derive, Export }
+pub enum ProtectedRouteAction { Read, Derive, Export, Resume }
 
 /// Constructed by the trusted host from native Task provenance, never input text.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -334,5 +337,19 @@ mod revision_wire {
             return Err(serde::de::Error::custom("canonical decimal revision required"));
         }
         value.parse().map_err(serde::de::Error::custom)
+    }
+}
+
+
+#[cfg(test)]
+mod lifecycle_evidence_tests {
+    use super::*;
+    #[test]
+    fn old_command_only_proof_cannot_cover_retained_resume() {
+        assert_ne!(AUTHORIZATION_SUITE,"inquello-current-route-negative-authorization-v1");
+        for scenario in ["resume","authorized-resume","revoked-before-resume","revoked-during-resume","resume-missing-linkage","resume-peer-private","resume-cross-company"] {
+            assert!(REQUIRED_AUTHORIZATION_SCENARIOS.contains(&scenario));
+        }
+        assert_eq!(serde_json::to_value(ProtectedRouteAction::Resume).unwrap(),serde_json::json!("resume"));
     }
 }

@@ -3635,6 +3635,18 @@ impl ThreadRequestProcessor {
         Ok((turns_page.backwards_cursor, items_page.backwards_cursor))
     }
 
+    /// O(1) retained-item revision probe. Updated order includes mutations of
+    /// older items, unlike a newest-created activity tail. Private Task APIs do
+    /// not permit rollback/delete; lineage/identity changes are fenced upstream.
+    pub(super) async fn inquello_progress_revision(&self,thread:&str)->Result<String,JSONRPCErrorError> {
+        let thread_id=ThreadId::from_string(thread).map_err(|_|invalid_request("Invalid retained Task identity"))?;
+        let page=self.thread_store.list_items(StoreListItemsParams {
+            item_ids:None,thread_id,turn_id:None,include_archived:true,position:None,page_size:1,
+            sort_direction:StoreSortDirection::Desc,sort_key:StoreItemSortKey::UpdatedAtOrdinal,after_updated_at_ordinal:None,
+        }).await.map_err(paginated_history_list_error)?;
+        Ok(page.items.first().map_or_else(||"empty".into(),|item|format!("{}:{:?}",item.item_id,item.updated_at_ordinal)))
+    }
+
     pub(super) async fn thread_items_list_response_inner(
         &self,
         params: ThreadItemsListParams,
@@ -6896,6 +6908,71 @@ impl ThreadRequestProcessor {
         profile:&codex_app_server_protocol::InquelloRuntimeProfile,
         authorization:codex_core::inquello_inference::TaskAuthorizationContext)
         ->Result<Arc<CodexThread>,JSONRPCErrorError> {
+        self.inquello_open_private_thread(connection,thread_id,route,choices,profile,authorization,None).await
+    }
+    async fn inquello_retained_history(&self, thread_id: ThreadId)->Result<InitialHistory,JSONRPCErrorError> {
+        let stored=self.read_stored_thread_for_resume(&thread_id.to_string(),None,false).await?;
+        let (history,_)=self.load_resume_initial_history_from_stored_thread(stored,None).await?;
+        match &history {
+            InitialHistory::Resumed(retained) if retained.conversation_id==thread_id && !retained.history.is_empty()=>Ok(history),
+            _=>Err(invalid_request("The retained Task history is missing or unlinked; no replacement thread was created")),
+        }
+    }
+    pub(crate) async fn inquello_check_retained_thread(&self, thread:&str,allowed:&std::collections::HashSet<String>)->Result<(),JSONRPCErrorError> {
+        let id=ThreadId::from_string(thread).map_err(|_|invalid_request("Invalid retained Task linkage"))?;
+        if allowed.is_empty() || allowed.len()>512 {return Err(invalid_request("Retained Task turn lineage is incomplete or exceeds the verified context bound"));}
+        let mut cursor=None;let mut seen=std::collections::HashSet::new();let mut cursors=std::collections::HashSet::new();
+        for _ in 0..6 {
+            let page=self.thread_turns_list_response_inner(ThreadTurnsListParams {thread_id:thread.into(),cursor,
+                limit:Some(100),sort_direction:Some(SortDirection::Asc),items_view:Some(TurnItemsView::Summary)}).await?;
+            for turn in page.data {
+                if !allowed.contains(&turn.id) || !seen.insert(turn.id) {return Err(invalid_request("Retained context contains an unverified Task turn; resume refused"));}
+            }
+            cursor=page.next_cursor;
+            if cursor.is_none() {break;}
+            if !cursors.insert(cursor.clone()) {return Err(invalid_request("Retained context pagination is unverifiable"));}
+        }
+        if cursor.is_some() || &seen!=allowed {return Err(invalid_request("Retained Task history is missing or unverifiable; resume refused"));}
+        self.inquello_retained_history(id).await?;
+        if let Ok(loaded)=self.thread_manager.get_thread(id).await {
+            if matches!(loaded.agent_status().await,AgentStatus::Running) {return Err(invalid_request("Retained Task is still running"));}
+        }
+        Ok(())
+    }
+    pub(crate) async fn inquello_resume_private_thread(&self,connection:ConnectionId,thread_id:ThreadId,
+        route:&inquello_domain::routes::RouteConfiguration,choices:&inquello_domain::usage::Choices,
+        profile:&codex_app_server_protocol::InquelloRuntimeProfile,
+        authorization:codex_core::inquello_inference::TaskAuthorizationContext,
+        allowed:&std::collections::HashSet<String>)
+        ->Result<Arc<CodexThread>,JSONRPCErrorError> {
+        self.inquello_check_retained_thread(&thread_id.to_string(),allowed).await?;
+        authorization.0.before_tool_effect().await.map_err(|_|invalid_request("Retained Task authority changed"))?;
+        if let Ok(thread)=self.thread_manager.get_thread(thread_id).await {
+            if matches!(thread.agent_status().await,AgentStatus::Running) {return Err(invalid_request("Retained Task is still running"));}
+            // Turn overrides cannot replace a loaded thread's sandbox or its
+            // thread-level authorization extension. Wait for actual shutdown
+            // before removing this exact instance and reopening its history.
+            tokio::time::timeout(std::time::Duration::from_secs(10),thread.shutdown_and_wait()).await
+                .map_err(|_|invalid_request("Previous Task runtime shutdown is unconfirmed; resume refused"))?
+                .map_err(|_|invalid_request("Previous Task runtime did not shut down; resume refused"))?;
+            if self.thread_manager.remove_thread_if_matches(&thread_id,&thread).await.is_none() {
+                return Err(invalid_request("Retained Task runtime changed during shutdown; resume refused"));
+            }
+            self.finalize_thread_teardown(thread_id).await;
+        }
+        // Re-read only after the old writer is closed. No stale pre-shutdown
+        // snapshot, replacement identity, or old configuration may carry forward.
+        self.inquello_check_retained_thread(&thread_id.to_string(),allowed).await?;
+        let history=self.inquello_retained_history(thread_id).await?;
+        authorization.0.before_tool_effect().await.map_err(|_|invalid_request("Retained Task authority changed"))?;
+        self.inquello_open_private_thread(connection,thread_id,route,choices,profile,authorization,Some(history)).await
+    }
+    async fn inquello_open_private_thread(&self,connection:ConnectionId,thread_id:ThreadId,
+        route:&inquello_domain::routes::RouteConfiguration,choices:&inquello_domain::usage::Choices,
+        profile:&codex_app_server_protocol::InquelloRuntimeProfile,
+        authorization:codex_core::inquello_inference::TaskAuthorizationContext,
+        history:Option<InitialHistory>)
+        ->Result<Arc<CodexThread>,JSONRPCErrorError> {
         codex_core::inquello_inference::mark_task_thread(&thread_id.to_string()).map_err(|_|invalid_request("Private runtime ownership unavailable"))?;
         let profile_id=profile.permission_profile_id.clone().ok_or_else(||invalid_request("Bounded private Task permissions are required"))?;
         let profile_value=profile.permission_profile.clone().ok_or_else(||invalid_request("Private Task sandbox unavailable"))?;
@@ -6956,16 +7033,42 @@ impl ThreadRequestProcessor {
         let mut options=StartThreadOptions::new(config);
         options.environments=Some(vec![local_request]);
         options.thread_extension_init.insert(codex_extension_api::SessionIsolation::Isolated);
-        options.reserved_thread_id=Some(thread_id);
+        if let Some(history)=history { options.initial_history=history; }
+        else { options.reserved_thread_id=Some(thread_id); }
         options.allow_provider_model_fallback=false;
         options.thread_extension_init.insert(codex_extension_api::ToolPolicy {allowed_tools:Some(vec![codex_tools::ToolName::plain("exec_command"),codex_tools::ToolName::plain("inquello_progress"),codex_tools::ToolName::plain("request_user_input")]),require_managed_sandbox:true,require_unified_exec:false,expose_additional_permissions:false});
         options.thread_extension_init.insert(authorization.clone());
         options.turn_extension_init.insert(authorization.clone());
         if authorization.0.cancellation().is_cancelled() {return Err(invalid_request("Private Task session changed before startup"));}
         let new=self.thread_manager.start_thread(options).await.map_err(|_|internal_error("Private retained thread startup failed; reconcile without retry"))?;
-        if authorization.0.cancellation().is_cancelled() {return Err(invalid_request("Private Task session changed during startup"));}
+        if new.thread_id!=thread_id || authorization.0.cancellation().is_cancelled() {
+            let _=new.thread.shutdown_and_wait().await;
+            return Err(invalid_request("Private Task linkage or session changed during startup"));
+        }
         self.ensure_conversation_listener(thread_id,connection,false).await?;
         Ok(new.thread)
+    }
+    pub(crate) async fn inquello_steer_private_turn(&self,thread_id:&str,turn_id:&str,operation_id:&str,request:String)->Result<bool,JSONRPCErrorError> {
+        let id=ThreadId::from_string(thread_id).map_err(|_|invalid_request("Invalid retained Task linkage"))?;
+        let thread=self.thread_manager.get_thread(id).await.map_err(|_|invalid_request("Active Task runtime unavailable"))?;
+        // This trusted identity is retained on the native user item. Identical
+        // guidance text from different operations must never deduplicate.
+        let input=codex_protocol::turn_input::TurnInput::UserInput {content:vec![codex_protocol::user_input::UserInput::Text {text:request,text_elements:Vec::new()}],client_id:Some(operation_id.into())};
+        match thread.steer_turn(TurnInputRequest::new(input),turn_id.into()).await.map_err(|_|internal_error("Steering acknowledgement is uncertain"))? {
+            codex_core::SteerSubmission::Steered {turn_id:actual}=>Ok(actual==turn_id),
+            codex_core::SteerSubmission::NotSubmitted {..}=>Ok(false),
+        }
+    }
+    /// Submission is not interruption confirmation. The Task journal observes
+    /// the real TurnAborted event, retaining stronger local process cancellation.
+    pub(crate) async fn inquello_interrupt_private_turn(&self,thread_id:&str,turn_id:&str)->Result<(),JSONRPCErrorError> {
+        let id=ThreadId::from_string(thread_id).map_err(|_|invalid_request("Invalid retained Task linkage"))?;
+        let thread=self.thread_manager.get_thread(id).await.map_err(|_|invalid_request("Active Task runtime unavailable"))?;
+        let state=self.thread_state_manager.thread_state(id).await;
+        let state=state.lock().await;
+        if state.active_turn_id()!=Some(turn_id) {return Err(invalid_request("The expected Task turn is no longer active"));}
+        thread.submit(Op::Interrupt).await.map_err(|_|internal_error("Interruption acknowledgement is uncertain"))?;
+        Ok(())
     }
     pub(crate) async fn inquello_start_private_turn(&self,thread:&Arc<CodexThread>,request:String,
         authorization:codex_core::inquello_inference::TaskAuthorizationContext)->Result<codex_core::StartIfIdleSubmission,JSONRPCErrorError> {

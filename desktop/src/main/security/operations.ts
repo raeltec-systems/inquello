@@ -1,5 +1,5 @@
 import type { TaskService } from '../tasks/service';
-import { taskPreflightPayload, taskStartPayload, taskReconcilePayload, taskProgressPayload, taskAnswerPayload } from '../tasks/validators';
+import { taskPreflightPayload, taskStartPayload, taskReconcilePayload, taskProgressPayload, taskActivityPayload, taskAnswerPayload, taskSteerPayload, taskStopPayload, taskResumePayload } from '../tasks/validators';
 import type { UsageService } from '../usage/service';
 import { usageReadPayload, usageSetPayload } from '../usage/validators';
 import type { EnvironmentService } from '../environments/service';
@@ -69,7 +69,12 @@ export const OPERATION_NAMES = [
   'tasks.start',
   'tasks.reconcile',
   'tasks.progress',
+  'tasks.activity',
+  'tasks.settleLifecycle',
   'tasks.answer',
+  'tasks.steer',
+  'tasks.stop',
+  'tasks.resume',
   'usage.forTask',
   'usage.set',
   'environments.forTask',
@@ -296,7 +301,7 @@ export interface PolicyOperations {
 }
 
 export interface OperationDeps {
-  tasks?: Pick<TaskService, 'preflight' | 'start' | 'reconcile' | 'progress' | 'answer'>;
+  tasks?: Pick<TaskService, 'preflight' | 'start' | 'reconcile' | 'progress' | 'activity' | 'settleLifecycle' | 'answer' | 'steer' | 'stop' | 'resume'>;
   usage?: Pick<UsageService, 'forTask' | 'set'>;
   environments?: Pick<EnvironmentService, 'forTask'>;
   routes?: Pick<RouteService, 'list' | 'configure' | 'forTask' | 'select'>;
@@ -494,7 +499,12 @@ export function createOperations(deps: OperationDeps): Operation[] {
     { name: 'tasks.start', validate: taskStartPayload, handle: input => { if (!deps.tasks) throw new Error('Task start unavailable'); return deps.tasks.start(input as Parameters<TaskService['start']>[0]); } },
     { name: 'tasks.reconcile', validate: taskReconcilePayload, handle: input => { if (!deps.tasks) throw new Error('Task reconciliation unavailable'); return deps.tasks.reconcile((input as {operationId:string}).operationId); } },
     { name: 'tasks.progress', validate: taskProgressPayload, handle: input => { if (!deps.tasks) throw new Error('Task progress unavailable'); return deps.tasks.progress(input as Parameters<TaskService['progress']>[0]); } },
+    { name: 'tasks.activity', validate: taskActivityPayload, handle: input => { if (!deps.tasks) throw new Error('Task progress unavailable'); return deps.tasks.activity(input as Parameters<TaskService['progress']>[0]); } },
+    { name: 'tasks.settleLifecycle', validate: taskStopPayload, handle: input => { if (!deps.tasks) throw new Error('Task lifecycle unavailable'); return deps.tasks.settleLifecycle(input as Parameters<TaskService['stop']>[0]); } },
     { name: 'tasks.answer', validate: taskAnswerPayload, handle: input => { if (!deps.tasks) throw new Error('Task input unavailable'); return deps.tasks.answer(input as Parameters<TaskService['answer']>[0]); } },
+    { name: 'tasks.steer', validate: taskSteerPayload, handle: input => { if (!deps.tasks) throw new Error('Task lifecycle unavailable'); return deps.tasks.steer(input as Parameters<TaskService['steer']>[0]); } },
+    { name: 'tasks.stop', validate: taskStopPayload, handle: input => { if (!deps.tasks) throw new Error('Task lifecycle unavailable'); return deps.tasks.stop(input as Parameters<TaskService['stop']>[0]); } },
+    { name: 'tasks.resume', validate: taskResumePayload, handle: input => { if (!deps.tasks) throw new Error('Task lifecycle unavailable'); return deps.tasks.resume(input as Parameters<TaskService['resume']>[0]); } },
     { name: 'usage.forTask', validate: usageReadPayload, handle: input => { if (!deps.usage) throw new Error('Usage unavailable'); return deps.usage.forTask((input as {taskId:string}).taskId); } },
     { name: 'usage.set', validate: usageSetPayload, handle: input => { if (!deps.usage) throw new Error('Usage unavailable'); return deps.usage.set(input as Parameters<UsageService['set']>[0]); } },
     { name: 'environments.forTask', validate: taskRoutePayload, handle: (input) => { if (!deps.environments) throw new Error('Environment information unavailable'); return deps.environments.forTask((input as {taskId:string}).taskId); } },

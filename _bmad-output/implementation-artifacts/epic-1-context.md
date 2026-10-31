@@ -4,7 +4,7 @@
 
 ## Goal
 
-Epic 1 lays the foundation for every later Increment 1 epic. It covers a reproducible Codex fork, a hardened Electron desktop driving the packaged Rust app-server, and the DESIGN token and primitive layer. It adds an Inquello identity separate from provider sign-in, creator-private Workspace/Engagement/Task organisation, and truthful states, permissions and route discovery. The epic delivers one real plain-text private Task on a configured synthetic-approved route, which the user can steer, stop, resume, search and reopen. Files and Methods (Epic 2), artifacts (Epic 3) and sharing (Epic 4) are out of scope. This goal is distilled from the epic’s stories. Evidence gap: the partial checkout lacks the PRD/addendum, product brief, architecture spine, EXPERIENCE and imported design assets; only epics, DESIGN and the two architecture companions were available.
+Deliver a genuine creator-private desktop Task: organise work, authenticate independently of inference, execute a permitted plain-text request, inspect truthful progress, interrupt safely, and resume or find retained work without leaking revoked content. Establish the security and accessibility foundations for later analysis, artifacts and collaboration. Available planning inputs include the epic breakdown, design contract and identity/provider architecture companions; the referenced PRD, product brief, architecture spine and interaction companion are absent from this planning directory.
 
 ## Stories
 
@@ -41,35 +41,29 @@ Epic 1 lays the foundation for every later Increment 1 epic. It covers a reprodu
 
 ## Requirements & Constraints
 
-- Tasks are creator-private: membership never exposes them, moves never widen grants, ad hoc Tasks need no Engagement; no Share control yet.
-- Provider sign-in only authorises inference; it never grants or removes Inquello authority. No guest role in V1; external exchange uses exports.
-- Task, run, artifact, check, review, Professional Approval and Delivery states are separate; a completed turn is "execution finished", never acceptance.
-- No silent fallback: failures name the limit; execution and inference locations are shown separately.
-- Nothing is enabled without a capability-register entry; synthetic evidence is not real-data eligibility. Real data waits for the route's passing negative authorisation suite and current eligibility; unknown fails closed.
-- Stop reports actual counts and applied effects, never rollback; resume rechecks authority; unlinkable threads show as uncertain.
-- Held local data needs a rule and owner; never invent retention. Deletion/export/recovery disclose retained copies and losses. Revocation blocks subsequent protected use, including stale snippets and resumed context; uncertainty fails closed.
-- Untrusted tool content cannot expand authority. Action permission is not analytical review or Professional Approval; the most restrictive command rule wins within the sandbox.
-- Contrast 4.5:1/3:1 is recorded per rendered state; core actions remain keyboard-operable and reduced motion retains textual progress.
+- Tasks begin private. Workspace or Engagement membership, administrative roles and moving work never implicitly disclose conversations or drafts. Ad hoc Tasks require no invented Engagement fields. Internal-company membership is the initial scope; external-client/independence routes remain gated and V1 has no guests.
+- Distinguish execution, checks, human review, Professional Approval and Delivery; a finished turn, permission decision or green indicator proves none of the others. Show checked, unchecked and incomplete work explicitly.
+- Each route needs a capability entry describing ownership, versions, identity, processing, limits and evidence. Missing or failing evidence means disabled; synthetic acceptance does not authorize real data. Current negative authorization tests and current organizational eligibility must pass before real-data enablement, including newly introduced resume/search paths.
+- Retention, deletion, export and recovery rules apply to every category actually held. Unknown policy blocks real-data use; invent neither durations nor native-record obligations. Exports do not transfer permissions; surviving external copies cannot be recalled.
+- Bound reads, writes and destinations through local enforcement. Most-restrictive command rules win; automatic permission review cannot widen policy. Tool output is untrusted data, never new authority. Credentials must stay outside renderer, model, arbitrary tools, logs and exports.
+- Stop prevents future work without claiming rollback; retain confirmed effects and pending steps. Resume revalidates identity, authority and retained context. Unlinkable runtime history stays uncertain rather than silently replaying a new thread. Crash recovery preserves last-confirmed metadata; revoked material cannot leak through caches, search snippets or resumed output.
 
 ## Technical Decisions
 
-- **Fork:** record cut SHA/date/reason; verify Rust 1.99.1 (2024), pnpm 10.34.5, TS 5.9.2, React 19.3.1, Electron 45.0.0; record deviations.
-- **Layering:** domain-owned ports and adapters; domain imports no Electron or concrete runtime/storage adapters. Introduce only currently needed entities, not future record schemas.
-- **Desktop:** sandboxed, context-isolated renderers without Node authority; named preload operations validate payload and sender in main, which enforces navigation/content boundaries. No general IPC/shell bridge. Main owns the packaged stdio Rust child, initialization, backpressure, disconnect and shutdown; stderr stays separate. Generated client schemas match the pinned runtime; no WebSocket production claim.
-- **Store:** separate SQLite (WAL-reset fix, 3.51.3+), written only via domain commands with operation ID and expected version.
-- **Identity:** external-browser OIDC + PKCE, `(issuer, subject)` principal, no email linking; revocable sessions and rotating refresh. Credentials remain outside renderer/model/tools/logs. Service-owned authority uses versioned HTTPS JSON, operation identity, expected revisions, durable redacted receipts and transactional revocation ordering. Bootstrap/refresh never recover credentials through ordinary receipts. Synthetic topology uses a local service, PostgreSQL 18 and isolated test OIDC; it proves no production issuer eligibility.
-- **Inference:** the selected Claude API-key route needs an Inquello-owned Messages adapter behind the retained Codex model client; changing a URL/key is insufficient. Normalize history, tools, events, errors and usage; partial tool JSON never executes. Subscription integration remains conditional, with no token reuse or silent harness replacement. Cloud inference requires connectivity; local execution is not offline inference.
-- **Sandbox:** local in V1; label "V2 revisit (OQ-13)".
+- Use an identified public Codex fork cut with verified toolchain compatibility, Electron/React/TypeScript desktop and shared Rust audit-domain rules. Electron main owns the packaged Rust app-server over bounded stdio; keep stderr separate, match generated protocol versions, and explicitly handle backpressure, disconnect and shutdown.
+- Sandboxed, context-isolated renderers have no Node authority. Expose only named, sender/payload-validated host operations; no general IPC or shell bridge. Domain-owned ports isolate policy from runtime, Electron and storage adapters.
+- Separate working SQLite from runtime storage; require a verified WAL-reset fix. Domain commands own writes, operation identity and expected versions. Introduce entities only when needed, retaining stable Task identity and runtime-thread linkage.
+- Shared authority is a versioned HTTPS service with Rust domain rules and transactional PostgreSQL metadata, not replicated desktop permissions. OIDC external-browser PKCE authenticates immutable issuer/subject principals; service-held sessions and current membership govern protected commands. Validate authority and revisions atomically; durable operation receipts resolve uncertain mutations without duplicate effects. Local caches cannot authorize stale access.
+- Inquello sessions and inference credentials remain independent. The selected additional initial inference route is Claude API-key access through a native Messages adapter, not a changed endpoint URL. Subscription integration remains conditional on official permission. No silent provider, model, environment or harness fallback.
+- Show execution location separately from inference processing. Cloud inference requires model connectivity; protected shared-derived work additionally requires live authority. Lost dependencies pause affected work and preserve supported progress, never imply offline AI or automatic local-model fallback.
+- Isolated synthetic service/OIDC/database/blob fixtures validate contracts, not production SSO or real-data eligibility. Actual inference must be evidenced separately where required; production issuer, operator, region and data-policy gates remain explicit.
 
 ## UX & Interaction Patterns
 
-- Exact DESIGN tokens, self-hosted IBM Plex, Lucide icons; no dark theme.
-- Shell: 264px Sidebar/52px rail (Workspace, Engagements, Tasks), 48px Header, 720px thread, 380px artifact minimum; collapse keeps selection.
-- Escape never stops a Task; Composer keeps unsent text; unavailable controls are labelled, not faked; ApprovalCards name the action.
-- PlanStep done only when finished; JudgmentTags separate result kinds; S07 shows provider session apart from Inquello identity.
+- Preserve the exact selected design tokens, self-hosted IBM Plex fonts and accessible icon semantics. Use the light, compact workbench; do not invent a dark theme. Measure actual states for 4.5:1 normal-text and 3:1 large-text/essential-indicator contrast; reduce motion without hiding running status.
+- Keep navigation, current Workspace/Engagement context and Composer reachable. Responsive collapse preserves selection and drafts. Keyboard focus follows the work, overlays return focus, and background progress never steals it. Escape dismisses overlays, never stops a Task.
+- Unavailable files, Methods, sharing and later capabilities must be labelled honestly, not simulated. Permission prompts describe the exact action, content, destination and consequences with action-specific verbs. Results distinguish calculations, observations, suggestions, decisions and gaps in text, not colour alone.
 
 ## Cross-Story Dependencies
 
-- 1.1→1.2→1.3→1.4; 1.5→1.6–1.8; 1.10→1.11/1.13; 1.22 needs 1.9, 1.19–1.21; 1.25 needs 1.22–1.24; 1.28 gates 1.29–1.30.
-- The selected fork cut/toolchain requires actual verification; production identity/operator/region/data-policy eligibility gates real shared data, not synthetic contract work. External-audit client/independence policy remains unresolved. Story 1.25 requires separately authorised actual inference, not a mocked response; planning criteria are not executed acceptance evidence.
-- Extended by Epics 2 (files/Methods), 3 (artifacts), 4 (sharing/revocation) and 10 (delegated usage).
+Fork/runtime isolation and protected persistence precede domain execution; identity/membership, policy, provider configuration and current-route denial evidence precede secure continuation. Design primitives precede shell/composition. Task execution and truthful progress precede interruption/recovery, which precedes protected search/reopen. Epic 2 adds source files and Methods; Epic 3 adds artifact continuity and recomputation; Epics 4–5 add sharing and review. Do not claim those later routes from fixtures or pre-create their full schemas. Each route extends authorization and recovery evidence when introduced.

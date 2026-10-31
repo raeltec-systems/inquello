@@ -5,6 +5,7 @@ use codex_app_server_protocol::*;
 use inquello_domain::routes::{self, RouteStore};
 use inquello_domain::tasks::{StartTaskIntent, TaskRunBinding, TaskRunStatus, TaskRunStore, TaskReservationError, TaskSetupFailure, NativeTaskDataTier};
 use inquello_domain::usage::{self, UsageStore};
+use inquello_domain::tasks::{TaskLifecycleIntent,TaskLifecycleKind,TaskLifecycleReceipt,TaskLifecycleStatus,TaskLifecycleStore};
 use codex_core::inquello_inference::{AttemptContext, TaskAuthorization, TaskAuthorizationContext};
 use codex_protocol::error::{CodexErr, Result as CoreResult};
 use std::sync::Arc;
@@ -122,6 +123,13 @@ impl InquelloRequestProcessor {
         let generation=generation.ok_or_else(||refusal("credential_unavailable","Selected route credential unavailable"))?;
         let fixture=self.task_fixture_matches(connection,actor,&params.workspace_id,&candidate.configuration,params.configuration_revision).await;
         if id==routes::RouteId::CodexResponses && !fixture {self.routes.responses.as_ref().ok_or_else(||refusal("route_unavailable","Inherited provider unavailable"))?.check_configuration(&candidate.configuration).map_err(|_|refusal("route_unavailable","Selected endpoint differs from inherited runtime provider"))?;}
+        // Isolated retained-child fault injection only. This is unavailable in
+        // release builds and without the authenticated loopback fixture binding;
+        // it can only deny new inference readiness, never promote eligibility.
+        #[cfg(all(feature="inference-fixtures",debug_assertions))]
+        if fixture && session.root.join(".inquello-fixture-provider-unavailable").exists() {
+            return Err(refusal("capabilities_unavailable","Synthetic fixture provider readiness is unavailable"));
+        }
         let caps=if fixture {usage_bridge::Capabilities {reasoning:vec!["default".into()],speeds:vec!["default".into()],defaults:usage::Choices::default()}}else{self.candidate_capabilities(&candidate.configuration,check_quota).await?};
         let inherited=if check_quota && !fixture {self.usage_limit_check(&params.route_id,"").await?}else{None};
         let state=self.routes.state.lock().await;
@@ -190,6 +198,8 @@ impl InquelloRequestProcessor {
             request:params.request,route_id:params.route_id.clone(),configuration_revision:params.configuration_revision,choices:usage::Choices {reasoning:params.reasoning,speed:params.speed}};
         intent.validate().map_err(domain_error).map_err(before_effect)?;
         let (store,actor)=self.context(connection).await.map_err(before_effect)?;
+        let lease_domain=self.ensure_task_runtime_lease().map_err(before_effect)?;
+        store.record_task_runtime_lease(&self.runtime_id,&lease_domain).await.map_err(domain_error).map_err(before_effect)?;
         if let Some(previous)=store.find_task_run(actor.principal_id,&intent.operation_id).await.map_err(domain_error)? {
             let tier=match store.task_data_tier(actor.principal_id,&previous.task_id).await.map_err(domain_error)?.as_deref() {Some("real")=>NativeTaskDataTier::Real,Some("synthetic")=>NativeTaskDataTier::Synthetic,_=>return Err(refusal("not_found","Private work unavailable"))};
             // reserve validates the entire canonical intent against immutable private request history;
@@ -282,7 +292,7 @@ impl InquelloRequestProcessor {
             match submission {
                 codex_core::StartIfIdleSubmission::Started {turn_id,..}=>{
                     let latest=store.find_task_run(actor.principal_id,&run.operation_id).await.map_err(domain_error)?.ok_or_else(||refusal("not_found","Private operation disappeared"))?;
-                    if matches!(latest.status,TaskRunStatus::Dispatching|TaskRunStatus::Running) {store.mark_task_run(actor.principal_id,&run.operation_id,TaskRunStatus::Running,Some(&turn_id)).await.map_err(domain_error)?;}
+                    if matches!(latest.status,TaskRunStatus::Dispatching|TaskRunStatus::Running) {store.mark_task_run_fenced(actor.principal_id,&run.operation_id,&run.run_id,&run.runtime_id,TaskRunStatus::Running,Some(&turn_id)).await.map_err(domain_error)?;}
                     Ok(())
                 },
                 codex_core::StartIfIdleSubmission::NotSubmitted {..}=>{submission_started=false;setup_failure=TaskSetupFailure::TurnNotIdle;Err(refusal("turn_not_idle","First turn was not accepted; no steering or retry performed"))},
@@ -290,10 +300,10 @@ impl InquelloRequestProcessor {
         }.await;
         if result.is_err() {
             authorization.cancellation.cancel();
-            if submission_started {let _=store.mark_task_run(actor.principal_id,&run.operation_id,TaskRunStatus::Uncertain,None).await;}
+            if submission_started {let _=store.mark_task_run_fenced(actor.principal_id,&run.operation_id,&run.run_id,&run.runtime_id,TaskRunStatus::Uncertain,run.turn_id.as_deref()).await;}
             else if store.fail_task_setup(actor.principal_id,&run.operation_id,setup_failure).await.is_err() {
                 // A storage error is not proof of a durable non-dispatch receipt.
-                let _=store.mark_task_run(actor.principal_id,&run.operation_id,TaskRunStatus::Uncertain,None).await;
+                let _=store.mark_task_run_fenced(actor.principal_id,&run.operation_id,&run.run_id,&run.runtime_id,TaskRunStatus::Uncertain,run.turn_id.as_deref()).await;
             }
         }
         #[cfg(all(feature="inference-fixtures",debug_assertions))]
@@ -330,7 +340,7 @@ impl TaskGuard {
             // requires current native creator/session/Workspace/route authority.
             let store=self.processor.store().await?;
             let current=store.find_task_run(self.actor.principal_id,&self.run.operation_id).await.map_err(domain_error)?.ok_or_else(||refusal("not_found","Private work unavailable"))?;
-            if current.task_id!=self.run.task_id || current.runtime_id!=self.processor.runtime_id || current.workspace_id!=self.run.workspace_id {return Err(refusal("not_found","Private work unavailable"));}
+            if current.run_id!=self.run.run_id || current.task_id!=self.run.task_id || current.runtime_id!=self.processor.runtime_id || current.workspace_id!=self.run.workspace_id {return Err(refusal("not_found","Private work unavailable"));}
             self.processor.authorize_task_disclosure(self.connection,self.actor,&current.workspace_id).await?;
             self.processor.authorize_run_route_disclosure(self.connection,self.actor,&current).await?;
             if self.cancellation.is_cancelled() || self.processor.actor(self.connection)?!=self.actor {return Err(refusal("stale","Private disclosure authority changed"));}
@@ -364,7 +374,7 @@ impl TaskGuard {
         if route.stale_configuration || route.revision.get()!=1 || selected.configuration!=self.configuration || selected.configuration_revision.get()!=self.run.configuration_revision
             || state.credential(self.actor.principal_id,&self.configuration)!=Some(self.generation) {return Err(refusal("stale","Task route or provider credentials changed"));}
         let run=store.find_task_run(self.actor.principal_id,&self.run.operation_id).await.map_err(domain_error)?.ok_or_else(||refusal("not_found","Task binding unavailable"))?;
-        if run.runtime_id!=self.processor.runtime_id || matches!(run.status,TaskRunStatus::Failed|TaskRunStatus::Cancelled|TaskRunStatus::Uncertain|TaskRunStatus::Completed|TaskRunStatus::SetupFailed) {return Err(refusal("stale","Task binding is no longer active"));}
+        if run.run_id!=self.run.run_id || run.runtime_id!=self.processor.runtime_id || matches!(run.status,TaskRunStatus::Failed|TaskRunStatus::Cancelled|TaskRunStatus::Uncertain|TaskRunStatus::Completed|TaskRunStatus::SetupFailed) {return Err(refusal("stale","Task binding is no longer active"));}
         let settings=usage::task_usage(&store,self.actor,&self.run.task_id).await.map_err(domain_error)?.settings.ok_or_else(||refusal("settings_unavailable","Task settings unavailable"))?;
         if settings.revision!=1 || settings.choices!=self.run.choices {return Err(refusal("stale","Task settings changed"));}
         if self.cancellation.is_cancelled() || self.processor.actor(self.connection)?!=self.actor {return Err(refusal("stale","Private Task authorization changed"));}
@@ -391,8 +401,9 @@ impl TaskAuthorization for TaskGuard {
         let status=match outcome {TaskTurnOutcome::Completed=>TaskRunStatus::Completed,TaskTurnOutcome::Failed=>TaskRunStatus::Failed,TaskTurnOutcome::Cancelled=>TaskRunStatus::Cancelled};
         let Ok(store)=self.processor.store().await else {self.processor.routes.invalidate_disclosure(self.actor.principal_id);self.cancellation.cancel();return;};
         let Ok(Some(bound))=store.find_task_run(self.actor.principal_id,&self.run.operation_id).await else {self.processor.routes.invalidate_disclosure(self.actor.principal_id);self.cancellation.cancel();return;};
-        let Some(thread)=bound.thread_id.as_deref() else {self.processor.routes.invalidate_disclosure(self.actor.principal_id);self.cancellation.cancel();return;};
-        if store.observe_task_terminal(self.actor.principal_id,&self.run.operation_id,&self.processor.runtime_id,thread,turn_id,status).await.is_err(){self.processor.routes.invalidate_disclosure(self.actor.principal_id);self.cancellation.cancel();}
+        if bound.run_id!=self.run.run_id || bound.runtime_id!=self.run.runtime_id {return;}
+        let Some(_thread)=bound.thread_id.as_deref() else {self.processor.routes.invalidate_disclosure(self.actor.principal_id);self.cancellation.cancel();return;};
+        if store.mark_task_run_fenced(self.actor.principal_id,&self.run.operation_id,&self.run.run_id,&self.run.runtime_id,status,Some(turn_id)).await.is_err(){self.processor.routes.invalidate_disclosure(self.actor.principal_id);self.cancellation.cancel();}
         self.terminal.store(true,std::sync::atomic::Ordering::Release);
     })}
     fn cancellation(&self)->CancellationToken {self.cancellation.clone()}
@@ -407,7 +418,7 @@ impl TaskAuthorization for TaskGuard {
         let store=self.processor.store().await.map_err(core_refusal)?;
         // Persist exact native turn identity before sampling: model questions and
         // progress can precede the desktop's Start acknowledgement safely.
-        store.mark_task_run(self.actor.principal_id,&self.run.operation_id,TaskRunStatus::Running,Some(turn_id)).await.map_err(|_|CodexErr::Fatal("Private turn attribution could not be retained".into()))?;
+        store.mark_task_run_fenced(self.actor.principal_id,&self.run.operation_id,&self.run.run_id,&self.run.runtime_id,TaskRunStatus::Running,Some(turn_id)).await.map_err(|_|CodexErr::Fatal("Private turn attribution could not be retained".into()))?;
         let attempt_id=uuid::Uuid::new_v4().to_string();
         let binding=inquello_protocol::inference::Binding {schema_version:1,principal_id:self.actor.principal_id.to_string(),task_id:self.run.task_id.clone(),run_id:self.run.run_id.clone(),turn_id:turn_id.into(),attempt_id:attempt_id.clone(),
             route_id:self.configuration.route_id().as_str().into(),model:self.configuration.model().into(),api_version:self.configuration.api_version().into(),account_ref:self.configuration.account_ref().into(),
@@ -609,13 +620,28 @@ mod tests {
     }
 }
 
+struct AuthorityRequestCleanup {
+    outgoing:Arc<crate::outgoing_message::OutgoingMessageSender>, id:Option<RequestId>,
+}
+impl Drop for AuthorityRequestCleanup {
+    fn drop(&mut self) {
+        if let Some(id)=self.id.take() {
+            let outgoing=self.outgoing.clone();
+            if let Ok(runtime)=tokio::runtime::Handle::try_current() {
+                runtime.spawn(async move {outgoing.cancel_request(&id).await;});
+            }
+        }
+    }
+}
+
 /// The service is owned by main. Native obtains a fresh observation after waits;
 /// neither cached Workspace membership nor a renderer assertion can grant effects.
-async fn current_service_policy(outgoing:&crate::outgoing_message::OutgoingMessageSender,connection:ConnectionId,workspace:&str,cancellation:&CancellationToken)
+async fn current_service_policy(outgoing:&Arc<crate::outgoing_message::OutgoingMessageSender>,connection:ConnectionId,workspace:&str,cancellation:&CancellationToken)
     ->Result<InquelloWorkspaceExecutionPolicy,JSONRPCErrorError> {
     let (id,response)=outgoing.send_request_to_connections(Some(&[connection]),ServerRequestPayload::InquelloTaskAuthority(InquelloTaskAuthorityParams {workspace_id:workspace.into(),route_discovery:None,route_check:None}),None).await;
+    let mut cleanup=AuthorityRequestCleanup {outgoing:outgoing.clone(),id:Some(id.clone())};
     let result=tokio::select! {biased;_=cancellation.cancelled()=>None,result=tokio::time::timeout(std::time::Duration::from_secs(15),response)=>result.ok().and_then(|r|r.ok()).and_then(|r|r.ok())};
-    outgoing.cancel_request(&id).await;
+    outgoing.cancel_request(&id).await;cleanup.id=None;
     let result:InquelloTaskAuthorityResponse=result.and_then(|r|serde_json::from_value(r).ok()).ok_or_else(||{cancellation.cancel();refusal("authority_unknown","Current Workspace membership/policy refresh unavailable")})?;
     result.workspace_policy.filter(|p|p.workspace_id==workspace&&p.authorization_epoch>0).ok_or_else(||refusal("authority_unknown","Current Workspace access is not authorized"))
 }
@@ -641,8 +667,15 @@ impl InquelloRequestProcessor {
 
 /// Explicit phase evidence; clients must never infer this from an error kind.
 fn before_effect(mut error:JSONRPCErrorError)->JSONRPCErrorError {
-    let mut data=error.data.take().unwrap_or_else(||json!({"inquello":{}}));
-    if let Some(inquello)=data.get_mut("inquello").and_then(|v|v.as_object_mut()) {inquello.insert("preEffect".into(),json!(true));}
+    let mut data=error.data.take().filter(serde_json::Value::is_object).unwrap_or_else(||json!({}));
+    let mut marker=data.get("inquello").and_then(serde_json::Value::as_object).cloned().unwrap_or_default();
+    // Generic protocol errors carry no Inquello kind. Supply the bounded kind
+    // required by desktop settlement without erasing a more specific refusal.
+    if !marker.get("kind").is_some_and(serde_json::Value::is_string) {
+        marker.insert("kind".into(),json!("refused"));
+    }
+    marker.insert("preEffect".into(),json!(true));
+    data["inquello"]=serde_json::Value::Object(marker);
     error.data=Some(data);error
 }
 
@@ -758,6 +791,18 @@ mod accounting_lifecycle_tests {
 
 
 
+#[derive(Clone)]
+pub(super) struct ProgressCache {
+    key:String, revision:String, analysis_key:String, analysis_digest:String, snapshot_id:String, canonical:Arc<InquelloTasksProgressResponse>,
+    bytes:usize, cancellation:CancellationToken,
+}
+
+impl ProgressCache {
+    fn matches(&self,key:&str,revision:&str)->bool {
+        !self.cancellation.is_cancelled() && self.key==key && self.revision==revision
+    }
+}
+
 impl InquelloRequestProcessor {
     /// Hydration reads canonical item status, never a terminal turn summary. A
     /// private subscription and renderer-provided thread IDs are not authority.
@@ -771,44 +816,107 @@ impl InquelloRequestProcessor {
             .filter(|task|task.creator_principal_id==actor.principal_id)
             .ok_or_else(||refusal("not_found","Private Task not found"))?;
         let thread=task.runtime_thread_id.as_ref().ok_or_else(||refusal("not_found","Private runtime binding unavailable"))?;
-        let run=store.find_thread_run(actor.principal_id,&self.runtime_id,thread).await.map_err(domain_error)?
-            .filter(|run|run.task_id==params.task_id && run.workspace_id==params.workspace_policy.workspace_id)
+        let run=store.find_task_current_run(actor.principal_id,&params.task_id).await.map_err(domain_error)?
+            .filter(|run|run.task_id==params.task_id && run.workspace_id==params.workspace_policy.workspace_id && run.thread_id.as_ref()==Some(thread))
             .ok_or_else(||refusal("not_found","Current private Task binding unavailable"))?;
-        let turn=run.turn_id.clone().ok_or_else(||refusal("not_found","Private turn not yet acknowledged"))?;
+        let turn=run.turn_id.clone();
+        let mut lineage=if params.activity_only { Vec::new() } else { store.prior_task_runs(actor.principal_id,&params.task_id).await.map_err(domain_error)? };
+        lineage.push(run.clone());
+        if lineage.iter().any(|prior|prior.task_id!=run.task_id || prior.workspace_id!=run.workspace_id || prior.principal_id!=run.principal_id || prior.thread_id!=run.thread_id) {
+            return Err(refusal("stale","Retained Task linkage could not be verified"));
+        }
+        let allowed_turns:std::collections::HashSet<String>=lineage.iter().filter_map(|prior|prior.turn_id.clone()).collect();
         let session=self.task_session(connection,actor,&run.workspace_id).await?;
-        self.authorize_task_disclosure(connection,actor,&run.workspace_id).await?;
-        self.authorize_run_route_disclosure(connection, actor, &run).await?;
+        for prior in &lineage {
+            self.authorize_task_disclosure(connection,actor,&prior.workspace_id).await?;
+            self.authorize_run_route_disclosure(connection,actor,prior).await?;
+        }
         if generation.cancellation.is_cancelled() || generation.principal!=actor.principal_id || generation.workspace!=run.workspace_id
             || !self.task_read_policy_current(actor.principal_id,&params.workspace_policy).await {
             return Err(refusal("stale","Workspace authority changed before progress read"));
         }
-        let (entries,incomplete)=read_progress_pages(|cursor,limit| {
-            let thread=thread.clone();let turn=turn.clone();let session=&session;let run=&run;
+        let requested=params.result_page.as_ref();
+        if requested.is_some_and(|p|p.current_offset>10_000_000 || p.history_offset>10_000_000
+            || p.snapshot_id.as_ref().is_some_and(|id|uuid::Uuid::parse_str(id).is_err())
+            || ((p.current_offset!=0 || p.history_offset!=0) && p.snapshot_id.is_none()))
+            || (params.activity_only && requested.is_some()) {
+            return Err(refusal("invalid","Bounded result page requires its retained snapshot"));
+        }
+        let key=serde_json::to_string(&(format!("{connection:?}"),actor.principal_id.to_string(),&lineage,&params.workspace_policy,&session.real))
+            .map_err(|_|refusal("history_unavailable","Retained projection identity unavailable"))?;
+        let revision=if params.activity_only {String::new()}else{threads.inquello_progress_revision(thread).await?};
+        let mut analytical_turns=allowed_turns.iter().collect::<Vec<_>>();analytical_turns.sort();
+        let analysis_key=serde_json::to_string(&(format!("{connection:?}"),actor.principal_id.to_string(),&run.task_id,&run.thread_id,analytical_turns,&params.workspace_policy,&session.real))
+            .map_err(|_|refusal("history_unavailable","Retained analytical identity unavailable"))?;
+        let previous={let mut cache=self.task_progress_cache.lock().await;
+            cache.retain(|entry|!entry.cancellation.is_cancelled());
+            cache.iter().rev().find(|entry|entry.analysis_key==analysis_key).cloned()};
+        let cached=previous.as_ref().filter(|entry|entry.matches(&key,&revision)).cloned();
+        let (canonical,bytes)=if params.activity_only {(Arc::new(canonical_progress(Vec::new(),&allowed_turns,turn.as_deref(),false)),0)}else if let Some(cache)=cached {
+            (cache.canonical,cache.bytes)
+        } else {
+            let (entries,incomplete)=read_progress_pages(|cursor,limit| {
+            let thread=thread.clone();let session=&session;let lineage=&lineage;
             async move {
                 let page=threads.thread_items_list_response_inner(ThreadItemsListParams {
-                    thread_id:thread,turn_id:Some(turn),cursor:cursor.map(ThreadItemsListCursor::Opaque),
+                    thread_id:thread,turn_id:None,cursor:cursor.map(ThreadItemsListCursor::Opaque),
                     limit:Some(limit),sort_direction:Some(SortDirection::Desc),
                 }).await?;
-                self.authorize_task_disclosure(connection,actor,&run.workspace_id).await?;
-        self.authorize_run_route_disclosure(connection, actor, &run).await?;
+                for prior in lineage {
+                    self.authorize_task_disclosure(connection,actor,&prior.workspace_id).await?;
+                    self.authorize_run_route_disclosure(connection,actor,prior).await?;
+                }
                 if session.cancellation.is_cancelled() || self.actor(connection)?!=actor {
                     return Err(refusal("session_changed","Private session changed while reading progress"));
                 }
                 Ok(page)
             }
         }).await?;
-        let latest=store.find_thread_run(actor.principal_id,&self.runtime_id,thread).await.map_err(domain_error)?
+            let canonical=canonical_progress(entries,&allowed_turns,turn.as_deref(),incomplete);
+            let bytes=serde_json::to_vec(&canonical).map_err(|_|refusal("history_unavailable","Retained projection unavailable"))?.len();
+            if bytes>64*1024*1024 {return Err(refusal("history_unavailable","Retained canonical state exceeds its safe cache bound"));}
+            (Arc::new(canonical),bytes)
+        };
+        let analysis_digest=analytical_digest(&canonical);
+        let snapshot_id=previous.as_ref().filter(|entry|entry.analysis_digest==analysis_digest)
+            .map_or_else(||uuid::Uuid::new_v4().to_string(),|entry|entry.snapshot_id.clone());
+        if requested.and_then(|p|p.snapshot_id.as_ref()).is_some_and(|id|id!=&snapshot_id) {
+            return Err(refusal("stale_snapshot","Findings or cited evidence changed; refresh before paging"));
+        }
+        if requested.is_some_and(|page|page.current_offset as usize>canonical.results.len() || page.history_offset as usize>canonical.result_history.len()) {
+            return Err(refusal("invalid","Result page is outside this retained snapshot"));
+        }
+        if !params.activity_only && threads.inquello_progress_revision(thread).await?!=revision {
+            return Err(refusal("stale_snapshot","Retained output changed during reconstruction; refresh progress"));
+        }
+        for prior in &lineage {
+            self.authorize_task_disclosure(connection,actor,&prior.workspace_id).await?;
+            self.authorize_run_route_disclosure(connection,actor,prior).await?;
+        }
+        let policy_current=self.task_read_policy_current(actor.principal_id,&params.workspace_policy).await;
+        let latest=store.find_task_current_run(actor.principal_id,&params.task_id).await.map_err(domain_error)?
             .ok_or_else(||refusal("not_found","Private binding disappeared"))?;
-        self.authorize_task_disclosure(connection,actor,&run.workspace_id).await?;
-        self.authorize_run_route_disclosure(connection, actor, &run).await?;
-        if session.cancellation.is_cancelled() || self.actor(connection)?!=actor || latest.run_id!=run.run_id || latest.turn_id!=run.turn_id
-            || !self.task_read_policy_current(actor.principal_id,&params.workspace_policy).await {
+        if session.cancellation.is_cancelled() || self.actor(connection)?!=actor || latest.run_id!=run.run_id || latest.turn_id!=run.turn_id || latest.thread_id!=run.thread_id
+            || !policy_current {
             return Err(refusal("stale","Private binding changed before progress disclosure"));
         }
-        let mut snapshot=project_progress(entries,&turn,incomplete);
+        if !params.activity_only {
+            let mut cache=self.task_progress_cache.lock().await;
+            cache.retain(|entry|entry.key!=key && !entry.cancellation.is_cancelled());
+            while !cache.is_empty() && (cache.len()>=4 || cache.iter().map(|entry|entry.bytes).sum::<usize>()+bytes>64*1024*1024) {cache.remove(0);}
+            cache.push(ProgressCache {key,revision,analysis_key,analysis_digest,snapshot_id:snapshot_id.clone(),canonical:canonical.clone(),bytes,cancellation:session.cancellation.clone()});
+        }
+        // Cache lock acquisition and revision reads are awaited too. A late old
+        // run must never publish a terminal snapshot over a newly resumed run.
+        let final_run=store.find_task_current_run(actor.principal_id,&params.task_id).await.map_err(domain_error)?;
+        if session.cancellation.is_cancelled() || self.actor(connection)?!=actor || final_run.as_ref()!=Some(&latest) {
+            return Err(refusal("stale","Task incarnation changed before snapshot publication"));
+        }
+        let mut snapshot=display_progress_page(&canonical,requested);
+        if params.activity_only {snapshot.result_page=None;}else if let Some(page)=&mut snapshot.result_page {page.snapshot_id=snapshot_id;}
         snapshot.task_id=run.task_id;snapshot.run_id=run.run_id;snapshot.workspace_id=run.workspace_id;
-        snapshot.thread_id=thread.clone();snapshot.turn_id=turn;snapshot.runtime_id=self.runtime_id.clone();
-        snapshot.status=status_name(latest.status).into();
+        snapshot.thread_id=thread.clone();snapshot.turn_id=turn;snapshot.runtime_id=run.runtime_id.clone();
+        snapshot.status=if run.runtime_id!=self.runtime_id && matches!(latest.status,TaskRunStatus::Reserved|TaskRunStatus::Bound|TaskRunStatus::Dispatching|TaskRunStatus::Running) {"uncertain".into()} else {status_name(latest.status).into()};
         snapshot.artifact=progress_artifact(&task.artifact_refs).into();
         finish_progress(&mut snapshot);
         Ok(Some(snapshot.into()))
@@ -817,38 +925,53 @@ impl InquelloRequestProcessor {
 
 fn progress_artifact(refs:&[String])->&'static str {if refs.is_empty() {"absent"} else {"unknown"}}
 
-/// Shared endpoint paging seam: chronological newest 256, bounded requests and
-/// explicit loss. Every awaited fetch performs the endpoint's disclosure guard.
+/// Canonical findings come from the retained store, not the recent activity tail.
+/// Each page is bounded and freshly authorized by the caller. A corrupt cursor or
+/// resource ceiling refuses the read rather than returning a false canonical tail.
 async fn read_progress_pages<F,Fut>(mut fetch:F)->Result<(Vec<ThreadItemEntry>,bool),JSONRPCErrorError>
 where F:FnMut(Option<String>,u32)->Fut,
       Fut:std::future::Future<Output=Result<ThreadItemsListResponse,JSONRPCErrorError>> {
-    let mut entries=Vec::new();let mut cursor=None;let mut incomplete=false;
+    let mut entries=Vec::new();let mut cursor=None;
     let mut cursors=std::collections::HashSet::new();
-    for _ in 0..3 {
-        let remaining=256-entries.len();if remaining==0 {incomplete|=cursor.is_some();break;}
-        let limit=remaining.min(100);
-        let page=fetch(cursor.clone(),limit as u32).await?;
-        if page.data.len()>limit {incomplete=true;}
-        entries.extend(page.data.into_iter().take(limit));
+    let mut bytes=0usize;
+    for _ in 0..1000 {
+        let page=fetch(cursor.clone(),100).await?;
+        if page.data.len()>100 {return Err(refusal("history_unavailable","Retained history page exceeded its bound"));}
+        bytes+=serde_json::to_vec(&page.data).map_err(|_|refusal("history_unavailable","Retained history could not be verified"))?.len();
+        if bytes>64*1024*1024 {return Err(refusal("history_unavailable","Retained history exceeds the safe projection bound; no partial canonical findings disclosed"));}
+        entries.extend(page.data);
         cursor=page.next_cursor;
-        if let Some(next)=&cursor {if !cursors.insert(next.clone()) {incomplete=true;break;}}
-        else {break;}
+        if let Some(next)=&cursor {
+            if !cursors.insert(next.clone()) {return Err(refusal("history_unavailable","Retained history cursor did not advance"));}
+        } else {entries.reverse();return Ok((entries,false));}
     }
-    incomplete|=cursor.is_some();entries.reverse();Ok((entries,incomplete))
+    Err(refusal("history_unavailable","Retained history paging limit reached; no partial canonical findings disclosed"))
 }
 
 /// Projection is a closed allowlist: reasoning, opaque provider blocks, hooks,
 /// arbitrary extension payloads and untrusted metadata never cross this seam.
-fn project_progress(entries:Vec<ThreadItemEntry>,turn:&str,mut incomplete:bool)->InquelloTasksProgressResponse {
-    use inquello_protocol::progress::{Publication,PlanClaim,ResultKind};
+#[cfg(test)]
+fn project_progress(entries:Vec<ThreadItemEntry>,turn:&str,incomplete:bool)->InquelloTasksProgressResponse {
+    project_progress_history(entries,&std::collections::HashSet::from([turn.to_owned()]),Some(turn),incomplete)
+}
+fn project_progress_history(entries:Vec<ThreadItemEntry>,allowed_turns:&std::collections::HashSet<String>,current_turn:Option<&str>,incomplete:bool)->InquelloTasksProgressResponse {
+    project_progress_page(entries,allowed_turns,current_turn,incomplete,None)
+}
+fn project_progress_page(entries:Vec<ThreadItemEntry>,allowed_turns:&std::collections::HashSet<String>,current_turn:Option<&str>,incomplete:bool,page:Option<&InquelloResultPageRequest>)->InquelloTasksProgressResponse {
+    display_progress_page(&canonical_progress(entries,allowed_turns,current_turn,incomplete),page)
+}
+fn canonical_progress(entries:Vec<ThreadItemEntry>,allowed_turns:&std::collections::HashSet<String>,current_turn:Option<&str>,mut incomplete:bool)->InquelloTasksProgressResponse {
+    use inquello_protocol::progress::{Publication,PlanClaim,ResultKind,ResultState};
     use std::collections::{HashMap,HashSet};
     let mut items=Vec::new();let mut plan:Vec<InquelloProgressStep>=Vec::new();let mut results=Vec::new();
+    let mut result_history:Vec<InquelloProgressResult>=Vec::new();
     let mut publications=Vec::new();let mut evidence:HashMap<String,String>=HashMap::new();let mut seen=HashSet::new();
     let mut human_instructions:HashMap<String,String>=HashMap::new();
     // Assemble canonical state before any display sanitization or clipping.
     let mut malformed=Vec::new();
     for entry in entries {
-        if entry.turn_id!=turn {incomplete=true;continue;}
+        if !allowed_turns.contains(&entry.turn_id) {incomplete=true;continue;}
+        let source_turn_id=entry.turn_id.clone();
         let id=entry.item.id().to_owned();
         if id.is_empty() || id.len()>128 || !seen.insert(id.clone()) {incomplete=true;continue;}
         let completed=entry.completed_at_ms.is_some();
@@ -877,9 +1000,9 @@ fn project_progress(entries:Vec<ThreadItemEntry>,turn:&str,mut incomplete:bool)-
             ThreadItem::FunctionCallOutput {name,namespace,output,..} if name=="inquello_progress" && namespace.is_none() => {
                 let text=output.to_text().unwrap_or_default();
                 match Publication::parse(&text) {
-                    Ok(publication)=>publications.push(publication),
+                    Ok(publication)=>publications.push((publication,source_turn_id.clone())),
                     Err(_)=>{
-                        malformed.push(InquelloProgressResult {id:format!("publication:{id}"),kind:None,text,checks:"unchecked".into(),check_scope:None,evidence_ids:Vec::new(),basis:None});
+                        malformed.push(InquelloProgressResult {id:format!("publication:{id}"),kind:None,text,checks:"unchecked".into(),check_scope:None,evidence_ids:Vec::new(),basis:None,revision:1,state:"current".into(),change_reason:None,superseded_reason:None,source_turn_id:source_turn_id.clone()});
                     }
                 }
                 ("tool","completed","Plan/result publication received; labels are not verification".into(),None)
@@ -894,8 +1017,9 @@ fn project_progress(entries:Vec<ThreadItemEntry>,turn:&str,mut incomplete:bool)-
     let citations:HashSet<String>=items.iter().map(|item|item.id.clone()).collect();
     let mut step_order=HashMap::new();let mut sequence=0usize;
     let mut step_indices:HashMap<String,usize>=HashMap::new();
-    let mut result_indices:HashMap<String,usize>=HashMap::new();
-    for publication in publications {
+    let mut result_states:HashMap<String,InquelloProgressResult>=HashMap::new();
+    let mut result_order:HashMap<String,usize>=HashMap::new();
+    for (publication,source_turn_id) in publications {
         for step in publication.plan {
             let step_id=step.id.clone();
             // Native evidence proves only the action's stated work, not an
@@ -905,7 +1029,7 @@ fn project_progress(entries:Vec<ThreadItemEntry>,turn:&str,mut incomplete:bool)-
             let requested_refs=step.evidence_ids.len();
             let refs=step.evidence_ids.into_iter().filter(|id|evidence.get(id).is_some_and(|work|!exact_work||work==&step.text)).collect::<Vec<_>>();
             if refs.len()!=requested_refs {incomplete=true;}
-            let status=match step.status {PlanClaim::Pending=>"pending",PlanClaim::Running=>"running",PlanClaim::Completed if exact_work=>"done",PlanClaim::Completed=>"unconfirmed"};
+            let status=match step.status {PlanClaim::Pending=>"pending",PlanClaim::Running if Some(source_turn_id.as_str())==current_turn=>"running",PlanClaim::Running=>"unconfirmed",PlanClaim::Completed if exact_work=>"done",PlanClaim::Completed=>"unconfirmed"};
             if let Some(&index)=step_indices.get(&step.id) {
                 // Same revision cannot rewrite text or regress a completed step.
                 if step.revision<plan[index].revision || (step.revision==plan[index].revision && step.text!=plan[index].text) {incomplete=true;continue;}
@@ -935,48 +1059,124 @@ fn project_progress(entries:Vec<ThreadItemEntry>,turn:&str,mut incomplete:bool)-
             let requested_refs=result.evidence_ids.len();
             let refs=result.evidence_ids.into_iter().filter(|id|citations.contains(id)).collect::<Vec<_>>();
             if refs.len()!=requested_refs {incomplete=true;}
-            let row=InquelloProgressResult {id:format!("result:{}",result.id),kind:Some(kind.into()),text:result.text,checks:"unchecked".into(),check_scope:None,evidence_ids:refs,basis};
-            if let Some(&index)=result_indices.get(&result.id) {
-                // Publication order, including updates, determines display priority.
-                results.remove(index);
-                result_indices.retain(|_,position|{if *position==index {false}else{if *position>index {*position-=1;}true}});
-                result_indices.insert(result.id,results.len());results.push(row);
+            let row=InquelloProgressResult {id:format!("result:{}",result.id),kind:Some(kind.into()),text:result.text,checks:"unchecked".into(),check_scope:None,evidence_ids:refs,basis,revision:result.revision,state:if result.state==ResultState::Withdrawn {"withdrawn".into()} else {"current".into()},change_reason:result.change_reason,superseded_reason:None,source_turn_id:source_turn_id.clone()};
+            if let Some(prior)=result_states.get(&result.id) {
+                if row.revision<prior.revision {incomplete=true;continue;}
+                if row.revision==prior.revision {
+                    // Repeating a version is harmless; rewriting it is not.
+                    if row.text!=prior.text || row.kind!=prior.kind || row.state!=prior.state || row.evidence_ids!=prior.evidence_ids || row.basis!=prior.basis || row.change_reason!=prior.change_reason {incomplete=true;}
+                    continue;
+                }
+                if row.change_reason.is_none() {incomplete=true;continue;}
+                let mut historical=prior.clone();
+                if historical.state=="current" {historical.state="superseded".into();historical.superseded_reason=row.change_reason.clone();}
+                result_history.push(historical);
+            } else {
+                // A retained version can be useful without its predecessor, but
+                // absent earlier lineage is never represented as complete.
+                if row.revision>1 {incomplete=true;}
+                if row.state=="withdrawn" {incomplete=true;continue;}
             }
-            else if results.len()<64 {result_indices.insert(result.id,results.len());results.push(row);}
-            else {
-                // Keep the latest structured findings, not the first 64 forever.
-                incomplete=true;results.remove(0);
-                result_indices.retain(|_,index|{if *index==0 {false}else{*index-=1;true}});
-                result_indices.insert(result.id,results.len());results.push(row);
-            }
+            sequence+=1;result_order.insert(result.id.clone(),sequence);
+            result_states.insert(result.id,row);
         }
     }
     plan.sort_by_key(|step|step_order.get(&step.id).copied().unwrap_or(0));
     if plan.len()>64 {incomplete=true;plan.drain(..plan.len()-64);}
-    // Structured findings outrank malformed fallback; ordinary agent text appears
-    // once in activity with an explicit unchecked, structure-unavailable label.
-    let available=64-results.len();
-    if malformed.len()>available {incomplete=true;}
-    let start=malformed.len().saturating_sub(available);
-    results.extend(malformed.into_iter().skip(start));
-    let mut budget=262_144usize;
-    // Reserve space for plan and current/terminal activity as well as results.
-    let mut result_budget=131_072usize;
-    for result in results.iter_mut().rev().filter(|r|r.kind.is_some()) {
-        result.text=progress_text(&result.text,&mut result_budget,&mut incomplete);
-        if let Some(basis)=&mut result.basis {basis.scope=progress_text(&basis.scope,&mut result_budget,&mut incomplete);}
+    let mut ordered=result_states.into_iter().collect::<Vec<_>>();
+    ordered.sort_by_key(|(id,_)|result_order.get(id).copied().unwrap_or(0));
+    for (_,row) in ordered {if row.state=="current" {results.push(row);}else{result_history.push(row);}}
+    // Canonical counts are computed before any display window. A page never
+    // drops a revision or overwrites either of its two independent reasons.
+    results.extend(malformed);
+    InquelloTasksProgressResponse {version:1,task_id:String::new(),run_id:String::new(),workspace_id:String::new(),thread_id:String::new(),turn_id:None,runtime_id:String::new(),status:String::new(),history_incomplete:incomplete,items,plan,results,result_history,result_page:None,artifact:"unknown".into()}
+}
+fn analytical_digest(canonical:&InquelloTasksProgressResponse)->String {
+    use sha2::{Digest,Sha256};
+    let references:std::collections::HashSet<&str>=canonical.results.iter().chain(canonical.result_history.iter())
+        .flat_map(|r|r.evidence_ids.iter().map(String::as_str).chain(r.basis.iter().map(|b|b.id.as_str()))).collect();
+    let mut evidence=canonical.items.iter().filter(|item|references.contains(item.id.as_str())).collect::<Vec<_>>();
+    evidence.sort_by(|a,b|a.id.cmp(&b.id));
+    // This digest stays trusted-side. Renderers receive only an opaque random
+    // identity reused while findings, lineage and cited evidence are identical.
+    let bytes=serde_json::to_vec(&(&canonical.results,&canonical.result_history,evidence)).unwrap_or_default();
+    format!("{:x}",Sha256::digest(bytes))
+}
+fn display_progress_page(canonical:&InquelloTasksProgressResponse,page:Option<&InquelloResultPageRequest>)->InquelloTasksProgressResponse {
+    use std::collections::HashSet;
+    let mut incomplete=canonical.history_incomplete;
+    let mut plan=canonical.plan.clone();
+    let current_total=canonical.results.len() as u32;let history_total=canonical.result_history.len() as u32;
+
+    let current_offset=page.map_or(0,|p|p.current_offset).min(current_total);
+    let history_offset=page.map_or(0,|p|p.history_offset).min(history_total);
+    let mut results=bounded_result_page(&canonical.results,current_offset as usize,64);
+    let mut result_history=bounded_result_page(&canonical.result_history,history_offset as usize,128);
+    // Fit page findings together with their complete citation identity set.
+    // Optional plan/activity never evicts evidence needed by a displayed result.
+    let item_index:std::collections::HashMap<&str,&InquelloProgressItem>=canonical.items.iter().map(|item|(item.id.as_str(),item)).collect();
+    let mut item_bytes=std::collections::HashMap::new();
+    let mut items;
+    loop {
+        let references:HashSet<&str>=results.iter().chain(result_history.iter())
+            .flat_map(|r|r.evidence_ids.iter().map(String::as_str).chain(r.basis.iter().map(|b|b.id.as_str()))).collect();
+        let evidence_bytes=references.iter().map(|id|*item_bytes.entry((*id).to_owned()).or_insert_with(||item_index.get(id).map_or(0,|item|serde_json::to_vec(item).map_or(usize::MAX,|v|v.len().saturating_add(1))))).fold(0usize,usize::saturating_add);
+        let bytes=serde_json::to_vec(&(&results,&result_history)).map_or(usize::MAX,|v|v.len()).saturating_add(evidence_bytes);
+        if references.len()<=256 && bytes<=450_000 {
+            items=references.iter().filter_map(|id|item_index.get(id).map(|item|(**item).clone())).collect::<Vec<_>>();
+            for item in &mut items {item.text=progress_text(&item.text,&mut 16_384usize,&mut incomplete);}
+            break;
+        }
+        if result_history.len()>1 && (result_history.len()>=results.len() || results.len()<=1) {result_history.pop();continue;}
+        if results.len()>1 {results.pop();continue;}
+        // An irreducible row may cite sixteen long tool outputs. Keep every
+        // citation and human basis, showing bounded non-basis evidence excerpts.
+        items=references.iter().filter_map(|id|item_index.get(id).map(|item|(**item).clone())).collect::<Vec<_>>();
+        let basis:HashSet<&str>=results.iter().chain(result_history.iter()).filter_map(|r|r.basis.as_ref().map(|b|b.id.as_str())).collect();
+        for item in &mut items {if !basis.contains(item.id.as_str()) {item.text=progress_text(&item.text,&mut 2048usize,&mut incomplete);}}
+        incomplete=true;break;
     }
-    for result in results.iter_mut().rev().filter(|r|r.kind.is_none()) {
-        result.text=progress_text(&result.text,&mut result_budget,&mut incomplete);
+    for result in results.iter_mut().chain(result_history.iter_mut()) {
+        result.text=progress_text(&result.text,&mut 16_384usize,&mut incomplete);
+        if let Some(basis)=&mut result.basis {basis.scope=progress_text(&basis.scope,&mut 16_384usize,&mut incomplete);}
     }
-    budget-=131_072-result_budget;
-    let mut plan_budget=65_536usize.min(budget);
-    let allocated=plan_budget;
+    let mut plan_budget=65_536usize;
     for step in plan.iter_mut().rev() {step.text=progress_text(&step.text,&mut plan_budget,&mut incomplete);}
-    budget-=allocated-plan_budget;
-    for item in items.iter_mut().rev() {item.text=progress_text(&item.text,&mut budget,&mut incomplete);}
-    let mut snapshot=InquelloTasksProgressResponse {version:1,task_id:String::new(),run_id:String::new(),workspace_id:String::new(),thread_id:String::new(),turn_id:String::new(),runtime_id:String::new(),status:String::new(),history_incomplete:incomplete,items,plan,results,artifact:"unknown".into()};
+    while !plan.is_empty() && serde_json::to_vec(&(&items,&plan,&results,&result_history)).map_or(true,|v|v.len()>600_000) {
+        plan.remove(0);incomplete=true;
+    }
+    let result_page=Some(InquelloResultPage {snapshot_id:String::new(),current_offset,history_offset,current_total,history_total,
+        current_next_offset:((current_offset+results.len() as u32)<current_total).then_some(current_offset+results.len() as u32),
+        history_next_offset:((history_offset+result_history.len() as u32)<history_total).then_some(history_offset+result_history.len() as u32)});
+    // Add optional plan evidence first, then recent activity, only within the
+    // remaining item/wire budget. No blanket citation filtering is needed.
+    let mut retained:HashSet<String>=items.iter().map(|item|item.id.clone()).collect();
+    let plan_refs:HashSet<&str>=plan.iter().flat_map(|step|step.evidence_ids.iter().map(String::as_str)).collect();
+    let mut wire_bytes=serde_json::to_vec(&(&items,&plan,&results,&result_history)).map_or(usize::MAX,|v|v.len());
+    for item in canonical.items.iter().rev().filter(|item|plan_refs.contains(item.id.as_str())).chain(canonical.items.iter().rev()) {
+        if retained.contains(&item.id) {continue;}
+        if items.len()>=256 {incomplete=true;continue;}
+        let mut candidate=item.clone();candidate.text=progress_text(&candidate.text,&mut 2048usize,&mut incomplete);
+        let cost=serde_json::to_vec(&candidate).map_or(usize::MAX,|v|v.len()+1);
+        if wire_bytes.saturating_add(cost)>600_000 {incomplete=true;continue;}
+        wire_bytes=wire_bytes.saturating_add(cost);items.push(candidate);retained.insert(item.id.clone());
+    }
+    let order:std::collections::HashMap<&str,usize>=canonical.items.iter().enumerate().map(|(index,item)|(item.id.as_str(),index)).collect();
+    items.sort_by_key(|item|order.get(item.id.as_str()).copied().unwrap_or(0));
+    let mut snapshot=InquelloTasksProgressResponse {version:1,task_id:String::new(),run_id:String::new(),workspace_id:String::new(),thread_id:String::new(),turn_id:None,runtime_id:String::new(),status:String::new(),history_incomplete:incomplete,items,plan,results,result_history,result_page,artifact:"unknown".into()};
     finish_progress(&mut snapshot);snapshot
+}
+
+fn bounded_result_page(rows:&[InquelloProgressResult],offset:usize,limit:usize)->Vec<InquelloProgressResult> {
+    let mut page=Vec::new();let mut bytes=0usize;
+    for row in rows.iter().skip(offset).take(limit) {
+        let size=serde_json::to_vec(&row).map_or(usize::MAX,|v|v.len());
+        // A single valid row always fits the transport. Preserve it intact even
+        // when two long reasons exceed the normal per-section page budget.
+        if !page.is_empty() && bytes.saturating_add(size)>131_072 {break;}
+        bytes=bytes.saturating_add(size);page.push(row.clone());
+    }
+    page
 }
 fn progress_text(text:&str,budget:&mut usize,incomplete:&mut bool)->String {
     // Display-only sanitizer: retained source and canonical comparisons stay exact.
@@ -1027,7 +1227,7 @@ fn finish_progress(snapshot:&mut InquelloTasksProgressResponse) {
             if count!=step.evidence_ids.len() {snapshot.history_incomplete=true;}
             if step.status=="done" && !step.evidence_ids.iter().any(|id|visible.get(id).is_some_and(|item|item.status=="completed")) {step.status="unconfirmed".into();}
         }
-        for result in &mut snapshot.results {
+        for result in snapshot.results.iter_mut().chain(snapshot.result_history.iter_mut()) {
             let count=result.evidence_ids.len();result.evidence_ids.retain(|id|visible.contains_key(id));
             if count!=result.evidence_ids.len() {snapshot.history_incomplete=true;}
             if result.basis.as_ref().is_some_and(|basis|!visible.get(&basis.id).is_some_and(|item|item.role.as_deref()==Some("user") && item.text==basis.scope && basis.scope==result.text)) {
@@ -1036,9 +1236,12 @@ fn finish_progress(snapshot:&mut InquelloTasksProgressResponse) {
         }
         if serde_json::to_vec(snapshot).map(|v|v.len()<=inquello_protocol::progress::MAX_PROJECTION_BYTES).unwrap_or(false) {break;}
         snapshot.history_incomplete=true;
-        if !snapshot.items.is_empty() {snapshot.items.remove(0);}
+        let result_refs:std::collections::HashSet<&str>=snapshot.results.iter().chain(snapshot.result_history.iter())
+            .flat_map(|r|r.evidence_ids.iter().map(String::as_str).chain(r.basis.iter().map(|b|b.id.as_str()))).collect();
+        if let Some(index)=snapshot.items.iter().position(|item|!result_refs.contains(item.id.as_str())) {snapshot.items.remove(index);}
         else if !snapshot.plan.is_empty() {snapshot.plan.remove(0);}
-        else if !snapshot.results.is_empty() {snapshot.results.remove(0);}
+        else if !snapshot.result_history.is_empty() {snapshot.result_history.pop();if let Some(page)=&mut snapshot.result_page {page.history_next_offset=Some(page.history_offset+snapshot.result_history.len() as u32);}}
+        else if !snapshot.results.is_empty() {snapshot.results.pop();if let Some(page)=&mut snapshot.result_page {page.current_next_offset=Some(page.current_offset+snapshot.results.len() as u32);}}
         else {break;}
     }
 }
@@ -1046,6 +1249,162 @@ fn finish_progress(snapshot:&mut InquelloTasksProgressResponse) {
 #[cfg(test)]
 mod progress_tests {
     use super::*;
+    fn revised_result(id:&str,revision:u32,state:&str,text:&str,turn:&str)->ThreadItemEntry {
+        let body=json!({"version":1,"plan":[],"results":[{"id":id,"revision":revision,"state":state,"changeReason":if revision>1 {Some("Auditor corrected the scope")} else {None},"kind":"observation","text":text,"evidenceIds":[]}]});
+        let mut value=entry(json!({"type":"functionCallOutput","id":format!("pub-{id}-{revision}-{turn}"),"name":"inquello_progress","namespace":null,"output":body.to_string()}),true);
+        value.turn_id=turn.into();value
+    }
+    #[test]
+    fn first_seen_later_revision_is_useful_but_not_complete_history() {
+        let snapshot=project_progress(vec![revised_result("finding",4,"current","Retained later version","turn-1")],"turn-1",false);
+        assert!(snapshot.history_incomplete);assert_eq!(snapshot.results[0].revision,4);assert!(snapshot.result_history.is_empty());
+    }
+    #[test]
+    fn unsupported_revision_reason_controls_never_become_structured_findings() {
+        for control in ['\u{1b}','\u{7}','\u{7f}','\u{85}'] {
+            let body=json!({"version":1,"plan":[],"results":[{"id":"finding","revision":2,"kind":"observation","text":"Finding","changeReason":format!("Correction{control}hidden"),"evidenceIds":[]}]});
+            let row=entry(json!({"type":"functionCallOutput","id":"invalid-reason","name":"inquello_progress","namespace":null,"output":body.to_string()}),true);
+            let snapshot=project_progress(vec![row],"turn-1",false);
+            assert!(snapshot.results.iter().all(|r|r.kind.is_none()));assert!(snapshot.result_history.is_empty());
+        }
+    }
+    #[test]
+    fn analytical_snapshot_ignores_uncited_stream_but_observes_older_cited_evidence() {
+        let body=json!({"version":1,"plan":[],"results":[{"id":"finding","kind":"observation","text":"Check evidence","evidenceIds":["cmd-1"]}]});
+        let publication=entry(json!({"type":"functionCallOutput","id":"newer-publication","name":"inquello_progress","namespace":null,"output":body.to_string()}),true);
+        let allowed=std::collections::HashSet::from(["turn-1".into()]);
+        let rows=vec![command("inProgress",None),publication];
+        let first=canonical_progress(rows.clone(),&allowed,Some("turn-1"),false);
+        let mut changed=rows.clone();changed.push(entry(json!({"type":"agentMessage","id":"uncited","text":"Unrelated activity"}),true));
+        let uncited=canonical_progress(changed,&allowed,Some("turn-1"),false);
+        assert_eq!(analytical_digest(&first),analytical_digest(&uncited));
+        let mut changed=rows;changed[0]=command("completed",Some(0));
+        let completed=canonical_progress(changed,&allowed,Some("turn-1"),false);
+        assert_ne!(analytical_digest(&first),analytical_digest(&completed));
+    }
+    #[test]
+    fn result_pagination_preserves_every_citation_across_item_and_payload_limits() {
+        let mut entries=Vec::new();
+        for n in 0..40 {
+            let ids=(0..16).map(|i|format!("evidence-{n}-{i}")).collect::<Vec<_>>();
+            for id in &ids {entries.push(entry(json!({"type":"commandExecution","id":id,"command":"inspect fictional evidence","cwd":"/private/task","processId":null,"status":"completed","commandActions":[],"aggregatedOutput":"e".repeat(16000),"exitCode":0,"durationMs":1}),true));}
+            for revision in 1..=2 {
+                let body=json!({"version":1,"plan":[],"results":[{"id":format!("finding-{n}"),"revision":revision,"kind":"observation","text":"Finding","changeReason":"Known revision reason","evidenceIds":ids}]});
+                entries.push(entry(json!({"type":"functionCallOutput","id":format!("publication-{n}-{revision}"),"name":"inquello_progress","namespace":null,"output":body.to_string()}),true));
+            }
+        }
+        let canonical=canonical_progress(entries,&std::collections::HashSet::from(["turn-1".into()]),Some("turn-1"),false);
+        let(mut current,mut history)=(0,0);let(mut current_seen,mut history_seen)=(std::collections::HashSet::new(),std::collections::HashSet::new());
+        loop {
+            let page=display_progress_page(&canonical,Some(&InquelloResultPageRequest{snapshot_id:None,current_offset:current,history_offset:history}));
+            assert!(page.items.len()<=256);assert!(serde_json::to_vec(&page).unwrap().len()<=inquello_protocol::progress::MAX_PROJECTION_BYTES);
+            for (rows,seen) in [(&page.results,&mut current_seen),(&page.result_history,&mut history_seen)] {
+                for row in rows {assert_eq!(row.evidence_ids.len(),16,"page must fit before dropping citations");assert!(seen.insert(row.id.clone()));
+                    assert!(row.evidence_ids.iter().all(|id|page.items.iter().any(|item|&item.id==id && !item.text.is_empty())));}
+            }
+            let meta=page.result_page.unwrap();assert_eq!((meta.current_total,meta.history_total),(40,40));
+            let next_current=meta.current_next_offset.unwrap_or(meta.current_total);let next_history=meta.history_next_offset.unwrap_or(meta.history_total);
+            assert!(next_current>current || next_history>history);current=next_current;history=next_history;
+            if current==40 && history==40 {break;}
+        }
+        assert_eq!((current_seen.len(),history_seen.len()),(40,40));
+    }
+    #[test]
+    fn canonical_cache_reuse_requires_output_lineage_policy_and_live_session() {
+        let token=CancellationToken::new();
+        let canonical=Arc::new(canonical_progress(vec![revised_result("keep",1,"current","Retained finding","turn-1")],&std::collections::HashSet::from(["turn-1".into()]),Some("turn-1"),false));
+        let entry=ProgressCache {key:"principal-session-run-lineage-policy".into(),revision:"item:42".into(),analysis_key:"analysis".into(),analysis_digest:"digest".into(),snapshot_id:uuid::Uuid::new_v4().to_string(),canonical:canonical.clone(),bytes:1,cancellation:token.clone()};
+        assert!(entry.matches("principal-session-run-lineage-policy","item:42"));
+        assert!(Arc::ptr_eq(&entry.canonical,&canonical));
+        assert!(!entry.matches("other-policy-or-lineage","item:42"));
+        assert!(!entry.matches("principal-session-run-lineage-policy","item:43"));
+        token.cancel();assert!(!entry.matches("principal-session-run-lineage-policy","item:42"));
+    }
+    #[test]
+    fn all_current_and_historical_results_are_retrievable_in_bounded_pages() {
+        let mut rows=Vec::new();
+        for index in 0..180 {
+            let id=format!("finding-{index}");
+            rows.push(revised_result(&id,1,"current","Original","turn-1"));
+            rows.push(revised_result(&id,2,"current","Corrected","turn-2"));
+        }
+        let canonical=canonical_progress(rows,&std::collections::HashSet::from(["turn-1".into(),"turn-2".into()]),Some("turn-2"),false);
+        let mut current=0;let mut history=0;let mut seen_current=std::collections::HashSet::new();let mut seen_history=std::collections::HashSet::new();
+        loop {
+            let query=InquelloResultPageRequest {snapshot_id:None,current_offset:current,history_offset:history};
+            let page=display_progress_page(&canonical,Some(&query));let meta=page.result_page.as_ref().unwrap();
+            assert_eq!(meta.current_total,180);assert_eq!(meta.history_total,180);
+            assert!(page.results.len()<=64 && page.result_history.len()<=128);
+            for row in &page.results {assert!(seen_current.insert(row.id.clone()));assert_eq!(row.revision,2);}
+            for row in &page.result_history {assert!(seen_history.insert(row.id.clone()));assert_eq!(row.source_turn_id,"turn-1");assert_eq!(row.superseded_reason.as_deref(),Some("Auditor corrected the scope"));}
+            current=meta.current_next_offset.unwrap_or(meta.current_total);history=meta.history_next_offset.unwrap_or(meta.history_total);
+            if current==180 && history==180 {break;}
+        }
+        assert_eq!(seen_current.len(),180);assert_eq!(seen_history.len(),180);
+    }
+    #[test]
+    fn paging_preserves_long_creation_and_supersession_reasons_exactly() {
+        let reason="Original reason ".repeat(900);let later="Later correction ".repeat(900);
+        let publication=|revision,reason:&str|entry(json!({"type":"functionCallOutput","id":format!("long-reason-{revision}"),"name":"inquello_progress","namespace":null,"output":json!({"version":1,"plan":[],"results":[{"id":"finding","revision":revision,"state":"current","kind":"observation","text":"Finding","evidenceIds":[],"changeReason":reason}]}).to_string()}),true);
+        let snapshot=project_progress(vec![publication(1,&reason),publication(2,&later)],"turn-1",false);
+        assert_eq!(snapshot.result_history[0].change_reason.as_deref(),Some(reason.as_str()));
+        assert_eq!(snapshot.result_history[0].superseded_reason.as_deref(),Some(later.as_str()));
+    }
+    #[test]
+    fn authorized_cross_turn_revisions_preserve_unaffected_findings_and_history() {
+        let rows=vec![revised_result("duplicates",1,"current","Two candidate pairs","turn-1"),revised_result("gap",1,"current","Missing approval","turn-1"),revised_result("duplicates",2,"current","One vendor/invoice pair","turn-2"),revised_result("duplicates",3,"withdrawn","Cancelled pair excluded","turn-2")];
+        let snapshot=project_progress_history(rows,&std::collections::HashSet::from(["turn-1".into(),"turn-2".into()]),Some("turn-2"),false);
+        assert_eq!(snapshot.results.len(),1);assert_eq!(snapshot.results[0].id,"result:gap");
+        assert_eq!(snapshot.result_history.iter().map(|r|r.revision).collect::<Vec<_>>(),vec![1,2,3]);
+        assert_eq!(snapshot.result_history.iter().map(|r|r.state.as_str()).collect::<Vec<_>>(),vec!["superseded","superseded","withdrawn"]);
+        assert!(snapshot.result_history.iter().all(|r|r.checks=="unchecked"));
+        assert!(snapshot.result_history[0].change_reason.is_none());
+        assert_eq!(snapshot.result_history[0].superseded_reason.as_deref(),Some("Auditor corrected the scope"));
+        assert_eq!(snapshot.result_history[0].source_turn_id,"turn-1");
+    }
+    #[tokio::test]
+    async fn old_findings_and_withdrawal_predecessors_survive_the_activity_window() {
+        let mut rows=vec![revised_result("unaffected",1,"current","Keep this finding","turn-1"),revised_result("affected",1,"current","Old duplicate","turn-1")];
+        for index in 0..350 {rows.push(entry(json!({"type":"agentMessage","id":format!("noise-{index}"),"text":"Intermediate activity"}),true));}
+        rows.push(revised_result("affected",2,"withdrawn","Cancelled duplicate excluded","turn-2"));
+        rows.reverse();
+        let (canonical,incomplete)=read_progress_pages(|cursor,limit| {
+            let offset=cursor.as_deref().unwrap_or("0").parse::<usize>().unwrap();
+            let end=(offset+limit as usize).min(rows.len());
+            std::future::ready(Ok(ThreadItemsListResponse {data:rows[offset..end].to_vec(),next_cursor:(end<rows.len()).then(||end.to_string()),backwards_cursor:None}))
+        }).await.unwrap();
+        let snapshot=project_progress_history(canonical,&std::collections::HashSet::from(["turn-1".into(),"turn-2".into()]),Some("turn-2"),incomplete);
+        assert_eq!(snapshot.items.len(),256);
+        assert_eq!(snapshot.results.len(),1);assert_eq!(snapshot.results[0].text,"Keep this finding");
+        assert_eq!(snapshot.result_history.len(),2);assert_eq!(snapshot.result_history[0].text,"Old duplicate");
+        assert_eq!(snapshot.result_history[1].state,"withdrawn");
+    }
+    #[tokio::test]
+    async fn nonadvancing_history_cursor_refuses_instead_of_disclosing_partial_findings() {
+        let result=read_progress_pages(|_,_|std::future::ready(Ok(ThreadItemsListResponse {data:Vec::new(),next_cursor:Some("same".into()),backwards_cursor:None}))).await;
+        assert!(result.is_err());
+    }
+    #[test]
+    fn historical_revision_keeps_its_own_reason_when_superseded() {
+        let first=revised_result("finding",1,"current","First","turn-1");
+        let second=revised_result("finding",2,"current","Second","turn-1");
+        let body=json!({"version":1,"plan":[],"results":[{"id":"finding","revision":3,"state":"current","changeReason":"Changed duplicate key","kind":"observation","text":"Third","evidenceIds":[]}]});
+        let third=entry(json!({"type":"functionCallOutput","id":"third","name":"inquello_progress","namespace":null,"output":body.to_string()}),true);
+        let snapshot=project_progress(vec![first,second,third],"turn-1",false);
+        assert_eq!(snapshot.result_history[1].change_reason.as_deref(),Some("Auditor corrected the scope"));
+        assert_eq!(snapshot.result_history[1].superseded_reason.as_deref(),Some("Changed duplicate key"));
+    }
+    #[test]
+    fn same_revision_rewrite_and_unlinked_turn_cannot_replace_current_result() {
+        let snapshot=project_progress(vec![revised_result("finding",1,"current","Original","turn-1"),revised_result("finding",1,"current","Unlinked rewrite","foreign")],"turn-1",false);
+        assert_eq!(snapshot.results[0].text,"Original");assert!(snapshot.history_incomplete);
+        let mut rewrite=revised_result("finding",1,"current","Same version rewrite","turn-1");
+        // Distinct native item ID, same stable analytical revision.
+        let original=revised_result("finding",1,"current","Original","turn-1");
+        if let ThreadItem::FunctionCallOutput {id,..}=&mut rewrite.item {*id="different-publication".into();}
+        let snapshot=project_progress(vec![original,rewrite],"turn-1",false);
+        assert_eq!(snapshot.results[0].text,"Original");assert!(snapshot.history_incomplete);assert!(snapshot.result_history.is_empty());
+    }
     #[test]
     fn cumulative_plan_keeps_recent_ids_without_forgetting_canonical_revisions() {
         let mut entries=Vec::new();
@@ -1099,11 +1458,11 @@ mod progress_tests {
         for id in &ids {snapshot.items.push(InquelloProgressItem{id:id.clone(),kind:"message".into(),status:"completed".into(),text:"\"".repeat(16_384),role:Some("user".into()),application:None});}
         for n in 0..64 {
             snapshot.plan.push(InquelloProgressStep{id:format!("s{n}"),revision:1,text:"scope".into(),status:"done".into(),evidence_ids:ids.clone()});
-            snapshot.results.push(InquelloProgressResult{id:format!("r{n}"),kind:Some("decision".into()),text:"\"".repeat(16_384),checks:"unchecked".into(),check_scope:None,evidence_ids:ids.clone(),basis:Some(InquelloProgressBasis{kind:"human".into(),id:ids[0].clone(),label:"Human instruction".into(),scope:"\"".repeat(16_384)})});
+            snapshot.results.push(InquelloProgressResult{id:format!("r{n}"),kind:Some("decision".into()),text:"\"".repeat(16_384),checks:"unchecked".into(),check_scope:None,evidence_ids:ids.clone(),basis:Some(InquelloProgressBasis{kind:"human".into(),id:ids[0].clone(),label:"Human instruction".into(),scope:"\"".repeat(16_384)}),revision:1,state:"current".into(),change_reason:None,superseded_reason:None,source_turn_id:"turn-1".into()});
         }
         finish_progress(&mut snapshot);
         assert!(serde_json::to_vec(&snapshot).unwrap().len()<=inquello_protocol::progress::MAX_PROJECTION_BYTES);assert!(snapshot.history_incomplete);
-        for result in &snapshot.results {assert!(result.evidence_ids.iter().all(|id|snapshot.items.iter().any(|item|&item.id==id)));assert!(result.basis.is_none());}
+        for result in &snapshot.results {assert!(result.evidence_ids.iter().all(|id|snapshot.items.iter().any(|item|&item.id==id)));if let Some(basis)=&result.basis {assert!(snapshot.items.iter().any(|item|item.id==basis.id && item.text==basis.scope));}}
         for step in &snapshot.plan {if step.evidence_ids.is_empty(){assert_ne!(step.status,"done");}}
     }
     fn entry(item:serde_json::Value,terminal:bool)->ThreadItemEntry {
@@ -1122,14 +1481,17 @@ mod progress_tests {
         assert_eq!(progress_artifact(&["unresolved-artifact".into()]),"unknown");
     }
     #[test]
-    fn structured_result_overflow_keeps_recent_exact_order_and_discloses_loss() {
+    fn structured_result_overflow_keeps_exact_order_and_exposes_bounded_continuation() {
         let entries=(0..70).map(|n| {
             let body=json!({"version":1,"plan":[],"results":[{"id":format!("r-{n}"),"kind":"observation","text":format!("Finding {n}"),"evidenceIds":[]}]});
             entry(json!({"type":"functionCallOutput","id":format!("p-{n}"),"name":"inquello_progress","namespace":null,"output":body.to_string()}),true)
         }).collect();
-        let snapshot=project_progress(entries,"turn-1",false);
-        assert_eq!(snapshot.results.iter().map(|r|r.id.clone()).collect::<Vec<_>>(),(6..70).map(|n|format!("result:r-{n}")).collect::<Vec<_>>());
-        assert_eq!(snapshot.results.last().unwrap().text,"Finding 69");assert!(snapshot.history_incomplete);
+        let canonical=canonical_progress(entries,&std::collections::HashSet::from(["turn-1".into()]),Some("turn-1"),false);
+        let snapshot=display_progress_page(&canonical,None);
+        assert_eq!(snapshot.results.iter().map(|r|r.id.clone()).collect::<Vec<_>>(),(0..64).map(|n|format!("result:r-{n}")).collect::<Vec<_>>());
+        assert_eq!(snapshot.result_page.as_ref().unwrap().current_next_offset,Some(64));
+        let next=display_progress_page(&canonical,Some(&InquelloResultPageRequest{snapshot_id:None,current_offset:64,history_offset:0}));
+        assert_eq!(next.results.last().unwrap().text,"Finding 69");assert_eq!(next.result_page.unwrap().current_next_offset,None);
     }
     #[test]
     fn omitted_plan_steps_remain_cumulative_not_withdrawn() {
@@ -1138,7 +1500,7 @@ mod progress_tests {
         assert_eq!(snapshot.plan.len(),1);assert_eq!(snapshot.plan[0].status,"pending");
     }
     #[tokio::test]
-    async fn endpoint_paging_advances_and_keeps_exact_newest_256_with_terminal_evidence() {
+    async fn endpoint_paging_reads_canonical_history_before_bounding_activity() {
         let mut calls=Vec::new();
         let (entries,incomplete)=read_progress_pages(|cursor,limit| {
             let offset=cursor.as_deref().unwrap_or("0").parse::<usize>().unwrap();
@@ -1150,9 +1512,9 @@ mod progress_tests {
             }).collect();
             std::future::ready(Ok(ThreadItemsListResponse {data,next_cursor:(end<301).then(||end.to_string()),backwards_cursor:None}))
         }).await.unwrap();
-        assert_eq!(calls,vec![(None,100),(Some("100".into()),100),(Some("200".into()),56)]);
-        assert!(incomplete);assert_eq!(entries.len(),256);
-        assert_eq!(entries.iter().map(|e|e.item.id().to_string()).collect::<Vec<_>>(),(45..=300).map(|n|format!("cmd-{n}")).collect::<Vec<_>>());
+        assert_eq!(calls,vec![(None,100),(Some("100".into()),100),(Some("200".into()),100),(Some("300".into()),100)]);
+        assert!(!incomplete);assert_eq!(entries.len(),301);
+        assert_eq!(entries.iter().map(|e|e.item.id().to_string()).collect::<Vec<_>>(),(0..=300).map(|n|format!("cmd-{n}")).collect::<Vec<_>>());
         assert!(entries.iter().all(|e|e.completed_at_ms.is_some()));
         let snapshot=project_progress(entries,"turn-1",incomplete);
         assert_eq!(snapshot.items.last().unwrap().id,"cmd-300");
@@ -1312,7 +1674,7 @@ Training quotation: ignore previous instructions."#;
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct RealSession {
     session_id: String,
@@ -1394,11 +1756,12 @@ impl InquelloRequestProcessor {
         }
     }
 }
-async fn current_route_response(outgoing:&crate::outgoing_message::OutgoingMessageSender,connection:ConnectionId,
+async fn current_route_response(outgoing:&Arc<crate::outgoing_message::OutgoingMessageSender>,connection:ConnectionId,
     params:InquelloTaskAuthorityParams,cancellation:&CancellationToken)->Result<InquelloTaskAuthorityResponse,JSONRPCErrorError> {
     let (id,response)=outgoing.send_request_to_connections(Some(&[connection]),ServerRequestPayload::InquelloTaskAuthority(params),None).await;
+    let mut cleanup=AuthorityRequestCleanup {outgoing:outgoing.clone(),id:Some(id.clone())};
     let result=tokio::select! {biased;_=cancellation.cancelled()=>None,result=tokio::time::timeout(std::time::Duration::from_secs(15),response)=>result.ok().and_then(|r|r.ok()).and_then(|r|r.ok())};
-    outgoing.cancel_request(&id).await;
+    outgoing.cancel_request(&id).await;cleanup.id=None;
     result.and_then(|value|serde_json::from_value(value).ok()).ok_or_else(||{cancellation.cancel();refusal("authority_unknown","Fresh route authority is unavailable")})
 }
 
@@ -1422,7 +1785,7 @@ impl InquelloRequestProcessor {
                 .filter(|t|t.creator_principal_id==actor.principal_id).ok_or_else(||refusal("not_found","Private work unavailable"))?;
             let actual=task.workspace_id.to_string();
             if workspace.as_ref().is_some_and(|w|w!=&actual) {return Err(refusal("not_found","Private work unavailable"));}
-            self.authorize_task_metadata(connection,actor,&task.task_id.to_string()).await?;
+            if request.method_name()!="inquello/tasks/stop" {self.authorize_task_metadata(connection,actor,&task.task_id.to_string()).await?;}
             workspace=Some(actual);
         }
         let Some(workspace)=workspace else {return Ok(None);};
@@ -1616,4 +1979,385 @@ mod bootstrap_order_tests {
             assert!(!processor.task_sessions.lock().await.contains_key(&CONNECTION));
         }
     }
+}
+
+
+/// Reconciliation reports only observed execution/admission, not model claims.
+fn lifecycle_observed_outcome(kind:TaskLifecycleKind,status:TaskRunStatus,has_turn:bool,steer_admitted:bool)->Option<TaskLifecycleStatus> {
+    match (kind,status,has_turn) {
+        (TaskLifecycleKind::Steer,_,_) if steer_admitted=>Some(TaskLifecycleStatus::Admitted),
+        // No marker after a terminal run is terminal uncertainty, not proof that
+        // the instruction was refused or permission to submit the same op again.
+        (TaskLifecycleKind::Steer,TaskRunStatus::Cancelled|TaskRunStatus::Completed|TaskRunStatus::Failed,_)=>Some(TaskLifecycleStatus::Unresolved),
+        (TaskLifecycleKind::Stop,TaskRunStatus::Cancelled,_)=>Some(TaskLifecycleStatus::Interrupted),
+        (TaskLifecycleKind::Stop,TaskRunStatus::Completed,_)=>Some(TaskLifecycleStatus::Completed),
+        (TaskLifecycleKind::Stop,TaskRunStatus::Failed,_)=>Some(TaskLifecycleStatus::Rejected),
+        (TaskLifecycleKind::Resume,TaskRunStatus::Running|TaskRunStatus::Completed|TaskRunStatus::Cancelled|TaskRunStatus::Failed,true)=>Some(TaskLifecycleStatus::Admitted),
+        _=>None,
+    }
+}
+
+// Story 1.29: one durable operation owns each effect; receipts are not permits.
+impl InquelloRequestProcessor {
+    fn ensure_task_runtime_lease(&self)->Result<String,JSONRPCErrorError> {
+        use std::io::{Read,Seek,SeekFrom,Write};
+        let mut lease=self.task_runtime_lease.lock().map_err(|_|refusal("runtime_unavailable","Runtime ownership unavailable"))?;
+        if let Some((_,domain))=&*lease {return Ok(domain.clone());}
+        let path=self.store_path.as_ref().ok_or_else(||refusal("runtime_unavailable","Private store unavailable"))?.with_extension("runtime-lease");
+        let mut file=std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(false).open(path)
+            .map_err(|_|refusal("runtime_unavailable","Private runtime ownership unavailable"))?;
+        file.try_lock().map_err(|_|refusal("runtime_unavailable","Another runtime still owns this private store; resume was not dispatched"))?;
+        let mut domain=String::new();
+        (&mut file).take(128).read_to_string(&mut domain).map_err(|_|refusal("runtime_unavailable","Runtime lease identity unavailable"))?;
+        if domain.is_empty() {
+            domain=uuid::Uuid::new_v4().to_string();
+            file.seek(SeekFrom::Start(0)).and_then(|_|file.write_all(domain.as_bytes())).and_then(|_|file.sync_all())
+                .map_err(|_|refusal("runtime_unavailable","Runtime lease identity could not be retained"))?;
+        }
+        if uuid::Uuid::parse_str(&domain).is_err() {return Err(refusal("runtime_unavailable","Runtime lease identity is unverifiable"));}
+        *lease=Some((file,domain.clone()));Ok(domain)
+    }
+    async fn lifecycle_authority(&self,connection:ConnectionId,actor:Actor,run:&TaskRunBinding,
+        policy:&InquelloWorkspaceExecutionPolicy,kind:TaskLifecycleKind)->Result<(),JSONRPCErrorError> {
+        if run.principal_id!=actor.principal_id.to_string() || run.workspace_id!=policy.workspace_id {return Err(refusal("not_found","Private work unavailable"));}
+        self.authorize_task_disclosure(connection,actor,&run.workspace_id).await?;
+        if kind!=TaskLifecycleKind::Stop {self.authorize_run_route_disclosure(connection,actor,run).await?;}
+        let session=self.task_session(connection,actor,&run.workspace_id).await?;
+        let outgoing=self.task_outgoing.as_ref().ok_or_else(||refusal("authority_unknown","Current service unavailable"))?;
+        let fresh=current_service_policy(outgoing,connection,&run.workspace_id,&session.cancellation).await?;
+        if &fresh!=policy {return Err(refusal("stale","Workspace policy changed before lifecycle dispatch"));}
+        // Cancellation authorizes the retained effect, not a new inference request.
+        // Credential rotation, provider discovery and capability/quota outages
+        // must not remove the owner's ability to interrupt their active work.
+        if kind==TaskLifecycleKind::Stop {
+            let final_policy=current_service_policy(outgoing,connection,&run.workspace_id,&session.cancellation).await?;
+            if final_policy!=fresh || session.cancellation.is_cancelled() || self.actor(connection)?!=actor {
+                return Err(refusal("stale","Cancellation authority changed before dispatch"));
+            }
+            return Ok(());
+        }
+        let (device,user)=self.current_task_layers().await?;
+        let params=InquelloTasksPreflightParams {workspace_id:run.workspace_id.clone(),route_id:run.route_id.clone(),configuration_revision:run.configuration_revision,workspace_policy:fresh.clone()};
+        let (store,current,configuration,_,caps,session)=self.checked_candidate(connection,&params,&device,&user,kind!=TaskLifecycleKind::Stop).await?;
+        let route=routes::task_route(&store,actor,&run.task_id).await.map_err(domain_error)?;
+        let selected=route.current.as_ref().ok_or_else(||refusal("route_unavailable","Retained Task route unavailable"))?;
+        let settings=usage::task_usage(&store,actor,&run.task_id).await.map_err(domain_error)?.settings.ok_or_else(||refusal("settings_unavailable","Retained Task settings unavailable"))?;
+        if kind==TaskLifecycleKind::Resume {
+            use inquello_domain::organise::OrganiseStore;
+            let task=store.load_task(TaskId::parse(&run.task_id).map_err(domain_error)?).await.map_err(|e|domain_error(DomainError::Store(e)))?
+                .filter(|task|task.creator_principal_id==actor.principal_id && task.workspace_id.to_string()==run.workspace_id && task.runtime_thread_id==run.thread_id)
+                .ok_or_else(||refusal("not_found","Retained context ownership is unavailable"))?;
+            if !task.source_refs.is_empty() || !task.artifact_refs.is_empty() {
+                return Err(refusal("context_unverifiable","This retained Task requires source or artifact context not supported by the current private resume route"));
+            }
+        }
+        if current!=actor || selected.configuration!=configuration || selected.configuration_revision.get()!=run.configuration_revision
+            || route.stale_configuration || route.revision.get()!=1 || settings.revision!=1 || settings.choices!=run.choices
+            || !caps.reasoning.contains(&run.choices.reasoning) || !caps.speeds.contains(&run.choices.speed) {
+            return Err(refusal("stale","Retained route, credentials or settings changed"));
+        }
+        if kind==TaskLifecycleKind::Resume && session.real.is_some() {
+            self.check_real_route(connection,actor,&session,&configuration,&run.task_id,&fresh,routes::ProtectedRouteAction::Resume).await?;
+        }
+        let final_policy=current_service_policy(outgoing,connection,&run.workspace_id,&session.cancellation).await?;
+        if final_policy!=fresh || session.cancellation.is_cancelled() || self.actor(connection)?!=actor {
+            return Err(refusal("stale","Authority changed before lifecycle dispatch"));
+        }
+        Ok(())
+    }
+    async fn retained_turn_lineage(&self,store:&SqliteWorkingStore,actor:Actor,run:&TaskRunBinding)->Result<std::collections::HashSet<String>,JSONRPCErrorError> {
+        let mut allowed=std::collections::HashSet::new();
+        if let Some(turn)=&run.turn_id {allowed.insert(turn.clone());}
+        for previous in store.prior_task_runs(actor.principal_id,&run.task_id).await.map_err(domain_error)? {
+            if previous.task_id!=run.task_id || previous.principal_id!=run.principal_id || previous.workspace_id!=run.workspace_id || previous.thread_id!=run.thread_id {
+                return Err(refusal("context_unverifiable","Retained Task lineage changed"));
+            }
+            if let Some(turn)=previous.turn_id {allowed.insert(turn);}
+        }
+        Ok(allowed)
+    }
+    async fn lifecycle_response(&self,connection:ConnectionId,actor:Actor,receipt:TaskLifecycleReceipt)->Result<Option<ClientResponsePayload>,JSONRPCErrorError> {
+        self.authorize_task_disclosure(connection,actor,&receipt.binding.workspace_id).await?;
+        self.authorize_run_route_disclosure(connection,actor,&receipt.binding).await?;
+        let kind=match receipt.kind {TaskLifecycleKind::Steer=>"steer",TaskLifecycleKind::Stop=>"stop",TaskLifecycleKind::Resume=>"resume"};
+        let status=match receipt.status {TaskLifecycleStatus::Reserved=>"reserved",TaskLifecycleStatus::Dispatching=>"dispatching",TaskLifecycleStatus::Admitted=>"admitted",TaskLifecycleStatus::Interrupted=>"interrupted",TaskLifecycleStatus::Completed=>"completed",TaskLifecycleStatus::Rejected=>"rejected",TaskLifecycleStatus::Uncertain=>"uncertain",TaskLifecycleStatus::Unresolved=>"unresolved"};
+        let run=receipt.binding;
+        Ok(Some(InquelloTasksLifecycleResponse {operation_id:receipt.operation_id,task_id:run.task_id,run_id:run.run_id,runtime_id:run.runtime_id,
+            thread_id:run.thread_id.ok_or_else(||refusal("not_found","Retained linkage unavailable"))?,turn_id:run.turn_id,kind:kind.into(),status:status.into()}.into()))
+    }
+    pub(crate) async fn tasks_lifecycle_reconcile(&self,connection:ConnectionId,params:InquelloTasksReconcileParams,threads:&super::super::ThreadRequestProcessor)->Result<Option<ClientResponsePayload>,JSONRPCErrorError> {
+        let (store,actor)=self.context(connection).await?;
+        let mut receipt=store.find_task_lifecycle(actor.principal_id,&params.operation_id).await.map_err(domain_error)?.ok_or_else(||refusal("not_found","Lifecycle operation unavailable"))?;
+        self.authorize_task_disclosure(connection,actor,&receipt.binding.workspace_id).await?;
+        self.authorize_run_route_disclosure(connection,actor,&receipt.binding).await?;
+        if matches!(receipt.status,TaskLifecycleStatus::Reserved|TaskLifecycleStatus::Dispatching|TaskLifecycleStatus::Uncertain) {
+            if let Some(current)=store.find_task_current_run(actor.principal_id,&receipt.binding.task_id).await.map_err(domain_error)? {
+                if current.run_id==receipt.binding.run_id && current.runtime_id==receipt.binding.runtime_id {
+                    let steer_admitted=if receipt.kind==TaskLifecycleKind::Steer {
+                        let thread=current.thread_id.clone().ok_or_else(||refusal("not_found","Retained Task linkage unavailable"))?;
+                        let turn=receipt.binding.turn_id.clone().ok_or_else(||refusal("not_found","Retained steering turn unavailable"))?;
+                        let (entries,_)=read_progress_pages(|cursor,limit| {
+                            let thread=thread.clone();let turn=turn.clone();let binding=&receipt.binding;
+                            async move {
+                                self.authorize_task_disclosure(connection,actor,&binding.workspace_id).await?;
+                                self.authorize_run_route_disclosure(connection,actor,binding).await?;
+                                let page=threads.thread_items_list_response_inner(ThreadItemsListParams {
+                                    thread_id:thread,turn_id:Some(turn),cursor:cursor.map(ThreadItemsListCursor::Opaque),
+                                    limit:Some(limit),sort_direction:Some(SortDirection::Desc),
+                                }).await?;
+                                self.authorize_task_disclosure(connection,actor,&binding.workspace_id).await?;
+                                self.authorize_run_route_disclosure(connection,actor,binding).await?;
+                                Ok(page)
+                            }
+                        }).await?;
+                        entries.iter().any(|entry| entry.turn_id==turn && matches!(&entry.item,
+                            ThreadItem::UserMessage {client_id:Some(id),..} if id==&receipt.operation_id))
+                    } else {false};
+                    let outcome=lifecycle_observed_outcome(receipt.kind,current.status,current.turn_id.is_some(),steer_admitted);
+                    if let (Some(outcome),Some(thread))=(outcome,current.thread_id.as_deref()) {
+                        receipt=store.finish_task_lifecycle(actor.principal_id,&receipt.operation_id,&current.runtime_id,thread,current.turn_id.as_deref(),outcome).await.map_err(domain_error)?;
+                    }
+                }
+            }
+        }
+        self.lifecycle_response(connection,actor,receipt).await
+    }
+    pub(crate) async fn tasks_lifecycle(self:&Arc<Self>,connection:ConnectionId,params:InquelloTasksLifecycleParams,kind:TaskLifecycleKind,
+        threads:&super::super::ThreadRequestProcessor)->Result<Option<ClientResponsePayload>,JSONRPCErrorError> {
+        // Stop is independent even while another instruction is awaiting
+        // authority or admission. SQLite claims and expected-turn fences still
+        // serialize competing effects for the same execution.
+        let _serial=if kind==TaskLifecycleKind::Stop {None}else{Some(self.task_start_lock.lock().await)};
+        let (store,actor)=self.context(connection).await.map_err(before_effect)?;
+        let lease_domain=self.ensure_task_runtime_lease().map_err(before_effect)?;
+        store.record_task_runtime_lease(&self.runtime_id,&lease_domain).await.map_err(domain_error).map_err(before_effect)?;
+        let mut run=store.find_task_current_run(actor.principal_id,&params.task_id).await.map_err(domain_error).map_err(before_effect)?.ok_or_else(||before_effect(refusal("not_found","Private Task linkage unavailable")))?;
+        self.lifecycle_authority(connection,actor,&run,&params.workspace_policy,kind).await.map_err(before_effect)?;
+        if let Some(old)=store.find_task_lifecycle_intent(actor.principal_id,&params.operation_id).await.map_err(domain_error).map_err(before_effect)? {
+            if old.kind!=kind || old.expected.task_id!=params.task_id || old.expected.run_id!=params.expected_run_id
+                || old.expected.runtime_id!=params.expected_runtime_id || old.expected.turn_id!=params.expected_turn_id || old.guidance!=params.request {
+                return Err(before_effect(refusal("operation_conflict","Operation identity belongs to different lifecycle guidance")));
+            }
+            return self.tasks_lifecycle_reconcile(connection,InquelloTasksReconcileParams {operation_id:params.operation_id},threads).await;
+        }
+        if run.run_id!=params.expected_run_id || run.runtime_id!=params.expected_runtime_id || run.turn_id!=params.expected_turn_id {
+            return Err(before_effect(refusal("stale","The Task turn changed; your guidance was not submitted")));
+        }
+        let thread=run.thread_id.clone().ok_or_else(||before_effect(refusal("not_found","Retained Task thread unavailable")))?;
+        if kind==TaskLifecycleKind::Resume {
+            let allowed=self.retained_turn_lineage(&store,actor,&run).await.map_err(before_effect)?;
+            threads.inquello_check_retained_thread(&thread,&allowed).await.map_err(before_effect)?;
+            // The OS lease is held by every private starter. Acquiring it after a
+            // different incarnation proves that incarnation released its process
+            // ownership. Merely observing a different runtime id is insufficient.
+            if run.runtime_id!=self.runtime_id {
+                if !store.task_runtime_lease_covered(&run.runtime_id,&lease_domain).await.map_err(domain_error).map_err(before_effect)? {
+                    return Err(before_effect(refusal("context_unverifiable","The previous runtime was not covered by this device's retained lease; no automatic replay or replacement is permitted")));
+                }
+                store.recover_task_runtime(&run.runtime_id).await.map_err(domain_error).map_err(before_effect)?;
+                run=store.find_task_current_run(actor.principal_id,&params.task_id).await.map_err(domain_error).map_err(before_effect)?.ok_or_else(||before_effect(refusal("not_found","Retained Task unavailable")))?;
+            }
+        }
+        let intent=TaskLifecycleIntent {operation_id:params.operation_id.clone(),kind,expected:run.clone(),guidance:params.request.clone(),runtime_id:self.runtime_id.clone()};
+        intent.validate().map_err(domain_error).map_err(before_effect)?;
+        let validate=|binding:TaskRunBinding| {let policy=&params.workspace_policy;async move {
+            self.lifecycle_authority(connection,actor,&binding,policy,kind).await.map_err(|_|DomainError::InvalidCommand("Current retained Task authority unavailable".into()))
+        }};
+        let reserved=store.reserve_task_lifecycle_fenced(actor.principal_id,intent,&validate).await.map_err(domain_error).map_err(before_effect)?;
+        if reserved.status!=TaskLifecycleStatus::Reserved {return self.lifecycle_response(connection,actor,reserved).await;}
+        let claimed=match store.claim_task_lifecycle_fenced(actor.principal_id,&params.operation_id,&validate).await {
+            Ok(claimed)=>claimed,
+            Err(error)=>{
+                // Claim is transactional. A failed claim submitted no native
+                // input; close its reservation so restored authority can act.
+                let _=store.finish_task_lifecycle(actor.principal_id,&params.operation_id,&run.runtime_id,&thread,run.turn_id.as_deref(),TaskLifecycleStatus::Rejected).await;
+                return Err(before_effect(domain_error(error)));
+            }
+        };
+        if claimed.status!=TaskLifecycleStatus::Dispatching {return self.lifecycle_response(connection,actor,claimed).await;}
+        // Durable claim fences duplicate effects. Do not hold a global startup
+        // mutex while steering waits: an independently claimed Stop must remain reachable.
+        drop(_serial);
+        let binding=claimed.binding.clone();
+        let outcome:Result<TaskLifecycleStatus,JSONRPCErrorError>=async {
+            if self.lifecycle_authority(connection,actor,&binding,&params.workspace_policy,kind).await.is_err() {
+                return Ok(TaskLifecycleStatus::Rejected);
+            }
+            match kind {
+                TaskLifecycleKind::Steer=>{
+                    let turn=binding.turn_id.as_deref().ok_or_else(||refusal("stale","No active turn to steer"))?;
+                    let admitted=threads.inquello_steer_private_turn(&thread,turn,&params.operation_id,params.request.clone().ok_or_else(||refusal("invalid","Guidance required"))?).await?;
+                    Ok(if admitted {TaskLifecycleStatus::Admitted}else{TaskLifecycleStatus::Rejected})
+                }
+                TaskLifecycleKind::Stop=>{
+                    let turn=binding.turn_id.as_deref().ok_or_else(||refusal("stale","No active turn to stop"))?;
+                    let submitted=threads.inquello_interrupt_private_turn(&thread,turn).await;
+                    // Poll retained terminal observation, not model output. A
+                    // completion race remains completion, never false rollback.
+                    let deadline=tokio::time::Instant::now()+std::time::Duration::from_secs(10);
+                    loop {
+                        let current=store.find_task_current_run(actor.principal_id,&binding.task_id).await.map_err(domain_error)?.ok_or_else(||refusal("not_found","Retained Task unavailable"))?;
+                        if current.run_id!=binding.run_id || current.turn_id!=binding.turn_id {return Err(refusal("stale","Task execution changed"));}
+                        match current.status {TaskRunStatus::Cancelled=>return Ok(TaskLifecycleStatus::Interrupted),TaskRunStatus::Completed=>return Ok(TaskLifecycleStatus::Completed),TaskRunStatus::Failed=>return Ok(TaskLifecycleStatus::Rejected),_=>{}}
+                        if submitted.is_err() || tokio::time::Instant::now()>=deadline {return Ok(TaskLifecycleStatus::Uncertain);}
+                        tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+                    }
+                }
+                TaskLifecycleKind::Resume=>{
+                    self.resume_lifecycle(connection,actor,&binding,&params.workspace_policy,params.request.clone(),threads).await
+                }
+            }
+        }.await;
+        let current=store.find_task_current_run(actor.principal_id,&binding.task_id).await.map_err(domain_error)?.ok_or_else(||refusal("not_found","Retained operation unavailable"))?;
+        let status=outcome.unwrap_or(TaskLifecycleStatus::Uncertain);
+        if kind==TaskLifecycleKind::Resume && matches!(status,TaskLifecycleStatus::Uncertain|TaskLifecycleStatus::Rejected) {
+            let run_status=if status==TaskLifecycleStatus::Rejected {TaskRunStatus::Failed}else{TaskRunStatus::Uncertain};
+            let _=store.mark_task_run_fenced(actor.principal_id,&binding.operation_id,&binding.run_id,&binding.runtime_id,run_status,current.turn_id.as_deref()).await;
+        }
+        let receipt=store.finish_task_lifecycle(actor.principal_id,&params.operation_id,&binding.runtime_id,&thread,current.turn_id.as_deref(),status).await.map_err(domain_error)?;
+        self.lifecycle_response(connection,actor,receipt).await
+    }
+    async fn resume_lifecycle(self:&Arc<Self>,connection:ConnectionId,actor:Actor,run:&TaskRunBinding,policy:&InquelloWorkspaceExecutionPolicy,request:Option<String>,
+        threads:&super::super::ThreadRequestProcessor)->Result<TaskLifecycleStatus,JSONRPCErrorError> {
+        let (device,user)=self.current_task_layers().await?;
+        let params=InquelloTasksPreflightParams {workspace_id:run.workspace_id.clone(),route_id:run.route_id.clone(),configuration_revision:run.configuration_revision,workspace_policy:policy.clone()};
+        let (store,_,configuration,generation,caps,session)=self.checked_candidate(connection,&params,&device,&user,true).await?;
+        self.lifecycle_authority(connection,actor,run,policy,TaskLifecycleKind::Resume).await?;
+        let cancellation=session.cancellation.child_token();
+        self.register_task_cancellation(actor.principal_id,&run.task_id,cancellation.clone()).await;
+        #[cfg(all(feature="inference-fixtures",debug_assertions))]
+        let fixture=self.task_fixtures.lock().await.get(&connection).cloned();
+        let authorization=Arc::new(TaskGuard {
+            #[cfg(all(feature="inference-fixtures",debug_assertions))]
+            fixture,processor:self.clone(),connection,actor,run:run.clone(),configuration,generation,policy:policy.clone(),device,user,cancellation,
+            terminal:std::sync::atomic::AtomicBool::new(false),tools:tokio::sync::Mutex::new(HashMap::new()),outgoing:threads.inquello_permission_sender(),defaults:caps.defaults});
+        let result:Result<TaskLifecycleStatus,JSONRPCErrorError>=async {
+            authorization.recheck().await?;
+            let thread_id=run.thread_id.as_deref().ok_or_else(||refusal("not_found","Retained thread unavailable"))?;
+            let id=codex_protocol::ThreadId::from_string(thread_id).map_err(|_|refusal("not_found","Retained thread unavailable"))?;
+            let guard:Arc<dyn TaskAuthorization>=authorization.clone();
+            codex_core::inquello_inference::rebind_task_authorization(thread_id,&guard).map_err(|_|refusal("authority_unknown","Retained disclosure fence unavailable"))?;
+            let folder=session.root.join("tasks").join(&run.task_id);
+            // Unlike first start, recovery never recreates missing context.
+            if !folder.is_dir() {return Err(refusal("not_found","Retained Task context is missing; nothing was recreated"));}
+            let folder=task_folder(&folder.to_string_lossy(),TaskId::parse(&run.task_id).map_err(domain_error)?)?;
+            let effective=execution_policy::effective_policy(&workspace_layer(policy)?,&authorization.device,&authorization.user);
+            let profile=runtime_profile(&execution_policy::tool_profile(&effective,BroadModeStatus::Standard,folder));
+            let choices=usage::Choices {reasoning:if run.choices.reasoning=="default" {authorization.defaults.reasoning.clone()}else{run.choices.reasoning.clone()},speed:if run.choices.speed=="default" {authorization.defaults.speed.clone()}else{run.choices.speed.clone()}};
+            let allowed=self.retained_turn_lineage(&store,actor,run).await?;
+            let thread=threads.inquello_resume_private_thread(connection,id,&authorization.configuration,&choices,&profile,TaskAuthorizationContext(authorization.clone()),&allowed).await?;
+            authorization.recheck().await?;
+            let text=request.unwrap_or_else(||"Resume the interrupted work in this same private Task. Use the retained conversation and confirmed work; do not replay confirmed effects. Check what remains, revise the plan as needed, and explain any missing context before proceeding.".into());
+            match threads.inquello_start_private_turn(&thread,text,TaskAuthorizationContext(authorization.clone())).await? {
+                codex_core::StartIfIdleSubmission::Started {turn_id,..}=>{
+                    let current=store.find_task_current_run(actor.principal_id,&run.task_id).await.map_err(domain_error)?.ok_or_else(||refusal("not_found","Retained Task unavailable"))?;
+                    if matches!(current.status,TaskRunStatus::Dispatching|TaskRunStatus::Running) {
+                        store.mark_task_run_fenced(actor.principal_id,&run.operation_id,&run.run_id,&run.runtime_id,TaskRunStatus::Running,Some(&turn_id)).await.map_err(domain_error)?;
+                    }
+                    Ok(TaskLifecycleStatus::Admitted)
+                }
+                codex_core::StartIfIdleSubmission::NotSubmitted {..}=>Ok(TaskLifecycleStatus::Rejected),
+            }
+        }.await;
+        if result.is_err() || matches!(&result,Ok(TaskLifecycleStatus::Rejected)) {
+            authorization.cancellation.cancel();
+            if let Ok(Some(current))=store.find_task_current_run(actor.principal_id,&run.task_id).await {
+                let _=store.mark_task_run_fenced(actor.principal_id,&run.operation_id,&run.run_id,&run.runtime_id,TaskRunStatus::Uncertain,current.turn_id.as_deref()).await;
+            }
+        } else {
+            let watched=Arc::downgrade(&authorization);
+            tokio::spawn(async move {loop {
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                let Some(guard)=watched.upgrade() else {break;};
+                if guard.terminal.load(std::sync::atomic::Ordering::Acquire)||guard.cancellation.is_cancelled()||guard.disclosure_recheck().await.is_err(){break;}
+            }});
+        }
+        result
+    }
+}
+
+
+#[cfg(test)]
+mod lifecycle_wire_tests {
+    use super::*;
+    #[test]
+    fn pre_effect_refusals_have_a_parseable_bounded_kind() {
+        for data in [None,Some(json!({})),Some(json!({"detail":"protocol validation"})),Some(json!(null)),Some(json!({"inquello":null}))] {
+            let error=before_effect(JSONRPCErrorError{code:-32602,message:"Retained context unavailable".into(),data});
+            let data=error.data.expect("pre-effect envelope");
+            assert_eq!(data["inquello"]["kind"],"refused");
+            assert_eq!(data["inquello"]["preEffect"],true);
+        }
+        let specific=before_effect(refusal("not_found","Retained context unavailable"));
+        assert_eq!(specific.data.as_ref().unwrap()["inquello"]["kind"],"not_found");
+        assert_eq!(specific.data.as_ref().unwrap()["inquello"]["preEffect"],true);
+    }
+
+    #[test]
+    fn terminal_reconciliation_is_not_adaptation_or_rollback() {
+        assert_eq!(lifecycle_observed_outcome(TaskLifecycleKind::Stop,TaskRunStatus::Failed,true,false),Some(TaskLifecycleStatus::Rejected));
+        assert_eq!(lifecycle_observed_outcome(TaskLifecycleKind::Stop,TaskRunStatus::Completed,true,false),Some(TaskLifecycleStatus::Completed));
+        assert_eq!(lifecycle_observed_outcome(TaskLifecycleKind::Stop,TaskRunStatus::Cancelled,true,false),Some(TaskLifecycleStatus::Interrupted));
+        assert_eq!(lifecycle_observed_outcome(TaskLifecycleKind::Steer,TaskRunStatus::Running,true,false),None);
+        assert_eq!(lifecycle_observed_outcome(TaskLifecycleKind::Steer,TaskRunStatus::Completed,true,false),Some(TaskLifecycleStatus::Unresolved));
+        assert_eq!(lifecycle_observed_outcome(TaskLifecycleKind::Steer,TaskRunStatus::Completed,true,true),Some(TaskLifecycleStatus::Admitted));
+        assert_eq!(lifecycle_observed_outcome(TaskLifecycleKind::Resume,TaskRunStatus::Uncertain,false,false),None);
+        assert_eq!(lifecycle_observed_outcome(TaskLifecycleKind::Resume,TaskRunStatus::Running,true,false),Some(TaskLifecycleStatus::Admitted));
+    }
+    #[test]
+    fn lifecycle_wire_is_bounded_and_guidance_redacted() {
+        let value=json!({"operationId":uuid::Uuid::new_v4().to_string(),"taskId":uuid::Uuid::new_v4().to_string(),
+            "expectedRunId":"run","expectedRuntimeId":"runtime","expectedTurnId":"turn","request":"Exclude cancelled invoice INV-104",
+            "workspacePolicy":{"workspaceId":uuid::Uuid::new_v4().to_string(),"policyRevision":1,"authorizationEpoch":1,"execution":null}});
+        let params:InquelloTasksLifecycleParams=serde_json::from_value(value.clone()).unwrap();
+        assert!(!format!("{params:?}").contains("INV-104"));
+        for field in ["threadId","principalId","routeId","classification","runtimeRequest"] {
+            let mut forged=value.clone();forged[field]=json!("forged");
+            assert!(serde_json::from_value::<InquelloTasksLifecycleParams>(forged).is_err());
+        }
+    }
+    #[test]
+    fn runtime_lease_is_exclusive_and_survives_processor_lifetime() {
+        let root=tempfile::tempdir().unwrap();let path=root.path().join("working.sqlite");
+        let first=InquelloRequestProcessor::with_store_path(Some(path.clone()),Vec::new());
+        let nonce=first.ensure_task_runtime_lease().unwrap();
+        let second=InquelloRequestProcessor::with_store_path(Some(path.clone()),Vec::new());
+        assert!(second.ensure_task_runtime_lease().is_err());
+        drop(first);
+        assert_eq!(second.ensure_task_runtime_lease().unwrap(),nonce);
+        drop(second);
+        std::fs::remove_file(path.with_extension("runtime-lease")).unwrap();
+        let restored=InquelloRequestProcessor::with_store_path(Some(path),Vec::new());
+        assert_ne!(restored.ensure_task_runtime_lease().unwrap(),nonce,"missing coordination state is not previous-runtime proof");
+    }
+    #[test]
+    fn runtime_lease_subprocess_child() {
+        let Some(path)=std::env::var_os("INQUELLO_LEASE_TEST_PATH") else {return;};
+        let path=PathBuf::from(path);
+        let child=InquelloRequestProcessor::with_store_path(Some(path.clone()),Vec::new());
+        let nonce=child.ensure_task_runtime_lease().unwrap();
+        std::fs::write(path.with_extension("ready"),nonce).unwrap();
+        // Parent kills this process. The upper bound prevents an orphaned test
+        // subprocess if the parent itself fails before cleanup.
+        std::thread::sleep(std::time::Duration::from_secs(60));
+    }
+    #[test]
+    fn runtime_lease_process_death_releases_os_lock_not_lineage() {
+        let root=tempfile::tempdir().unwrap();let path=root.path().join("working.sqlite");
+        let mut child=std::process::Command::new(std::env::current_exe().unwrap())
+            .arg("runtime_lease_subprocess_child").arg("--nocapture")
+            .env("INQUELLO_LEASE_TEST_PATH",&path).stdout(std::process::Stdio::null()).spawn().unwrap();
+        let deadline=std::time::Instant::now()+std::time::Duration::from_secs(10);
+        while !path.with_extension("ready").exists() {
+            if std::time::Instant::now()>=deadline {let _=child.kill();let _=child.wait();panic!("lease subprocess did not acquire ownership");}
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        let nonce=std::fs::read_to_string(path.with_extension("ready")).unwrap();
+        let parent=InquelloRequestProcessor::with_store_path(Some(path),Vec::new());
+        let exclusive=parent.ensure_task_runtime_lease().is_err();
+        child.kill().unwrap();child.wait().unwrap();
+        assert!(exclusive,"a still-live runtime cannot be replaced");
+        assert_eq!(parent.ensure_task_runtime_lease().unwrap(),nonce,"process death releases the OS lease, not its device-local lineage");
+    }
+
 }

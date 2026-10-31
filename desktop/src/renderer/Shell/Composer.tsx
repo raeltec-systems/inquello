@@ -1,5 +1,5 @@
 /** Plain text Composer. Draft ownership remains in Shell memory. The Start surface
- * supplies an explicit authorized Send action; existing Tasks stay read-only here.
+ * supplies an explicit authorized Send action; Task lifecycle supplies steering and Stop.
  * IME owns composition Enter, Shift+Enter inserts lines, Escape keeps the draft.
  * Unavailable Send remains focusable with a visible explanation.
  */
@@ -32,9 +32,11 @@ export interface ComposerProps {
   disabledReason?: string;
   autoFocus?: boolean;
   readOnly?: boolean;
+  onStop?: () => void;
+  stopDisabledReason?: string;
 }
 
-export function Composer({ draft, onSend, disabledReason, autoFocus, readOnly }: ComposerProps): ReactElement {
+export function Composer({ draft, onSend, disabledReason, autoFocus, readOnly, onStop, stopDisabledReason }: ComposerProps): ReactElement {
   const inputId = useId();
   const reason = !onSend ? sendReason(draft.value) : draft.value.trim() === '' ? SEND_EMPTY_REASON : disabledReason;
   const label = draft.taskId ? COMPOSER_LABEL : COMPOSER_LABEL_NO_TASK;
@@ -68,6 +70,7 @@ export function Composer({ draft, onSend, disabledReason, autoFocus, readOnly }:
         data-composer-input
       />
       <div className="iq-composer-actions">
+        {onStop && <IconButton variant="stop" label="Stop" disabledReason={stopDisabledReason} onPress={onStop} data-composer-stop />}
         <IconButton variant="send" label="Send" disabledReason={reason} onPress={() => { if (!readOnly) onSend?.(); }} data-composer-send />
       </div>
     </div>

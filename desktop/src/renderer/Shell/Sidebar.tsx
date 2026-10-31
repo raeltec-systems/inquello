@@ -1,3 +1,4 @@
+import {TaskActivityLabel} from './TaskLifecycle';
 /**
  * The 264px Sidebar (Story 1.14): the Workspace selector, the Engagements
  * section (each Engagement, then its folders, then their Tasks), the ad hoc
@@ -100,6 +101,8 @@ function TaskRow({ task, open, onOpen }: { task: TaskItem; open: boolean; onOpen
     <li className="iq-sidebar-task" data-task-id={task.taskId}>
       <a
         href={`#task-${task.taskId}`}
+        aria-label={task.title}
+        aria-describedby={task.runtimeThreadId?`task-activity-${task.taskId}`:undefined}
         className="iq-nav-row iq-sidebar-row"
         aria-current={open ? 'page' : undefined}
         data-nav-row="task"
@@ -109,6 +112,7 @@ function TaskRow({ task, open, onOpen }: { task: TaskItem; open: boolean; onOpen
         }}
       >
         <span className="iq-nav-row-label">{task.title}</span>
+        {task.runtimeThreadId&&<TaskActivityLabel taskId={task.taskId} workspaceId={task.workspaceId}/>}
       </a>
     </li>
   );

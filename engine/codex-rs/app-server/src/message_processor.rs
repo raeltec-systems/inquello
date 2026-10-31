@@ -1231,7 +1231,7 @@ impl MessageProcessor {
         let private_fence = self.outgoing.capture_private_fence(connection_id);
         let private_thread = self.inquello_processor.guard_retained_request(connection_id,&codex_request).await?;
         let private_scope = self.inquello_processor.guard_private_scope(connection_id,&codex_request).await?;
-        if private_thread.is_some() || private_scope.is_some() || matches!(codex_request.method_name(), "inquello/workspace/list" | "inquello/tasks/reconcile" | "inquello/tasks/forThread" | "inquello/tasks/progress") {
+        if private_thread.is_some() || private_scope.is_some() || matches!(codex_request.method_name(), "inquello/workspace/list" | "inquello/tasks/reconcile" | "inquello/tasks/lifecycleReconcile" | "inquello/tasks/forThread" | "inquello/tasks/progress") {
             self.outgoing.fence_request(&request_id, private_fence).await;
         }
         let result: Result<Option<ClientResponsePayload>, JSONRPCErrorError> = match codex_request {
@@ -2100,6 +2100,16 @@ impl MessageProcessor {
                 let (device,user)=self.inquello_policy_layers().await?;
                 self.inquello_processor.tasks_start(connection_id,params,device,user,&self.thread_processor).await
             }
+            ClientRequest::InquelloTasksSteer { params, .. } => {
+                self.inquello_processor.tasks_lifecycle(connection_id,params,inquello_domain::tasks::TaskLifecycleKind::Steer,&self.thread_processor).await
+            }
+            ClientRequest::InquelloTasksStop { params, .. } => {
+                self.inquello_processor.tasks_lifecycle(connection_id,params,inquello_domain::tasks::TaskLifecycleKind::Stop,&self.thread_processor).await
+            }
+            ClientRequest::InquelloTasksResume { params, .. } => {
+                self.inquello_processor.tasks_lifecycle(connection_id,params,inquello_domain::tasks::TaskLifecycleKind::Resume,&self.thread_processor).await
+            }
+            ClientRequest::InquelloTasksLifecycleReconcile { params, .. } => self.inquello_processor.tasks_lifecycle_reconcile(connection_id,params,&self.thread_processor).await,
             ClientRequest::InquelloTasksReconcile { params, .. } => self.inquello_processor.tasks_reconcile(connection_id,params).await,
             ClientRequest::InquelloTasksProgress { params, .. } => self.inquello_processor.tasks_progress(connection_id,params,&self.thread_processor).await,
             ClientRequest::InquelloTasksForThread { params, .. } => self.inquello_processor.tasks_for_thread(connection_id,params).await,

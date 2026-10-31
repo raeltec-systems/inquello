@@ -1627,6 +1627,30 @@ client_request_definitions! {
         serialization: None,
         response: v2::InquelloTasksStartResponse,
     },
+    InquelloTasksSteer => "inquello/tasks/steer" {
+        params: v2::InquelloTasksLifecycleParams,
+        serialization: None,
+        
+        response: v2::InquelloTasksLifecycleResponse,
+    },
+    InquelloTasksStop => "inquello/tasks/stop" {
+        params: v2::InquelloTasksLifecycleParams,
+        serialization: None,
+        manual_payload_conversion: manual,
+        response: v2::InquelloTasksLifecycleResponse,
+    },
+    InquelloTasksResume => "inquello/tasks/resume" {
+        params: v2::InquelloTasksLifecycleParams,
+        serialization: None,
+        manual_payload_conversion: manual,
+        response: v2::InquelloTasksLifecycleResponse,
+    },
+    InquelloTasksLifecycleReconcile => "inquello/tasks/lifecycleReconcile" {
+        params: v2::InquelloTasksReconcileParams,
+        serialization: None,
+        manual_payload_conversion: manual,
+        response: v2::InquelloTasksLifecycleResponse,
+    },
     InquelloTasksReconcile => "inquello/tasks/reconcile" {
         params: v2::InquelloTasksReconcileParams,
         serialization: None,

@@ -25,6 +25,26 @@ pub(super) async fn private_response(server:&mut TestAppServer,host:&mut Private
             JSONRPCMessage::Request(request)=>match request.method.as_str() {
                 "inquello/tasks/authority"=>{
                     assert_eq!(request.params.as_ref().expect("authority params")["workspaceId"],host.workspace_id);
+                    if host.lifecycle==Some("lifecycle-stop-inflight-steer") && host.authority_context["holdSteerAuthority"]==true {
+                        use sqlx::Connection;
+                        let path=host.authority_context["workingDatabase"].as_str().expect("isolated writer probe");
+                        let mut db=sqlx::SqliteConnection::connect_with(&sqlx::sqlite::SqliteConnectOptions::new().filename(path).busy_timeout(Duration::ZERO)).await.unwrap();
+                        let writer_held=match sqlx::query("BEGIN IMMEDIATE").execute(&mut db).await {
+                            Ok(_)=>{sqlx::query("ROLLBACK").execute(&mut db).await.unwrap();false},
+                            Err(error)=>{assert!(error.as_database_error().is_some_and(|e|matches!(e.code().as_deref(),Some("5"|"6"))),"unexpected writer probe failure: {error}");true},
+                        };
+                        db.close().await.unwrap();
+                        if writer_held {
+                            // This is the actual admitted RPC future inside the
+                            // native SQLite validation fence, not an edited receipt.
+                            host.authority_context["holdSteerAuthority"]=json!(false);
+                            host.authority_context["heldAuthorityRequest"]=serde_json::to_value(&request.id).unwrap();
+                            let stop=host.authority_context["concurrentStop"].clone();
+                            let stop_id=server.send_request("inquello/tasks/stop",Some(stop)).await.unwrap();
+                            host.authority_context["concurrentStopId"]=json!(stop_id);
+                            continue; // Intentionally withhold this authority reply.
+                        }
+                    }
                     let response=if !host.authority_available {json!({"workspacePolicy":null})} else if let Some(callback)=host.authority_callback.clone() { {let mut params=request.params.unwrap();params["fixtureContext"]=host.authority_context.clone();callback(params).await} } else {json!({"workspacePolicy":host.policy})};
                     server.send_response(request.id,response).await.expect("fresh host authority");
                 },

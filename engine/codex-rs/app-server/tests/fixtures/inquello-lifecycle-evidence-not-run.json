@@ -1,0 +1,314 @@
+{
+  "report_kind": "authoring-status-only",
+  "suite": "inquello-current-route-negative-authorization-v2",
+  "eligible": false,
+  "reason": "Cargo unavailable; native and actual-provider outcomes unrun",
+  "implementation_digest": null,
+  "tested_artifact_digest": null,
+  "results": [
+    {
+      "route_id": "codex-responses",
+      "scenario": "steer",
+      "status": "not-run",
+      "test_selector": "responses_lifecycle_steer",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "isolated synthetic retained-child lifecycle; not model usefulness or real-data eligibility"
+    },
+    {
+      "route_id": "codex-responses",
+      "scenario": "stop_resume",
+      "status": "not-run",
+      "test_selector": "responses_lifecycle_stop_resume",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "isolated synthetic retained-child lifecycle; not model usefulness or real-data eligibility"
+    },
+    {
+      "route_id": "codex-responses",
+      "scenario": "restart",
+      "status": "not-run",
+      "test_selector": "responses_lifecycle_restart",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "isolated synthetic retained-child lifecycle; not model usefulness or real-data eligibility"
+    },
+    {
+      "route_id": "codex-responses",
+      "scenario": "crash",
+      "status": "not-run",
+      "test_selector": "responses_lifecycle_crash",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "isolated synthetic retained-child lifecycle; not model usefulness or real-data eligibility"
+    },
+    {
+      "route_id": "codex-responses",
+      "scenario": "revoke_before_resume",
+      "status": "not-run",
+      "test_selector": "responses_lifecycle_revoke_before_resume",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "isolated synthetic retained-child lifecycle; not model usefulness or real-data eligibility"
+    },
+    {
+      "route_id": "codex-responses",
+      "scenario": "revoke_during_resume",
+      "status": "not-run",
+      "test_selector": "responses_lifecycle_revoke_during_resume",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "isolated synthetic retained-child lifecycle; not model usefulness or real-data eligibility"
+    },
+    {
+      "route_id": "codex-responses",
+      "scenario": "missing_linkage",
+      "status": "not-run",
+      "test_selector": "responses_lifecycle_missing_linkage",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "isolated synthetic retained-child lifecycle; not model usefulness or real-data eligibility"
+    },
+    {
+      "route_id": "codex-responses",
+      "scenario": "peer_private",
+      "status": "not-run",
+      "test_selector": "responses_lifecycle_peer_private",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "isolated synthetic retained-child lifecycle; not model usefulness or real-data eligibility"
+    },
+    {
+      "route_id": "codex-responses",
+      "scenario": "cross_company",
+      "status": "not-run",
+      "test_selector": "responses_lifecycle_cross_company",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "isolated synthetic retained-child lifecycle; not model usefulness or real-data eligibility"
+    },
+    {
+      "route_id": "claude-api-key",
+      "scenario": "steer",
+      "status": "not-run",
+      "test_selector": "messages_lifecycle_steer",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "isolated synthetic retained-child lifecycle; not model usefulness or real-data eligibility"
+    },
+    {
+      "route_id": "claude-api-key",
+      "scenario": "stop_resume",
+      "status": "not-run",
+      "test_selector": "messages_lifecycle_stop_resume",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "isolated synthetic retained-child lifecycle; not model usefulness or real-data eligibility"
+    },
+    {
+      "route_id": "claude-api-key",
+      "scenario": "restart",
+      "status": "not-run",
+      "test_selector": "messages_lifecycle_restart",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "isolated synthetic retained-child lifecycle; not model usefulness or real-data eligibility"
+    },
+    {
+      "route_id": "claude-api-key",
+      "scenario": "crash",
+      "status": "not-run",
+      "test_selector": "messages_lifecycle_crash",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "isolated synthetic retained-child lifecycle; not model usefulness or real-data eligibility"
+    },
+    {
+      "route_id": "claude-api-key",
+      "scenario": "revoke_before_resume",
+      "status": "not-run",
+      "test_selector": "messages_lifecycle_revoke_before_resume",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "isolated synthetic retained-child lifecycle; not model usefulness or real-data eligibility"
+    },
+    {
+      "route_id": "claude-api-key",
+      "scenario": "revoke_during_resume",
+      "status": "not-run",
+      "test_selector": "messages_lifecycle_revoke_during_resume",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "isolated synthetic retained-child lifecycle; not model usefulness or real-data eligibility"
+    },
+    {
+      "route_id": "claude-api-key",
+      "scenario": "missing_linkage",
+      "status": "not-run",
+      "test_selector": "messages_lifecycle_missing_linkage",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "isolated synthetic retained-child lifecycle; not model usefulness or real-data eligibility"
+    },
+    {
+      "route_id": "claude-api-key",
+      "scenario": "peer_private",
+      "status": "not-run",
+      "test_selector": "messages_lifecycle_peer_private",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "isolated synthetic retained-child lifecycle; not model usefulness or real-data eligibility"
+    },
+    {
+      "route_id": "claude-api-key",
+      "scenario": "cross_company",
+      "status": "not-run",
+      "test_selector": "messages_lifecycle_cross_company",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "isolated synthetic retained-child lifecycle; not model usefulness or real-data eligibility"
+    },
+    {
+      "route_id": "codex-responses",
+      "scenario": "unknown_turn",
+      "status": "not-run",
+      "test_selector": "responses_lifecycle_unknown_turn",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "isolated retained-context refusal; no model call/reservation/run rotation; not execution evidence"
+    },
+    {
+      "route_id": "codex-responses",
+      "scenario": "source_reference",
+      "status": "not-run",
+      "test_selector": "responses_lifecycle_source_reference",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "isolated retained-context refusal; no model call/reservation/run rotation; not execution evidence"
+    },
+    {
+      "route_id": "claude-api-key",
+      "scenario": "unknown_turn",
+      "status": "not-run",
+      "test_selector": "messages_lifecycle_unknown_turn",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "isolated retained-context refusal; no model call/reservation/run rotation; not execution evidence"
+    },
+    {
+      "route_id": "claude-api-key",
+      "scenario": "source_reference",
+      "status": "not-run",
+      "test_selector": "messages_lifecycle_source_reference",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "isolated retained-context refusal; no model call/reservation/run rotation; not execution evidence"
+    },
+    {
+      "route_id": "codex-responses",
+      "scenario": "steer_lost_ack",
+      "status": "not-run",
+      "test_selector": "responses_lifecycle_steer_lost_ack",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "actual retained-child guidance admission with uncertain acknowledgement journal; no provider eligibility promotion"
+    },
+    {
+      "route_id": "codex-responses",
+      "scenario": "stop_pending_steer",
+      "status": "not-run",
+      "test_selector": "responses_lifecycle_stop_pending_steer",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "actual retained-child guidance admission with uncertain acknowledgement journal; no provider eligibility promotion"
+    },
+    {
+      "route_id": "claude-api-key",
+      "scenario": "steer_lost_ack",
+      "status": "not-run",
+      "test_selector": "messages_lifecycle_steer_lost_ack",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "actual retained-child guidance admission with uncertain acknowledgement journal; no provider eligibility promotion"
+    },
+    {
+      "route_id": "claude-api-key",
+      "scenario": "stop_pending_steer",
+      "status": "not-run",
+      "test_selector": "messages_lifecycle_stop_pending_steer",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "actual retained-child guidance admission with uncertain acknowledgement journal; no provider eligibility promotion"
+    },
+    {
+      "route_id": "codex-responses",
+      "scenario": "warm_policy_change",
+      "status": "not-run",
+      "test_selector": "responses_lifecycle_warm_policy_change",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "same-process retained thread Resume with stricter current policy; inspect exact resumed runtime TurnContext sandbox, not only per-turn guard"
+    },
+    {
+      "route_id": "claude-api-key",
+      "scenario": "warm_policy_change",
+      "status": "not-run",
+      "test_selector": "messages_lifecycle_warm_policy_change",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "same-process retained thread Resume with stricter current policy; inspect exact resumed runtime TurnContext sandbox, not only per-turn guard"
+    },
+    {
+      "route_id": "codex-responses",
+      "scenario": "progress_continuity",
+      "status": "not-run",
+      "test_selector": "responses_lifecycle_progress_continuity",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "Actual retained-child progress endpoint before/after Resume; unaffected/current/predecessor/source-turn/two-reason assertions; synthetic only"
+    },
+    {
+      "route_id": "claude-api-key",
+      "scenario": "progress_continuity",
+      "status": "not-run",
+      "test_selector": "messages_lifecycle_progress_continuity",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "Actual retained-child progress endpoint before/after Resume; unaffected/current/predecessor/source-turn/two-reason assertions; synthetic only"
+    },
+    {
+      "route_id": "codex-responses",
+      "scenario": "stop_provider_unavailable",
+      "status": "not-run",
+      "test_selector": "responses_lifecycle_stop_provider_unavailable",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "Synthetic fixture-only readiness fault: actual preflight refusal while retained shell/turn remain live; Stop interrupts exact original PID despite unavailable new-inference readiness; explicit same-thread Resume after clearing fault"
+    },
+    {
+      "route_id": "claude-api-key",
+      "scenario": "stop_provider_unavailable",
+      "status": "not-run",
+      "test_selector": "messages_lifecycle_stop_provider_unavailable",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "Synthetic fixture-only readiness fault: actual preflight refusal while retained shell/turn remain live; Stop interrupts exact original PID despite unavailable new-inference readiness; explicit same-thread Resume after clearing fault"
+    },
+    {
+      "route_id": "codex-responses",
+      "scenario": "progress_cache",
+      "status": "not-run",
+      "test_selector": "responses_lifecycle_progress_cache",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs + common/inquello_private_host.rs",
+      "scope": "Actual endpoint same-turn new publication and older cited item completion reject stale analytical snapshots; unrelated output retains snapshot"
+    },
+    {
+      "route_id": "codex-responses",
+      "scenario": "stop_inflight_steer",
+      "status": "not-run",
+      "test_selector": "responses_lifecycle_stop_inflight_steer",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs + common/inquello_private_host.rs",
+      "scope": "Actual native writer-held authority RPC withheld while Stop is sent concurrently; no edited admission receipt"
+    },
+    {
+      "route_id": "claude-api-key",
+      "scenario": "progress_cache",
+      "status": "not-run",
+      "test_selector": "messages_lifecycle_progress_cache",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs + common/inquello_private_host.rs",
+      "scope": "Actual endpoint same-turn new publication and older cited item completion reject stale analytical snapshots; unrelated output retains snapshot"
+    },
+    {
+      "route_id": "claude-api-key",
+      "scenario": "stop_inflight_steer",
+      "status": "not-run",
+      "test_selector": "messages_lifecycle_stop_inflight_steer",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs + common/inquello_private_host.rs",
+      "scope": "Actual native writer-held authority RPC withheld while Stop is sent concurrently; no edited admission receipt"
+    }
+  ],
+  "platform_gates": [
+    {
+      "platform": "linux",
+      "status": "not-run",
+      "command_from_desktop": "node scripts/run-lifecycle-native.cjs",
+      "required_selected_cases": 28,
+      "scope": "actual local retained-child stop/resume with synthetic provider; separate from model usefulness and Electron packaging"
+    },
+    {
+      "platform": "windows",
+      "status": "not-run",
+      "command_from_desktop": "node scripts/run-lifecycle-native.cjs",
+      "required_selected_cases": 28,
+      "scope": "actual local retained-child stop/resume with synthetic provider; separate from model usefulness and Electron packaging"
+    }
+  ]
+}

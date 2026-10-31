@@ -39,7 +39,17 @@ pub struct ResultClaim {
     /// An exact retained human instruction ID, not an author/model supplied name.
     /// An unresolved reference never becomes an authoritative decision cue.
     pub basis_id: Option<String>,
+    #[serde(default = "initial_revision")]
+    pub revision: u32,
+    #[serde(default)]
+    pub state: ResultState,
+    #[serde(default)]
+    pub change_reason: Option<String>,
 }
+fn initial_revision() -> u32 { 1 }
+#[derive(Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum ResultState { #[default] Current, Withdrawn }
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum ResultKind { Calculation, Observation, Suggestion, Decision, Gap }
@@ -48,6 +58,7 @@ fn id(value: &str) -> bool {
     !value.is_empty() && value.len() <= 128 && value.bytes().all(|b| b.is_ascii_alphanumeric() || b"-_.:".contains(&b))
 }
 fn text(value: &str) -> bool { !value.trim().is_empty() && value.len() <= MAX_TEXT && !value.contains('\0') }
+fn reason(value:&str)->bool {text(value) && !value.chars().any(|c|c.is_control() && !matches!(c,'\n'|'\r'|'\t'))}
 fn references(values: &[String]) -> bool { values.len() <= 16 && values.iter().all(|v| id(v)) }
 impl Publication {
     pub fn parse(raw: &str) -> Result<Self, &'static str> {
@@ -65,7 +76,9 @@ impl Publication {
         ids.clear();
         for result in &publication.results {
             if !id(&result.id) || !ids.insert(&result.id) || !text(&result.text) || !references(&result.evidence_ids)
-                || result.basis_id.as_ref().is_some_and(|v| !id(v)) {
+                || result.basis_id.as_ref().is_some_and(|v| !id(v)) || result.revision == 0
+                || result.change_reason.as_ref().is_some_and(|v| !reason(v))
+                || ((result.revision > 1 || result.state == ResultState::Withdrawn) && result.change_reason.is_none()) {
                 return Err("Invalid result identity or evidence references");
             }
         }
@@ -80,6 +93,27 @@ impl std::fmt::Debug for Publication {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn revisions_and_withdrawals_need_explicit_reason_and_cannot_claim_review() {
+        let mut v=serde_json::json!({"version":1,"plan":[],"results":[{"id":"duplicate","kind":"observation","text":"Cancelled duplicate withdrawn","evidenceIds":[],"revision":2,"state":"withdrawn","changeReason":"Exclude cancelled invoices"}]});
+        assert!(Publication::parse(&v.to_string()).is_ok());
+        v["results"][0].as_object_mut().unwrap().remove("changeReason");
+        assert!(Publication::parse(&v.to_string()).is_err());
+        v["results"][0]["changeReason"]=serde_json::json!("Exclude cancelled invoices");
+        v["results"][0]["checks"]=serde_json::json!("checked");
+        assert!(Publication::parse(&v.to_string()).is_err());
+    }
+    #[test]
+    fn revision_reasons_preserve_supported_text_and_reject_unsupported_controls() {
+        for reason in ["Correction\nwith lines\tand tabs\r", "Ordinary correction"] {
+            let raw=serde_json::json!({"version":1,"plan":[],"results":[{"id":"finding","kind":"observation","text":"Finding","revision":2,"changeReason":reason,"evidenceIds":[]}]}).to_string();
+            assert_eq!(Publication::parse(&raw).unwrap().results[0].change_reason.as_deref(),Some(reason));
+        }
+        for control in ['\0','\u{1b}','\u{7}','\u{7f}','\u{85}'] {
+            let raw=serde_json::json!({"version":1,"plan":[],"results":[{"id":"finding","kind":"observation","text":"Finding","revision":2,"changeReason":format!("Correction{control}hidden"),"evidenceIds":[]}]}).to_string();
+            assert!(Publication::parse(&raw).is_err());
+        }
+    }
     #[test]
     fn model_cannot_supply_trusted_checks_or_authority() {
         for field in ["checks", "checked", "authority", "principalId", "runtimeId"] {

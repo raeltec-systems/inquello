@@ -1,3 +1,4 @@
+import {parseLifecycle,type LifecycleInput,type LifecycleKind,type LifecycleReceipt} from './types';
 import {parseRouteEligibilityCheckRequest,type RouteEligibilityCheckRequest,type RouteApprovalView,type RouteEligibilityCheckResponse} from '../identity/wire';
 import {parseProgress,parseQuestion,parseAnswers,progressId,terminalProgress,type ProgressInput,type ProgressSnapshot,type ProgressQuestion,type AnswerInput,type NativeRequestId} from './progress';
 /** Trusted named orchestration. A lost acknowledgment is reconciled, never replayed. */
@@ -12,6 +13,13 @@ const unavailable='The local runtime, signed-in identity or Workspace policy is 
 const changed='Your identity, runtime or authority changed. Your draft is preserved; reconcile the existing request before submitting again.';
 export class TaskService {
  private epoch=0;
+ private readonly lifecycleOperations=new Map<string,{input:LifecycleInput;kind:LifecycleKind;scope:ReturnType<TaskService['scope']>;receipt?:LifecycleReceipt;binding?:ProgressSnapshot;promise?:Promise<TasksResult<LifecycleReceipt>>;dispatched:boolean;settled?:boolean}>();
+ private readonly lifecycleTasks=new Map<string,string>();
+ private readonly incarnations=new Map<string,string>();
+ private incarnation(value:Pick<ProgressSnapshot,"runId"|"runtimeId"|"threadId"|"turnId">){return JSON.stringify([value.runId,value.runtimeId,value.threadId,value.turnId]);}
+ private readonly activeTurns=new Map<string,string|null>();
+ private readonly completedTurns=new Set<string>();
+
  private readonly active=new Map<string,string>();
  private readonly pending=new Set<string>();
  private activeRuntime:unknown;
@@ -19,7 +27,7 @@ export class TaskService {
  private completionSequence=0;
  private readonly completedThreads=new Map<string,number>();
  private readonly operationSequences=new Map<string,number>();
- private clearActivity(){this.active.clear();this.pending.clear();this.completedThreads.clear();this.operationSequences.clear();this.completionSequence=0;this.activityUncertain=false;}
+ private clearActivity(){this.active.clear();this.incarnations.clear();this.activeTurns.clear();this.completedTurns.clear();this.pending.clear();this.completedThreads.clear();this.operationSequences.clear();this.completionSequence=0;this.activityUncertain=false;}
  private syncActivity(){const instance=this.options.runtime.instance();if(instance!=null&&instance!==this.activeRuntime&&this.options.runtime.ready()){this.clearActivity();this.activeRuntime=instance;}}
  activeTasks(){this.syncActivity();return this.active.size+this.pending.size;}
  /** Only permits attempting native shutdown; this is not proof of quiescence. */
@@ -40,7 +48,7 @@ export class TaskService {
  private readonly trustedThreads=new Map<string,{threadId:string;workspaceId?:string;scope:ReturnType<TaskService['scope']>}>();
  private readonly operationWorkspaces=new Map<string,string>();
  constructor(private readonly options:TaskServiceOptions){this.activeRuntime=options.runtime.instance();}
- invalidate(notify=true){if(this.active.size+this.pending.size>0)this.activityUncertain=true;this.epoch++;this.trustedThreads.clear();this.clearQuestions();this.historyIncomplete=false;if(notify)this.options.onProgressChanged?.();}
+ invalidate(notify=true){if(this.active.size+this.pending.size>0)this.activityUncertain=true;this.epoch++;this.incarnations.clear();this.activeTurns.clear();this.trustedThreads.clear();this.clearQuestions();this.historyIncomplete=false;if(notify)this.options.onProgressChanged?.();}
  private scope(){this.syncActivity();return{principal:this.options.identity.principalId(),runtime:this.options.runtime.instance(),epoch:this.epoch};}
  private current(s:ReturnType<TaskService['scope']>){return !!s.principal&&s.principal===this.options.identity.principalId()&&s.runtime===this.options.runtime.instance()&&s.epoch===this.epoch&&this.options.runtime.ready();}
  private failure(error:unknown,dispatch:boolean):{ok:false;reason:string;code:'refused'|'uncertain'}{
@@ -71,9 +79,63 @@ export class TaskService {
   if(value.accepted){if(value.threadId)this.trustedThreads.set(value.taskId,{threadId:value.threadId,workspaceId:this.operationWorkspaces.get(value.operationId),scope:s});this.options.onAccepted?.();}
  }
 
- private async prepare(input:TaskCandidateInput,s:ReturnType<TaskService['scope']>){if(!this.current(s))throw new Error();await this.options.syncPrincipal();if(!this.current(s))throw new Error();const routes=await this.options.prepareRoutes();if(!routes.ok||!this.current(s))throw new Error();await this.options.bootstrap?.(input.workspaceId);if(!this.current(s))throw new Error();const policy=await this.options.freshPolicy(input.workspaceId);if(!policy||!this.current(s))throw new Error();return policy;}
+ private readonly bootstraps=new Map<string,Promise<void>>();
+ /** Concurrent status readers share initialization, not an authority cache. */
+ private bootstrap(workspaceId:string):Promise<void> {
+  const scope=this.scope(),key=JSON.stringify([scope.principal,scope.epoch,workspaceId]);
+  const pending=this.bootstraps.get(key);if(pending)return pending;
+  const promise=Promise.resolve().then(()=>{if(!this.current(scope))throw new Error();return this.options.bootstrap?.(workspaceId);}).then(()=>{if(!this.current(scope))throw new Error();}).finally(()=>{if(this.bootstraps.get(key)===promise)this.bootstraps.delete(key);});
+  this.bootstraps.set(key,promise);return promise;
+ }
+ private async prepare(input:TaskCandidateInput,s:ReturnType<TaskService['scope']>){if(!this.current(s))throw new Error();await this.options.syncPrincipal();if(!this.current(s))throw new Error();const routes=await this.options.prepareRoutes();if(!routes.ok||!this.current(s))throw new Error();await this.bootstrap(input.workspaceId);if(!this.current(s))throw new Error();const policy=await this.options.freshPolicy(input.workspaceId);if(!policy||!this.current(s))throw new Error();return policy;}
  async preflight(input:TaskCandidateInput):Promise<TasksResult<TaskCandidateView>>{const s=this.scope();try{const workspacePolicy=await this.prepare(input,s);const value=parseCandidate(await this.options.runtime.request('inquello/tasks/preflight',{...input,workspacePolicy}),input.workspaceId);if(!this.current(s))return{ok:false,reason:changed};if(value.routeId!==input.routeId||value.configurationRevision!==input.configurationRevision)return{ok:false,reason:'The route configuration changed. Refresh and explicitly reconfirm it.'};return{ok:true,value};}catch(e){return this.failure(e,false);}}
  async start(input:StartTaskInput):Promise<TasksResult<StartedTaskView>>{const s=this.scope();this.operationWorkspaces.set(input.operationId,input.workspaceId);let dispatched=false;try{const workspacePolicy=await this.prepare(input,s);dispatched=true;if(!this.operationSequences.has(input.operationId))this.operationSequences.set(input.operationId,this.completionSequence);this.pending.add(input.operationId);const value=parseStarted(await this.options.runtime.request('inquello/tasks/start',{...input,workspacePolicy}));if(!this.current(s)){this.activityUncertain=true;return{ok:false,reason:changed,code:'uncertain'};}if(value.operationId!==input.operationId||value.request!==input.request)throw new Error();this.registerAccepted(value,s);return{ok:true,value};}catch(e){const failure=this.failure(e,dispatched);if(failure.code==='refused')this.pending.delete(input.operationId);else this.activityUncertain=true;return failure;}}
+
+ private lifecycleOpen(receipt:LifecycleReceipt|undefined){return !receipt||['reserved','dispatching','uncertain'].includes(receipt.status);}
+ private async lifecycleReceipt(entry:{input:LifecycleInput;kind:LifecycleKind;scope:ReturnType<TaskService['scope']>;receipt?:LifecycleReceipt;binding?:ProgressSnapshot;dispatched:boolean},raw:unknown,policy:InquelloWorkspaceExecutionPolicy):Promise<LifecycleReceipt>{
+  const value=parseLifecycle(raw);if(value.operationId!==entry.input.operationId||value.taskId!==entry.input.taskId||value.kind!==entry.kind||!this.current(entry.scope))throw new Error();
+  const after=await this.options.freshPolicy(entry.input.workspaceId);if(!after||JSON.stringify(after)!==JSON.stringify(policy)||!this.current(entry.scope))throw new Error();
+  if(entry.binding&&(value.threadId!==entry.binding.threadId||(entry.kind!=='resume'&&(value.runId!==entry.binding.runId||value.runtimeId!==entry.binding.runtimeId||value.turnId!==entry.binding.turnId))))throw new Error();
+  const changedReceipt=JSON.stringify(entry.receipt)!==JSON.stringify(value);entry.receipt=value;if(this.lifecycleOpen(value))this.activityUncertain=true;
+  if(value.kind==='resume'&&!this.lifecycleOpen(value))this.pending.delete(value.operationId);
+  if(value.kind==='resume'&&value.status==='admitted'&&this.lifecycleTasks.get(value.taskId)===value.operationId){this.incarnations.set(value.taskId,this.incarnation(value));if(!this.completedTurns.has(JSON.stringify([value.threadId,value.turnId])))this.active.set(value.threadId,value.operationId);this.activeTurns.set(value.threadId,value.turnId);this.trustedThreads.set(value.taskId,{threadId:value.threadId,workspaceId:entry.input.workspaceId,scope:entry.scope});}
+  if((value.status==='interrupted'||value.status==='completed')&&(!this.incarnations.has(value.taskId)||this.incarnations.get(value.taskId)===this.incarnation(value))&&(!this.activeTurns.has(value.threadId)||this.activeTurns.get(value.threadId)===value.turnId))this.completed(value.threadId);
+  if(changedReceipt)this.options.onProgressChanged?.();return value;
+ }
+ private async reconcileLifecycle(entry:{input:LifecycleInput;kind:LifecycleKind;scope:ReturnType<TaskService['scope']>;receipt?:LifecycleReceipt;binding?:ProgressSnapshot;dispatched:boolean}):Promise<TasksResult<LifecycleReceipt>>{
+  try{const scope=this.scope();if(!scope.principal||scope.principal!==entry.scope.principal||!this.current(scope))throw new Error();await this.options.syncPrincipal();await this.bootstrap(entry.input.workspaceId);if(!this.current(scope))throw new Error();entry.scope=scope;const policy=await this.options.freshPolicy(entry.input.workspaceId);if(!policy||!this.current(entry.scope))throw new Error();return{ok:true,value:await this.lifecycleReceipt(entry,await this.options.runtime.request('inquello/tasks/lifecycleReconcile',{operationId:entry.input.operationId}),policy)};}catch{this.activityUncertain=true;return{ok:false,code:'uncertain',reason:'The operation outcome is not yet confirmed. Retained work and your draft are preserved; no command was repeated.'};}
+ }
+ async settleLifecycle(input:Omit<LifecycleInput,'request'>):Promise<TasksResult<{settled:boolean}>> {
+  const entry=this.lifecycleOperations.get(input.operationId),scope=this.scope();
+  if(!entry||entry.input.taskId!==input.taskId||entry.input.workspaceId!==input.workspaceId||entry.scope.principal!==scope.principal||!this.current(scope)||this.lifecycleOpen(entry.receipt))return{ok:false,code:'refused',reason:'Operation settlement unavailable.'};
+  try{await this.options.syncPrincipal();const policy=await this.options.freshPolicy(input.workspaceId);if(!policy||!this.current(scope))throw new Error();entry.settled=true;return{ok:true,value:{settled:true}};}catch{return{ok:false,code:'refused',reason:'Current authority unavailable.'};}
+ }
+ steer(input:LifecycleInput){return this.lifecycle('steer',input);}
+ stop(input:LifecycleInput){return this.lifecycle('stop',input);}
+ resume(input:LifecycleInput){return this.lifecycle('resume',input);}
+ private lifecycle(kind:LifecycleKind,input:LifecycleInput):Promise<TasksResult<LifecycleReceipt>>{
+  const existing=this.lifecycleOperations.get(input.operationId);
+  if(existing){if(existing.kind!==kind||JSON.stringify(existing.input)!==JSON.stringify(input))return Promise.resolve({ok:false,code:'refused',reason:'This operation already belongs to another instruction. Your draft is preserved.'});if(existing.promise)return existing.promise;return this.reconcileLifecycle(existing);}
+  const prior=[...this.lifecycleOperations.values()].find(entry=>entry.input.taskId===input.taskId&&entry.scope.principal===this.options.identity.principalId()&&(entry.promise||this.lifecycleOpen(entry.receipt)));
+  // Stop is independently fenced to the observed current turn. Explicit Resume
+  // may ask native to prove an uncertain prior run is no longer live.
+  if(prior&&kind!=='stop'&&!(kind==='resume'&&!prior.promise)){return this.reconcileLifecycle(prior).then(()=>({ok:false as const,code:'refused' as const,reason:'The previous operation is being reconciled. This new instruction was not submitted; your draft is preserved.'}));}
+  if(this.lifecycleOperations.size>=256){for(const [id,old]of this.lifecycleOperations){if(old.settled&&!old.promise&&!this.lifecycleOpen(old.receipt)){this.lifecycleOperations.delete(id);if(this.lifecycleTasks.get(old.input.taskId)===id)this.lifecycleTasks.delete(old.input.taskId);if(this.lifecycleOperations.size<256)break;}}if(this.lifecycleOperations.size>=256)return Promise.resolve({ok:false,code:'refused',reason:'Outstanding operations must be confirmed before more work is admitted. Your draft is preserved.'});}
+  const entry:{input:LifecycleInput;kind:LifecycleKind;scope:ReturnType<TaskService['scope']>;receipt?:LifecycleReceipt;binding?:ProgressSnapshot;promise?:Promise<TasksResult<LifecycleReceipt>>;dispatched:boolean}={input:{...input},kind,scope:this.scope(),dispatched:false};
+  this.lifecycleOperations.set(input.operationId,entry);this.lifecycleTasks.set(input.taskId,input.operationId);
+  const execute=async():Promise<TasksResult<LifecycleReceipt>>=>{try{
+   if(!this.current(entry.scope))throw new Error();await this.options.syncPrincipal();if(!this.current(entry.scope))throw new Error();if(kind!=='stop'){const routes=await this.options.prepareRoutes();if(!routes.ok||!this.current(entry.scope))throw new Error();}
+   const snapshot=await (kind==='stop'?this.readProgress(input,true,false):this.activity(input));if(!snapshot.ok||!this.current(entry.scope))throw new Error();
+   const before=snapshot.value;entry.binding=before;
+   if(kind!=='resume'&&(!['active','running'].includes(before.status)||before.turnId===null))return{ok:false,code:'refused',reason:'That turn has ended. Your instruction is preserved; no new turn was started.'};
+   if(kind==='resume'&&!['cancelled','uncertain','failed'].includes(before.status))return{ok:false,code:'refused',reason:'Only interrupted retained work can be resumed. No replacement Task was created.'};
+   const policy=await this.options.freshPolicy(input.workspaceId);if(!policy||!this.current(entry.scope))throw new Error();entry.dispatched=true;if(kind==='resume')this.pending.add(input.operationId);
+   const raw=await this.options.runtime.request(`inquello/tasks/${kind}`,{operationId:input.operationId,taskId:input.taskId,workspacePolicy:policy,expectedRunId:before.runId,expectedRuntimeId:before.runtimeId,expectedTurnId:before.turnId,request:input.request});
+   return{ok:true,value:await this.lifecycleReceipt(entry,raw,policy)};
+  }catch(error){if(inquelloRefusal(error)?.preEffect===true){entry.dispatched=false;this.pending.delete(input.operationId);return this.failure(error,false);}if(entry.dispatched&&this.current(entry.scope))return this.reconcileLifecycle(entry);return this.failure(error,entry.dispatched);}
+  finally{entry.promise=undefined;if(!entry.dispatched){this.lifecycleOperations.delete(input.operationId);if(this.lifecycleTasks.get(input.taskId)===input.operationId)this.lifecycleTasks.delete(input.taskId);}}};
+  entry.promise=execute();return entry.promise;
+ }
  async authority(params:unknown):Promise<{workspacePolicy:InquelloWorkspaceExecutionPolicy|null;routeApproval?:RouteApprovalView;routeAuthority?:RouteEligibilityCheckResponse['authority']}> {
   const s=this.scope();try{
    const r=object(params);if(Object.keys(r).some(k=>!['workspaceId','routeDiscovery','routeCheck'].includes(k))||(r.routeDiscovery!==undefined&&r.routeCheck!==undefined))return{workspacePolicy:null};
@@ -86,23 +148,38 @@ export class TaskService {
  }
  async applicableDataTier(taskId:string):Promise<'synthetic'|'real'|'unknown'>{const binding=this.trustedThreads.get(taskId);if(!binding||!this.current(binding.scope))return 'unknown';try{const r=object(await this.options.runtime.request('inquello/tasks/forThread',{threadId:binding.threadId}));return r.taskId===taskId&&r.threadId===binding.threadId&&this.current(binding.scope)&&(r.dataTier==='synthetic'||r.dataTier==='real')?r.dataTier:'unknown';}catch{return 'unknown';}}
  async permissionRoute(threadId:string|null):Promise<EscalationRoute|null>{const s=this.scope();if(!threadId||!this.current(s)||!this.options.askPermission)return null;try{await this.options.syncPrincipal();if(!this.current(s))return null;const r=object(await this.options.runtime.request('inquello/tasks/forThread',{threadId}));const taskId=uuid(r.taskId);if(r.threadId!==threadId||!this.current(s))return null;this.trustedThreads.set(taskId,{threadId,workspaceId:typeof r.workspaceId==='string'?r.workspaceId:undefined,scope:s});return{ask:async command=>{if(!this.current(s))return 'denied';const answer=await this.options.askPermission!(taskId,command);return this.current(s)?answer:'denied';}};}catch{return null;}}
- async reconcile(operationId:string):Promise<TasksResult<StartedTaskView>>{const s=this.scope();try{if(!this.current(s))return{ok:false,reason:unavailable};await this.options.syncPrincipal();if(!this.current(s))return{ok:false,reason:changed};const workspace=this.operationWorkspaces.get(operationId);if(workspace){await this.options.bootstrap?.(workspace);if(!this.current(s))return{ok:false,reason:changed};}const value=parseStarted(await this.options.runtime.request('inquello/tasks/reconcile',{operationId}));if(!this.current(s))return{ok:false,reason:changed};if(value.operationId!==operationId)throw new Error();this.registerAccepted(value,s);return{ok:true,value};}catch(e){return this.failure(e,true);}}
+ async reconcile(operationId:string):Promise<TasksResult<StartedTaskView>>{const s=this.scope();try{if(!this.current(s))return{ok:false,reason:unavailable};await this.options.syncPrincipal();if(!this.current(s))return{ok:false,reason:changed};const workspace=this.operationWorkspaces.get(operationId);if(workspace){await this.bootstrap(workspace);if(!this.current(s))return{ok:false,reason:changed};}const value=parseStarted(await this.options.runtime.request('inquello/tasks/reconcile',{operationId}));if(!this.current(s))return{ok:false,reason:changed};if(value.operationId!==operationId)throw new Error();this.registerAccepted(value,s);return{ok:true,value};}catch(e){return this.failure(e,true);}}
  /** Notifications are invalidation hints only. No native body reaches the renderer. */
  notification(method:string,params:unknown):void {
-  if(method==='turn/completed'){try{const r=object(params);if(typeof r.threadId==='string')this.completed(r.threadId);}catch{}}
+  if(method==='turn/completed'){try{const r=object(params);if(typeof r.threadId==='string'){const turn=r.turn&&typeof r.turn==='object'?(r.turn as {id?:unknown}).id:r.turnId;if(typeof turn==='string'){this.completedTurns.add(JSON.stringify([r.threadId,turn]));if(this.completedTurns.size>256)this.completedTurns.delete(this.completedTurns.values().next().value!);}if(!this.activeTurns.has(r.threadId)||this.activeTurns.get(r.threadId)===turn)this.completed(r.threadId);}}catch{}}
   if(method==='serverRequest/resolved'){try{const r=object(params);for(const [key,q] of this.questions)if(q.view.threadId===r.threadId&&q.view.requestId===r.requestId)this.dropQuestion(key);}catch{/* malformed notification reveals nothing */}}
   if(['turn/completed','turn/started','item/started','item/completed','item/agentMessage/delta','item/commandExecution/outputDelta','turn/plan/updated','serverRequest/resolved'].includes(method))this.options.onProgressChanged?.();
  }
- async progress(input:ProgressInput):Promise<TasksResult<ProgressSnapshot>> {
-  const s=this.scope();let authorityFailure=false,identityFailure=true;let policyBefore:InquelloWorkspaceExecutionPolicy|null=null;try{
-   if(!this.current(s))throw new Error();await this.options.syncPrincipal();if(!this.current(s))throw new Error();identityFailure=false;
+ private readonly observations=new Map<string,Promise<TasksResult<ProgressSnapshot>>>();
+ activity(input:ProgressInput){return this.observe(input,true);}
+ progress(input:ProgressInput){return this.observe(input,false);}
+ private observe(input:ProgressInput,activityOnly:boolean):Promise<TasksResult<ProgressSnapshot>> {
+  const key=JSON.stringify([this.scope(),input,activityOnly,this.lifecycleTasks.get(input.taskId),this.incarnations.get(input.taskId)]);const existing=this.observations.get(key);if(existing)return existing;
+  const promise=this.readProgress(input,activityOnly).finally(()=>{if(this.observations.get(key)===promise)this.observations.delete(key);});this.observations.set(key,promise);return promise;
+ }
+ private async readProgress(input:ProgressInput,activityOnly=false,reconcileOperations=true):Promise<TasksResult<ProgressSnapshot>> {
+  const s=this.scope(),lifecycleAtRead=this.lifecycleTasks.get(input.taskId),incarnationAtRead=this.incarnations.get(input.taskId);const superseded=()=>lifecycleAtRead!==this.lifecycleTasks.get(input.taskId)||incarnationAtRead!==this.incarnations.get(input.taskId);let authorityFailure=false,identityFailure=true;let policyBefore:InquelloWorkspaceExecutionPolicy|null=null;try{
+   if(!this.current(s))throw new Error();await this.options.syncPrincipal();if(!this.current(s))throw new Error();await this.bootstrap(input.workspaceId);if(!this.current(s))throw new Error();identityFailure=false;
    authorityFailure=true;const policy=await this.options.freshPolicy(input.workspaceId);if(!policy||!this.current(s))throw new Error();policyBefore=policy;authorityFailure=false;
-   const value=parseProgress(await this.options.runtime.request('inquello/tasks/progress',{taskId:input.taskId,workspacePolicy:policy}));
-   if(!this.current(s)||value.taskId!==input.taskId||value.workspaceId!==input.workspaceId)throw new Error();
-   authorityFailure=true;const after=await this.options.freshPolicy(input.workspaceId);if(!after||!this.current(s)||JSON.stringify(after)!==JSON.stringify(policy))throw new Error();authorityFailure=false;
+   const operations=[...this.lifecycleOperations.values()].filter(entry=>entry.input.taskId===input.taskId&&entry.input.workspaceId===input.workspaceId&&entry.scope.principal===s.principal);
+   for(const entry of operations)if(reconcileOperations&&entry.dispatched&&!entry.promise&&this.lifecycleOpen(entry.receipt))await this.reconcileLifecycle(entry);
+   const pending=operations.at(-1);if(!this.current(s))throw new Error();
+   const value=parseProgress(await this.options.runtime.request('inquello/tasks/progress',{taskId:input.taskId,workspacePolicy:policy,...(activityOnly?{activityOnly:true}:input.resultPage?{resultPage:input.resultPage}:{})}));
+   if(!this.current(s)||value.taskId!==input.taskId||value.workspaceId!==input.workspaceId||lifecycleAtRead!==this.lifecycleTasks.get(input.taskId))throw new Error();
+   authorityFailure=true;const after=await this.options.freshPolicy(input.workspaceId);if(!after||!this.current(s)||JSON.stringify(after)!==JSON.stringify(policy))throw new Error();authorityFailure=false;if(superseded())throw new Error();
+   if(input.resultPage&&(!value.resultPage||input.resultPage.snapshotId!==undefined&&value.resultPage.snapshotId!==input.resultPage.snapshotId||value.resultPage.currentOffset!==(input.resultPage.currentOffset??0)||value.resultPage.historyOffset!==(input.resultPage.historyOffset??0)))throw new Error();
+   this.incarnations.set(value.taskId,this.incarnation(value));
    for(const [key,q] of this.questions){if(q.binding?.taskId!==input.taskId)continue;if(!this.current(q.scope)||q.binding.workspaceId!==value.workspaceId||q.binding.runId!==value.runId||q.binding.runtimeId!==value.runtimeId||q.view.threadId!==value.threadId||q.view.turnId!==value.turnId||terminalProgress(value.status))this.dropQuestion(key);}
    value.questions=[...this.questions.values()].filter(q=>q.binding?.taskId===value.taskId&&this.current(q.scope)).map(q=>q.view);
    if(terminalProgress(value.status))this.completed(value.threadId);
+   if(!terminalProgress(value.status)){this.activeTurns.set(value.threadId,value.turnId);if(pending?.kind==='resume'&&pending.receipt?.runId===value.runId){this.pending.delete(pending.input.operationId);this.active.set(value.threadId,pending.input.operationId);}}
+   if(pending?.receipt&&this.current(pending.scope))value.lifecycle={...pending.receipt};
+   value.lifecycleOperations=operations.filter(entry=>!entry.settled).map(entry=>({operationId:entry.input.operationId,kind:entry.kind,request:entry.input.request,status:entry.receipt?.status??'dispatching'}));
    value.sessionGeneration=s.epoch;value.historyIncomplete ||=this.historyIncomplete;
    return{ok:true,value};
   }catch(error){
@@ -111,6 +188,8 @@ export class TaskService {
    if(!authorityFailure&&policyBefore&&this.current(s)){
     try{const fresh=await this.options.freshPolicy(input.workspaceId);authorityFailure=!fresh||JSON.stringify(fresh)!==JSON.stringify(policyBefore);}catch{authorityFailure=true;}
    }
+   if(superseded())return{ok:false,code:'refused',reason:'A newer Task run is being observed.'};
+   if(this.current(s)&&!authorityFailure&&inquelloRefusal(error)?.kind==='stale_snapshot')return{ok:false,code:'refused',reason:'The result snapshot changed. Read the current authorized result pages.'};
    if(!this.current(s)){if(s.epoch===this.epoch)this.invalidate(false);}else{const kind=inquelloRefusal(error)?.kind;if(identityFailure||kind==='session_changed'||kind==='classification_unknown')this.invalidate(false);else this.suppress(input.taskId,input.workspaceId,authorityFailure||kind==='authority_unknown'||kind==='stale');}this.activityUncertain=true;this.options.onAuthorityUnavailable?.();return{ok:false,reason:'Current Task progress or Workspace authority is unavailable. Previously shown progress and pending answers have been cleared.',code:'refused'};}
  }
  async question(id:NativeRequestId,params:unknown):Promise<unknown> {

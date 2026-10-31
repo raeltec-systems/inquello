@@ -1,3 +1,4 @@
+import {TaskLifecycle} from './TaskLifecycle';
 /**
  * The desktop Shell (Story 1.14): Sidebar, Header and the open Task.
  *
@@ -570,7 +571,7 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
   // The draft follows the Task actually shown; a Task that vanished falls back to the no-Task draft.
   const draft = useDraftBinding(task?.taskId ?? null, draftStore, task?.workspaceId ?? null);
   const startDraft = useDraftBinding(null, draftStore);
-  const composer = !state?.signedIn || showStart ? null : renderComposer ? renderComposer(draft) : <Composer draft={draft} />;
+  const composer = !state?.signedIn || showStart ? null : renderComposer ? renderComposer(draft) : task?.runtimeThreadId || (task&&acceptedFor(task.taskId)) ? <TaskLifecycle key={`${runtimeEpoch}:${task!.taskId}`} taskId={task!.taskId} workspaceId={task!.workspaceId} draft={draft} operationIds={operationIds}/> : <Composer draft={draft} />;
 
   return (
     <div

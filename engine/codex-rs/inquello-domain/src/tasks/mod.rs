@@ -105,3 +105,64 @@ mod tests {
         c=intent();c.folder_id=Some(c.workspace_id.clone());assert!(c.validate().is_err());
     }
 }
+
+/// Lifecycle receipts are observations, never reusable dispatch capabilities.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum TaskLifecycleKind { Steer, Stop, Resume }
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum TaskLifecycleStatus { Reserved, Dispatching, Admitted, Interrupted, Completed, Rejected, Uncertain, Unresolved }
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TaskLifecycleIntent {
+    pub operation_id: String,
+    pub kind: TaskLifecycleKind,
+    pub expected: TaskRunBinding,
+    pub guidance: Option<String>,
+    /// Execution incarnation, not an arbitrary renderer-selected runtime.
+    pub runtime_id: String,
+}
+impl std::fmt::Debug for TaskLifecycleIntent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TaskLifecycleIntent").field("operation_id", &self.operation_id).field("kind", &self.kind).finish_non_exhaustive()
+    }
+}
+impl TaskLifecycleIntent {
+    pub fn validate(&self) -> Result<(), DomainError> {
+        OperationId::parse(&self.operation_id)?;
+        OperationId::parse(&self.expected.operation_id)?;
+        crate::organise::TaskId::parse(&self.expected.task_id)?;
+        WorkspaceId::parse(&self.expected.workspace_id)?;
+        PrincipalId::parse(&self.expected.principal_id)?;
+        let reference = |s: &str| !s.is_empty() && s.len() <= 128 && !s.chars().any(|c| c.is_control() || c.is_whitespace());
+        if !reference(&self.runtime_id) || !reference(&self.expected.runtime_id) || !reference(&self.expected.run_id)
+            || !self.expected.thread_id.as_deref().is_some_and(reference)
+            || self.expected.turn_id.as_deref().is_some_and(|s| !reference(s)) {
+            return Err(DomainError::InvalidCommand("verified retained runtime linkage required".into()));
+        }
+        if self.guidance.as_ref().is_some_and(|s| s.trim().is_empty() || s.len() > 128 * 1024 || s.chars().any(|c| c.is_control() && !matches!(c, '\n' | '\r' | '\t')))
+            || (self.kind == TaskLifecycleKind::Steer && self.guidance.is_none())
+            || (self.kind == TaskLifecycleKind::Stop && self.guidance.is_some()) {
+            return Err(DomainError::InvalidCommand("invalid lifecycle guidance".into()));
+        }
+        Ok(())
+    }
+}
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TaskLifecycleReceipt {
+    pub operation_id: String,
+    pub kind: TaskLifecycleKind,
+    pub binding: TaskRunBinding,
+    pub status: TaskLifecycleStatus,
+}
+/// Callers must validate current authority, retained-context access, route evidence,
+/// credentials/settings and limits; a journal record alone grants none of these.
+pub trait TaskLifecycleStore: Send + Sync {
+    fn reserve_task_lifecycle_fenced<F, Fut>(&self, principal: PrincipalId, intent: TaskLifecycleIntent, validate: F) -> impl Future<Output = Result<TaskLifecycleReceipt, DomainError>> + Send
+        where F: Fn(TaskRunBinding) -> Fut + Send + Sync, Fut: Future<Output = Result<(), DomainError>> + Send;
+    fn claim_task_lifecycle_fenced<F, Fut>(&self, principal: PrincipalId, operation: &str, validate: F) -> impl Future<Output = Result<TaskLifecycleReceipt, DomainError>> + Send
+        where F: Fn(TaskRunBinding) -> Fut + Send + Sync, Fut: Future<Output = Result<(), DomainError>> + Send;
+    fn find_task_lifecycle(&self, principal: PrincipalId, operation: &str) -> impl Future<Output = Result<Option<TaskLifecycleReceipt>, DomainError>> + Send;
+    fn finish_task_lifecycle(&self, principal: PrincipalId, operation: &str, runtime: &str, thread: &str, turn: Option<&str>, status: TaskLifecycleStatus) -> impl Future<Output = Result<TaskLifecycleReceipt, DomainError>> + Send;
+}

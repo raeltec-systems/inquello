@@ -1246,16 +1246,37 @@ mod task_permission_debug_tests {
 #[ts(export_to="v2/")]
 pub struct InquelloTasksProgressParams {
     pub task_id:String,
+    #[serde(default)]
+    pub activity_only:bool,
+    #[serde(default)]
+    pub result_page:Option<InquelloResultPageRequest>,
     pub workspace_policy:InquelloWorkspaceExecutionPolicy,
+}
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all="camelCase", deny_unknown_fields)]
+#[ts(export_to="v2/")]
+pub struct InquelloResultPageRequest {
+    pub snapshot_id:Option<String>,
+    #[serde(default)] pub current_offset:u32,
+    #[serde(default)] pub history_offset:u32,
+}
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all="camelCase")]
+#[ts(export_to="v2/")]
+pub struct InquelloResultPage {
+    pub snapshot_id:String, pub current_offset:u32, pub history_offset:u32,
+    pub current_total:u32, pub history_total:u32,
+    pub current_next_offset:Option<u32>, pub history_next_offset:Option<u32>,
 }
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, TS)]
 #[serde(rename_all="camelCase")]
 #[ts(export_to="v2/")]
 pub struct InquelloTasksProgressResponse {
     pub version:u32, pub task_id:String, pub run_id:String, pub workspace_id:String,
-    pub thread_id:String, pub turn_id:String, pub runtime_id:String, pub status:String,
+    pub thread_id:String, pub turn_id:Option<String>, pub runtime_id:String, pub status:String,
     pub history_incomplete:bool, pub items:Vec<InquelloProgressItem>,
-    pub plan:Vec<InquelloProgressStep>, pub results:Vec<InquelloProgressResult>, pub artifact:String,
+    pub result_page:Option<InquelloResultPage>,
+    pub plan:Vec<InquelloProgressStep>, pub results:Vec<InquelloProgressResult>, pub result_history:Vec<InquelloProgressResult>, pub artifact:String,
 }
 impl std::fmt::Debug for InquelloTasksProgressResponse {
     fn fmt(&self,f:&mut std::fmt::Formatter<'_>)->std::fmt::Result {
@@ -1292,4 +1313,34 @@ pub struct InquelloProgressBasis {
 pub struct InquelloProgressResult {
     pub id:String, pub kind:Option<String>, pub text:String, pub checks:String,
     pub check_scope:Option<String>, pub evidence_ids:Vec<String>, pub basis:Option<InquelloProgressBasis>,
+    pub revision:u32, pub state:String, pub change_reason:Option<String>, pub superseded_reason:Option<String>, pub source_turn_id:String,
+}
+
+
+/// Named lifecycle commands carry only the main-owned observation to fence.
+/// Thread identity, route, settings and principal are resolved natively.
+#[derive(Clone, PartialEq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct InquelloTasksLifecycleParams {
+    pub operation_id: String,
+    pub task_id: String,
+    pub expected_run_id: String,
+    pub expected_runtime_id: String,
+    pub expected_turn_id: Option<String>,
+    pub request: Option<String>,
+    pub workspace_policy: InquelloWorkspaceExecutionPolicy,
+}
+impl std::fmt::Debug for InquelloTasksLifecycleParams {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InquelloTasksLifecycleParams").field("operation_id", &self.operation_id).finish_non_exhaustive()
+    }
+}
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloTasksLifecycleResponse {
+    pub operation_id: String, pub task_id: String, pub run_id: String,
+    pub runtime_id: String, pub thread_id: String, pub turn_id: Option<String>,
+    pub kind: String, pub status: String,
 }

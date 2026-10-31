@@ -708,3 +708,21 @@ cancellation controls. See `story-1-28-authorization-support.md` and
 `validation/story128-loop2/` for exact results. Cargo, native/model/Windows and
 matching generated-protocol acceptance remain open; no real-data route is
 promoted and no paid inference or organization approval occurred.
+
+## Story 1.29 — retained private Task lifecycle (2026-10-31)
+
+Named steer/stop/resume and same-operation reconciliation reuse native runtime
+semantics behind Task/run/turn authority. Additive lifecycle/history and local
+lease-lineage migrations preserve same-thread recovery without replacement or
+automatic restart; missing context/lease coverage refuses. Current findings and
+historical superseded/withdrawn revisions retain evidence lineage separately
+from independent review. Desktop Composer/navigation exposes these operations
+without focus theft or rollback claims.
+
+The v2 negative authorization gate now requires Resume/lifecycle coverage; old
+command-only proof cannot promote the new surface. Thirty-six both-binding native
+lifecycle fixtures and cross-platform lease tests are authored, all unrun because
+Cargo is unavailable. Windows OS-lock lifetime, actual model reanalysis and
+matching generated protocol remain gates. See
+`_bmad-output/implementation-artifacts/story-1-29-lifecycle-support.md` and
+`epic-1-acceptance-ledger.md`. Story remains in-progress; no eligibility promotion.

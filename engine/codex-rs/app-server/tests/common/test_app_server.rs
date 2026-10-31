@@ -189,6 +189,12 @@ impl TestAppServer {
         }
     }
 
+    /// Abrupt test-only child loss: no shutdown handshake or lifecycle acknowledgement.
+    pub async fn crash_and_wait(&mut self) -> std::io::Result<ExitStatus> {
+        self.process.start_kill()?;
+        self.process.wait().await
+    }
+
     pub async fn wait_for_exit(&mut self) -> std::io::Result<ExitStatus> {
         self.process.wait().await
     }

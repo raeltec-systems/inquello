@@ -487,6 +487,28 @@
       },
       "deletion": "Delete Unvalidated recovery data in Local data; this does not delete exported copies or service-held provenance receipts",
       "recovery": "No automatic reuse. Repeat recovery from the original export with current authorization and its immutable service-held byte receipt"
+    },
+    {
+      "id": "runtime-lease",
+      "label": "Local runtime ownership",
+      "location": {
+        "root": "user-data",
+        "globs": [
+          "working/*.runtime-lease"
+        ]
+      },
+      "enabled": true,
+      "credentials": false,
+      "owner": "The local private runtime on this device",
+      "rule_owner": "Organisation data-policy owner (OQ-2)",
+      "retention": "until-owner-deletes",
+      "access": "runtime",
+      "export": {
+        "mode": "excluded",
+        "reason": "Device-local process ownership nonce is not portable authority and must not accompany restored work"
+      },
+      "deletion": "Delete Local runtime ownership only after the runtime is stopped; deleting it makes earlier unfinished work unverifiable for resume",
+      "recovery": "Content-free OS locking and device-local nonce only. Not exported or restored. Confirmed Task history remains in Private work organisation; a missing or changed nonce never proves a previous runtime ended."
     }
   ]
 }

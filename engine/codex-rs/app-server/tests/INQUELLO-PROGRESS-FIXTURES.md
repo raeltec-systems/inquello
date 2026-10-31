@@ -84,9 +84,18 @@ blob SHA-1 identities checked against the actual Inquello baseline commit
 
 ## Pass 1 correction coverage (authored, native execution still required)
 
-The endpoint now uses the tested `read_progress_pages` seam. Its 301-item fixture
-asserts cursors None → 100 → 200, limits 100/100/56, exact chronological identities
-cmd-45 through cmd-300, terminal completion evidence and incomplete history.
+The endpoint uses the `read_progress_pages` seam. Story 1.29 corrects its
+canonical input independently of the recent activity display: its 301-item fixture
+now asserts cursors None → 100 → 200 → 300, 100-item page limits, and canonical
+identities cmd-0 through cmd-300 before the separate 256-item display bound.
+A 353-item regression retains an old unaffected finding and the predecessor of a
+later withdrawal; a repeated cursor refuses rather than disclosing partial
+canonical findings. Every page performs fresh disclosure authorization. The
+existing retained thread store remains canonical and follows its existing export
+and deletion rules; no additional history cache is introduced. Reads exceeding
+1,000 pages or 64 MiB refuse explicitly, never substitute a recent tail.
+Revision creation reasons and later supersession reasons are separate fields.
+Navigation activity-only requests skip history and authorize current status.
 Additional native tests cover colored CSI/OSC output, canonical revisions after
 large history, latest structured results after 100 ordinary messages, 70-result
 overflow, cumulative omitted plan IDs and authoritative artifact refs. These are
@@ -101,3 +110,104 @@ has 768 KiB bounded headroom for escaping/metadata around 256 KiB display text.
 Questions keep the existing required choice schema and freeform Other path; no
 optionless model question surface is introduced. Answers are limited to 4096 UTF-8
 bytes before consuming the desktop request, with correctable UI feedback.
+
+
+## Story 1.29 review loop 2: authored native corrections (unrun)
+
+- Lifecycle reservation and claim retain final authority validation inside the
+  SQLite writer transaction, with one two-second total validation deadline per
+  transaction. Timeout rolls back before dispatch; pending host authority RPCs
+  are cleaned up on future cancellation. Stop owns an independent claim and
+  does not require new-inference candidate discovery, credentials, quota or
+  capability readiness. Output disclosure remains separately authorized.
+- `stalled_inflight_steer_authority_releases_writer_for_stop` holds the actual
+  validation future at the first and final validation boundaries of both reserve
+  and claim, concurrently requesting Stop. This is not a receipt edited after
+  admission. Expected: no admission effect, writer released within two seconds,
+  Stop reserves/claims inside four seconds, no silent replay.
+- `responses_lifecycle_progress_continuity` and
+  `messages_lifecycle_progress_continuity` use four synthetic model responses
+  (one tool per response, respecting Messages' nonparallel binding): publish
+  first-turn findings, hold real shell, explicitly Stop/Resume, publish revision,
+  then final text. Actual `inquello/tasks/progress` before/after Resume asserts
+  unaffected finding/source turn, current revision, historical predecessor,
+  original change reason and subsequent supersession reason. They do not prove
+  actual model analytical correctness.
+- Full progress uses a four-entry/64 MiB canonical cache keyed by principal,
+  session, run/lineage, policy and persisted updated-item ordinal. Every read
+  freshly authorizes disclosure; cached authorization is never accepted.
+  The ordinal seam is verified against the selected Codex cut
+  `360319d8dee62d87e2d59fc0c21805d79519cfed`, `thread-store/src/types.rs`, and
+  exact fork blob `4a55334b105c776ee590c134809c6ecd6534e552` (read-only research
+  copy `/workspace/shared/story129-research-fork/engine/codex-rs/thread-store/src/types.rs`).
+  This is not a coarse timestamp or newest-created-item heuristic.
+- Optional `resultPage` has UUID `snapshotId`, `currentOffset` and `historyOffset`
+  (0..10000000). Responses give exact current/history totals and nullable next
+  offsets, at most 64 current/128 historical rows under per-section byte bounds.
+  Historical creation/supersession reasons are not display-budget clipped.
+  Snapshot changes/eviction refuse `stale_snapshot`, never combine revisions.
+  Canonical pagination, long-reason and cache-identity/session regressions are
+  authored. Final run identity is checked after awaited disclosure boundaries.
+
+Attempted here from `engine/codex-rs` (all exit 127, `cargo: command not found`):
+
+```sh
+cargo fmt --all -- --check
+cargo test -p inquello-domain
+cargo test -p inquello-adapters
+cargo test -p codex-app-server --test inquello_authorization_runtime
+```
+
+Required native targeted commands (unrun here; no Cargo/rustc/rustfmt):
+
+```sh
+cargo test -p inquello-adapters --test task_runs stalled_inflight_steer_authority_releases_writer_for_stop
+cargo test -p codex-app-server progress_tests
+# From desktop, Linux or Windows; script must require both new selectors:
+node scripts/run-lifecycle-native.cjs
+```
+
+No native/provider/Windows execution, generated protocol regeneration or real-data
+eligibility is established by these authored fixtures. All four new selectors must
+be included in the nonzero platform selection gate (32 lifecycle cases total).
+
+
+### Provider-readiness outage cancellation witness (authored, unrun)
+
+`responses_lifecycle_stop_provider_unavailable` and
+`messages_lifecycle_stop_provider_unavailable` start an actual retained local
+shell, then create a fixture-only readiness-failure marker under the isolated
+session root. The check exists only with both `inference-fixtures` and
+`debug_assertions` and an already authenticated pinned-loopback Task fixture.
+It only refuses new inference; it cannot grant capability or route eligibility,
+and introduces no production toggle or real credential.
+
+The child must reject actual `inquello/tasks/preflight` at the candidate-readiness
+boundary while the same PID/start identity and turn are still running. The marker
+remains present while actual Stop returns `interrupted` and the original PID is
+observably terminated; confirmed/pending effects are checked by the shared
+retained-child fixture. Only then is the fault removed, followed by explicit
+same-thread Resume. This is a synthetic readiness fault, not a claim of a tested
+live provider outage. Native execution remains unrun without Cargo.
+
+Static selection validation: `pnpm exec vitest run
+ test/tasks-lifecycle-native-selection.test.ts` from `desktop`: 2 tests pass;
+source selector inspection selects all 32 required both-binding lifecycle cases.
+
+
+### Localized round-3 regression additions — authored, unrun
+
+The required nonzero lifecycle selection is now **36 cases**; the earlier 32-case
+records above describe the prior candidate. Added both-provider `progress_cache`
+and `stop_inflight_steer` selectors. The former uses real publication and original
+command-item completion updates in one turn, rejects stale analytical snapshots,
+and keeps the snapshot stable across unrelated assistant activity. The latter
+holds an actual steering authority RPC during writer-held validation while Stop
+is issued concurrently, with no admitted-receipt editing. Continuity's final
+provider request count is scenario-specific (four, not an unconditional two).
+
+The current targeted desktop observer/evidence/selector run passes 64 tests across
+3 files; native selector alone passes 2. Focused protocol/projection/lifecycle Cargo
+commands each exit127 because Cargo is absent. No native/Windows/provider execution
+or generated-protocol acceptance is inferred. Exact commands and logs are in
+`story-1-29-lifecycle-support.md` and `validation/story129-round3-patch/`.

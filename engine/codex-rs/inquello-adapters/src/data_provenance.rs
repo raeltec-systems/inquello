@@ -31,7 +31,7 @@ const MIGRATIONS:&[&str]=&[
  include_str!("../migrations/0005_command_rules_and_permissions.sql"),include_str!("../migrations/0006_processing_routes.sql"),
  include_str!("../migrations/0007_automated_permission_review.sql"),include_str!("../migrations/0008_task_usage.sql"),
  include_str!("../migrations/0009_task_runs.sql"),include_str!("../migrations/0010_task_data_provenance.sql"),
- include_str!("../migrations/0011_task_metadata_provenance.sql"),
+ include_str!("../migrations/0011_task_metadata_provenance.sql"),include_str!("../migrations/0012_task_lifecycle.sql"),include_str!("../migrations/0013_task_runtime_leases.sql"),
 ];
 fn failure()->String {"Native ownership/category provenance unavailable, mixed, changed or incomplete; data remains quarantined".into()}
 fn uuid(value:&str)->Result<(),String>{if uuid::Uuid::parse_str(value).is_ok(){Ok(())}else{Err(failure())}}
@@ -84,6 +84,11 @@ async fn inspect_inner(request:InspectRequest)->Result<(Vec<ProvenFile>,Vec<Prov
             for id in ids {uuid(&id)?;workspaces.entry(id).or_default();}
         }
     }
+    // New retained/lifecycle history is governed private Task content, including
+    // guidance. Whole-store exports must reject inconsistent nested provenance.
+    let invalid_history:i64=sqlx::query_scalar("SELECT COUNT(*) FROM task_run_history h JOIN tasks t ON t.task_id=h.task_id WHERE json_extract(h.record,'$.task_id') IS NOT t.task_id OR json_extract(h.record,'$.principal_id') IS NOT t.creator_principal_id OR json_extract(h.record,'$.workspace_id') IS NOT t.workspace_id OR json_extract(h.record,'$.thread_id') IS NOT t.runtime_thread_id OR json_extract(h.record,'$.run_id') IS NOT h.run_id").fetch_one(&mut db).await.map_err(|_|failure())?;
+    let invalid_lifecycle:i64=sqlx::query_scalar("SELECT COUNT(*) FROM task_lifecycle l JOIN tasks t ON t.task_id=l.task_id WHERE l.principal_id IS NOT t.creator_principal_id OR json_extract(l.intent,'$.expected.task_id') IS NOT t.task_id OR json_extract(l.intent,'$.expected.principal_id') IS NOT t.creator_principal_id OR json_extract(l.intent,'$.expected.workspace_id') IS NOT t.workspace_id OR json_extract(l.intent,'$.expected.thread_id') IS NOT t.runtime_thread_id OR json_extract(l.receipt,'$.binding.task_id') IS NOT t.task_id OR json_extract(l.receipt,'$.binding.principal_id') IS NOT t.creator_principal_id OR json_extract(l.receipt,'$.binding.workspace_id') IS NOT t.workspace_id OR json_extract(l.receipt,'$.binding.thread_id') IS NOT t.runtime_thread_id").fetch_one(&mut db).await.map_err(|_|failure())?;
+    if invalid_history!=0 || invalid_lifecycle!=0 {return Err(failure());}
     let rows=sqlx::query("SELECT t.task_id,t.workspace_id,t.runtime_thread_id,t.source_refs,t.artifact_refs,p.data_tier FROM tasks t LEFT JOIN task_data_provenance p ON p.task_id=t.task_id AND p.principal_id=t.creator_principal_id AND p.workspace_id=t.workspace_id ORDER BY t.task_id").fetch_all(&mut db).await.map_err(|_|failure())?;
     let mut threads=BTreeSet::new();let mut tasks=BTreeSet::new();
     for row in rows {
