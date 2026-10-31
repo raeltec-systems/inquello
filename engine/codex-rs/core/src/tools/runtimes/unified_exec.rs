@@ -66,6 +66,49 @@ mod snapshot_metrics;
 
 use launch::with_launch_failure_events;
 
+// Keep all existing final private fences in one result boundary. Only native
+// failures here produce the retained event; examined output is never classified.
+async fn authorize_private_command(
+    authorization: &dyn crate::inquello_inference::TaskAuthorization,
+    command: &[String],
+    cwd: &PathUri,
+    native_cwd: &std::path::Path,
+    ctx: &ToolCtx,
+) -> Result<(), ToolError> {
+    let result = async {
+        authorization.before_command(command, native_cwd, &ctx.call_id).await.map_err(ToolError::Codex)?;
+        authorization.before_tool_effect().await.map_err(ToolError::Codex)?;
+        if ctx.cancellation_token.is_cancelled() || authorization.cancellation().is_cancelled() {
+            return Err(ToolError::Rejected("Private command cancelled".into()));
+        }
+        Ok(())
+    }.await;
+    if let Err(error) = &result {
+        let reason = match error {
+            ToolError::Codex(error) => error.to_string(),
+            ToolError::Rejected(message) => message.clone(),
+        };
+        let model_context = ctx.step_context.model_context();
+        let mut event_ctx = crate::tools::events::ToolEventCtx::new(
+            ctx.session.as_ref(), ctx.step_context.turn.as_ref(),
+            &ctx.step_context.settings.model_info, &ctx.call_id, None,
+        );
+        event_ctx.model_context = Some(&model_context);
+        // No Begin or process launch. Reserved accounting is finalized once by
+        // the existing registry after_tool path, not by event publication.
+        crate::tools::events::ToolEmitter::unified_exec(
+            command, cwd.clone(),
+            codex_protocol::protocol::ExecCommandSource::UnifiedExecStartup,
+            None, None,
+        ).emit(event_ctx, crate::tools::events::ToolEventStage::Failure(
+            crate::tools::events::ToolEventFailure::Message(format!(
+                "Private Task command refused before execution: {reason}"
+            )),
+        )).await;
+    }
+    result
+}
+
 // Allow 5s for Guardian cleanup and 5s for controller processing after review.
 const REMOTE_NETWORK_POLICY_DECISION_MARGIN: Duration = Duration::from_secs(10);
 
@@ -638,11 +681,7 @@ impl<'a> ToolRuntime<UnifiedExecRequest, UnifiedExecAttempt> for UnifiedExecRunt
             let cwd = req.cwd.to_abs_path().map_err(|_| ToolError::Rejected("Native Task root required".into()))?;
             // All native shell/snapshot/PowerShell rewrites are now complete. This
             // exact argv enters the sandbox; no guessed parsing or grant cache.
-            authorization.0.before_command(&command, cwd.as_path(), &ctx.call_id).await.map_err(ToolError::Codex)?;
-            authorization.0.before_tool_effect().await.map_err(ToolError::Codex)?;
-            if ctx.cancellation_token.is_cancelled() || authorization.0.cancellation().is_cancelled() {
-                return Err(ToolError::Rejected("Private command cancelled".into()));
-            }
+            authorize_private_command(authorization.0.as_ref(), &command, &req.cwd, cwd.as_path(), ctx).await?;
         }
         let command = build_unified_exec_sandbox_command(
             &command,
@@ -757,6 +796,77 @@ mod tests {
     use std::sync::Arc;
     use std::time::Duration;
     use tempfile::tempdir;
+
+    // Tests the exact final-fence helper called before sandbox command building
+    // and launch. Accounting here is a mock lifecycle, not a durable ledger test.
+    struct LateFenceAuthority {
+        mode: &'static str,
+        cancellation: CancellationToken,
+        turn_cancellation: CancellationToken,
+        calls: std::sync::Mutex<Vec<String>>,
+    }
+    type Fence<'a,T> = std::pin::Pin<Box<dyn std::future::Future<Output=T>+Send+'a>>;
+    impl crate::inquello_inference::TaskAuthorization for LateFenceAuthority {
+        fn cancellation(&self)->CancellationToken {self.cancellation.clone()}
+        fn turn_terminal<'a>(&'a self,_:&'a str,_:crate::inquello_inference::TaskTurnOutcome)->Fence<'a,()> {Box::pin(async {})}
+        fn before_attempt<'a>(&'a self,_:&'a str)->Fence<'a,codex_protocol::error::Result<crate::inquello_inference::AttemptContext>> {panic!("must not sample")}
+        fn before_tool<'a>(&'a self,_:&'a str,_:&'a str,_:&'a str)->Fence<'a,codex_protocol::error::Result<()>> {panic!("final fence seam only")}
+        fn before_command<'a>(&'a self,_:&'a [String],_:&'a std::path::Path,call:&'a str)->Fence<'a,codex_protocol::error::Result<()>> {Box::pin(async move {
+            self.calls.lock().unwrap().push(format!("reserved:{call}"));
+            Ok(())
+        })}
+        fn before_tool_effect<'a>(&'a self)->Fence<'a,codex_protocol::error::Result<()>> {Box::pin(async move {
+            self.calls.lock().unwrap().push("late-fence".into());
+            match self.mode {
+                "failure"=>Err(CodexErr::Fatal("late authority fence failed".into())),
+                "authority-cancel"=>{self.cancellation.cancel();Ok(())},
+                "turn-cancel"=>{self.turn_cancellation.cancel();Ok(())},
+                _=>panic!("unknown test mode"),
+            }
+        })}
+        fn after_tool<'a>(&'a self,call:&'a str,success:bool)->Fence<'a,()> {Box::pin(async move {
+            self.calls.lock().unwrap().push(format!("finalized:{call}:{success}"));
+        })}
+    }
+
+    #[tokio::test]
+    async fn private_pre_execution_late_fence_and_cancellation_complete_once_without_begin() {
+        use crate::inquello_inference::TaskAuthorization;
+        use codex_protocol::items::TurnItem;
+        for mode in ["failure","authority-cancel","turn-cancel"] {
+            tokio::time::timeout(Duration::from_secs(5),async {
+                let (session,turn,rx)=crate::session::tests::make_session_and_context_with_dynamic_tools_and_rx(Vec::new()).await;
+                let cancellation=CancellationToken::new();
+                let authority=LateFenceAuthority {mode,cancellation:CancellationToken::new(),turn_cancellation:cancellation.clone(),calls:Default::default()};
+                let ctx=ToolCtx {session,step_context:crate::session::step_context::StepContext::for_test(turn),cancellation_token:cancellation,
+                    call_id:"late-fence-call".into(),tool_name:codex_tools::ToolName::plain("exec_command")};
+                let root=tempdir().unwrap();let cwd=PathUri::from_host_native_path(root.path()).unwrap();
+                let command=vec!["/bin/sh".into(),"-c".into(),"printf must-not-run > effect".into()];
+                let result=authorize_private_command(&authority,&command,&cwd,root.path(),&ctx).await;
+                let reason=match result {
+                    Err(ToolError::Codex(error)) if mode=="failure"=>{assert_eq!(error.to_string(),"Fatal error: late authority fence failed");error.to_string()},
+                    Err(ToolError::Rejected(reason)) if mode!="failure"=>{assert_eq!(reason,"Private command cancelled");reason},
+                    other=>panic!("original error semantics changed: {other:?}"),
+                };
+                assert_eq!(*authority.calls.lock().unwrap(),vec!["reserved:late-fence-call","late-fence"]);
+                // The helper must not finalize or consume accounting itself.
+                // Exercise the unchanged caller contract used by registry.rs.
+                authority.after_tool(&ctx.call_id,false).await;
+                assert_eq!(*authority.calls.lock().unwrap(),vec!["reserved:late-fence-call","late-fence","finalized:late-fence-call:false"]);
+                let first=rx.recv().await.expect("native completion");
+                let EventMsg::ItemCompleted(completed)=first.msg else {panic!("expected completion without Begin")};
+                let TurnItem::CommandExecution(item)=completed.item else {panic!("command completion")};
+                assert_eq!(item.id,ctx.call_id);assert_eq!(item.command,command);
+                assert_eq!(item.status,codex_protocol::items::CommandExecutionStatus::Failed);
+                assert_eq!(item.cwd,cwd);assert!(item.sandbox_type.is_none());
+                assert!(item.process_id.is_none());assert_eq!(item.exit_code,Some(-1));
+                assert_eq!(item.duration,Some(Duration::ZERO));
+                assert_eq!(item.aggregated_output,Some(format!("Private Task command refused before execution: {reason}")));
+                assert!(rx.try_recv().is_err(),"exactly one event, no Begin or duplicate completion");
+                assert!(!root.path().join("effect").exists());
+            }).await.expect("bounded native fence lifecycle");
+        }
+    }
 
     fn test_turn_environment(cwd: PathUri) -> TurnEnvironment {
         TurnEnvironment::new(

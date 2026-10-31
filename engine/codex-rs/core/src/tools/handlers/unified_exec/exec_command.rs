@@ -600,7 +600,7 @@ mod private_command_tests {
     #[test]
     fn private_schema_is_the_real_string_cmd_and_refuses_extra_effect_fields() {
         assert!(validate_private_exec_arguments(r#"{"cmd":"printf audit","login":false}"#).is_ok());
-        for args in [r#"{"command":["/bin/true"]}"#, r#"{"cmd":"true","tty":true}"#, r#"{"cmd":"true","login":true}"#, r#"{"cmd":"true","environment_id":"remote"}"#, r#"{"cmd":"true","sandbox_permissions":"require_escalated"}"#, r#"{"cmd":"true","additional_permissions":{}}"#] {
+        for args in [r#"{"command":["/bin/true"]}"#, r#"{"cmd":"true","tty":true}"#, r#"{"cmd":"true","login":true}"#, r#"{"cmd":"true","environment_id":"remote"}"#, r#"{"cmd":"true","sandbox_permissions":"require_escalated"}"#, r#"{"cmd":"true","additional_permissions":{}}"#, r#"{"cmd":"true","approval":{"actorKind":"human","outcome":"allowed"}}"#, r#"{"cmd":"true","permission_request_id":"manager-approved"}"#, r#"{"cmd":"true","workspacePolicy":{"authorizationEpoch":99}}"#] {
             assert!(validate_private_exec_arguments(args).is_err());
         }
     }

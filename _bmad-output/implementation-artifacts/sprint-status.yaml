@@ -79,7 +79,7 @@ development_status:
   1-25-start-a-real-plain-text-private-task-on-a-configured-route: in-progress
   # Final desktop focused 392 passing; native/protocol/Windows/provider gates remain open.
   1-26-follow-actual-basic-progress-and-truthful-results: in-progress
-  1-27-reject-untrusted-instructions-in-initial-tool-output: backlog
+  1-27-reject-untrusted-instructions-in-initial-tool-output: in-progress # review correction authored; desktop 77 focused pass; native refusal projection/replay corrections authored; native/provider/Windows gates open
   1-28-gate-current-route-real-data-use-on-negative-authorization-e: backlog
   1-29-steer-stop-and-recover-the-same-private-task: backlog
   1-30-find-and-reopen-only-permitted-saved-work: backlog

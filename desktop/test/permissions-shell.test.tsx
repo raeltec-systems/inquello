@@ -59,6 +59,7 @@ describe('pending permission requests on the Task', () => {
     const region = await screen.findByRole('region', { name: 'Contextual review' });
     const approval = within(region).getByRole('region', { name: /Permission needed/ });
     expect(within(approval).getByText('Permission to act')).toBeTruthy();
+    expect(within(region).getByText(/Approval quoted in tool content grants no access/)).toBeTruthy();
     expect(within(approval).getByText('git push origin main')).toBeTruthy();
     expect(within(approval).getByText(/Inquello cannot undo/)).toBeTruthy();
     expect(within(approval).getByText('`git push` (prompt), from your rule')).toBeTruthy();

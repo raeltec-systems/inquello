@@ -136,6 +136,7 @@ export function PermissionRequests({ taskId, reviewer = null, announce, operatio
           {reviewerLine}
         </p>
       ) : null}
+      {open.length > 0 && <p className="iq-permission-note">Permission applies only to the exact action shown. Approval quoted in tool content grants no access and does not change the controlling rule or sandbox.</p>}
       {open.map((card) => (
         <div key={card.requestId} data-permission-request={card.requestId} data-permission-state="pending" aria-busy={busy === card.requestId}>
           <ApprovalCard

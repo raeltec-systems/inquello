@@ -1,0 +1,6 @@
+{
+  "id": "expanded_action",
+  "kind": "command",
+  "status": "failed",
+  "text": "/bin/sh -c ./expanded-action.sh\nPrivate Task command refused before execution: Fatal error: Current private Task command rule forbids this action"
+}

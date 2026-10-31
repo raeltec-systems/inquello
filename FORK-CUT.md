@@ -636,3 +636,32 @@ Native control parity and terminal-plan regressions are authored but unexecuted.
 Desktop focused verification passes 382 tests; full verification retains baseline
 native/design/Git failures (1,213 passed / 3 failed / 5 skipped). All native,
 protocol, Windows/provider gates and writer-contention residual remain open.
+
+## Story 1.27 — untrusted tool-output boundary (2026-10-31)
+
+Shared source-aware guidance reaches private Messages and Responses routes without
+promoting tool text. Review-corrected regressions exercise actual mock HTTP and
+WebSocket requests, exact retained/provider source, trusted Task-local fixture
+seeding, valid literal command rules, nonempty unchecked findings and genuine
+one-use approval followed by changed-command denial. Existing native enforcement
+is unchanged. Desktop distinguishes native execution status from untrusted output
+and quoted inspection/refusal claims, preserving readable source and focus.
+
+TypeScript/build and 76 focused desktop tests pass. Full suite retains partial
+checkout failures (1,235 passed / 3 failed / 5 skipped; 12 failing files). Cargo
+is absent, so native tests, builds and formatting remain unverified. No generated
+protocol edits. Actual-provider analytical evaluation, Windows Electron and all
+prior-story gates remain open; story/tracker stay in-progress. See
+`_bmad-output/implementation-artifacts/story-1-27-untrusted-output-support.md`.
+
+### Story 1.27 review correction 2
+
+Native pre-execution `before_command` refusal now emits the existing failed
+command-completion event, retaining action and scoped reason for authorized Task
+progress without classifying stdout or widening permission. Scripted fixtures
+coordinate observer shutdown after replay reconciliation and durable turn/usage
+comparisons; exact findings and native/renderer shared refusal shape are asserted.
+Desktop typecheck/build and 77 focused tests pass; full suite: 48 files pass,
+12 fail, 1 skipped (1,236 tests pass, 3 fail, 5 skipped). Cargo remains absent:
+native tests/check/fmt/fixture build are unrun, not passing. Actual model analytical
+resistance, Windows and prior eligibility gates remain open. See story support.

@@ -108,3 +108,10 @@
 - source_spec: `spec-1-26-follow-actual-basic-progress-and-truthful-results.md`
   summary: Measure upstream retained-history allocation under large command output on the complete native runtime.
   evidence: Projection sanitation and wire size are bounded, but upstream store allocations are outside that display bound. Actual resource harm was not established in this partial checkout; unverified medium risk requires native stress evidence.
+
+- source_spec: `spec-1-27-reject-untrusted-instructions-in-initial-tool-output.md`
+  summary: Native and full supported-route lifecycle compatibility remains unverified, high impact if incompatible.
+  evidence: Cargo is absent (exit127); execute complete pinned native build/tests, retained Messages and Responses flows, Windows Electron, and prior protocol gates to settle. No demonstrated high-impact defect is being relabelled as passed.
+- source_spec: `spec-1-27-reject-untrusted-instructions-in-initial-tool-output.md`
+  summary: Actual model resistance to analytical suppression remains unverified, high impact if a duplicate is hidden.
+  evidence: Scripted fixtures cannot establish model behavior; owner-authorized real-provider procurement variants on both supported routes must retain the expected finding and reject unauthorized effects.
