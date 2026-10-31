@@ -102,9 +102,24 @@ impl ToolOrchestrator {
                 .as_ref()
                 .map(ActiveNetworkApproval::execution_proxy),
         };
-        let run_result = tool
-            .run(req, &attempt_with_network_approval, &attempt_tool_ctx)
-            .await;
+        // Approval and network setup can wait. Recheck at the final effect
+        // boundary for every initial/retry attempt, never only at registry entry.
+        let authority = async {
+            if crate::inquello_inference::is_task_thread(&tool_ctx.session.thread_id.to_string()) {
+                let authorization = tool_ctx.step_context.turn.extension_data
+                    .get::<crate::inquello_inference::TaskAuthorizationContext>()
+                    .ok_or_else(|| ToolError::Rejected("Private Task authority unavailable".into()))?;
+                authorization.0.before_tool_effect().await.map_err(ToolError::Codex)?;
+                if authorization.0.cancellation().is_cancelled() || tool_ctx.cancellation_token.is_cancelled() {
+                    return Err(ToolError::Rejected("Private Task cancelled before process execution".into()));
+                }
+            }
+            Ok(())
+        }.await;
+        let run_result = match authority {
+            Ok(()) => tool.run(req, &attempt_with_network_approval, &attempt_tool_ctx).await,
+            Err(error) => Err(error),
+        };
 
         let Some(network_approval) = network_approval else {
             return (run_result, None);
@@ -136,7 +151,8 @@ impl ToolOrchestrator {
         let otel = turn_ctx.session_telemetry.clone();
         let otel_tn = flat_tool_name(&tool_ctx.tool_name).into_owned();
         let otel_ci = &tool_ctx.call_id;
-        let strict_auto_review = turn_ctx.strict_auto_review_enabled();
+        let private_task = crate::inquello_inference::is_task_thread(&tool_ctx.session.thread_id.to_string());
+        let strict_auto_review = !private_task && turn_ctx.strict_auto_review_enabled();
         // 1) Approval
         let mut initial_approval_source = None;
 
@@ -164,6 +180,15 @@ impl ToolOrchestrator {
         let requirement = tool.exec_approval_requirement(req).unwrap_or_else(|| {
             default_exec_approval_requirement(approval_policy, &file_system_sandbox_policy)
         });
+        // The final native-resolved command uses the existing Task PermissionMediator.
+        // Do not independently prompt/cache here or turn a bounded grant into elevation.
+        // Native forbidden rules still win; sandbox enforcement is never bypassed.
+        let requirement = if private_task {
+            match requirement {
+                ExecApprovalRequirement::Forbidden { reason } => return Err(ToolError::Rejected(reason)),
+                _ => ExecApprovalRequirement::Skip { bypass_sandbox: false, proposed_execpolicy_amendment: None },
+            }
+        } else { requirement };
         match &requirement {
             ExecApprovalRequirement::Skip { .. } => {
                 if strict_auto_review {
@@ -392,6 +417,7 @@ impl ToolOrchestrator {
                 })
             }
             Err(ToolError::Codex(err)) => {
+                if private_task { return Err(ToolError::Codex(err)); } // no second attempt/elevation from one grant
                 let CodexErrorDetails::Sandbox(SandboxErr::Denied {
                     output,
                     network_policy_decision,
@@ -642,4 +668,66 @@ fn build_denial_reason_from_output(_output: &ExecToolCallOutput) -> String {
     // Keep approval reason terse and stable for UX/tests, but accept the
     // output so we can evolve heuristics later without touching call sites.
     "command failed; retry without sandbox?".to_string()
+}
+
+#[cfg(test)]
+mod private_task_effect_tests {
+    use super::*;
+    use crate::inquello_inference::{TaskAuthorizationContext, effect_test_support::Authority, mark_task_thread};
+    use crate::session::step_context::StepContext;
+    use crate::session::turn_context::TurnEnvironment;
+    use crate::tools::sandboxing::{Approvable,Sandboxable};
+    use std::sync::atomic::{AtomicUsize,Ordering};
+    struct CountRuns(Arc<AtomicUsize>);
+    impl Approvable<()> for CountRuns {
+        fn approval_action(&self,_:&(),_:&str)->std::io::Result<ApprovalAction> {unreachable!("already-approved attempt")}
+    }
+    impl Sandboxable for CountRuns {
+        fn sandbox_preference(&self)->codex_sandboxing::SandboxablePreference {codex_sandboxing::SandboxablePreference::Auto}
+    }
+    impl ToolRuntime<(),()> for CountRuns {
+        fn turn_environment<'a>(&self,_:&'a ())->&'a TurnEnvironment {unreachable!("direct attempt boundary")}
+        async fn run(&mut self,_:&(),_:&SandboxAttempt<'_>,_:&ToolCtx)->Result<(),ToolError> {
+            self.0.fetch_add(1,Ordering::SeqCst);Ok(())
+        }
+    }
+    #[tokio::test]
+    async fn delayed_approval_cannot_launch_with_stale_authority_on_initial_or_retry_attempt() {
+        let (session,turn)=crate::session::tests::make_session_and_context().await;
+        mark_task_thread(&session.thread_id.to_string()).unwrap();
+        let authority=Arc::new(Authority::new());
+        turn.extension_data.insert(TaskAuthorizationContext(authority.clone()));
+        let step_context=StepContext::for_test(Arc::new(turn));
+        let ctx=ToolCtx {session:Arc::new(session),step_context,cancellation_token:tokio_util::sync::CancellationToken::new(),call_id:"delayed-approval".into(),tool_name:codex_tools::ToolName::plain("shell")};
+        let directory=tempfile::tempdir().unwrap();
+        let cwd=codex_utils_path_uri::PathUri::from_abs_path(&codex_utils_absolute_path::AbsolutePathBuf::from_absolute_path(directory.path()).unwrap());
+        let manager=SandboxManager::new();
+        let permissions=PermissionProfile::Disabled;
+        let attempt=SandboxAttempt {
+            sandbox_override:SandboxOverride::NoOverride,sandbox:SandboxType::None,sandbox_requested:false,
+            permissions:&permissions,exec_server_permissions:&permissions,enforce_managed_network:false,
+            manager:&manager,sandbox_cwd:&cwd,workspace_roots:&[],sandbox_exe:None,use_legacy_landlock:false,
+            windows_sandbox_type:SandboxType::None,windows_sandbox_level:codex_protocol::config_types::WindowsSandboxLevel::Disabled,
+            network_denial_cancellation_token:None,network_proxy:None,
+        };
+        let runs=Arc::new(AtomicUsize::new(0));let mut tool=CountRuns(runs.clone());
+        let (approved,wait_for_approval)=tokio::sync::oneshot::channel::<()>();
+        // Authority changes while the native approval is outstanding, without a
+        // cancellation signal. The launch guard must perform a fresh read.
+        let post_approval_attempts=async {
+            wait_for_approval.await.unwrap();
+            for _ in 0..2 {
+                let (result,deferred)=ToolOrchestrator::run_attempt(&mut tool,&(),&ctx,&attempt,None).await;
+                assert!(result.is_err());assert!(deferred.is_none());
+            }
+        };
+        let revoke_during_wait=async {
+            tokio::task::yield_now().await;
+            authority.current.store(false,Ordering::SeqCst);
+            approved.send(()).unwrap();
+        };
+        tokio::join!(post_approval_attempts,revoke_during_wait);
+        assert!(!authority.token.is_cancelled());
+        assert_eq!(runs.load(Ordering::SeqCst),0);
+    }
 }

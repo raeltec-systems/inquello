@@ -2512,6 +2512,12 @@ impl Session {
 
     /// Persist the event to rollout and send it to clients.
     pub(crate) async fn send_event(&self, turn_context: &TurnContext, msg: EventMsg) {
+        // Bind durable Task completion to the actual retained lifecycle, including
+        // failure before sampling and cancellation between tool continuations.
+        // Never infer success from a closed/missing provider event stream.
+        if let Some(authorization) = turn_context.extension_data.get::<crate::inquello_inference::TaskAuthorizationContext>() {
+            crate::inquello_inference::observe_task_turn_terminal(authorization.0.as_ref(), &turn_context.sub_id, &msg).await;
+        }
         let legacy_source = msg.clone();
         if let EventMsg::Error(error) = &legacy_source
             && error

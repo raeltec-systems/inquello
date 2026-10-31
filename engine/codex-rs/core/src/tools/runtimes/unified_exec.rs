@@ -264,6 +264,12 @@ impl<'a> ToolRuntime<UnifiedExecRequest, UnifiedExecAttempt> for UnifiedExecRunt
         attempt: &SandboxAttempt<'_>,
         ctx: &ToolCtx,
     ) -> Result<UnifiedExecAttempt, ToolError> {
+        let private_task = crate::inquello_inference::is_task_thread(&ctx.session.thread_id.to_string());
+        if private_task && (req.turn_environment.environment.is_remote() || req.tty || req.shell_snapshot.is_some()
+            || req.shell.use_login_shell || req.sandbox_permissions != SandboxPermissions::UseDefault
+            || req.additional_permissions.is_some() || attempt.is_escalated()) {
+            return Err(ToolError::Rejected("Unsupported private command execution mode".into()));
+        }
         let base_command = &req.command;
         let requested_shell = &req.shell.shell;
         let windows_sandbox_proxy_settings_mode = ctx.session.windows_sandbox_proxy_settings_mode;
@@ -300,7 +306,7 @@ impl<'a> ToolRuntime<UnifiedExecRequest, UnifiedExecAttempt> for UnifiedExecRunt
         };
         let snapshot_metrics =
             snapshot_metrics::SnapshotMetrics::start(req, &ctx.step_context.turn.config);
-        let shell_snapshot = if environment_is_remote
+        let shell_snapshot = if private_task || environment_is_remote
             || credential_broker_available
                 && launch_sandbox_permissions.requires_escalated_permissions()
         {
@@ -456,13 +462,14 @@ impl<'a> ToolRuntime<UnifiedExecRequest, UnifiedExecAttempt> for UnifiedExecRunt
                 }
             }
         }
-        let metrics_sidecar = sidecar_for_command(
+        let metrics_sidecar = if private_task { None } else { sidecar_for_command(
             ctx,
             &req.command,
             &req.cwd,
             req.turn_environment.environment.as_ref(),
         )
-        .await;
+        .await
+        };
         if let Some(sidecar) = metrics_sidecar.as_ref() {
             sidecar.install_output_env(&mut env);
         }
@@ -624,6 +631,19 @@ impl<'a> ToolRuntime<UnifiedExecRequest, UnifiedExecAttempt> for UnifiedExecRunt
             permissions
         };
 
+        if private_task {
+            let authorization = ctx.step_context.turn.extension_data
+                .get::<crate::inquello_inference::TaskAuthorizationContext>()
+                .ok_or_else(|| ToolError::Rejected("Private command authority unavailable".into()))?;
+            let cwd = req.cwd.to_abs_path().map_err(|_| ToolError::Rejected("Native Task root required".into()))?;
+            // All native shell/snapshot/PowerShell rewrites are now complete. This
+            // exact argv enters the sandbox; no guessed parsing or grant cache.
+            authorization.0.before_command(&command, cwd.as_path(), &ctx.call_id).await.map_err(ToolError::Codex)?;
+            authorization.0.before_tool_effect().await.map_err(ToolError::Codex)?;
+            if ctx.cancellation_token.is_cancelled() || authorization.0.cancellation().is_cancelled() {
+                return Err(ToolError::Rejected("Private command cancelled".into()));
+            }
+        }
         let command = build_unified_exec_sandbox_command(
             &command,
             &req.cwd,

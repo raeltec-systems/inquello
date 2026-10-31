@@ -76,7 +76,7 @@ development_status:
   # Desktop implementation verified; native/generator/seeded Electron gates remain blocked (see spec).
   1-23-show-local-execution-separately-from-inference: in-progress
   1-24-choose-reasoning-and-inspect-attributable-usage: in-progress # desktop verified; native/generation/combined limit-smoke gates remain (see support record)
-  1-25-start-a-real-plain-text-private-task-on-a-configured-route: backlog
+  1-25-start-a-real-plain-text-private-task-on-a-configured-route: in-progress
   1-26-follow-actual-basic-progress-and-truthful-results: backlog
   1-27-reject-untrusted-instructions-in-initial-tool-output: backlog
   1-28-gate-current-route-real-data-use-on-negative-authorization-e: backlog

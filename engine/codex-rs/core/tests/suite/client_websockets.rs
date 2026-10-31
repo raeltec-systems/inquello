@@ -3093,3 +3093,46 @@ async fn stream_until_complete_with_metadata(
         }
     }
 }
+
+/// A bound attempt must refuse the legacy 426 fallback, without prewarming.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn bound_responses_websocket_426_refuses_without_http_post() {
+    use codex_core::inquello_inference::{AttemptContext, bind_attempt, mark_task_thread};
+    use wiremock::{Mock, ResponseTemplate};
+    use wiremock::matchers::{method, path_regex};
+    skip_if_no_network!();
+    let server = core_test_support::responses::start_mock_server().await;
+    Mock::given(method("GET")).and(path_regex(".*/responses$"))
+        .respond_with(ResponseTemplate::new(426)).mount(&server).await;
+    let mut provider = ModelProviderInfo::create_openai_provider(Some(format!("{}/v1", server.uri())));
+    provider.requires_openai_auth = false;
+    provider.supports_websockets = true;
+    provider.request_max_retries = Some(0);
+    provider.stream_max_retries = Some(0);
+    let harness = websocket_harness_with_provider_options(provider, false, false, &[]).await;
+    let id = || uuid::Uuid::new_v4().to_string();
+    let binding = inquello_protocol::inference::Binding {
+        schema_version: 1, principal_id: id(), task_id: id(), run_id: id(),
+        turn_id: id(), attempt_id: id(), route_id: "codex-responses".into(),
+        model: harness.model_info.slug.clone(), api_version: "responses-v1".into(),
+        account_ref: id(), authority_basis: id(), authority_epoch: 1,
+        policy_revision: 1, route_revision: 1, credential_generation: 1,
+    };
+    let (events, _receiver) = tokio::sync::mpsc::channel(32);
+    mark_task_thread(&harness.thread_id.to_string()).unwrap();
+    bind_attempt(&harness.thread_id.to_string(), AttemptContext {
+        binding, auth: None, max_output_tokens: 128, completed_tool_call_ids: Vec::new(),
+        events, cancellation: tokio_util::sync::CancellationToken::new(),
+    }).unwrap();
+    let mut session = harness.client.new_session();
+    let result = session.stream(
+        &prompt_with_input(vec![message_item("Review fictional R01.")]),
+        &harness.model_info, &harness.session_telemetry, harness.effort.clone(),
+        harness.summary, None, &turn_metadata(&harness, None), &InferenceTraceContext::disabled(),
+    ).await;
+    let error = match result { Ok(_) => panic!("bound transport must refuse fallback"), Err(error) => error };
+    assert!(error.to_string().contains("automatic retry is disabled"));
+    let requests = server.received_requests().await.unwrap();
+    assert_eq!(requests.iter().filter(|r| r.method == wiremock::http::Method::GET).count(), 1);
+    assert_eq!(requests.iter().filter(|r| r.method == wiremock::http::Method::POST).count(), 0);
+}

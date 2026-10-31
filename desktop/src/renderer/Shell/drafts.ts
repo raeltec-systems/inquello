@@ -24,6 +24,8 @@ export interface DraftBinding {
   taskId: string | null;
   value: string;
   onChange: (value: string) => void;
+  /** Compare against the live store, not an async submit callback's render. */
+  clearIfUnchanged?: (submitted: string) => void;
 }
 
 export interface DraftStore {
@@ -110,5 +112,8 @@ export function useDraftBinding(taskId: string | null, store?: DraftStore, works
   const key = taskId ?? NO_TASK_DRAFT;
   const onChange = useCallback((value: string) => drafts.set(key, workspaceId, value), [drafts, key, workspaceId]);
   const value = drafts.get(key);
-  return useMemo(() => ({ taskId, value, onChange }), [taskId, value, onChange]);
+  const clearIfUnchanged = useCallback((submitted: string) => {
+    if (drafts.get(key) === submitted) drafts.set(key, workspaceId, '');
+  }, [drafts, key, workspaceId]);
+  return useMemo(() => ({ taskId, value, onChange, clearIfUnchanged }), [taskId, value, onChange, clearIfUnchanged]);
 }

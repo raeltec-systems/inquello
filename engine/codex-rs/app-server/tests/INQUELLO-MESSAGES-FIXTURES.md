@@ -70,3 +70,63 @@ Use the existing isolated seeded identity topology and temporary smoke data root
 Never package the fixture binary. No real credentials or paid provider calls are
 required or allowed. This combined source is authored but unrun in the partial
 workspace without native binaries/toolchain/seeded topology.
+
+## Story 1.25 actual retained private Task child (authored, unrun)
+
+`real_private_task_retained_thread_denial_and_lost_ack_reconcile_without_second_turn`
+now exercises **normal** `inquello/tasks/bootstrap`, read-only `preflight`, `start`,
+`reconcile`, ownership lookup, retained `thread/read`, permission request/decision
+and usage reads in the actual app-server child. It does not call the earlier
+`inquello/fixture/messagesTurn` shortcut and never creates a Task with legacy
+`inquello/task/create` or renderer-provided thread ownership.
+
+The sole extra seam, `inquello/fixture/taskTransport`, is raw private stdio,
+default-off `inference-fixtures` plus debug assertions. It requires the opaque
+bootstrapped isolated session and an explicitly configured current Claude route,
+refuses existing provider credentials/generations and cached Codex authentication,
+and installs only the compiled fictional key and validated pinned loopback TLS
+endpoint. Its scoped fixture eligibility does not edit the capability register or
+promote real/provider acceptance. Every actual Task attempt receives a one-use
+loopback transport; consumption cannot fall through to the production endpoint.
+Normal durable reservation, retained thread creation, idle-only turn submission,
+authority callbacks, tool restrictions, permission mediation and accounting remain
+in the execution path.
+
+The test host supplies fresh fictional Workspace service observations and denies
+one model-originated exact-argv shell request through the ordinary native
+permission request/decision operations before answering the runtime escalation.
+Assertions cover no Task/provider call from preflight, exactly one Task and native
+thread, canonical submitted procurement records in retained history and the first
+TLS request, one denied action with no filesystem effect, real retained tool-result
+continuation, same Task/run/thread after deliberately ignored acknowledgment and
+same-operation replay, changed-content conflict, two attributable model attempts,
+no request content in usage, and no duplicate turn/provider retry. This proves
+wiring only **when executed**, not useful real-provider audit analysis.
+
+Run the existing command above with an additional filter:
+
+```sh
+INQUELLO_FIXTURE_APP_SERVER_BIN=/tmp/inquello-app-server-fixture \
+  cargo test -p codex-app-server --features inference-fixtures \
+  --test inquello_messages_runtime \
+  real_private_task_retained_thread_denial_and_lost_ack_reconcile_without_second_turn -- --nocapture
+```
+
+No native toolchain/binary was available in the implementation workspace. This
+new fixture has **not compiled or run**. The full retained startup/model catalog,
+shell selection, sandbox prerequisites, callback protocol and test harness API
+compatibility remain explicit native gates; failures must be fixed in the pinned
+complete checkout, never replaced by direct-client fixture success. Separately
+authorized actual provider inference and auditor validation remain pending.
+
+Round 4 additionally authors
+`real_private_task_interrupt_cancels_running_shell_before_later_file_effect`:
+normal consumed one-use permission starts a bounded shell inside the private Task
+root; actual retained interrupt must cancel it before its delayed second write.
+Registry coverage separately revokes only the Task authority token (leaving the
+ordinary invocation token live), waits for real child reaping, and asserts exactly
+one accounting finalization. Orchestrator coverage refuses stale authority after
+an approval wait at both initial and retry attempt entry. Cancellation/queued
+usage and bound Responses WebSocket 426/no-HTTP-POST cases are also authored.
+These native checks remain **unexecuted** without the matching Rust build; they
+are not actual provider-connected acceptance or evidence of real-data eligibility.

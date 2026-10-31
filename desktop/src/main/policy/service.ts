@@ -296,6 +296,29 @@ export class PolicyService {
     }
   }
 
+  /** Bound model permission, sharing the existing mediator without executing a tool here. */
+  async askRuntimePermission(taskId: string, command: readonly string[]): Promise<'allowed' | 'denied' | 'expired'> {
+    const principal = this.options.identity.principalId(), instance = this.options.runtime.instance();
+    const current = () => !!principal && principal === this.options.identity.principalId() && instance === this.options.runtime.instance() && this.options.runtime.ready();
+    const before = await this.reviewPolicy(taskId);
+    if (!before || !current()) return 'denied';
+    const decision = await this.options.permissions.ask({workspacePolicy: before, taskId, command: [...command], origin: 'runtime'});
+    if (!current() || !decision.ok || decision.outcome !== 'allowed') return decision.ok && decision.outcome === 'expired' ? 'expired' : 'denied';
+    const after = await this.reviewPolicy(taskId);
+    if (!current() || !after || JSON.stringify(before) !== JSON.stringify(after)) return 'denied';
+    try {
+      const consumed = await this.options.runtime.request<{accepted?:boolean}>('inquello/tasks/consumePermission', {taskId, requestId: decision.requestId, command: [...command], workspacePolicy: after});
+      return current() && consumed.accepted === true ? 'allowed' : 'denied';
+    } catch { return 'denied'; }
+  }
+
+  /** Main-only pre-Task authority; never accepts renderer policy or classification. */
+  async startPolicy(workspaceId: string): Promise<InquelloWorkspaceExecutionPolicy | null> {
+    const principal = this.options.identity.principalId(), instance = this.options.runtime.instance();
+    const result = await this.workspacePolicy(workspaceId);
+    return result.ok && principal && principal === this.options.identity.principalId() && instance === this.options.runtime.instance() ? result.value : null;
+  }
+
   /** Fresh authority and policy for each phase of a scoped runtime review. */
   async reviewPolicy(taskId: string): Promise<InquelloWorkspaceExecutionPolicy | null> {
     const principal = this.options.identity.principalId(), instance = this.options.runtime.instance();

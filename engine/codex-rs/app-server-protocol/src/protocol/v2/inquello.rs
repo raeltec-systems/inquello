@@ -1107,3 +1107,115 @@ pub struct InquelloUsageResponse {
     pub capabilities: serde_json::Value,
     pub limits: serde_json::Value,
 }
+
+// Story 1.25: native-coordinated private starts. No renderer-supplied thread or classification.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct InquelloTasksPreflightParams {
+    pub workspace_id: String,
+    pub route_id: String,
+    #[ts(type = "number")]
+    pub configuration_revision: u64,
+    pub workspace_policy: InquelloWorkspaceExecutionPolicy,
+}
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloTasksPreflightResponse {
+    pub route_id: String,
+    #[ts(type = "number")]
+    pub configuration_revision: u64,
+    pub reasoning: Vec<String>,
+    pub speeds: Vec<String>,
+    pub available: bool,
+    pub reason: String,
+    pub execution_flow: String,
+    pub inference_flow: String,
+}
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct InquelloTasksStartParams {
+    pub operation_id: String,
+    pub workspace_id: String,
+    pub engagement_id: Option<String>,
+    pub folder_id: Option<String>,
+    pub request: String,
+    pub route_id: String,
+    #[ts(type = "number")]
+    pub configuration_revision: u64,
+    pub reasoning: String,
+    pub speed: String,
+    pub workspace_policy: InquelloWorkspaceExecutionPolicy,
+}
+impl std::fmt::Debug for InquelloTasksStartParams {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InquelloTasksStartParams").field("operation_id", &self.operation_id).finish_non_exhaustive()
+    }
+}
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct InquelloTasksReconcileParams { pub operation_id: String }
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloTasksStartResponse {
+    pub operation_id: String, pub task_id: String, pub run_id: String,
+    pub thread_id: Option<String>, pub status: String, pub request: String,
+    pub accepted: bool, pub reason: Option<String>,
+}
+impl std::fmt::Debug for InquelloTasksStartResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InquelloTasksStartResponse").field("operation_id", &self.operation_id).field("status", &self.status).finish_non_exhaustive()
+    }
+}
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct InquelloTasksForThreadParams { pub thread_id: String }
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloTasksForThreadResponse { pub task_id: String, pub run_id: String, pub thread_id: String, pub status: String }
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct InquelloTasksBootstrapParams { pub workspace_id: String, pub isolated_root: String }
+
+/// Native-to-main authority refresh, never a renderer-controlled verdict.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all="camelCase", deny_unknown_fields)]
+#[ts(export_to="v2/")]
+pub struct InquelloTaskAuthorityParams {pub workspace_id:String}
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all="camelCase", deny_unknown_fields)]
+#[ts(export_to="v2/")]
+pub struct InquelloTaskAuthorityResponse {pub workspace_policy:Option<InquelloWorkspaceExecutionPolicy>}
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all="camelCase", deny_unknown_fields)]
+#[ts(export_to="v2/")]
+pub struct InquelloTasksConsumePermissionParams {pub task_id:String,pub request_id:String,pub command:Vec<String>,pub workspace_policy:InquelloWorkspaceExecutionPolicy}
+
+impl std::fmt::Debug for InquelloTasksConsumePermissionParams {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InquelloTasksConsumePermissionParams").finish_non_exhaustive()
+    }
+}
+#[cfg(test)]
+mod task_permission_debug_tests {
+    use super::*;
+    #[test]
+    fn consume_permission_debug_omits_private_command_but_wire_preserves_it() {
+        let sentinel="PRIVATE-COMMAND-SENTINEL";
+        let value=InquelloTasksConsumePermissionParams {
+            task_id:"task".into(), request_id:"request".into(), command:vec!["sh".into(),"-c".into(),sentinel.into()],
+            workspace_policy:InquelloWorkspaceExecutionPolicy {workspace_id:"workspace".into(),policy_revision:1,authorization_epoch:1,execution:None},
+        };
+        assert!(!format!("{value:?}").contains(sentinel));
+        let wire=serde_json::to_value(&value).unwrap();
+        assert_eq!(wire["command"][2],sentinel);
+        assert_eq!(serde_json::from_value::<InquelloTasksConsumePermissionParams>(wire).unwrap(),value);
+    }
+}

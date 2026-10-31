@@ -695,3 +695,13 @@ async fn write_stdin_post_tool_use_payload_keeps_parallel_session_metadata_separ
         ]
     );
 }
+
+#[cfg(unix)]
+#[test]
+fn private_command_resolution_preserves_script_as_one_exact_native_argument() -> anyhow::Result<()> {
+    let args: ExecCommandArgs = parse_arguments(r#"{"cmd":"printf '%s' 'audit; not a second command'","shell":"/bin/sh","login":false}"#)?;
+    let resolved = get_command(&args, Arc::new(default_user_shell()), true).map_err(anyhow::Error::msg)?;
+    assert_eq!(resolved.command, vec!["/bin/sh", "-c", "printf '%s' 'audit; not a second command'"]);
+    assert!(!resolved.shell.use_login_shell);
+    Ok(())
+}

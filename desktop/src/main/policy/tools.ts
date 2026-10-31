@@ -227,6 +227,8 @@ export interface EscalationGateOptions {
   boundaryFor?: (threadId: string | null) => string | null;
   /** The permission path of the Task that owns a thread, when known. */
   routeFor?: (threadId: string | null) => EscalationRoute | null;
+  /** Native ownership lookup, before resolving any model-originated request. */
+  resolveRouteFor?: (threadId: string | null) => Promise<EscalationRoute | null>;
   now?: () => Date;
   newId: () => string;
 }
@@ -255,13 +257,22 @@ export class EscalationGate {
    */
   answer(method: string, params: unknown): unknown {
     if (!this.handles(method)) return undefined;
+    if (this.options.resolveRouteFor) {
+      const p = (typeof params === 'object' && params !== null ? params : {}) as Record<string, unknown>;
+      const id = typeof p.threadId === 'string' ? p.threadId : typeof p.conversationId === 'string' ? p.conversationId : null;
+      return this.options.resolveRouteFor(id).catch(() => null).then(route => this.answerResolved(method, params, route));
+    }
+    return this.answerResolved(method, params);
+  }
+
+  private answerResolved(method: EscalationMethod, params: unknown, resolvedRoute?: EscalationRoute | null): unknown {
     const p = (typeof params === 'object' && params !== null ? params : {}) as Record<string, unknown>;
     const threadId = typeof p.threadId === 'string' ? p.threadId : typeof p.conversationId === 'string' ? p.conversationId : null;
     const network = p.networkApprovalContext as { host?: unknown } | null | undefined;
     const host = network && typeof network.host === 'string' && network.host.length > 0 ? network.host : null;
     const boundary = this.options.boundaryFor?.(threadId) ?? null;
     const reason = host ? networkDenialText(host) : boundary ? outsideDenialText(boundary) : DENIAL_SANDBOX;
-    const route = method === 'item/commandExecution/requestApproval' || method === 'execCommandApproval' ? (this.options.routeFor?.(threadId) ?? null) : null;
+    const route = method === 'item/commandExecution/requestApproval' || method === 'execCommandApproval' ? (resolvedRoute === undefined ? this.options.routeFor?.(threadId) ?? null : resolvedRoute) : null;
     const command = route ? commandOf(p.command) : null;
     const record: PendingAuthorization = { id: this.options.newId(), method, threadId, status: route && command ? 'pending' : 'declined', reason, receivedAt: (this.options.now?.() ?? new Date()).toISOString() };
     this.records.push(record);

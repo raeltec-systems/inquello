@@ -559,8 +559,24 @@ impl UnifiedExecProcessManager {
             permissions,
         } = attempt;
         let process = Arc::new(process);
+        #[cfg(test)]
+        if completion.is_some() {
+            if let Some(barrier) = context.step_context.turn.extension_data
+                .get::<super::oneshot::publication_test_support::PublicationBarrier>() {
+                barrier.after_spawn_before_publication(Arc::clone(&process)).await;
+            }
+        }
         if let Some(completion) = completion.as_ref() {
             let _ = completion.process.set(Arc::clone(&process));
+        }
+        // Cancellation can race with spawn before the one-shot handle is published.
+        // Keep ownership of startup, terminate the newly obtained process, then run
+        // normal accounting/store cleanup rather than dropping a spawn future.
+        if crate::inquello_inference::is_task_thread(&context.session.thread_id.to_string()) && completion.is_some() && context.cancellation_token.is_cancelled() {
+            if !process.has_exited() {
+                if let Err(err) = process.terminate_confirmed().await { process.fail_and_terminate(err.to_string()); }
+            }
+            process.cancellation_token().cancel();
         }
         let network_denial_monitor = deferred_network_approval.as_ref().map(|deferred| {
             terminate_process_on_network_denial(
@@ -1456,6 +1472,16 @@ impl UnifiedExecProcessManager {
             } else {
                 None
             };
+        if let Some(ctx) = tool_ctx {
+            if crate::inquello_inference::is_task_thread(&ctx.session.thread_id.to_string()) {
+                let authorization = ctx.step_context.turn.extension_data.get::<crate::inquello_inference::TaskAuthorizationContext>()
+                    .ok_or_else(|| UnifiedExecError::create_process("Private authority unavailable".into()))?;
+                authorization.0.before_tool_effect().await.map_err(|_| UnifiedExecError::create_process("Private authority changed before launch".into()))?;
+                if ctx.cancellation_token.is_cancelled() || authorization.0.cancellation().is_cancelled() {
+                    return Err(UnifiedExecError::create_process("Private command cancelled before launch".into()));
+                }
+            }
+        }
         let spawn_result = codex_sandboxing::spawn_process(codex_sandboxing::SpawnRequest {
             command: &request.command,
             cwd: native_cwd.as_path(),
@@ -1507,7 +1533,7 @@ impl UnifiedExecProcessManager {
             policy: exec_env_policy_from_shell_policy(shell_environment_policy),
             local_policy_env,
         };
-        let shell_snapshot = shell_snapshot_request(request, &cwd, context);
+        let shell_snapshot = if crate::inquello_inference::is_task_thread(&context.session.thread_id.to_string()) { None } else { shell_snapshot_request(request, &cwd, context) };
         let mut orchestrator = ToolOrchestrator::new();
         let mut runtime = UnifiedExecRuntime::new(self);
         let session_shell = context.session.user_shell();

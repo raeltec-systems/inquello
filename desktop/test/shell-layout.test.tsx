@@ -32,7 +32,7 @@ import {
   WINDOW_MIN_WIDTH,
 } from '../src/renderer/Shell/layout';
 import type { TaskItem } from '../src/renderer/Shell/organise-bridge';
-import { Shell, UNTITLED_TASK } from '../src/renderer/Shell/Shell';
+import { Shell } from '../src/renderer/Shell/Shell';
 
 const renderer = path.resolve(__dirname, '..', 'src', 'renderer');
 const WORKSPACE = '5d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e';
@@ -356,21 +356,15 @@ describe('Shell layout', () => {
     const { main } = await renderReady({ composer: true });
     (document.activeElement as HTMLElement | null)?.blur();
     await user.keyboard('{Control>}n{/Control}');
-    await waitFor(() => expect(main.organise.createTask).toHaveBeenCalledTimes(1));
-    expect(main.organise.createTask).toHaveBeenCalledWith(expect.objectContaining({ engagementId: null, folderId: null, title: UNTITLED_TASK }));
-    await waitFor(() => expect(document.querySelector('[data-header-title]')!.textContent).toBe(UNTITLED_TASK));
-    expect(announcer().textContent).toBe(`Opened Task ${UNTITLED_TASK}`);
-    await user.click(within(nav()).getByRole('link', { name: 'Bank confirmations' }));
-    await user.keyboard('{Meta>}n{/Meta}');
-    await waitFor(() => expect(main.organise.createTask).toHaveBeenCalledTimes(2));
-
-    const composer = screen.getByLabelText('Test composer');
+    expect(screen.getByRole('heading', {name:'What should we work on?'})).toBeTruthy();
+    expect(main.organise.createTask).not.toHaveBeenCalled();
+    expect(announcer().textContent).toBe('New private Task. What should we work on?');
+    const composer = screen.getByRole('textbox');
     composer.focus();
-    const event = new KeyboardEvent('keydown', { key: 'n', ctrlKey: true, bubbles: true, cancelable: true });
+    const event = new KeyboardEvent('keydown', {key:'n',ctrlKey:true,bubbles:true,cancelable:true});
     composer.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(false);
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(main.organise.createTask).toHaveBeenCalledTimes(2);
+    expect(main.organise.createTask).not.toHaveBeenCalled();
   });
 
   it('Ctrl/Cmd+K is not handled by Inquello', async () => {

@@ -771,3 +771,12 @@ a.iq-nav-row:hover {
 .iq-task-usage-history dl { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(0, 2fr); gap: 4px 12px; }
 .iq-task-usage-history dd { margin: 0; }
 @media (max-width: 560px) { .iq-task-usage-history dl { grid-template-columns: 1fr; } }
+
+/* Start is private, memory-only work preparation; it shares the Composer tokens. */
+.iq-start { max-width: 100%; padding-block: var(--space-5); color: var(--text-primary); }
+.iq-start h1 { margin-block: 0 var(--space-4); font-weight: 500; }
+.iq-start p { color: var(--text-secondary); line-height: 1.5; overflow-wrap: anywhere; }
+.iq-start > label { display: grid; gap: var(--space-1); margin-block: var(--space-3); }
+.iq-start select { width: 100%; min-width: 0; padding: var(--space-2); font: inherit; color: var(--text-primary); background: var(--surface-app); border: 1px solid var(--border-default); border-radius: var(--radius-sm); }
+.iq-start select:focus-visible { outline: 2px solid var(--text-link); outline-offset: 2px; }
+.iq-start .iq-composer { margin-top: var(--space-5); }

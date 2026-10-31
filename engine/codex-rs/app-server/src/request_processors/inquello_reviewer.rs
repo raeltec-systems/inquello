@@ -635,3 +635,23 @@ mod cache_counter_tests {
         assert_eq!(super::reported_cache_tokens(-1),None);
     }
 }
+
+impl InquelloRequestProcessor {
+    pub(super) async fn task_authority_current(&self, principal:PrincipalId, policy:&InquelloWorkspaceExecutionPolicy, device:&DeviceRequirements, user:&UserConfig)->bool {
+        let Ok(workspace)=WorkspaceId::parse(&policy.workspace_id) else {return false;};
+        self.routes.state.lock().await.authorities.get(&(principal,workspace))
+            .is_some_and(|a|a.policy==*policy && a.device==*device && a.user==*user)
+    }
+    pub(super) async fn register_task_cancellation(&self,principal:PrincipalId,task:&str,cancellation:CancellationToken) {
+        self.routes.state.lock().await.pending.insert(format!("task:{task}"), Invocation {principal,task:task.into(),request:format!("task:{task}"),cancellation});
+    }
+}
+impl InquelloRequestProcessor {
+    pub(super) async fn task_read_policy_current(&self,principal:PrincipalId,policy:&InquelloWorkspaceExecutionPolicy)->bool {
+        let Ok(workspace)=WorkspaceId::parse(&policy.workspace_id) else {return false;};
+        let mut state=self.routes.state.lock().await;
+        let current=state.authorities.get(&(principal,workspace)).is_some_and(|a|a.policy==*policy);
+        if !current {self.routes.cancel_principal_reviews(&mut state,principal);}
+        current
+    }
+}

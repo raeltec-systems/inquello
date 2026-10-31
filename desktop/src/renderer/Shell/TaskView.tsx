@@ -1,4 +1,5 @@
 import { ProcessingRoutes } from '../ProcessingRoutes';
+import type { StartedTask } from './tasks-bridge';
 /**
  * The open Task (Story 1.14): a placeholder thread area, the Task's privacy,
  * and the two organisation commands a Task has today: rename and move.
@@ -28,6 +29,10 @@ import { TaskStates } from './TaskStates';
 import { TaskEnvironment } from './TaskEnvironment';
 import { TaskUsage } from './TaskUsage';
 
+export function AcceptedRequest({accepted}:{accepted:StartedTask}):ReactElement {
+  return <section aria-label="Accepted request"><h2>Request</h2><p style={{whiteSpace:'pre-wrap'}}>{accepted.request}</p><p role="status">{['active','running'].includes(accepted.status) ? 'Initial execution accepted by the runtime.' : `Initial execution: ${accepted.status}.`}</p>{accepted.reason && <p>{accepted.reason}</p>}<p>Execution state is not analytical review or Professional Approval.</p></section>;
+}
+
 export interface MoveTarget {
   engagementId: string | null;
   folderId: string | null;
@@ -35,6 +40,7 @@ export interface MoveTarget {
 
 export interface TaskViewProps {
   task: TaskItem;
+  accepted?: StartedTask;
   engagements: readonly EngagementItem[];
   folders: readonly FolderItem[];
   onRename: (task: TaskItem, title: string, operationId: string) => Promise<Outcome<TaskItem>>;
@@ -61,6 +67,7 @@ export function targetKey(target: MoveTarget): string {
 
 export function TaskView({
   task,
+  accepted,
   engagements,
   folders,
   onRename,
@@ -134,6 +141,7 @@ export function TaskView({
 
   return (
     <section className="iq-task" aria-label="Task" data-task-view={task.taskId}>
+      {accepted && <AcceptedRequest accepted={accepted}/>}
       <div className="iq-task-tools">
         <form className="iq-task-rename" onSubmit={(event) => void save(event)} data-task-rename>
           <TextField label="Task title" value={draft} onChange={setDraft} />
@@ -155,12 +163,12 @@ export function TaskView({
       <TaskUsage taskId={task.taskId} />
       <TaskStates states={states && states.taskId === task.taskId ? states : null} notice={statesNotice} />
       <TaskPolicy policy={policy && policy.taskId === task.taskId ? policy : null} notice={policyNotice} onSetMode={onSetMode} />
-      <div className="iq-thread-placeholder" data-thread-placeholder>
-        <p className="iq-thread-placeholder-title">This Task has no thread yet.</p>
+      {!accepted && <div className="iq-thread-placeholder" data-thread-placeholder>
+        <p className="iq-thread-placeholder-title">{task.runtimeThreadId ? 'This Task has a retained runtime thread.' : 'This Task has no thread yet.'}</p>
         <p className="iq-thread-placeholder-body">
-          Requests and replies will appear here once runtime threads arrive. Only you can see this Task; moving it never shares it.
+          {task.runtimeThreadId ? 'Current execution details have not been loaded. No completed analysis is implied.' : 'Start new work with New thread. Only you can see this Task; moving it never shares it.'}
         </p>
-      </div>
+      </div>}
     </section>
   );
 }

@@ -824,6 +824,7 @@ impl ModelClient {
         effort: Option<ReasoningEffortConfig>,
         session_telemetry: &SessionTelemetry,
     ) -> Result<Vec<ApiMemorySummarizeOutput>> {
+        crate::inquello_inference::refuse_unbound_background(&self.state.thread_id.to_string())?;
         if raw_memories.is_empty() {
             return Ok(Vec::new());
         }
@@ -1322,6 +1323,7 @@ impl ModelClient {
     }
 
     pub(crate) async fn prewarm_auth(&self) -> Result<()> {
+        crate::inquello_inference::refuse_unbound_background(&self.state.thread_id.to_string())?;
         if self.state.provider.info().wire_api == WireApi::Messages { return Ok(()); }
         self.current_client_setup(ClientRouting::Workspace)
             .await
@@ -1952,6 +1954,9 @@ impl ResponsesHttpExecutor<'_> {
                         response_debug_context.request_id.as_deref(),
                         /*output_items*/ &[],
                     );
+                    if crate::inquello_inference::is_task_thread(&self.client.state.thread_id.to_string()) {
+                        return Err(CodexErr::Fatal("Private Task credential changed; automatic retry is disabled".into()));
+                    }
                     pending_retry = PendingUnauthorizedRetry::from_recovery(
                         handle_unauthorized(
                             unauthorized_transport,
@@ -2094,6 +2099,9 @@ impl ModelClientSession {
                 Err(ApiError::Transport(unauthorized_transport))
                     if provider.is_recoverable_auth_error(&unauthorized_transport) =>
                 {
+                    if crate::inquello_inference::is_task_thread(&self.client.state.thread_id.to_string()) {
+                        return Err(CodexErr::Fatal("Private Task credential changed; automatic retry is disabled".into()));
+                    }
                     pending_retry = PendingUnauthorizedRetry::from_recovery(
                         handle_unauthorized(
                             unauthorized_transport,
@@ -2340,6 +2348,7 @@ impl ModelClientSession {
         service_tier: Option<String>,
         responses_metadata: &CodexResponsesMetadata,
     ) -> Result<()> {
+        crate::inquello_inference::refuse_unbound_background(&self.client.state.thread_id.to_string())?;
         if !self.client.responses_websocket_enabled() {
             return Ok(());
         }
@@ -2423,6 +2432,9 @@ impl ModelClientSession {
             }
             WireApi::Responses => {
                 let context = crate::inquello_inference::take_attempt(&self.client.state.thread_id.to_string())?;
+                if context.is_none() && crate::inquello_inference::is_task_thread(&self.client.state.thread_id.to_string()) {
+                    return Err(CodexErr::Fatal("Private Task Responses attempt requires current authorization; no fallback".into()));
+                }
                 let request = context.as_ref().map(|context| {
                     if context.binding.route_id != "codex-responses" || context.binding.model != model_info.slug
                         || context.binding.api_version != "responses-v1" {
@@ -2461,6 +2473,9 @@ impl ModelClientSession {
                             _ => stream,
                         }),
                         WebsocketStreamOutcome::FallbackToHttp => {
+                            if context.is_some() {
+                                return Err(CodexErr::Fatal("Private Task transport outcome is uncertain; automatic retry is disabled".into()));
+                            }
                             self.try_switch_fallback_transport(session_telemetry, model_info);
                         }
                     }

@@ -268,6 +268,7 @@ impl CodexThread {
     /// The next turn consumes the warmup through the existing startup handoff.
     /// Call after installing host services such as the thread's attestation routing.
     pub async fn prewarm(&self) {
+        if crate::inquello_inference::is_task_thread(&self.session.thread_id.to_string()) { return; }
         self.session
             .schedule_startup_prewarm(PrewarmInput::Base)
             .await;
@@ -277,6 +278,7 @@ impl CodexThread {
     /// Sends `generate: false`; the next turn reuses the prepared response only if its prompt
     /// still extends this history and its request settings match. Uses the same handoff as `prewarm`.
     pub async fn prewarm_with_history(&self) {
+        if crate::inquello_inference::is_task_thread(&self.session.thread_id.to_string()) { return; }
         self.session
             .schedule_startup_prewarm(PrewarmInput::History)
             .await;

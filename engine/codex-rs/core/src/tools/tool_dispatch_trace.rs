@@ -38,7 +38,7 @@ impl ToolDispatchTrace {
         payload: &ToolPayload,
         result: &dyn ToolOutput,
     ) {
-        if !self.context.is_enabled() {
+        if crate::inquello_inference::is_task_thread(&invocation.session.thread_id.to_string()) || !self.context.is_enabled() {
             return;
         }
 
@@ -60,6 +60,7 @@ impl ToolDispatchTrace {
 }
 
 fn tool_dispatch_invocation(invocation: &ToolInvocation) -> Option<ToolDispatchInvocation> {
+    if crate::inquello_inference::is_task_thread(&invocation.session.thread_id.to_string()) { return None; }
     let requester = match &invocation.source {
         ToolCallSource::Direct | ToolCallSource::DirectPlaintextMessage => {
             ToolDispatchRequester::Model {

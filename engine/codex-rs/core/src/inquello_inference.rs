@@ -25,6 +25,56 @@ pub struct AttemptContext {
     pub events: mpsc::Sender<Event>,
     pub cancellation: CancellationToken,
 }
+/// Trusted host authorization carried into the turn before its first sample.
+/// Deliberately not serializable: model text and RPC payloads cannot construct it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TaskTurnOutcome { Completed, Failed, Cancelled }
+pub trait TaskAuthorization: Send + Sync {
+    /// Called from the retained turn's terminal event, not from any model stream.
+    fn turn_terminal<'a>(&'a self, turn_id: &'a str, outcome: TaskTurnOutcome) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>>;
+    fn before_attempt<'a>(&'a self, turn_id: &'a str) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<AttemptContext>> + Send + 'a>>;
+    fn before_tool<'a>(&'a self, name: &'a str, arguments: &'a str, call_id: &'a str) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + 'a>>;
+    /// Trusted native-resolved command; never renderer/model-supplied argv.
+    fn before_command<'a>(&'a self, _command: &'a [String], _cwd: &'a std::path::Path, _call_id: &'a str) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + 'a>> {
+        Box::pin(async { Err(failure("Private command authorization unavailable")) })
+    }
+    fn after_tool<'a>(&'a self, call_id: &'a str, success: bool) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>>;
+    /// Revalidate current authority after handler approvals/network waits, before
+    /// each sandbox/process attempt. This does not consume permission again.
+    fn before_tool_effect<'a>(&'a self) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<()>> + Send + 'a>>;
+    fn cancellation(&self) -> CancellationToken;
+}
+/// Only retained turn lifecycle events can terminate the durable run. Error
+/// notifications alone and provider/usage completion are not turn completion.
+pub(crate) async fn observe_task_turn_terminal(authorization:&dyn TaskAuthorization,turn_id:&str,event:&codex_protocol::protocol::EventMsg) {
+    use codex_protocol::protocol::EventMsg;
+    let outcome=match event {
+        EventMsg::TurnComplete(event)=>Some(if event.error.is_some(){TaskTurnOutcome::Failed}else{TaskTurnOutcome::Completed}),
+        EventMsg::TurnAborted(_)=>Some(TaskTurnOutcome::Cancelled),
+        _=>None,
+    };
+    if let Some(outcome)=outcome {authorization.turn_terminal(turn_id,outcome).await;}
+}
+#[derive(Clone)]
+pub struct TaskAuthorizationContext(pub std::sync::Arc<dyn TaskAuthorization>);
+
+/// Process-lifetime ownership fence. Register the reserved id before thread startup.
+static TASK_THREADS: OnceLock<Mutex<std::collections::HashSet<String>>> = OnceLock::new();
+pub fn mark_task_thread(thread_id: &str) -> std::result::Result<(), &'static str> {
+    if uuid::Uuid::parse_str(thread_id).is_err() { return Err("invalid Task thread"); }
+    let mut threads = TASK_THREADS.get_or_init(Default::default).lock().map_err(|_| "Task ownership unavailable")?;
+    if threads.len() >= 10000 && !threads.contains(thread_id) { return Err("Task ownership capacity reached"); }
+    threads.insert(thread_id.to_owned());
+    Ok(())
+}
+pub fn is_task_thread(thread_id: &str) -> bool {
+    TASK_THREADS.get_or_init(Default::default).lock().map(|threads| threads.contains(thread_id)).unwrap_or(true)
+}
+pub(crate) fn refuse_unbound_background(thread_id: &str) -> Result<()> {
+    if is_task_thread(thread_id) { return Err(failure("background memory, compaction and warmup are unavailable for bound Tasks")); }
+    Ok(())
+}
+
 static PENDING: OnceLock<Mutex<HashMap<String, AttemptContext>>> = OnceLock::new();
 fn pending() -> &'static Mutex<HashMap<String, AttemptContext>> { PENDING.get_or_init(|| Mutex::new(HashMap::new())) }
 /// Binding must be created at the trusted permission/execution boundary after
@@ -731,9 +781,110 @@ mod tests {
 
 fn messages_client(binding: &Binding) -> Result<MessagesClient> {
     #[cfg(feature = "inference-fixtures")]
-    if let Some(client) = fixtures::take_transport(&binding.attempt_id)? { return Ok(client); }
+    {
+        if let Some(client) = fixtures::take_transport(&binding.attempt_id)? { return Ok(client); }
+        if fixtures::task_transport_required(&binding.attempt_id) { return Err(failure("retained Task fixture transport consumed; no production fallback")); }
+    }
     let _ = binding;
     MessagesClient::production().map_err(failure)
 }
 #[cfg(feature = "inference-fixtures")]
 pub mod fixtures;
+
+#[cfg(test)]
+mod private_task_fence_tests {
+    use super::*;
+    #[test]
+    fn registered_thread_remains_owned_without_a_pending_attempt() {
+        let thread = uuid::Uuid::new_v4().to_string();
+        assert!(!is_task_thread(&thread));
+        mark_task_thread(&thread).expect("trusted reserved thread");
+        assert!(is_task_thread(&thread));
+        assert!(take_attempt(&thread).expect("pending store").is_none());
+        assert!(refuse_unbound_background(&thread).is_err());
+        cancel_bound_attempt(&thread);
+        assert!(is_task_thread(&thread), "cancellation does not relinquish ownership");
+        assert!(refuse_unbound_background(&thread).is_err());
+    }
+    #[test]
+    fn arbitrary_or_empty_thread_ownership_is_never_accepted() {
+        for thread in ["", "first", "../private", "renderer-supplied-thread"] {
+            assert!(mark_task_thread(thread).is_err());
+        }
+    }
+}
+
+
+#[cfg(test)]
+mod task_turn_lifecycle_tests {
+    use super::*;
+    use codex_protocol::protocol::{EventMsg,ErrorEvent,TurnCompleteEvent,TurnAbortedEvent,TurnAbortReason};
+    struct Observer(Mutex<Vec<(String,TaskTurnOutcome)>>);
+    impl TaskAuthorization for Observer {
+        fn turn_terminal<'a>(&'a self,id:&'a str,outcome:TaskTurnOutcome)->std::pin::Pin<Box<dyn std::future::Future<Output=()>+Send+'a>> {Box::pin(async move {self.0.lock().unwrap().push((id.into(),outcome));})}
+        fn before_attempt<'a>(&'a self,_:&'a str)->std::pin::Pin<Box<dyn std::future::Future<Output=Result<AttemptContext>>+Send+'a>> {panic!("lifecycle must not sample")}
+        fn before_tool_effect<'a>(&'a self)->std::pin::Pin<Box<dyn std::future::Future<Output=Result<()>>+Send+'a>> {panic!("lifecycle must not execute")}
+        fn before_tool<'a>(&'a self,_:&'a str,_:&'a str,_:&'a str)->std::pin::Pin<Box<dyn std::future::Future<Output=Result<()>>+Send+'a>> {panic!("lifecycle must not execute")}
+        fn after_tool<'a>(&'a self,_:&'a str,_:bool)->std::pin::Pin<Box<dyn std::future::Future<Output=()>+Send+'a>> {panic!("lifecycle is not tool accounting")}
+        fn cancellation(&self)->CancellationToken {CancellationToken::new()}
+    }
+    #[tokio::test]
+    async fn failure_before_sampling_and_cancellation_between_attempts_use_retained_terminal_events() {
+        let observer=Observer(Mutex::new(Vec::new()));
+        let error=ErrorEvent {misalignment:None,message:"setup failed".into(),codex_error_info:None};
+        observe_task_turn_terminal(&observer,"turn-a",&EventMsg::Error(error.clone())).await;
+        assert!(observer.0.lock().unwrap().is_empty(),"an error notification is not completion");
+        let mut completed=TurnCompleteEvent {root_turn_id:None,turn_id:"turn-a".into(),last_agent_message:None,error:Some(error),started_at:None,completed_at:None,duration_ms:None,time_to_first_token_ms:None};
+        observe_task_turn_terminal(&observer,"turn-a",&EventMsg::TurnComplete(completed.clone())).await;
+        let aborted=TurnAbortedEvent {root_turn_id:None,turn_id:Some("turn-b".into()),reason:TurnAbortReason::Interrupted,error:None,started_at:None,completed_at:None,duration_ms:None};
+        observe_task_turn_terminal(&observer,"turn-b",&EventMsg::TurnAborted(aborted)).await;
+        completed.error=None;completed.turn_id="turn-c".into();
+        observe_task_turn_terminal(&observer,"turn-c",&EventMsg::TurnComplete(completed)).await;
+        assert_eq!(*observer.0.lock().unwrap(),vec![("turn-a".into(),TaskTurnOutcome::Failed),("turn-b".into(),TaskTurnOutcome::Cancelled),("turn-c".into(),TaskTurnOutcome::Completed)]);
+    }
+}
+
+/// Keep the handler alive to reap its process and finish cleanup on revocation.
+/// The child token also inherits ordinary invocation cancellation. No detached
+/// watcher survives the handler, and cancellation never drops its future.
+pub(crate) async fn run_task_handler<F: std::future::Future>(
+    handler: F,
+    handler_cancellation: CancellationToken,
+    authority_cancellation: CancellationToken,
+) -> F::Output {
+    tokio::pin!(handler);
+    tokio::select! {
+        biased;
+        _ = authority_cancellation.cancelled() => {
+            handler_cancellation.cancel();
+            handler.await
+        }
+        result = &mut handler => result,
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod effect_test_support {
+    use super::*;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    pub(crate) struct Authority {
+        pub token: CancellationToken,
+        pub current: AtomicBool,
+        pub finalized: AtomicUsize,
+    }
+    impl Authority {
+        pub fn new() -> Self { Self {token:CancellationToken::new(),current:AtomicBool::new(true),finalized:AtomicUsize::new(0)} }
+    }
+    impl TaskAuthorization for Authority {
+        fn cancellation(&self)->CancellationToken {self.token.clone()}
+        fn turn_terminal<'a>(&'a self,_:&'a str,_:TaskTurnOutcome)->std::pin::Pin<Box<dyn std::future::Future<Output=()>+Send+'a>> {Box::pin(async {})}
+        fn before_attempt<'a>(&'a self,_:&'a str)->std::pin::Pin<Box<dyn std::future::Future<Output=Result<AttemptContext>>+Send+'a>> {panic!("no inference in effect tests")}
+        fn before_tool<'a>(&'a self,_:&'a str,_:&'a str,_:&'a str)->std::pin::Pin<Box<dyn std::future::Future<Output=Result<()>>+Send+'a>> {Box::pin(async {Ok(())})}
+        fn before_tool_effect<'a>(&'a self)->std::pin::Pin<Box<dyn std::future::Future<Output=Result<()>>+Send+'a>> {
+            Box::pin(async move {if self.current.load(Ordering::SeqCst) && !self.token.is_cancelled() {Ok(())} else {Err(failure("test authority revoked"))}})
+        }
+        fn after_tool<'a>(&'a self,_:&'a str,_:bool)->std::pin::Pin<Box<dyn std::future::Future<Output=()>+Send+'a>> {
+            Box::pin(async move {self.finalized.fetch_add(1,Ordering::SeqCst);})
+        }
+    }
+}

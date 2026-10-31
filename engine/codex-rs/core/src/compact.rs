@@ -182,6 +182,7 @@ async fn run_compact_task_inner(
     world_state: Arc<WorldState>,
     compaction_metadata: CompactionTurnMetadata,
 ) -> CodexResult<()> {
+    crate::inquello_inference::refuse_unbound_background(&sess.thread_id.to_string())?;
     let trigger = compaction_metadata.trigger();
     let reason = compaction_metadata.reason();
     let phase = compaction_metadata.phase();

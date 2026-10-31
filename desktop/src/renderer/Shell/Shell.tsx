@@ -46,6 +46,8 @@ import { identityBridge, parseIdentityStatus } from '../bridge';
 import { SegmentedControl } from '../primitives';
 import { ArtifactArea, type ShellArtifact } from './ArtifactArea';
 import { Composer } from './Composer';
+import { StartView } from './StartView';
+import type { StartedTask } from './tasks-bridge';
 import { createDraftStore, useDraftBinding, type DraftBinding, type DraftStore } from './drafts';
 import { Header } from './Header';
 import { PermissionRequests } from './PermissionRequests';
@@ -70,7 +72,7 @@ import {
 import { Sidebar, type EngagementDraft, type PersonView } from './Sidebar';
 import { parseTaskPolicy, policyBridge, type TaskPolicyItem } from '../policy-bridge';
 import { parseTaskStates, stateBridge, type TaskStatesItem } from './state-bridge';
-import { TaskView, type MoveTarget } from './TaskView';
+import { AcceptedRequest, TaskView, type MoveTarget } from './TaskView';
 
 const REFRESH_MS = 30_000;
 export const UNTITLED_TASK = 'Untitled thread';
@@ -78,6 +80,7 @@ export const UNTITLED_TASK = 'Untitled thread';
 const blankToNull = (value: string): string | null => (value.trim() === '' ? null : value.trim());
 
 export interface ShellProps {
+  active?: boolean;
   onShowSpecimen: () => void;
   /** Tests inject a deterministic ID source. */
   operationIds?: () => string;
@@ -111,7 +114,7 @@ async function readPerson(): Promise<PersonView | null> {
 /** The principal the identity status names, as a draft-ownership key; null when unknown. */
 const ownerKey = (person: PersonView | null): string | null => (person ? `${person.name}\n${person.detail}` : null);
 
-export function Shell({ onShowSpecimen, operationIds = newOperationId, artifact = null, renderComposer, drafts }: ShellProps): ReactElement {
+export function Shell({ active = true, onShowSpecimen, operationIds = newOperationId, artifact = null, renderComposer, drafts }: ShellProps): ReactElement {
   const bridge = organiseBridge();
   const [state, setState] = useState<WorkspacesState | null>(null);
   const [workspaceId, setWorkspaceIdState] = useState<string | null>(null);
@@ -124,7 +127,15 @@ export function Shell({ onShowSpecimen, operationIds = newOperationId, artifact 
   const [tree, setTree] = useState<WorkspaceTree | null>(null);
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [creatingTask, setCreatingTask] = useState(false);
+  const creatingTask = false;
+  const [startLocation, setStartLocation] = useState<{workspaceId:string;engagementId:string|null;folderId:string|null}|null>(null);
+  const [showStart,setShowStart] = useState(false);
+  const [pendingStart,setPendingStart] = useState(false);
+  const [runtimeEpoch,setRuntimeEpoch] = useState(0);
+  const [acceptedTasks,setAcceptedTasks] = useState<Record<string,{workspaceId:string;binding:StartedTask}>>({});
+  const authorizedWorkspaces = useRef<string[]>([]);
+  const activeStart = useRef({active:false,location:startLocation});
+  activeStart.current = {active:active && showStart,location:startLocation};
   const [states, setStates] = useState<TaskStatesItem | null>(null);
   const [statesNotice, setStatesNotice] = useState<string | null>(null);
   const [taskPolicy, setTaskPolicy] = useState<TaskPolicyItem | null>(null);
@@ -311,6 +322,7 @@ export function Shell({ onShowSpecimen, operationIds = newOperationId, artifact 
         return;
       }
       const result = parseOutcome(await bridge.getTree({ workspaceId: id }), parseTree);
+      if (chosenWorkspace.current !== id || !authorizedWorkspaces.current.includes(id)) return;
       if (result.ok) {
         // A Task that is gone (deleted) takes its draft with it.
         draftStore.retain(result.value.workspaceId, result.value.tasks.map((item) => item.taskId));
@@ -332,11 +344,21 @@ export function Shell({ onShowSpecimen, operationIds = newOperationId, artifact 
       // Drafts belong to one signed-in principal: none signed in, or a different one, clears them all.
       const nextPerson = next.signedIn ? await readPerson() : null;
       if (next.signedIn) draftStore.claim(ownerKey(nextPerson));
-      else draftStore.clear();
+      else { draftStore.clear(); setPendingStart(false); setStartLocation(null); setShowStart(false); setAcceptedTasks({}); }
       setState(next);
       setPerson(nextPerson);
       const ids = next.workspaces.map((workspace) => workspace.workspaceId);
+      authorizedWorkspaces.current = next.signedIn ? ids : [];
+      setAcceptedTasks(previous => Object.fromEntries(Object.entries(previous).filter(([,entry]) => next.signedIn && ids.includes(entry.workspaceId))));
       const current = chosenWorkspace.current;
+      if (!next.signedIn || (current && !ids.includes(current))) {
+        setOpenTaskId(null); openTask.current=null; setTree(null);
+        setStates(null); setTaskPolicy(null);
+      }
+      if (activeStart.current.location && !authorizedWorkspaces.current.includes(activeStart.current.location.workspaceId)) {
+        activeStart.current={active:false,location:null};
+        setStartLocation(null); setShowStart(false); setPendingStart(false);
+      }
       const chosen = current && ids.includes(current) ? current : (ids[0] ?? null);
       chosenWorkspace.current = chosen;
       setWorkspaceIdState(chosen);
@@ -350,10 +372,34 @@ export function Shell({ onShowSpecimen, operationIds = newOperationId, artifact 
     void load();
     const timer = setInterval(() => void load(), REFRESH_MS);
     return () => clearInterval(timer);
+  }, [load, active]);
+
+  // Private-scope invalidation must remove submitted content immediately. Route
+  // changes use this signal too, so memory-only drafts and pending operation IDs
+  // remain intact; fresh identity/policy reads decide whether they can be shown.
+  useEffect(() => {
+    const usage = (globalThis as {inquello?:{usage?:{onChanged?:(listener:(privateScope:boolean)=>void)=>()=>void}}}).inquello?.usage;
+    return usage?.onChanged?.((privateScope) => {
+      if (!privateScope) return;
+      setAcceptedTasks({});
+      void load();
+    });
   }, [load]);
 
+  useEffect(() => {
+    const api = (globalThis as {inquello?:{tasks?:{onSessionChanged?:(listener:(identityChanged:boolean)=>void)=>()=>void}}}).inquello?.tasks;
+    return api?.onSessionChanged?.((identityChanged) => {
+      setAcceptedTasks({}); setTree(null); setOpenTaskId(null);
+      if (identityChanged) { draftStore.clear(); setPendingStart(false); setStartLocation(null); setShowStart(false); setState(null); setPerson(null); }
+      else setRuntimeEpoch(n => n + 1);
+      void load();
+    });
+  }, [load, draftStore]);
+
   const selectWorkspace = (id: string) => {
+    activeStart.current.active=false;
     setWorkspaceId(id);
+    setShowStart(false);
     setOpenTaskId(null);
     const name = state?.workspaces.find((item) => item.workspaceId === id)?.name;
     if (name) announce(`Workspace ${name}`);
@@ -362,7 +408,9 @@ export function Shell({ onShowSpecimen, operationIds = newOperationId, artifact 
 
   /** Opens a Task from navigation; the overlay (if open) closes and focus returns to its opener. */
   const openTaskFromNav = (item: TaskItem) => {
+    activeStart.current.active=false;
     if (showOverlay) closeOverlay(true);
+    setShowStart(false);
     if (item.taskId === openTask.current) return;
     setOpenTaskId(item.taskId);
     announce(`Opened Task ${item.title}`);
@@ -382,15 +430,19 @@ export function Shell({ onShowSpecimen, operationIds = newOperationId, artifact 
   };
 
   const createTask = async (engagementId: string | null, folderId: string | null) => {
-    if (!bridge || !workspaceId || creatingTask) return;
-    setCreatingTask(true);
-    const operationId = operationIds();
-    const result = await mutate(() => bridge.createTask({ operationId, workspaceId, engagementId, folderId, title: UNTITLED_TASK }), parseTask);
-    setCreatingTask(false);
-    if (result.ok) {
-      setOpenTaskId(result.value.taskId);
-      announce(`Opened Task ${result.value.title}`);
-    } else setNotice(result.reason);
+    if (!workspaceId) return;
+    if (pendingStart && startLocation) {
+      setWorkspaceId(startLocation.workspaceId); setOpenTaskId(null); setShowStart(true);
+      setNotice('Check the pending operation before starting another private Task.');
+      void loadTree(startLocation.workspaceId); return;
+    }
+    setStartLocation({workspaceId,engagementId,folderId});
+    setOpenTaskId(null);
+    setShowStart(true);
+    shellRef.current?.querySelector<HTMLElement>('[data-start-view] textarea')?.focus();
+    announce('New private Task. What should we work on?');
+    void loadTree(workspaceId);
+    if (showOverlay) closeOverlay(false);
   };
 
   const createEngagement = (draft: EngagementDraft, operationId: string): Promise<Outcome<EngagementItem>> => {
@@ -452,7 +504,7 @@ export function Shell({ onShowSpecimen, operationIds = newOperationId, artifact 
   // latest state through a ref, so the listener is added once.
   const newThreadShortcut = useRef<() => boolean>(() => false);
   newThreadShortcut.current = () => {
-    if (!bridge || !state?.signedIn || !workspaceId) return false;
+    if (!active || !bridge || !state?.signedIn || !workspaceId) return false;
     void createTask(null, null);
     return true;
   };
@@ -470,14 +522,21 @@ export function Shell({ onShowSpecimen, operationIds = newOperationId, artifact 
     return () => globalThis.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  const task = useMemo(() => tree?.tasks.find((item) => item.taskId === openTaskId) ?? null, [tree, openTaskId]);
+  const authorizedWorkspace = state?.signedIn && state.workspaces.some(item => item.workspaceId === workspaceId);
+  const currentTree = authorizedWorkspace && tree?.workspaceId === workspaceId ? tree : null;
+  const task = useMemo(() => currentTree?.tasks.find((item) => item.taskId === openTaskId) ?? null, [currentTree, openTaskId]);
+  const acceptedFor = (id:string) => {
+    const entry=acceptedTasks[id];
+    return authorizedWorkspace && entry?.workspaceId===workspaceId ? entry.binding : undefined;
+  };
   const engagement = useMemo(() => (task?.engagementId ? (tree?.engagements.find((item) => item.engagementId === task.engagementId) ?? null) : null), [tree, task]);
   const workspace = state?.workspaces.find((item) => item.workspaceId === workspaceId) ?? null;
 
   const selectedItemId = openArtifact && selectedItem?.artifactId === openArtifact.artifactId ? selectedItem.itemId : null;
   // The draft follows the Task actually shown; a Task that vanished falls back to the no-Task draft.
   const draft = useDraftBinding(task?.taskId ?? null, draftStore, task?.workspaceId ?? null);
-  const composer = !state?.signedIn ? null : renderComposer ? renderComposer(draft) : <Composer draft={draft} />;
+  const startDraft = useDraftBinding(null, draftStore);
+  const composer = !state?.signedIn || showStart ? null : renderComposer ? renderComposer(draft) : <Composer draft={draft} />;
 
   return (
     <div
@@ -494,7 +553,7 @@ export function Shell({ onShowSpecimen, operationIds = newOperationId, artifact 
       <Sidebar
         state={state}
         workspaceId={workspaceId}
-        tree={tree}
+        tree={currentTree}
         openTaskId={openTaskId}
         onSelectWorkspace={selectWorkspace}
         onOpenTask={openTaskFromNav}
@@ -535,9 +594,24 @@ export function Shell({ onShowSpecimen, operationIds = newOperationId, artifact 
                   {notice}
                 </p>
               ) : null}
-              {task && tree ? (
+              {state?.signedIn && startLocation ? <StartView
+                key={`${ownerKey(person)}:${startLocation.workspaceId}`}
+                {...startLocation} onPendingChange={setPendingStart} runtimeEpoch={runtimeEpoch} draft={startDraft} active={showStart && active} operationIds={operationIds}
+                onAccepted={(accepted) => {
+                  const origin=startLocation;
+                  if (!authorizedWorkspaces.current.includes(origin.workspaceId)) return;
+                  setAcceptedTasks(previous => ({...previous,[accepted.taskId]:{workspaceId:origin.workspaceId,binding:accepted}}));
+                  // Async acknowledgement may outlive this Start's foreground visit.
+                  // Keep its binding without taking over the user's current navigation.
+                  if (!activeStart.current.active || activeStart.current.location!==origin || chosenWorkspace.current!==origin.workspaceId) return;
+                  setNotice(null); setOpenTaskId(accepted.taskId); setShowStart(false);
+                  announce('Private Task accepted.'); void loadTree(origin.workspaceId);
+                }}
+              /> : null}
+              {!showStart && task && tree ? (
                 <TaskView
                   task={task}
+                  accepted={acceptedFor(task.taskId)}
                   engagements={tree.engagements}
                   folders={tree.folders}
                   onRename={renameTask}
@@ -549,12 +623,12 @@ export function Shell({ onShowSpecimen, operationIds = newOperationId, artifact 
                   policyNotice={policyNotice}
                   onSetMode={policyBridge() ? setMode : undefined}
                 />
-              ) : (
+              ) : !showStart && openTaskId && acceptedFor(openTaskId) ? <AcceptedRequest accepted={acceptedFor(openTaskId)!}/> : !showStart ? (
                 <div className="iq-thread-placeholder" data-thread-placeholder="none">
                   <p className="iq-thread-placeholder-title">No Task open.</p>
                   <p className="iq-thread-placeholder-body">Choose a Task in the Sidebar, or start one with New thread.</p>
                 </div>
-              )}
+              ) : null}
             </div>
           </main>
           {openArtifact ? (

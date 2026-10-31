@@ -1268,7 +1268,11 @@ fn add_shell_tools(context: &CoreToolPlanContext<'_>, registry: &mut ToolRegistr
         // Managed requirements are the only configuration path that can keep
         // unified exec disabled. Preserve command execution without exposing a
         // resumable process or write_stdin authority prohibited by policy.
-        registry.add(ExecCommandHandler::one_shot(options));
+        if turn_context.extension_data.get::<crate::inquello_inference::TaskAuthorizationContext>().is_some() {
+            registry.add(ExecCommandHandler::private_one_shot(options));
+        } else {
+            registry.add(ExecCommandHandler::one_shot(options));
+        }
     }
 }
 

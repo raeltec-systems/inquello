@@ -843,3 +843,47 @@ fn test_invocation(
         },
     }
 }
+
+/// Exercises the registry and actual ToolExecutor handler future, including a
+/// real child that must be reaped before after_tool accounting can finish.
+#[cfg(unix)]
+#[tokio::test]
+async fn private_authority_revocation_cancels_handler_and_awaits_process_cleanup() {
+    use crate::inquello_inference::{TaskAuthorizationContext, effect_test_support::Authority, mark_task_thread};
+    use tokio_util::sync::CancellationToken;
+    struct ProcessHandler {started:CancellationToken,cleaned:Arc<AtomicUsize>}
+    impl ToolExecutor<ToolInvocation> for ProcessHandler {
+        fn tool_name(&self)->codex_tools::ToolName {codex_tools::ToolName::plain("shell")}
+        fn spec(&self)->codex_tools::ToolSpec {test_spec(&self.tool_name())}
+        fn handle<'a>(&'a self,invocation:ToolInvocation)->codex_tools::ToolExecutorFuture<'a> where ToolInvocation:'a {
+            Box::pin(async move {
+                let mut child=tokio::process::Command::new("/bin/sleep").arg("30").kill_on_drop(true).spawn().expect("real child");
+                self.started.cancel();
+                invocation.cancellation_token.cancelled().await;
+                child.kill().await.expect("kill and reap real child");
+                // Yield after kill: dropping the handler future instead of awaiting
+                // cleanup would leave this completion marker/accounting unfinished.
+                tokio::task::yield_now().await;
+                assert!(child.try_wait().expect("child status").is_some());
+                self.cleaned.fetch_add(1,Ordering::SeqCst);
+                Err(FunctionCallError::RespondToModel("cancelled after cleanup".into()))
+            })
+        }
+    }
+    impl CoreToolRuntime for ProcessHandler {}
+    let (session,turn)=crate::session::tests::make_session_and_context().await;
+    mark_task_thread(&session.thread_id.to_string()).unwrap();
+    let authority=Arc::new(Authority::new());
+    turn.extension_data.insert(TaskAuthorizationContext(authority.clone()));
+    let started=CancellationToken::new();let cleaned=Arc::new(AtomicUsize::new(0));
+    let registry=ToolRegistry::from_tools([Arc::new(ProcessHandler{started:started.clone(),cleaned:cleaned.clone()}) as Arc<dyn CoreToolRuntime>]);
+    let invocation=test_invocation(Arc::new(session),Arc::new(turn),"private-cancel",codex_tools::ToolName::plain("shell"));
+    let ordinary_cancellation=invocation.cancellation_token.clone();
+    let work=async {registry.dispatch_any_with_state(invocation,None).await};
+    let revoke=async {started.cancelled().await;authority.token.cancel();};
+    let (result,())=tokio::time::timeout(Duration::from_secs(5),async {tokio::join!(work,revoke)}).await.expect("bounded real handler cleanup");
+    assert!(result.is_err());
+    assert!(!ordinary_cancellation.is_cancelled(),"Task revocation, not invocation cancellation, stopped the process");
+    assert_eq!(cleaned.load(Ordering::SeqCst),1);
+    assert_eq!(authority.finalized.load(Ordering::SeqCst),1);
+}

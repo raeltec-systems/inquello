@@ -187,10 +187,18 @@ fn configured_store_path() -> Option<PathBuf> {
 mod route_bridge;
 #[path = "inquello_reviewer.rs"]
 mod reviewer;
+#[path = "inquello_tasks.rs"]
+pub(crate) mod tasks_bridge;
 #[path = "inquello_usage.rs"]
 pub(crate) mod usage_bridge;
 
 pub(crate) struct InquelloRequestProcessor {
+    task_config: Option<super::ConfigRequestProcessor>,
+    #[cfg(all(feature="inference-fixtures",debug_assertions))]
+    task_fixtures: tokio::sync::Mutex<HashMap<ConnectionId,tasks_bridge::TaskFixture>>,
+    task_outgoing: Option<std::sync::Arc<crate::outgoing_message::OutgoingMessageSender>>,
+    task_start_lock: tokio::sync::Mutex<()>,
+    task_sessions: tokio::sync::Mutex<HashMap<ConnectionId, tasks_bridge::SessionBinding>>,
     routes: reviewer::RouteRuntime,
     runtime_id: String,
     usage_sources: Option<(std::sync::Arc<super::AccountRequestProcessor>, super::CatalogRequestProcessor)>,
@@ -211,6 +219,12 @@ impl InquelloRequestProcessor {
         agent_writable_roots: Vec<PathBuf>,
     ) -> Self {
         Self {
+            task_config: None,
+            #[cfg(all(feature="inference-fixtures",debug_assertions))]
+            task_fixtures: tokio::sync::Mutex::new(HashMap::new()),
+            task_outgoing: None,
+            task_start_lock: tokio::sync::Mutex::new(()),
+            task_sessions: tokio::sync::Mutex::new(HashMap::new()),
             routes: reviewer::RouteRuntime::default(),
             runtime_id: uuid::Uuid::new_v4().to_string(),
             usage_sources: None,
@@ -222,6 +236,9 @@ impl InquelloRequestProcessor {
     }
 
     pub(crate) async fn connection_closed(&self, connection_id: ConnectionId) {
+        #[cfg(all(feature="inference-fixtures",debug_assertions))]
+        self.task_fixtures.lock().await.remove(&connection_id);
+        if let Some(session)=self.task_sessions.lock().await.remove(&connection_id) {session.cancellation.cancel();}
         let mut state = self.routes.state.lock().await;
         if let Some(principal) = self.principals_guard().remove(&connection_id) {
             self.routes.invalidate_principal(&mut state, principal);
@@ -241,6 +258,9 @@ impl InquelloRequestProcessor {
         connection_id: ConnectionId,
         params: InquelloSetPrincipalParams,
     ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        #[cfg(all(feature="inference-fixtures",debug_assertions))]
+        self.task_fixtures.lock().await.remove(&connection_id);
+        if let Some(session) = self.task_sessions.lock().await.remove(&connection_id) { session.cancellation.cancel(); }
         let mut state = self.routes.state.lock().await;
         let mut principals = self.principals_guard();
         if let Some(principal) = principals.get(&connection_id).copied() {

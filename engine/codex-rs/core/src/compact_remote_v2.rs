@@ -290,6 +290,7 @@ async fn run_remote_compaction_request_v2(
     responses_metadata: &CodexResponsesMetadata,
     transport: CompactionRequestTransport<'_>,
 ) -> CodexResult<RemoteCompactionV2Output> {
+    crate::inquello_inference::refuse_unbound_background(&sess.thread_id.to_string())?;
     let turn_context = &step_context.turn;
     let client_session = match transport {
         CompactionRequestTransport::Background(turn_state, auth_owner_generation) => {

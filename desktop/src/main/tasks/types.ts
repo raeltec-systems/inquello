@@ -1,0 +1,11 @@
+/** Source-owned projections; generated runtime bindings are never edited by hand. */
+import {object, uuid, identifier, integer} from '../usage/types';
+import {routeId, type RouteId} from '../routes/types';
+export interface TaskCandidateInput {workspaceId:string;routeId:RouteId;configurationRevision:number}
+export interface StartTaskInput extends TaskCandidateInput {operationId:string;engagementId:string|null;folderId:string|null;request:string;reasoning:string;speed:string}
+export interface TaskCandidateView extends TaskCandidateInput {reasoning:string[];speeds:string[];available:boolean;reason:string;executionFlow:string;inferenceFlow:string}
+export interface StartedTaskView {operationId:string;taskId:string;runId:string;threadId:string|null;status:string;request:string;accepted:boolean;reason?:string}
+export type TasksResult<T>={ok:true;value:T}|{ok:false;reason:string;code?:'refused'|'uncertain'};
+const text=(v:unknown,max=2048):string=>{if(typeof v!=='string'||v.length>max)throw new Error('Invalid Task response');return v;};
+export function parseCandidate(v:unknown,workspaceId:string):TaskCandidateView {const r=object(v);const list=(v:unknown)=>{if(!Array.isArray(v)||v.length>32)throw new Error('Invalid choices');return v.map(identifier);};if(typeof r.available!=='boolean')throw new Error('Invalid availability');return{workspaceId,routeId:routeId(r.routeId),configurationRevision:integer(r.configurationRevision),reasoning:list(r.reasoning),speeds:list(r.speeds),available:r.available,reason:text(r.reason),executionFlow:text(r.executionFlow),inferenceFlow:text(r.inferenceFlow)};}
+export function parseStarted(v:unknown):StartedTaskView {const r=object(v);if(typeof r.accepted!=='boolean')throw new Error('Invalid binding');const status=identifier(r.status);if(!['setup-failed','reserved','bound','dispatching','active','running','failed','uncertain','completed','cancelled','refused'].includes(status))throw new Error('Invalid state');return{operationId:uuid(r.operationId),taskId:uuid(r.taskId),runId:uuid(r.runId),threadId:r.threadId===null?null:identifier(r.threadId),status,request:text(r.request,262144),accepted:r.accepted,...(r.reason==null?{}:{reason:text(r.reason)})};}

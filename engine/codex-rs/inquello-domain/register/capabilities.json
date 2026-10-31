@@ -85,7 +85,8 @@
         "Execution sandbox: local OS sandbox on this device; no hosted sandbox \u2014 V2 revisit (OQ-13)",
         "Tools read and write only the Task's private working folder and its output folder, read the system locations they need, and contact only the Workspace's allowed domains through the runtime's network proxy",
         "If the local sandbox cannot be applied on this device, execution is refused; a permitted Full access broad mode is the only unsandboxed path",
-        "Verified on Linux with the bundled bubblewrap only; macOS and Windows are not yet verified"
+        "Verified on Linux with the bundled bubblewrap only; macOS and Windows are not yet verified",
+        "Story 1.25 retained Task command mediation and per-attempt inference binding are authored but native compilation, seeded child integration and separately authorized provider-connected fictional-data acceptance remain pending; existing evidence does not promote those gates or real-data eligibility"
       ],
       "identity": "No identity: tools run as the desktop user's own process inside the sandbox, with no Inquello or provider credential",
       "formats": [

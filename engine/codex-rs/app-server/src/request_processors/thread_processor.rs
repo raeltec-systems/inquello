@@ -6884,3 +6884,94 @@ fn build_thread_from_loaded_snapshot(
 #[cfg(test)]
 #[path = "thread_processor_tests.rs"]
 mod thread_processor_tests;
+
+// Story 1.25: retained, native-only startup, with authority installed before any
+// asynchronous thread initialization. No renderer thread identity or fallback.
+impl ThreadRequestProcessor {
+    pub(crate) fn inquello_permission_sender(&self)->Arc<crate::outgoing_message::OutgoingMessageSender> {self.outgoing.clone()}
+    pub(crate) fn inquello_reserve_thread_id(&self)->ThreadId {self.thread_manager.reserve_thread_id()}
+    pub(crate) async fn inquello_start_private_thread(&self,connection:ConnectionId,thread_id:ThreadId,
+        route:&inquello_domain::routes::RouteConfiguration,choices:&inquello_domain::usage::Choices,
+        profile:&codex_app_server_protocol::InquelloRuntimeProfile,
+        authorization:codex_core::inquello_inference::TaskAuthorizationContext)
+        ->Result<Arc<CodexThread>,JSONRPCErrorError> {
+        codex_core::inquello_inference::mark_task_thread(&thread_id.to_string()).map_err(|_|invalid_request("Private runtime ownership unavailable"))?;
+        let profile_id=profile.permission_profile_id.clone().ok_or_else(||invalid_request("Bounded private Task permissions are required"))?;
+        let profile_value=profile.permission_profile.clone().ok_or_else(||invalid_request("Private Task sandbox unavailable"))?;
+        let cwd=profile.readable_roots.first().cloned().ok_or_else(||invalid_request("Private Task root unavailable"))?;
+        let mut overrides=HashMap::from([
+            (format!("permissions.{profile_id}"),profile_value),
+            ("default_permissions".into(),serde_json::json!(profile_id)),
+            ("approval_policy".into(),serde_json::json!("untrusted")),
+            ("approvals_reviewer".into(),serde_json::json!("user")),
+            ("features.network_proxy".into(),serde_json::json!(true)),
+            ("features.plugins".into(),serde_json::json!(false)),
+            ("features.apps".into(),serde_json::json!(false)),
+            ("features.codex_hooks".into(),serde_json::json!(false)),
+            ("features.memories".into(),serde_json::json!(false)),
+            ("features.shell_snapshot".into(),serde_json::json!(false)),
+            ("features.shell_snapshot_v2".into(),serde_json::json!(false)),
+            ("features.unified_exec".into(),serde_json::json!(false)),
+            ("memories.generate_memories".into(),serde_json::json!(false)),
+            ("memories.use_memories".into(),serde_json::json!(false)),
+            ("web_search".into(),serde_json::json!("disabled")),
+            ("model_reasoning_summary".into(),serde_json::json!("none")),
+        ]);
+        // Explicitly turn off each inherited MCP endpoint, not only an empty
+        // overlay (which would leave merged user/project entries enabled).
+        for name in self.config.mcp_servers.get().keys() {overrides.insert(format!("mcp_servers.{name}.enabled"),serde_json::json!(false));}
+        if choices.reasoning!="default" {overrides.insert("model_reasoning_effort".into(),serde_json::json!(choices.reasoning));}
+        if choices.speed!="default" {overrides.insert("service_tier".into(),serde_json::json!(choices.speed));}
+        let provider=if route.route_id()==inquello_domain::routes::RouteId::ClaudeApiKey {
+            overrides.insert("model_providers.inquello-messages".into(),serde_json::json!({"name":"Selected Messages route","wire_api":"messages","base_url":"https://api.anthropic.com/v1","request_max_retries":0,"stream_max_retries":0,"requires_openai_auth":false}));
+            "inquello-messages".to_string()
+        } else {self.config.model_provider_id.clone()};
+        overrides.insert(format!("model_providers.{provider}.request_max_retries"),serde_json::json!(0));
+        overrides.insert(format!("model_providers.{provider}.stream_max_retries"),serde_json::json!(0));
+        let mut config=self.config_manager.load_with_overrides(Some(overrides),ConfigOverrides {model:Some(route.model().into()),model_provider:Some(provider),service_tier:Some(if choices.speed=="default" {None}else{Some(choices.speed.clone())}),cwd:Some(PathBuf::from(cwd)),ephemeral:Some(false),..Default::default()}).await.map_err(|_|invalid_request("Selected private runtime configuration could not be applied"))?;
+        // Provider defaults explicitly clear inherited user/project values.
+        config.model_reasoning_effort=if choices.reasoning=="default" {None}else{Some(serde_json::from_value(serde_json::json!(choices.reasoning)).map_err(|_|invalid_request("Selected reasoning setting is unsupported"))?)};
+        config.model_reasoning_summary=Some(codex_protocol::config_types::ReasoningSummary::None);
+        config.model_verbosity=None;
+        config.memories.generate_memories=false;
+        config.memories.use_memories=false;
+        if route.route_id()==inquello_domain::routes::RouteId::CodexResponses {
+            let mut expected=self.config.model_provider.clone();
+            expected.request_max_retries=Some(0);expected.stream_max_retries=Some(0);
+            if config.model_provider!=expected {return Err(invalid_request("Retained provider differs from selected exact route; no fallback"));}
+        }
+        if config.mcp_servers.get().values().any(|server|server.enabled) {return Err(invalid_request("Managed external connections cannot be disabled for this private Task"));}
+        // Never inherit a remote default environment or broader project roots.
+        if self.thread_manager.environment_manager().try_local_environment().is_none() {
+            return Err(invalid_request("Local private Task environment unavailable"));
+        }
+        config.workspace_roots=vec![config.cwd.clone()];
+        let local_request=codex_protocol::protocol::TurnEnvironmentRequest {
+            environment_id:codex_exec_server::LOCAL_ENVIRONMENT_ID.into(),
+            cwd:codex_utils_path_uri::PathUri::from_abs_path(&config.cwd),
+            workspace_roots:vec![codex_utils_path_uri::PathUri::from_abs_path(&config.cwd)],
+            config:codex_protocol::protocol::EnvironmentConfigState::FromThread,
+        };
+        let mut options=StartThreadOptions::new(config);
+        options.environments=Some(vec![local_request]);
+        options.thread_extension_init.insert(codex_extension_api::SessionIsolation::Isolated);
+        options.reserved_thread_id=Some(thread_id);
+        options.allow_provider_model_fallback=false;
+        options.thread_extension_init.insert(codex_extension_api::ToolPolicy {allowed_tools:Some(vec![codex_tools::ToolName::plain("exec_command")]),require_managed_sandbox:true,require_unified_exec:false,expose_additional_permissions:false});
+        options.thread_extension_init.insert(authorization.clone());
+        options.turn_extension_init.insert(authorization.clone());
+        if authorization.0.cancellation().is_cancelled() {return Err(invalid_request("Private Task session changed before startup"));}
+        let new=self.thread_manager.start_thread(options).await.map_err(|_|internal_error("Private retained thread startup failed; reconcile without retry"))?;
+        if authorization.0.cancellation().is_cancelled() {return Err(invalid_request("Private Task session changed during startup"));}
+        self.ensure_conversation_listener(thread_id,connection,false).await?;
+        Ok(new.thread)
+    }
+    pub(crate) async fn inquello_start_private_turn(&self,thread:&Arc<CodexThread>,request:String,
+        authorization:codex_core::inquello_inference::TaskAuthorizationContext)->Result<codex_core::StartIfIdleSubmission,JSONRPCErrorError> {
+        let input=codex_protocol::turn_input::TurnInput::UserInput {content:vec![codex_protocol::user_input::UserInput::Text {text:request,text_elements:Vec::new()}],client_id:None};
+        let mut turn_extension_init=ExtensionDataInit::new();
+        turn_extension_init.insert(authorization);
+        thread.start_turn_if_idle(codex_core::WithTurnExtensionData::new(TurnInputRequest::new(input),turn_extension_init)).await
+            .map_err(|_|internal_error("Private first-turn acceptance is uncertain; reconcile without retry"))
+    }
+}

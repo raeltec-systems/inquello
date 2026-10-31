@@ -1,18 +1,7 @@
-/**
- * The Composer (Story 1.17): a plain-text request for the open Task.
- *
- * - The text lives in the Shell's in-memory draft store (`drafts.ts`) through a
- *   `DraftBinding`, so it survives opening other Tasks, layout changes and the
- *   Conversation/Artifact switch. Nothing here saves, logs or sends it.
- * - Shift+Enter inserts a newline. Enter submits only when Send is available;
- *   until real runs exist (Story 1.25) it never is, so Enter does nothing and
- *   keeps the text. Enter during input-method composition (`isComposing`, or
- *   keyCode 229) is always left to the input method.
- * - Escape never clears the draft; Ctrl/Cmd+N stays with the text field.
- * - Send is visible but unavailable (`aria-disabled`, still focusable), with
- *   its reason shown and linked through `aria-describedby`.
- * - No attachment, Method, scope, environment or reasoning controls are built:
- *   none is shown, so none can pretend to work.
+/** Plain text Composer. Draft ownership remains in Shell memory. The Start surface
+ * supplies an explicit authorized Send action; existing Tasks stay read-only here.
+ * IME owns composition Enter, Shift+Enter inserts lines, Escape keeps the draft.
+ * Unavailable Send remains focusable with a visible explanation.
  */
 import { useId, type KeyboardEvent, type ReactElement } from 'react';
 
@@ -39,10 +28,15 @@ export function sendReason(value: string): string {
 
 export interface ComposerProps {
   draft: DraftBinding;
+  onSend?: () => void;
+  disabledReason?: string;
+  autoFocus?: boolean;
+  readOnly?: boolean;
 }
 
-export function Composer({ draft }: ComposerProps): ReactElement {
+export function Composer({ draft, onSend, disabledReason, autoFocus, readOnly }: ComposerProps): ReactElement {
   const inputId = useId();
+  const reason = !onSend ? sendReason(draft.value) : draft.value.trim() === '' ? SEND_EMPTY_REASON : disabledReason;
   const label = draft.taskId ? COMPOSER_LABEL : COMPOSER_LABEL_NO_TASK;
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key !== 'Enter') return;
@@ -50,8 +44,9 @@ export function Composer({ draft }: ComposerProps): ReactElement {
     if (isComposingEnter(event)) return;
     // Shift+Enter (and other modified Enters) keep the field's own behaviour.
     if (event.shiftKey || event.ctrlKey || event.metaKey || event.altKey) return;
-    // Enter would submit when Send is available; it never is yet, so it only keeps the text.
+    // Enter submits only the explicitly enabled action.
     event.preventDefault();
+    if (!reason && !readOnly) onSend?.();
   };
 
   return (
@@ -61,6 +56,8 @@ export function Composer({ draft }: ComposerProps): ReactElement {
       </label>
       <textarea
         id={inputId}
+        autoFocus={autoFocus}
+        readOnly={readOnly}
         className="iq-composer-input"
         rows={2}
         value={draft.value}
@@ -71,7 +68,7 @@ export function Composer({ draft }: ComposerProps): ReactElement {
         data-composer-input
       />
       <div className="iq-composer-actions">
-        <IconButton variant="send" label="Send" disabledReason={sendReason(draft.value)} data-composer-send />
+        <IconButton variant="send" label="Send" disabledReason={reason} onPress={() => { if (!readOnly) onSend?.(); }} data-composer-send />
       </div>
     </div>
   );

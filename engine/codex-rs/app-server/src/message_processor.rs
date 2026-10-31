@@ -122,6 +122,13 @@ fn deserialize_client_request(request: JSONRPCRequest) -> Result<ClientRequest, 
         .map_err(|err| if private_auth { invalid_request("Invalid private provider handoff") } else { invalid_request(format!("Invalid request: {err}")) })
 }
 
+// Authority installation and credential handoff are desktop-main-only operations.
+// A remote connection on a server that also exposes stdio is not a stdio origin.
+fn reject_private_handoff_transport(method: &str, transport: Option<&AppServerTransport>, origin: crate::transport::ConnectionOrigin) -> bool {
+    matches!(method, "inquello/routes/privateAuth" | "inquello/tasks/bootstrap")
+        && (!matches!(transport, Some(AppServerTransport::Stdio)) || origin != crate::transport::ConnectionOrigin::Stdio)
+}
+
 fn reject_obsolete_request_fields(request: &JSONRPCRequest) -> Result<(), JSONRPCErrorError> {
     reject_removed_permission_profile(request)?;
     Ok(())
@@ -483,7 +490,7 @@ impl MessageProcessor {
         // working store may never live inside it.
         let inquello_processor = Arc::new(InquelloRequestProcessor::new(vec![
             config.codex_home.to_path_buf(),
-        ]).with_route_provider(config.model_provider.clone(), auth_manager.clone(), config.http_client_factory()).with_usage_sources(account_processor.clone(), catalog_processor.clone()));
+        ]).with_route_provider(config.model_provider.clone(), auth_manager.clone(), config.http_client_factory()).with_usage_sources(account_processor.clone(), catalog_processor.clone()).with_task_outgoing(outgoing.clone()).with_task_config(config_processor.clone()));
         let initialize_processor = InitializeRequestProcessor::new(
             gateway_login_control,
             outgoing.clone(),
@@ -675,9 +682,18 @@ impl MessageProcessor {
             }
             return;
         }
-        if request.method == "inquello/routes/privateAuth" && (!matches!(transport, AppServerTransport::Stdio) || session.origin != crate::transport::ConnectionOrigin::Stdio) {
+        #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+        if request.method == "inquello/fixture/taskTransport" {
+            let id=ConnectionRequestId {connection_id,request_id:request.id};
+            let result=if session.initialized() && matches!(transport,AppServerTransport::Stdio) && session.origin==crate::transport::ConnectionOrigin::Stdio {
+                self.inquello_processor.prepare_task_fixture(connection_id,request.params).await
+            }else{Err(invalid_request("Retained Task fixture requires private stdio"))};
+            match result {Ok(value)=>self.outgoing.send_response(id,value).await,Err(error)=>self.outgoing.send_error(id,error).await,}
+            return;
+        }
+        if reject_private_handoff_transport(&request.method, Some(transport), session.origin) {
             self.outgoing.send_error(ConnectionRequestId { connection_id, request_id: request.id },
-                invalid_request("Private provider handoff requires stdio")).await;
+                invalid_request("Private authority/provider handoff requires stdio")).await;
             return;
         }
         let request_method = request.method.as_str();
@@ -744,9 +760,9 @@ impl MessageProcessor {
         outbound_initialized: &AtomicBool,
         cancellation: tokio_util::sync::CancellationToken,
     ) {
-        if matches!(&request, ClientRequest::InquelloRoutePrivateAuth { .. }) {
+        if reject_private_handoff_transport(request.method_name(), None, session.origin) {
             self.outgoing.send_error(ConnectionRequestId { connection_id, request_id: request.id().clone() },
-                invalid_request("Private provider handoff requires stdio")).await;
+                invalid_request("Private authority/provider handoff requires stdio")).await;
             return;
         }
         let request_id = ConnectionRequestId {
@@ -1211,6 +1227,7 @@ impl MessageProcessor {
             connection_id,
             request_id: codex_request.id().clone(),
         };
+        let private_thread = self.inquello_processor.guard_retained_request(connection_id,&codex_request).await?;
         let result: Result<Option<ClientResponsePayload>, JSONRPCErrorError> = match codex_request {
             ClientRequest::Initialize { .. } => {
                 panic!("Initialize should be handled before initialized request dispatch");
@@ -2065,6 +2082,21 @@ impl MessageProcessor {
                     Err(error) => Err(error),
                 }
             }
+            ClientRequest::InquelloTasksConsumePermission { params, .. } => {
+                let (device,user)=self.inquello_policy_layers().await?;
+                self.inquello_processor.tasks_consume_permission(connection_id,params,device,user).await
+            }
+            ClientRequest::InquelloTasksPreflight { params, .. } => {
+                let (device,user)=self.inquello_policy_layers().await?;
+                self.inquello_processor.tasks_preflight(connection_id,params,device,user).await
+            }
+            ClientRequest::InquelloTasksStart { params, .. } => {
+                let (device,user)=self.inquello_policy_layers().await?;
+                self.inquello_processor.tasks_start(connection_id,params,device,user,&self.thread_processor).await
+            }
+            ClientRequest::InquelloTasksReconcile { params, .. } => self.inquello_processor.tasks_reconcile(connection_id,params).await,
+            ClientRequest::InquelloTasksForThread { params, .. } => self.inquello_processor.tasks_for_thread(connection_id,params).await,
+            ClientRequest::InquelloTasksBootstrap { params, .. } => self.inquello_processor.tasks_bootstrap(connection_id,params).await,
             ClientRequest::InquelloRoutesList { params, .. } => self.inquello_processor.routes_list(connection_id, params).await,
             ClientRequest::InquelloRouteConfigure { params, .. } => self.inquello_processor.route_configure(connection_id, params).await,
             ClientRequest::InquelloUsageRead { params, .. } => self.inquello_processor.usage_read(connection_id, params).await,
@@ -2185,6 +2217,7 @@ impl MessageProcessor {
             }
         };
 
+        if let Some(thread) = private_thread { self.inquello_processor.require_task_thread(connection_id,&thread).await?; }
         match result {
             Ok(Some(response)) => {
                 self.outgoing
@@ -2219,3 +2252,23 @@ mod workspace_routing_tests;
 #[cfg(all(feature = "inference-fixtures", debug_assertions))]
 #[path = "inquello_fixture.rs"]
 mod inquello_fixture;
+
+#[cfg(test)]
+mod private_handoff_transport_tests {
+    use super::*;
+    use crate::transport::ConnectionOrigin;
+    #[test]
+    fn bootstrap_and_credentials_require_both_private_stdio_transport_and_origin() {
+        let websocket=AppServerTransport::WebSocket {bind_address:"127.0.0.1:0".parse().unwrap()};
+        for method in ["inquello/tasks/bootstrap","inquello/routes/privateAuth"] {
+            assert!(!reject_private_handoff_transport(method,Some(&AppServerTransport::Stdio),ConnectionOrigin::Stdio));
+            for origin in [ConnectionOrigin::InProcess,ConnectionOrigin::WebSocket,ConnectionOrigin::RemoteControl] {
+                assert!(reject_private_handoff_transport(method,Some(&AppServerTransport::Stdio),origin));
+            }
+            for transport in [Some(&websocket),Some(&AppServerTransport::Off),None] {
+                assert!(reject_private_handoff_transport(method,transport,ConnectionOrigin::Stdio));
+            }
+        }
+        assert!(!reject_private_handoff_transport("inquello/tasks/preflight",Some(&websocket),ConnectionOrigin::WebSocket));
+    }
+}

@@ -441,8 +441,11 @@ impl OutgoingMessageSender {
                         send_error = Some(err);
                         break;
                     } else {
-                        self.analytics_events_client
-                            .track_server_request(connection_id.0, request.clone());
+                        // Private model-originated permission commands may contain
+                        // governed request data; never copy them into analytics.
+                        if !thread_id.is_some_and(|id|codex_core::inquello_inference::is_task_thread(&id.to_string())) {
+                            self.analytics_events_client.track_server_request(connection_id.0, request.clone());
+                        }
                     }
                 }
                 match send_error {

@@ -23,6 +23,7 @@ export function viewFor(hash: string): View {
 export function App(): ReactElement {
   const [view, setView] = useState<View>(() => viewFor(globalThis.location?.hash ?? ''));
   const [drafts] = useState(createDraftStore);
+  const [sessionEpoch,setSessionEpoch] = useState(0);
 
   useEffect(() => {
     const onHash = () => setView(viewFor(globalThis.location.hash));
@@ -34,17 +35,11 @@ export function App(): ReactElement {
     globalThis.location.hash = next === 'specimen' ? '#specimen' : '#shell';
   };
 
-  if (view === 'specimen') {
-    return (
-      <>
-        <Specimen onIdentityChanged={() => drafts.clear()} />
-        <div className="specimen specimen-back">
-          <Button variant="quiet" size="sm" onPress={() => show('shell')}>
-            Back to the workspace
-          </Button>
-        </div>
-      </>
-    );
-  }
-  return <Shell onShowSpecimen={() => show('specimen')} drafts={drafts} />;
+  return <>
+    <div hidden={view !== 'shell'}><Shell key={sessionEpoch} active={view === 'shell'} onShowSpecimen={() => show('specimen')} drafts={drafts} /></div>
+    {view === 'specimen' && <>
+      <Specimen onIdentityChanged={() => { drafts.clear(); setSessionEpoch(n => n + 1); }} />
+      <div className="specimen specimen-back"><Button variant="quiet" size="sm" onPress={() => show('shell')}>Back to the workspace</Button></div>
+    </>}
+  </>;
 }

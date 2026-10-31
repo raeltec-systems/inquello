@@ -186,6 +186,7 @@ const TAB_SETTLE_MS = 50;
 
 /** The tree `window.inquello` must expose, as `describe` renders it. */
 export const EXPECTED_BRIDGE_TREE = {
+  tasks: {preflight:'function',start:'function',reconcile:'function',onSessionChanged:'function'},
   usage: { forTask: 'function', set: 'function', onChanged: 'function' },
   environments: { forTask: 'function', onChanged: 'function' },
   routes: { list: 'function', configure: 'function', forTask: 'function', select: 'function', onChanged: 'function' },
@@ -3558,4 +3559,27 @@ export async function probeEnvironments(contents: WebContents, options: Organise
   } catch { failures.push('Environment smoke could not finish; seeded identity and matching native runtime required'); }
   finally { if (configured) { await options.identity.session.signOut(); await options.organise.syncPrincipal().catch(() => {}); } }
   return {ok:failures.length===0,failures};
+}
+
+/** Story 1.25 Start-surface probe only; never sends a request or claims provider acceptance. */
+export async function probeStartSurface(contents:WebContents,options:Omit<OrganiseProbeOptions,'runtimeRequest'>):Promise<{ok:boolean;skipped:boolean;failures:string[]}> {
+ if(options.identity.config.kind!=='configured')return{ok:true,skipped:true,failures:[]};
+ const failures:string[]=[];
+ try {
+  const seed=JSON.parse(fs.readFileSync(options.seedFile??'','utf8')) as {workspace_id?:string};
+  if(!seed.workspace_id)throw new Error('Seeded Workspace unavailable');
+  if(!(await options.identity.session.signIn()).ok)throw new Error('Seeded identity unavailable');
+  await options.organise.syncPrincipal();await options.organise.getWorkspaces();
+  const before=await options.organise.getTree(seed.workspace_id);if(!before.ok)throw new Error('Private tree unavailable');
+  const read=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}
+   const opened=await openShell();const ready=await wait(()=>q('[data-sidebar][data-sidebar-state="ready"]'),${SHELL_SETTLE_MS});
+   const button=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='New thread');if(!opened||!ready||!button)return{opened:false};button.click();
+   const start=await wait(()=>q('[data-start-view]:not([hidden])'),${SHELL_SETTLE_MS});const field=start?.querySelector('textarea');const send=start?.querySelector('[aria-label="Send"]');
+   return{opened:!!start,prompt:start?.textContent.includes('What should we work on?'),focused:document.activeElement===field,empty:field?.value==='',disabled:send?.getAttribute('aria-disabled')==='true',later:start?.textContent.includes('Files and Methods are not available yet.')};
+  })()`) as Record<string,boolean>;
+  for(const key of ['opened','prompt','focused','empty','disabled','later'])if(read[key]!==true)failures.push(`Start surface ${key} not established`);
+  const after=await options.organise.getTree(seed.workspace_id);if(!after.ok||after.value.tasks.length!==before.value.tasks.length)failures.push('New thread changed persisted Tasks before Send');
+ }catch{failures.push('Seeded Start surface could not be verified');}
+ finally{await options.identity.session.signOut().catch(()=>undefined);await options.organise.syncPrincipal().catch(()=>undefined);}
+ return{ok:failures.length===0,skipped:false,failures};
 }

@@ -79,7 +79,22 @@ const USAGE_TASK_CHANNEL = 'inquello:op:usage.forTask';
 const USAGE_SET_CHANNEL = 'inquello:op:usage.set';
 const USAGE_CHANGED_CHANNEL = 'inquello:usage-changed';
 
+const TASKS_CHANGED_CHANNEL = 'inquello:tasks-session-changed';
+const TASKS_PREFLIGHT_CHANNEL = 'inquello:op:tasks.preflight';
+const TASKS_START_CHANNEL = 'inquello:op:tasks.start';
+const TASKS_RECONCILE_CHANNEL = 'inquello:op:tasks.reconcile';
 const api = Object.freeze({
+  tasks: Object.freeze({
+    onSessionChanged: (listener: (identityChanged: boolean) => void): (() => void) => {
+      if (typeof listener !== 'function') throw new Error('expected a listener');
+      const handler = (_event: unknown, identityChanged: unknown) => listener(identityChanged === true);
+      ipcRenderer.on(TASKS_CHANGED_CHANNEL, handler);
+      return () => ipcRenderer.removeListener(TASKS_CHANGED_CHANNEL, handler);
+    },
+    preflight: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(TASKS_PREFLIGHT_CHANNEL, ...args),
+    start: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(TASKS_START_CHANNEL, ...args),
+    reconcile: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(TASKS_RECONCILE_CHANNEL, ...args),
+  }),
   usage: Object.freeze({
     forTask: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(USAGE_TASK_CHANNEL, ...args),
     set: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(USAGE_SET_CHANNEL, ...args),

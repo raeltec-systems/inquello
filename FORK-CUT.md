@@ -503,3 +503,98 @@ test are now authored using the existing default-off debug fixture dispatcher,
 with zero-provider-dispatch and retained-work assertions. Seeded mounted defaults,
 local-tool history and native limit-refusal smoke remain unrun. See `story-1-24-usage-support.md` for precise evidence and owner-run gates.
 Story stays **in-progress**; prior 1.21–1.23 eligibility/native gates are unchanged.
+
+## Story 1.25 — private Start-to-retained-turn binding (2026-10-30)
+
+Source now includes a memory-only Start surface, explicit candidate configuration
+revision and reasoning/speed acceptance, trusted named preflight/start/reconcile,
+and an additive 0009 private Task/run journal. The creator-scoped operation binds
+the exact request in governed private history; receipts contain private record references, not
+prompt copies. First submission uses a real reserved retained thread and idle-only
+turn, with host authorization installed before sampling. Lost acknowledgments
+reconcile the same operation and never submit a second turn.
+
+The internal fictional-data setup is default-off: an unpackaged main process must
+receive `INQUELLO_FICTIONAL_AUDIT_SESSION` with exact principal/Workspace/profile
+root, and the native binary must have the existing debug `inference-fixtures`
+feature. The isolated profile contains `.inquello-fictional-audit-session`; native
+checks its private store/root and binds the actual connection identity. No renderer
+classification, prompt detection, synthetic banner or additional acceptance exists.
+This is not production real-data authorization or proof of provider acceptance.
+
+Owned Task inference is fenced from unbound Responses, automatic retry/fallback,
+startup prewarm, compaction and memory summarization. Each actual sampling request
+and tool continuation must use current native authority and attributable usage.
+Only bounded command tools with an exact authorization mapping may execute; unknown
+non-command tools remain unavailable. Retained history access is owner-guarded,
+not granted by subscription. Submitted prompts/tool content are omitted from the
+new receipt/usage/diagnostic paths; governed Task/runtime history retains them.
+
+Native compilation, matching generated bindings, seeded Electron, actual retained
+child fixture, and separately authorized live-provider fictional audit acceptance
+remain explicit unrun gates. No paid provider call occurred during implementation.
+Prior Stories 1.21–1.24 open gates remain unchanged. See
+`_bmad-output/implementation-artifacts/story-1-25-start-support.md` for the precise
+verification ledger and limitations. Story remains **in-progress**.
+
+### Story 1.25 round 2 retained lifecycle correction (2026-10-30)
+
+Durable private Task completion now follows real core TurnComplete/TurnAborted events, not provider usage receiver termination. The lifecycle integration file `engine/codex-rs/core/src/session/mod.rs` was restored from `ec39248123172de735f80515d12e58a123a23a02` and baseline Git blob verified as `aba497125ce18b608ad2ddeadcd4827ee0214cb5`. Usage accounting and terminal Task state are independent; late terminal rewrites remain refused. Desktop corrections and real PolicyService permission-consumption tests pass the focused matrix. Rust compilation, native fixtures (including allowed one-use action), generated protocol, seeded Electron and separately authorized actual provider acceptance remain open. No generated bindings were manually edited or eligibility promoted.
+
+### Story 1.25 round 3 compatibility note
+
+Bounded corrections add domain-owned reservation validation fences, a sanitized `setup-failed` journal state and a separate retained-terminal observation operation. These remain JSON journal additions under migration 0009, not manually generated protocol bindings. Native debug fixtures now author real retained pre-sampling failure and inter-attempt interrupt checks. Rust build/test/fmt, matching protocol generation and actual retained-child execution remain required and unexecuted here; desktop-only passing checks do not discharge those gates.
+
+### Story 1.25 round 4 native effect boundary (2026-10-30)
+
+Private tool handlers now receive a child of the ordinary invocation cancellation
+token; Task authority revocation cancels that child and the registry awaits handler
+cleanup instead of dropping the future. There is no detached watcher to dispose.
+`ToolOrchestrator::run_attempt` revalidates trusted current authority and required
+limits after approval/network waits, immediately before each initial/retry
+`tool.run`, retaining existing sandbox and network cleanup. Queued attributable
+usage and terminal evidence is drained on cancellation, not replaced with zero.
+
+Regression scaffolding restored from pinned `ec39248123172de735f80515d12e58a123a23a02`
+was Git-blob verified before editing: `registry_tests.rs`
+`0cf26b084a09832e5bc7b6474babb9af7fd8a6b3`, `sandboxing.rs`
+`d49273beb37fadf1dda778ef5ba8a047438dff69`, and `session/turn_context.rs`
+`b31eeca5d5a9e20f382f6e4e78c5c5a7c837f64d`. The latter two remain unchanged.
+The bound Responses transport test extends hash-verified `client_websockets.rs`
+(baseline `288b8e208be27b3fb3a14d6b4a74922950a7d8dd`). No generated bindings,
+dependencies, tool grants, eligibility or real-data approval were changed.
+Native compilation and all new native regression execution remain explicit open
+gates; see the Story 1.25 support ledger for executed desktop checks.
+
+### Story 1.25 round 5 — actual one-shot command integration
+
+The private tool policy now admits pinned `exec_command`, not nonexistent legacy
+`shell`. Its one-shot string-`cmd` schema is constrained for private Tasks. Native
+`get_command` resolves the shell, and `UnifiedExecRuntime::run` authorizes the
+**final** rewritten argv and native Task-root cwd immediately before sandbox
+launch. The existing bounded command evaluator and one-use PermissionMediator
+are used; native forbidden rules remain effective. An independent native approval
+prompt/cache is not reused as a second grant. Private retries/elevation, TTY,
+persistent sessions, alternate environments/cwd, implicit skill dispatch,
+apply-patch interception, shell snapshots and plugin sidecars are unavailable.
+Final authority/limits checks occur after waits and before process spawn. The
+one-shot lifecycle awaits startup ownership and reaps a process even when
+cancellation races with publication of its process handle.
+
+Additional pinned `ec39248123172de735f80515d12e58a123a23a02` sources restored
+read-only and Git-blob verified before editing:
+- `core/src/tools/handlers/unified_exec.rs`: `50faf5259ae74c4d81236b681617843ac93bda56`
+- `core/src/unified_exec/process_manager.rs`: `0ba92cb486fe0b78413e85b061ae8601063bcd7b`
+- `core/src/tools/runtimes/unified_exec.rs`: `44a6ab9b35e30fb7746886ba07aca7536759c09b`
+- `core/src/unified_exec/oneshot.rs`: `5136c9139e12d67229ad6e8ed003325622e8afd6`
+- `core/src/tools/handlers/unified_exec_tests.rs`: `0881f7eafffcab146fec1c2e23ac745bf677f975`
+  Originals are retained in round-5 baselines.
+
+The actual retained fixture now emits string-`cmd` `exec_command`, asserts the
+advertised tool/schema, exact permission argv, one appended Task-root effect,
+denial/no effect, consumed-permission reuse rejection, no additional inference,
+sentinel hook suppression and exact Task/run usage. It also authors actual
+one-shot running-process authority-revocation coverage. Native source is **not
+execution evidence**: Rust build/fmt/check/clippy/tests, matching protocol
+regeneration, sandboxed Electron and separately authorized provider-connected
+fictional audit acceptance remain open. No dependency or credentials added.

@@ -1611,6 +1611,39 @@ client_request_definitions! {
         serialization: None,
         response: v2::InquelloRouteConfigureResponse,
     },
+    InquelloTasksConsumePermission => "inquello/tasks/consumePermission" {
+        params: v2::InquelloTasksConsumePermissionParams,
+        serialization: None,
+        manual_payload_conversion: manual,
+        response: v2::InquelloRoutePrivateAuthResponse,
+    },
+    InquelloTasksPreflight => "inquello/tasks/preflight" {
+        params: v2::InquelloTasksPreflightParams,
+        serialization: None,
+        response: v2::InquelloTasksPreflightResponse,
+    },
+    InquelloTasksStart => "inquello/tasks/start" {
+        params: v2::InquelloTasksStartParams,
+        serialization: None,
+        response: v2::InquelloTasksStartResponse,
+    },
+    InquelloTasksReconcile => "inquello/tasks/reconcile" {
+        params: v2::InquelloTasksReconcileParams,
+        serialization: None,
+        manual_payload_conversion: manual,
+        response: v2::InquelloTasksStartResponse,
+    },
+    InquelloTasksForThread => "inquello/tasks/forThread" {
+        params: v2::InquelloTasksForThreadParams,
+        serialization: None,
+        response: v2::InquelloTasksForThreadResponse,
+    },
+    InquelloTasksBootstrap => "inquello/tasks/bootstrap" {
+        params: v2::InquelloTasksBootstrapParams,
+        serialization: None,
+        manual_payload_conversion: manual,
+        response: v2::InquelloRoutePrivateAuthResponse,
+    },
     InquelloUsageRead => "inquello/usage/read" {
         params: v2::InquelloUsageReadParams,
         serialization: None,
@@ -2066,6 +2099,10 @@ server_request_definitions! {
 
     /// DEPRECATED APIs below
     /// Request to approve a patch.
+    InquelloTaskAuthority => "inquello/tasks/authority" {
+        params: v2::InquelloTaskAuthorityParams,
+        response: v2::InquelloTaskAuthorityResponse,
+    },
     /// This request is used for Turns started via the legacy APIs (i.e. SendUserTurn, SendUserMessage).
     ApplyPatchApproval {
         params: v1::ApplyPatchApprovalParams,

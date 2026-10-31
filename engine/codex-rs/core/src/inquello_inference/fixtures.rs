@@ -74,3 +74,20 @@ impl FixtureSession {
     }
 }
 impl Default for FixtureSession { fn default() -> Self { Self::new() } }
+
+// Real retained-Task fixture seam. This supplies transport only; the ordinary
+// Task coordinator still owns identity, journal, idle turn, tools and accounting.
+// Consumed fixture attempts can never fall through to the paid provider endpoint.
+static REQUIRED_TASK_ATTEMPTS: OnceLock<Mutex<std::collections::HashSet<String>>> = OnceLock::new();
+pub fn bind_task_transport(binding:&Binding,endpoint:&str,certificate:&[u8])->Result<()> {
+    binding.validate().map_err(failure)?;
+    if binding.route_id!="claude-api-key" {return Err(failure("retained Task fixture requires Messages"));}
+    let client=MessagesClient::fixture_from_der(endpoint,certificate).map_err(failure)?;
+    let mut required=REQUIRED_TASK_ATTEMPTS.get_or_init(||Mutex::new(std::collections::HashSet::new())).lock().map_err(|_|failure("fixture unavailable"))?;
+    if required.len()>=128 || !required.insert(binding.attempt_id.clone()){return Err(failure("fixture attempt reused or capacity reached"));}
+    transports().lock().map_err(|_|failure("fixture transport unavailable"))?.insert(binding.attempt_id.clone(),client);
+    Ok(())
+}
+pub(super) fn task_transport_required(attempt:&str)->bool {
+    REQUIRED_TASK_ATTEMPTS.get().is_some_and(|set|set.lock().map(|set|set.contains(attempt)).unwrap_or(true))
+}

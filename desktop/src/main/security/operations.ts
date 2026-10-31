@@ -1,3 +1,5 @@
+import type { TaskService } from '../tasks/service';
+import { taskPreflightPayload, taskStartPayload, taskReconcilePayload } from '../tasks/validators';
 import type { UsageService } from '../usage/service';
 import { usageReadPayload, usageSetPayload } from '../usage/validators';
 import type { EnvironmentService } from '../environments/service';
@@ -63,6 +65,9 @@ import { describeSender, isTrustedSender, type InvokeEventLike } from './sender'
 
 /** Every operation the preload exposes, in `<namespace>.<name>` form. */
 export const OPERATION_NAMES = [
+  'tasks.preflight',
+  'tasks.start',
+  'tasks.reconcile',
   'usage.forTask',
   'usage.set',
   'environments.forTask',
@@ -289,6 +294,7 @@ export interface PolicyOperations {
 }
 
 export interface OperationDeps {
+  tasks?: Pick<TaskService, 'preflight' | 'start' | 'reconcile'>;
   usage?: Pick<UsageService, 'forTask' | 'set'>;
   environments?: Pick<EnvironmentService, 'forTask'>;
   routes?: Pick<RouteService, 'list' | 'configure' | 'forTask' | 'select'>;
@@ -482,6 +488,9 @@ export function createOperations(deps: OperationDeps): Operation[] {
   const capabilityManage: Operation<CapabilityInput, CapabilityResult> = {name:'capabilities.manage',validate:capabilityPayload,handle:(input)=>{ if(!deps.capabilities) throw new Error('capabilities unavailable'); return deps.capabilities.manage(input); }};
   const routes = () => { if (!deps.routes) throw new Error('Processing routes unavailable'); return deps.routes; };
   const routeOps: Operation[] = [
+    { name: 'tasks.preflight', validate: taskPreflightPayload, handle: input => { if (!deps.tasks) throw new Error('Task start unavailable'); return deps.tasks.preflight(input as Parameters<TaskService['preflight']>[0]); } },
+    { name: 'tasks.start', validate: taskStartPayload, handle: input => { if (!deps.tasks) throw new Error('Task start unavailable'); return deps.tasks.start(input as Parameters<TaskService['start']>[0]); } },
+    { name: 'tasks.reconcile', validate: taskReconcilePayload, handle: input => { if (!deps.tasks) throw new Error('Task reconciliation unavailable'); return deps.tasks.reconcile((input as {operationId:string}).operationId); } },
     { name: 'usage.forTask', validate: usageReadPayload, handle: input => { if (!deps.usage) throw new Error('Usage unavailable'); return deps.usage.forTask((input as {taskId:string}).taskId); } },
     { name: 'usage.set', validate: usageSetPayload, handle: input => { if (!deps.usage) throw new Error('Usage unavailable'); return deps.usage.set(input as Parameters<UsageService['set']>[0]); } },
     { name: 'environments.forTask', validate: taskRoutePayload, handle: (input) => { if (!deps.environments) throw new Error('Environment information unavailable'); return deps.environments.forTask((input as {taskId:string}).taskId); } },
