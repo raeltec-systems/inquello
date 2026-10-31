@@ -1,3 +1,5 @@
+import {contextPayload} from './payloads';
+import {searchView,reopenView,type SearchInput,type SearchView,type ReopenInput,type ReopenView,type NavigationInput} from './navigation';
 /**
  * Private Workspace organisation in the main process (Story 1.14).
  *
@@ -24,7 +26,7 @@
  *   recorded for the `task` and `run` dimensions only, with the actor kind
  *   `system` (this desktop) supplied here, never by the renderer.
  */
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import { RpcResponseError } from '../runtime/errors';
 import type { Logger } from '../runtime/logger';
@@ -177,6 +179,7 @@ function refusalOf(error: unknown): { kind: string; actual?: number } | null {
 
 export class OrganiseService {
   private authorityGeneration=0;
+  private searchSequence=0;
   private listSequence=0;
   private settledListSequence=0;
   private readonly listTickets=new WeakMap<ServiceWorkspacesView,number>();
@@ -279,6 +282,44 @@ export class OrganiseService {
     } catch (error) {
       return this.runtimeFailure(error);
     }
+  }
+
+  // Runtime instances are opaque (often objects); assign an identity, never stringify them.
+  private snapshotRuntime: unknown = undefined;
+  private snapshotRuntimeGeneration = 0;
+  /** Native-to-main request-scoped observation only; never exposed to a renderer.
+   * One service read per observation, independent of the number of Tasks.
+   * The final observation is a boundary, not a promise about future revocation.
+   */
+  async authorizeContext(params:unknown):Promise<{available:boolean;snapshot:string|null;serviceEngagementIds:string[]}> {
+    const denied = {available:false,snapshot:null,serviceEngagementIds:[]};
+    const principal=this.options.identity.principalId(),instance=this.options.runtime.instance(),generation=this.authorityGeneration;
+    try {
+      const input=contextPayload([params]);if(!principal||!this.options.runtime.ready())return denied;
+      if(this.snapshotRuntime!==instance){this.snapshotRuntime=instance;this.snapshotRuntimeGeneration++;}
+      const runtimeGeneration=this.snapshotRuntimeGeneration;
+      const observation=await this.freshWorkspaces(principal);
+      if(principal!==this.options.identity.principalId()||instance!==this.options.runtime.instance()||generation!==this.authorityGeneration||runtimeGeneration!==this.snapshotRuntimeGeneration)return denied;
+      const workspace=observation.workspaces.find(w=>w.workspace_id===input.workspaceId);
+      if(!workspace||workspace.engagements.length>2000)return denied;
+      const engagements=[...workspace.engagements].sort((a,b)=>a.engagement_id.localeCompare(b.engagement_id));
+      const serviceEngagementIds=engagements.map(e=>e.engagement_id);
+      if(new Set(serviceEngagementIds).size!==serviceEngagementIds.length)return denied;
+      const snapshot=createHash('sha256').update(JSON.stringify({principal,generation,runtimeGeneration,
+        workspace:{...workspace,membership:{...workspace.membership,roles:[...(workspace.membership.roles??[])].sort()},engagements}})).digest('hex');
+      if(input.expectedSnapshot!==null&&input.expectedSnapshot!==snapshot)return denied;
+      return {available:true,snapshot,serviceEngagementIds};
+    }catch{return denied;}
+  }
+  async search(input:SearchInput):Promise<OrganiseResult<SearchView>> {
+    const sequence=++this.searchSequence;
+    return this.call('inquello/workspace/search',input,raw=>{if(sequence!==this.searchSequence)throw new Error();const value=searchView(raw);if(value.workspaceId!==input.workspaceId||value.query!==input.query.trim())throw new Error();return value;});
+  }
+  async reopen(input:ReopenInput):Promise<OrganiseResult<ReopenView>> {
+    return this.call('inquello/task/reopen',input,raw=>{const value=reopenView(raw);if(value.task.taskId!==input.taskId||value.task.workspaceId!==input.workspaceId||input.itemId!==null&&(value.hit?.itemId!==input.itemId||value.hit?.turnId!==input.turnId))throw new Error();return value;});
+  }
+  async setNavigation(input:NavigationInput):Promise<OrganiseResult<TaskView>> {
+    return this.call<InquelloTaskResponse,TaskView>('inquello/task/setNavigation',input,response=>taskView(response.task));
   }
 
   // ---- Workspaces ------------------------------------------------------------

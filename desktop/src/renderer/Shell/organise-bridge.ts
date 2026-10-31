@@ -1,3 +1,4 @@
+import type {SearchInput,ReopenInput,NavigationInput} from '../../main/organise/navigation';
 /**
  * The renderer's typed view of `window.inquello.organise` (Story 1.14).
  * Results come from main and are parsed defensively: a malformed answer is
@@ -24,6 +25,8 @@ export interface FolderItem {
 }
 
 export interface TaskItem {
+  pinned?:boolean;
+  archived?:boolean;
   taskId: string;
   workspaceId: string;
   engagementId: string | null;
@@ -60,6 +63,9 @@ export interface WorkspacesState {
 export type Outcome<T> = { ok: true; value: T } | { ok: false; code: string; reason: string };
 
 export interface OrganiseBridge {
+  search?(input:SearchInput):Promise<unknown>;
+  reopen?(input:ReopenInput):Promise<unknown>;
+  setNavigation?(input:NavigationInput):Promise<unknown>;
   getWorkspaces(): Promise<unknown>;
   getTree(request: { workspaceId: string }): Promise<unknown>;
   createEngagement(request: {
@@ -139,7 +145,8 @@ export function parseTask(value: unknown): TaskItem | null {
   const rev = revision(r.revision);
   if (taskId === null || workspaceId === null || title === null || rev === null || sourceRefs === null || artifactRefs === null) return null;
   if (engagementId === undefined || folderId === undefined || runtimeThreadId === undefined) return null;
-  return { taskId, workspaceId, engagementId, folderId, title, runtimeThreadId, sourceRefs, artifactRefs, visibility: 'private', revision: rev };
+  if(r.pinned!==undefined&&typeof r.pinned!=='boolean'||r.archived!==undefined&&typeof r.archived!=='boolean')return null;
+  return { taskId, workspaceId, engagementId, folderId, title, runtimeThreadId, sourceRefs, artifactRefs, visibility: 'private', revision: rev, pinned:r.pinned===true,archived:r.archived===true };
 }
 
 function all<T>(value: unknown, parse: (item: unknown) => T | null): T[] | null {

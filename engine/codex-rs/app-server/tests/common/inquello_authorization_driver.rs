@@ -14,7 +14,7 @@ const ALICE:&str="11111111-1111-4111-8111-111111111111";
 const BOB:&str="22222222-2222-4222-8222-222222222222";
 const COMPANY_A:&str="5d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e";
 const COMPANY_B:&str="6d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e";
-const LATE:&str="INV-104 duplicated: potential K12,480; INV-105 distinct. Authorization fixture output, not professional approval.";
+const LATE:&str="INV-104 duplicated: potential K12,480; INV-105 distinct. Authorization fixture output, not professional approval. Vendor **evidence** required.";
 fn event(kind:&str,value:Value)->String {format!("event: {kind}\ndata: {value}\n\n")}
 fn streams(route:&str,scenario:&str)->Vec<String> {
     let waiting=scenario=="revoke-running-tool" || scenario.starts_with("lifecycle-");
@@ -205,7 +205,7 @@ async fn wait_progress<F:Fn(&Value)->bool>(server:&mut TestAppServer,host:&mut P
     }
 }
 pub(super) async fn run(route:&'static str,scenario:&'static str,service:Option<ServiceFixture>) {
-    let revoke=scenario!="allowed" && !scenario.starts_with("lifecycle-");
+    let revoke=scenario!="allowed" && scenario!="search-stalled-admission" && !scenario.starts_with("lifecycle-");
     let principal=service.as_ref().map_or(ALICE,|s|s.principal.as_str()).to_owned();
     let workspace=service.as_ref().map_or(COMPANY_A,|s|s.workspace.as_str()).to_owned();
     let directory=tempfile::tempdir().unwrap();let home=directory.path().join("runtime");std::fs::create_dir(&home).unwrap();
@@ -545,6 +545,48 @@ pub(super) async fn run(route:&'static str,scenario:&'static str,service:Option<
         let mut correction=ended;correction["operationId"]=json!(uuid::Uuid::new_v4().to_string());correction["request"]=json!("Keep this draft; do not start a new turn.");
         assert!(private_rpc(&mut server,&mut host,"inquello/tasks/steer",correction).await.get("rpcError").is_some());
         assert_eq!(fixture.requests.lock().await.len(),if scenario=="lifecycle-progress-continuity" {4}else{2});
+        if scenario=="lifecycle-stop-resume" {
+            // The phrase appears in the original request, not the resumed turn.
+            // Exercise both retained formats through actual private RPCs.
+            for legacy in [false,true] {
+                if legacy {
+                    server.shutdown_gracefully().await.unwrap();
+                    use sqlx::Connection;
+                    let mut changed=0;
+                    for entry in std::fs::read_dir(&home).unwrap() {
+                        let path=entry.unwrap().path();
+                        if path.extension().and_then(|s|s.to_str())!=Some("sqlite") {continue;}
+                        let mut db=sqlx::SqliteConnection::connect_with(&sqlx::sqlite::SqliteConnectOptions::new().filename(&path)).await.unwrap();
+                        let has:i64=sqlx::query_scalar("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='threads'").fetch_one(&mut db).await.unwrap();
+                        if has==1 {changed+=sqlx::query("UPDATE threads SET history_mode='legacy' WHERE id=?").bind(&thread).execute(&mut db).await.unwrap().rows_affected();}
+                        db.close().await.unwrap();
+                    }
+                    assert_eq!(changed,1,"explicit isolated legacy-format fixture, never production metadata");
+                    convert_saved_fixture_header_to_legacy(&home,&thread);
+                    server=TestAppServer::builder().with_program(std::path::Path::new(&binary)).with_codex_home(&home).without_auto_env()
+                        .with_env_overrides(&[("INQUELLO_WORKING_STORE",database.to_str()),("OPENAI_API_KEY",None),("ANTHROPIC_API_KEY",None)])
+                        .build_initialized().await.unwrap();
+                    host.pending.clear();host.notifications.clear();
+                    private_rpc(&mut server,&mut host,"inquello/session/setPrincipal",json!({"principalId":principal})).await;
+                    assert_eq!(private_rpc(&mut server,&mut host,"inquello/tasks/bootstrap",json!({"workspaceId":workspace,"isolatedRoot":directory.path()})).await["accepted"],true);
+                }
+                let found=private_rpc(&mut server,&mut host,"inquello/workspace/search",json!({"workspaceId":workspace,"query":"INV-105 is distinct","includeArchived":true,"cursor":null})).await;
+                assert!(found.get("rpcError").is_none(),"old-turn native search legacy={legacy}: {found}");
+                assert_eq!(found["unavailable"],false,"supported history must not silently omit coverage");
+                let hit=found["items"].as_array().unwrap().iter().find(|v|v["kind"]=="conversation" && v["turnId"]==observed["turnId"]).expect("older retained turn exact hit");
+                assert_ne!(hit["turnId"],final_binding["turnId"]);
+                let opened=private_rpc(&mut server,&mut host,"inquello/task/reopen",json!({"workspaceId":workspace,"taskId":task,"query":"INV-105 is distinct","turnId":hit["turnId"],"itemId":hit["itemId"]})).await;
+                assert!(opened.get("rpcError").is_none(),"old-turn exact native reopen legacy={legacy}: {opened}");
+                assert_eq!(opened["hit"]["turnId"],observed["turnId"]);assert_eq!(opened["hit"]["itemId"],hit["itemId"]);
+                assert!(opened["hit"]["text"].as_str().unwrap().contains("INV-105 is distinct"));
+                let markdown=private_rpc(&mut server,&mut host,"inquello/workspace/search",json!({"workspaceId":workspace,"query":"Vendor evidence required","includeArchived":true,"cursor":null})).await;
+                assert_eq!(markdown["unavailable"],false,"Markdown coverage legacy={legacy}: {markdown}");
+                let selected=markdown["items"].as_array().unwrap().iter().find(|item|item["kind"]=="conversation").expect("both history formats match visible Markdown phrase");
+                let exact=private_rpc(&mut server,&mut host,"inquello/task/reopen",json!({"workspaceId":workspace,"taskId":task,"query":"Vendor evidence required","turnId":selected["turnId"],"itemId":selected["itemId"]})).await;
+                assert_eq!(exact["hit"]["itemId"],selected["itemId"],"same normalized legacy/paginated exact activation");
+                assert_eq!(fixture.requests.lock().await.len(),2,"retained inspection never samples");
+            }
+        }
         server.shutdown_gracefully().await.unwrap();
         if scenario=="lifecycle-warm-policy-change" {
             let modes=retained_sandbox_modes(&home,&thread);
@@ -626,10 +668,34 @@ pub(super) async fn run(route:&'static str,scenario:&'static str,service:Option<
         assert!(retained.to_string().contains("INV-104"));assert!(retained.get("rpcError").is_none());
         let retry=private_rpc(&mut server,&mut host,"inquello/tasks/start",command).await;assert_eq!(retry["taskId"],task);
         assert_eq!(fixture.requests.lock().await.len(),2,"reconcile/replay never dispatches another model attempt");
+        // Actual native search and exact-hit inspection, not generic search fixtures.
+        let search=json!({"workspaceId":workspace,"query":"potential K12,480","includeArchived":true,"cursor":null});
+        let found=private_rpc(&mut server,&mut host,"inquello/workspace/search",search.clone()).await;
+        assert!(found.get("rpcError").is_none(),"private retained search: {found}");
+        let hit=found["items"].as_array().unwrap().iter().find(|v|v["kind"]=="conversation" && v["taskId"]==task).expect("actual saved conversation hit");
+        let activation=json!({"workspaceId":workspace,"taskId":task,"query":"potential K12,480","turnId":hit["turnId"],"itemId":hit["itemId"]});
+        let opened=private_rpc(&mut server,&mut host,"inquello/task/reopen",activation.clone()).await;
+        assert!(opened.get("rpcError").is_none(),"exact native retained reopen: {opened}");
+        assert_eq!(opened["hit"]["turnId"],hit["turnId"]);assert_eq!(opened["hit"]["itemId"],hit["itemId"]);
+        assert!(opened["hit"]["text"].as_str().unwrap().contains("potential K12,480"));
+        assert_eq!(fixture.requests.lock().await.len(),2,"search/reopen perform no inference");
+        // Occurrence matching normalizes Markdown; activation must use that same matcher.
+        let markdown=private_rpc(&mut server,&mut host,"inquello/workspace/search",json!({"workspaceId":workspace,"query":"Vendor evidence required","includeArchived":true,"cursor":null})).await;
+        let exact=markdown["items"].as_array().unwrap().iter().find(|v|v["kind"]=="conversation").expect("Markdown-normalized native occurrence");
+        let reopened=private_rpc(&mut server,&mut host,"inquello/task/reopen",json!({"workspaceId":workspace,"taskId":task,"query":"Vendor evidence required","turnId":exact["turnId"],"itemId":exact["itemId"]})).await;
+        assert!(reopened.get("rpcError").is_none(),"same matcher must activate Markdown hit: {reopened}");
+        assert_eq!(reopened["hit"]["itemId"],exact["itemId"]);
+        let forged=json!({"workspaceId":workspace,"taskId":task,"query":"potential K12,480","turnId":hit["turnId"],"itemId":"foreign-item"});
+        assert!(private_rpc(&mut server,&mut host,"inquello/task/reopen",forged).await.get("rpcError").is_some());
+        if service.is_none(){saved_navigation_matrix(&mut server,&mut host,&database,&home,&workspace,&task,&thread,&activation,route,&configuration,scenario=="search-stalled-admission").await;}
         host.authority_callback=None;host.revoke_callback=None;
         // Same Workspace peer cannot read a retained creator-private Task.
         private_rpc(&mut server,&mut host,"inquello/session/setPrincipal",json!({"principalId":BOB})).await;
         let denied=private_rpc(&mut server,&mut host,"inquello/tasks/forThread",json!({"threadId":thread})).await;
+        let denied_hit=private_rpc(&mut server,&mut host,"inquello/task/reopen",activation.clone()).await;
+        assert!(denied_hit.get("rpcError").is_some());assert!(!denied_hit.to_string().contains("potential K12,480"));
+        let denied_search=private_rpc(&mut server,&mut host,"inquello/workspace/search",search.clone()).await;
+        if let Some(items)=denied_search["items"].as_array(){assert!(items.is_empty(),"peer-private results and counts absent");}
         let missing=private_rpc(&mut server,&mut host,"inquello/tasks/forThread",json!({"threadId":uuid::Uuid::new_v4()})).await;
         assert_eq!(denied,missing,"foreign and nonexistent bindings have the same bounded response");
         assert!(!denied.to_string().contains("INV-104"));
@@ -643,9 +709,125 @@ pub(super) async fn run(route:&'static str,scenario:&'static str,service:Option<
         private_rpc(&mut server,&mut host,"inquello/tasks/bootstrap",json!({"workspaceId":COMPANY_B,"isolatedRoot":directory.path()})).await;
         let denied=private_rpc(&mut server,&mut host,"thread/read",json!({"threadId":thread,"includeTurns":true})).await;
         assert!(denied.get("rpcError").is_some());assert!(!denied.to_string().contains("INV-104"));
+        let mut crossed_activation=activation;crossed_activation["workspaceId"]=json!(COMPANY_B);
+        let crossed=private_rpc(&mut server,&mut host,"inquello/task/reopen",crossed_activation).await;
+        assert!(crossed.get("rpcError").is_some());assert!(!crossed.to_string().contains("potential K12,480"));
     }
     server.shutdown_gracefully().await.unwrap();
     if scenario=="revoke-pending-permission" {assert!(!directory.path().join("tasks").join(task).join("output/authorized.txt").exists(),"late approval never executes after cancellation");}
     if running_shell.is_some() {assert!(!directory.path().join("tasks").join(task).join("output/late.txt").exists(),"no late side effect after observed shell termination and runtime shutdown");}
     fixture.stop.send(()).unwrap();fixture.task.await.unwrap();
+}
+
+
+/// Real RPC matrix with a parent-controlled final-callback barrier. All records
+/// are fictional and each denial follows a positive search/activation control.
+async fn saved_navigation_matrix(server:&mut TestAppServer,host:&mut PrivateTaskHost,database:&std::path::Path,home:&std::path::Path,workspace:&str,task:&str,thread:&str,activation:&Value,route:&str,configuration:&Value,exercise_stall:bool){
+    use sqlx::Connection;
+    for index in 0..51 {
+        let made=private_rpc(server,host,"inquello/task/create",json!({"operationId":uuid::Uuid::new_v4(),"expectedRevision":0,"workspaceId":workspace,"engagementId":null,"folderId":null,"title":format!("Pagination procurement {index:02}")})).await;
+        assert!(made.get("rpcError").is_none(),"normal private draft fixture: {made}");
+    }
+    let request=json!({"workspaceId":workspace,"query":"Pagination procurement","includeArchived":true,"cursor":null});
+    let before_inventory=host.authority_context["inventoryCalls"].as_u64().unwrap_or(0);
+    let before_policy=host.authority_context["policyCalls"].as_u64().unwrap_or(0);
+    let first=private_rpc(server,host,"inquello/workspace/search",request.clone()).await;
+    assert_eq!(first["items"].as_array().unwrap().len(),50);
+    assert!(first["nextCursor"].is_string(),"actual nonempty next cursor");
+    assert_eq!(host.authority_context["inventoryCalls"].as_u64().unwrap()-before_inventory,2,"51 candidates still use two inventory observations");
+    assert_eq!(host.authority_context["policyCalls"].as_u64().unwrap()-before_policy,4,"generic/initial/final policy observations are request bounded for fictional records");
+    let mut next=request.clone();next["cursor"]=first["nextCursor"].clone();
+    let second=private_rpc(server,host,"inquello/workspace/search",next.clone()).await;
+    assert_eq!(second["items"].as_array().unwrap().len(),1);assert!(second["nextCursor"].is_null());
+    let off_page=second["items"][0]["taskId"].as_str().unwrap().to_owned();
+    let opened=private_rpc(server,host,"inquello/task/reopen",json!({"workspaceId":workspace,"taskId":off_page,"query":null,"turnId":null,"itemId":null})).await;
+    assert_eq!(opened["task"]["taskId"],off_page);
+    for (field,value) in [("query",json!("different procurement")),("includeArchived",json!(false)),("workspaceId",json!(COMPANY_B))] {
+        let mut changed=next.clone();changed[field]=value;
+        assert!(private_rpc(server,host,"inquello/workspace/search",changed).await.get("rpcError").is_some(),"cursor scope mismatch {field}");
+    }
+    host.authority_context["inventorySnapshot"]=json!("fictional-scope-v2");
+    assert!(private_rpc(server,host,"inquello/workspace/search",next.clone()).await.get("rpcError").is_some(),"same labels do not preserve stale authority cursor");
+    host.authority_context["inventorySnapshot"]=json!("fictional-scope-v1");
+    let mut db=sqlx::SqliteConnection::connect_with(&sqlx::sqlite::SqliteConnectOptions::new().filename(database)).await.unwrap();
+    let title:String=sqlx::query_scalar("SELECT title FROM tasks WHERE task_id=?").bind(&off_page).fetch_one(&mut db).await.unwrap();
+    host.authority_context["finalMutationExecuted"]=json!(false);
+    host.authority_context["inventoryFinalMutation"]=json!({"database":database,"sql":"UPDATE tasks SET title=? WHERE task_id=?","arguments":["Withdrawn off-page private contributor",off_page]});
+    let denied=private_rpc(server,host,"inquello/workspace/search",request.clone()).await;
+    assert_eq!(host.authority_context["finalMutationExecuted"],true,"must reach actual final await");
+    assert!(denied.get("rpcError").is_some(),"off-page contributor mutation invalidates first page: {denied}");
+    assert!(denied.get("items").is_none(),"no partial snippets/counts");
+    sqlx::query("UPDATE tasks SET title=? WHERE task_id=?").bind(&title).bind(&off_page).execute(&mut db).await.unwrap();
+    assert!(private_rpc(server,host,"inquello/workspace/search",request).await.get("rpcError").is_none(),"restored positive control");
+    // Retained lineage changes during the final service wait, not before entry.
+    let original_run:String=sqlx::query_scalar("SELECT record FROM task_runs WHERE task_id=?").bind(task).fetch_one(&mut db).await.unwrap();
+    host.authority_context["inventoryFinalMutation"]=json!({"database":database,"sql":"UPDATE task_runs SET record=json_set(record,'$.status','interrupted') WHERE task_id=?","arguments":[task]});
+    let denied=private_rpc(server,host,"inquello/task/reopen",activation.clone()).await;
+    assert!(denied.get("rpcError").is_some(),"final-await lineage mutation rejects exact hit: {denied}");
+    assert!(!denied.to_string().contains("potential K12,480"));
+    sqlx::query("UPDATE task_runs SET record=? WHERE task_id=?").bind(&original_run).bind(task).execute(&mut db).await.unwrap();
+    // A genuinely indexed old-message edit at the same final boundary.
+    let mut history_database=None;
+    for entry in std::fs::read_dir(home).unwrap(){let path=entry.unwrap().path();if path.extension().and_then(|x|x.to_str())!=Some("sqlite"){continue;}
+        let mut history=sqlx::SqliteConnection::connect_with(&sqlx::sqlite::SqliteConnectOptions::new().filename(&path)).await.unwrap();
+        let table:i64=sqlx::query_scalar("SELECT count(*) FROM sqlite_master WHERE type='table' AND name='thread_items'").fetch_one(&mut history).await.unwrap();
+        history.close().await.unwrap();if table==1{assert!(history_database.replace(path).is_none());}}
+    let history_database=history_database.expect("real native indexed history database");
+    let mut history=sqlx::SqliteConnection::connect_with(&sqlx::sqlite::SqliteConnectOptions::new().filename(&history_database)).await.unwrap();
+    let item=activation["itemId"].as_str().unwrap();
+    let original_item:String=sqlx::query_scalar("SELECT item_json FROM thread_items WHERE thread_id=? AND item_id=?").bind(thread).bind(item).fetch_one(&mut history).await.unwrap();
+    // No-hit histories still contribute to the completed search observation.
+    let absent=json!({"workspaceId":workspace,"query":"newly permitted zero-match witness","includeArchived":true,"cursor":null});
+    let empty=private_rpc(server,host,"inquello/workspace/search",absent.clone()).await;
+    assert_eq!(empty["unavailable"],false);assert!(empty["items"].as_array().unwrap().is_empty());
+    host.authority_context["finalMutationExecuted"]=json!(false);
+    host.authority_context["inventoryFinalMutation"]=json!({"database":history_database,"sql":"UPDATE thread_items SET item_json=json_set(item_json,'$.text','newly permitted zero-match witness') WHERE thread_id=? AND item_id=?","arguments":[thread,item]});
+    let changed=private_rpc(server,host,"inquello/workspace/search",absent.clone()).await;
+    assert_eq!(host.authority_context["finalMutationExecuted"],true);
+    assert!(changed.get("rpcError").is_some(),"zero-to-match change during final await must not return a stale zero: {changed}");
+    let positive=private_rpc(server,host,"inquello/workspace/search",absent).await;
+    assert!(positive["items"].as_array().unwrap().iter().any(|hit|hit["itemId"]==item),"new request observes the new match");
+    sqlx::query("UPDATE thread_items SET item_json=? WHERE thread_id=? AND item_id=?").bind(&original_item).bind(thread).bind(item).execute(&mut history).await.unwrap();
+    host.authority_context["inventoryFinalMutation"]=json!({"database":history_database,"sql":"UPDATE thread_items SET item_json=json_set(item_json,'$.text','Withheld retained message') WHERE thread_id=? AND item_id=?","arguments":[thread,item]});
+    let denied=private_rpc(server,host,"inquello/task/reopen",activation.clone()).await;
+    assert!(denied.get("rpcError").is_some(),"final-await indexed content mutation rejects exact hit: {denied}");
+    assert!(!denied.to_string().contains("potential K12,480"));
+    sqlx::query("UPDATE thread_items SET item_json=? WHERE thread_id=? AND item_id=?").bind(original_item).bind(thread).bind(item).execute(&mut history).await.unwrap();history.close().await.unwrap();
+    assert!(private_rpc(server,host,"inquello/task/reopen",activation.clone()).await.get("rpcError").is_none());
+    if exercise_stall {
+        host.authority_context["holdNextAdmission"]=json!(true);
+        let notifications_before=host.notifications.len();
+        let started=tokio::time::Instant::now();
+        let stalled=private_rpc(server,host,"inquello/workspace/search",json!({"workspaceId":workspace,"query":"potential K12,480","includeArchived":true,"cursor":null})).await;
+        assert!(started.elapsed()<Duration::from_secs(35),"admission is inside the saved-work deadline");
+        assert!(stalled.get("rpcError").is_some());assert!(stalled.get("items").is_none());assert!(!stalled.to_string().contains("potential K12,480"));
+        let held:codex_app_server_protocol::RequestId=serde_json::from_value(host.authority_context["heldAdmissionId"].take()).expect("actual stalled native callback");
+        server.send_response(held,json!({"workspacePolicy":host.policy})).await.unwrap();
+        // Fresh explicit bootstrap is required after authority loss; no inference
+        // or provider fallback is involved. The late old reply cannot revive it.
+        assert_eq!(private_rpc(server,host,"inquello/tasks/bootstrap",json!({"workspaceId":workspace,"isolatedRoot":home.parent().unwrap()})).await["accepted"],true);
+        assert!(private_rpc(server,host,"inquello/task/reopen",activation.clone()).await.get("rpcError").is_none());
+        assert!(host.pending.is_empty(),"no late success response escaped the cancelled request");
+        assert!(!host.notifications[notifications_before..].iter().any(|message|message.to_string().contains("potential K12,480")),"late authority response reveals no retained text");
+    }
+    // Current selection revision 2 must not stand in for retained run revision 1.
+    assert!(private_rpc(server,host,"inquello/routes/configure",json!({"operationId":uuid::Uuid::new_v4(),"expectedRevision":1,"configuration":configuration})).await.get("rpcError").is_none());
+    let current=private_rpc(server,host,"inquello/routes/task/read",json!({"taskId":task})).await;
+    let expected=current["revision"].as_u64().expect("Task route revision");
+    assert!(private_rpc(server,host,"inquello/routes/task/set",json!({"operationId":uuid::Uuid::new_v4(),"expectedRevision":expected,"taskId":task,"routeId":route,"configurationRevision":2})).await.get("rpcError").is_none());
+    assert!(private_rpc(server,host,"inquello/task/reopen",activation.clone()).await.get("rpcError").is_none(),"retained revision 1 still works with current selection 2");
+    sqlx::query("PRAGMA foreign_keys=OFF").execute(&mut db).await.unwrap();
+    assert_eq!(sqlx::query("DELETE FROM processing_route_candidates WHERE principal_id=? AND route_id=? AND revision=1").bind(ALICE).bind(route).execute(&mut db).await.unwrap().rows_affected(),1);
+    let denied=private_rpc(server,host,"inquello/task/reopen",activation.clone()).await;
+    assert!(denied.get("rpcError").is_some(),"current route cannot substitute for missing exact retained configuration: {denied}");
+    db.close().await.unwrap();
+}
+
+
+fn convert_saved_fixture_header_to_legacy(home:&std::path::Path,thread:&str){
+    fn visit(path:&std::path::Path,thread:&str,changed:&mut usize){for entry in std::fs::read_dir(path).unwrap(){let path=entry.unwrap().path();if path.is_dir(){visit(&path,thread,changed);continue;}if path.extension().and_then(|s|s.to_str())!=Some("jsonl"){continue;}
+        let original=std::fs::read_to_string(&path).unwrap();let Some((first,rest))=original.split_once('\n')else{continue;};let mut header:Value=serde_json::from_str(first).unwrap();
+        if header["type"]=="session_meta"&&header["payload"]["id"]==thread{header["payload"]["history_mode"]=json!("legacy");std::fs::write(path,format!("{}\n{}",header,rest)).unwrap();*changed+=1;}
+    }}
+    let mut changed=0;visit(&home.join("sessions"),thread,&mut changed);assert_eq!(changed,1,"fixture converts both authoritative header and indexed mode");
 }

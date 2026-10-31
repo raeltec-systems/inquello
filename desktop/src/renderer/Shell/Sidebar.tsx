@@ -111,7 +111,7 @@ function TaskRow({ task, open, onOpen }: { task: TaskItem; open: boolean; onOpen
           onOpen(task);
         }}
       >
-        <span className="iq-nav-row-label">{task.title}</span>
+        <span className="iq-nav-row-label">{task.pinned?"Pinned · ":""}{task.title}</span>
         {task.runtimeThreadId&&<TaskActivityLabel taskId={task.taskId} workspaceId={task.workspaceId}/>}
       </a>
     </li>
@@ -330,7 +330,7 @@ function SidebarContent(props: SidebarProps & { collapseLabel: string }): ReactE
   };
   const engagements = tree?.engagements ?? [];
   const folders = tree?.folders ?? [];
-  const tasks = tree?.tasks ?? [];
+  const tasks = (tree?.tasks ?? []).filter(task=>!task.archived).sort((a,b)=>Number(!!b.pinned)-Number(!!a.pinned)||a.title.localeCompare(b.title));
   const adHoc = tasks.filter((task) => task.engagementId === null);
   const noWorkspace = workspace ? undefined : 'Choose a Workspace first.';
   const creationReason = noWorkspace ?? (state.engagementCreation.enabled ? undefined : (state.engagementCreation.reason ?? 'Engagement creation is unavailable.'));
@@ -444,7 +444,7 @@ function Rail(props: SidebarProps): ReactElement {
   const { state, workspaceId, tree, openTaskId, onNewThread, onOpenTask, overlayOpen = false, person = null } = props;
   const signedIn = !!state?.signedIn;
   const workspace = state?.workspaces.find((entry) => entry.workspaceId === workspaceId) ?? null;
-  const tasks = tree?.tasks ?? [];
+  const tasks = (tree?.tasks ?? []).filter(task=>!task.archived).sort((a,b)=>Number(!!b.pinned)-Number(!!a.pinned)||a.title.localeCompare(b.title));
   const openTask = tasks.find((task) => task.taskId === openTaskId) ?? null;
   const expand = () => props.onExpand?.();
   const railButton = (icon: IconName, label: string, extra: Record<string, unknown> = {}) => (

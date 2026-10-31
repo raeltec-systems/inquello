@@ -370,7 +370,7 @@ describe('operation registry', () => {
 
   it('registers exactly one fixed channel per named operation', () => {
     expect(OPERATION_NAMES).toEqual([
-      'tasks.preflight', 'tasks.start', 'tasks.reconcile', 'tasks.progress', 'tasks.activity', 'tasks.settleLifecycle', 'tasks.answer', 'tasks.steer', 'tasks.stop', 'tasks.resume',
+      'tasks.preflight', 'tasks.start', 'tasks.reconcile', 'tasks.progress', 'tasks.activity', 'tasks.inbox', 'tasks.settleLifecycle', 'tasks.answer', 'tasks.steer', 'tasks.stop', 'tasks.resume',
       'usage.forTask', 'usage.set',
       'environments.forTask',
       'routes.list', 'routes.configure', 'routes.forTask', 'routes.select',
@@ -392,6 +392,9 @@ describe('operation registry', () => {
       'provider.codexLogout',
       'organise.getWorkspaces',
       'organise.getTree',
+      'organise.search',
+      'organise.reopen',
+      'organise.setNavigation',
       'organise.createEngagement',
       'organise.updateEngagement',
       'organise.createFolder',
@@ -986,7 +989,7 @@ describe('host privilege source scan', () => {
     expect(uses.length).toBeGreaterThan(0);
     for (const use of uses) expect(use).toMatch(/^ipcRenderer\.(?:invoke\([A-Z_]+_CHANNEL(?:, \.\.\.args)?\)|(?:on|removeListener)\((?:CAPABILITIES|ROUTES|ENVIRONMENTS|USAGE|TASKS|TASKS_PROGRESS)_CHANGED_CHANNEL, handler\))/);
     // Only the data operations, the two provider operations that take what the user entered, and the organise, state, policy and permissions operations forward arguments.
-    expect((body.match(/_CHANNEL, \.\.\.args\)/g) ?? []).length).toBe(42);
+    expect((body.match(/_CHANNEL, \.\.\.args\)/g) ?? []).length).toBe(46);
     expect(
       body
         .match(/[A-Z_]+_CHANNEL, \.\.\.args\)/g)

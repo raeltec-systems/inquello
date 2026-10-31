@@ -23,7 +23,36 @@ pub(super) async fn private_response(server:&mut TestAppServer,host:&mut Private
             JSONRPCMessage::Response(response)=>{let RequestId::Integer(other)=response.id else {panic!("unexpected string response identity")};host.pending.insert(other,response.result);},
             JSONRPCMessage::Error(error)=>{let RequestId::Integer(other)=error.id else {panic!("unexpected string error identity")};host.pending.insert(other,json!({"rpcError":error.error}));},
             JSONRPCMessage::Request(request)=>match request.method.as_str() {
+                "inquello/context/authorize"=>{
+                    let params=request.params.unwrap_or_default();
+                    host.authority_context["inventoryCalls"]=json!(host.authority_context["inventoryCalls"].as_u64().unwrap_or(0)+1);
+                    if params["expectedSnapshot"].is_string() {
+                        host.authority_context["inventoryFinalCalls"]=json!(host.authority_context["inventoryFinalCalls"].as_u64().unwrap_or(0)+1);
+                        if let Some(mutation)=host.authority_context.as_object_mut().unwrap().remove("inventoryFinalMutation") {
+                            // Isolated parent fixture seam at the ACTUAL native final
+                            // callback await. No production grant or native bypass.
+                            use sqlx::Connection;
+                            let mut db=sqlx::SqliteConnection::connect_with(&sqlx::sqlite::SqliteConnectOptions::new().filename(mutation["database"].as_str().unwrap()).busy_timeout(Duration::from_secs(2))).await.unwrap();
+                            let sql=mutation["sql"].as_str().unwrap();
+                            let mut query=sqlx::query(sqlx::AssertSqlSafe(sql.to_owned()));
+                            for argument in mutation["arguments"].as_array().unwrap(){query=query.bind(argument.as_str().unwrap());}
+                            assert_eq!(query.execute(&mut db).await.unwrap().rows_affected(),1,"final callback must mutate one actual contributor");
+                            db.close().await.unwrap();
+                            host.authority_context["finalMutationExecuted"]=json!(true);
+                        }
+                    }
+                    let snapshot=host.authority_context["inventorySnapshot"].as_str().unwrap_or("fictional-scope-v1").to_owned();
+                    let available=host.authority_available && params["workspaceId"]==host.workspace_id
+                        && (params["expectedSnapshot"].is_null()||params["expectedSnapshot"]==snapshot);
+                    server.send_response(request.id,json!({"available":available,"snapshot":if available{Some(snapshot)}else{None},"serviceEngagementIds":[]})).await.expect("fresh fictional context authority");
+                },
                 "inquello/tasks/authority"=>{
+                    host.authority_context["policyCalls"]=json!(host.authority_context["policyCalls"].as_u64().unwrap_or(0)+1);
+                    if host.authority_context["holdNextAdmission"]==true {
+                        host.authority_context["holdNextAdmission"]=json!(false);
+                        host.authority_context["heldAdmissionId"]=serde_json::to_value(&request.id).unwrap();
+                        continue; // Actual initial authority callback remains unanswered.
+                    }
                     assert_eq!(request.params.as_ref().expect("authority params")["workspaceId"],host.workspace_id);
                     if host.lifecycle==Some("lifecycle-stop-inflight-steer") && host.authority_context["holdSteerAuthority"]==true {
                         use sqlx::Connection;

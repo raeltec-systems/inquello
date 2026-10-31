@@ -12,15 +12,18 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 /** Longer than the domain allows, so the domain's own rules decide; this only stops oversized payloads. */
 export const MAX_TEXT_PAYLOAD = 8192;
 
-type FieldKind = 'uuid' | 'uuid?' | 'text' | 'text?' | 'revision';
-type FieldValue<K extends FieldKind> = K extends 'uuid' | 'text' ? string : K extends 'uuid?' | 'text?' ? string | null : number;
+type FieldKind = 'uuid' | 'uuid?' | 'text' | 'text?' | 'revision' | 'boolean';
+type FieldValue<K extends FieldKind> = K extends 'boolean' ? boolean : K extends 'uuid' | 'text' ? string : K extends 'uuid?' | 'text?' ? string | null : number;
 type Shape = Record<string, FieldKind>;
 type Parsed<S extends Shape> = { [K in keyof S]: FieldValue<S[K]> };
 
-function field(kind: FieldKind, value: unknown, key: string): string | number | null {
+function field(kind: FieldKind, value: unknown, key: string): string | number | boolean | null {
   const nullable = kind.endsWith('?');
   if (nullable && value === null) return null;
   switch (kind) {
+    case 'boolean':
+      if(typeof value!=='boolean')throw new OperationError(`wrong type for ${key}`);
+      return value;
     case 'uuid':
     case 'uuid?':
       if (typeof value !== 'string' || !UUID.test(value)) throw new OperationError(`${key} must be a UUID`);
@@ -95,3 +98,11 @@ export const taskMovePayload = organisePayload({
   engagementId: 'uuid?',
   folderId: 'uuid?',
 });
+
+export const navigationPayload=organisePayload({operationId:'uuid',workspaceId:'uuid',taskId:'uuid',expectedRevision:'revision',pinned:'boolean',archived:'boolean'});
+const contextShape=organisePayload({workspaceId:'uuid',expectedSnapshot:'text?'});
+export const contextPayload:PayloadValidator<ReturnType<typeof contextShape>>=args=>{const v=contextShape(args);if(v.expectedSnapshot!==null&&!/^[0-9a-f]{64}$/.test(v.expectedSnapshot))throw new OperationError('Invalid inventory snapshot');return v;};
+const searchShape=organisePayload({workspaceId:'uuid',query:'text',includeArchived:'boolean',cursor:'text?'});
+export const searchPayload:PayloadValidator<ReturnType<typeof searchShape>>=args=>{const v=searchShape(args);if(!v.query.trim()||/[\u0000-\u001f\u007f-\u009f]/.test(v.query)||Buffer.byteLength(v.query.trim())>256||(v.cursor?.length??0)>4096)throw new OperationError('Invalid search');return {...v,query:v.query.trim()};};
+const reopenShape=organisePayload({workspaceId:'uuid',taskId:'uuid',query:'text?',turnId:'text?',itemId:'text?'});
+export const reopenPayload:PayloadValidator<ReturnType<typeof reopenShape>>=args=>{const v=reopenShape(args);if((v.query!==null&&(!v.query.trim()||/[\u0000-\u001f\u007f-\u009f]/.test(v.query)||Buffer.byteLength(v.query.trim())>256))||(v.turnId?.length??0)>256||(v.itemId?.length??0)>256||((v.turnId===null)!==(v.itemId===null))||(v.turnId!==null&&v.query===null))throw new OperationError('Invalid saved hit');return v;};

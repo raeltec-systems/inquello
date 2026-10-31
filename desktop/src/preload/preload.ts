@@ -46,6 +46,10 @@ const PROVIDER_CODEX_LOGIN_CHANNEL = 'inquello:op:provider.codexLogin';
 const PROVIDER_CODEX_LOGOUT_CHANNEL = 'inquello:op:provider.codexLogout';
 const ORGANISE_WORKSPACES_CHANNEL = 'inquello:op:organise.getWorkspaces';
 const ORGANISE_TREE_CHANNEL = 'inquello:op:organise.getTree';
+const ORGANISE_SEARCH_CHANNEL = 'inquello:op:organise.search';
+const ORGANISE_REOPEN_CHANNEL = 'inquello:op:organise.reopen';
+const ORGANISE_NAVIGATION_CHANNEL = 'inquello:op:organise.setNavigation';
+const TASKS_INBOX_CHANNEL = 'inquello:op:tasks.inbox';
 const ORGANISE_CREATE_ENGAGEMENT_CHANNEL = 'inquello:op:organise.createEngagement';
 const ORGANISE_UPDATE_ENGAGEMENT_CHANNEL = 'inquello:op:organise.updateEngagement';
 const ORGANISE_CREATE_FOLDER_CHANNEL = 'inquello:op:organise.createFolder';
@@ -93,6 +97,7 @@ const TASKS_START_CHANNEL = 'inquello:op:tasks.start';
 const TASKS_RECONCILE_CHANNEL = 'inquello:op:tasks.reconcile';
 const api = Object.freeze({
   tasks: Object.freeze({
+    inbox: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(TASKS_INBOX_CHANNEL, ...args),
     steer: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(TASKS_STEER_CHANNEL, ...args),
     stop: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(TASKS_STOP_CHANNEL, ...args),
     resume: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(TASKS_RESUME_CHANNEL, ...args),
@@ -192,6 +197,9 @@ const api = Object.freeze({
     codexLogout: (): Promise<unknown> => ipcRenderer.invoke(PROVIDER_CODEX_LOGOUT_CHANNEL),
   }),
   organise: Object.freeze({
+    search: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ORGANISE_SEARCH_CHANNEL, ...args),
+    reopen: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ORGANISE_REOPEN_CHANNEL, ...args),
+    setNavigation: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ORGANISE_NAVIGATION_CHANNEL, ...args),
     /** Resolves with `{ signedIn, sharedService, workspaces, engagementCreation }`. Takes no arguments. */
     getWorkspaces: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ORGANISE_WORKSPACES_CHANNEL, ...args),
     /** `{ workspaceId }`; resolves with `{ ok, value: { engagements, folders, tasks } }` (own Tasks only) or `{ ok: false, reason }`. */

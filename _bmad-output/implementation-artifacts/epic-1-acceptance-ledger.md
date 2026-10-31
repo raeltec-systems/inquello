@@ -1,6 +1,6 @@
 # Epic 1 cumulative acceptance ledger
 
-Updated 2026-10-31 for the Story 1.29 implementation candidate. This ledger does
+Updated 2026-10-31 for the Story 1.30 implementation candidate. This ledger does
 not change earlier story statuses or convert authored tests into acceptance.
 The sprint tracker remains authoritative for workflow state; support records
 retain their historical commands/results. No real-data route is promoted.
@@ -17,7 +17,7 @@ retain their historical commands/results. No real-data route is promoted.
 | 1.27 | In-progress. Native HTTP/WebSocket tool-output boundary, actual model procurement resistance/usefulness, Windows and prior gates remain open. See story-1-27-untrusted-output-support.md. |
 | 1.28 | In-progress. Exact-route negative proof, current organization approval, PostgreSQL/service-coupled/native inspector/recovery/queue gates and matching protocol remain open. All earlier not-run reports remain not-run. See story-1-28-authorization-support.md. |
 | 1.29 | In-progress. Loop-2 bounded cancellation, incarnation/settlement fences, selected observation, canonical cache and snapshot-bound result pages authored. Desktop build/typechecks and 290 focused tests pass. Latest full suite: 1,462 pass, 2 existing Git/generated assertion failures, 5 skips; 9 missing-native collection failures. All 36 both-binding lifecycle cases and native lease/race/cache/pagination tests unrun. Actual agent adaptation, Windows/Electron and current-route Resume evidence remain required. See story-1-29-lifecycle-support.md and validation/story129-loop2/. |
-| 1.30 | Backlog; protected search/reopen acceptance is not claimed by retained Resume. |
+| 1.30 | In-progress reviewed candidate after Round 2 corrections. Both typechecks/build pass; focused 12 files/411 tests pass; final full-suite results and exact failures in story-1-30-navigation-support.md. Fourteen native selectors authored/unrun. Native/Cargo, protocol, browser/Windows/native latency and cumulative owner acceptance remain gates. No eligibility promotion. |
 
 ## End-of-Epic-1 outcome gates
 

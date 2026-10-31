@@ -12,7 +12,7 @@ use crate::ThreadStoreResult;
 
 mod read;
 mod realtime;
-mod search;
+pub(crate) mod search;
 mod segment_paging;
 mod turn_lookup;
 

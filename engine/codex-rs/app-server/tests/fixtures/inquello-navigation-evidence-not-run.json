@@ -1,0 +1,80 @@
+{
+  "report_kind": "authoring-status-only",
+  "suite": "inquello-current-route-negative-authorization-v3",
+  "eligible": false,
+  "implementation_digest": null,
+  "tested_artifact_digest": null,
+  "reason": "Cargo is absent in the partial checkout. All native fixtures, including actual-RPC final-await barriers, remain authored/uncompiled/unrun; no eligibility promotion.",
+  "results": [
+    {
+      "route_id": "codex-responses",
+      "test_selector": "responses_search_reopen_private_denials",
+      "status": "not-run"
+    },
+    {
+      "route_id": "codex-responses",
+      "test_selector": "responses_search_paginated_and_legacy_old_turn",
+      "status": "not-run"
+    },
+    {
+      "route_id": "claude-api-key",
+      "test_selector": "messages_search_reopen_private_denials",
+      "status": "not-run"
+    },
+    {
+      "route_id": "claude-api-key",
+      "test_selector": "messages_search_paginated_and_legacy_old_turn",
+      "status": "not-run"
+    },
+    {
+      "route_id": "codex-responses",
+      "test_selector": "responses_search_final_await_contributors",
+      "status": "not-run"
+    },
+    {
+      "route_id": "codex-responses",
+      "test_selector": "responses_search_next_cursor_scope_snapshot",
+      "status": "not-run"
+    },
+    {
+      "route_id": "codex-responses",
+      "test_selector": "responses_search_retained_route_mismatch",
+      "status": "not-run"
+    },
+    {
+      "route_id": "claude-api-key",
+      "test_selector": "messages_search_final_await_contributors",
+      "status": "not-run"
+    },
+    {
+      "route_id": "claude-api-key",
+      "test_selector": "messages_search_next_cursor_scope_snapshot",
+      "status": "not-run"
+    },
+    {
+      "route_id": "claude-api-key",
+      "test_selector": "messages_search_retained_route_mismatch",
+      "status": "not-run"
+    },
+    {
+      "route_id": "codex-responses",
+      "test_selector": "responses_search_zero_to_match_final_await",
+      "status": "not-run"
+    },
+    {
+      "route_id": "codex-responses",
+      "test_selector": "responses_search_stalled_admission_timeout",
+      "status": "not-run"
+    },
+    {
+      "route_id": "claude-api-key",
+      "test_selector": "messages_search_zero_to_match_final_await",
+      "status": "not-run"
+    },
+    {
+      "route_id": "claude-api-key",
+      "test_selector": "messages_search_stalled_admission_timeout",
+      "status": "not-run"
+    }
+  ]
+}

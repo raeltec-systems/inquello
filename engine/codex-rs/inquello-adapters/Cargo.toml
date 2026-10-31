@@ -37,3 +37,6 @@ workspace = true
 # Test-only loopback TLS seam. Never enable in release/package builds.
 [features]
 inference-fixtures = []
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }

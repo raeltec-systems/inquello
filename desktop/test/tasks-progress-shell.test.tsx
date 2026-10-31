@@ -122,3 +122,21 @@ it('renders the native retained refusal projection without treating printed clai
  expect(screen.getByText(/no inspection verdict is supplied by this view/)).toBeTruthy();
  expect(api.answer).not.toHaveBeenCalled();
 });
+
+it('focuses the same current Inbox question on each explicit visit, never on a background refresh',async()=>{
+ const api=setup({...base,questions:[question]});await screen.findByRole('radio',{name:/Include R02/});
+ api.rerender(<TaskProgress taskId="task-1" workspaceId="workspace-1" pollMs={100000} selectedQuestion={{requestId:42,turnId:"turn-1",itemId:"q-item",visit:1}}/>);
+ const target=document.querySelector('[data-question-item="q-item"]');await waitFor(()=>expect(document.activeElement).toBe(target));
+ const radio=screen.getByRole('radio',{name:/Include R02/});radio.focus();
+ await api.update({...base,questions:[question]});expect(document.activeElement).toBe(radio);
+ api.rerender(<TaskProgress taskId="task-1" workspaceId="workspace-1" pollMs={100000} selectedQuestion={null}/>);
+ api.rerender(<TaskProgress taskId="task-1" workspaceId="workspace-1" pollMs={100000} selectedQuestion={{requestId:42,turnId:"turn-1",itemId:"q-item",visit:1}}/>);
+ await waitFor(()=>expect(document.activeElement).toBe(target));
+});
+
+it('never focuses a replacement question with the same item ID but a different request or turn',async()=>{
+ const api=setup({...base,questions:[{...question,requestId:43}]});await screen.findByRole('radio',{name:/Include R02/});
+ const radio=screen.getByRole('radio',{name:/Include R02/});radio.focus();
+ api.rerender(<TaskProgress taskId="task-1" workspaceId="workspace-1" selectedQuestion={{requestId:42,turnId:'turn-1',itemId:'q-item',visit:2}}/>);
+ expect(await screen.findByText(/selected question was resolved or replaced/)).toBeTruthy();expect(document.activeElement).toBe(radio);
+});

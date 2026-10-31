@@ -309,7 +309,7 @@ fn invalid_cursor(cursor: &str) -> ThreadStoreError {
     }
 }
 
-fn searchable_text(item: &ThreadItem) -> Option<Cow<'_, str>> {
+pub fn searchable_text(item: &ThreadItem) -> Option<Cow<'_, str>> {
     match item {
         ThreadItem::UserMessage { content, .. } => {
             let mut text_parts = content
@@ -499,4 +499,27 @@ fn char_end_after(text: &str, byte_index: usize, chars_after: usize) -> usize {
         .nth(chars_after)
         .map(|(offset, _)| byte_index.saturating_add(offset))
         .unwrap_or(text.len())
+}
+
+
+/// Uses precisely the same text normalization, literal matching and snippet
+/// builder as paginated occurrences. Legacy inspection and exact activation must
+/// not acquire a second, subtly different Markdown matcher.
+pub fn conversation_match_snippet(item:&ThreadItem,query:&str)->Option<String> {
+    let text=searchable_text(item)?;
+    let matched=LiteralMatcher::new(query).find_ranges(&text,1).into_iter().next()?;
+    Some(occurrence_in_item("",item.id(),&text,matched,"").snippet)
+}
+
+#[cfg(test)]
+mod saved_matcher_tests {
+    use super::*;
+    #[test]
+    fn legacy_and_exact_activation_use_the_native_markdown_matcher() {
+        let item:ThreadItem=serde_json::from_value(serde_json::json!({"type":"agentMessage","id":"retained-item","text":"Vendor **evidence** required"})).unwrap();
+        assert_eq!(searchable_text(&item).as_deref(),Some("Vendor evidence required"));
+        assert_eq!(conversation_match_snippet(&item,"Vendor evidence required").as_deref(),Some("Vendor evidence required"));
+        let plan:ThreadItem=serde_json::from_value(serde_json::json!({"type":"plan","id":"hidden-plan","text":"Vendor evidence required"})).unwrap();
+        assert!(conversation_match_snippet(&plan,"Vendor evidence required").is_none());
+    }
 }

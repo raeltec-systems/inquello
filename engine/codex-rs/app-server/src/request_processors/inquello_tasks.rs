@@ -1738,16 +1738,20 @@ impl InquelloRequestProcessor {
         if !eligible.enabled {return Err(refusal("route_unavailable",eligible.gate.unwrap_or("Current route is unavailable")));}
         Ok(())
     }
-    async fn authorize_run_route_disclosure(&self,connection:ConnectionId,actor:Actor,run:&TaskRunBinding)->Result<(),JSONRPCErrorError> {
+    pub(super) async fn authorize_run_route_disclosure(&self,connection:ConnectionId,actor:Actor,run:&TaskRunBinding)->Result<(),JSONRPCErrorError> {
         let store=self.store().await?;
         let tier=store.task_data_tier(actor.principal_id,&run.task_id).await.map_err(domain_error)?;
         let session=self.task_session(connection,actor,&run.workspace_id).await?;
+        use inquello_domain::routes::RouteStore;
+        let route_id=routes::RouteId::parse(&run.route_id).ok_or_else(||refusal("route_unavailable","Retained route identity unavailable"))?;
+        let candidate=store.load_candidate_route_record(actor.principal_id,route_id,Revision::new(run.configuration_revision)).await
+            .map_err(|_|refusal("route_unavailable","Retained route configuration unavailable"))?
+            .filter(|candidate|candidate.revision.get()==run.configuration_revision && candidate.configuration.route_id()==route_id)
+            .ok_or_else(||refusal("route_unavailable","The run's exact retained route configuration is unavailable"))?;
+        let configuration=candidate.configuration;
         match tier.as_deref() {
             Some("synthetic") if session.real.is_none() => Ok(()),
             Some("real") if session.real.is_some() => {
-                let route=routes::task_route(&store,actor,&run.task_id).await.map_err(domain_error)?;
-                if route.stale_configuration {return Err(refusal("stale","Task route changed"));}
-                let configuration=route.current.ok_or_else(||refusal("route_unavailable","Task route unavailable"))?.configuration;
                 let outgoing=self.task_outgoing.as_ref().ok_or_else(||refusal("authority_unknown","Current service unavailable"))?;
                 let policy=current_service_policy(outgoing,connection,&run.workspace_id,&session.cancellation).await?;
                 self.check_real_route(connection,actor,&session,&configuration,&run.task_id,&policy,routes::ProtectedRouteAction::Read).await
@@ -1806,13 +1810,9 @@ impl InquelloRequestProcessor {
         match tier.as_deref() {
             Some("synthetic")=>Ok(()),
             Some("real")=>{
-                let route=routes::task_route(&store,actor,task_id).await.map_err(domain_error)?;
-                if route.stale_configuration {return Err(refusal("not_found","Private work unavailable"));}
-                let session=self.task_session(connection,actor,&route.workspace_id.to_string()).await?;
-                let configuration=route.current.ok_or_else(||refusal("not_found","Private work unavailable"))?.configuration;
-                let outgoing=self.task_outgoing.as_ref().ok_or_else(||refusal("authority_unknown","Current service unavailable"))?;
-                let policy=current_service_policy(outgoing,connection,&session.workspace,&session.cancellation).await?;
-                self.check_real_route(connection,actor,&session,&configuration,task_id,&policy,routes::ProtectedRouteAction::Read).await
+                let run=store.find_task_current_run(actor.principal_id,task_id).await.map_err(domain_error)?
+                    .ok_or_else(||refusal("not_found","Retained Task route binding unavailable"))?;
+                self.authorize_run_route_disclosure(connection,actor,&run).await
             },
             _=>Err(refusal("classification_unknown","Saved work has no trusted native data classification and remains unavailable")),
         }
@@ -1882,6 +1882,18 @@ mod bootstrap_order_tests {
         let processor=Arc::new(InquelloRequestProcessor::with_store_path(Some(root.join("working.sqlite")),vec![]).with_task_outgoing(outgoing.clone()));
         processor.set_principal(CONNECTION,InquelloSetPrincipalParams {principal_id:Some(PRINCIPAL.into())}).await.unwrap();
         (processor,outgoing,rx)
+    }
+    #[tokio::test]
+    async fn dropped_saved_admission_cleanup_removes_native_callback_and_ignores_late_reply(){
+        let (tx,mut rx)=tokio::sync::mpsc::channel(8);
+        let outgoing=Arc::new(OutgoingMessageSender::new(tx,codex_analytics::AnalyticsEventsClient::disabled()));
+        let (id,waiter)=outgoing.send_request_to_connections(Some(&[CONNECTION]),ServerRequestPayload::InquelloTaskAuthority(InquelloTaskAuthorityParams{workspace_id:WORKSPACE.into(),route_discovery:None,route_check:None}),None).await;
+        let observed=request_id(&mut rx).await;assert_eq!(observed,id);
+        drop(AuthorityRequestCleanup{outgoing:outgoing.clone(),id:Some(id.clone())});
+        assert!(tokio::time::timeout(std::time::Duration::from_secs(1),waiter).await.expect("cleanup task must settle").is_err(),"callback sender is removed on dropped admission future");
+        assert!(!outgoing.cancel_request(&id).await,"callback was already removed, not merely abandoned");
+        allow(&outgoing,id).await;
+        assert!(rx.try_recv().is_err(),"late old authority cannot enqueue a new disclosure");
     }
     #[tokio::test]
     async fn final_scope_rechecks_owned_task_provenance_after_workspace_authority_wait() {

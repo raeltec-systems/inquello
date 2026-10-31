@@ -726,3 +726,25 @@ Cargo is unavailable. Windows OS-lock lifetime, actual model reanalysis and
 matching generated protocol remain gates. See
 `_bmad-output/implementation-artifacts/story-1-29-lifecycle-support.md` and
 `epic-1-acceptance-ledger.md`. Story remains in-progress; no eligibility promotion.
+
+## Story 1.30 — saved private navigation, review loop 1 (2026-10-31)
+
+Migration 0014 preserves owner-bound navigation and receipts. Saved search/reopen
+use request-wide current inventory and coordinated native history/working-store
+observations, bounded legacy/compressed/indexed reads, shared native Markdown
+matching and original retained display text. Exact historical route revisions
+remain independently authorized. Native queue cancellation fences are retained;
+no network work occurs under final local writer leases. Desktop Search/Inbox
+compose existing primitives inside native modal ownership, preserve latest
+selection/drafts and focus genuine questions without execution.
+
+Both desktop typechecks/build pass. Full suite: 1,501 pass, two existing Git/schema
+assertion failures, five skips; nine missing-native suite initialization failures.
+Ten native selectors/negative matrices are authored but unrun: Cargo is absent.
+Protocol generation, actual browser modal behavior, Windows, native latency and
+cumulative auditor acceptance remain open. No generated binding edits, provider
+calls or real-data promotion. See Story 1.30 support and its loop1 validation logs.
+
+### Story 1.30 final reviewed candidate
+
+Round 2 narrow native/desktop corrections are applied. Final Inbox typing correction preserves the existing full-identity publication guard. Typechecks/build and 411 selected tests pass. Full-suite environmental failures and all native/protocol/browser/Windows/latency/owner gates remain explicit in the updated Story 1.30 support ledger. Fourteen native selectors remain unrun; story in-progress, no eligibility promotion.

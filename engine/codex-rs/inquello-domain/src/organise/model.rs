@@ -279,6 +279,9 @@ pub struct Task {
     /// Empty until later epics add artifacts.
     pub artifact_refs: Vec<String>,
     pub visibility: Visibility,
+    /// Personal navigation only; neither flag changes execution or retention.
+    pub pinned: bool,
+    pub archived: bool,
     pub revision: Revision,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
@@ -336,10 +339,11 @@ pub enum OrganiseCommandKind {
     MoveTask,
     AttachThread,
     RememberWorkspace,
+    SetTaskNavigation,
 }
 
 impl OrganiseCommandKind {
-    pub const ALL: [OrganiseCommandKind; 8] = [
+    pub const ALL: [OrganiseCommandKind; 9] = [
         OrganiseCommandKind::CreateEngagement,
         OrganiseCommandKind::UpdateEngagement,
         OrganiseCommandKind::CreateFolder,
@@ -348,6 +352,7 @@ impl OrganiseCommandKind {
         OrganiseCommandKind::MoveTask,
         OrganiseCommandKind::AttachThread,
         OrganiseCommandKind::RememberWorkspace,
+        OrganiseCommandKind::SetTaskNavigation,
     ];
 
     pub const fn as_str(self) -> &'static str {
@@ -360,6 +365,7 @@ impl OrganiseCommandKind {
             OrganiseCommandKind::MoveTask => "move_task",
             OrganiseCommandKind::AttachThread => "attach_thread",
             OrganiseCommandKind::RememberWorkspace => "remember_workspace",
+            OrganiseCommandKind::SetTaskNavigation => "set_task_navigation",
         }
     }
 

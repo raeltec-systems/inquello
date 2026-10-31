@@ -278,7 +278,7 @@ describe('organise service', () => {
     h.handlers.set('inquello/task/create', () => ({ task: { ...task, extra: 'nope' }, receipt }));
     const created = await h.service.createTask({ operationId: OP, workspaceId: WORKSPACE, engagementId: null, folderId: null, title: 'Untitled thread' });
     expect(created.ok && Object.keys(created.value).sort()).toEqual(
-      ['artifactRefs', 'engagementId', 'folderId', 'revision', 'runtimeThreadId', 'sourceRefs', 'taskId', 'title', 'visibility', 'workspaceId'].sort(),
+      ['archived', 'artifactRefs', 'engagementId', 'folderId', 'pinned', 'revision', 'runtimeThreadId', 'sourceRefs', 'taskId', 'title', 'visibility', 'workspaceId'].sort(),
     );
   });
 });
@@ -307,6 +307,9 @@ describe('organise payloads', () => {
     expect(OPERATION_NAMES.filter((name) => name.startsWith('organise.'))).toEqual([
       'organise.getWorkspaces',
       'organise.getTree',
+      'organise.search',
+      'organise.reopen',
+      'organise.setNavigation',
       'organise.createEngagement',
       'organise.updateEngagement',
       'organise.createFolder',

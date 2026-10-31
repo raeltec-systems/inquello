@@ -430,3 +430,93 @@ async fn actual_creation_tree_keeps_own_draft_but_never_returns_peer_or_company_
     assert_eq!(tree.tasks.len(),1);assert_eq!(tree.tasks[0].task_id,own.task_id);
     assert!(tree.tasks.iter().all(|task|task.task_id!=peer.task_id&&task.task_id!=foreign.task_id));
 }
+
+#[tokio::test]
+async fn navigation_is_private_durable_receipted_and_does_not_change_saved_work() {
+    use inquello_domain::organise::{SetTaskNavigation, set_task_navigation};
+    let fixture = fixture();
+    let store = open(&fixture).await;
+    let original = task(&store, actor(1), "navigation-create", None, None).await;
+    assert!(!original.pinned && !original.archived);
+    let command = SetTaskNavigation {
+        operation_id: "navigation-pin-archive".into(),
+        expected_revision: original.revision,
+        workspace_id: WORKSPACE.into(),
+        task_id: original.task_id.to_string(),
+        pinned: true,
+        archived: true,
+    };
+    assert!(matches!(set_task_navigation(&store, &SystemClock, actor(2), command.clone()).await, Err(DomainError::NotFound)));
+    let changed = ok(set_task_navigation(&store, &SystemClock, actor(1), command.clone()).await);
+    let saved = task_of(&changed);
+    assert!(saved.pinned && saved.archived);
+    assert_eq!(saved.runtime_thread_id, original.runtime_thread_id);
+    assert_eq!(saved.creator_principal_id, original.creator_principal_id);
+    assert_eq!(saved.visibility, original.visibility);
+    assert_eq!(saved.source_refs, original.source_refs);
+    assert_eq!(saved.artifact_refs, original.artifact_refs);
+    assert!(ok(set_task_navigation(&store, &SystemClock, actor(1), command.clone()).await).replayed);
+    assert!(matches!(set_task_navigation(&store, &SystemClock, actor(2), command.clone()).await, Err(DomainError::OperationConflict { .. })));
+    let mut conflict = command.clone();
+    conflict.archived = false;
+    assert!(matches!(set_task_navigation(&store, &SystemClock, actor(1), conflict.clone()).await, Err(DomainError::OperationConflict { .. })));
+    conflict.operation_id = "navigation-stale".into();
+    assert!(matches!(set_task_navigation(&store, &SystemClock, actor(1), conflict).await, Err(DomainError::RevisionConflict { .. })));
+    store.close().await;
+    let store = open(&fixture).await;
+    let tree = ok(workspace_tree(&store, actor(1), WORKSPACE).await);
+    assert_eq!(tree.tasks, vec![saved.clone()]); // Archive never removes the record.
+    assert!(ok(workspace_tree(&store, actor(2), WORKSPACE).await).tasks.is_empty());
+    let restored = task_of(&ok(set_task_navigation(&store, &SystemClock, actor(1), SetTaskNavigation {
+        operation_id: "navigation-unarchive".into(), expected_revision: saved.revision,
+        archived: false, ..command
+    }).await));
+    assert!(restored.pinned && !restored.archived);
+}
+
+#[tokio::test]
+async fn populated_navigation_is_in_owned_snapshot_and_cannot_recover_as_another_principal() {
+    use inquello_adapters::data_provenance::{InspectRequest, inspect};
+    use inquello_domain::organise::{SetTaskNavigation, set_task_navigation};
+    let fixture = fixture();
+    let store = open(&fixture).await;
+    let original = task(&store, actor(1), "navigation-export-create", None, None).await;
+    ok(set_task_navigation(&store, &SystemClock, actor(1), SetTaskNavigation {
+        operation_id: "navigation-export-update".into(), expected_revision: original.revision,
+        workspace_id: WORKSPACE.into(), task_id: original.task_id.to_string(), pinned: true, archived: true,
+    }).await);
+    store.close().await;
+    let request = |path: PathBuf, principal: Actor| InspectRequest {
+        version: 1, store_path: path, principal_id: principal.principal_id.to_string(), task_root: None, runtime_home: None,
+    };
+    let inspected = inspect(request(fixture.path.clone(), actor(1))).await;
+    assert!(inspected.available, "{:?}", inspected.reason);
+    assert_eq!(inspected.workspaces[0].tasks[0].task_id, original.task_id.to_string());
+    // A populated, quiescent whole-store copy includes preferences and receipts.
+    // This exercises bytes/ownership, not permission to import a backup.
+    let backup = fixture._dir.path().join("navigation-backup.sqlite");
+    std::fs::copy(&fixture.path, &backup).unwrap();
+    assert!(inspect(request(backup.clone(), actor(1))).await.available);
+    assert!(!inspect(request(backup.clone(), actor(2))).await.available);
+    let recovered = SqliteWorkingStore::open(&backup, &[]).await.unwrap();
+    let saved = recovered.load_task(original.task_id).await.unwrap().unwrap();
+    assert!(saved.pinned && saved.archived);
+    assert!(recovered.find_organise_receipt(&OperationId::parse("navigation-export-update").unwrap()).await.unwrap().is_some());
+    recovered.close().await;
+    // Navigation metadata has no separate file/index that escapes store deletion.
+    std::fs::remove_file(&backup).unwrap();
+    assert!(!inspect(request(backup, actor(1))).await.available);
+}
+
+#[tokio::test]
+async fn saved_request_fence_observes_other_connections_and_releases_queue_lease() {
+    let fixture=fixture();let store=open(&fixture).await;
+    let mut clean=store.saved_read_fence().await.unwrap();
+    let lease=store.seal_saved_read(&mut clean).await.unwrap();drop(lease);
+    let mut changed=store.saved_read_fence().await.unwrap();
+    let _=task(&store,actor(1),"saved-fence-concurrent-create",None,None).await;
+    assert!(store.seal_saved_read(&mut changed).await.is_err(),"a different pool connection's commit invalidates the request-wide snapshot");
+    drop(changed);drop(clean);
+    let mut refreshed=store.saved_read_fence().await.unwrap();
+    assert!(store.seal_saved_read(&mut refreshed).await.is_ok(),"new request observes the new stable state");
+}

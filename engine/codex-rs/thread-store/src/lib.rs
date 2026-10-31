@@ -118,3 +118,8 @@ pub use types::ThreadSortKey;
 pub use types::TimelinePage;
 pub use types::TurnPage;
 pub use types::UpdateThreadMetadataParams;
+
+pub use local::SavedHistoryLease;
+pub use local::thread_history::search::searchable_text as searchable_conversation_text;
+
+pub use local::thread_history::search::conversation_match_snippet;

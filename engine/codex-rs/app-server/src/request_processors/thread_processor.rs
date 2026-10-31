@@ -3360,7 +3360,49 @@ impl ThreadRequestProcessor {
         )
     }
 
-    async fn thread_search_occurrences_response_inner(
+    pub(super) async fn inquello_saved_revision(&self,id:&str)->Result<String,JSONRPCErrorError> {
+        if let Some(items)=self.inquello_legacy_conversation(id).await? {
+            use sha2::{Digest,Sha256};
+            let bytes=serde_json::to_vec(&items).map_err(|_|invalid_request("Retained conversation unavailable"))?;
+            return Ok(format!("legacy:{:x}",Sha256::digest(bytes)));
+        }
+        let local=self.thread_store.as_any().downcast_ref::<codex_thread_store::LocalThreadStore>().ok_or_else(||invalid_request("Bounded local saved history unavailable"))?;
+        local.saved_history_revision(ThreadId::from_string(id).map_err(|_|invalid_request("Invalid saved thread"))?).await.map_err(|_|invalid_request("Retained revision unavailable"))
+    }
+
+    /// Exact-authorized-thread legacy fallback; never discovers or searches another path.
+    pub(super) async fn inquello_legacy_conversation(&self, id:&str) -> Result<Option<Vec<(String,ThreadItem)>>,JSONRPCErrorError> {
+        let id=ThreadId::from_string(id).map_err(|_|invalid_request("Invalid retained thread"))?;
+        let local=self.thread_store.as_any().downcast_ref::<codex_thread_store::LocalThreadStore>().ok_or_else(||invalid_request("Bounded local saved history unavailable"))?;
+        let path=local.saved_rollout_path(id).await.map_err(|_|invalid_request("Retained history unavailable"))?;
+        let cancelled=tokio_util::sync::CancellationToken::new();
+        let _cancel_on_drop=cancelled.clone().drop_guard();
+        let header_path=path.clone();let header_cancel=cancelled.clone();
+        let header=tokio::task::spawn_blocking(move ||codex_rollout::read_rollout_header_bounded(&header_path,||header_cancel.is_cancelled()))
+            .await.map_err(|_|invalid_request("Retained header unavailable"))?.map_err(|_|invalid_request("Retained header unavailable"))?;
+        let header=codex_rollout::parse_rollout_line_bytes(&header).map_err(|_|invalid_request("Corrupt retained header"))?;
+        let codex_rollout::RolloutItem::SessionMeta(meta)=header.item else{return Err(invalid_request("Retained identity unavailable"));};
+        if meta.meta.id!=id || meta.meta.history_base.is_some(){return Err(invalid_request("This Task's exact retained source context is unavailable"));}
+        if matches!(meta.meta.history_mode,ThreadHistoryMode::Paginated){
+            local.check_saved_history_bounds(id).await.map_err(|_|invalid_request("Retained history exceeds bounded inspection"))?;
+            return Ok(None);
+        }
+        let bytes=tokio::task::spawn_blocking(move ||codex_rollout::read_rollout_bounded(&path,16*1024*1024,||cancelled.is_cancelled()))
+            .await.map_err(|_|invalid_request("Retained legacy reader unavailable"))?
+            .map_err(|_|invalid_request("Retained legacy history exceeds bounded inspection or is unavailable"))?;
+        let mut items=Vec::new();
+        for line in bytes.split(|b|*b==b'\n').filter(|line|!line.is_empty()) {
+            if line.len()>1024*1024 || items.len()>=100_000{return Err(invalid_request("Retained legacy item bound reached"));}
+            items.push(codex_rollout::parse_rollout_line_bytes(line).map_err(|_|invalid_request("Corrupt retained legacy history"))?.item);
+        }
+        if !items.iter().any(|item|matches!(item,codex_rollout::RolloutItem::SessionMeta(meta) if meta.meta.id==id)) {
+            return Err(invalid_request("Retained history identity is unavailable"));
+        }
+        let turns=build_legacy_api_turns_from_rollout_items(&items);
+        Ok(Some(turns.into_iter().flat_map(|turn|turn.items.into_iter().filter(|item|matches!(item,ThreadItem::UserMessage{..}|ThreadItem::AgentMessage{..})).map(move |item|(turn.id.clone(),item))).collect()))
+    }
+
+    pub(super) async fn thread_search_occurrences_response_inner(
         &self,
         params: ThreadSearchOccurrencesParams,
     ) -> Result<ThreadSearchOccurrencesResponse, JSONRPCErrorError> {
@@ -3719,7 +3761,7 @@ impl ThreadRequestProcessor {
         })
     }
 
-    async fn thread_items_read_response_inner(
+    pub(super) async fn thread_items_read_response_inner(
         &self,
         params: ThreadItemsReadParams,
     ) -> Result<ThreadItemsReadResponse, JSONRPCErrorError> {

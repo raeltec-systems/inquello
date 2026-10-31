@@ -1,3 +1,4 @@
+import type {QuestionSelection} from './Inbox';
 /** Authorized, bounded presentation only. No native notifications or model inference here. */
 import {useEffect,useRef,useState,type FormEvent,type ReactElement} from 'react';
 import {Button,DiffLine,JudgmentTag,PlanSteps} from '../primitives';
@@ -19,7 +20,7 @@ function Question({request,onAnswer}:{request:ProgressQuestion;onAnswer:(answers
  const hasControls=request.questions.some(q=>invalidAnswer(value(q.id)));
  const valid=!hasControls&&!tooLong&&request.questions.every(q=>value(q.id).trim());
  const submit=async(event:FormEvent)=>{event.preventDefault();if(busy||!valid)return;setBusy(true);const answers:AnswerInput['answers']=Object.create(null);for(const q of request.questions)answers[q.id]={answers:[value(q.id)]};try{await onAnswer(answers);}finally{setDraft({});setBusy(false);}};
- return <form className="iq-progress-question" onSubmit={event=>void submit(event)} aria-label="Agent question">
+ return <form data-question-item={request.itemId} data-question-turn={request.turnId} data-question-request={JSON.stringify(request.requestId)} tabIndex={-1} className="iq-progress-question" onSubmit={event=>void submit(event)} aria-label="Agent question">
   <p>Answer requested. Your answer grants no tool permission and is not analytical review or Professional Approval.</p>
   {request.questions.map(q=><fieldset key={q.id} disabled={busy}><legend>{q.header}</legend><p>{q.question}</p>
    {q.options?.map((o,index)=><label key={index} className="iq-progress-option"><input type="radio" name={`${questionKey(request)}:${q.id}`} checked={!isOther(q.id)&&draft[q.id]===o.label} onChange={()=>{setOther(d=>({...d,[q.id]:false}));setDraft(d=>({...d,[q.id]:o.label}));}}/>{o.label}<span>{o.description}</span></label>)}
@@ -42,7 +43,7 @@ function EvidenceItems({items,status,label}:{items:ProgressItem[];status:string;
    </li>)}</ol>
 );}
 
-export function TaskProgress({taskId,workspaceId}:{taskId:string;workspaceId:string;pollMs?:number}):ReactElement {
+export function TaskProgress({taskId,workspaceId,selectedQuestion}:{taskId:string;workspaceId:string;pollMs?:number;selectedQuestion?:QuestionSelection|null}):ReactElement {
  const observed=useTaskObservation(taskId,workspaceId,true,true);
  const [snapshot,setSnapshot]=useState<ProgressSnapshot|null>(null),[notice,setNotice]=useState('Reading progress…'),[announcement,setAnnouncement]=useState('');
  const [pages,setPages]=useState<{current?:ProgressSnapshot;history?:ProgressSnapshot}>({}),[pageBusy,setPageBusy]=useState(false);
@@ -61,6 +62,17 @@ export function TaskProgress({taskId,workspaceId}:{taskId:string;workspaceId:str
   }else setAnnouncement([...next.questions.map(q=>`Agent question ${q.itemId} needs an answer.`),...next.items.filter(item=>['completed','failed','cancelled'].includes(item.status)).map(item=>`${item.kind} ${item.id}: ${item.status}.`)].join(' '));
   current.current=next;setSnapshot(next);setNotice('');
  },[observed]);
+ const focusedQuestion=useRef<number|null>(null);
+ const [questionNotice,setQuestionNotice]=useState('');
+ useEffect(()=>{
+  if(!selectedQuestion){focusedQuestion.current=null;setQuestionNotice('');return;}
+  if(!snapshot)return;
+  const exact=snapshot.questions.some(q=>q.requestId===selectedQuestion.requestId&&q.turnId===selectedQuestion.turnId&&q.itemId===selectedQuestion.itemId);
+  if(!exact||ended(snapshot.status)){setQuestionNotice('The selected question was resolved or replaced. No answer was sent.');return;}
+  setQuestionNotice('');if(focusedQuestion.current===selectedQuestion.visit)return;
+  const target=[...document.querySelectorAll<HTMLElement>('[data-question-item]')].find(e=>e.dataset.questionItem===selectedQuestion.itemId&&e.dataset.questionTurn===selectedQuestion.turnId&&e.dataset.questionRequest===JSON.stringify(selectedQuestion.requestId));
+  if(target){focusedQuestion.current=selectedQuestion.visit;target.focus();target.scrollIntoView?.({block:'center'});}
+ },[selectedQuestion,snapshot]);
  const baseView=snapshot?.taskId===taskId&&snapshot.workspaceId===workspaceId?snapshot:null;
  const currentPage=pages.current?.resultPage?.snapshotId===baseView?.resultPage?.snapshotId?pages.current:undefined;
  const historyPage=pages.history?.resultPage?.snapshotId===baseView?.resultPage?.snapshotId?pages.history:undefined;
@@ -84,7 +96,7 @@ export function TaskProgress({taskId,workspaceId}:{taskId:string;workspaceId:str
   finally{if(gen===generation.current)refreshTaskObservation(taskId,workspaceId);}
  };
  return <section className="iq-task-progress" aria-label="Task progress">
-  <h2>Work</h2>{notice&&<p role="status">{notice}</p>}<div className="iq-visually-hidden" aria-live="polite" aria-atomic="true">{announcement}</div>
+  <h2>Work</h2>{questionNotice&&<p role="status">{questionNotice}</p>}{notice&&<p role="status">{notice}</p>}<div className="iq-visually-hidden" aria-live="polite" aria-atomic="true">{announcement}</div>
   <p className="iq-artifact-status">{view?artifactText[view.artifact]:'Artifact information unavailable'}</p>
   {view&&<>
    <p>Execution: {view.status==='completed'?'finished':view.status}. Execution does not establish analytical review, Professional Approval or delivery.</p>

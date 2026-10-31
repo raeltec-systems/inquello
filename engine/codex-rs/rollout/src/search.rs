@@ -407,3 +407,10 @@ fn char_end_after(text: &str, byte_index: usize, chars_after: usize) -> usize {
 #[cfg(test)]
 #[path = "search_tests.rs"]
 mod tests;
+
+/// Native literal matcher for already-authorized conversation text. No index or path scan.
+pub fn retained_conversation_snippet(text: &str, search_term: &str) -> io::Result<Option<String>> {
+    if search_term.trim().is_empty() { return Ok(None); }
+    let pattern = case_insensitive_literal_regex(search_term)?;
+    Ok(excerpt_around_match(text, &pattern))
+}

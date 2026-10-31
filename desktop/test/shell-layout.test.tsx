@@ -11,7 +11,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -50,6 +50,7 @@ const task = (n: number, title: string, engagementId: string | null = null, fold
   sourceRefs: [],
   artifactRefs: [],
   visibility: 'private',
+  pinned:false,archived:false,
   revision: 1,
 });
 
@@ -248,8 +249,9 @@ describe('Shell layout', () => {
     expect(within(nav()).getByRole('img', { name: 'Inquello' }).getAttribute('src')).toMatch(/lockup/);
     expect(document.querySelector('[data-header]')).not.toBeNull();
     expect(document.querySelector('main .iq-shell-content')).not.toBeNull();
-    // Landmarks: one navigation, one main, no artifact while nothing opened one.
-    expect(screen.getAllByRole('navigation')).toHaveLength(1);
+    // Story 1.30 adds a named saved-work navigation alongside the Sidebar.
+    expect(screen.getAllByRole('navigation')).toHaveLength(2);
+    expect(screen.getByRole('navigation',{name:'Saved work'})).toBeTruthy();
     expect(screen.getAllByRole('main')).toHaveLength(1);
     expect(screen.queryByRole('complementary')).toBeNull();
     expect(shell().dataset.artifactOpen).toBe('false');
@@ -367,17 +369,14 @@ describe('Shell layout', () => {
     expect(main.organise.createTask).not.toHaveBeenCalled();
   });
 
-  it('Ctrl/Cmd+K is not handled by Inquello', async () => {
-    const { main } = await renderReady();
-    const before = announceCount();
-    for (const modifier of [{ ctrlKey: true }, { metaKey: true }]) {
-      const event = new KeyboardEvent('keydown', { key: 'k', bubbles: true, cancelable: true, ...modifier });
-      document.body.dispatchEvent(event);
-      expect(event.defaultPrevented).toBe(false);
+  it('Ctrl/Cmd+K opens Search without execution and Escape returns focus', async () => {
+    const {main}=await renderReady();const button=screen.getByRole('button',{name:'Search saved work · Ctrl/Cmd+K'});button.focus();
+    for(const modifier of [{ctrlKey:true},{metaKey:true}]){
+      const event=new KeyboardEvent('keydown',{key:'k',bubbles:true,cancelable:true,...modifier});act(()=>document.body.dispatchEvent(event));expect(event.defaultPrevented).toBe(true);
+      expect(screen.getByRole('dialog',{name:'Search saved work'})).toBeTruthy();
+      await userEvent.setup().keyboard('{Escape}');expect(document.activeElement).toBe(button);
     }
     expect(main.organise.createTask).not.toHaveBeenCalled();
-    expect(announceCount()).toBe(before);
-    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
   it('Escape closes the topmost Menu, then the navigation overlay, returning focus each time; the Task is unaffected', async () => {
@@ -476,6 +475,16 @@ describe('Shell layout', () => {
     expect(announcer().getAttribute('aria-live')).toBe('polite');
   });
 
+  it('a delayed reopen cannot replace the later Task selection in the same Workspace',async()=>{
+    const {main}=await renderReady();const fresh=await main.organise.getTree({workspaceId:WORKSPACE});let release!:(v:unknown)=>void;
+    main.organise.getTree.mockImplementationOnce(()=>new Promise(resolve=>{release=resolve as (v:unknown)=>void;}));
+    const user=userEvent.setup();await user.click(within(nav()).getByRole('link',{name:'Cash count'}));
+    await user.click(within(nav()).getByRole('link',{name:'Bank confirmations'}));
+    await waitFor(()=>expect(announcer().textContent).toBe('Opened Task Bank confirmations'));
+    await act(async()=>release(fresh));expect(announcer().textContent).toBe('Opened Task Bank confirmations');
+    expect(within(nav()).getByRole('link',{name:'Bank confirmations'}).getAttribute('aria-current')).toBe('page');
+  });
+
   it('opening a Task is announced once', async () => {
     await renderReady();
     const before = announceCount();
@@ -558,11 +567,62 @@ describe('no demo artifact, light theme only', () => {
     for (const file of files) expect(fs.readFileSync(file, 'utf8'), file).not.toMatch(/prefers-color-scheme|data-theme/);
   });
 
-  it('Ctrl/Cmd+K is never bound and no global shortcut is registered', () => {
+  it('Search shortcut is renderer-only and no OS global shortcut is registered', () => {
     const shellDir = path.join(renderer, 'Shell');
     const source = fs.readdirSync(shellDir).map((file) => fs.readFileSync(path.join(shellDir, file), 'utf8')).join('\n');
-    expect(source).not.toMatch(/key\s*===?\s*['"]k['"]/i);
+    expect(source).toContain("event.key.toLowerCase()==='k'");
     const main = fs.readFileSync(path.resolve(renderer, '..', 'main', 'main.ts'), 'utf8');
     expect(main).not.toMatch(/globalShortcut/);
   });
+});
+
+describe('saved-work latest foreground destination',()=>{
+ it('does not let a delayed Task reopen replace New thread',async()=>{
+  const {main}=await renderReady();let resolve!:(v:unknown)=>void;
+  const original=(globalThis as any).inquello;Object.assign(globalThis,{inquello:{...original,organise:{...original.organise,reopen:vi.fn(()=>new Promise(r=>{resolve=r;}))}}});
+  // Shell captures its bridge at mount; remount with the extended named bridge.
+  cleanup();render(<Shell onShowSpecimen={()=>{}} operationIds={()=>uuid(900)}/>);await screen.findByRole('link',{name:'Bank confirmations'});
+  const user=userEvent.setup();await user.click(screen.getByRole('link',{name:'Bank confirmations'}));
+  await user.click(screen.getByRole('button',{name:'New thread'}));
+  await act(async()=>resolve({ok:true,value:{task:main.tasks[0],hit:null}}));
+  expect(document.querySelector('[data-start-view]')).not.toBeNull();expect(document.querySelector('[data-task-view]')).toBeNull();
+ });
+ it('blocks underlying global navigation while Search owns the modal',async()=>{
+  await renderReady();await userEvent.setup().click(screen.getByRole('button',{name:/Search saved work/}));
+  expect(screen.getByRole('dialog',{name:'Search saved work'})).toHaveProperty('open',true);
+  fireEvent.keyDown(window,{key:'n',ctrlKey:true});expect(document.querySelector('[data-start-view]')).toBeNull();
+  fireEvent.keyDown(window,{key:'k',ctrlKey:true});expect(screen.getAllByRole('dialog')).toHaveLength(1);
+ });
+ it('does not let a delayed sidebar reopen replace a newer Engagement activation',async()=>{
+  const {main}=await renderReady();let resolve!:(v:unknown)=>void;const original=(globalThis as any).inquello;
+  Object.assign(globalThis,{inquello:{...original,organise:{...original.organise,reopen:vi.fn(()=>new Promise(r=>{resolve=r;})),search:vi.fn(async()=>({ok:true,value:{workspaceId:WORKSPACE,query:'FY26',items:[{kind:'engagement',engagementId:ENGAGEMENT,taskId:null,title:'FY26 audit',snippet:'FY26',turnId:null,itemId:null,archived:false}],nextCursor:null,unavailable:false,coverage:[]}}))}}});
+  cleanup();render(<Shell onShowSpecimen={()=>{}} operationIds={()=>uuid(900)}/>);const user=userEvent.setup();await user.click(await screen.findByRole('link',{name:'Bank confirmations'}));
+  await user.click(screen.getByRole('button',{name:/Search saved work/}));await user.type(screen.getByLabelText('Search this Workspace'),'FY26');await user.click(screen.getByRole('button',{name:'Search',exact:true}));
+  await user.click(await within(screen.getByRole('dialog')).findByRole('button',{name:'FY26 audit'}));await screen.findByRole('region',{name:'Engagement details'});
+  await act(async()=>resolve({ok:true,value:{task:main.tasks[0],hit:null}}));expect(screen.getByRole('region',{name:'Engagement details'})).toBeTruthy();expect(document.querySelector('[data-task-view]')).toBeNull();
+ });
+});
+
+describe('personal navigation projections',()=>{
+ it('orders mixed pinned work first, hides archived rows, and counts only visible Tasks in the rail',async()=>{
+  const main=fakeMain();main.tasks.splice(0,main.tasks.length,{...task(1,'Zulu pinned'),pinned:true},{...task(2,'Alpha ordinary')},{...task(3,'Archived pinned'),pinned:true,archived:true});
+  render(<Shell onShowSpecimen={()=>{}}/>);await screen.findByRole('link',{name:'Zulu pinned'});
+  const rows=[...nav().querySelectorAll('[data-task-id]')];expect(rows.map(row=>row.textContent)).toEqual(['Pinned · Zulu pinned','Alpha ordinary']);expect(screen.queryByRole('link',{name:/Archived pinned/})).toBeNull();
+  await userEvent.setup().click(screen.getByRole('button',{name:'Collapse navigation'}));
+  expect(document.querySelector('.iq-rail-badge [aria-hidden="true"]')?.textContent).toBe('2');expect(document.querySelector('.iq-rail-badge')?.textContent).toContain('2 Tasks in this Workspace');
+ });
+ it('rechecks the full question identity after the second Task reopen, not just the item ID',async()=>{
+  const main=fakeMain();const q={taskId:main.tasks[0]!.taskId,workspaceId:WORKSPACE,requestId:'old-request',turnId:'turn',itemId:'shared-item',question:'Which vendor?'};
+  let resolve!:(v:unknown)=>void,reads=0;const original=(globalThis as any).inquello;
+  const progress=()=>({ok:true,value:{version:1,taskId:q.taskId,workspaceId:WORKSPACE,runId:'run',threadId:'thread',turnId:'turn',runtimeId:'runtime',status:'running',historyIncomplete:false,items:[],plan:[],results:[],artifact:'absent',questions:[{requestId:++reads===1?'old-request':'replacement',threadId:'thread',turnId:'turn',itemId:q.itemId,questions:[]}],sessionGeneration:1}});
+  Object.assign(globalThis,{inquello:{...original,organise:{...original.organise,reopen:vi.fn(()=>new Promise(r=>{resolve=r;}))},tasks:{inbox:async()=>({ok:true,value:{workspaceId:WORKSPACE,items:[q],unavailable:false}}),progress:vi.fn(async()=>progress())}}});
+  render(<Shell onShowSpecimen={()=>{}}/>);await screen.findByRole('link',{name:'Bank confirmations'});const user=userEvent.setup();await user.click(screen.getByRole('button',{name:'Inbox'}));await user.click(await screen.findByRole('button',{name:/Which vendor/}));
+  await act(async()=>resolve({ok:true,value:{task:main.tasks[0],hit:null}}));expect(await screen.findByText(/selected question was resolved or replaced while opening/)).toBeTruthy();expect(document.querySelector('[data-task-view]')).toBeNull();
+ });
+});
+
+it('the maintained native smoke closes Search between independent Ctrl and Cmd shortcut attempts',()=>{
+ const source=fs.readFileSync(path.resolve(__dirname,'../src/main/smoke-probe.ts'),'utf8');
+ const start=source.indexOf('async function probeShellKeys('),end=source.indexOf('const SHELL_THEME_READ',start);const body=source.slice(start,end);
+ expect(body).toMatch(/pressKey\(contents, 'K', \['control'\]\);\s*await pressKey\(contents, 'Escape'\);\s*await pressKey\(contents, 'K', \['meta'\]\)/);
 });

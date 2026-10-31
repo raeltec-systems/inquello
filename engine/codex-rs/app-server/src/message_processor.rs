@@ -1212,7 +1212,29 @@ impl MessageProcessor {
         Ok(())
     }
 
+    /// Saved-work deadlines include admission, native-to-main requests, reads,
+    /// final authorization and queueing, not merely the dispatch match below.
     async fn handle_initialized_client_request(
+        self: Arc<Self>,
+        connection_request_id: ConnectionRequestId,
+        codex_request: ClientRequest,
+        request_context: RequestContext,
+        session: Arc<ConnectionSessionState>,
+        event_stream_ready: Option<McpEventStreamReady>,
+    ) -> Result<(), JSONRPCErrorError> {
+        let saved=matches!(codex_request.method_name(),"inquello/workspace/search"|"inquello/task/reopen"|"inquello/workspace/tree");
+        let cancellation=request_context.cancellation.clone();
+        let request=self.handle_initialized_client_request_inner(connection_request_id,codex_request,request_context,session,event_stream_ready);
+        if saved {
+            tokio::select! {
+                biased;
+                _=cancellation.cancelled()=>Err(crate::request_processors::saved_timeout_error()),
+                result=tokio::time::timeout(std::time::Duration::from_secs(30),request)=>result.map_err(|_|crate::request_processors::saved_timeout_error())?,
+            }
+        } else { request.await }
+    }
+
+    async fn handle_initialized_client_request_inner(
         self: Arc<Self>,
         connection_request_id: ConnectionRequestId,
         codex_request: ClientRequest,
@@ -1228,13 +1250,17 @@ impl MessageProcessor {
             connection_id,
             request_id: codex_request.id().clone(),
         };
+        let saved_operation=matches!(codex_request.method_name(),"inquello/workspace/search"|"inquello/task/reopen"|"inquello/workspace/tree");
+        let saved_deadline=tokio::time::Instant::now()+std::time::Duration::from_secs(30);
+        let saved_cancellation=request_context.cancellation.clone();
+        let mut saved_read_fence=if saved_operation{Some(self.inquello_processor.saved_read_fence(connection_id).await?)}else{None};
         let private_fence = self.outgoing.capture_private_fence(connection_id);
         let private_thread = self.inquello_processor.guard_retained_request(connection_id,&codex_request).await?;
         let private_scope = self.inquello_processor.guard_private_scope(connection_id,&codex_request).await?;
         if private_thread.is_some() || private_scope.is_some() || matches!(codex_request.method_name(), "inquello/workspace/list" | "inquello/tasks/reconcile" | "inquello/tasks/lifecycleReconcile" | "inquello/tasks/forThread" | "inquello/tasks/progress") {
             self.outgoing.fence_request(&request_id, private_fence).await;
         }
-        let result: Result<Option<ClientResponsePayload>, JSONRPCErrorError> = match codex_request {
+        let dispatch=async { match codex_request {
             ClientRequest::Initialize { .. } => {
                 panic!("Initialize should be handled before initialized request dispatch");
             }
@@ -2013,6 +2039,9 @@ impl MessageProcessor {
                     .workspace_remember(connection_id, params)
                     .await
             }
+            ClientRequest::InquelloWorkspaceSearch { params, .. } => self.inquello_processor.workspace_search(connection_id,params,&self.thread_processor).await,
+            ClientRequest::InquelloTaskReopen { params, .. } => self.inquello_processor.task_reopen(connection_id,params,&self.thread_processor).await,
+            ClientRequest::InquelloTaskSetNavigation { params, .. } => self.inquello_processor.task_set_navigation(connection_id,params).await,
             ClientRequest::InquelloWorkspaceTree { params, .. } => {
                 self.inquello_processor
                     .workspace_tree(connection_id, params)
@@ -2232,7 +2261,13 @@ impl MessageProcessor {
             ClientRequest::FeedbackSave { params, .. } => {
                 self.feedback_processor.feedback_save(params).await
             }
-        };
+        }};
+        let result:Result<Option<ClientResponsePayload>,JSONRPCErrorError>=if saved_operation {
+            tokio::select! {biased;
+                _=saved_cancellation.cancelled()=>return Err(crate::request_processors::saved_timeout_error()),
+                result=tokio::time::timeout_at(saved_deadline,dispatch)=>result.map_err(|_|crate::request_processors::saved_timeout_error())?,
+            }
+        }else{dispatch.await};
 
         // Capture before the final fresh authority check, while the response is
         // still local. Never renew this fence once it enters either output queue.
@@ -2240,12 +2275,24 @@ impl MessageProcessor {
             self.outgoing.fence_request(&request_id, self.outgoing.capture_private_fence(connection_id)).await;
         }
         if let Some(thread) = private_thread { self.inquello_processor.require_task_thread(connection_id,&thread).await?; }
-        if result.is_ok() { if let Some(scope) = private_scope { self.inquello_processor.guard_private_scope_after(connection_id,&scope).await?; } }
+        if result.is_ok() { if let Some(scope) = private_scope {
+            let check=self.inquello_processor.guard_private_scope_after(connection_id,&scope);
+            if saved_operation{tokio::time::timeout_at(saved_deadline,check).await.map_err(|_|crate::request_processors::saved_timeout_error())??;}else{check.await?;}
+        } }
+        let _saved_queue_lease=if let (Ok(Some(response)),Some(fence))=(&result,saved_read_fence.as_mut()) {
+            Some(tokio::time::timeout_at(saved_deadline,self.inquello_processor.guard_saved_disclosure(connection_id,response,&self.thread_processor,fence)).await
+                .map_err(|_|crate::request_processors::saved_timeout_error())??)
+        }else{None};
         match result {
             Ok(Some(response)) => {
-                self.outgoing
-                    .send_response_as(request_id.clone(), response)
-                    .await;
+                if saved_operation {
+                    // Local leases remain live through reservation + synchronous queue
+                    // check; transport still carries the captured session/route fence.
+                    let send=self.outgoing.send_response_as_checked(request_id.clone(),response,||{
+                        if saved_cancellation.is_cancelled(){Err(crate::request_processors::saved_timeout_error())}else{Ok(())}
+                    });
+                    tokio::time::timeout_at(saved_deadline.min(tokio::time::Instant::now()+std::time::Duration::from_secs(2)),send).await.map_err(|_|crate::request_processors::saved_timeout_error())?;
+                }else{self.outgoing.send_response_as(request_id.clone(), response).await;}
             }
             Ok(None) => {}
             Err(error) => {

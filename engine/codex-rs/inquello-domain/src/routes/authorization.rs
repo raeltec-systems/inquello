@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use sha2::{Digest, Sha256};
 
-pub const AUTHORIZATION_SUITE: &str = "inquello-current-route-negative-authorization-v2";
+pub const AUTHORIZATION_SUITE: &str = "inquello-current-route-negative-authorization-v3";
 pub const REQUIRED_AUTHORIZATION_SCENARIOS: &[&str] = &[
     "cross-workspace", "peer-private", "foreign-thread", "foreign-tool",
     "revoked-before-dispatch", "revoked-during-model", "revoked-during-tool",
@@ -16,6 +16,12 @@ pub const REQUIRED_AUTHORIZATION_SCENARIOS: &[&str] = &[
     "resume", "authorized-resume", "revoked-before-resume", "revoked-during-resume",
     "resume-missing-linkage", "resume-peer-private", "resume-cross-company",
     "resume-after-runtime-loss", "lifecycle-lost-ack", "stop-finish", "steer-finish",
+    "search-private", "search-legacy-old-turn", "search-paginated-old-turn",
+    "search-revoked-before-disclosure", "search-prior-lineage-revoked", "search-late-response",
+    "exact-hit-reopen", "exact-hit-markdown", "cached-hit-revoked", "search-provider-independent",
+    "search-final-await-off-page", "search-final-await-history", "search-final-await-lineage",
+    "search-next-cursor-scope-snapshot", "search-legacy-markdown", "search-retained-route-mismatch",
+    "search-bounded-plain-compressed", "search-inventory-request-bounded",
 ];
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -271,6 +277,12 @@ mod tests {
         assert!(!check(&after_wait),"withdrawal denies final read");
         after_wait=authority;after_wait.binding.task_id=uuid::Uuid::new_v4().to_string();
         assert!(!check(&after_wait),"Workspace-only authority cannot replace exact Task identity");
+    }
+    #[test]
+    fn prior_lifecycle_proof_cannot_enable_saved_search_or_reopen() {
+        let (_,mut proof,_,_)=fixture();assert!(proof.complete());
+        proof.suite="inquello-current-route-negative-authorization-v2".into();assert!(!proof.complete());
+        proof.suite=AUTHORIZATION_SUITE.into();proof.scenarios.remove("search-prior-lineage-revoked");assert!(!proof.complete());
     }
     #[test]
     fn every_required_scenario_and_count_must_actually_pass() {

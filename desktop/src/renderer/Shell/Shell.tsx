@@ -1,3 +1,7 @@
+import {Search} from './Search';
+import {Inbox,useInbox,type InputRequest,type QuestionSelection} from './Inbox';
+import {reopenView,type ReopenView} from '../../main/organise/navigation';
+import {taskValue,tasksBridge,parseProgress} from './tasks-bridge';
 import {TaskLifecycle} from './TaskLifecycle';
 /**
  * The desktop Shell (Story 1.14): Sidebar, Header and the open Task.
@@ -24,8 +28,7 @@ import {TaskLifecycle} from './TaskLifecycle';
  *   the Composer slot last.
  * - One polite live region announces each surface change once: a Task opened,
  *   the view switched, navigation collapsed or expanded.
- * - Ctrl/Cmd+N activates New thread outside text fields; Ctrl/Cmd+K is not
- *   bound; Escape closes the topmost overlay and returns focus to its opener,
+ * - Ctrl/Cmd+N activates New thread outside text fields; Ctrl/Cmd+K opens saved-work Search; Escape closes the topmost overlay and returns focus to its opener,
  *   and never acts on a Task (`keyboard.ts`).
  * - The artifact area stays closed: nothing in the app opens one yet. The
  *   `artifact` and `renderComposer` props are for tests and later stories.
@@ -44,7 +47,7 @@ import {TaskLifecycle} from './TaskLifecycle';
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 
 import { identityBridge, parseIdentityStatus } from '../bridge';
-import { SegmentedControl } from '../primitives';
+import { SegmentedControl,Button,Badge } from '../primitives';
 import { ArtifactArea, type ShellArtifact } from './ArtifactArea';
 import { Composer } from './Composer';
 import { StartView } from './StartView';
@@ -122,12 +125,18 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
   // The periodic reload reads the current choice without re-creating itself.
   const chosenWorkspace = useRef<string | null>(null);
   const setWorkspaceId = (id: string | null) => {
+    setSavedHit(null);setOpenedEngagement(null);setSelectedQuestion(null);setSavedSurface(null);
     chosenWorkspace.current = id;
     setWorkspaceIdState(id);
   };
   const [tree, setTree] = useState<WorkspaceTree | null>(null);
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [savedSurface,setSavedSurface]=useState<'search'|'inbox'|null>(null);
+  const [savedHit,setSavedHit]=useState<(ReopenView&{generation:number})|null>(null);
+  const [openedEngagement,setOpenedEngagement]=useState<string|null>(null);
+  const [selectedQuestion,setSelectedQuestion]=useState<QuestionSelection|null>(null);
+  const inbox=useInbox(workspaceId,active&&!!state?.signedIn);
   const creatingTask = false;
   const [startLocation, setStartLocation] = useState<{workspaceId:string;engagementId:string|null;folderId:string|null}|null>(null);
   const [showStart,setShowStart] = useState(false);
@@ -137,6 +146,7 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
   const authorizedWorkspaces = useRef<string[]>([]);
   const authorityGeneration = useRef(0);
   const workspaceRead = useRef(0);
+  const navigationRead = useRef(0);
   const disclosedOwner = useRef<string | null>(null);
   const activeStart = useRef({active:false,location:startLocation});
   activeStart.current = {active:active && showStart,location:startLocation};
@@ -431,7 +441,14 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
     });
   }, [load, draftStore]);
 
+  /** Every foreground destination invalidates all older awaited navigation. */
+  const selectDestination = () => {
+    navigationRead.current++;
+    setSavedHit(null);setSelectedQuestion(null);setOpenedEngagement(null);
+    return navigationRead.current;
+  };
   const selectWorkspace = (id: string) => {
+    selectDestination();
     activeStart.current.active=false;
     setWorkspaceId(id);
     setShowStart(false);
@@ -442,14 +459,39 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
   };
 
   /** Opens a Task from navigation; the overlay (if open) closes and focus returns to its opener. */
-  const openTaskFromNav = (item: TaskItem) => {
-    activeStart.current.active=false;
-    if (showOverlay) closeOverlay(true);
-    setShowStart(false);
-    if (item.taskId === openTask.current) return;
-    setOpenTaskId(item.taskId);
-    announce(`Opened Task ${item.title}`);
+  const acceptSaved = (value:ReopenView) => {
+    if(value.task.workspaceId!==chosenWorkspace.current||!authorizedWorkspaces.current.includes(value.task.workspaceId))return;
+    selectDestination();
+    activeStart.current.active=false;setShowStart(false);setOpenedEngagement(null);setSelectedQuestion(null);
+    setTree(previous=>previous?.workspaceId===value.task.workspaceId?{...previous,tasks:[...previous.tasks.filter(t=>t.taskId!==value.task.taskId),value.task]}:previous);
+    const changed=openTask.current!==value.task.taskId;openTask.current=value.task.taskId;
+    setOpenTaskId(value.task.taskId);setSavedHit(value.hit?{...value,generation:authorityGeneration.current}:null);
+    if(changed)announce(`Opened Task ${value.task.title}`);
   };
+  const openTaskFromNav = async (item:TaskItem,question?:InputRequest) => {
+    if(!bridge)return;const generation=authorityGeneration.current,workspace=item.workspaceId,read=selectDestination();
+    setSavedHit(null);setSelectedQuestion(null);setOpenedEngagement(null);
+    if(showOverlay)closeOverlay(true);
+    try {
+      // Older bridge callers still use a fresh authorized tree, never cached Task labels.
+      let value:ReopenView;
+      if(bridge.reopen)value=reopenView(taskValue(await bridge.reopen({workspaceId:workspace,taskId:item.taskId,query:null,turnId:null,itemId:null})));
+      else {const result=parseOutcome(await bridge.getTree({workspaceId:workspace}),parseTree);const task=result.ok?result.value.tasks.find(t=>t.taskId===item.taskId):null;if(!task)throw new Error();value={task,hit:null};}
+      if(read!==navigationRead.current||generation!==authorityGeneration.current||workspace!==chosenWorkspace.current)return;
+      if(question){
+        const api=tasksBridge();if(!api)throw new Error();
+        const progress=parseProgress(taskValue(await api.progress({taskId:item.taskId,workspaceId:workspace})));
+        if(read!==navigationRead.current||generation!==authorityGeneration.current||workspace!==chosenWorkspace.current)return;
+        if(progress.taskId!==item.taskId||progress.workspaceId!==workspace||!progress.questions.some(q=>q.requestId===question.requestId&&q.turnId===question.turnId&&q.itemId===question.itemId)){
+          setNotice('The selected question was resolved or replaced while opening. No answer was sent.');return;
+        }
+      }
+      acceptSaved(value);
+      if(question)setSelectedQuestion({requestId:question.requestId,turnId:question.turnId,itemId:question.itemId,visit:navigationRead.current});
+      return navigationRead.current;
+    }catch{if(read===navigationRead.current&&generation===authorityGeneration.current&&workspace===chosenWorkspace.current){setOpenTaskId(null);setNotice('This Task is unavailable. No cached work was opened.');}}
+  };
+
 
   /** Runs one mutation, then re-reads the tree; a refusal is shown, never hidden. */
   const mutate = async <T,>(call: () => Promise<unknown>, parse: (value: unknown) => T | null): Promise<Outcome<T>> => {
@@ -466,6 +508,7 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
 
   const createTask = async (engagementId: string | null, folderId: string | null) => {
     if (!workspaceId) return;
+    selectDestination();openTask.current=null;
     if (pendingStart && startLocation) {
       setWorkspaceId(startLocation.workspaceId); setOpenTaskId(null); setShowStart(true);
       setNotice('Check the pending operation before starting another private Task.');
@@ -524,6 +567,11 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
     );
   };
 
+  const setNavigation = (task:TaskItem,pinned:boolean,archived:boolean,operationId:string,expectedRevision:number):Promise<Outcome<TaskItem>> => {
+    if(!bridge?.setNavigation)return Promise.resolve({ok:false,code:'failed',reason:'Navigation preferences are unavailable.'});
+    return mutate(()=>bridge.setNavigation!({operationId,workspaceId:task.workspaceId,taskId:task.taskId,expectedRevision,pinned,archived}),parseTask);
+  };
+  const reconnect = (destination:string) => {onShowSpecimen();setTimeout(()=>{const target=document.getElementById(destination)??document.querySelector<HTMLElement>(`[data-provider-action="${destination}"]`);target?.focus();target?.scrollIntoView?.({block:'center'});},100);};
   const signIn = async () => {
     const identity = identityBridge();
     if (!identity) return;
@@ -543,9 +591,12 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
     void createTask(null, null);
     return true;
   };
+  const openSavedSurface=(surface:'search'|'inbox')=>{selectDestination();setSavedSurface(surface);};
+  const searchShortcut=useRef<()=>void>(()=>{});searchShortcut.current=()=>{if(active)openSavedSurface('search');};
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented) return;
+      if (event.defaultPrevented || document.querySelector('dialog[open]')) return;
+      if(!event.isComposing&&!event.repeat&&event.key.toLowerCase()==='k'&&event.ctrlKey!==event.metaKey&&!event.altKey&&!event.shiftKey){event.preventDefault();searchShortcut.current();return;}
       if (event.key === 'Escape') {
         if (escapeStack.current.closeTopmost()) event.preventDefault();
         return;
@@ -607,6 +658,11 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
         person={person}
       />
       <div className="iq-shell-main">
+        <nav className="iq-saved-toolbar" aria-label="Saved work">
+          <Button variant="ghost" onPress={()=>openSavedSurface('search')}>Search saved work · Ctrl/Cmd+K</Button>
+          <Button variant="ghost" onPress={()=>openSavedSurface('inbox')}>Inbox</Button>
+          {inbox&&!inbox.unavailable?<Badge count={inbox.items.length} label="requests for input"/>:<span>Attention unavailable</span>}
+        </nav>
         <Header task={task} engagement={engagement} workspace={workspace} />
         <div className={`iq-work${openArtifact ? ' iq-work--artifact' : ''}`} data-work>
           {mode === 'single' && openArtifact ? (
@@ -643,12 +699,17 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
                   announce('Private Task accepted.'); void loadTree(origin.workspaceId);
                 }}
               /> : null}
+              {savedHit?.hit&&task?.taskId===savedHit.task.taskId&&savedHit.generation===authorityGeneration.current&&<section className="iq-saved-hit" aria-label="Selected saved message" tabIndex={-1} ref={element=>{if(element&&!element.dataset.focused){element.dataset.focused='true';setTimeout(()=>{if(element.isConnected){element.focus();element.scrollIntoView?.({block:'center'});}},0);}}}><h2>Selected saved message</h2><details><summary>Message source</summary><p>Turn {savedHit.hit.turnId} · Item {savedHit.hit.itemId}</p></details><p className="iq-progress-text">{savedHit.hit.text}</p><p>{savedHit.hit.truncated?'Bounded matching context; the full message is longer.':'Exact retained message.'} Inspection does not resume work.</p><Button onPress={()=>setSavedHit(null)}>Close saved message</Button></section>}
+              {!showStart&&openedEngagement&&currentTree?.engagements.filter(e=>e.engagementId===openedEngagement).map(e=><section key={e.engagementId} aria-label="Engagement details"><h2>{e.name}</h2><p>{e.objectives}</p><p>{e.scope}</p><p>{e.clientEntity} · {e.periodStart}–{e.periodEnd}</p></section>)}
               {!showStart && task && tree ? (
                 <TaskView
                   task={task}
                   accepted={acceptedFor(task.taskId)}
                   engagements={tree.engagements}
                   folders={tree.folders}
+                  onNavigation={setNavigation}
+                  onReconnect={reconnect}
+                  selectedQuestion={selectedQuestion}
                   onRename={renameTask}
                   onMove={moveTask}
                   newOperationId={operationIds}
@@ -691,6 +752,8 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
           </div>
         </div>
       </div>
+      {active&&savedSurface==='search'&&<Search key={`${workspaceId}:${runtimeEpoch}:${authorityGeneration.current}`} workspaceId={authorizedWorkspace?workspaceId:null} onClose={()=>setSavedSurface(null)} onOpen={acceptSaved} onEngagement={e=>{if(e.workspaceId===chosenWorkspace.current&&authorizedWorkspaces.current.includes(e.workspaceId)){selectDestination();openTask.current=null;setTree(previous=>previous?{...previous,engagements:[...previous.engagements.filter(row=>row.engagementId!==e.engagementId),e]}:previous);setOpenTaskId(null);setSavedHit(null);setShowStart(false);setOpenedEngagement(e.engagementId);}}}/>}
+      {active&&savedSurface==='inbox'&&<Inbox key={`${workspaceId}:${runtimeEpoch}:${authorityGeneration.current}`} view={authorizedWorkspace?inbox:null} tasks={currentTree?.tasks??[]} onClose={()=>setSavedSurface(null)} onOpen={(task,question)=>{void openTaskFromNav(task,question);}}/>}
       <div className="iq-visually-hidden" role="status" aria-live="polite" aria-atomic="true" data-shell-announcer data-announce-count={announcement.count}>
         {announcement.text ? <span key={announcement.count}>{announcement.text}</span> : null}
       </div>

@@ -1,3 +1,4 @@
+import {searchPayload,reopenPayload,navigationPayload,type SearchInput,type SearchView,type ReopenInput,type ReopenView,type NavigationInput} from '../organise';
 import type { TaskService } from '../tasks/service';
 import { taskPreflightPayload, taskStartPayload, taskReconcilePayload, taskProgressPayload, taskActivityPayload, taskAnswerPayload, taskSteerPayload, taskStopPayload, taskResumePayload } from '../tasks/validators';
 import type { UsageService } from '../usage/service';
@@ -70,6 +71,7 @@ export const OPERATION_NAMES = [
   'tasks.reconcile',
   'tasks.progress',
   'tasks.activity',
+  'tasks.inbox',
   'tasks.settleLifecycle',
   'tasks.answer',
   'tasks.steer',
@@ -100,6 +102,9 @@ export const OPERATION_NAMES = [
   'provider.codexLogout',
   'organise.getWorkspaces',
   'organise.getTree',
+  'organise.search',
+  'organise.reopen',
+  'organise.setNavigation',
   'organise.createEngagement',
   'organise.updateEngagement',
   'organise.createFolder',
@@ -268,6 +273,9 @@ export interface ProviderOperations {
 
 /** Private Workspace organisation as the operations see it (main-owned; see `organise/service.ts`). */
 export interface OrganiseOperations {
+  search(input:SearchInput):Promise<OrganiseResult<SearchView>>;
+  reopen(input:ReopenInput):Promise<OrganiseResult<ReopenView>>;
+  setNavigation(input:NavigationInput):Promise<OrganiseResult<TaskView>>;
   getWorkspaces(): Promise<WorkspacesView>;
   getTree(workspaceId: string): Promise<OrganiseResult<WorkspaceTreeView>>;
   createEngagement(input: EngagementInput): Promise<OrganiseResult<EngagementView>>;
@@ -301,7 +309,7 @@ export interface PolicyOperations {
 }
 
 export interface OperationDeps {
-  tasks?: Pick<TaskService, 'preflight' | 'start' | 'reconcile' | 'progress' | 'activity' | 'settleLifecycle' | 'answer' | 'steer' | 'stop' | 'resume'>;
+  tasks?: Pick<TaskService, 'preflight' | 'start' | 'reconcile' | 'progress' | 'activity' | 'inbox' | 'settleLifecycle' | 'answer' | 'steer' | 'stop' | 'resume'>;
   usage?: Pick<UsageService, 'forTask' | 'set'>;
   environments?: Pick<EnvironmentService, 'forTask'>;
   routes?: Pick<RouteService, 'list' | 'configure' | 'forTask' | 'select'>;
@@ -500,6 +508,7 @@ export function createOperations(deps: OperationDeps): Operation[] {
     { name: 'tasks.reconcile', validate: taskReconcilePayload, handle: input => { if (!deps.tasks) throw new Error('Task reconciliation unavailable'); return deps.tasks.reconcile((input as {operationId:string}).operationId); } },
     { name: 'tasks.progress', validate: taskProgressPayload, handle: input => { if (!deps.tasks) throw new Error('Task progress unavailable'); return deps.tasks.progress(input as Parameters<TaskService['progress']>[0]); } },
     { name: 'tasks.activity', validate: taskActivityPayload, handle: input => { if (!deps.tasks) throw new Error('Task progress unavailable'); return deps.tasks.activity(input as Parameters<TaskService['progress']>[0]); } },
+    {name:'tasks.inbox',validate:treePayload,handle:input=>deps.tasks?.inbox(input as {workspaceId:string})??{ok:false,reason:'Current requests for input are unavailable.'}},
     { name: 'tasks.settleLifecycle', validate: taskStopPayload, handle: input => { if (!deps.tasks) throw new Error('Task lifecycle unavailable'); return deps.tasks.settleLifecycle(input as Parameters<TaskService['stop']>[0]); } },
     { name: 'tasks.answer', validate: taskAnswerPayload, handle: input => { if (!deps.tasks) throw new Error('Task input unavailable'); return deps.tasks.answer(input as Parameters<TaskService['answer']>[0]); } },
     { name: 'tasks.steer', validate: taskSteerPayload, handle: input => { if (!deps.tasks) throw new Error('Task lifecycle unavailable'); return deps.tasks.steer(input as Parameters<TaskService['steer']>[0]); } },
@@ -531,6 +540,9 @@ export function createOperations(deps: OperationDeps): Operation[] {
     codexLogout,
     organiseWorkspaces,
     organiseTree,
+    {name:'organise.search',validate:searchPayload,handle:input=>deps.organise.search(input as SearchInput)},
+    {name:'organise.reopen',validate:reopenPayload,handle:input=>deps.organise.reopen(input as ReopenInput)},
+    {name:'organise.setNavigation',validate:navigationPayload,handle:input=>deps.organise.setNavigation(input as NavigationInput)},
     organiseCreateEngagement,
     organiseUpdateEngagement,
     organiseCreateFolder,

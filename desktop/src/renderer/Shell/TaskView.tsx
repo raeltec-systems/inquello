@@ -1,3 +1,4 @@
+import type {QuestionSelection} from './Inbox';
 import { TaskProgress } from './TaskProgress';
 import { ProcessingRoutes } from '../ProcessingRoutes';
 import type { StartedTask } from './tasks-bridge';
@@ -19,7 +20,7 @@ import type { StartedTask } from './tasks-bridge';
  * - The Composer (Story 1.17) sits below in the Shell; runtime threads come with Story 1.25:
  *   nothing here starts work.
  */
-import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactElement } from 'react';
 
 import { Button, Menu, TextField, type MenuEntry } from '../primitives';
 import type { EngagementItem, FolderItem, Outcome, TaskItem } from './organise-bridge';
@@ -44,6 +45,9 @@ export interface TaskViewProps {
   accepted?: StartedTask;
   engagements: readonly EngagementItem[];
   folders: readonly FolderItem[];
+  onNavigation?: (task:TaskItem,pinned:boolean,archived:boolean,operationId:string,expectedRevision:number)=>Promise<Outcome<TaskItem>>;
+  onReconnect?: (destination:string)=>void;
+  selectedQuestion?:QuestionSelection|null;
   onRename: (task: TaskItem, title: string, operationId: string) => Promise<Outcome<TaskItem>>;
   onMove: (task: TaskItem, target: MoveTarget) => Promise<Outcome<TaskItem>>;
   newOperationId: () => string;
@@ -72,6 +76,9 @@ export function TaskView({
   engagements,
   folders,
   onRename,
+  onNavigation,
+  onReconnect,
+  selectedQuestion,
   onMove,
   newOperationId,
   states = null,
@@ -84,13 +91,34 @@ export function TaskView({
   const [renameOp, setRenameOp] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [navigation,setNavigation]=useState<{operationId:string;pinned:boolean;archived:boolean;expectedRevision:number;conflict?:boolean}|null>(null);
+  const origin=useRef({key:`${task.workspaceId}:${task.taskId}`,generation:0});
+  const key=`${task.workspaceId}:${task.taskId}`;
+  // Render-synchronous: a completion cannot sneak between a Task switch and its effect.
+  if(origin.current.key!==key)origin.current={key,generation:origin.current.generation+1};
+  useEffect(()=>()=>{origin.current.generation++;},[]);
+  const navigate=async(pinned:boolean,archived:boolean)=>{
+    if(!onNavigation||busy)return;
+    const generation=origin.current.generation;
+    const op=navigation?(navigation.conflict?{...navigation,expectedRevision:task.revision}:navigation):{operationId:newOperationId(),pinned,archived,expectedRevision:task.revision};
+    setNavigation(op);setBusy(true);
+    let result:Outcome<TaskItem>;
+    try{result=await onNavigation(task,op.pinned,op.archived,op.operationId,op.expectedRevision);}
+    catch{result={ok:false,code:'failed',reason:'Navigation could not be confirmed. Retry the same change.'};}
+    if(generation!==origin.current.generation)return;
+    setBusy(false);
+    if(result.ok){setNavigation(null);setNotice(result.value.archived?'Archived from navigation. No authoritative record was deleted; running work was not stopped.':'Navigation preference saved.');}
+    else {if(result.code==='conflict')setNavigation({...op,conflict:true});setNotice(result.reason);}
+  };
 
   // A different Task opened: start from its title.
   useEffect(() => {
     setDraft(task.title);
+    setBusy(false);
     setRenameOp(null);
+    setNavigation(null);
     setNotice(null);
-  }, [task.taskId]);
+  }, [task.taskId,task.workspaceId]);
 
   const save = async (event: FormEvent) => {
     event.preventDefault();
@@ -99,7 +127,9 @@ export function TaskView({
     setRenameOp(operationId);
     setBusy(true);
     setNotice(null);
+    const generation=origin.current.generation;
     const result = await onRename(task, draft, operationId);
+    if(generation!==origin.current.generation)return;
     setBusy(false);
     if (result.ok) {
       setRenameOp(null);
@@ -134,7 +164,9 @@ export function TaskView({
       }
       if (targetKey(target) === targetKey(task)) return;
       setNotice(null);
+      const generation=origin.current.generation;
       void onMove(task, target).then((result) => {
+        if(generation!==origin.current.generation)return;
         if (!result.ok) setNotice(result.reason);
       });
     },
@@ -143,8 +175,14 @@ export function TaskView({
   return (
     <section className="iq-task" aria-label="Task" data-task-view={task.taskId}>
       {accepted && <AcceptedRequest accepted={accepted}/>}
-      {(accepted || task.runtimeThreadId) && <TaskProgress key={task.taskId} taskId={task.taskId} workspaceId={task.workspaceId}/> }
+      {(accepted || task.runtimeThreadId) && <TaskProgress key={task.taskId} taskId={task.taskId} workspaceId={task.workspaceId} selectedQuestion={selectedQuestion}/> }
       <div className="iq-task-tools">
+        {onNavigation&&<Menu label="Organise Task" items={[
+          {label:task.pinned?'Unpin':'Pin',disabledReason:busy?'Saving navigation.':navigation?'Retry the pending navigation change first.':undefined,onSelect:()=>void navigate(!task.pinned,!!task.archived)},
+          {label:task.archived?'Unarchive':'Archive',description:'Personal navigation only. No authoritative record is deleted, and running work is not stopped.',disabledReason:busy?'Saving navigation.':navigation?'Retry the pending navigation change first.':undefined,onSelect:()=>void navigate(!!task.pinned,!task.archived)}
+        ]}/>}
+        {navigation&&!busy&&<Button onPress={()=>void navigate(navigation.pinned,navigation.archived)}>Retry navigation change</Button>}
+        {task.archived&&<p>Archived. Opening does not unarchive this Task.</p>}
         <form className="iq-task-rename" onSubmit={(event) => void save(event)} data-task-rename>
           <TextField label="Task title" value={draft} onChange={setDraft} />
           <Button variant="secondary" size="sm" type="submit" pending={busy} disabledReason={draft.trim() === '' ? 'A title is required.' : undefined}>
@@ -161,7 +199,7 @@ export function TaskView({
         </p>
       ) : null}
       <TaskEnvironment taskId={task.taskId} />
-      <ProcessingRoutes taskId={task.taskId} />
+      <ProcessingRoutes taskId={task.taskId} onReconnect={onReconnect} />
       <TaskUsage taskId={task.taskId} />
       <TaskStates states={states && states.taskId === task.taskId ? states : null} notice={statesNotice} />
       <TaskPolicy policy={policy && policy.taskId === task.taskId ? policy : null} notice={policyNotice} onSetMode={onSetMode} />

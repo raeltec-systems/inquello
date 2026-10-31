@@ -100,6 +100,8 @@ pub struct InquelloWorkspaceTreeParams {
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
 pub struct InquelloWorkspaceTreeResponse {
+    #[serde(skip)] #[schemars(skip)] #[ts(skip)]
+    pub internal_disclosure_fence:String,
     pub workspace_id: String,
     pub engagements: Vec<InquelloEngagement>,
     pub folders: Vec<InquelloFolder>,
@@ -155,6 +157,8 @@ pub enum InquelloTaskVisibility {
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
 pub struct InquelloTask {
+    #[serde(default)] pub pinned: bool,
+    #[serde(default)] pub archived: bool,
     pub task_id: String,
     pub workspace_id: String,
     pub creator_principal_id: String,
@@ -1344,3 +1348,62 @@ pub struct InquelloTasksLifecycleResponse {
     pub runtime_id: String, pub thread_id: String, pub turn_id: Option<String>,
     pub kind: String, pub status: String,
 }
+
+// Story 1.30: private navigation, never generic thread search or inference.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all="camelCase", deny_unknown_fields)]
+#[ts(export_to="v2/")]
+pub struct InquelloTaskSetNavigationParams {
+    pub operation_id:String, #[ts(type="number")] pub expected_revision:u64,
+    pub workspace_id:String, pub task_id:String, pub pinned:bool, pub archived:bool,
+}
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all="camelCase", deny_unknown_fields)]
+#[ts(export_to="v2/")]
+pub struct InquelloWorkspaceSearchParams {
+    pub workspace_id:String, pub query:String, pub include_archived:bool, pub cursor:Option<String>,
+}
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all="camelCase")]
+#[ts(export_to="v2/")]
+pub struct InquelloSearchItem {
+    pub kind:String, pub task_id:Option<String>, pub engagement_id:Option<String>, pub title:String,
+    pub snippet:Option<String>, pub turn_id:Option<String>, pub item_id:Option<String>, pub archived:bool,
+}
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all="camelCase")]
+#[ts(export_to="v2/")]
+pub struct InquelloWorkspaceSearchResponse {
+    /// Internal native response fence; never serialized, indexed, or exposed in generated bindings.
+    #[serde(skip)] #[schemars(skip)] #[ts(skip)]
+    pub internal_disclosure_fence:String,
+    pub workspace_id:String,pub query:String,pub items:Vec<InquelloSearchItem>,pub next_cursor:Option<String>,
+    pub unavailable:bool,pub coverage:Vec<String>,
+}
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all="camelCase", deny_unknown_fields)]
+#[ts(export_to="v2/")]
+pub struct InquelloTaskReopenParams {
+    pub workspace_id:String,pub task_id:String,pub query:Option<String>,pub turn_id:Option<String>,pub item_id:Option<String>,
+}
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all="camelCase")]
+#[ts(export_to="v2/")]
+pub struct InquelloSavedHit {pub turn_id:String,pub item_id:String,pub text:String,pub truncated:bool}
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all="camelCase")]
+#[ts(export_to="v2/")]
+pub struct InquelloTaskReopenResponse {
+    pub task:InquelloTask,pub hit:Option<InquelloSavedHit>,
+    #[serde(skip)] #[schemars(skip)] #[ts(skip)]
+    pub internal_disclosure_fence:String,
+}
+/// Fresh main-owned service observation. No renderer-supplied access verdict.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all="camelCase", deny_unknown_fields)]
+#[ts(export_to="v2/")]
+pub struct InquelloContextAuthorizeParams {pub workspace_id:String,pub expected_snapshot:Option<String>}
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all="camelCase", deny_unknown_fields)]
+#[ts(export_to="v2/")]
+pub struct InquelloContextAuthorizeResponse {pub available:bool,pub snapshot:Option<String>,pub service_engagement_ids:Vec<String>}

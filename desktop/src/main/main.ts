@@ -293,7 +293,7 @@ async function startRuntimeNow(): Promise<void> {
     stderrLogPath: path.join(app.getPath('logs'), 'app-server-stderr.log'),
     logger,
     onNotification: ({ method, params }) => { tasks?.notification(method, params); providers?.codex.handleNotification(method, params); if (method === 'account/updated') void routes?.invalidate('codex-responses'); capabilities?.handleNotification(method, params); if (['app/list/updated','skills/changed','mcpServer/startupStatus/updated','mcpServerStatus','mcpServer/oauthLogin/completed','account/updated'].includes(method)) for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:capabilities-changed'); },
-    onServerRequest: (method, params, id) => method === 'item/tool/requestUserInput' ? tasks?.question(id, params) ?? {answers:{}} : method === 'inquello/tasks/authority' ? tasks?.authority(params) ?? {workspacePolicy:null} : escalations.answer(method, params),
+    onServerRequest: (method, params, id) => method === 'inquello/context/authorize' ? organise?.authorizeContext(params) ?? {available:false,snapshot:null,serviceEngagementIds:[]} : method === 'item/tool/requestUserInput' ? tasks?.question(id, params) ?? {answers:{}} : method === 'inquello/tasks/authority' ? tasks?.authority(params) ?? {workspacePolicy:null} : escalations.answer(method, params),
   });
   runtime.on('state', ({ state, error }) => {
     if (['disconnected','failed','stopped'].includes(state)) { taskSessionChanged(); runtimeConfigurationVerified = false;
@@ -660,6 +660,9 @@ void app.whenReady().then(async () => {
         codexLogout: () => providerLogoutWithCapabilities({capabilities, stopRuntime, logout: () => providerService.codexLogout(), getStatus: () => providerService.getStatus()}),
       },
       organise: {
+        search: input => organiseService.search(input),
+        reopen: input => organiseService.reopen(input),
+        setNavigation: input => organiseService.setNavigation(input),
         getWorkspaces: () => organiseService.getWorkspaces(),
         getTree: (workspaceId) => organiseService.getTree(workspaceId),
         createEngagement: (input) => organiseService.createEngagement(input),

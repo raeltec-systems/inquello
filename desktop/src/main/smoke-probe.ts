@@ -104,7 +104,7 @@
  * actual width, that the page has no horizontal overflow
  * (`scrollWidth <= clientWidth`), the landmarks, that the artifact area is
  * closed and that the open Task stays open and marked. It checks that a
- * Ctrl/Cmd+K keydown is left unhandled, that collapsing the rail by keyboard is
+ * Ctrl/Cmd+K keydown opens saved-work search, that collapsing the rail by keyboard is
  * announced once, and, under an emulated `prefers-color-scheme: dark`, that the
  * Shell stays light. Nothing can open the artifact area yet, so at the single
  * width it requires the Shell to report that the artifact would not fit beside
@@ -186,7 +186,7 @@ const TAB_SETTLE_MS = 50;
 
 /** The tree `window.inquello` must expose, as `describe` renders it. */
 export const EXPECTED_BRIDGE_TREE = {
-  tasks: { steer: 'function', stop: 'function', resume: 'function',preflight:'function',start:'function',reconcile:'function',progress:'function',activity:'function',settleLifecycle:'function',answer:'function',onProgressChanged:'function',onSessionChanged:'function'},
+  tasks: { inbox: 'function', steer: 'function', stop: 'function', resume: 'function',preflight:'function',start:'function',reconcile:'function',progress:'function',activity:'function',settleLifecycle:'function',answer:'function',onProgressChanged:'function',onSessionChanged:'function'},
   usage: { forTask: 'function', set: 'function', onChanged: 'function' },
   environments: { forTask: 'function', onChanged: 'function' },
   routes: { list: 'function', configure: 'function', forTask: 'function', select: 'function', onChanged: 'function' },
@@ -203,6 +203,7 @@ export const EXPECTED_BRIDGE_TREE = {
     codexLogout: 'function',
   },
   organise: {
+    search:'function',reopen:'function',setNavigation:'function',
     getWorkspaces: 'function',
     getTree: 'function',
     createEngagement: 'function',
@@ -2128,14 +2129,16 @@ async function pressKey(contents: WebContents, keyCode: string, modifiers: Array
   await new Promise((resolve) => setTimeout(resolve, 300));
 }
 
-/** Ctrl+K and Cmd+K go unhandled; Enter on Collapse, then on Expand, toggles the rail with one announcement each. */
+/** Ctrl+K and Cmd+K open Search without execution; Enter on Collapse, then on Expand, toggles the rail with one announcement each. */
 async function probeShellKeys(contents: WebContents): Promise<NonNullable<ShellLayoutProbeRead['keys']>> {
   contents.focus();
   const tasksBefore = (await contents.executeJavaScript(SHELL_KEYS_PREPARE)) as number;
   await pressKey(contents, 'K', ['control']);
+  await pressKey(contents, 'Escape');
   await pressKey(contents, 'K', ['meta']);
   const keys = (await contents.executeJavaScript(SHELL_KEYS_READ)) as { handled: boolean[]; tasks: number };
   const out: NonNullable<ShellLayoutProbeRead['keys']> = { ctrlK: keys.handled, ctrlKCreatedTask: keys.tasks !== tasksBefore, rail: null };
+  await pressKey(contents, 'Escape');
   if (!(await contents.executeJavaScript(focusAction('collapse-nav')))) return out;
   const before = (await contents.executeJavaScript(SHELL_RAIL_READ)) as RailRead;
   await pressKey(contents, 'Return');
@@ -2250,7 +2253,7 @@ export function evaluateShellLayout(read: ShellLayoutProbeRead): ShellLayoutRepo
   const keys = read.keys;
   if (!keys) failures.push('the keyboard checks did not run');
   else {
-    if (keys.ctrlK.length !== 2 || keys.ctrlK.some(Boolean)) failures.push(`Ctrl/Cmd+K was handled (${JSON.stringify(keys.ctrlK)})`);
+    if (keys.ctrlK.length !== 2 || keys.ctrlK.some(value => !value)) failures.push(`Ctrl/Cmd+K did not open Search (${JSON.stringify(keys.ctrlK)})`);
     if (keys.ctrlKCreatedTask) failures.push('Ctrl/Cmd+K changed the Task list');
     const rail = keys.rail;
     if (!rail) failures.push('the Collapse navigation control was not found');

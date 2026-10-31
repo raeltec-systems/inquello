@@ -2067,6 +2067,7 @@ dependencies = [
  "clap",
  "codex-agent-extension",
  "codex-analytics",
+ "codex-api",
  "codex-app-server-daemon",
  "codex-app-server-protocol",
  "codex-app-server-transport",
@@ -2140,6 +2141,7 @@ dependencies = [
  "http 1.4.0",
  "inquello-adapters",
  "inquello-domain",
+ "inquello-protocol",
  "insta",
  "keyring",
  "libc",
@@ -3030,6 +3032,8 @@ dependencies = [
  "iana-time-zone",
  "image",
  "indexmap 2.14.0",
+ "inquello-adapters",
+ "inquello-protocol",
  "insta",
  "libc",
  "maplit",
@@ -4893,6 +4897,7 @@ dependencies = [
  "pulldown-cmark",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "sqlx",
  "sqlx-macros",
  "tempfile",
@@ -9513,15 +9518,26 @@ dependencies = [
 name = "inquello-adapters"
 version = "0.165.0"
 dependencies = [
+ "eventsource-stream",
+ "futures",
  "inquello-domain",
+ "inquello-protocol",
  "pretty_assertions",
+ "rcgen",
+ "reqwest 0.12.28",
+ "rustls",
+ "serde",
  "serde_json",
+ "sha2 0.10.9",
  "sqlx",
  "sqlx-macros",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-rustls",
+ "tokio-util",
  "uuid",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -9531,6 +9547,7 @@ dependencies = [
  "pretty_assertions",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "thiserror 2.0.18",
  "uuid",
 ]
@@ -9540,6 +9557,7 @@ name = "inquello-protocol"
 version = "0.165.0"
 dependencies = [
  "chrono",
+ "inquello-domain",
  "pretty_assertions",
  "serde",
  "serde_json",
@@ -9550,9 +9568,11 @@ dependencies = [
 name = "inquello-service"
 version = "0.165.0"
 dependencies = [
+ "app_test_support",
  "axum",
  "base64 0.22.1",
  "chrono",
+ "codex-app-server-protocol",
  "inquello-domain",
  "inquello-protocol",
  "jsonwebtoken",

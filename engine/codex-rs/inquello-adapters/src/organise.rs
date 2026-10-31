@@ -38,7 +38,7 @@ const FOLDER_COLUMNS: &str =
     "folder_id, engagement_id, workspace_id, name, revision, created_at_ms, updated_at_ms";
 const TASK_COLUMNS: &str = "task_id, workspace_id, creator_principal_id, engagement_id, \
      folder_id, title, runtime_thread_id, source_refs, artifact_refs, visibility, revision, \
-     created_at_ms, updated_at_ms";
+     created_at_ms, updated_at_ms, pinned, archived";
 const LABEL_COLUMNS: &str = "principal_id, workspace_id, name, revision, updated_at_ms";
 
 impl OrganiseStore for SqliteWorkingStore {
@@ -219,7 +219,7 @@ impl OrganiseStore for SqliteWorkingStore {
         let workspace = workspace_id.to_string();
         let engagements = sqlx::query(sqlx::AssertSqlSafe(format!(
             "SELECT {ENGAGEMENT_COLUMNS} FROM engagements WHERE workspace_id = ? \
-             ORDER BY name COLLATE NOCASE, created_at_ms, engagement_id"
+             ORDER BY name COLLATE NOCASE, created_at_ms, engagement_id LIMIT 2001"
         )))
         .bind(&workspace)
         .fetch_all(self.pool())
@@ -227,7 +227,7 @@ impl OrganiseStore for SqliteWorkingStore {
         .map_err(backend)?;
         let folders = sqlx::query(sqlx::AssertSqlSafe(format!(
             "SELECT {FOLDER_COLUMNS} FROM folders WHERE workspace_id = ? \
-             ORDER BY name COLLATE NOCASE, created_at_ms, folder_id"
+             ORDER BY name COLLATE NOCASE, created_at_ms, folder_id LIMIT 2001"
         )))
         .bind(&workspace)
         .fetch_all(self.pool())
@@ -236,13 +236,14 @@ impl OrganiseStore for SqliteWorkingStore {
         // Only the creator's own Tasks: membership never lists another creator's.
         let tasks = sqlx::query(sqlx::AssertSqlSafe(format!(
             "SELECT {TASK_COLUMNS} FROM tasks WHERE workspace_id = ? AND creator_principal_id = ? \
-             ORDER BY created_at_ms, task_id"
+             ORDER BY created_at_ms, task_id LIMIT 2001"
         )))
         .bind(&workspace)
         .bind(creator.to_string())
         .fetch_all(self.pool())
         .await
         .map_err(backend)?;
+        if engagements.len()>2000 || folders.len()>2000 || tasks.len()>2000 {return Err(StoreError::Backend("Workspace inventory exceeds bounded navigation".into()));}
         Ok(WorkspaceTree {
             engagements: engagements
                 .iter()
@@ -383,13 +384,13 @@ async fn write_record(
             let sql = if create {
                 "INSERT INTO tasks (task_id, workspace_id, creator_principal_id, engagement_id, \
                  folder_id, title, runtime_thread_id, source_refs, artifact_refs, visibility, \
-                 revision, created_at_ms, updated_at_ms) \
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)"
+                 revision, created_at_ms, updated_at_ms, pinned, archived) \
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)"
             } else {
                 "UPDATE tasks SET workspace_id = ?2, creator_principal_id = ?3, \
                  engagement_id = ?4, folder_id = ?5, title = ?6, runtime_thread_id = ?7, \
                  source_refs = ?8, artifact_refs = ?9, visibility = ?10, revision = ?11, \
-                 created_at_ms = ?12, updated_at_ms = ?13 WHERE task_id = ?1 AND revision = ?14"
+                 created_at_ms = ?12, updated_at_ms = ?13, pinned = ?14, archived = ?15 WHERE task_id = ?1 AND revision = ?16"
             };
             sqlx::query(sql)
                 .bind(r.task_id.to_string())
@@ -405,6 +406,8 @@ async fn write_record(
                 .bind(revision)
                 .bind(r.created_at.unix_millis())
                 .bind(r.updated_at.unix_millis())
+                .bind(r.pinned)
+                .bind(r.archived)
                 .bind_if_update(create, expected)
                 .execute(&mut **tx)
                 .await
@@ -516,6 +519,8 @@ fn task_from_row(row: &SqliteRow) -> Result<Task, StoreError> {
             .transpose()?,
         title: row.try_get("title").map_err(backend)?,
         runtime_thread_id: row.try_get("runtime_thread_id").map_err(backend)?,
+        pinned: row.try_get("pinned").map_err(backend)?,
+        archived: row.try_get("archived").map_err(backend)?,
         source_refs: refs_from_db(row, "source_refs")?,
         artifact_refs: refs_from_db(row, "artifact_refs")?,
         visibility: Visibility::parse(&visibility)

@@ -73,3 +73,15 @@ it('ordinary background refresh retains focused controls disabled until fresh fa
  await act(async()=>release({ok:true,value:[route]}));await waitFor(()=>expect(button.getAttribute('aria-disabled')).not.toBe('true'));
  expect(document.activeElement).toBe(button);expect(screen.getByRole('button',{name:'Select Anthropic route for this Task'})).toBe(button);timer.mockRestore();
 });
+
+it.each([
+ ['claude-api-key','anthropic-direct','provider-claude-key'],
+ ['codex-responses','openai-api','provider-codex-key'],
+ ['codex-responses','chatgpt-codex','codex-chatgpt'],
+])('offers the applicable %s reconnect destination without changing routes or executing',async(routeId,deployment,destination)=>{
+ const h=setup(),reconnect=vi.fn();const selected={...route,routeId,credentialPresent:false,configuration:{...route.configuration,routeId,deployment}};
+ h.forTask.mockResolvedValue({ok:true,value:{taskId,workspaceId:taskId,revision:1,configurationRevision:1,staleConfiguration:false,selected}} as never);
+ render(<ProcessingRoutes taskId={taskId} onReconnect={reconnect}/>);
+ await userEvent.click(await screen.findByRole('button',{name:'Reconnect selected provider'}));
+ expect(reconnect).toHaveBeenCalledWith(destination);expect(h.select).not.toHaveBeenCalled();expect(h.configure).not.toHaveBeenCalled();
+});

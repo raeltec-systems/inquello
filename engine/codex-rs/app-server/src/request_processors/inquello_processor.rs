@@ -187,6 +187,8 @@ fn configured_store_path() -> Option<PathBuf> {
 mod route_bridge;
 #[path = "inquello_reviewer.rs"]
 mod reviewer;
+#[path = "inquello_search.rs"]
+mod search_bridge;
 #[path = "inquello_tasks.rs"]
 pub(crate) mod tasks_bridge;
 #[path = "inquello_usage.rs"]
@@ -411,22 +413,29 @@ impl InquelloRequestProcessor {
     ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
         let (store, actor) = self.context(connection_id).await?;
         self.current_workspace_metadata(connection_id,actor,&params.workspace_id).await?;
-        let tree = organise::workspace_tree(&store, actor, &params.workspace_id)
-            .await
-            .map_err(domain_error)?;
-        let mut tasks=Vec::new(); let mut unavailable_tasks=Vec::new();
+        let inventory=self.saved_inventory(connection_id,actor,&params.workspace_id,None).await?;
+        let tree=organise::workspace_tree(&store,actor,&params.workspace_id).await.map_err(domain_error)?;
+        if tree.tasks.len()+tree.engagements.len()>2000{return Err(refusal("search_unavailable","Workspace navigation exceeds its bounded scope"));}
+        let mut tasks=Vec::new();let mut unavailable_tasks=Vec::new();let mut disclosed=Vec::new();
         for task in &tree.tasks {
-            let available=self.authorize_task_metadata(connection_id,actor,&task.task_id.to_string()).await.is_ok();
-            match private_task_tree_item(task,actor,&params.workspace_id,available) {
-                Some(Ok(task))=>tasks.push(task),Some(Err(task))=>unavailable_tasks.push(task),None=>{},
+            let available=self.authorize_saved_task(connection_id,actor,task,&inventory).await.is_ok();
+            match private_task_tree_item(task,actor,&params.workspace_id,available){
+                Some(Ok(view))=>{tasks.push(view);disclosed.push(task.clone());},Some(Err(task))=>unavailable_tasks.push(task),None=>{},
             }
         }
-        self.current_workspace_metadata(connection_id,actor,&params.workspace_id).await?;
+        let mut engagements=Vec::new();let mut accessible=std::collections::HashSet::new();let mut disclosed_engagements=Vec::new();
+        for engagement in &tree.engagements {
+            if self.authorize_saved_context(&inventory,&params.workspace_id,Some(&engagement.service_engagement_id.to_string())).is_ok(){
+                accessible.insert(engagement.engagement_id);engagements.push(engagement_view(engagement));disclosed_engagements.push(engagement.clone());
+            }
+        }
+        let internal_disclosure_fence=self.saved_tree_fence(actor,inventory,&disclosed,&disclosed_engagements)?;
         Ok(Some(
             InquelloWorkspaceTreeResponse {
+                internal_disclosure_fence,
                 workspace_id: params.workspace_id,
-                engagements: tree.engagements.iter().map(engagement_view).collect(),
-                folders: tree.folders.iter().map(folder_view).collect(),
+                engagements,
+                folders: tree.folders.iter().filter(|folder|accessible.contains(&folder.engagement_id)).map(folder_view).collect(),
                 tasks, unavailable_tasks,
             }
             .into(),
@@ -1886,6 +1895,7 @@ fn private_task_tree_item(task:&organise::Task,actor:Actor,workspace:&str,availa
 }
 fn task_view(task: &organise::Task) -> InquelloTask {
     InquelloTask {
+        pinned: task.pinned, archived: task.archived,
         task_id: task.task_id.to_string(),
         workspace_id: task.workspace_id.to_string(),
         creator_principal_id: task.creator_principal_id.to_string(),
@@ -2034,3 +2044,6 @@ impl InquelloRequestProcessor {
         self.actor(connection).map(|actor| actor.principal_id.to_string())
     }
 }
+
+/// Bounded saved navigation returns a truthful retryable failure, never an indefinite spinner.
+pub(crate) fn saved_timeout_error()->JSONRPCErrorError {refusal("search_unavailable","Saved inspection timed out or was cancelled; try again")}

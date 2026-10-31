@@ -64,3 +64,24 @@
 #[tokio::test(flavor="multi_thread",worker_threads=4)] async fn messages_lifecycle_progress_cache(){driver::run("claude-api-key","lifecycle-progress-cache",None).await;}
 
 #[tokio::test(flavor="multi_thread",worker_threads=4)] async fn messages_lifecycle_stop_inflight_steer(){driver::run("claude-api-key","lifecycle-stop-inflight-steer",None).await;}
+
+// Story 1.30 actual native matching, exact activation, forged item and cached peer/company denial.
+// Authored, pending nonzero execution on the exact build.
+#[tokio::test(flavor="multi_thread",worker_threads=4)] async fn responses_search_reopen_private_denials(){driver::run("codex-responses","allowed",None).await;}
+#[tokio::test(flavor="multi_thread",worker_threads=4)] async fn messages_search_reopen_private_denials(){driver::run("claude-api-key","allowed",None).await;}
+
+#[tokio::test(flavor="multi_thread",worker_threads=4)] async fn responses_search_paginated_and_legacy_old_turn(){driver::run("codex-responses","lifecycle-stop-resume",None).await;}
+#[tokio::test(flavor="multi_thread",worker_threads=4)] async fn messages_search_paginated_and_legacy_old_turn(){driver::run("claude-api-key","lifecycle-stop-resume",None).await;}
+
+// Loop 1 witnesses are actual-RPC positive/negative matrices; still unrun evidence.
+#[tokio::test(flavor="multi_thread",worker_threads=4)] async fn responses_search_final_await_contributors(){driver::run("codex-responses","allowed",None).await;}
+#[tokio::test(flavor="multi_thread",worker_threads=4)] async fn responses_search_next_cursor_scope_snapshot(){driver::run("codex-responses","allowed",None).await;}
+#[tokio::test(flavor="multi_thread",worker_threads=4)] async fn responses_search_retained_route_mismatch(){driver::run("codex-responses","allowed",None).await;}
+#[tokio::test(flavor="multi_thread",worker_threads=4)] async fn messages_search_final_await_contributors(){driver::run("claude-api-key","allowed",None).await;}
+#[tokio::test(flavor="multi_thread",worker_threads=4)] async fn messages_search_next_cursor_scope_snapshot(){driver::run("claude-api-key","allowed",None).await;}
+#[tokio::test(flavor="multi_thread",worker_threads=4)] async fn messages_search_retained_route_mismatch(){driver::run("claude-api-key","allowed",None).await;}
+
+#[tokio::test(flavor="multi_thread",worker_threads=4)] async fn responses_search_zero_to_match_final_await(){driver::run("codex-responses","allowed",None).await;}
+#[tokio::test(flavor="multi_thread",worker_threads=4)] async fn messages_search_zero_to_match_final_await(){driver::run("claude-api-key","allowed",None).await;}
+#[tokio::test(flavor="multi_thread",worker_threads=4)] async fn responses_search_stalled_admission_timeout(){driver::run("codex-responses","search-stalled-admission",None).await;}
+#[tokio::test(flavor="multi_thread",worker_threads=4)] async fn messages_search_stalled_admission_timeout(){driver::run("claude-api-key","search-stalled-admission",None).await;}

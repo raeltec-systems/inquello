@@ -4,7 +4,7 @@
  *
  * - Ctrl+N (Cmd+N on macOS) activates New thread, and only while focus is not
  *   in a text field, so typing and the field's own shortcuts are never taken.
- * - Ctrl/Cmd+K is deliberately unbound until a Search surface exists.
+ * - Ctrl/Cmd+K opens the saved-work Search surface (Story 1.30).
  * - Escape closes the topmost open overlay and returns focus to the control
  *   that opened it. A Menu closes itself first (it handles its own Escape and
  *   marks the event handled). Escape never acts on a Task.

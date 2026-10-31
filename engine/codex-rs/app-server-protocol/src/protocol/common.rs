@@ -1526,6 +1526,18 @@ client_request_definitions! {
         serialization: global("inquello"),
         response: v2::InquelloWorkspaceRememberResponse,
     },
+    InquelloWorkspaceSearch => "inquello/workspace/search" {
+        params: v2::InquelloWorkspaceSearchParams,
+        response: v2::InquelloWorkspaceSearchResponse,
+    },
+    InquelloTaskReopen => "inquello/task/reopen" {
+        params: v2::InquelloTaskReopenParams,
+        response: v2::InquelloTaskReopenResponse,
+    },
+    InquelloTaskSetNavigation => "inquello/task/setNavigation" {
+        params: v2::InquelloTaskSetNavigationParams,
+        response: v2::InquelloTaskResponse,
+    },
     InquelloWorkspaceTree => "inquello/workspace/tree" {
         params: v2::InquelloWorkspaceTreeParams,
         serialization: global("inquello"),
@@ -2128,6 +2140,10 @@ server_request_definitions! {
 
     /// DEPRECATED APIs below
     /// Request to approve a patch.
+    InquelloContextAuthorize => "inquello/context/authorize" {
+        params: v2::InquelloContextAuthorizeParams,
+        response: v2::InquelloContextAuthorizeResponse,
+    },
     InquelloTaskAuthority => "inquello/tasks/authority" {
         params: v2::InquelloTaskAuthorityParams,
         response: v2::InquelloTaskAuthorityResponse,

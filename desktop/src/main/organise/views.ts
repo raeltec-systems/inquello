@@ -31,6 +31,8 @@ export interface FolderView {
 }
 
 export interface TaskView {
+  pinned?: boolean;
+  archived?: boolean;
   taskId: string;
   workspaceId: string;
   engagementId: string | null;
@@ -110,8 +112,10 @@ export function folderView(value: InquelloFolder): FolderView {
   };
 }
 
-export function taskView(value: InquelloTask): TaskView {
+export function taskView(value: InquelloTask & {pinned?:boolean;archived?:boolean}): TaskView {
   return {
+    pinned: value.pinned === true,
+    archived: value.archived === true,
     taskId: String(value.taskId),
     workspaceId: String(value.workspaceId),
     engagementId: value.engagementId === null ? null : String(value.engagementId),

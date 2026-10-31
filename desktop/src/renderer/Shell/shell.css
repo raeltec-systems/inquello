@@ -794,3 +794,15 @@ a.iq-nav-row:hover {
 .iq-progress-question input[type="text"], .iq-progress-question input[type="password"] { display: block; width: 100%; box-sizing: border-box; font: inherit; color: var(--text-primary); background: var(--surface-app); border: 1px solid var(--border-default); padding: var(--space-2); }
 .iq-progress-option { display: block; margin-block: var(--space-2); }
 .iq-progress-option span { display: block; color: var(--text-secondary); margin-left: var(--space-4); }
+
+/* S05 uses the workbench's existing surfaces and compact control vocabulary. */
+.iq-saved-toolbar { display:flex;align-items:center;gap:var(--space-2,8px);padding:var(--space-2,8px);flex-wrap:wrap;border-bottom:1px solid var(--border-default); }
+.iq-saved-dialog::backdrop { background:rgba(22,25,29,.15); }
+.iq-saved-dialog { width:min(720px,calc(100% - 32px));max-height:85vh;margin:auto;overflow:auto;background:var(--surface-app,#fff);border:1px solid var(--border-strong);border-radius:10px;padding:16px;box-shadow:0 12px 32px rgba(16,24,40,.14); }
+.iq-saved-results { list-style:none;padding:0; }
+.iq-saved-results>li { padding:8px 0;border-bottom:1px solid var(--border-default);overflow-wrap:anywhere; }
+.iq-saved-hit { padding:16px;border:1px solid var(--border-strong);border-radius:8px;overflow-wrap:anywhere; }
+.iq-saved-dialog,.iq-saved-hit { font:var(--type-ui);color:var(--text-primary); }
+.iq-saved-dialog h2,.iq-saved-dialog h3,.iq-saved-hit h2 { font:var(--type-title); }
+.iq-saved-dialog p,.iq-saved-hit p { color:var(--text-secondary); }
+.iq-saved-hit:focus-visible { outline:2px solid var(--blue-600);outline-offset:2px; }

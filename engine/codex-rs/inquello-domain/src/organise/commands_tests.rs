@@ -739,3 +739,41 @@ fn remembered_workspace_labels_keep_tasks_listable_offline() {
     // Labels are per principal.
     assert!(ok(block_on(known_workspaces(&store, actor(3)))).is_empty());
 }
+
+#[test]
+fn navigation_preserves_private_record_and_reuses_only_identical_receipts() {
+    let store = FakeStore::default();
+    let original = new_task(&store, actor(1), "navigation-create", None, None);
+    assert!(!original.pinned && !original.archived);
+    let command = SetTaskNavigation {
+        operation_id: "navigation-pin-archive".into(),
+        expected_revision: original.revision,
+        workspace_id: WORKSPACE.into(),
+        task_id: original.task_id.to_string(),
+        pinned: true,
+        archived: true,
+    };
+    assert!(matches!(
+        block_on(set_task_navigation(&store, &FixedClock, actor(2), command.clone())),
+        Err(DomainError::NotFound)
+    ));
+    let changed = ok(block_on(set_task_navigation(&store, &FixedClock, actor(1), command.clone())));
+    let saved = task_of(&changed);
+    assert!(saved.pinned && saved.archived);
+    let expected = Task { pinned: true, archived: true, revision: original.revision.next().unwrap(), ..original };
+    assert_eq!(saved, expected);
+    assert!(ok(block_on(set_task_navigation(&store, &FixedClock, actor(1), command.clone()))).replayed);
+    let mut changed_request = command.clone();
+    changed_request.archived = false;
+    assert!(matches!(
+        block_on(set_task_navigation(&store, &FixedClock, actor(1), changed_request.clone())),
+        Err(DomainError::OperationConflict { .. })
+    ));
+    changed_request.operation_id = "navigation-stale-revision".into();
+    assert!(matches!(
+        block_on(set_task_navigation(&store, &FixedClock, actor(1), changed_request)),
+        Err(DomainError::RevisionConflict { .. })
+    ));
+    assert_eq!(ok(block_on(workspace_tree(&store, actor(1), WORKSPACE))).tasks, vec![saved]);
+    assert!(ok(block_on(workspace_tree(&store, actor(2), WORKSPACE))).tasks.is_empty());
+}

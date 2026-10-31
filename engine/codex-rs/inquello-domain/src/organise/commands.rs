@@ -447,9 +447,61 @@ where
             source_refs: Vec::new(),
             artifact_refs: Vec::new(),
             visibility: Visibility::Private,
+            pinned: false,
+            archived: false,
             revision: prepared.expected.next()?,
             created_at: now,
             updated_at: now,
+        });
+        commit(store, clock, actor, &prepared, record).await
+    })
+    .await
+}
+
+/// Replaces only the creator's personal navigation preferences. Opening a Task
+/// does not invoke this command; archive does not stop or delete work.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SetTaskNavigation {
+    pub operation_id: String,
+    pub expected_revision: Revision,
+    pub workspace_id: String,
+    pub task_id: String,
+    pub pinned: bool,
+    pub archived: bool,
+}
+
+pub async fn set_task_navigation<S, C>(
+    store: &S,
+    clock: &C,
+    actor: Actor,
+    command: SetTaskNavigation,
+) -> Result<OrganiseOutcome, DomainError>
+where
+    S: OrganiseStore,
+    C: Clock,
+{
+    let workspace_id = WorkspaceId::parse(&command.workspace_id)?;
+    let task_id = TaskId::parse(&command.task_id)?;
+    let prepared = Prepared::new(
+        &command.operation_id,
+        OrganiseCommandKind::SetTaskNavigation,
+        command.expected_revision,
+        json!({
+            "workspace_id": workspace_id.to_string(),
+            "task_id": task_id.to_string(),
+            "pinned": command.pinned,
+            "archived": command.archived,
+        }),
+    )?;
+    settle(store, actor, &prepared, async {
+        let current = visible_task(store, actor, workspace_id, task_id).await?;
+        check_revision(prepared.expected, current.revision)?;
+        let record = OrganiseRecord::Task(Task {
+            pinned: command.pinned,
+            archived: command.archived,
+            revision: prepared.expected.next()?,
+            updated_at: clock.now(),
+            ..current
         });
         commit(store, clock, actor, &prepared, record).await
     })
@@ -827,6 +879,7 @@ where
         OrganiseCommandKind::CreateTask
         | OrganiseCommandKind::RenameTask
         | OrganiseCommandKind::MoveTask
+        | OrganiseCommandKind::SetTaskNavigation
         | OrganiseCommandKind::AttachThread => store
             .load_task(TaskId::from_uuid(resource_id))
             .await

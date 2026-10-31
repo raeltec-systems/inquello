@@ -25,6 +25,8 @@ pub use error::OpenError;
 pub use sqlite::MINIMUM_SQLITE_VERSION;
 pub use sqlite::check_sqlite_version;
 pub use store::SqliteWorkingStore;
+pub use store::SavedReadFence;
+pub use store::SavedQueueGuard;
 
 pub mod anthropic;
 

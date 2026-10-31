@@ -156,6 +156,7 @@ pub use reverse_jsonl_scanner::ReverseJsonlScanner;
 pub use reverse_jsonl_scanner::ScanOutcome;
 pub use rollout_reference_index::RolloutReferenceIndex;
 pub use search::first_rollout_content_match_snippet;
+pub use search::retained_conversation_snippet;
 pub use search::search_rollout_matches;
 pub use search::search_rollout_paths;
 pub use session_index::append_thread_name;
@@ -171,3 +172,7 @@ pub use writer_lock::WriterLockGuard;
 
 #[cfg(test)]
 mod tests;
+
+pub use seekable_reader::read_rollout_bounded;
+
+pub use seekable_reader::read_rollout_header_bounded;

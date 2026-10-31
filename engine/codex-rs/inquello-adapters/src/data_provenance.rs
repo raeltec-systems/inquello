@@ -32,6 +32,7 @@ const MIGRATIONS:&[&str]=&[
  include_str!("../migrations/0007_automated_permission_review.sql"),include_str!("../migrations/0008_task_usage.sql"),
  include_str!("../migrations/0009_task_runs.sql"),include_str!("../migrations/0010_task_data_provenance.sql"),
  include_str!("../migrations/0011_task_metadata_provenance.sql"),include_str!("../migrations/0012_task_lifecycle.sql"),include_str!("../migrations/0013_task_runtime_leases.sql"),
+ include_str!("../migrations/0014_task_navigation.sql"),
 ];
 fn failure()->String {"Native ownership/category provenance unavailable, mixed, changed or incomplete; data remains quarantined".into()}
 fn uuid(value:&str)->Result<(),String>{if uuid::Uuid::parse_str(value).is_ok(){Ok(())}else{Err(failure())}}
@@ -84,6 +85,11 @@ async fn inspect_inner(request:InspectRequest)->Result<(Vec<ProvenFile>,Vec<Prov
             for id in ids {uuid(&id)?;workspaces.entry(id).or_default();}
         }
     }
+    // Navigation flags live in the creator-bound Task row and are included in the
+    // working-store snapshot/deletion family, never in an ungoverned side index.
+    // A receipt must refer to that same principal and Workspace, even in backups.
+    let invalid_navigation:i64=sqlx::query_scalar("SELECT COUNT(*) FROM organise_receipts r LEFT JOIN tasks t ON t.task_id=r.resource_id WHERE r.command='set_task_navigation' AND (t.task_id IS NULL OR r.principal_id IS NOT t.creator_principal_id OR json_extract(r.request,'$.task_id') IS NOT t.task_id OR json_extract(r.request,'$.workspace_id') IS NOT t.workspace_id OR COALESCE(json_type(r.request,'$.pinned'),'missing') NOT IN ('true','false') OR COALESCE(json_type(r.request,'$.archived'),'missing') NOT IN ('true','false'))").fetch_one(&mut db).await.map_err(|_|failure())?;
+    if invalid_navigation!=0 {return Err(failure());}
     // New retained/lifecycle history is governed private Task content, including
     // guidance. Whole-store exports must reject inconsistent nested provenance.
     let invalid_history:i64=sqlx::query_scalar("SELECT COUNT(*) FROM task_run_history h JOIN tasks t ON t.task_id=h.task_id WHERE json_extract(h.record,'$.task_id') IS NOT t.task_id OR json_extract(h.record,'$.principal_id') IS NOT t.creator_principal_id OR json_extract(h.record,'$.workspace_id') IS NOT t.workspace_id OR json_extract(h.record,'$.thread_id') IS NOT t.runtime_thread_id OR json_extract(h.record,'$.run_id') IS NOT h.run_id").fetch_one(&mut db).await.map_err(|_|failure())?;

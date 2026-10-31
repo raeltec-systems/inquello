@@ -1,3 +1,4 @@
+import {savedTaskView} from '../organise/navigation';
 import {parseLifecycle,type LifecycleInput,type LifecycleKind,type LifecycleReceipt} from './types';
 import {parseRouteEligibilityCheckRequest,type RouteEligibilityCheckRequest,type RouteApprovalView,type RouteEligibilityCheckResponse} from '../identity/wire';
 import {parseProgress,parseQuestion,parseAnswers,progressId,terminalProgress,type ProgressInput,type ProgressSnapshot,type ProgressQuestion,type AnswerInput,type NativeRequestId} from './progress';
@@ -9,6 +10,7 @@ import type {EscalationRoute} from '../policy/tools';
 import {inquelloRefusal} from '../policy/permissions';
 import {parseCandidate,parseStarted,type TaskCandidateInput,type TaskCandidateView,type StartTaskInput,type StartedTaskView,type TasksResult} from './types';
 export interface TaskServiceOptions {runtime:OrganiseRuntime;identity:Pick<OrganiseIdentity,'principalId'>;syncPrincipal():Promise<void>;bootstrap?(workspaceId:string):Promise<void>;prepareRoutes():Promise<{ok:boolean}>;freshPolicy(workspaceId:string):Promise<InquelloWorkspaceExecutionPolicy|null>;routeApproval?(workspaceId:string,routeId:string):Promise<RouteApprovalView|null>;routeCheck?(workspaceId:string,request:RouteEligibilityCheckRequest):Promise<RouteEligibilityCheckResponse|null>;onAuthorityUnavailable?():void;onAccepted?():void;onProgressChanged?():void;askPermission?(taskId:string,command:readonly string[]):Promise<'allowed'|'denied'|'expired'>}
+export const INBOX_OBSERVATION_TIMEOUT_MS=10_000;
 const unavailable='The local runtime, signed-in identity or Workspace policy is unavailable. Your request is preserved.';
 const changed='Your identity, runtime or authority changed. Your draft is preserved; reconcile the existing request before submitting again.';
 export class TaskService {
@@ -154,6 +156,54 @@ export class TaskService {
   if(method==='turn/completed'){try{const r=object(params);if(typeof r.threadId==='string'){const turn=r.turn&&typeof r.turn==='object'?(r.turn as {id?:unknown}).id:r.turnId;if(typeof turn==='string'){this.completedTurns.add(JSON.stringify([r.threadId,turn]));if(this.completedTurns.size>256)this.completedTurns.delete(this.completedTurns.values().next().value!);}if(!this.activeTurns.has(r.threadId)||this.activeTurns.get(r.threadId)===turn)this.completed(r.threadId);}}catch{}}
   if(method==='serverRequest/resolved'){try{const r=object(params);for(const [key,q] of this.questions)if(q.view.threadId===r.threadId&&q.view.requestId===r.requestId)this.dropQuestion(key);}catch{/* malformed notification reveals nothing */}}
   if(['turn/completed','turn/started','item/started','item/completed','item/agentMessage/delta','item/commandExecution/outputDelta','turn/plan/updated','serverRequest/resolved'].includes(method))this.options.onProgressChanged?.();
+ }
+ private inboxGeneration=0;
+ /** One bounded observation. An already-dispatched native call may finish after
+  * timeout; this guard prevents subsequent scheduling or late Inbox publication.
+  * It does not claim to cancel native execution. */
+ async inbox(input:{workspaceId:string}):Promise<TasksResult<{workspaceId:string;items:Array<{taskId:string;workspaceId:string;requestId:string|number;turnId:string;itemId:string;question:string}>;unavailable:boolean}>> {
+  const scope=this.scope(),generation=++this.inboxGeneration,deadline=Date.now()+INBOX_OBSERVATION_TIMEOUT_MS;
+  let expired=false,timer:ReturnType<typeof setTimeout>|undefined;
+  const active=()=>!expired&&Date.now()<deadline&&generation===this.inboxGeneration&&this.current(scope);
+  const check=()=>{if(!active())throw new Error('Observation expired');};
+  const timeout=new Promise<never>((_,reject)=>{timer=setTimeout(()=>{expired=true;reject(new Error('Observation deadline'));},INBOX_OBSERVATION_TIMEOUT_MS);});
+  const wait=async<T>(call:()=>Promise<T>):Promise<T>=>{check();const result=await Promise.race([call(),timeout]);check();return result;};
+  try {
+   await wait(()=>this.options.syncPrincipal());
+   const before=await wait(()=>this.options.freshPolicy(input.workspaceId));if(!before||before.workspaceId!==input.workspaceId)throw new Error();
+   const ids=[...new Set([...this.questions.values()].filter(q=>this.current(q.scope)&&q.binding?.workspaceId===input.workspaceId).map(q=>q.binding!.taskId))];
+   const items:Array<{taskId:string;workspaceId:string;requestId:string|number;turnId:string;itemId:string;question:string;pending:(TaskService['questions'] extends Map<string,infer T>?T:never)}>=[];
+   let unavailable=this.historyIncomplete;
+   for(const taskId of ids){
+    try {
+     const reopened=object(await wait(()=>this.options.runtime.request('inquello/task/reopen',{workspaceId:input.workspaceId,taskId,query:null,turnId:null,itemId:null})));
+     const task=savedTaskView(reopened.task);if(task.taskId!==taskId||task.workspaceId!==input.workspaceId)throw new Error();
+     const progress=parseProgress(await wait(()=>this.options.runtime.request('inquello/tasks/progress',{taskId,workspacePolicy:before,activityOnly:true})));
+     if(progress.taskId!==taskId||progress.workspaceId!==input.workspaceId)throw new Error();
+     for(const [key,pending] of this.questions){
+      check();if(pending.binding?.taskId!==taskId||!this.current(pending.scope))continue;
+      const q=pending.view,binding=pending.binding;
+      if(binding.workspaceId!==input.workspaceId||binding.runId!==progress.runId||binding.runtimeId!==progress.runtimeId||q.threadId!==progress.threadId||q.turnId!==progress.turnId||terminalProgress(progress.status)){this.dropQuestion(key);continue;}
+      items.push({taskId,workspaceId:input.workspaceId,requestId:q.requestId,turnId:q.turnId,itemId:q.itemId,question:q.questions.map(row=>row.question).join(' ').slice(0,512),pending});
+     }
+    }catch{check();unavailable=true;}
+   }
+   const after=await wait(()=>this.options.freshPolicy(input.workspaceId));if(!after||JSON.stringify(before)!==JSON.stringify(after))throw new Error();
+   // Last awaited authority read covers the entire contributor set after policy
+   // latency. Native saved-tree fences include archived Tasks and all contributors.
+   const tree=object(await wait(()=>this.options.runtime.request('inquello/workspace/tree',{workspaceId:input.workspaceId})));
+   if(tree.workspaceId!==input.workspaceId||!Array.isArray(tree.tasks)||tree.tasks.length>2000)throw new Error();
+   const allowed=new Set<string>();for(const raw of tree.tasks){const task=savedTaskView(raw);if(task.workspaceId!==input.workspaceId||allowed.has(task.taskId))throw new Error();allowed.add(task.taskId);}
+   check();
+   const current=items.filter(row=>{
+    if(!allowed.has(row.taskId)){unavailable=true;return false;}
+    const q=this.questions.get(this.questionKey(row.requestId));
+    if(q&&q!==row.pending)unavailable=true;
+    return q!==undefined&&q===row.pending&&this.current(q.scope)&&q.binding?.taskId===row.taskId&&q.binding.workspaceId===input.workspaceId&&q.view.itemId===row.itemId&&q.view.turnId===row.turnId;
+   }).map(({pending:_,...row})=>row);
+   return{ok:true,value:{workspaceId:input.workspaceId,items:current,unavailable}};
+  }catch{return{ok:false,reason:'Current requests for input are unavailable.'};}
+  finally{expired=true;clearTimeout(timer);}
  }
  private readonly observations=new Map<string,Promise<TasksResult<ProgressSnapshot>>>();
  activity(input:ProgressInput){return this.observe(input,true);}
