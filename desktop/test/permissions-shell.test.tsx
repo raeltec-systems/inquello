@@ -8,7 +8,7 @@
  * reachable by keyboard, "no longer pending" when stale), the reviewer line,
  * and S07's command rules with their sources and the person's own rules.
  */
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { parsePermissionCard, parsePermissionSettings } from '../src/renderer/permission-bridge';
@@ -172,4 +172,42 @@ describe('S07 command rules', () => {
     expect(parsePermissionSettings(settings())).not.toBeNull();
     expect(parsePermissionSettings({ ...settings(), workspaces: [{ ...settings().workspaces[0], rules: [{ prefix: ['x'], decision: 'maybe' }] }] })).toBeNull();
   });
+});
+
+describe('Story 1.26 permission disclosure invalidation',()=>{
+ it('clears pending permission cards on passive refresh failure',async()=>{
+  const pending=vi.fn(async()=>({ok:true,value:[card('request-126')]}));installBridge({pending,decide:vi.fn()});
+  render(<PermissionRequests taskId={TASK} announce={()=>undefined} pollMs={20}/>);
+  await screen.findByRole('button',{name:'Run `git push origin main`'});
+  pending.mockRejectedValue(new Error('authority unavailable'));
+  await waitFor(()=>expect(screen.queryByRole('button',{name:'Run `git push origin main`'})).toBeNull());
+  expect(screen.queryByText('git push origin main')).toBeNull();
+ });
+ it('ignores an in-flight permission decision after private-scope invalidation',async()=>{
+  let invalidated=()=>{};let finish!:(v:unknown)=>void;
+  (globalThis as {inquello?:unknown}).inquello={permissions:{pending:async()=>({ok:true,value:[card('request-126')]}),decide:()=>new Promise(resolve=>{finish=resolve;})},tasks:{onSessionChanged:(listener:()=>void)=>{invalidated=listener;return()=>{};}}};
+  render(<PermissionRequests taskId={TASK} announce={()=>undefined} pollMs={100000}/>);
+  fireEvent.click(await screen.findByRole('button',{name:'Run `git push origin main`'}));
+  invalidated();finish({ok:true,value:{outcome:'allowed',text:'Secret old decision',rule:null}});
+  await waitFor(()=>expect(screen.queryByText('git push origin main')).toBeNull());
+  expect(screen.queryByText('Secret old decision')).toBeNull();
+ });
+});
+
+
+it('allows a pending permission read slower than polling to complete without superseding it',async()=>{
+ vi.useFakeTimers();let finish!:(value:unknown)=>void;const pending=vi.fn(()=>new Promise(resolve=>{finish=resolve;}));installBridge({pending,decide:vi.fn()});
+ render(<PermissionRequests taskId={TASK} announce={()=>undefined} pollMs={20}/>);
+ await act(async()=>vi.advanceTimersByTimeAsync(120));expect(pending).toHaveBeenCalledOnce();
+ await act(async()=>finish({ok:true,value:[card('slow')]}));expect(screen.getByRole('button',{name:'Run `git push origin main`'})).toBeTruthy();
+});
+it('fences a delayed pre-decision permission read and suppresses consumed IDs beyond the five visible outcomes',async()=>{
+ vi.useFakeTimers();const all=Array.from({length:7},(_,n)=>card(`request-${n}`,`inspect R0${n}`));let finish!:(value:unknown)=>void;
+ const pending=vi.fn<()=>Promise<unknown>>().mockResolvedValue({ok:true,value:all}).mockResolvedValueOnce({ok:true,value:all}).mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve;}));
+ installBridge({pending,decide:async()=>({ok:true,value:{outcome:'denied',text:'Denied: nothing ran.',rule:null}})});
+ render(<PermissionRequests taskId={TASK} announce={()=>undefined} pollMs={20}/>);await act(async()=>{});
+ await act(async()=>vi.advanceTimersByTimeAsync(20));expect(pending).toHaveBeenCalledTimes(2);
+ for(let n=0;n<6;n++)await act(async()=>fireEvent.click(screen.getAllByRole('button',{name:'Deny'})[0]!));
+ await act(async()=>finish({ok:true,value:all}));expect(screen.getAllByRole('region',{name:/Permission needed/})).toHaveLength(1);
+ await act(async()=>vi.advanceTimersByTimeAsync(20));expect(screen.getAllByRole('region',{name:/Permission needed/})).toHaveLength(1);expect(screen.getByRole('button',{name:'Run `inspect R06`'})).toBeTruthy();expect(screen.queryByRole('button',{name:'Run `inspect R00`'})).toBeNull();
 });

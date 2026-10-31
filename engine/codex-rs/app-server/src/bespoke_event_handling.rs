@@ -832,6 +832,7 @@ pub(crate) async fn apply_bespoke_event_handling(
             });
         }
         EventMsg::RequestUserInput(request) => {
+            if !authorize_private_question(&conversation,&conversation_id.to_string(),&request.turn_id,&request.call_id).await {return;}
             let user_input_guard = thread_watch_manager
                 .note_user_input_requested(&conversation_id.to_string())
                 .await;
@@ -868,6 +869,7 @@ pub(crate) async fn apply_bespoke_event_handling(
                 .await;
             tokio::spawn(async move {
                 on_request_user_input_response(
+                    conversation_id.to_string(),
                     event_turn_id,
                     pending_request_id,
                     rx,
@@ -1691,7 +1693,23 @@ async fn handle_error_notification(
         .await;
 }
 
+/// Reuse the retained turn's exact authority handle, not a parallel identity map.
+/// A missing/stale private turn never falls back to unbound question handling.
+async fn authorize_private_question(conversation:&CodexThread,thread_id:&str,turn_id:&str,call_id:&str)->bool {
+    use codex_core::inquello_inference::{TaskAuthorizationContext,is_task_thread};
+    if !is_task_thread(thread_id) {return true;}
+    let Some(authority)=conversation.current_turn_extension_data::<TaskAuthorizationContext>(turn_id).await else {return false;};
+    if authority.0.before_tool("request_user_input","",call_id).await.is_err() {
+        // Unknown passive authority cannot leave a hidden, unanswerable wait.
+        authority.0.cancellation().cancel();return false;
+    }
+    if authority.0.cancellation().is_cancelled() {return false;}
+    conversation.current_turn_extension_data::<TaskAuthorizationContext>(turn_id).await
+        .is_some_and(|current|Arc::ptr_eq(&authority,&current))
+}
+
 async fn on_request_user_input_response(
+    private_thread_id: String,
     event_turn_id: String,
     pending_request_id: RequestId,
     receiver: oneshot::Receiver<ClientRequestResult>,
@@ -1702,11 +1720,14 @@ async fn on_request_user_input_response(
     let response = receiver.await;
     resolve_server_request_on_thread_listener(&thread_state, pending_request_id).await;
     drop(user_input_guard);
+    let private_task=codex_core::inquello_inference::is_task_thread(&private_thread_id);
+    if private_task && (!authorize_private_question(&conversation,&private_thread_id,&event_turn_id,&event_turn_id).await
+        || thread_state.lock().await.active_turn_id()!=Some(event_turn_id.as_str())) {return;}
     let value = match response {
         Ok(Ok(value)) => value,
         Ok(Err(err)) if is_turn_transition_server_request_error(&err) => return,
         Ok(Err(err)) => {
-            error!("request failed with client error: {err:?}");
+            if !private_task {error!("request failed with client error: {err:?}");}
             let empty = CoreRequestUserInputResponse {
                 answers: HashMap::new(),
             };
@@ -1717,12 +1738,12 @@ async fn on_request_user_input_response(
                 })
                 .await
             {
-                error!("failed to submit UserInputAnswer: {err}");
+                if !private_task {error!("failed to submit UserInputAnswer: {err}");}
             }
             return;
         }
         Err(err) => {
-            error!("request failed: {err:?}");
+            if !private_task {error!("request failed: {err:?}");}
             let empty = CoreRequestUserInputResponse {
                 answers: HashMap::new(),
             };
@@ -1733,7 +1754,7 @@ async fn on_request_user_input_response(
                 })
                 .await
             {
-                error!("failed to submit UserInputAnswer: {err}");
+                if !private_task {error!("failed to submit UserInputAnswer: {err}");}
             }
             return;
         }
@@ -1741,7 +1762,7 @@ async fn on_request_user_input_response(
 
     let response =
         serde_json::from_value::<ToolRequestUserInputResponse>(value).unwrap_or_else(|err| {
-            error!("failed to deserialize ToolRequestUserInputResponse: {err}");
+            if !private_task {error!("failed to deserialize ToolRequestUserInputResponse: {err}");}
             ToolRequestUserInputResponse {
                 answers: HashMap::new(),
             }
@@ -1768,7 +1789,7 @@ async fn on_request_user_input_response(
         })
         .await
     {
-        error!("failed to submit UserInputAnswer: {err}");
+        if !private_task {error!("failed to submit UserInputAnswer: {err}");}
     }
 }
 

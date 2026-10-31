@@ -2095,6 +2095,7 @@ impl MessageProcessor {
                 self.inquello_processor.tasks_start(connection_id,params,device,user,&self.thread_processor).await
             }
             ClientRequest::InquelloTasksReconcile { params, .. } => self.inquello_processor.tasks_reconcile(connection_id,params).await,
+            ClientRequest::InquelloTasksProgress { params, .. } => self.inquello_processor.tasks_progress(connection_id,params,&self.thread_processor).await,
             ClientRequest::InquelloTasksForThread { params, .. } => self.inquello_processor.tasks_for_thread(connection_id,params).await,
             ClientRequest::InquelloTasksBootstrap { params, .. } => self.inquello_processor.tasks_bootstrap(connection_id,params).await,
             ClientRequest::InquelloRoutesList { params, .. } => self.inquello_processor.routes_list(connection_id, params).await,

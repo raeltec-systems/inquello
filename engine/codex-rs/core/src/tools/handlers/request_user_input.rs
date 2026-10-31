@@ -75,23 +75,44 @@ impl RequestUserInputHandler {
             return Err(FunctionCallError::RespondToModel(message));
         }
 
+        let private = turn.extension_data.get::<crate::inquello_inference::TaskAuthorizationContext>();
+        if private.is_some() && arguments.len() > 16_384 {
+            return Err(FunctionCallError::RespondToModel("Private question exceeds bounds".into()));
+        }
         let args: RequestUserInputToolArgs = parse_arguments(&arguments)?;
         let args = normalize_request_user_input_tool_args(args)
             .map_err(FunctionCallError::RespondToModel)?;
+        if private.is_some() {
+            let mut ids = std::collections::HashSet::new();
+
+            if args.questions.is_empty() || args.questions.len() > 3 || args.questions.iter().any(|q|
+                private_question_controls(&q.id) || private_question_controls(&q.header) || private_question_controls(&q.question) || q.options.as_ref().is_some_and(|options| options.iter().any(|o|private_question_controls(&o.label)||private_question_controls(&o.description))) || q.id.is_empty() || q.id.len() > 128 || !ids.insert(q.id.clone()) || q.header.len() > 128
+                || q.question.is_empty() || q.question.len() > 4096 || q.options.as_ref().is_none_or(|options|
+                    options.is_empty() || options.len() > 8 || options.iter().any(|o| o.label.is_empty() || o.label.len() > 256 || o.description.len() > 2048))) {
+                return Err(FunctionCallError::RespondToModel("Private question IDs/options exceed bounds".into()));
+            }
+        }
         let args = RequestUserInputArgs {
             questions: args.questions,
             is_blocking: mode == ModeKind::Plan,
             auto_resolution_ms: None,
         };
         let questions = args.questions.clone();
-        let accepted = session
-            .request_user_input(turn.as_ref(), call_id.clone(), args)
-            .await
-            .ok_or_else(|| {
-                FunctionCallError::RespondToModel(format!(
-                    "{REQUEST_USER_INPUT_TOOL_NAME} was cancelled before receiving a response"
-                ))
-            })?;
+        let pending = session.request_user_input(turn.as_ref(), call_id.clone(), args);
+        let accepted = if let Some(authority) = private.as_ref() {
+            let cancellation = authority.0.cancellation();
+            tokio::select! { biased; _ = cancellation.cancelled() => None, response = pending => response }
+        } else { pending.await }.ok_or_else(|| FunctionCallError::RespondToModel("Question was cancelled before receiving a response".into()))?;
+        if let Some(authority) = private.as_ref() {
+            // A reply after a wait is not authority. No tool permission is granted.
+            authority.0.before_tool(REQUEST_USER_INPUT_TOOL_NAME, &arguments, &call_id).await
+                .map_err(|_| FunctionCallError::RespondToModel("Question authority changed; answer unavailable".into()))?;
+            if accepted.response.answers.len() != questions.len() || questions.iter().any(|q|
+                accepted.response.answers.get(&q.id).is_none_or(|a| a.answers.is_empty() || a.answers.len() > 8
+                    || a.answers.iter().any(|v| v.len() > 4096 || private_question_controls(v) || (!q.is_other && !q.options.as_ref().is_some_and(|opts| opts.iter().any(|o| o.label == *v)))))) {
+                return Err(FunctionCallError::RespondToModel("Question answer IDs/options are invalid".into()));
+            }
+        }
 
         let response = accepted.response;
 
@@ -161,3 +182,19 @@ impl CoreToolRuntime for RequestUserInputHandler {
 #[cfg(test)]
 #[path = "request_user_input_tests.rs"]
 mod tests;
+
+// Same accepted text controls as the named desktop question/answer boundary.
+fn private_question_controls(text:&str)->bool {
+    text.chars().any(|c| matches!(c, '\u{0}'..='\u{8}'|'\u{b}'|'\u{c}'|'\u{e}'..='\u{1f}'|'\u{7f}'))
+}
+#[cfg(test)]
+mod private_progress_control_tests {
+    #[test]
+    fn private_questions_and_answers_share_desktop_control_rules() {
+        for code in (0..=31).chain(std::iter::once(127)) {
+            let text=format!("R02{} audit",char::from_u32(code).unwrap());
+            assert_eq!(super::private_question_controls(&text),!matches!(code,9|10|13));
+        }
+        assert!(!super::private_question_controls("Fictional R02 — é"));
+    }
+}

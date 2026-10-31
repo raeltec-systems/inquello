@@ -68,7 +68,7 @@ export interface AppServerRuntimeOptions {
   logger?: Logger;
   onNotification?: (notification: ServerNotificationMessage) => void;
   /** Answers a server-initiated request; `undefined` leaves it unsupported (Story 1.19 escalations). */
-  onServerRequest?: (method: string, params: unknown) => unknown;
+  onServerRequest?: (method: string, params: unknown, id: number | string) => unknown;
 }
 
 export class AppServerRuntime extends EventEmitter<{ state: [StateChange] }> {

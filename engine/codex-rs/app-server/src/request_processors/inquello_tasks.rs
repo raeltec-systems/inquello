@@ -129,10 +129,11 @@ impl InquelloRequestProcessor {
     }
     pub(crate) async fn tasks_for_thread(&self,connection:ConnectionId,params:InquelloTasksForThreadParams)->Result<Option<ClientResponsePayload>,JSONRPCErrorError> {
         let (store,actor)=self.context(connection).await?;
+        let generation=self.task_sessions.lock().await.get(&connection).cloned().ok_or_else(||refusal("session_changed","Private session unavailable"))?;
         let run=store.find_thread_run(actor.principal_id,&self.runtime_id,&params.thread_id).await.map_err(domain_error)?.ok_or_else(||refusal("not_found","Current private Task/thread ownership is unknown"))?;
         self.authorize_task_disclosure(connection,actor,&run.workspace_id).await?;
-        if self.actor(connection)?!=actor {return Err(refusal("stale","Private identity changed"));}
-        Ok(Some(InquelloTasksForThreadResponse {task_id:run.task_id,run_id:run.run_id,thread_id:params.thread_id,status:status_name(run.status).into()}.into()))
+        if self.actor(connection)?!=actor || generation.cancellation.is_cancelled() || generation.principal!=actor.principal_id || generation.workspace!=run.workspace_id {return Err(refusal("stale","Private identity or session changed"));}
+        Ok(Some(InquelloTasksForThreadResponse {task_id:run.task_id,run_id:run.run_id,workspace_id:run.workspace_id,thread_id:params.thread_id,turn_id:run.turn_id,runtime_id:run.runtime_id,status:status_name(run.status).into()}.into()))
     }
     /// A connection subscription is not authority. Generic retained APIs are
     /// unavailable for private-store hosts until exact current ownership is proven.
@@ -241,6 +242,18 @@ impl InquelloRequestProcessor {
                 let _=store.mark_task_run(actor.principal_id,&run.operation_id,TaskRunStatus::Uncertain,None).await;
             }
         }
+        #[cfg(all(feature="inference-fixtures",debug_assertions))]
+        if result.is_ok() {
+            if let Some(fixture)=authorization.fixture.as_ref().filter(|f|f.hold_ack_for_question) {
+                // Deterministic retained-child barrier: withhold only the host
+                // acknowledgement, not work/binding, until a real question reply.
+                tokio::select! {
+                    _=authorization.cancellation.cancelled()=>{},
+                    _=tokio::time::sleep(std::time::Duration::from_secs(30))=>{authorization.cancellation.cancel();},
+                    _=fixture.question_answered.notified()=>{},
+                }
+            }
+        }
         let current=store.find_task_run(actor.principal_id,&run.operation_id).await.map_err(domain_error)?.ok_or_else(||failure("uncertain","Private operation receipt unavailable; reconcile the same operation"))?;
         self.run_response(connection,actor,&store,current).await
     }
@@ -304,6 +317,8 @@ impl TaskAuthorization for TaskGuard {
         self.processor.usage_limit_check(self.configuration.route_id().as_str(),&self.run.task_id).await.map_err(core_refusal)?;
         self.recheck().await.map_err(core_refusal)?;
         let store=self.processor.store().await.map_err(core_refusal)?;
+        // Persist exact native turn identity before sampling: model questions and
+        // progress can precede the desktop's Start acknowledgement safely.
         store.mark_task_run(self.actor.principal_id,&self.run.operation_id,TaskRunStatus::Running,Some(turn_id)).await.map_err(|_|CodexErr::Fatal("Private turn attribution could not be retained".into()))?;
         let attempt_id=uuid::Uuid::new_v4().to_string();
         let binding=inquello_protocol::inference::Binding {schema_version:1,principal_id:self.actor.principal_id.to_string(),task_id:self.run.task_id.clone(),run_id:self.run.run_id.clone(),turn_id:turn_id.into(),attempt_id:attempt_id.clone(),
@@ -332,7 +347,15 @@ impl TaskAuthorization for TaskGuard {
     })}
     fn before_tool<'a>(&'a self,name:&'a str,arguments:&'a str,call_id:&'a str)->std::pin::Pin<Box<dyn std::future::Future<Output=CoreResult<()>>+Send+'a>> {Box::pin(async move {
         self.recheck().await.map_err(core_refusal)?;
-        if name!="exec_command" {return Err(CodexErr::Fatal("This tool has no exact bounded private Task mapping".into()));}
+        if !matches!(name,"exec_command"|"inquello_progress"|"request_user_input") {return Err(CodexErr::Fatal("This tool has no exact bounded private Task mapping".into()));}
+        #[cfg(all(feature="inference-fixtures",debug_assertions))]
+        if name=="request_user_input" && !arguments.is_empty() {
+            if let Some(fixture)=self.fixture.as_ref().filter(|f|f.hold_ack_for_question) {
+                // Exact handler checks nonempty arguments before entry and after
+                // receiving its reply. Disclosure-only fences pass empty args.
+                if fixture.question_checks.fetch_add(1,std::sync::atomic::Ordering::SeqCst)==1 {fixture.question_answered.notify_one();}
+            }
+        }
         let _=(arguments,call_id); // Native handler validates schema and resolves argv.
         Ok(())
     })}
@@ -553,7 +576,7 @@ fn create_private_task_folder(root:&std::path::Path,task:&str)->Result<(),JSONRP
 
 #[cfg(all(feature="inference-fixtures",debug_assertions))]
 #[derive(Clone)]
-pub(super) struct TaskFixture {fail_before_sampling:bool,principal:PrincipalId,workspace:String,revision:u64,endpoint:String,certificate:Vec<u8>}
+pub(super) struct TaskFixture {hold_ack_for_question:bool,question_checks:Arc<std::sync::atomic::AtomicUsize>,question_answered:Arc<tokio::sync::Notify>,fail_before_sampling:bool,principal:PrincipalId,workspace:String,revision:u64,endpoint:String,certificate:Vec<u8>}
 impl InquelloRequestProcessor {
     async fn task_fixture_matches(&self,connection:ConnectionId,actor:Actor,workspace:&str,config:&routes::RouteConfiguration,revision:u64)->bool {
         #[cfg(all(feature="inference-fixtures",debug_assertions))]
@@ -567,7 +590,7 @@ impl InquelloRequestProcessor {
     pub(crate) async fn prepare_task_fixture(&self,connection:ConnectionId,raw:Option<serde_json::Value>)->Result<serde_json::Value,JSONRPCErrorError> {
         #[derive(serde::Deserialize)]
         #[serde(rename_all="camelCase",deny_unknown_fields)]
-        struct Input {workspace_id:String,configuration_revision:u64,endpoint:String,certificate:Vec<u8>,#[serde(default)] fail_before_sampling:bool}
+        struct Input {workspace_id:String,configuration_revision:u64,endpoint:String,certificate:Vec<u8>,#[serde(default)] fail_before_sampling:bool,#[serde(default)] hold_ack_for_question:bool}
         let input:Input=serde_json::from_value(raw.ok_or_else(||refusal("fixture_unavailable","Missing fixture parameters"))?).map_err(|_|refusal("fixture_unavailable","Invalid fixture parameters"))?;
         if input.endpoint.len()>512||input.certificate.len()>8192 {return Err(refusal("fixture_unavailable","Fixture parameters exceed bounds"));}
         inquello_adapters::anthropic::MessagesClient::fixture_from_der(&input.endpoint,&input.certificate).map_err(|_|refusal("fixture_unavailable","Only pinned loopback TLS fixture is allowed"))?;
@@ -580,7 +603,7 @@ impl InquelloRequestProcessor {
         self.routes.auth.install(inquello_adapters::anthropic::AuthScope {principal_id:actor.principal_id.to_string(),route_id:"claude-api-key".into(),account_ref:actor.principal_id.to_string(),generation:1},"sk-ant-synthetic-fixture-only".into()).map_err(|_|refusal("fixture_unavailable","Fixture credential installation refused"))?;
         state.credentials.insert((actor.principal_id,routes::RouteId::ClaudeApiKey),(actor.principal_id.to_string(),1));
         state.generations.insert((actor.principal_id,routes::RouteId::ClaudeApiKey),1);
-        self.task_fixtures.lock().await.insert(connection,TaskFixture {fail_before_sampling:input.fail_before_sampling,principal:actor.principal_id,workspace:input.workspace_id,revision:input.configuration_revision,endpoint:input.endpoint,certificate:input.certificate});
+        self.task_fixtures.lock().await.insert(connection,TaskFixture {hold_ack_for_question:input.hold_ack_for_question,question_checks:Arc::new(std::sync::atomic::AtomicUsize::new(0)),question_answered:Arc::new(tokio::sync::Notify::new()),fail_before_sampling:input.fail_before_sampling,principal:actor.principal_id,workspace:input.workspace_id,revision:input.configuration_revision,endpoint:input.endpoint,certificate:input.certificate});
         Ok(json!({"accepted":true,"providerCalls":0}))
     }
 }
@@ -639,3 +662,518 @@ mod accounting_lifecycle_tests {
 }
 
 
+
+impl InquelloRequestProcessor {
+    /// Hydration reads canonical item status, never a terminal turn summary. A
+    /// private subscription and renderer-provided thread IDs are not authority.
+    pub(crate) async fn tasks_progress(&self, connection:ConnectionId, params:InquelloTasksProgressParams,
+        threads:&super::super::ThreadRequestProcessor)->Result<Option<ClientResponsePayload>,JSONRPCErrorError> {
+        use inquello_domain::organise::OrganiseStore;
+        let (store,actor)=self.context(connection).await?;
+        let generation=self.task_sessions.lock().await.get(&connection).cloned().ok_or_else(||refusal("session_changed","Private session unavailable"))?;
+        let task=store.load_task(TaskId::parse(&params.task_id).map_err(domain_error)?).await
+            .map_err(|e|domain_error(DomainError::Store(e)))?
+            .filter(|task|task.creator_principal_id==actor.principal_id)
+            .ok_or_else(||refusal("not_found","Private Task not found"))?;
+        let thread=task.runtime_thread_id.as_ref().ok_or_else(||refusal("not_found","Private runtime binding unavailable"))?;
+        let run=store.find_thread_run(actor.principal_id,&self.runtime_id,thread).await.map_err(domain_error)?
+            .filter(|run|run.task_id==params.task_id && run.workspace_id==params.workspace_policy.workspace_id)
+            .ok_or_else(||refusal("not_found","Current private Task binding unavailable"))?;
+        let turn=run.turn_id.clone().ok_or_else(||refusal("not_found","Private turn not yet acknowledged"))?;
+        let session=self.task_session(connection,actor,&run.workspace_id).await?;
+        self.authorize_task_disclosure(connection,actor,&run.workspace_id).await?;
+        if generation.cancellation.is_cancelled() || generation.principal!=actor.principal_id || generation.workspace!=run.workspace_id
+            || !self.task_read_policy_current(actor.principal_id,&params.workspace_policy).await {
+            return Err(refusal("stale","Workspace authority changed before progress read"));
+        }
+        let (entries,incomplete)=read_progress_pages(|cursor,limit| {
+            let thread=thread.clone();let turn=turn.clone();let session=&session;let run=&run;
+            async move {
+                let page=threads.thread_items_list_response_inner(ThreadItemsListParams {
+                    thread_id:thread,turn_id:Some(turn),cursor:cursor.map(ThreadItemsListCursor::Opaque),
+                    limit:Some(limit),sort_direction:Some(SortDirection::Desc),
+                }).await?;
+                self.authorize_task_disclosure(connection,actor,&run.workspace_id).await?;
+                if session.cancellation.is_cancelled() || self.actor(connection)?!=actor {
+                    return Err(refusal("session_changed","Private session changed while reading progress"));
+                }
+                Ok(page)
+            }
+        }).await?;
+        let latest=store.find_thread_run(actor.principal_id,&self.runtime_id,thread).await.map_err(domain_error)?
+            .ok_or_else(||refusal("not_found","Private binding disappeared"))?;
+        self.authorize_task_disclosure(connection,actor,&run.workspace_id).await?;
+        if session.cancellation.is_cancelled() || self.actor(connection)?!=actor || latest.run_id!=run.run_id || latest.turn_id!=run.turn_id
+            || !self.task_read_policy_current(actor.principal_id,&params.workspace_policy).await {
+            return Err(refusal("stale","Private binding changed before progress disclosure"));
+        }
+        let mut snapshot=project_progress(entries,&turn,incomplete);
+        snapshot.task_id=run.task_id;snapshot.run_id=run.run_id;snapshot.workspace_id=run.workspace_id;
+        snapshot.thread_id=thread.clone();snapshot.turn_id=turn;snapshot.runtime_id=self.runtime_id.clone();
+        snapshot.status=status_name(latest.status).into();
+        snapshot.artifact=progress_artifact(&task.artifact_refs).into();
+        finish_progress(&mut snapshot);
+        Ok(Some(snapshot.into()))
+    }
+}
+
+fn progress_artifact(refs:&[String])->&'static str {if refs.is_empty() {"absent"} else {"unknown"}}
+
+/// Shared endpoint paging seam: chronological newest 256, bounded requests and
+/// explicit loss. Every awaited fetch performs the endpoint's disclosure guard.
+async fn read_progress_pages<F,Fut>(mut fetch:F)->Result<(Vec<ThreadItemEntry>,bool),JSONRPCErrorError>
+where F:FnMut(Option<String>,u32)->Fut,
+      Fut:std::future::Future<Output=Result<ThreadItemsListResponse,JSONRPCErrorError>> {
+    let mut entries=Vec::new();let mut cursor=None;let mut incomplete=false;
+    let mut cursors=std::collections::HashSet::new();
+    for _ in 0..3 {
+        let remaining=256-entries.len();if remaining==0 {incomplete|=cursor.is_some();break;}
+        let limit=remaining.min(100);
+        let page=fetch(cursor.clone(),limit as u32).await?;
+        if page.data.len()>limit {incomplete=true;}
+        entries.extend(page.data.into_iter().take(limit));
+        cursor=page.next_cursor;
+        if let Some(next)=&cursor {if !cursors.insert(next.clone()) {incomplete=true;break;}}
+        else {break;}
+    }
+    incomplete|=cursor.is_some();entries.reverse();Ok((entries,incomplete))
+}
+
+/// Projection is a closed allowlist: reasoning, opaque provider blocks, hooks,
+/// arbitrary extension payloads and untrusted metadata never cross this seam.
+fn project_progress(entries:Vec<ThreadItemEntry>,turn:&str,mut incomplete:bool)->InquelloTasksProgressResponse {
+    use inquello_protocol::progress::{Publication,PlanClaim,ResultKind};
+    use std::collections::{HashMap,HashSet};
+    let mut items=Vec::new();let mut plan:Vec<InquelloProgressStep>=Vec::new();let mut results=Vec::new();
+    let mut publications=Vec::new();let mut evidence:HashMap<String,String>=HashMap::new();let mut seen=HashSet::new();
+    let mut human_instructions:HashMap<String,String>=HashMap::new();
+    // Assemble canonical state before any display sanitization or clipping.
+    let mut malformed=Vec::new();
+    for entry in entries {
+        if entry.turn_id!=turn {incomplete=true;continue;}
+        let id=entry.item.id().to_owned();
+        if id.is_empty() || id.len()>128 || !seen.insert(id.clone()) {incomplete=true;continue;}
+        let completed=entry.completed_at_ms.is_some();
+        let role=match &entry.item {ThreadItem::UserMessage {..}=>Some("user".into()),ThreadItem::AgentMessage {..}|ThreadItem::Plan {..}=>Some("agent".into()),_=>None};
+        let (kind,status,text,application)=match entry.item {
+            ThreadItem::AgentMessage {text,..} => {
+                ("message",if completed {"completed"} else {"running"},text,None)
+            },
+            ThreadItem::UserMessage {content,..} => {
+                let text=content.into_iter().filter_map(|v|match v {UserInput::Text {text,..}=>Some(text),_=>None}).collect::<Vec<_>>().join("\n");
+                if text.len()<=16_384 {human_instructions.insert(id.clone(),text.clone());}
+                ("message","completed",text,None)
+            },
+            ThreadItem::CommandExecution {command,aggregated_output,status,exit_code,..} => {
+                let status=match status {CommandExecutionStatus::InProgress=>"running",CommandExecutionStatus::Completed if exit_code==Some(0)=>"completed",CommandExecutionStatus::Completed if exit_code.is_some()=>"failed",CommandExecutionStatus::Completed=>"unknown",CommandExecutionStatus::Failed=>"failed",CommandExecutionStatus::Declined=>"cancelled"};
+                if status=="completed" {evidence.insert(id.clone(),command.clone());}
+                ("command",status,command_display(&command,aggregated_output.as_deref(),&mut incomplete),None)
+            },
+            ThreadItem::FileChange {changes,status,..} => {
+                let (status,application)=match status {PatchApplyStatus::InProgress=>("running","unknown"),PatchApplyStatus::Completed=>("completed","applied"),PatchApplyStatus::Failed=>("failed","unknown"),PatchApplyStatus::Declined=>("cancelled","suggested")};
+                if changes.len()>64 {incomplete=true;}
+                let text=changes.into_iter().take(64).map(|c|format!("{}\n{}",c.path,c.diff)).collect::<Vec<_>>().join("\n");
+                if status=="completed" {evidence.insert(id.clone(),text.clone());}
+                ("edit",status,text,Some(application.into()))
+            },
+            ThreadItem::FunctionCallOutput {name,namespace,output,..} if name=="inquello_progress" && namespace.is_none() => {
+                let text=output.to_text().unwrap_or_default();
+                match Publication::parse(&text) {
+                    Ok(publication)=>publications.push(publication),
+                    Err(_)=>{
+                        malformed.push(InquelloProgressResult {id:format!("publication:{id}"),kind:None,text,checks:"unchecked".into(),check_scope:None,evidence_ids:Vec::new(),basis:None});
+                    }
+                }
+                ("tool","completed","Plan/result publication received; labels are not verification".into(),None)
+            },
+            // Native Plan is a proposed narrative, not the stable checklist contract.
+            ThreadItem::Plan {text,..}=>("message","proposed",text,None),
+            ThreadItem::Reasoning {..}=>continue,
+            _=>continue,
+        };
+        items.push(InquelloProgressItem {id,kind:kind.into(),status:status.into(),text,application,role});
+    }
+    let citations:HashSet<String>=items.iter().map(|item|item.id.clone()).collect();
+    let mut step_order=HashMap::new();let mut sequence=0usize;
+    let mut step_indices:HashMap<String,usize>=HashMap::new();
+    let mut result_indices:HashMap<String,usize>=HashMap::new();
+    for publication in publications {
+        for step in publication.plan {
+            let step_id=step.id.clone();
+            // Native evidence proves only the action's stated work, not an
+            // arbitrary model conclusion about that action. Exact scope matching
+            // avoids semantic guessing or completion by unrelated successful work.
+            let exact_work=step.evidence_ids.iter().any(|id|evidence.get(id).is_some_and(|work|work==&step.text));
+            let requested_refs=step.evidence_ids.len();
+            let refs=step.evidence_ids.into_iter().filter(|id|evidence.get(id).is_some_and(|work|!exact_work||work==&step.text)).collect::<Vec<_>>();
+            if refs.len()!=requested_refs {incomplete=true;}
+            let status=match step.status {PlanClaim::Pending=>"pending",PlanClaim::Running=>"running",PlanClaim::Completed if exact_work=>"done",PlanClaim::Completed=>"unconfirmed"};
+            if let Some(&index)=step_indices.get(&step.id) {
+                // Same revision cannot rewrite text or regress a completed step.
+                if step.revision<plan[index].revision || (step.revision==plan[index].revision && step.text!=plan[index].text) {incomplete=true;continue;}
+                if step.revision==plan[index].revision && plan[index].status=="done" {sequence+=1;step_order.insert(step_id,sequence);continue;}
+                plan[index]=InquelloProgressStep {id:step.id,revision:step.revision,text:step.text,status:status.into(),evidence_ids:refs};
+            } else {
+                step_indices.insert(step.id.clone(),plan.len());
+                plan.push(InquelloProgressStep {id:step.id,revision:step.revision,text:step.text,status:status.into(),evidence_ids:refs});
+            }
+            sequence+=1;step_order.insert(plan[*step_indices.get(&step_id).unwrap()].id.clone(),sequence);
+        }
+        for result in publication.results {
+            let kind=match result.kind {ResultKind::Calculation=>"calculation",ResultKind::Observation=>"observation",ResultKind::Suggestion=>"suggestion",ResultKind::Decision=>"decision",ResultKind::Gap=>"gap"};
+            // No independently executed check records exist on this route. The
+            // model cannot set checks, professional approval or delivery state.
+            // Resolve only actual human text in this exact retained turn. The
+            // model's name/label is never authoritative; permission requests and
+            // tool output cannot enter this map. This is cited instruction scope,
+            // not a claim that its analytical conclusion has been reviewed.
+            // Require exact instruction text too: a citation alone cannot make
+            // an unrelated model decision authoritative.
+            let basis=if kind=="decision" {
+                result.basis_id.and_then(|id|human_instructions.get(&id).filter(|scope|scope.as_str()==result.text.as_str()).map(|scope|InquelloProgressBasis {
+                    kind:"human".into(),id,label:"Human instruction".into(),scope:scope.clone(),
+                }))
+            } else {None};
+            let requested_refs=result.evidence_ids.len();
+            let refs=result.evidence_ids.into_iter().filter(|id|citations.contains(id)).collect::<Vec<_>>();
+            if refs.len()!=requested_refs {incomplete=true;}
+            let row=InquelloProgressResult {id:format!("result:{}",result.id),kind:Some(kind.into()),text:result.text,checks:"unchecked".into(),check_scope:None,evidence_ids:refs,basis};
+            if let Some(&index)=result_indices.get(&result.id) {
+                // Publication order, including updates, determines display priority.
+                results.remove(index);
+                result_indices.retain(|_,position|{if *position==index {false}else{if *position>index {*position-=1;}true}});
+                result_indices.insert(result.id,results.len());results.push(row);
+            }
+            else if results.len()<64 {result_indices.insert(result.id,results.len());results.push(row);}
+            else {
+                // Keep the latest structured findings, not the first 64 forever.
+                incomplete=true;results.remove(0);
+                result_indices.retain(|_,index|{if *index==0 {false}else{*index-=1;true}});
+                result_indices.insert(result.id,results.len());results.push(row);
+            }
+        }
+    }
+    plan.sort_by_key(|step|step_order.get(&step.id).copied().unwrap_or(0));
+    if plan.len()>64 {incomplete=true;plan.drain(..plan.len()-64);}
+    // Structured findings outrank malformed fallback; ordinary agent text appears
+    // once in activity with an explicit unchecked, structure-unavailable label.
+    let available=64-results.len();
+    if malformed.len()>available {incomplete=true;}
+    let start=malformed.len().saturating_sub(available);
+    results.extend(malformed.into_iter().skip(start));
+    let mut budget=262_144usize;
+    // Reserve space for plan and current/terminal activity as well as results.
+    let mut result_budget=131_072usize;
+    for result in results.iter_mut().rev().filter(|r|r.kind.is_some()) {
+        result.text=progress_text(&result.text,&mut result_budget,&mut incomplete);
+        if let Some(basis)=&mut result.basis {basis.scope=progress_text(&basis.scope,&mut result_budget,&mut incomplete);}
+    }
+    for result in results.iter_mut().rev().filter(|r|r.kind.is_none()) {
+        result.text=progress_text(&result.text,&mut result_budget,&mut incomplete);
+    }
+    budget-=131_072-result_budget;
+    let mut plan_budget=65_536usize.min(budget);
+    let allocated=plan_budget;
+    for step in plan.iter_mut().rev() {step.text=progress_text(&step.text,&mut plan_budget,&mut incomplete);}
+    budget-=allocated-plan_budget;
+    for item in items.iter_mut().rev() {item.text=progress_text(&item.text,&mut budget,&mut incomplete);}
+    let mut snapshot=InquelloTasksProgressResponse {version:1,task_id:String::new(),run_id:String::new(),workspace_id:String::new(),thread_id:String::new(),turn_id:String::new(),runtime_id:String::new(),status:String::new(),history_incomplete:incomplete,items,plan,results,artifact:"unknown".into()};
+    finish_progress(&mut snapshot);snapshot
+}
+fn progress_text(text:&str,budget:&mut usize,incomplete:&mut bool)->String {
+    // Display-only sanitizer: retained source and canonical comparisons stay exact.
+    // Strip CSI/OSC and other terminal escape/control sequences, never interpret them.
+    let limit=16_384.min(*budget);
+    let mut clean=String::with_capacity(limit.min(text.len()));let mut chars=text.chars().peekable();
+    while let Some(ch)=chars.next() {
+        if ch=='\u{1b}' {
+            *incomplete=true;
+            match chars.next() {
+                Some('[')=>{for c in chars.by_ref(){if ('@'..='~').contains(&c){break;}}},
+                Some(']')=>{while let Some(c)=chars.next(){if c=='\u{7}' {break;} if c=='\u{1b}' && chars.peek()==Some(&'\\'){chars.next();break;}}},
+                _=>{},
+            }
+        } else if ch.is_control() && !matches!(ch,'\n'|'\r'|'\t') {*incomplete=true;}
+        else {if clean.len()+ch.len_utf8()>limit {*incomplete=true;break;}clean.push(ch);}
+    }
+    let text=clean.as_str();
+    let mut end=text.len().min(limit);
+    while !text.is_char_boundary(end) {end-=1;}
+    if end<text.len(){*incomplete=true;}
+    *budget-=end;text[..end].to_owned()
+}
+
+/// Keep the command and final diagnostic, not just a long output prefix.
+fn command_display(command:&str,output:Option<&str>,incomplete:&mut bool)->String {
+    let mut budget=4096;let mut text=progress_text(command,&mut budget,incomplete);
+    if let Some(output)=output {
+        let mut start=output.len().saturating_sub(12_000);
+        while !output.is_char_boundary(start) {start+=1;}
+        if start>0 {*incomplete=true;text.push_str("\n[Earlier output omitted]");}
+        text.push('\n');let mut budget=12_000;
+        text.push_str(&progress_text(&output[start..],&mut budget,incomplete));
+    }
+    text
+}
+
+/// Final wire budget includes escaped text, IDs, references and trusted metadata.
+/// This bounds only this projection, not the upstream retained thread store.
+fn finish_progress(snapshot:&mut InquelloTasksProgressResponse) {
+    if matches!(snapshot.status.as_str(),"completed"|"failed"|"cancelled"|"uncertain"|"setup-failed") {
+        for step in &mut snapshot.plan {if step.status=="running" {step.status="unconfirmed".into();}}
+    }
+    loop {
+        let visible:std::collections::HashMap<_,_>=snapshot.items.iter().filter(|item|!item.text.is_empty()).map(|item|(item.id.clone(),item)).collect();
+        for step in &mut snapshot.plan {
+            let count=step.evidence_ids.len();step.evidence_ids.retain(|id|visible.contains_key(id));
+            if count!=step.evidence_ids.len() {snapshot.history_incomplete=true;}
+            if step.status=="done" && !step.evidence_ids.iter().any(|id|visible.get(id).is_some_and(|item|item.status=="completed")) {step.status="unconfirmed".into();}
+        }
+        for result in &mut snapshot.results {
+            let count=result.evidence_ids.len();result.evidence_ids.retain(|id|visible.contains_key(id));
+            if count!=result.evidence_ids.len() {snapshot.history_incomplete=true;}
+            if result.basis.as_ref().is_some_and(|basis|!visible.get(&basis.id).is_some_and(|item|item.role.as_deref()==Some("user") && item.text==basis.scope && basis.scope==result.text)) {
+                result.basis=None;snapshot.history_incomplete=true;
+            }
+        }
+        if serde_json::to_vec(snapshot).map(|v|v.len()<=inquello_protocol::progress::MAX_PROJECTION_BYTES).unwrap_or(false) {break;}
+        snapshot.history_incomplete=true;
+        if !snapshot.items.is_empty() {snapshot.items.remove(0);}
+        else if !snapshot.plan.is_empty() {snapshot.plan.remove(0);}
+        else if !snapshot.results.is_empty() {snapshot.results.remove(0);}
+        else {break;}
+    }
+}
+
+#[cfg(test)]
+mod progress_tests {
+    use super::*;
+    #[test]
+    fn cumulative_plan_keeps_recent_ids_without_forgetting_canonical_revisions() {
+        let mut entries=Vec::new();
+        for n in 0..70 {
+            let body=json!({"version":1,"plan":[{"id":format!("step-{n}"),"revision":2,"text":format!("Inspect fictional R{n}"),"status":"running","evidenceIds":[]}],"results":[]});
+            entries.push(entry(json!({"type":"functionCallOutput","id":format!("p-{n}"),"name":"inquello_progress","namespace":null,"output":body.to_string()}),true));
+        }
+        // An omitted old ID is not forgotten: stale text cannot re-enter as new.
+        let body=json!({"version":1,"plan":[{"id":"step-0","revision":1,"text":"Forged older text","status":"completed","evidenceIds":[]}],"results":[]});
+        entries.push(entry(json!({"type":"functionCallOutput","id":"stale","name":"inquello_progress","namespace":null,"output":body.to_string()}),true));
+        let snapshot=project_progress(entries,"turn-1",false);
+        assert_eq!(snapshot.plan.iter().map(|step|step.id.clone()).collect::<Vec<_>>(),(6..70).map(|n|format!("step-{n}")).collect::<Vec<_>>());
+        assert!(snapshot.history_incomplete);
+    }
+    #[test]
+    fn unresolved_initial_publication_references_disclose_incomplete_history() {
+        for target in ["plan","result"] {
+            let body=json!({"version":1,"plan":[{"id":"work","revision":1,"text":"compare fictional R01 R03","status":"completed","evidenceIds":if target=="plan" {vec!["cmd-1","missing"]}else{vec!["cmd-1"]}}],"results":[{"id":"finding","kind":"observation","text":"Fictional comparison","evidenceIds":if target=="result" {vec!["cmd-1","missing"]}else{vec!["cmd-1"]}}]});
+            let snapshot=project_progress(vec![command("completed",Some(0)),entry(json!({"type":"functionCallOutput","id":"pub","name":"inquello_progress","namespace":null,"output":body.to_string()}),true)],"turn-1",false);
+            assert!(snapshot.history_incomplete);assert_eq!(snapshot.plan[0].status,"done");
+            assert_eq!(snapshot.plan[0].evidence_ids,vec!["cmd-1"]);assert_eq!(snapshot.results[0].evidence_ids,vec!["cmd-1"]);assert_eq!(snapshot.results[0].checks,"unchecked");
+        }
+    }
+    #[test]
+    fn failed_actions_and_retained_messages_are_citations_not_completion_proof() {
+        let body=json!({"version":1,"plan":[{"id":"work","revision":1,"text":"compare fictional R01 R03","status":"completed","evidenceIds":["cmd-1"]}],"results":[{"id":"finding","kind":"gap","text":"Command failed; inspect this diagnostic","evidenceIds":["cmd-1","message-1","missing"]}]});
+        for status in ["failed","declined"] {
+        let snapshot=project_progress(vec![command(status,Some(1)),entry(json!({"type":"agentMessage","id":"message-1","text":"R02 gap","phase":"final_answer"}),true),entry(json!({"type":"functionCallOutput","id":"pub","name":"inquello_progress","namespace":null,"output":body.to_string()}),true)],"turn-1",false);
+        assert_eq!(snapshot.results[0].evidence_ids,vec!["cmd-1","message-1"]);
+        assert_eq!(snapshot.results[0].checks,"unchecked");assert_eq!(snapshot.plan[0].status,"unconfirmed");
+        }
+    }
+    #[test]
+    fn command_display_keeps_failure_diagnostic_tail_and_bounds_sanitized_allocation() {
+        let mut incomplete=false;let output=format!("{}\nFINAL: R02 approval unavailable", "prefix ".repeat(100_000));
+        let text=command_display("inspect fictional R02",Some(&output),&mut incomplete);
+        assert!(text.starts_with("inspect fictional R02"));assert!(text.ends_with("FINAL: R02 approval unavailable"));assert!(text.len()<=16_384);assert!(incomplete);
+        let mut budget=10;let text=progress_text(&"é".repeat(100_000),&mut budget,&mut incomplete);assert_eq!(text.len(),10);
+    }
+    #[test]
+    fn terminal_runs_stop_unconfirmed_running_steps_without_marking_them_done() {
+        for status in ["completed","failed","cancelled","uncertain","setup-failed"] {
+            let mut snapshot=project_progress(vec![publication("p","Inspect R02",1,"running",vec![])],"turn-1",false);
+            snapshot.status=status.into();finish_progress(&mut snapshot);assert_eq!(snapshot.plan[0].status,"unconfirmed");
+        }
+    }
+    #[test]
+    fn final_serialized_ceiling_includes_maximum_escaping_references_and_basis() {
+        let mut snapshot=project_progress(vec![],"turn-1",false);
+        let ids:Vec<String>=(0..16).map(|n|format!("{n:03}{}","x".repeat(125))).collect();
+        for id in &ids {snapshot.items.push(InquelloProgressItem{id:id.clone(),kind:"message".into(),status:"completed".into(),text:"\"".repeat(16_384),role:Some("user".into()),application:None});}
+        for n in 0..64 {
+            snapshot.plan.push(InquelloProgressStep{id:format!("s{n}"),revision:1,text:"scope".into(),status:"done".into(),evidence_ids:ids.clone()});
+            snapshot.results.push(InquelloProgressResult{id:format!("r{n}"),kind:Some("decision".into()),text:"\"".repeat(16_384),checks:"unchecked".into(),check_scope:None,evidence_ids:ids.clone(),basis:Some(InquelloProgressBasis{kind:"human".into(),id:ids[0].clone(),label:"Human instruction".into(),scope:"\"".repeat(16_384)})});
+        }
+        finish_progress(&mut snapshot);
+        assert!(serde_json::to_vec(&snapshot).unwrap().len()<=inquello_protocol::progress::MAX_PROJECTION_BYTES);assert!(snapshot.history_incomplete);
+        for result in &snapshot.results {assert!(result.evidence_ids.iter().all(|id|snapshot.items.iter().any(|item|&item.id==id)));assert!(result.basis.is_none());}
+        for step in &snapshot.plan {if step.evidence_ids.is_empty(){assert_ne!(step.status,"done");}}
+    }
+    fn entry(item:serde_json::Value,terminal:bool)->ThreadItemEntry {
+        serde_json::from_value(json!({"turnId":"turn-1","item":item,"startedAtMs":1,"completedAtMs":if terminal {Some(2)}else{None}})).expect("canonical retained item")
+    }
+    fn command(status:&str,code:Option<i32>)->ThreadItemEntry {
+        entry(json!({"type":"commandExecution","id":"cmd-1","command":"compare fictional R01 R03","cwd":"/private/task","processId":null,"status":status,"commandActions":[],"aggregatedOutput":"R01/R03 candidate; not verified","exitCode":code,"durationMs":1}),status!="inProgress")
+    }
+    fn publication(id:&str,text:&str,revision:u32,claim:&str,refs:Vec<&str>)->ThreadItemEntry {
+        let body=json!({"version":1,"plan":[{"id":"compare","revision":revision,"text":text,"status":claim,"evidenceIds":refs}],"results":[]});
+        entry(json!({"type":"functionCallOutput","id":id,"name":"inquello_progress","namespace":null,"output":body.to_string()}),true)
+    }
+    #[test]
+    fn actual_empty_refs_establish_absence_but_unresolved_refs_do_not() {
+        assert_eq!(progress_artifact(&[]),"absent");
+        assert_eq!(progress_artifact(&["unresolved-artifact".into()]),"unknown");
+    }
+    #[test]
+    fn structured_result_overflow_keeps_recent_exact_order_and_discloses_loss() {
+        let entries=(0..70).map(|n| {
+            let body=json!({"version":1,"plan":[],"results":[{"id":format!("r-{n}"),"kind":"observation","text":format!("Finding {n}"),"evidenceIds":[]}]});
+            entry(json!({"type":"functionCallOutput","id":format!("p-{n}"),"name":"inquello_progress","namespace":null,"output":body.to_string()}),true)
+        }).collect();
+        let snapshot=project_progress(entries,"turn-1",false);
+        assert_eq!(snapshot.results.iter().map(|r|r.id.clone()).collect::<Vec<_>>(),(6..70).map(|n|format!("result:r-{n}")).collect::<Vec<_>>());
+        assert_eq!(snapshot.results.last().unwrap().text,"Finding 69");assert!(snapshot.history_incomplete);
+    }
+    #[test]
+    fn omitted_plan_steps_remain_cumulative_not_withdrawn() {
+        let empty=entry(json!({"type":"functionCallOutput","id":"empty","name":"inquello_progress","namespace":null,"output":json!({"version":1,"plan":[],"results":[]}).to_string()}),true);
+        let snapshot=project_progress(vec![publication("p-1","Inspect R02",1,"pending",vec![]),empty],"turn-1",false);
+        assert_eq!(snapshot.plan.len(),1);assert_eq!(snapshot.plan[0].status,"pending");
+    }
+    #[tokio::test]
+    async fn endpoint_paging_advances_and_keeps_exact_newest_256_with_terminal_evidence() {
+        let mut calls=Vec::new();
+        let (entries,incomplete)=read_progress_pages(|cursor,limit| {
+            let offset=cursor.as_deref().unwrap_or("0").parse::<usize>().unwrap();
+            calls.push((cursor,limit));
+            let end=(offset+limit as usize).min(301);
+            let data=(offset..end).map(|i| {
+                let number=300-i;
+                entry(json!({"type":"commandExecution","id":format!("cmd-{number}"),"command":format!("work {number}"),"cwd":"/private/task","processId":null,"status":"completed","commandActions":[],"aggregatedOutput":null,"exitCode":0,"durationMs":1}),true)
+            }).collect();
+            std::future::ready(Ok(ThreadItemsListResponse {data,next_cursor:(end<301).then(||end.to_string()),backwards_cursor:None}))
+        }).await.unwrap();
+        assert_eq!(calls,vec![(None,100),(Some("100".into()),100),(Some("200".into()),56)]);
+        assert!(incomplete);assert_eq!(entries.len(),256);
+        assert_eq!(entries.iter().map(|e|e.item.id().to_string()).collect::<Vec<_>>(),(45..=300).map(|n|format!("cmd-{n}")).collect::<Vec<_>>());
+        assert!(entries.iter().all(|e|e.completed_at_ms.is_some()));
+        let snapshot=project_progress(entries,"turn-1",incomplete);
+        assert_eq!(snapshot.items.last().unwrap().id,"cmd-300");
+        assert_eq!(snapshot.items.last().unwrap().status,"completed");assert!(snapshot.history_incomplete);
+    }
+    #[test]
+    fn display_controls_are_removed_without_poisoning_progress() {
+        let item=entry(json!({"type":"commandExecution","id":"colored","command":"printf fictional","cwd":"/private/task","processId":null,"status":"completed","commandActions":[],"aggregatedOutput":"\u{1b}[32mR01\u{1b}[0m\u{1b}]0;hidden title\u{7}\u{0}","exitCode":0,"durationMs":1}),true);
+        let snapshot=project_progress(vec![item],"turn-1",false);
+        assert_eq!(snapshot.items[0].text,"printf fictional\nR01");assert!(snapshot.history_incomplete);
+    }
+    #[test]
+    fn latest_structured_result_is_not_starved_by_old_fallback_content() {
+        let mut entries=(0..100).map(|n|entry(json!({"type":"agentMessage","id":format!("a-{n}"),"text":"x".repeat(16_384)}),true)).collect::<Vec<_>>();
+        let body=json!({"version":1,"plan":[],"results":[{"id":"latest","kind":"gap","text":"Latest R02 approval gap","evidenceIds":[]}]});
+        entries.push(entry(json!({"type":"functionCallOutput","id":"p-last","name":"inquello_progress","namespace":null,"output":body.to_string()}),true));
+        let snapshot=project_progress(entries,"turn-1",false);
+        assert_eq!(snapshot.results.len(),1);assert_eq!(snapshot.results[0].text,"Latest R02 approval gap");assert!(snapshot.history_incomplete);
+        assert_eq!(snapshot.items.iter().filter(|i|i.role.as_deref()==Some("agent")).count(),100);
+    }
+    #[test]
+    fn canonical_plan_revision_comparison_precedes_display_budget() {
+        let mut entries=(0..32).map(|n|entry(json!({"type":"agentMessage","id":format!("a-{n}"),"text":"x".repeat(16_384)}),true)).collect::<Vec<_>>();
+        entries.extend([publication("p-1","Inspect R02",1,"pending",vec![]),publication("p-2","Inspect R02",1,"running",vec![])]);
+        let snapshot=project_progress(entries,"turn-1",false);
+        assert_eq!(snapshot.plan[0].text,"Inspect R02");assert_eq!(snapshot.plan[0].status,"running");
+    }
+    #[test]
+    fn completed_commands_require_success_and_exact_work_scope() {
+        for (status,code,expected) in [("completed",Some(0),"done"),("completed",Some(1),"unconfirmed"),("completed",None,"unconfirmed"),("failed",Some(0),"unconfirmed"),("inProgress",None,"unconfirmed"),("declined",None,"unconfirmed")] {
+            let snapshot=project_progress(vec![command(status,code),publication("pub-1","compare fictional R01 R03",1,"completed",vec!["cmd-1"])],"turn-1",false);
+            assert_eq!(snapshot.plan[0].status,expected);
+            assert_eq!(snapshot.artifact,"unknown","projection alone cannot establish artifact absence");
+        }
+        let snapshot=project_progress(vec![command("completed",Some(0)),publication("pub-1","All procurement controls are effective",1,"completed",vec!["cmd-1"])],"turn-1",false);
+        assert_eq!(snapshot.plan[0].status,"unconfirmed");
+        assert_eq!(snapshot.plan[0].evidence_ids,vec!["cmd-1"]);
+    }
+    #[test]
+    fn terminal_execution_never_completes_pending_or_agent_only_steps() {
+        let pending=publication("pub-1","Inspect approval evidence R02",1,"pending",vec![]);
+        let snapshot=project_progress(vec![pending],"turn-1",false);
+        assert_eq!(snapshot.plan[0].status,"pending");
+        let snapshot=project_progress(vec![publication("pub-1","Inspect R02",1,"completed",vec!["pub-1"])],"turn-1",false);
+        assert_eq!(snapshot.plan[0].status,"unconfirmed");
+        assert!(snapshot.plan[0].evidence_ids.is_empty());
+    }
+    #[test]
+    fn stale_revisions_and_same_revision_rewrites_are_not_replayed() {
+        let snapshot=project_progress(vec![publication("pub-1","Inspect R02",2,"running",vec![]),publication("pub-2","Forged rewrite",2,"completed",vec![]),publication("pub-3","Older text",1,"pending",vec![])],"turn-1",false);
+        assert_eq!(snapshot.plan[0].revision,2);
+        assert_eq!(snapshot.plan[0].text,"Inspect R02");
+        assert_eq!(snapshot.plan[0].status,"running");
+        assert!(snapshot.history_incomplete);
+    }
+    #[test]
+    fn hidden_reasoning_and_foreign_turns_never_project() {
+        let hidden=entry(json!({"type":"reasoning","id":"secret-1","summary":["hidden"],"content":["opaque provider block"]}),true);
+        let mut foreign=command("completed",Some(0));foreign.turn_id="other-turn".into();
+        let snapshot=project_progress(vec![hidden,foreign],"turn-1",false);
+        assert!(snapshot.items.is_empty());assert!(snapshot.results.is_empty());assert!(snapshot.history_incomplete);
+        assert!(!format!("{snapshot:?}").contains("opaque"));
+    }
+    #[test]
+    fn unstructured_and_malformed_outputs_remain_unchecked() {
+        let ordinary=entry(json!({"type":"agentMessage","id":"a-1","text":"I independently checked every invoice"}),true);
+        let malformed=entry(json!({"type":"functionCallOutput","id":"p-1","name":"inquello_progress","namespace":null,"output":"{invalid publication; R02 lacks approval}"}),true);
+        let snapshot=project_progress(vec![ordinary,malformed],"turn-1",false);
+        assert_eq!(snapshot.results.len(),1);
+        assert_eq!(snapshot.items[0].role.as_deref(),Some("agent"));
+        for result in snapshot.results {assert_eq!(result.kind,None);assert_eq!(result.checks,"unchecked");assert!(result.basis.is_none());}
+    }
+    #[test]
+    fn forged_checks_do_not_become_structured_labels() {
+        let body=json!({"version":1,"plan":[],"results":[{"id":"r-1","kind":"observation","text":"R01","evidenceIds":[],"basisId":null,"checks":"checked"}]});
+        let output=entry(json!({"type":"functionCallOutput","id":"p-1","name":"inquello_progress","namespace":null,"output":body.to_string()}),true);
+        let snapshot=project_progress(vec![output],"turn-1",false);
+        assert_eq!(snapshot.results[0].kind,None);assert_eq!(snapshot.results[0].checks,"unchecked");
+    }
+    #[test]
+    fn only_exact_retained_human_instruction_ids_resolve_decision_basis() {
+        for (basis,expected) in [("human-1",true),("Procurement director",false),("cmd-1",false)] {
+            let instruction=entry(json!({"type":"userMessage","id":"human-1","clientId":null,"content":[{"type":"text","text":"Use the documented 10000 materiality threshold","textElements":[]}]}),true);
+            let body=json!({"version":1,"plan":[],"results":[{"id":"r-1","kind":"decision","text":"Use the documented 10000 materiality threshold","evidenceIds":[],"basisId":basis}]});
+            let output=entry(json!({"type":"functionCallOutput","id":"p-1","name":"inquello_progress","namespace":null,"output":body.to_string()}),true);
+            let snapshot=project_progress(vec![instruction,output],"turn-1",false);
+            assert_eq!(snapshot.results[0].basis.is_some(),expected);
+            assert_eq!(snapshot.results[0].checks,"unchecked");
+            if let Some(basis)=&snapshot.results[0].basis {assert_eq!(basis.scope,"Use the documented 10000 materiality threshold");}
+        }
+    }
+    #[test]
+    fn duplicate_identity_and_clipping_disclose_incomplete_history() {
+        let duplicate=command("completed",Some(0));
+        let huge=entry(json!({"type":"agentMessage","id":"a-1","text":"é".repeat(20_000)}),true);
+        let snapshot=project_progress(vec![duplicate.clone(),duplicate,huge],"turn-1",false);
+        assert_eq!(snapshot.items.len(),2);assert!(snapshot.history_incomplete);
+        assert!(snapshot.items.iter().all(|item|item.text.len()<=16_384));
+    }
+    #[test]
+    fn an_unrelated_human_instruction_is_not_decision_authority() {
+        let instruction=entry(json!({"type":"userMessage","id":"human-1","clientId":null,"content":[{"type":"text","text":"Review fictional invoices","textElements":[]}]}),true);
+        let body=json!({"version":1,"plan":[],"results":[{"id":"r-1","kind":"decision","text":"All controls are approved","evidenceIds":[],"basisId":"human-1"}]});
+        let output=entry(json!({"type":"functionCallOutput","id":"p-1","name":"inquello_progress","namespace":null,"output":body.to_string()}),true);
+        let snapshot=project_progress(vec![instruction,output],"turn-1",false);
+        assert!(snapshot.results[0].basis.is_none());assert_eq!(snapshot.results[0].checks,"unchecked");
+    }
+    #[test]
+    fn progress_read_cannot_accept_renderer_binding_or_principal() {
+        let params=json!({"taskId":"11111111-1111-4111-8111-111111111111","workspacePolicy":{"workspaceId":"5d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e","policyRevision":1,"authorizationEpoch":1,"execution":null}});
+        assert!(serde_json::from_value::<InquelloTasksProgressParams>(params.clone()).is_ok());
+        for field in ["principalId","threadId","turnId","runtimeId","runId","sessionGeneration"] {
+            let mut forged=params.clone();forged[field]=json!("untrusted");
+            assert!(serde_json::from_value::<InquelloTasksProgressParams>(forged).is_err());
+        }
+    }
+    #[test]
+    fn projection_without_plan_does_not_invent_steps() {
+        let snapshot=project_progress(vec![command("completed",Some(0))],"turn-1",true);
+        assert!(snapshot.plan.is_empty());assert!(snapshot.history_incomplete);
+    }
+}

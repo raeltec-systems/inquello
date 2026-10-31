@@ -780,3 +780,17 @@ a.iq-nav-row:hover {
 .iq-start select { width: 100%; min-width: 0; padding: var(--space-2); font: inherit; color: var(--text-primary); background: var(--surface-app); border: 1px solid var(--border-default); border-radius: var(--radius-sm); }
 .iq-start select:focus-visible { outline: 2px solid var(--text-link); outline-offset: 2px; }
 .iq-start .iq-composer { margin-top: var(--space-5); }
+
+/* Live work uses the existing thread, typography and semantic primitive tokens. */
+.iq-task-progress { margin-block: var(--space-4); overflow-wrap: anywhere; }
+.iq-task-progress h2, .iq-task-progress h3 { font-weight: 500; }
+.iq-artifact-status, .iq-progress-label { color: var(--text-secondary); }
+.iq-progress-items { list-style: none; padding: 0; }
+.iq-progress-items > li, .iq-task-progress article { margin-block: var(--space-4); padding-block: var(--space-2); border-bottom: 1px solid var(--border-default); }
+.iq-progress-items [data-status="running"] > .iq-progress-label { color: var(--blue-600); }
+.iq-progress-text { white-space: pre-wrap; }
+.iq-progress-question { padding: var(--space-3); border: 1px solid var(--border-default); border-radius: var(--radius-md); margin-block: var(--space-4); }
+.iq-progress-question fieldset { border: 0; padding: 0; margin-block: var(--space-3); min-width: 0; }
+.iq-progress-question input[type="text"], .iq-progress-question input[type="password"] { display: block; width: 100%; box-sizing: border-box; font: inherit; color: var(--text-primary); background: var(--surface-app); border: 1px solid var(--border-default); padding: var(--space-2); }
+.iq-progress-option { display: block; margin-block: var(--space-2); }
+.iq-progress-option span { display: block; color: var(--text-secondary); margin-left: var(--space-4); }

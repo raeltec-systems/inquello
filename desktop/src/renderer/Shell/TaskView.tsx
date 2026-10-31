@@ -1,3 +1,4 @@
+import { TaskProgress } from './TaskProgress';
 import { ProcessingRoutes } from '../ProcessingRoutes';
 import type { StartedTask } from './tasks-bridge';
 /**
@@ -142,6 +143,7 @@ export function TaskView({
   return (
     <section className="iq-task" aria-label="Task" data-task-view={task.taskId}>
       {accepted && <AcceptedRequest accepted={accepted}/>}
+      {(accepted || task.runtimeThreadId) && <TaskProgress key={task.taskId} taskId={task.taskId} workspaceId={task.workspaceId}/> }
       <div className="iq-task-tools">
         <form className="iq-task-rename" onSubmit={(event) => void save(event)} data-task-rename>
           <TextField label="Task title" value={draft} onChange={setDraft} />
@@ -163,7 +165,7 @@ export function TaskView({
       <TaskUsage taskId={task.taskId} />
       <TaskStates states={states && states.taskId === task.taskId ? states : null} notice={statesNotice} />
       <TaskPolicy policy={policy && policy.taskId === task.taskId ? policy : null} notice={policyNotice} onSetMode={onSetMode} />
-      {!accepted && <div className="iq-thread-placeholder" data-thread-placeholder>
+      {!accepted && !task.runtimeThreadId && <div className="iq-thread-placeholder" data-thread-placeholder>
         <p className="iq-thread-placeholder-title">{task.runtimeThreadId ? 'This Task has a retained runtime thread.' : 'This Task has no thread yet.'}</p>
         <p className="iq-thread-placeholder-body">
           {task.runtimeThreadId ? 'Current execution details have not been loaded. No completed analysis is implied.' : 'Start new work with New thread. Only you can see this Task; moving it never shares it.'}

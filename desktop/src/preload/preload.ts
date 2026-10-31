@@ -79,12 +79,23 @@ const USAGE_TASK_CHANNEL = 'inquello:op:usage.forTask';
 const USAGE_SET_CHANNEL = 'inquello:op:usage.set';
 const USAGE_CHANGED_CHANNEL = 'inquello:usage-changed';
 
+const TASKS_PROGRESS_CHANGED_CHANNEL = 'inquello:tasks-progress-changed';
+const TASKS_PROGRESS_CHANNEL = 'inquello:op:tasks.progress';
+const TASKS_ANSWER_CHANNEL = 'inquello:op:tasks.answer';
 const TASKS_CHANGED_CHANNEL = 'inquello:tasks-session-changed';
 const TASKS_PREFLIGHT_CHANNEL = 'inquello:op:tasks.preflight';
 const TASKS_START_CHANNEL = 'inquello:op:tasks.start';
 const TASKS_RECONCILE_CHANNEL = 'inquello:op:tasks.reconcile';
 const api = Object.freeze({
   tasks: Object.freeze({
+    progress: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(TASKS_PROGRESS_CHANNEL, ...args),
+    answer: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(TASKS_ANSWER_CHANNEL, ...args),
+    onProgressChanged: (listener: () => void): (() => void) => {
+      if (typeof listener !== 'function') throw new Error('expected a listener');
+      const handler = () => listener();
+      ipcRenderer.on(TASKS_PROGRESS_CHANGED_CHANNEL, handler);
+      return () => ipcRenderer.removeListener(TASKS_PROGRESS_CHANGED_CHANNEL, handler);
+    },
     onSessionChanged: (listener: (identityChanged: boolean) => void): (() => void) => {
       if (typeof listener !== 'function') throw new Error('expected a listener');
       const handler = (_event: unknown, identityChanged: unknown) => listener(identityChanged === true);

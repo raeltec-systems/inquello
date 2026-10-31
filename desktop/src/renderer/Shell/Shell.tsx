@@ -134,6 +134,9 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
   const [runtimeEpoch,setRuntimeEpoch] = useState(0);
   const [acceptedTasks,setAcceptedTasks] = useState<Record<string,{workspaceId:string;binding:StartedTask}>>({});
   const authorizedWorkspaces = useRef<string[]>([]);
+  const authorityGeneration = useRef(0);
+  const workspaceRead = useRef(0);
+  const disclosedOwner = useRef<string | null>(null);
   const activeStart = useRef({active:false,location:startLocation});
   activeStart.current = {active:active && showStart,location:startLocation};
   const [states, setStates] = useState<TaskStatesItem | null>(null);
@@ -321,28 +324,51 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
         setTree(null);
         return;
       }
+      const generation = authorityGeneration.current;
       const result = parseOutcome(await bridge.getTree({ workspaceId: id }), parseTree);
+      if (generation !== authorityGeneration.current) return;
       if (chosenWorkspace.current !== id || !authorizedWorkspaces.current.includes(id)) return;
       if (result.ok) {
         // A Task that is gone (deleted) takes its draft with it.
         draftStore.retain(result.value.workspaceId, result.value.tasks.map((item) => item.taskId));
         setTree(result.value);
-      } else setNotice(result.reason);
+      } else {
+        setTree(null); setAcceptedTasks({}); setStates(null); setTaskPolicy(null);
+        setOpenTaskId(null); openTask.current=null; setNotice(result.reason);
+      }
       if (openTask.current) await Promise.all([loadStates(openTask.current), loadPolicy(openTask.current)]);
     },
     [bridge, loadStates, loadPolicy, draftStore],
   );
 
+  const suppressPrivateContent = useCallback(() => {
+    authorityGeneration.current++; authorizedWorkspaces.current=[];
+    setState(null); setPerson(null); setTree(null); setAcceptedTasks({});
+    setStates(null); setTaskPolicy(null); setOpenTaskId(null); openTask.current=null;
+    activeStart.current.active=false; setStartLocation(null); setShowStart(false); setPendingStart(false);
+    draftStore.clear();
+  }, [draftStore]);
+
   const load = useCallback(async () => {
     if (!bridge) return;
+    const read=++workspaceRead.current; const generation=authorityGeneration.current;
     try {
       const next = parseWorkspaces(await bridge.getWorkspaces());
+      if (read!==workspaceRead.current || generation!==authorityGeneration.current) return;
       if (!next) {
+        suppressPrivateContent();
         setNotice('Your Workspaces could not be read.');
         return;
       }
       // Drafts belong to one signed-in principal: none signed in, or a different one, clears them all.
       const nextPerson = next.signedIn ? await readPerson() : null;
+      if (read!==workspaceRead.current || generation!==authorityGeneration.current) return;
+      const nextOwner=next.signedIn?ownerKey(nextPerson):null;
+      if (disclosedOwner.current!==nextOwner) {
+        setAcceptedTasks({}); setTree(null); setStates(null); setTaskPolicy(null);
+        setOpenTaskId(null); openTask.current=null;
+      }
+      disclosedOwner.current=nextOwner;
       if (next.signedIn) draftStore.claim(ownerKey(nextPerson));
       else { draftStore.clear(); setPendingStart(false); setStartLocation(null); setShowStart(false); setAcceptedTasks({}); }
       setState(next);
@@ -364,9 +390,11 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
       setWorkspaceIdState(chosen);
       await loadTree(chosen);
     } catch {
+      if (read!==workspaceRead.current || generation!==authorityGeneration.current) return;
+      suppressPrivateContent();
       setNotice('Your Workspaces could not be read.');
     }
-  }, [bridge, loadTree, draftStore]);
+  }, [bridge, loadTree, draftStore, suppressPrivateContent]);
 
   useEffect(() => {
     void load();
@@ -381,6 +409,8 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
     const usage = (globalThis as {inquello?:{usage?:{onChanged?:(listener:(privateScope:boolean)=>void)=>()=>void}}}).inquello?.usage;
     return usage?.onChanged?.((privateScope) => {
       if (!privateScope) return;
+      authorityGeneration.current++; authorizedWorkspaces.current=[];
+      setTree(null); setState(null); setStates(null); setTaskPolicy(null);
       setAcceptedTasks({});
       void load();
     });
@@ -389,6 +419,7 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
   useEffect(() => {
     const api = (globalThis as {inquello?:{tasks?:{onSessionChanged?:(listener:(identityChanged:boolean)=>void)=>()=>void}}}).inquello?.tasks;
     return api?.onSessionChanged?.((identityChanged) => {
+      authorityGeneration.current++; authorizedWorkspaces.current=[];
       setAcceptedTasks({}); setTree(null); setOpenTaskId(null);
       if (identityChanged) { draftStore.clear(); setPendingStart(false); setStartLocation(null); setShowStart(false); setState(null); setPerson(null); }
       else setRuntimeEpoch(n => n + 1);

@@ -48,12 +48,18 @@ export function PermissionRequests({ taskId, reviewer = null, announce, operatio
   const [outcomes, setOutcomes] = useState<Outcome[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const announced = useRef(new Set<string>());
+  const generation = useRef(0);
+  const pendingRead = useRef<object | null>(null);
+  const decisionEpoch = useRef(0);
+  const consumed = useRef(new Set<string>());
   const current = useRef(taskId);
   current.current = taskId;
 
   const load = useCallback(async () => {
     const api = permissionBridge();
-    if (!api) return;
+    if (!api || pendingRead.current) return;
+    const token={};pendingRead.current=token;
+    const gen=generation.current, epoch=decisionEpoch.current;
     let next: PermissionCardItem[] | null = null;
     try {
       const result = (await api.pending({ taskId })) as { ok?: unknown; value?: unknown };
@@ -61,8 +67,10 @@ export function PermissionRequests({ taskId, reviewer = null, announce, operatio
     } catch {
       next = null;
     }
-    if (current.current !== taskId || next === null) return;
-    const mine = next.filter((card) => card.taskId === taskId);
+    if(pendingRead.current===token)pendingRead.current=null;
+    if (current.current !== taskId || gen!==generation.current || epoch!==decisionEpoch.current) return;
+    if (next===null) { generation.current++; setCards([]); setOutcomes([]); setBusy(null); announced.current.clear(); return; }
+    const mine = next.filter((card) => card.taskId === taskId && !consumed.current.has(card.requestId));
     setCards(mine);
     for (const card of mine) {
       if (announced.current.has(card.requestId)) continue;
@@ -72,17 +80,23 @@ export function PermissionRequests({ taskId, reviewer = null, announce, operatio
   }, [taskId, announce]);
 
   useEffect(() => {
+    generation.current++;pendingRead.current=null;consumed.current.clear();
     setCards([]);
     setOutcomes([]);
+    setBusy(null); announced.current.clear();
     if (!permissionBridge()) return undefined;
     void load();
     const timer = setInterval(() => void load(), pollMs);
-    return () => clearInterval(timer);
+    const api=(globalThis as {inquello?:{tasks?:{onSessionChanged?:(listener:()=>void)=>()=>void}}}).inquello?.tasks;
+    const unsubscribe=api?.onSessionChanged?.(()=>{generation.current++;pendingRead.current=null;consumed.current.clear();setCards([]);setOutcomes([]);setBusy(null);announced.current.clear();});
+    return () => {generation.current++;pendingRead.current=null;clearInterval(timer);unsubscribe?.();};
   }, [load, pollMs]);
 
   const decide = async (card: PermissionCardItem, choice: PermissionChoice) => {
     const api = permissionBridge();
-    if (!api || busy) return;
+    if (!api || busy || consumed.current.has(card.requestId) || !cards.some(current=>current.requestId===card.requestId)) return;
+    const gen=generation.current;
+    decisionEpoch.current++;
     setBusy(card.requestId);
     let outcome: Outcome;
     try {
@@ -98,8 +112,10 @@ export function PermissionRequests({ taskId, reviewer = null, announce, operatio
     } catch {
       outcome = { card, state: 'decided', text: 'The request did not complete.' };
     }
+    if (current.current !== taskId || gen!==generation.current) return;
+    decisionEpoch.current++;consumed.current.add(card.requestId);
+    if(consumed.current.size>256)consumed.current.delete(consumed.current.values().next().value!);
     setBusy(null);
-    if (current.current !== taskId) return;
     setOutcomes((previous) => [...previous.filter((entry) => entry.card.requestId !== card.requestId), outcome].slice(-5));
     setCards((previous) => previous.filter((entry) => entry.requestId !== card.requestId));
     announce(outcome.text);

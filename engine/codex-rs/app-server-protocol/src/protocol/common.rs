@@ -1633,6 +1633,11 @@ client_request_definitions! {
         manual_payload_conversion: manual,
         response: v2::InquelloTasksStartResponse,
     },
+    InquelloTasksProgress => "inquello/tasks/progress" {
+        params: v2::InquelloTasksProgressParams,
+        serialization: None,
+        response: v2::InquelloTasksProgressResponse,
+    },
     InquelloTasksForThread => "inquello/tasks/forThread" {
         params: v2::InquelloTasksForThreadParams,
         serialization: None,

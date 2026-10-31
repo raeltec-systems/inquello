@@ -1178,7 +1178,7 @@ pub struct InquelloTasksForThreadParams { pub thread_id: String }
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
-pub struct InquelloTasksForThreadResponse { pub task_id: String, pub run_id: String, pub thread_id: String, pub status: String }
+pub struct InquelloTasksForThreadResponse { pub task_id: String, pub run_id: String, pub workspace_id:String, pub thread_id: String, pub turn_id:Option<String>, pub runtime_id:String, pub status: String }
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[ts(export_to = "v2/")]
@@ -1218,4 +1218,58 @@ mod task_permission_debug_tests {
         assert_eq!(wire["command"][2],sentinel);
         assert_eq!(serde_json::from_value::<InquelloTasksConsumePermissionParams>(wire).unwrap(),value);
     }
+}
+
+/// Named, bounded private progress read. IDs are derived from durable Task binding.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all="camelCase", deny_unknown_fields)]
+#[ts(export_to="v2/")]
+pub struct InquelloTasksProgressParams {
+    pub task_id:String,
+    pub workspace_policy:InquelloWorkspaceExecutionPolicy,
+}
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all="camelCase")]
+#[ts(export_to="v2/")]
+pub struct InquelloTasksProgressResponse {
+    pub version:u32, pub task_id:String, pub run_id:String, pub workspace_id:String,
+    pub thread_id:String, pub turn_id:String, pub runtime_id:String, pub status:String,
+    pub history_incomplete:bool, pub items:Vec<InquelloProgressItem>,
+    pub plan:Vec<InquelloProgressStep>, pub results:Vec<InquelloProgressResult>, pub artifact:String,
+}
+impl std::fmt::Debug for InquelloTasksProgressResponse {
+    fn fmt(&self,f:&mut std::fmt::Formatter<'_>)->std::fmt::Result {
+        f.debug_struct("InquelloTasksProgressResponse").field("task_id",&self.task_id).field("status",&self.status).field("history_incomplete",&self.history_incomplete).finish_non_exhaustive()
+    }
+}
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all="camelCase")]
+#[ts(export_to="v2/")]
+pub struct InquelloProgressItem {
+    pub id:String, pub kind:String, pub status:String, pub text:String,
+    #[serde(skip_serializing_if="Option::is_none")]
+    #[ts(optional)]
+    pub application:Option<String>,
+    #[serde(skip_serializing_if="Option::is_none")]
+    #[ts(optional)]
+    pub role:Option<String>,
+}
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all="camelCase")]
+#[ts(export_to="v2/")]
+pub struct InquelloProgressStep {
+    pub id:String, pub revision:u32, pub text:String, pub status:String, pub evidence_ids:Vec<String>,
+}
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all="camelCase")]
+#[ts(export_to="v2/")]
+pub struct InquelloProgressBasis {
+    pub kind:String, pub id:String, pub label:String, pub scope:String,
+}
+#[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, TS)]
+#[serde(rename_all="camelCase")]
+#[ts(export_to="v2/")]
+pub struct InquelloProgressResult {
+    pub id:String, pub kind:Option<String>, pub text:String, pub checks:String,
+    pub check_scope:Option<String>, pub evidence_ids:Vec<String>, pub basis:Option<InquelloProgressBasis>,
 }

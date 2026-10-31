@@ -290,8 +290,8 @@ async function startRuntimeNow(): Promise<void> {
     schemaStamp,
     stderrLogPath: path.join(app.getPath('logs'), 'app-server-stderr.log'),
     logger,
-    onNotification: ({ method, params }) => { providers?.codex.handleNotification(method, params); if (method === 'account/updated') void routes?.invalidate('codex-responses'); capabilities?.handleNotification(method, params); if (['app/list/updated','skills/changed','mcpServer/startupStatus/updated','mcpServerStatus','mcpServer/oauthLogin/completed','account/updated'].includes(method)) for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:capabilities-changed'); },
-    onServerRequest: (method, params) => method === 'inquello/tasks/authority' ? tasks?.authority(params) ?? {workspacePolicy:null} : escalations.answer(method, params),
+    onNotification: ({ method, params }) => { tasks?.notification(method, params); providers?.codex.handleNotification(method, params); if (method === 'account/updated') void routes?.invalidate('codex-responses'); capabilities?.handleNotification(method, params); if (['app/list/updated','skills/changed','mcpServer/startupStatus/updated','mcpServerStatus','mcpServer/oauthLogin/completed','account/updated'].includes(method)) for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:capabilities-changed'); },
+    onServerRequest: (method, params, id) => method === 'item/tool/requestUserInput' ? tasks?.question(id, params) ?? {answers:{}} : method === 'inquello/tasks/authority' ? tasks?.authority(params) ?? {workspacePolicy:null} : escalations.answer(method, params),
   });
   runtime.on('state', ({ state, error }) => {
     if (['disconnected','failed','stopped'].includes(state)) { taskSessionChanged(); runtimeConfigurationVerified = false;
@@ -580,7 +580,7 @@ void app.whenReady().then(async () => {
     identity: identitySession, syncPrincipal: () => organiseService.syncPrincipal(), providers: providerService, freshPolicy: (taskId) => policyService.reviewPolicy(taskId), applicableDataTier: taskId => tasks?.applicableDataTier(taskId) ?? Promise.resolve('unknown'),
     onChanged: () => { environmentChanged(); for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:routes-changed'); },
   });
-  tasks = new TaskService({runtime: policyRuntime, identity: identitySession, bootstrap: taskBootstrap({env: process.env, packaged: app.isPackaged, userData, runtime: policyRuntime, identity: identitySession}), syncPrincipal: () => organiseService.syncPrincipal(), prepareRoutes: () => routes!.list(), freshPolicy: workspaceId => policyService.startPolicy(workspaceId), askPermission: (taskId, command) => policyService.askRuntimePermission(taskId, command), onAccepted: () => usageChanged()});
+  tasks = new TaskService({runtime: policyRuntime, identity: identitySession, bootstrap: taskBootstrap({env: process.env, packaged: app.isPackaged, userData, runtime: policyRuntime, identity: identitySession}), syncPrincipal: () => organiseService.syncPrincipal(), prepareRoutes: () => routes!.list(), freshPolicy: workspaceId => policyService.startPolicy(workspaceId), askPermission: (taskId, command) => policyService.askRuntimePermission(taskId, command), onProgressChanged: () => { for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:tasks-progress-changed'); }, onAccepted: () => usageChanged()});
   usage = new UsageService({runtime: policyRuntime, identity: identitySession, policy: policyService, onChanged: usageChanged});
   environments = new EnvironmentService({runtime: policyRuntime, identity: identitySession, policy: policyService, routes});
   providerService.setRouteInvalidator((id) => routes!.invalidate(id));

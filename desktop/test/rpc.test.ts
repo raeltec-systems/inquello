@@ -151,3 +151,16 @@ describe('RpcConnection', () => {
     await expect(rpc.request('after')).rejects.toThrow('connection is closed');
   });
 });
+
+describe('private input request correlation',()=>{
+ it('passes exact native request IDs to mediation and redacts handler failures',async()=>{
+  const input=new PassThrough(),output=new HeldWritable(1024*1024,false),logger=recordingLogger();
+  const seen:(string|number)[]=[];
+  new RpcConnection(input,output,{logger,onFatal:()=>{},onServerRequest:(_method,_params,id)=>{seen.push(id);throw new Error('PRIVATE QUESTION');},onNotification:()=>{throw new Error('PRIVATE NOTIFICATION');}});
+  input.write(JSON.stringify({id:'001',method:'item/tool/requestUserInput',params:{}})+'\n');
+  input.write(JSON.stringify({id:1,method:'item/tool/requestUserInput',params:{}})+'\n');
+  input.write(JSON.stringify({method:'item/completed',params:{}})+'\n');await tick();
+  expect(seen).toEqual(['001',1]);expect(JSON.stringify(logger)).not.toContain('PRIVATE');
+  expect(output.written.map(v=>JSON.parse(v).id)).toEqual(['001',1]);
+ });
+});

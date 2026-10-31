@@ -101,3 +101,10 @@
 - source_spec: `spec-1-22-configure-initial-processing-routes-without-silent-fallback.md`
   summary: Native locked build and genuine generated protocol remain an owner-run acceptance gate (unverified high impact).
   evidence: Cargo, complete Git checkout and matching runtime unavailable; authored RPC/dependency changes require real compilation, lock resolution and generation before acceptance.
+
+- source_spec: `spec-1-26-follow-actual-basic-progress-and-truthful-results.md`
+  summary: Validate cumulative plan update expectations during the auditor walkthrough; omission currently does not withdraw a step.
+  evidence: Unverified medium usability claim only; tool contract explicitly describes cumulative updates and no reset/delete. Representative provider use will establish whether this needs a separately approved change.
+- source_spec: `spec-1-26-follow-actual-basic-progress-and-truthful-results.md`
+  summary: Measure upstream retained-history allocation under large command output on the complete native runtime.
+  evidence: Projection sanitation and wire size are bounded, but upstream store allocations are outside that display bound. Actual resource harm was not established in this partial checkout; unverified medium risk requires native stress evidence.

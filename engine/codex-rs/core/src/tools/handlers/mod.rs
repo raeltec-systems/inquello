@@ -17,6 +17,8 @@ pub(crate) mod multi_agents_v2;
 mod new_context_window;
 pub(crate) mod new_context_window_spec;
 mod plan;
+mod inquello_progress;
+pub use inquello_progress::InquelloProgressHandler;
 pub(crate) mod plan_spec;
 mod request_permissions;
 mod request_plugin_install;

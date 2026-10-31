@@ -39,7 +39,7 @@ export interface RpcConnectionOptions {
    * Answers a server-initiated request with a result; returning `undefined`
    * (or throwing) answers it as unsupported (Story 1.19: escalations).
    */
-  onServerRequest?: (method: string, params: unknown) => unknown | Promise<unknown>;
+  onServerRequest?: (method: string, params: unknown, id: RequestId) => unknown | Promise<unknown>;
   /** Called once when the inbound stream can no longer be trusted (e.g. oversized line). */
   onFatal: (error: Error) => void;
 }
@@ -223,7 +223,7 @@ export class RpcConnection {
         this.options.onNotification?.({ method, params: record.params });
       } catch (error) {
         // Keep processing the rest of the chunk; a faulty handler must not break the stream.
-        this.options.logger.error(`notification handler for ${method} threw: ${(error as Error).message}`);
+        this.options.logger.error('app-server notification handler failed');
       }
     } else if (hasId && 'result' in record) {
       this.settle(id, (entry) => entry.resolve(record.result));
@@ -250,9 +250,9 @@ export class RpcConnection {
   private answerServerRequest(id: RequestId, method: string, params: unknown): void {
     let result: unknown;
     try {
-      result = this.options.onServerRequest?.(method, params);
+      result = this.options.onServerRequest?.(method, params, id);
     } catch (error) {
-      this.options.logger.error(`server request handler for ${method} threw: ${(error as Error).message}`);
+      this.options.logger.error('app-server request handler failed');
       result = undefined;
     }
     if (result instanceof Promise) {
@@ -260,11 +260,11 @@ export class RpcConnection {
         try {
           this.sendServerAnswer(id, method, value);
         } catch (error) {
-          this.options.logger.warn(`the answer to ${method} could not be sent (${(error as Error).message})`);
+          this.options.logger.warn('app-server answer could not be sent');
         }
       };
       result.then(answer, (error: unknown) => {
-        this.options.logger.error(`server request handler for ${method} failed: ${(error as Error).message}`);
+        this.options.logger.error('app-server request handler failed');
         answer(undefined);
       });
       return;
@@ -273,6 +273,7 @@ export class RpcConnection {
   }
 
   private sendServerAnswer(id: RequestId, method: string, result: unknown): void {
+    if (this.closed) return;
     if (result !== undefined) {
       this.send({ line: encodeLine({ id, result }) }, true);
       return;

@@ -1,3 +1,4 @@
+import {requestId,parseAnswers} from './progress';
 import {OperationError,type PayloadValidator} from '../security/operations';
 import {object,uuid,identifier,integer} from '../usage/types';
 import {routeId} from '../routes/types';
@@ -9,3 +10,6 @@ const keys=['workspaceId','routeId','configurationRevision'];
 export const taskPreflightPayload=safe(a=>candidate(fields(a,keys)));
 export const taskStartPayload=safe<StartTaskInput>(a=>{const r=fields(a,[...keys,'operationId','engagementId','folderId','request','reasoning','speed']);if(typeof r.request!=='string'||!r.request.trim()||Buffer.byteLength(r.request,'utf8')>131072||/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/.test(r.request))throw new Error();return{...candidate(r),operationId:uuid(r.operationId),engagementId:r.engagementId===null?null:uuid(r.engagementId),folderId:r.folderId===null?null:uuid(r.folderId),request:r.request,reasoning:identifier(r.reasoning),speed:identifier(r.speed)};});
 export const taskReconcilePayload=safe(a=>{const r=fields(a,['operationId']);return{operationId:uuid(r.operationId)};});
+
+export const taskProgressPayload=safe(a=>{const r=fields(a,['taskId','workspaceId']);return{taskId:uuid(r.taskId),workspaceId:uuid(r.workspaceId)};});
+export const taskAnswerPayload=safe(a=>{const r=fields(a,['taskId','workspaceId','requestId','answers']);return{taskId:uuid(r.taskId),workspaceId:uuid(r.workspaceId),requestId:requestId(r.requestId),answers:parseAnswers(r.answers)};});

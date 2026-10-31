@@ -3635,7 +3635,7 @@ impl ThreadRequestProcessor {
         Ok((turns_page.backwards_cursor, items_page.backwards_cursor))
     }
 
-    async fn thread_items_list_response_inner(
+    pub(super) async fn thread_items_list_response_inner(
         &self,
         params: ThreadItemsListParams,
     ) -> Result<ThreadItemsListResponse, JSONRPCErrorError> {
@@ -6957,7 +6957,7 @@ impl ThreadRequestProcessor {
         options.thread_extension_init.insert(codex_extension_api::SessionIsolation::Isolated);
         options.reserved_thread_id=Some(thread_id);
         options.allow_provider_model_fallback=false;
-        options.thread_extension_init.insert(codex_extension_api::ToolPolicy {allowed_tools:Some(vec![codex_tools::ToolName::plain("exec_command")]),require_managed_sandbox:true,require_unified_exec:false,expose_additional_permissions:false});
+        options.thread_extension_init.insert(codex_extension_api::ToolPolicy {allowed_tools:Some(vec![codex_tools::ToolName::plain("exec_command"),codex_tools::ToolName::plain("inquello_progress"),codex_tools::ToolName::plain("request_user_input")]),require_managed_sandbox:true,require_unified_exec:false,expose_additional_permissions:false});
         options.thread_extension_init.insert(authorization.clone());
         options.turn_extension_init.insert(authorization.clone());
         if authorization.0.cancellation().is_cancelled() {return Err(invalid_request("Private Task session changed before startup"));}

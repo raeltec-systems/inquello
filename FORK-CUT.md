@@ -598,3 +598,41 @@ one-shot running-process authority-revocation coverage. Native source is **not
 execution evidence**: Rust build/fmt/check/clippy/tests, matching protocol
 regeneration, sandboxed Electron and separately authorized provider-connected
 fictional audit acceptance remain open. No dependency or credentials added.
+
+## Story 1.26 — bounded actual progress and truthful publications (2026-10-31)
+
+Native canonical retained-item progress now has a narrow authorized projection;
+versioned plan/result metadata remains model-authored in existing governed history.
+Exact action evidence alone can confirm plan work, and exact retained human
+instruction scope alone can establish a decision basis. Results remain unchecked
+without independent native check records. Questions reuse the native handler with
+exact-turn authority before and after waits; they confer no process permission.
+Main/preload holds bounded transient projections/questions; renderer composes the
+existing progress/judgment/edit/approval primitives and clears stale private views.
+No artifact creation, new database, broad tool grant or generated-binding edit.
+
+Native compilation/fmt/tests/clippy, matching supported protocol generation,
+retained-child fixture, target Windows Electron and separately authorized provider
+useful-output acceptance remain open. Conditional SQLite writer contention and all
+prior native/protocol/provider gates carry forward unchanged. See
+`_bmad-output/implementation-artifacts/story-1-26-progress-support.md` for exact
+verification and the cumulative auditor ledger. Story remains **in-progress**.
+
+Story 1.26 pass-1 correction: canonical publication assembly precedes display
+clipping; latest structured findings, terminal/recent work and explicit speakers
+are retained preferentially, and ordinary answers are not duplicated as results.
+ANSI/control removal is display-only and declares incomplete information. Local
+Task hydration failure no longer cancels unrelated Task questions; Workspace and
+session failure scopes remain fail-closed. Artifact absence requires actual empty
+Task refs. The shared bounded native pagination seam has authored 301-item cursor,
+identity and terminal-evidence coverage, still an unexecuted native owner gate.
+Cumulative plan omission is not withdrawal; no reset/delete protocol was added.
+
+Story 1.26 pass-2 correction adds read-only exact-operation discovery before Start
+acknowledgement; scoped question-consumption fences and coalesced hydration; recent
+canonical plan selection; citation/proof separation; diagnostic tails; and a shared
+640 KiB native serialized projection ceiling with visible-reference consistency.
+Native control parity and terminal-plan regressions are authored but unexecuted.
+Desktop focused verification passes 382 tests; full verification retains baseline
+native/design/Git failures (1,213 passed / 3 failed / 5 skipped). All native,
+protocol, Windows/provider gates and writer-contention residual remain open.

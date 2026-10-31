@@ -49,6 +49,19 @@ function write(root: string, rel: string, content = 'x'): string {
 }
 
 describe('shipped register', () => {
+  it('discloses the separately retained request and binding after Task history deletion', () => {
+    const history = shipped().categories.find(category => category.id === 'task-history')!;
+    expect(history.deletion).toContain('submitted request and Task/run/thread binding copy');
+    expect(history.deletion).toContain('also delete Private work organisation in Local data');
+    expect(history.deletion).toContain('entire working store');
+  });
+  it('discloses governed publications and memory-only authorized progress', () => {
+    const history = shipped().categories.find(category => category.id === 'task-history')!;
+    expect(history.recovery).toContain('plan/result publications and scoped question answers');
+    expect(history.recovery).toContain('memory only');
+    expect(history.recovery).toContain('no new persistent cache or database');
+    expect(history.recovery).toContain('Hidden reasoning and opaque continuation blocks are never projected');
+  });
   it('loads from desktop/data-policy.json and is frozen', () => {
     expect(policyPath()).toBe(path.join(desktop, 'data-policy.json'));
     const policy = shipped();

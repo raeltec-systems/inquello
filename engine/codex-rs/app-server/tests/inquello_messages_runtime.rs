@@ -134,7 +134,7 @@ async fn usage_limit_fixture_refuses_at_native_boundary_and_preserves_local_work
 // Story 1.25 differs deliberately from the earlier direct ModelClientSession
 // fixture above: all work enters normal tasks/start, creates a retained thread,
 // and answers the same host authority and permission requests as desktop main.
-struct PrivateTaskHost {allow_once:bool, lifecycle:Option<&'static str>,policy:Value,notifications:Vec<Value>,denied_commands:Vec<Vec<String>>,bound_thread:Option<String>,pending:std::collections::HashMap<i64,Value>}
+struct PrivateTaskHost {answered_questions:usize,allow_once:bool, lifecycle:Option<&'static str>,policy:Value,notifications:Vec<Value>,denied_commands:Vec<Vec<String>>,bound_thread:Option<String>,pending:std::collections::HashMap<i64,Value>}
 async fn private_rpc(server:&mut TestAppServer,host:&mut PrivateTaskHost,method:&str,params:Value)->Value {
     let id=server.send_request(method,Some(params)).await.expect("send private operation");
     private_response(server,host,id).await
@@ -155,6 +155,16 @@ async fn private_response(server:&mut TestAppServer,host:&mut PrivateTaskHost,id
                 "inquello/tasks/authority"=>{
                     assert_eq!(request.params.as_ref().expect("authority params")["workspaceId"],WORKSPACE);
                     server.send_response(request.id,json!({"workspacePolicy":host.policy})).await.expect("fresh host authority");
+                },
+                "item/tool/requestUserInput"=>{
+                    let params=request.params.expect("actual scoped question");
+                    let owned=Box::pin(private_rpc(server,host,"inquello/tasks/forThread",json!({"threadId":params["threadId"]}))).await;
+                    assert_eq!(owned["turnId"],params["turnId"]);assert_eq!(owned["workspaceId"],WORKSPACE);
+                    assert_eq!(params["questions"][0]["id"],"audit_scope");
+                    assert_eq!(params["questions"][0]["options"][0]["label"],"Review only");
+                    assert_eq!(params["questions"][0]["isSecret"],false);
+                    host.answered_questions+=1;
+                    server.send_response(request.id,json!({"answers":{"audit_scope":{"answers":["Review only"]}}})).await.expect("exact question response, not tool permission");
                 },
                 "execCommandApproval"=>{
                     let params=request.params.expect("approval params");
@@ -237,14 +247,35 @@ fn retained_running_tool_stream()->String {
     retained_command_stream(json!({"cmd":"printf started > output/started.txt; sleep 5; printf late > output/late.txt","shell":"/bin/sh","timeout_ms":10000}),"call_running")
 }
 fn retained_command_stream(command:Value,call_id:&str)->String {
+    retained_named_tool_stream(command,call_id,"exec_command")
+}
+fn retained_named_tool_stream(command:Value,call_id:&str,name:&str)->String {
     let mut wire=event("message_start",json!({"type":"message_start","message":{"id":"msg_running","role":"assistant","model":"claude-sonnet-5-5","content":[],"usage":{"input_tokens":12}}}));
-    wire+=&event("content_block_start",json!({"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":call_id,"name":"exec_command","input":{}}}));
+    wire+=&event("content_block_start",json!({"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":call_id,"name":name,"input":{}}}));
     wire+=&event("content_block_delta",json!({"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":command.to_string()}}));
     wire+=&event("content_block_stop",json!({"type":"content_block_stop","index":0}));
     wire+=&event("message_delta",json!({"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":8}}));
     wire+=&event("message_stop",json!({"type":"message_stop"}));wire
 }
 async fn retained_private_task(allow_once:bool,lifecycle:Option<&'static str>) {
+    retained_private_task_with_progress(allow_once,lifecycle,false).await;
+}
+#[tokio::test(flavor="multi_thread",worker_threads=4)]
+async fn real_private_task_retains_publication_question_and_truthful_progress() {
+    retained_private_task_with_progress(true,None,true).await;
+}
+fn progress_fixture_streams()->Vec<String> {
+    let pending=json!({"version":1,"plan":[{"id":"inspect-approval","revision":1,"text":"Inspect approval evidence for R02","status":"pending","evidenceIds":[]}],"results":[]});
+    let results=json!({"version":1,"plan":[{"id":"inspect-approval","revision":1,"text":"Inspect approval evidence for R02","status":"pending","evidenceIds":[]}],"results":[
+        {"id":"r-calc","kind":"calculation","text":"12500 + 12500 = 25000 for R01/R03","evidenceIds":[]},
+        {"id":"r-observe","kind":"observation","text":"R01/R03 are a duplicate candidate, not proof of fraud","evidenceIds":["call_fixture"]},
+        {"id":"r-suggest","kind":"suggestion","text":"Ask for approval evidence before acting","evidenceIds":[]},
+        {"id":"r-decision","kind":"decision","text":"Proposed threshold interpretation; basis has not resolved","evidenceIds":[],"basisId":"unverified-policy"},
+        {"id":"r-gap","kind":"gap","text":"R02 approval evidence was not provided","evidenceIds":[]}]});
+    let question=json!({"questions":[{"id":"audit_scope","header":"Scope","question":"Should I report findings without modifying the audit records?","options":[{"label":"Review only","description":"Report observations and gaps"},{"label":"Clarify scope","description":"Wait for more instructions"}]}]});
+    vec![retained_named_tool_stream(pending,"publish_plan","inquello_progress"),retained_tool_stream(),retained_named_tool_stream(question,"question_scope","request_user_input"),retained_named_tool_stream(results,"publish_results","inquello_progress"),audit_text_stream()]
+}
+async fn retained_private_task_with_progress(allow_once:bool,lifecycle:Option<&'static str>,progress:bool) {
     let directory=tempfile::tempdir().expect("governed isolated root");
     let home=directory.path().join("runtime");std::fs::create_dir(&home).expect("runtime home");
     std::fs::write(directory.path().join(".inquello-fictional-audit-session"),b"isolated fixture session\n").expect("explicit owner fixture marker");
@@ -277,14 +308,14 @@ async fn retained_private_task(allow_once:bool,lifecycle:Option<&'static str>) {
     let listed:HooksListResponse=server.read_response(hook_request).await.expect("trusted hook metadata");
     assert_eq!(listed.data[0].hooks.len(),2);
     assert!(listed.data[0].hooks.iter().all(|hook|hook.enabled&&hook.trust_status==HookTrustStatus::Trusted));
-    let mut host=PrivateTaskHost {allow_once,lifecycle,policy:json!({"workspaceId":WORKSPACE,"policyRevision":1,"authorizationEpoch":1,"execution":{"command_rules":[{"prefix":["/bin/sh"],"decision":"prompt"}]}}),notifications:Vec::new(),denied_commands:Vec::new(),bound_thread:None,pending:std::collections::HashMap::new()};
+    let mut host=PrivateTaskHost {answered_questions:0,allow_once,lifecycle,policy:json!({"workspaceId":WORKSPACE,"policyRevision":1,"authorizationEpoch":1,"execution":{"command_rules":[{"prefix":["/bin/sh"],"decision":"prompt"}]}}),notifications:Vec::new(),denied_commands:Vec::new(),bound_thread:None,pending:std::collections::HashMap::new()};
     if lifecycle==Some("running-handler-interrupt") {host.policy["execution"]["command_rules"]=json!([{"prefix":["/bin/sh"],"decision":"prompt"}]);}
     assert!(private_rpc(&mut server,&mut host,"inquello/session/setPrincipal",json!({"principalId":ALICE})).await.get("rpcError").is_none());
     assert_eq!(private_rpc(&mut server,&mut host,"inquello/tasks/bootstrap",json!({"workspaceId":WORKSPACE,"isolatedRoot":directory.path()})).await["accepted"],true);
     assert!(private_rpc(&mut server,&mut host,"inquello/routes/configure",json!({"operationId":uuid::Uuid::new_v4().to_string(),"expectedRevision":0,
         "configuration":{"routeId":"claude-api-key","deployment":"anthropic-direct","model":"claude-sonnet-5-5","apiVersion":"2026-10-21","accountRef":ALICE,"region":null}})).await.get("rpcError").is_none());
-    let fixture=tls_fixture(match lifecycle {Some("failure-before-sampling")=>vec![],Some("interrupt-between-attempts")=>vec![retained_tool_stream()],Some("running-handler-interrupt"|"running-authority-revoke")=>vec![retained_running_tool_stream()],_=>vec![retained_tool_stream(),audit_text_stream()]}).await;
-    assert_eq!(private_rpc(&mut server,&mut host,"inquello/fixture/taskTransport",json!({"workspaceId":WORKSPACE,"configurationRevision":1,"endpoint":fixture.endpoint,"certificate":fixture.cert,"failBeforeSampling":lifecycle==Some("failure-before-sampling")})).await["accepted"],true);
+    let fixture=tls_fixture(if progress {progress_fixture_streams()} else {match lifecycle {Some("failure-before-sampling")=>vec![],Some("interrupt-between-attempts")=>vec![retained_tool_stream()],Some("running-handler-interrupt"|"running-authority-revoke")=>vec![retained_running_tool_stream()],_=>vec![retained_tool_stream(),audit_text_stream()]}}).await;
+    assert_eq!(private_rpc(&mut server,&mut host,"inquello/fixture/taskTransport",json!({"workspaceId":WORKSPACE,"configurationRevision":1,"endpoint":fixture.endpoint,"certificate":fixture.cert,"failBeforeSampling":lifecycle==Some("failure-before-sampling"),"holdAckForQuestion":progress})).await["accepted"],true);
     let policy=host.policy.clone();
     assert_eq!(private_rpc(&mut server,&mut host,"inquello/tasks/preflight",json!({"workspaceId":WORKSPACE,"routeId":"claude-api-key","configurationRevision":1,"workspacePolicy":policy})).await["available"],true);
     assert!(fixture.requests.lock().await.is_empty(),"read-only preflight performs no provider warmup");
@@ -297,7 +328,8 @@ async fn retained_private_task(allow_once:bool,lifecycle:Option<&'static str>) {
     // the only next application action, as after a lost desktop acknowledgement.
     let start_id=server.send_request("inquello/tasks/start",Some(command.clone())).await.expect("submit real start");
     let _lost_ack=private_response(&mut server,&mut host,start_id).await;
-    let deadline=tokio::time::Instant::now()+Duration::from_secs(30);
+    if progress {assert_eq!(host.answered_questions,1,"real bound question must be answered before the held Start acknowledgement");}
+    let deadline=tokio::time::Instant::now()+Duration::from_secs(if progress {60}else{30});
     let mut interrupted_running=false;
     let accepted=loop {
         assert!(tokio::time::Instant::now()<deadline,"retained turn must reach terminal state");
@@ -390,18 +422,39 @@ async fn retained_private_task(allow_once:bool,lifecycle:Option<&'static str>) {
     let retained_json=retained.to_string();assert!(retained_json.contains("INV-100"));assert!(retained_json.contains("R01/R03"));
     let usage=private_rpc(&mut server,&mut host,"inquello/usage/read",json!({"taskId":task})).await;
     let attempts=usage["usage"]["attempts"].as_array().expect("native attempt ledger");
-    assert_eq!(attempts.iter().filter(|a|a["snapshot"]["operation_kind"]=="human-requested-model").count(),2);
+    assert_eq!(attempts.iter().filter(|a|a["snapshot"]["operation_kind"]=="human-requested-model").count(),if progress {5}else{2});
     assert_eq!(attempts.iter().filter(|a|a["snapshot"]["operation_kind"]=="local-tool").count(),usize::from(allow_once));
     assert!(attempts.iter().all(|a|a["snapshot"]["task_id"]==task&&a["snapshot"]["run_id"]==accepted["runId"]));
     assert!(!usage.to_string().contains("INV-100"),"canonical request never leaks into usage");
-    fixture.server.await.expect("exactly two loopback requests, no retry");
-    let requests=fixture.requests.lock().await;assert_eq!(requests.len(),2,"duplicate/lost acknowledgement never sampled another turn");
+    if progress {
+        let policy=host.policy.clone();
+        let projected=private_rpc(&mut server,&mut host,"inquello/tasks/progress",json!({"taskId":task,"workspacePolicy":policy})).await;
+        assert!(projected.get("rpcError").is_none(),"authorized bounded native projection: {projected}");
+        assert_eq!(projected["turnId"],turn_id);assert_eq!(projected["threadId"],thread);assert_eq!(projected["runId"],accepted["runId"]);
+        assert_eq!(projected["status"],"completed");assert_eq!(projected["artifact"],"absent");
+        assert_eq!(projected["plan"][0]["status"],"pending","turn completion is not checklist completion");
+        assert_eq!(host.answered_questions,1,"real question answers through exact runtime request");
+        let results=projected["results"].as_array().expect("retained structured results");
+        for kind in ["calculation","observation","suggestion","decision","gap"] {assert!(results.iter().any(|r|r["kind"]==kind));}
+        assert!(results.iter().all(|r|r["checks"]=="unchecked"&&r["basis"].is_null()),"fixture output never independently checked or professionally approved");
+        assert!(projected["items"].as_array().unwrap().iter().any(|item|item["kind"]=="command"&&item["status"]=="completed"));
+        assert!(!projected.to_string().contains("encrypted_content"));
+        let mut stale=policy;stale["authorizationEpoch"]=json!(2);
+        assert!(private_rpc(&mut server,&mut host,"inquello/tasks/progress",json!({"taskId":task,"workspacePolicy":stale})).await.get("rpcError").is_some());
+    }
+    fixture.server.await.expect("bounded loopback requests, no retry");
+    let requests=fixture.requests.lock().await;assert_eq!(requests.len(),if progress {5}else{2},"duplicate/lost acknowledgement never sampled another turn");
     let tools=requests[0]["tools"].as_array().expect("actual advertised tools");
     let exec=tools.iter().find(|tool|tool["name"]=="exec_command").expect("actual pinned command handler advertised");
     assert_eq!(exec["input_schema"]["properties"]["cmd"]["type"],"string");
     assert!(tools.iter().all(|tool|tool["name"]!="shell" && tool["name"]!="write_stdin"));
     assert!(requests[0]["messages"].to_string().contains("INV-100"));
-    assert!(requests[1]["messages"].to_string().contains("tool_result"),"real denied tool output continued through retained history");
+    assert!(requests[1]["messages"].to_string().contains("tool_result"),"real tool output continued through retained history");
+    if progress {
+        assert!(tools.iter().any(|tool|tool["name"]=="inquello_progress"));
+        assert!(tools.iter().any(|tool|tool["name"]=="request_user_input"));
+        assert!(requests[3]["messages"].to_string().contains("Review only"),"actual question response reaches retained inference history");
+    }
     assert_eq!(host.notifications.iter().filter(|n|n["method"]=="turn/started"&&n.to_string().contains(thread)&&n.to_string().contains(turn_id)).count(),1,"one actual native turn identity notification");
     server.shutdown_gracefully().await.expect("shutdown");
 }

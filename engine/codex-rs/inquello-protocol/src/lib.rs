@@ -39,3 +39,5 @@ pub const PROTOCOL_MAJOR: u32 = 1;
 pub const SCHEMA_VERSION: u32 = 1;
 
 pub mod inference;
+
+pub mod progress;

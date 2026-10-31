@@ -186,7 +186,7 @@ const TAB_SETTLE_MS = 50;
 
 /** The tree `window.inquello` must expose, as `describe` renders it. */
 export const EXPECTED_BRIDGE_TREE = {
-  tasks: {preflight:'function',start:'function',reconcile:'function',onSessionChanged:'function'},
+  tasks: {preflight:'function',start:'function',reconcile:'function',progress:'function',answer:'function',onProgressChanged:'function',onSessionChanged:'function'},
   usage: { forTask: 'function', set: 'function', onChanged: 'function' },
   environments: { forTask: 'function', onChanged: 'function' },
   routes: { list: 'function', configure: 'function', forTask: 'function', select: 'function', onChanged: 'function' },
