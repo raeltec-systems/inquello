@@ -898,3 +898,33 @@ a.iq-nav-row:hover {
 .iq-request-receipt > summary, .iq-tool-guidance > summary { cursor: pointer; padding-block: var(--space-1); }
 .iq-request-receipt > summary:focus-visible { outline: 2px solid var(--blue-600); outline-offset: 3px; }
 .iq-request-receipt h2 { font: var(--type-ui); }
+
+/* Idle-home polish based on the desktop reference; no task/route behavior changes. */
+.iq-shell-content:has(> [data-thread-placeholder='none']) {
+  min-height: 100%; display: flex; align-items: center; justify-content: center;
+}
+[data-thread-placeholder='none'] {
+  width: 100%; padding: var(--space-6) var(--space-3); border: 0;
+  background: transparent; text-align: center;
+}
+[data-thread-placeholder='none'] .iq-thread-placeholder-title {
+  font: var(--type-body); font-size: clamp(1.5rem, 2.4vw, 2rem);
+  font-weight: 400; line-height: 1.3; margin-bottom: var(--space-3);
+}
+[data-thread-placeholder='none'] .iq-thread-placeholder-body {
+  max-width: 32rem; margin-inline: auto; font: var(--type-ui); line-height: 1.6;
+}
+.iq-header[data-header-empty] .iq-header-title {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
+.iq-header-context dt, .iq-sidebar-heading {
+  font: var(--type-caption); letter-spacing: normal; text-transform: none;
+}
+.iq-sidebar-heading { font-weight: 500; }
+.iq-composer { padding: var(--space-3); }
+.iq-composer-actions .iq-note { max-width: 25rem; line-height: 1.4; }
+@media (max-width: 700px) {
+  [data-thread-placeholder='none'] { padding-inline: 0; }
+  .iq-composer-hint { flex-basis: auto; }
+}

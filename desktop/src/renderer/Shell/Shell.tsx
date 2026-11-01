@@ -724,7 +724,7 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
                 />
               ) : !showStart && openTaskId && acceptedFor(openTaskId) ? <AcceptedRequest accepted={acceptedFor(openTaskId)!}/> : !showStart ? (
                 <div className="iq-thread-placeholder" data-thread-placeholder="none">
-                  <p className="iq-thread-placeholder-title">No Task open.</p>
+                  <p className="iq-thread-placeholder-title">What should we work on?</p>
                   <p className="iq-thread-placeholder-body">Choose a Task in the Sidebar, or start one with New thread.</p>
                 </div>
               ) : null}

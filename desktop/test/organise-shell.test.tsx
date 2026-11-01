@@ -306,7 +306,7 @@ it('removes cached private request and selection when Workspace membership disap
  main.bridge.getWorkspaces!.mockResolvedValue({signedIn:true,sharedService:'available',workspaces:[{workspaceId:WORKSPACE,name:'Synthetic Audit Co',source:'service'}],engagementCreation:{enabled:true}});
  mounted.rerender(<Shell active onShowSpecimen={()=>undefined}/>);
  await waitFor(()=>expect(document.querySelector('[data-workspace-selector]')?.getAttribute('data-workspace-id')).toBe(WORKSPACE));
- expect(screen.getByText('No Task open.')).toBeTruthy();
+ expect(screen.getByText('What should we work on?')).toBeTruthy();
  await user.click(await screen.findByRole('link',{name:'Private task'}));
  expect(screen.queryByRole('region',{name:'Accepted request'})).toBeNull();
 });
@@ -385,7 +385,7 @@ it('suppresses delayed discovery and Start acknowledgement after Workspace revoc
  main.bridge.getWorkspaces!.mockResolvedValue({signedIn:true,sharedService:'available',workspaces:[{workspaceId:WORKSPACE,name:'Synthetic Audit Co',source:'service'}],engagementCreation:{enabled:true}});
  mounted.rerender(<Shell active onShowSpecimen={()=>undefined}/>);
  await waitFor(()=>expect(document.querySelector('[data-workspace-selector]')?.getAttribute('data-workspace-id')).toBe(WORKSPACE));
- expect(screen.getByText('No Task open.')).toBeTruthy();
+ expect(screen.getByText('What should we work on?')).toBeTruthy();
  await user.click(await screen.findByRole('link',{name:'Private task'}));
  expect(screen.queryByRole('region',{name:'Accepted request'})).toBeNull();
 });

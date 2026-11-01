@@ -25,7 +25,7 @@ export function periodText(engagement: EngagementItem | null): string | null {
 export function Header({ task, engagement, workspace }: HeaderProps): ReactElement {
   const period = periodText(engagement);
   return (
-    <header className="iq-header" data-header>
+    <header className="iq-header" data-header data-header-empty={!task || undefined}>
       <div className="iq-header-main">
         <span className="iq-header-title" data-header-title>
           {task ? task.title : 'Inquello'}
