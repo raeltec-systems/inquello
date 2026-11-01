@@ -30,3 +30,18 @@ All changes stay on feat/epic-1-secure-private-desktop with regular local commit
 - Focused desktop regression: 289 tests across 8 files passed, including explicit follow-up, current-scope settings, security bridge, static catalog and data-identity transition cases. The first run exposed a missing explicit event-channel allowlist entry in its security assertion; the named channel was added and the complete focused set rerun.
 - Independent review found the alternate data-identity callback gap, now repaired; no other must-fix issue found in reviewed settings/static-catalog paths.
 - Full desktop validation and the rebuilt native 62-case inventory remain in progress; these checks do not establish Epic acceptance.
+
+## Runtime checkpoint (13:03 UTC)
+- Focused native: completed follow-up 2/2, Stop during steering 2/2, peer-private lifecycle 2/2, progress continuity 2/2 passed. Both cache cases still fail: running command is emitted as a transient notification but absent from the durable index used by progress. Do not count cache as passed.
+- Broad desktop run (log historically named desktop-targeted.log because the pnpm separator did not apply the intended filter) completed with 1,617 passing tests and 18 platform skips. One suite failed in its afterAll WSL cleanup hook; no test assertion failed. A separately explicit focused run passed 289 tests, including the new data-identity file not present when broad discovery began.
+- Cleanup diagnosis: discoverScopes performs ACL mutation on all profile directories before ownership filtering. A parallel vanished profile caused FileNotFound. Fix under implementation: discovery must be read-only and exact selected-scope validation must fail closed. No manual ACL widening/deletion is being used.
+- First repaired Electron run completed all 16 reports: 7 passed, 9 failed (organise, states, shell-layout, composer, policy, tool-bounds, permissions, capabilities, environments). Handshake passed; external model-refresh matches were zero. UI stale observations and authority refresh latency remain open.
+- A fresh isolated Electron attempt was started after other checks ended, then deliberately stopped (verified owned wrapper PID 24520 and descendants only) as soon as the broad ACL mutation bug was confirmed; no acceptance result is claimed for that aborted run. Existing profiles/services were not manually altered. Its artifacts remain preserved.
+- Next: verify scoped discovery repair, isolated Electron rerun, and bounded current-run live command projection/cache coverage. Full native inventory and visual owner review remain pending.
+
+## Scoped cleanup repair (13:12 UTC)
+- WSL profile discovery is now read-only; exact forScope lookup no longer re-enumerates peers. Selected scope ownership/privacy and redirect/hardlink checks remain fail-closed.
+- Locator reads use an 8 KiB + 1 byte bounded buffer with pre/open/post identity, size and modification checks; overflow/replacement is rejected.
+- 19 mocked scope/race/corruption cases passed; fresh desktop production build passed.
+- Real WSL integration rerun passed both execution-boundary/OS-transition tests and its cleanup hook (60 seconds), including the existing 13-case executor boundary matrix. No manual profile deletion or ACL repair was performed.
+- This repairs the failed broad-run cleanup hook; the broad suite still requires a final rerun at the completed candidate. Native live-progress repair remains in development.
