@@ -42,7 +42,15 @@ unmet gates until these commands pass; authored source is not acceptance evidenc
 The same private-stdio, debug-only `inquello/fixture/messagesTurn` dispatcher accepts
 `scenario: "usage-limit"` with phases `prepare`, `refuse`, and `clear`. No production
 protocol/preload method was added. It is scoped to one creator-private Task already
-explicitly configured for the synthetic Codex model. Preparation refuses any cached
+explicitly configured for the synthetic Codex model. Prepare/refuse require trusted
+native `synthetic` content provenance and an exact service-backed execution policy:
+`automatic_permission_review: true` plus a single `/usr/bin/true` prompt rule.
+The handler does not mutate policy or classify an existing draft. The fixture
+creates a new Task through the authorized isolated bootstrap, pinned loopback
+`taskTransport` with `failBeforeSampling: true`, and ordinary `tasks/start`.
+Native reservation establishes its provenance; the retained first turn must fail
+before any provider request. A configured but unclassified draft is explicitly
+rejected. Preparation refuses any cached
 Codex authentication or existing bound Codex credential. Only synthetic capability
 and quota observations are installed; no provider key is installed.
 
@@ -59,7 +67,10 @@ its override/trap state.
 harmless local command while the model quota is exhausted, and verifies its retained
 completed history beside the refused review.
 
-The seeded desktop `probeEnvironments` now uses this same scenario, saves defaults
+The seeded desktop launcher runs the normal default-off environment journey and
+a separate quota-only Electron journey with its own service-seeded Workspace,
+profile and pinned loopback TLS observer. Both reports are required. `probeQuota`
+uses this same canonical native Task setup and scenario, saves defaults
 through the actual mounted usage controls, invokes the native refusal, calls the
 normal settled-work notification function, and asserts the mounted exhausted-limit
 explanation/refused attempt plus all retained local-tool history. It always clears
@@ -68,7 +79,8 @@ separately built **debug inference-fixtures binary**, selected via existing
 `INQUELLO_APP_SERVER`; a default binary rejects the scenario, not silently skips it.
 Use the existing isolated seeded identity topology and temporary smoke data roots.
 Never package the fixture binary. No real credentials or paid provider calls are
-required or allowed. This combined source is authored but unrun in the partial
+required or allowed. This Linux-only native test alignment is source-authored,
+not a claimed Linux execution pass from Windows. This combined source is authored but unrun in the partial
 workspace without native binaries/toolchain/seeded topology.
 
 ## Story 1.25 actual retained private Task child (authored, unrun)

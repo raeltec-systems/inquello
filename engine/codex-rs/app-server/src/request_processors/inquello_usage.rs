@@ -616,6 +616,31 @@ fn checked_account(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    #[test]
+    fn fixture_usage_requires_native_synthetic_and_exact_authoritative_policy() {
+        let expected = json!({"automatic_permission_review":true,"command_rules":[{"prefix":["/usr/bin/true"],"decision":"prompt"}]});
+        assert!(fixture_usage_authority_matches(
+            Some("synthetic"),
+            Some(&expected)
+        ));
+        for tier in [None, Some("real"), Some("unknown")] {
+            assert!(!fixture_usage_authority_matches(tier, Some(&expected)));
+        }
+        for execution in [
+            None,
+            Some(json!({})),
+            Some(json!({"automatic_permission_review":false})),
+            Some(
+                json!({"automatic_permission_review":true,"command_rules":[{"prefix":["/usr/bin/true"],"decision":"allow"}]}),
+            ),
+        ] {
+            assert!(!fixture_usage_authority_matches(
+                Some("synthetic"),
+                execution.as_ref()
+            ));
+        }
+    }
     #[test]
     fn account_bound_explicit_permission_only_no_reset_recovery() {
         for allowed in [serde_json::Value::Null, json!(false), json!(true)] {
@@ -641,13 +666,24 @@ fn fixture_quota() -> GetAccountRateLimitsResponse {
     serde_json::from_value(json!({"ordinaryUsageAllowed":false,"accountId":"synthetic-fixture-account","rateLimits":{"primary":{"usedPercent":100,"windowDurationMins":60,"resetsAt":1}}})).expect("fixed synthetic quota contract")
 }
 #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+fn fixture_usage_authority_matches(
+    tier: Option<&str>,
+    execution: Option<&serde_json::Value>,
+) -> bool {
+    tier == Some("synthetic")
+        && execution
+            == Some(
+                &json!({"automatic_permission_review":true,"command_rules":[{"prefix":["/usr/bin/true"],"decision":"prompt"}]}),
+            )
+}
+#[cfg(all(feature = "inference-fixtures", debug_assertions))]
 impl InquelloRequestProcessor {
     pub(crate) async fn fixture_usage_limit(
         &self,
         connection: ConnectionId,
         task: &str,
         phase: &str,
-        mut policy: InquelloWorkspaceExecutionPolicy,
+        policy: InquelloWorkspaceExecutionPolicy,
         device: DeviceRequirements,
         user: UserConfig,
     ) -> Result<serde_json::Value, JSONRPCErrorError> {
@@ -686,6 +722,15 @@ impl InquelloRequestProcessor {
             || selected.configuration.model() != "fixture-model-20261030"
             || policy.workspace_id != route.workspace_id.to_string()
         {
+            return Err(invalid());
+        }
+        // A fixture may not classify an existing draft or rewrite service authority.
+        // Use a genuine native synthetic lifecycle Task in a dedicated seeded workspace.
+        let tier = store
+            .task_data_tier(actor.principal_id, task)
+            .await
+            .map_err(domain_error)?;
+        if !fixture_usage_authority_matches(tier.as_deref(), policy.execution.as_ref()) {
             return Err(invalid());
         }
         if phase == "prepare" {
@@ -736,10 +781,8 @@ impl InquelloRequestProcessor {
         let before = usage::task_usage(&store, actor, task)
             .await
             .map_err(domain_error)?;
-        // Fixed permission-only action. This fixture never runs it or applies a verdict.
-        policy.execution = Some(
-            json!({"automatic_permission_review":true,"command_rules":[{"prefix":["/usr/bin/true"],"decision":"prompt"}]}),
-        );
+        // Fixed permission-only action under unchanged service-backed authority.
+        // This fixture never runs it or applies a verdict.
         let request_id = uuid::Uuid::new_v4().to_string();
         self.permissions_request(
             connection,

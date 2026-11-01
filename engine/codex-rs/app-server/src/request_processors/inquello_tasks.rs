@@ -3020,8 +3020,22 @@ impl InquelloRequestProcessor {
                 "Live turn ordering exceeds its safe bound",
             ));
         }
-        let order: Vec<String> = items.iter().map(|item| item.id().to_owned()).collect();
+        // The presentation builder's legacy message IDs are not the canonical
+        // IDs retained by the store. Join only with actual lifecycle event IDs.
+        let order = state
+            .canonical_active_order(turn)
+            .ok_or_else(|| refusal("history_unavailable", "Canonical live ordering unavailable"))?
+            .to_vec();
         let entries = bounded_live_commands(turn, items)?;
+        if entries
+            .iter()
+            .any(|entry| !order.iter().any(|id| id == entry.item.id()))
+        {
+            return Err(refusal(
+                "stale_snapshot",
+                "Canonical live ordering has not caught up",
+            ));
+        }
         use sha2::{Digest, Sha256};
         let identity = serde_json::to_vec(&(
             &run.run_id,
@@ -3361,14 +3375,22 @@ impl InquelloRequestProcessor {
         let final_policy_current = self
             .task_read_policy_current(actor.principal_id, &params.workspace_policy)
             .await;
-        if live_progress_revision(&final_durable_revision, final_live.as_ref()) != revision
-            || !final_policy_current
-            || session.cancellation.is_cancelled()
-            || self.actor(connection)? != actor
-        {
+        if session.cancellation.is_cancelled() || self.actor(connection)? != actor {
+            return Err(refusal(
+                "session_changed",
+                "Private session changed before progress disclosure",
+            ));
+        }
+        if !final_policy_current {
+            return Err(refusal(
+                "stale",
+                "Workspace policy changed before progress disclosure",
+            ));
+        }
+        if live_progress_revision(&final_durable_revision, final_live.as_ref()) != revision {
             return Err(refusal(
                 "stale_snapshot",
-                "Live or retained output changed before disclosure",
+                "Live or retained output changed before progress disclosure",
             ));
         }
         let mut snapshot = display_progress_page(&canonical, requested);
@@ -4405,6 +4427,33 @@ mod progress_tests {
         assert_ne!(
             live_progress_revision("same", Some(&replacement)),
             "same:live:runtime-listener-1-running"
+        );
+    }
+
+    #[test]
+    fn live_merge_requires_canonical_user_identity_and_preserves_start_order() {
+        let user_id = "11111111-1111-4111-8111-111111111111";
+        let user = entry(
+            json!({"type":"userMessage","id":user_id,"clientId":null,
+            "content":[{"type":"text","text":"Fictional input","text_elements":[]}]}),
+            true,
+        );
+        let mut live = LiveProgressCommands {
+            runtime: None,
+            fingerprint: "live".into(),
+            turn: "turn-1".into(),
+            order: vec!["item-1".into(), "cmd-1".into()],
+            entries: bounded_live_commands("turn-1", &[command("inProgress", None).item]).unwrap(),
+        };
+        assert!(
+            merge_live_commands(vec![user.clone()], Some(&live)).is_err(),
+            "legacy presentation IDs cannot be substituted for retained IDs"
+        );
+        live.order[0] = user_id.into();
+        let rows = merge_live_commands(vec![user], Some(&live)).unwrap();
+        assert_eq!(
+            rows.iter().map(|entry| entry.item.id()).collect::<Vec<_>>(),
+            vec![user_id, "cmd-1"]
         );
     }
 

@@ -258,6 +258,14 @@ async fn usage_limit_fixture_refuses_at_native_boundary_and_preserves_local_work
     let directory = tempfile::tempdir().expect("directory");
     let home = directory.path().join("runtime");
     std::fs::create_dir(&home).expect("home");
+    std::fs::write(
+        directory.path().join(".inquello-fictional-audit-session"),
+        b"isolated quota fixture",
+    )
+    .expect("owner fixture marker");
+    let catalog = home.join("models.json");
+    std::fs::write(&catalog,json!({"models":[{"slug":"claude-sonnet-5-5","display_name":"Fixture Messages model","description":"Retained quota wiring fixture","default_reasoning_level":null,"supported_reasoning_levels":[],"shell_type":"unified_exec","visibility":"list","supported_in_api":true,"priority":1,"upgrade":null,"model_messages":null,"support_verbosity":false,"default_verbosity":null,"apply_patch_tool_type":null,"truncation_policy":{"mode":"bytes","limit":10000},"supports_image_detail_original":false,"context_window":32000,"auto_compact_token_limit":null,"experimental_supported_tools":[]}]}).to_string()).expect("fixture catalog");
+    std::fs::write(home.join("config.toml"),format!("model_catalog_json = {}\ncli_auth_credentials_store = \"keyring\"\n[features]\nnetwork_proxy = true\n",serde_json::to_string(&catalog).expect("catalog path"))).expect("offline fixture config");
     let database = directory.path().join("working.sqlite");
     let binary = std::env::var_os("INQUELLO_FIXTURE_APP_SERVER_BIN")
         .map(std::path::PathBuf::from)
@@ -274,67 +282,170 @@ async fn usage_limit_fixture_refuses_at_native_boundary_and_preserves_local_work
         .build_initialized()
         .await
         .expect("actual fixture child");
-    rpc(
+    let policy = json!({"workspaceId":WORKSPACE,"policyRevision":1,"authorizationEpoch":1,"execution":{"automatic_permission_review":true,"command_rules":[{"prefix":["/usr/bin/true"],"decision":"prompt"}]}});
+    let mut host = PrivateTaskHost {
+        authority_context: json!({}),
+        authority_callback: None,
+        revoke_callback: None,
+        authority_available: true,
+        workspace_id: WORKSPACE.into(),
+        answered_questions: 0,
+        allow_once: false,
+        lifecycle: Some("failure-before-sampling"),
+        policy: policy.clone(),
+        notifications: Vec::new(),
+        denied_commands: Vec::new(),
+        bound_thread: None,
+        pending: std::collections::HashMap::new(),
+    };
+    assert!(
+        private_rpc(
+            &mut server,
+            &mut host,
+            "inquello/session/setPrincipal",
+            json!({"principalId":ALICE})
+        )
+        .await
+        .get("rpcError")
+        .is_none()
+    );
+    assert_eq!(
+        private_rpc(
+            &mut server,
+            &mut host,
+            "inquello/tasks/bootstrap",
+            json!({"workspaceId":WORKSPACE,"isolatedRoot":directory.path()})
+        )
+        .await["accepted"],
+        true
+    );
+    assert!(private_rpc(&mut server,&mut host,"inquello/routes/configure",json!({"operationId":"usage-configure","expectedRevision":0,"configuration":{"routeId":"codex-responses","deployment":"openai-api","model":"fixture-model-20261030","apiVersion":"responses-v1","accountRef":ALICE,"region":null}})).await.get("rpcError").is_none());
+    // A caller-created draft is NOT synthetic content even under the correct policy.
+    let draft=private_rpc(&mut server,&mut host,"inquello/task/create",json!({"operationId":"usage-draft","expectedRevision":0,"workspaceId":WORKSPACE,"engagementId":null,"folderId":null,"title":"Unclassified quota draft"})).await;
+    let draft_id = draft["task"]["taskId"].as_str().expect("draft");
+    assert!(private_rpc(&mut server,&mut host,"inquello/routes/task/set",json!({"operationId":"usage-draft-select","expectedRevision":0,"taskId":draft_id,"routeId":"codex-responses","configurationRevision":1})).await.get("rpcError").is_none());
+    let draft_refusal=private_rpc(&mut server,&mut host,"inquello/fixture/messagesTurn",json!({"scenario":"usage-limit","phase":"prepare","taskId":draft_id,"workspacePolicy":policy})).await;
+    assert_eq!(
+        draft_refusal["rpcError"]["data"]["inquello"]["kind"],
+        "fixture_unavailable"
+    );
+    assert!(private_rpc(&mut server,&mut host,"inquello/routes/configure",json!({"operationId":"usage-claude","expectedRevision":0,"configuration":{"routeId":"claude-api-key","deployment":"anthropic-direct","model":"claude-sonnet-5-5","apiVersion":"2026-10-21","accountRef":ALICE,"region":null}})).await.get("rpcError").is_none());
+    let mut fixture = tls_fixture(vec![]).await;
+    assert_eq!(private_rpc(&mut server,&mut host,"inquello/fixture/taskTransport",json!({"workspaceId":WORKSPACE,"configurationRevision":1,"routeId":"claude-api-key","endpoint":fixture.endpoint,"certificate":fixture.cert,"failBeforeSampling":true})).await["accepted"],true);
+    let operation = uuid::Uuid::new_v4().to_string();
+    let mut run=private_rpc(&mut server,&mut host,"inquello/tasks/start",json!({"operationId":operation,"workspaceId":WORKSPACE,"engagementId":null,"folderId":null,"request":"Fictional quota validation only. No customer data.","routeId":"claude-api-key","configurationRevision":1,"reasoning":"default","speed":"default","workspacePolicy":policy})).await;
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
+    while run["status"] != "failed" {
+        assert!(
+            run.get("rpcError").is_none(),
+            "native synthetic start must remain authorized"
+        );
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "native pre-sampling failure deadline"
+        );
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        run = private_rpc(
+            &mut server,
+            &mut host,
+            "inquello/tasks/reconcile",
+            json!({"operationId":operation}),
+        )
+        .await;
+    }
+    let task = run["taskId"]
+        .as_str()
+        .expect("native classified Task")
+        .to_owned();
+    assert!(run["threadId"].is_string());
+    assert!(fixture.requests.lock().await.is_empty());
+    let initial = private_rpc(
         &mut server,
-        "inquello/session/setPrincipal",
-        json!({"principalId":ALICE}),
+        &mut host,
+        "inquello/usage/read",
+        json!({"taskId":task}),
     )
     .await;
-    let created=rpc(&mut server,"inquello/task/create",json!({"operationId":"usage-create","expectedRevision":0,"workspaceId":WORKSPACE,"engagementId":null,"folderId":null,"title":"Synthetic quota fixture"})).await;
-    let task = created["task"]["taskId"].as_str().expect("Task").to_owned();
-    rpc(&mut server,"inquello/routes/configure",json!({"operationId":"usage-configure","expectedRevision":0,"configuration":{"routeId":"codex-responses","deployment":"openai-api","model":"fixture-model-20261030","apiVersion":"responses-v1","accountRef":ALICE,"region":null}})).await;
-    rpc(&mut server,"inquello/routes/task/set",json!({"operationId":"usage-select","expectedRevision":0,"taskId":task,"routeId":"codex-responses","configurationRevision":1})).await;
-    let policy = json!({"workspaceId":WORKSPACE,"policyRevision":1,"authorizationEpoch":1,"execution":{"command_rules":[{"prefix":["/usr/bin/true"],"decision":"allow"}]}});
+    let initial_attempts = initial["usage"]["attempts"]
+        .as_array()
+        .expect("initial native history")
+        .clone();
+    assert!(private_rpc(&mut server,&mut host,"inquello/routes/task/set",json!({"operationId":"usage-select","expectedRevision":1,"taskId":task,"routeId":"codex-responses","configurationRevision":1})).await.get("rpcError").is_none());
     let scenario = |phase: &str| json!({"scenario":"usage-limit","phase":phase,"taskId":task,"workspacePolicy":policy});
     assert_eq!(
-        rpc(
+        private_rpc(
             &mut server,
+            &mut host,
             "inquello/fixture/messagesTurn",
             scenario("prepare")
         )
         .await["providerCalls"],
         0
     );
-    rpc(&mut server,"inquello/usage/set",json!({"operationId":"usage-defaults","expectedRevision":0,"routeRevision":1,"taskId":task,"reasoning":"default","speed":"default"})).await;
+    assert!(private_rpc(&mut server,&mut host,"inquello/usage/set",json!({"operationId":"usage-defaults","expectedRevision":1,"routeRevision":2,"taskId":task,"reasoning":"default","speed":"default"})).await.get("rpcError").is_none());
     let folder = directory.path().join("tasks").join(&task);
-    std::fs::create_dir_all(folder.join("output")).expect("folder");
-    let tool=rpc(&mut server,"inquello/tools/exec",json!({"workspacePolicy":policy,"taskId":task,"taskFolder":folder,"command":["/usr/bin/true"],"timeoutMs":5000})).await;
+    let tool=private_rpc(&mut server,&mut host,"inquello/tools/exec",json!({"workspacePolicy":policy,"taskId":task,"taskFolder":folder,"command":["/bin/sh","-c","exit 0"],"timeoutMs":5000})).await;
     assert_eq!(
         tool["exitCode"], 0,
-        "local tool is not blocked by model quota"
+        "local work is not blocked by exhausted model quota"
     );
-    let refused = rpc(
+    let before = private_rpc(
         &mut server,
+        &mut host,
+        "inquello/usage/read",
+        json!({"taskId":task}),
+    )
+    .await;
+    let retained = before["usage"]["attempts"]
+        .as_array()
+        .expect("retained native history")
+        .clone();
+    assert_eq!(retained.len(), initial_attempts.len() + 1);
+    assert!(initial_attempts.iter().all(|old| retained.contains(old)));
+    assert!(retained.iter().any(
+        |row| row["status"] == "completed" && row["snapshot"]["operation_kind"] == "local-tool"
+    ));
+    let refused = private_rpc(
+        &mut server,
+        &mut host,
         "inquello/fixture/messagesTurn",
         scenario("refuse"),
     )
     .await;
     assert_eq!(refused["refused"], true);
     assert_eq!(refused["providerCalls"], 0);
-    assert_eq!(refused["retainedAttempts"], 1);
-    let usage = rpc(&mut server, "inquello/usage/read", json!({"taskId":task})).await;
+    assert_eq!(refused["retainedAttempts"], json!(retained.len()));
+    let usage = private_rpc(
+        &mut server,
+        &mut host,
+        "inquello/usage/read",
+        json!({"taskId":task}),
+    )
+    .await;
     assert_eq!(usage["limits"]["status"], "exhausted");
-    let attempts = usage["usage"]["attempts"].as_array().expect("history");
-    assert_eq!(attempts.len(), 2);
-    assert!(
-        attempts
-            .iter()
-            .any(|a| a["status"] == "completed" && a["snapshot"]["operation_kind"] == "local-tool")
-    );
-    assert!(
-        attempts
-            .iter()
-            .any(|a| a["status"] == "refused" && a["usage"]["input_tokens"].is_null())
-    );
+    let attempts = usage["usage"]["attempts"]
+        .as_array()
+        .expect("authorized history after refusal");
+    assert_eq!(attempts.len(), retained.len() + 1);
+    assert!(retained.iter().all(|old| attempts.contains(old)));
+    assert!(attempts.iter().any(|a| a["status"] == "refused"
+        && a["snapshot"]["operation_kind"] == "automated-permission-review"
+        && a["usage"]["input_tokens"].is_null()));
     assert_eq!(
-        rpc(
+        private_rpc(
             &mut server,
+            &mut host,
             "inquello/fixture/messagesTurn",
             scenario("clear")
         )
         .await["accepted"],
         true
     );
+    assert!(
+        fixture.requests.lock().await.is_empty(),
+        "no model dispatch, including initial retained start"
+    );
+    fixture.stop().await;
     server.shutdown_gracefully().await.expect("shutdown");
 }
 

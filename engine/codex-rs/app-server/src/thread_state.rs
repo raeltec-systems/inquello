@@ -100,6 +100,75 @@ pub(crate) struct TurnSummary {
     pub(crate) last_agent_message: Option<ThreadItem>,
 }
 
+const LIVE_CANONICAL_ORDER_LIMIT: usize = 4096;
+const LIVE_CANONICAL_ID_BYTES: usize = 128;
+
+/// The presentation history uses synthetic item-N message IDs. Private progress
+/// must instead join retained rows to IDs observed in canonical lifecycle events.
+#[derive(Default)]
+struct CanonicalLiveOrder {
+    turn: Option<String>,
+    ids: Vec<String>,
+    overflowed: bool,
+}
+
+impl CanonicalLiveOrder {
+    fn begin(&mut self, turn: &str) {
+        *self = Self::default();
+        if turn.is_empty() || turn.len() > LIVE_CANONICAL_ID_BYTES {
+            self.overflowed = true;
+        } else {
+            self.turn = Some(turn.to_owned());
+        }
+    }
+
+    fn record(&mut self, turn: &str, id: &str) {
+        if self.turn.as_deref() != Some(turn) || self.overflowed {
+            return;
+        }
+        if id.is_empty() || id.len() > LIVE_CANONICAL_ID_BYTES {
+            self.overflowed = true;
+            self.ids.clear();
+        } else if !self.ids.iter().any(|existing| existing == id) {
+            if self.ids.len() == LIVE_CANONICAL_ORDER_LIMIT {
+                self.overflowed = true;
+                self.ids.clear();
+            } else {
+                self.ids.push(id.to_owned());
+            }
+        }
+    }
+
+    fn for_turn(&self, turn: &str) -> Option<&[String]> {
+        (!self.overflowed && self.turn.as_deref() == Some(turn)).then_some(self.ids.as_slice())
+    }
+}
+
+/// Borrow before applying the bound; do not clone arbitrary model-supplied IDs.
+fn canonical_item_id(item: &CoreTurnItem) -> &str {
+    match item {
+        CoreTurnItem::UserMessage(item) => &item.id,
+        CoreTurnItem::FunctionCallOutput(item) => &item.id,
+        CoreTurnItem::HookPrompt(item) => &item.id,
+        CoreTurnItem::AgentMessage(item) => &item.id,
+        CoreTurnItem::Plan(item) => &item.id,
+        CoreTurnItem::Reasoning(item) => &item.id,
+        CoreTurnItem::CommandExecution(item) => &item.id,
+        CoreTurnItem::DynamicToolCall(item) => &item.id,
+        CoreTurnItem::CollabAgentToolCall(item) => &item.id,
+        CoreTurnItem::SubAgentActivity(item) => &item.id,
+        CoreTurnItem::WebSearch(item) => &item.id,
+        CoreTurnItem::ImageView(item) => &item.id,
+        CoreTurnItem::Extension(item) => item.id(),
+        CoreTurnItem::ImageGeneration(item) => &item.id,
+        CoreTurnItem::EnteredReviewMode(item) => &item.id,
+        CoreTurnItem::ExitedReviewMode(item) => &item.id,
+        CoreTurnItem::FileChange(item) => &item.id,
+        CoreTurnItem::McpToolCall(item) => &item.id,
+        CoreTurnItem::ContextCompaction(item) => &item.id,
+    }
+}
+
 #[derive(Default)]
 pub(crate) struct ThreadState {
     goal_resume_lock: Arc<Mutex<()>>,
@@ -115,11 +184,38 @@ pub(crate) struct ThreadState {
     last_thread_settings: Option<ThreadSettings>,
     listener_command_tx: Option<mpsc::UnboundedSender<ThreadListenerCommand>>,
     current_turn_history: ThreadHistoryBuilder,
+    canonical_live_order: CanonicalLiveOrder,
     listener_thread: Option<Weak<CodexThread>>,
     watch_registration: WatchRegistration,
 }
 
+fn listener_source_is_current<T>(
+    current_generation: u64,
+    source_generation: u64,
+    current_source: Option<&Weak<T>>,
+    source: &Arc<T>,
+) -> bool {
+    current_generation == source_generation
+        && current_source
+            .and_then(Weak::upgrade)
+            .is_some_and(|current| Arc::ptr_eq(&current, source))
+}
+
 impl ThreadState {
+    /// Caller holds the state mutex across this check and event tracking.
+    pub(crate) fn accepts_listener_event(
+        &self,
+        source_generation: u64,
+        source: &Arc<CodexThread>,
+    ) -> bool {
+        listener_source_is_current(
+            self.listener_generation,
+            source_generation,
+            self.listener_thread.as_ref(),
+            source,
+        )
+    }
+
     pub(crate) fn listener_matches(&self, conversation: &Arc<CodexThread>) -> bool {
         self.listener_thread
             .as_ref()
@@ -138,6 +234,7 @@ impl ThreadState {
             let _ = previous.send(());
         }
         self.listener_generation = self.listener_generation.wrapping_add(1);
+        self.canonical_live_order = CanonicalLiveOrder::default();
         self.last_thread_settings = Some(thread_settings_baseline);
         let (listener_command_tx, listener_command_rx) = mpsc::unbounded_channel();
         self.listener_command_tx = Some(listener_command_tx);
@@ -153,6 +250,7 @@ impl ThreadState {
         self.shutdown_drain_waiter = None;
         self.listener_command_tx = None;
         self.current_turn_history.reset();
+        self.canonical_live_order = CanonicalLiveOrder::default();
         self.listener_thread = None;
         self.watch_registration = WatchRegistration::default();
     }
@@ -172,6 +270,10 @@ impl ThreadState {
         &self,
     ) -> Option<(&str, &codex_app_server_protocol::TurnStatus, &[ThreadItem])> {
         self.current_turn_history.active_turn_items()
+    }
+
+    pub(crate) fn canonical_active_order(&self, turn: &str) -> Option<&[String]> {
+        self.canonical_live_order.for_turn(turn)
     }
 
     pub(crate) fn active_turn_snapshot(&self) -> Option<Turn> {
@@ -206,6 +308,27 @@ impl ThreadState {
     }
 
     pub(crate) fn track_current_turn_event(&mut self, event_turn_id: &str, event: &EventMsg) {
+        match event {
+            EventMsg::TurnStarted(payload) => self.canonical_live_order.begin(&payload.turn_id),
+            EventMsg::ItemStarted(payload) => self
+                .canonical_live_order
+                .record(&payload.turn_id, canonical_item_id(&payload.item)),
+            EventMsg::ItemCompleted(payload) => self
+                .canonical_live_order
+                .record(&payload.turn_id, canonical_item_id(&payload.item)),
+            EventMsg::ExecCommandBegin(payload) => self
+                .canonical_live_order
+                .record(&payload.turn_id, &payload.call_id),
+            EventMsg::ExecCommandEnd(payload) => self
+                .canonical_live_order
+                .record(&payload.turn_id, &payload.call_id),
+            EventMsg::TurnComplete(_) | EventMsg::TurnAborted(_)
+                if self.canonical_live_order.turn.as_deref() == Some(event_turn_id) =>
+            {
+                self.canonical_live_order = CanonicalLiveOrder::default();
+            }
+            _ => {}
+        }
         if let EventMsg::TurnStarted(payload) = event {
             self.turn_summary.started_at = payload.started_at;
         }
@@ -278,6 +401,203 @@ mod tests {
     use codex_protocol::config_types::Settings;
     use codex_utils_absolute_path::AbsolutePathBuf;
     use pretty_assertions::assert_eq;
+
+    #[tokio::test]
+    async fn listener_source_rejects_event_waiting_across_replacement() {
+        let old_source = Arc::new(());
+        let new_source = Arc::new(());
+        let state = Arc::new(Mutex::new((
+            7_u64,
+            Some(Arc::downgrade(&old_source)),
+            CanonicalLiveOrder::default(),
+        )));
+        // Hold the same mutex used by replacement and event ingestion. The old
+        // listener has obtained an event, but cannot inspect current identity yet.
+        let mut replacement = state.lock().await;
+        let (event_selected, selected) = oneshot::channel();
+        let listener_state = Arc::clone(&state);
+        let listener_source = Arc::clone(&old_source);
+        let listener = tokio::spawn(async move {
+            event_selected.send(()).unwrap();
+            let mut current = listener_state.lock().await;
+            if !listener_source_is_current(current.0, 7, current.1.as_ref(), &listener_source) {
+                return false;
+            }
+            current.2.record("new-turn", "stale-event");
+            true
+        });
+        selected.await.unwrap();
+        replacement.0 = 8;
+        replacement.1 = Some(Arc::downgrade(&new_source));
+        replacement.2.begin("new-turn");
+        drop(replacement);
+
+        assert!(!listener.await.unwrap());
+        let mut current = state.lock().await;
+        assert!(current.2.for_turn("new-turn").unwrap().is_empty());
+        // Neither generation alone nor source identity alone is sufficient.
+        assert!(!listener_source_is_current(
+            8,
+            7,
+            current.1.as_ref(),
+            &new_source
+        ));
+        assert!(!listener_source_is_current(
+            8,
+            8,
+            current.1.as_ref(),
+            &old_source
+        ));
+        assert!(listener_source_is_current(
+            8,
+            8,
+            current.1.as_ref(),
+            &new_source
+        ));
+        current.2.record("new-turn", "current-event");
+        assert_eq!(current.2.for_turn("new-turn").unwrap(), &["current-event"]);
+    }
+
+    #[test]
+    fn listener_source_rejects_cleared_or_expired_identity() {
+        let source = Arc::new(());
+        assert!(!listener_source_is_current(1, 1, None, &source));
+        let expired = {
+            let removed = Arc::new(());
+            Arc::downgrade(&removed)
+        };
+        assert!(!listener_source_is_current(1, 1, Some(&expired), &source));
+    }
+
+    fn start_canonical_turn(state: &mut ThreadState, turn: &str) {
+        state.track_current_turn_event(
+            turn,
+            &EventMsg::TurnStarted(codex_protocol::protocol::TurnStartedEvent {
+                turn_attribution: None,
+                turn_id: turn.into(),
+                root_turn_id: None,
+                trace_id: None,
+                started_at: Some(100),
+                model_context_window: None,
+                collaboration_mode_kind: Default::default(),
+            }),
+        );
+    }
+
+    #[test]
+    fn canonical_live_order_joins_uuid_messages_not_legacy_presentation_ids() {
+        use codex_protocol::protocol::{ItemCompletedEvent, ItemStartedEvent, UserMessageEvent};
+        let mut state = ThreadState::default();
+        let turn = "active-turn";
+        let canonical_id = "11111111-1111-4111-8111-111111111111";
+        start_canonical_turn(&mut state, turn);
+        state.track_current_turn_event(
+            turn,
+            &EventMsg::UserMessage(UserMessageEvent {
+                message: "Fictional input".into(),
+                ..Default::default()
+            }),
+        );
+        assert_eq!(state.active_turn_items().unwrap().2[0].id(), "item-1");
+        let item = CoreTurnItem::UserMessage(codex_protocol::items::UserMessageItem {
+            id: canonical_id.into(),
+            client_id: None,
+            content: Vec::new(),
+        });
+        state.track_current_turn_event(
+            turn,
+            &EventMsg::ItemStarted(ItemStartedEvent {
+                thread_id: ThreadId::new(),
+                turn_id: turn.into(),
+                item: item.clone(),
+                started_at_ms: 100,
+            }),
+        );
+        state.track_current_turn_event(
+            turn,
+            &EventMsg::ItemCompleted(ItemCompletedEvent {
+                thread_id: ThreadId::new(),
+                turn_id: turn.into(),
+                item,
+                started_at_ms: Some(100),
+                completed_at_ms: 101,
+            }),
+        );
+        // Completion does not duplicate or replace the canonical start ordering.
+        assert_eq!(
+            state.canonical_active_order(turn).unwrap(),
+            &[canonical_id.to_string()]
+        );
+        assert_eq!(state.active_turn_items().unwrap().2[0].id(), "item-1");
+        assert!(state.canonical_active_order("another-turn").is_none());
+    }
+
+    #[test]
+    fn canonical_live_order_ends_on_completion_and_listener_reset() {
+        let mut state = ThreadState::default();
+        start_canonical_turn(&mut state, "turn-a");
+        state.canonical_live_order.record("turn-a", "command-a");
+        state.track_current_turn_event(
+            "turn-a",
+            &EventMsg::TurnComplete(codex_protocol::protocol::TurnCompleteEvent {
+                root_turn_id: None,
+                turn_id: "turn-a".into(),
+                last_agent_message: None,
+                error: None,
+                started_at: Some(100),
+                completed_at: Some(102),
+                duration_ms: Some(2000),
+                time_to_first_token_ms: None,
+            }),
+        );
+        assert!(state.canonical_active_order("turn-a").is_none());
+        start_canonical_turn(&mut state, "turn-b");
+        state
+            .canonical_live_order
+            .record("turn-a", "late-old-command");
+        state.canonical_live_order.record("turn-b", "command-b");
+        assert_eq!(
+            state.canonical_active_order("turn-b").unwrap(),
+            &["command-b".to_string()]
+        );
+        state.clear_listener();
+        assert!(state.canonical_active_order("turn-b").is_none());
+        // Reattachment without a new TurnStarted event cannot revive old order.
+        state
+            .canonical_live_order
+            .record("turn-b", "late-after-reset");
+        assert!(state.canonical_active_order("turn-b").is_none());
+    }
+
+    #[test]
+    fn canonical_live_order_overflow_is_sticky_and_bounded_until_next_turn() {
+        let mut order = CanonicalLiveOrder::default();
+        order.begin("turn-a");
+        for index in 0..LIVE_CANONICAL_ORDER_LIMIT {
+            order.record("turn-a", &format!("id-{index}"));
+        }
+        assert_eq!(
+            order.for_turn("turn-a").unwrap().len(),
+            LIVE_CANONICAL_ORDER_LIMIT
+        );
+        order.record("turn-a", "id-0");
+        assert_eq!(
+            order.for_turn("turn-a").unwrap().len(),
+            LIVE_CANONICAL_ORDER_LIMIT
+        );
+        order.record("turn-a", "overflow");
+        assert!(order.for_turn("turn-a").is_none());
+        assert!(order.ids.is_empty());
+        order.record("turn-a", "later");
+        assert!(order.for_turn("turn-a").is_none());
+        order.begin("turn-b");
+        order.record("turn-b", &"x".repeat(LIVE_CANONICAL_ID_BYTES + 1));
+        assert!(order.for_turn("turn-b").is_none());
+        assert!(order.ids.is_empty());
+        order.begin("turn-c");
+        order.record("turn-c", "valid");
+        assert_eq!(order.for_turn("turn-c").unwrap(), &["valid".to_string()]);
+    }
 
     #[test]
     fn note_thread_settings_reports_only_effective_changes() {

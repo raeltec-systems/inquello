@@ -328,6 +328,22 @@ pub(super) async fn ensure_listener_task_running(
                         }
                     };
 
+                    // Track the event before emitting any typed translations
+                    // so thread-local state such as raw event opt-in stays
+                    // synchronized with the conversation.
+                    let (raw_events_enabled, terminal_summary) = {
+                        let mut thread_state = thread_state.lock().await;
+                        // Cancellation can arrive after next_event wins the select
+                        // while this listener waits for the state lock. Never label
+                        // that old event with the replacement listener's identity.
+                        if !thread_state.accepts_listener_event(listener_generation, &conversation) {
+                            break;
+                        }
+                        thread_state.track_current_turn_event(&event.id, &event.msg);
+                        let terminal = matches!(event.msg, EventMsg::TurnComplete(_) | EventMsg::TurnAborted(_))
+                            .then(|| thread_state.turn_summary.clone());
+                        (thread_state.experimental_raw_events, terminal)
+                    };
                     if let Some(worker) = &turn_cost_worker {
                         worker.observe_event(
                             conversation_id,
@@ -336,17 +352,6 @@ pub(super) async fn ensure_listener_task_running(
                             || conversation.session_telemetry(),
                         );
                     }
-
-                    // Track the event before emitting any typed translations
-                    // so thread-local state such as raw event opt-in stays
-                    // synchronized with the conversation.
-                    let (raw_events_enabled, terminal_summary) = {
-                        let mut thread_state = thread_state.lock().await;
-                        thread_state.track_current_turn_event(&event.id, &event.msg);
-                        let terminal = matches!(event.msg, EventMsg::TurnComplete(_) | EventMsg::TurnAborted(_))
-                            .then(|| thread_state.turn_summary.clone());
-                        (thread_state.experimental_raw_events, terminal)
-                    };
                     if matches!(
                         &event.msg,
                         EventMsg::RawResponseItem(_) | EventMsg::RawResponseCompleted(_) | EventMsg::PrivateSessionEvent(_)
