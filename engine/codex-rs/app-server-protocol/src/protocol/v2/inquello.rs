@@ -1238,6 +1238,9 @@ pub struct InquelloTasksForThreadResponse {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[ts(export_to = "v2/")]
 pub struct InquelloTasksBootstrapParams {
+    /// Restricts explicit navigation recovery; never replaces a healthy different binding.
+    #[serde(default)]
+    pub recovery_only: bool,
     pub workspace_id: String,
     pub isolated_root: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]

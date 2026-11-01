@@ -1372,7 +1372,7 @@ impl MessageProcessor {
         } else {
             None
         };
-        let private_fence = self.outgoing.capture_private_fence(connection_id);
+        let private_fence = self.outgoing.capture_private_fence(connection_id).await;
         let private_thread = self
             .inquello_processor
             .guard_retained_request(connection_id, &codex_request)
@@ -2520,7 +2520,7 @@ impl MessageProcessor {
             self.outgoing
                 .fence_request(
                     &request_id,
-                    self.outgoing.capture_private_fence(connection_id),
+                    self.outgoing.capture_private_fence(connection_id).await,
                 )
                 .await;
         }

@@ -26,6 +26,22 @@ pub(super) struct SessionBinding {
     real: Option<RealSession>,
     pub(super) cancellation: CancellationToken,
 }
+fn recovery_binding_matches(
+    existing: Option<&SessionBinding>,
+    principal: PrincipalId,
+    workspace: &str,
+    root: &std::path::Path,
+    real: Option<&RealSession>,
+) -> bool {
+    existing.is_none_or(|binding| {
+        binding.principal == principal
+            && binding.workspace == workspace
+            && binding.root == root
+            && binding.real.is_some() == real.is_some()
+            && (binding.cancellation.is_cancelled() || binding.real.as_ref() == real)
+    })
+}
+
 impl InquelloRequestProcessor {
     pub(crate) fn with_task_config(mut self, config: super::super::ConfigRequestProcessor) -> Self {
         self.task_config = Some(config);
@@ -98,6 +114,18 @@ impl InquelloRequestProcessor {
         params: InquelloTasksBootstrapParams,
     ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
         let bootstrap_generation = self.begin_task_bootstrap(connection)?;
+        let recovery_authority_generation = if params.recovery_only {
+            Some(
+                *self
+                    .authority_generations
+                    .lock()
+                    .map_err(|_| refusal("authority_unknown", "Authority fence unavailable"))?
+                    .entry(connection)
+                    .or_insert(1),
+            )
+        } else {
+            None
+        };
         if let Some(value) = params.real_session.as_ref() {
             let real: RealSession = serde_json::from_value(value.clone()).map_err(|_| {
                 refusal(
@@ -141,6 +169,36 @@ impl InquelloRequestProcessor {
             }) || self.actor(connection)? != actor
             {
                 return Err(refusal("stale", "Session setup was superseded"));
+            }
+            // Recovery cannot switch an active workspace/session or data tier.
+            // Hold the authority generation through the local replacement commit.
+            let recovery_authority = if params.recovery_only {
+                Some(
+                    self.authority_generations
+                        .lock()
+                        .map_err(|_| refusal("authority_unknown", "Authority fence unavailable"))?,
+                )
+            } else {
+                None
+            };
+            if params.recovery_only
+                && (recovery_authority
+                    .as_ref()
+                    .and_then(|g| g.get(&connection))
+                    .copied()
+                    != recovery_authority_generation
+                    || !recovery_binding_matches(
+                        sessions.get(&connection),
+                        actor.principal_id,
+                        &params.workspace_id,
+                        &root,
+                        Some(&real),
+                    ))
+            {
+                return Err(refusal(
+                    "stale",
+                    "Explicit recovery cannot replace this private session",
+                ));
             }
             if sessions.get(&connection).is_some_and(|s| {
                 s.principal == actor.principal_id
@@ -203,6 +261,19 @@ impl InquelloRequestProcessor {
                     "Private store and authorized isolated session root do not match",
                 ));
             }
+            if params.recovery_only {
+                let outgoing = self
+                    .task_outgoing
+                    .as_ref()
+                    .ok_or_else(|| refusal("authority_unknown", "Current service unavailable"))?;
+                current_service_policy(
+                    outgoing,
+                    connection,
+                    &params.workspace_id,
+                    &CancellationToken::new(),
+                )
+                .await?;
+            }
             let mut sessions = self.task_sessions.lock().await;
             let generations = self
                 .task_bootstrap_generations
@@ -213,6 +284,36 @@ impl InquelloRequestProcessor {
             }) || self.actor(connection)? != actor
             {
                 return Err(refusal("stale", "Session setup was superseded"));
+            }
+            // Recovery cannot switch an active workspace/session or data tier.
+            // Hold the authority generation through the local replacement commit.
+            let recovery_authority = if params.recovery_only {
+                Some(
+                    self.authority_generations
+                        .lock()
+                        .map_err(|_| refusal("authority_unknown", "Authority fence unavailable"))?,
+                )
+            } else {
+                None
+            };
+            if params.recovery_only
+                && (recovery_authority
+                    .as_ref()
+                    .and_then(|g| g.get(&connection))
+                    .copied()
+                    != recovery_authority_generation
+                    || !recovery_binding_matches(
+                        sessions.get(&connection),
+                        actor.principal_id,
+                        &params.workspace_id,
+                        &root,
+                        None,
+                    ))
+            {
+                return Err(refusal(
+                    "stale",
+                    "Explicit recovery cannot replace this private session",
+                ));
             }
             if sessions.get(&connection).is_some_and(|old| {
                 old.principal == actor.principal_id
@@ -2068,6 +2169,162 @@ mod tests {
             .expect("bind actor");
         processor
     }
+
+    async fn private_fence_fixture() -> InquelloRequestProcessor {
+        let processor = signed_in(PathBuf::from("unused-private-fence-fixture.sqlite")).await;
+        let actor = processor.actor(CONNECTION).expect("actor");
+        processor.task_sessions.lock().await.insert(
+            CONNECTION,
+            SessionBinding {
+                principal: actor.principal_id,
+                workspace: WORKSPACE.into(),
+                root: PathBuf::from("unused-private-fence-fixture"),
+                real: None,
+                cancellation: CancellationToken::new(),
+            },
+        );
+        processor
+    }
+
+    async fn assert_capture_waiting(future: &mut crate::outgoing_message::PrivateFenceFuture<'_>) {
+        std::future::poll_fn(|cx| {
+            assert!(
+                future.as_mut().poll(cx).is_pending(),
+                "contention must wait rather than fabricate revocation"
+            );
+            std::task::Poll::Ready(())
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn private_fence_capture_waits_for_unchanged_session_reader() {
+        use crate::outgoing_message::PrivateThreadAuthority;
+        let processor = private_fence_fixture().await;
+        let sessions = processor.task_sessions.lock().await;
+        let session_token = sessions[&CONNECTION].cancellation.clone();
+        let mut capture = processor.capture_fence(CONNECTION);
+        assert_capture_waiting(&mut capture).await;
+        drop(sessions);
+        let fence = capture.await.expect("private fence");
+        assert!(fence.is_current());
+        session_token.cancel();
+        assert!(
+            !fence.is_current(),
+            "captured session revocation remains effective"
+        );
+    }
+
+    #[tokio::test]
+    async fn private_fence_capture_preserves_principal_revocation_while_waiting() {
+        use crate::outgoing_message::PrivateThreadAuthority;
+        let processor = private_fence_fixture().await;
+        let sessions = processor.task_sessions.lock().await;
+        let actor = processor.actor(CONNECTION).expect("actor");
+        let mut capture = processor.capture_fence(CONNECTION);
+        assert_capture_waiting(&mut capture).await;
+        processor.routes.invalidate_disclosure(actor.principal_id);
+        drop(sessions);
+        assert!(!capture.await.expect("private fence").is_current());
+        assert!(
+            processor
+                .capture_fence(CONNECTION)
+                .await
+                .expect("fresh request fence")
+                .is_current()
+        );
+    }
+
+    #[tokio::test]
+    async fn private_fence_capture_preserves_session_revocation_while_waiting() {
+        use crate::outgoing_message::PrivateThreadAuthority;
+        let processor = private_fence_fixture().await;
+        let sessions = processor.task_sessions.lock().await;
+        let mut capture = processor.capture_fence(CONNECTION);
+        assert_capture_waiting(&mut capture).await;
+        sessions[&CONNECTION].cancellation.cancel();
+        drop(sessions);
+        assert!(!capture.await.expect("private fence").is_current());
+        assert!(
+            !processor
+                .capture_fence(CONNECTION)
+                .await
+                .expect("still revoked")
+                .is_current()
+        );
+    }
+
+    #[tokio::test]
+    async fn private_fence_capture_rejects_identity_change_while_waiting() {
+        use crate::outgoing_message::PrivateThreadAuthority;
+        let processor = private_fence_fixture().await;
+        let sessions = processor.task_sessions.lock().await;
+        let mut capture = processor.capture_fence(CONNECTION);
+        assert_capture_waiting(&mut capture).await;
+        // Isolate the identity recheck from the additional cancellation performed
+        // by production set_principal; neither may be omitted by this capture.
+        processor.principals_guard().insert(
+            CONNECTION,
+            PrincipalId::parse("22222222-2222-4222-8222-222222222222").expect("other principal"),
+        );
+        drop(sessions);
+        assert!(
+            !capture
+                .await
+                .expect("denied fence, never unfenced")
+                .is_current()
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn private_fence_capture_timeout_remains_denied() {
+        use crate::outgoing_message::PrivateThreadAuthority;
+        let processor = private_fence_fixture().await;
+        let sessions = processor.task_sessions.lock().await;
+        let mut capture = processor.capture_fence(CONNECTION);
+        assert_capture_waiting(&mut capture).await;
+        tokio::time::advance(std::time::Duration::from_secs(5)).await;
+        assert!(
+            !capture
+                .await
+                .expect("timeout denies rather than unfences")
+                .is_current()
+        );
+        drop(sessions);
+        assert!(
+            processor
+                .capture_fence(CONNECTION)
+                .await
+                .expect("fresh capture")
+                .is_current()
+        );
+    }
+
+    #[tokio::test]
+    async fn private_fence_capture_replacement_keeps_old_generation_revoked() {
+        use crate::outgoing_message::PrivateThreadAuthority;
+        let processor = private_fence_fixture().await;
+        let mut sessions = processor.task_sessions.lock().await;
+        let old = sessions[&CONNECTION].cancellation.clone();
+        let actor = processor.actor(CONNECTION).expect("actor");
+        let mut capture = processor.capture_fence(CONNECTION);
+        assert_capture_waiting(&mut capture).await;
+        // Same-principal replacement follows production bootstrap invalidation.
+        processor.routes.invalidate_disclosure(actor.principal_id);
+        old.cancel();
+        sessions.get_mut(&CONNECTION).unwrap().cancellation = CancellationToken::new();
+        drop(sessions);
+        assert!(!capture.await.expect("old generation").is_current());
+        assert!(
+            processor
+                .capture_fence(CONNECTION)
+                .await
+                .expect("new generation")
+                .is_current()
+        );
+        assert!(old.is_cancelled());
+    }
+
     #[test]
     fn start_wire_rejects_renderer_thread_and_classification_and_redacts_debug() {
         let base = json!({"operationId":uuid::Uuid::new_v4().to_string(),"workspaceId":WORKSPACE,"engagementId":null,"folderId":null,
@@ -5987,23 +6244,38 @@ impl InquelloRequestProcessor {
 }
 
 impl crate::outgoing_message::PrivateThreadAuthority for InquelloRequestProcessor {
-    fn capture_fence(
-        &self,
+    fn capture_fence<'a>(
+        &'a self,
         connection: ConnectionId,
-    ) -> Option<codex_app_server_transport::PrivateOutputFence> {
-        self.actor(connection).ok().map(|actor| {
+    ) -> crate::outgoing_message::PrivateFenceFuture<'a> {
+        Box::pin(async move {
+            let actor = self.actor(connection).ok()?;
+            // Preserve the pre-wait principal generation. An identity or authority
+            // transition while waiting must not silently renew this payload.
             let fence = self.routes.disclosure_fence(actor.principal_id);
-            match self.task_sessions.try_lock() {
-                Ok(sessions) => match sessions.get(&connection) {
-                    Some(session) => fence.with_token(session.cancellation.clone()),
-                    None => fence,
-                },
-                Err(_) => {
-                    let denied = CancellationToken::new();
-                    denied.cancel();
-                    fence.with_token(denied)
-                }
+            let denied = || {
+                let token = CancellationToken::new();
+                token.cancel();
+                token
+            };
+            // Mere reader contention is not revocation. Wait for the short
+            // session-map critical section, but fail closed if it cannot settle.
+            let Ok(sessions) =
+                tokio::time::timeout(std::time::Duration::from_secs(5), self.task_sessions.lock())
+                    .await
+            else {
+                return Some(fence.with_token(denied()));
+            };
+            if self.actor(connection).ok() != Some(actor) {
+                return Some(fence.with_token(denied()));
             }
+            Some(match sessions.get(&connection) {
+                Some(session) if session.principal == actor.principal_id => {
+                    fence.with_token(session.cancellation.clone())
+                }
+                Some(_) => fence.with_token(denied()),
+                None => fence,
+            })
         })
     }
 
@@ -6035,6 +6307,7 @@ mod bootstrap_order_tests {
     const WORKSPACE: &str = "5d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e";
     fn params(root: &std::path::Path, generation: u64) -> InquelloTasksBootstrapParams {
         InquelloTasksBootstrapParams {
+            recovery_only: false,
             workspace_id: WORKSPACE.into(),
             isolated_root: root.to_string_lossy().into_owned(),
             real_session: Some(
@@ -6080,6 +6353,218 @@ mod bootstrap_order_tests {
             .unwrap();
         (processor, outgoing, rx)
     }
+
+    async fn allowed_bootstrap(
+        processor: &InquelloRequestProcessor,
+        outgoing: &OutgoingMessageSender,
+        rx: &mut tokio::sync::mpsc::Receiver<OutgoingEnvelope>,
+        params: InquelloTasksBootstrapParams,
+    ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        let (result, ()) = tokio::join!(processor.tasks_bootstrap(CONNECTION, params), async {
+            let id = request_id(rx).await;
+            allow(outgoing, id).await;
+        });
+        result
+    }
+
+    #[tokio::test]
+    async fn recovery_bootstrap_fresh_authority_repairs_only_cancelled_matching_binding() {
+        use crate::outgoing_message::PrivateThreadAuthority;
+        let dir = tempfile::tempdir().unwrap();
+        let (processor, outgoing, mut rx) = fixture(dir.path()).await;
+        let recovery = || {
+            let mut p = params(dir.path(), 1);
+            p.recovery_only = true;
+            p
+        };
+        allowed_bootstrap(&processor, &outgoing, &mut rx, recovery())
+            .await
+            .unwrap();
+        let original = processor.task_sessions.lock().await[&CONNECTION].clone();
+        let fence = processor.capture_fence(CONNECTION).await.unwrap();
+        allowed_bootstrap(&processor, &outgoing, &mut rx, recovery())
+            .await
+            .unwrap();
+        assert!(
+            !original.cancellation.is_cancelled(),
+            "healthy exact binding is idempotent"
+        );
+        assert!(fence.is_current());
+        original.cancellation.cancel();
+        allowed_bootstrap(&processor, &outgoing, &mut rx, recovery())
+            .await
+            .unwrap();
+        let current = processor.task_sessions.lock().await[&CONNECTION].clone();
+        assert!(!current.cancellation.is_cancelled());
+        assert!(original.cancellation.is_cancelled());
+        assert!(
+            !fence.is_current(),
+            "recovery never renews queued old payloads"
+        );
+        assert!(
+            processor
+                .capture_fence(CONNECTION)
+                .await
+                .unwrap()
+                .is_current()
+        );
+        let mut changed = recovery();
+        changed.real_session = params(dir.path(), 2).real_session;
+        assert!(
+            allowed_bootstrap(&processor, &outgoing, &mut rx, changed)
+                .await
+                .is_err()
+        );
+        assert!(
+            !current.cancellation.is_cancelled(),
+            "healthy different session is preserved"
+        );
+    }
+
+    #[tokio::test]
+    async fn recovery_bootstrap_rechecks_authority_generation_at_commit() {
+        let dir = tempfile::tempdir().unwrap();
+        let (processor, outgoing, mut rx) = fixture(dir.path()).await;
+        let mut recovery = params(dir.path(), 1);
+        recovery.recovery_only = true;
+        let pending = {
+            let processor = processor.clone();
+            tokio::spawn(async move { processor.tasks_bootstrap(CONNECTION, recovery).await })
+        };
+        let id = request_id(&mut rx).await;
+        *processor
+            .authority_generations
+            .lock()
+            .unwrap()
+            .get_mut(&CONNECTION)
+            .unwrap() += 1;
+        allow(&outgoing, id).await;
+        assert!(pending.await.unwrap().is_err());
+        assert!(
+            !processor
+                .task_sessions
+                .lock()
+                .await
+                .contains_key(&CONNECTION)
+        );
+    }
+
+    #[tokio::test]
+    async fn recovery_bootstrap_denied_fresh_authority_preserves_cancelled_binding() {
+        let dir = tempfile::tempdir().unwrap();
+        let (processor, outgoing, mut rx) = fixture(dir.path()).await;
+        allowed_bootstrap(&processor, &outgoing, &mut rx, params(dir.path(), 1))
+            .await
+            .unwrap();
+        let original = processor.task_sessions.lock().await[&CONNECTION].clone();
+        original.cancellation.cancel();
+        let mut recovery = params(dir.path(), 1);
+        recovery.recovery_only = true;
+        let pending = {
+            let processor = processor.clone();
+            tokio::spawn(async move { processor.tasks_bootstrap(CONNECTION, recovery).await })
+        };
+        let id = request_id(&mut rx).await;
+        outgoing
+            .notify_client_response(CONNECTION, id, json!({"workspacePolicy":null}))
+            .await;
+        assert!(pending.await.unwrap().is_err());
+        assert!(
+            processor.task_sessions.lock().await[&CONNECTION]
+                .cancellation
+                .is_cancelled()
+        );
+    }
+
+    #[test]
+    fn recovery_binding_never_switches_owner_workspace_root_or_data_tier() {
+        let principal = PrincipalId::parse(PRINCIPAL).unwrap();
+        let other = PrincipalId::parse("22222222-2222-4222-8222-222222222222").unwrap();
+        let root = PathBuf::from("profile");
+        let binding = SessionBinding {
+            principal,
+            workspace: WORKSPACE.into(),
+            root: root.clone(),
+            real: None,
+            cancellation: CancellationToken::new(),
+        };
+        assert!(recovery_binding_matches(
+            None, principal, WORKSPACE, &root, None
+        ));
+        for revoked in [false, true] {
+            if revoked {
+                binding.cancellation.cancel();
+            }
+            assert!(recovery_binding_matches(
+                Some(&binding),
+                principal,
+                WORKSPACE,
+                &root,
+                None
+            ));
+            assert!(!recovery_binding_matches(
+                Some(&binding),
+                other,
+                WORKSPACE,
+                &root,
+                None
+            ));
+            assert!(!recovery_binding_matches(
+                Some(&binding),
+                principal,
+                "another-workspace",
+                &root,
+                None
+            ));
+            assert!(!recovery_binding_matches(
+                Some(&binding),
+                principal,
+                WORKSPACE,
+                std::path::Path::new("another-root"),
+                None
+            ));
+            let real: RealSession =
+                serde_json::from_value(params(&root, 1).real_session.unwrap()).unwrap();
+            assert!(!recovery_binding_matches(
+                Some(&binding),
+                principal,
+                WORKSPACE,
+                &root,
+                Some(&real)
+            ));
+            let mut real_binding = binding.clone();
+            real_binding.real = Some(real);
+            assert!(!recovery_binding_matches(
+                Some(&real_binding),
+                principal,
+                WORKSPACE,
+                &root,
+                None
+            ));
+        }
+    }
+
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    #[tokio::test]
+    async fn recovery_bootstrap_synthetic_also_requires_fresh_authority() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join(".inquello-fictional-audit-session"),
+            "synthetic",
+        )
+        .unwrap();
+        let (processor, outgoing, mut rx) = fixture(dir.path()).await;
+        let mut recovery = params(dir.path(), 1);
+        recovery.real_session = None;
+        recovery.recovery_only = true;
+        allowed_bootstrap(&processor, &outgoing, &mut rx, recovery)
+            .await
+            .unwrap();
+        let binding = processor.task_sessions.lock().await[&CONNECTION].clone();
+        assert!(binding.real.is_none());
+        assert!(!binding.cancellation.is_cancelled());
+    }
+
     #[tokio::test]
     async fn dropped_saved_admission_cleanup_removes_native_callback_and_ignores_late_reply() {
         let (tx, mut rx) = tokio::sync::mpsc::channel(8);
