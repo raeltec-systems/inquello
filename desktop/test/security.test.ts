@@ -264,6 +264,10 @@ describe('operation registry', () => {
     const workspaceId = '5d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e';
     const operationId = '0a1b2c3d-4e5f-4a6b-8c7d-8e9f0a1b2c3d';
     await expect(ipc.invoke(channelFor('organise.getTree'), trustedEvent, { workspaceId })).resolves.toMatchObject({ ok: false, code: 'signed-out' });
+    await expect(ipc.invoke(channelFor('organise.recoverNavigation'), trustedEvent, { workspaceId })).resolves.toMatchObject({ ok: false });
+    for (const key of ['principalId', 'isolatedRoot', 'realSession', 'recoveryOnly', 'dataTier']) {
+      await expect(ipc.invoke(channelFor('organise.recoverNavigation'), trustedEvent, { workspaceId, [key]: 'forbidden' })).rejects.toThrow('invalid payload for organise.recoverNavigation');
+    }
     for (const bad of [
       { workspaceId, principalId: workspaceId },
       { workspaceId: '/home/user/.ssh' },
@@ -393,6 +397,7 @@ describe('operation registry', () => {
       'provider.codexLogout',
       'organise.getWorkspaces',
       'organise.getTree',
+      'organise.recoverNavigation',
       'organise.search',
       'organise.reopen',
       'organise.setNavigation',
@@ -997,7 +1002,7 @@ describe('host privilege source scan', () => {
     expect(uses.length).toBeGreaterThan(0);
     for (const use of uses) expect(use).toMatch(/^ipcRenderer\.(?:invoke\([A-Z_]+_CHANNEL(?:, \.\.\.args)?\)|(?:on|removeListener)\((?:CAPABILITIES|ROUTES|ENVIRONMENTS|USAGE|TASKS|TASKS_PROGRESS|POLICY_SETTINGS)_CHANGED_CHANNEL, handler\))/);
     // Only the data operations, the two provider operations that take what the user entered, and the organise, state, policy and permissions operations forward arguments.
-    expect((body.match(/_CHANNEL, \.\.\.args\)/g) ?? []).length).toBe(46);
+    expect((body.match(/_CHANNEL, \.\.\.args\)/g) ?? []).length).toBe(47);
     expect(
       body
         .match(/[A-Z_]+_CHANNEL, \.\.\.args\)/g)

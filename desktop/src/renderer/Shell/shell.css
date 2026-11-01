@@ -933,3 +933,17 @@ a.iq-nav-row:hover {
   [data-thread-placeholder='none'] { padding-inline: 0; }
   .iq-composer-hint { flex-basis: auto; }
 }
+
+/* Keep Task titles readable; status is secondary, not a competing column. */
+.iq-nav-row[data-nav-row='task'] { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; align-items: start; }
+.iq-nav-row[data-nav-row='task'] .iq-nav-row-label { width: 100%; }
+.iq-nav-row[data-nav-row='task'] .iq-nav-row-meta { min-width: 0; font: var(--type-caption); color: var(--text-secondary); line-height: 1.35; overflow-wrap: anywhere; }
+.iq-composer-route { min-width: 0; max-width: 100%; font: var(--type-caption); color: var(--text-secondary); overflow-wrap: anywhere; }
+.iq-composer-route-provider { color: var(--text-secondary); }
+.iq-execution-details { margin-block: var(--space-2); padding-block: 0; border-bottom: 0; font: var(--type-caption); }
+.iq-execution-details > summary { padding-block: var(--space-1); font: var(--type-caption); }
+.iq-execution-details[open] > summary { margin-bottom: var(--space-2); }
+.iq-message-source { margin-top: var(--space-1); line-height: 1.35; }
+.iq-message-source > summary { padding-block: 2px; font: var(--type-caption); }
+.iq-message-source p { margin-block: var(--space-1); }
+.iq-execution-details > summary:focus-visible, .iq-message-source > summary:focus-visible { outline: 2px solid var(--blue-600); outline-offset: 2px; }

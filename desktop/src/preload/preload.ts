@@ -46,6 +46,7 @@ const PROVIDER_CODEX_LOGIN_CHANNEL = 'inquello:op:provider.codexLogin';
 const PROVIDER_CODEX_LOGOUT_CHANNEL = 'inquello:op:provider.codexLogout';
 const ORGANISE_WORKSPACES_CHANNEL = 'inquello:op:organise.getWorkspaces';
 const ORGANISE_TREE_CHANNEL = 'inquello:op:organise.getTree';
+const ORGANISE_RECOVERY_CHANNEL = 'inquello:op:organise.recoverNavigation';
 const ORGANISE_SEARCH_CHANNEL = 'inquello:op:organise.search';
 const ORGANISE_REOPEN_CHANNEL = 'inquello:op:organise.reopen';
 const ORGANISE_NAVIGATION_CHANNEL = 'inquello:op:organise.setNavigation';
@@ -198,6 +199,7 @@ const api = Object.freeze({
     codexLogout: (): Promise<unknown> => ipcRenderer.invoke(PROVIDER_CODEX_LOGOUT_CHANNEL),
   }),
   organise: Object.freeze({
+    recoverNavigation: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ORGANISE_RECOVERY_CHANNEL, ...args),
     search: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ORGANISE_SEARCH_CHANNEL, ...args),
     reopen: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ORGANISE_REOPEN_CHANNEL, ...args),
     setNavigation: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ORGANISE_NAVIGATION_CHANNEL, ...args),

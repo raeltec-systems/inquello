@@ -12,6 +12,8 @@ export interface RouteServiceOptions {
   freshPolicy(taskId:string):Promise<InquelloWorkspaceExecutionPolicy|null>;
   /** Trusted Task classification only; unknown never means synthetic. No preload setter. */
   applicableDataTier?(taskId:string):Promise<'synthetic'|'real'|'unknown'>;
+  /** Main-only dedicated debug smoke verifier; never supplied by preload. No provider handoff in this mode. */
+  syntheticFixtureBinding?(route:RouteView):Promise<void>;
   onChanged?():void;
 }
 export class RouteService {
@@ -45,6 +47,17 @@ export class RouteService {
   private failure<T>(e:unknown):RouteResult<T>{const k=inquelloRefusal(e)?.kind;return{ok:false,reason:k==='revision_conflict'||k==='operation_conflict'?ROUTE_REASONS.conflict:k==='not_found'?ROUTE_REASONS.unknown:ROUTE_REASONS.failed};}
   private async prepare(){if(!this.options.identity.principalId()){if(!this.signedOutCleared){this.signedOutCleared=true;await this.invalidate();}throw new Error('Unavailable');}this.signedOutCleared=false;if(this.paused||!this.options.runtime.ready())throw new Error('Unavailable');const s=this.scope();await this.options.syncPrincipal();if(!this.current(s))throw new Error('Changed');return s;}
   private async bind(routes:RouteView[],s:ReturnType<RouteService['scope']>){
+    if(this.options.syntheticFixtureBinding){
+      const empty=()=>{const status=this.options.providers.snapshot();return status.claude.state==='not-configured'&&status.codex.state==='not-connected'&&status.codex.account===null&&!this.options.providers.routeCredentialChanging('claude-api-key')&&!this.options.providers.routeCredentialChanging('codex-responses');};
+      await this.options.providers.getStatus();
+      if(!this.current(s)||!empty())throw new Error('Synthetic fixture refuses provider credentials');
+      for(const route of routes){
+        if(!route.configuration){if(route.credentialPresent)throw new Error('Unexpected synthetic credential');continue;}
+        await this.options.syntheticFixtureBinding(route);
+        if(!this.current(s)||!empty())throw new Error('Synthetic fixture authority changed');
+      }
+      return;
+    }
     const work=async()=>{for(const route of routes){if(!this.current(s))throw new Error('Changed');const c=route.configuration;if(!c||this.options.providers.routeCredentialChanging(c.routeId))continue;const status=this.options.providers.snapshot();const present=c.routeId==='claude-api-key'?status.claude.state!=='not-configured'&&status.claude.state!=='rejected':status.codex.state==='connected';if(!present){if(this.bound.has(c.routeId)||route.credentialPresent){await this.invalidate(c.routeId);throw new Error('Credential removed');}continue;}
       const marker=`${s.principal}:${route.revision}:${c.accountRef}`;if(this.bound.get(c.routeId)===marker)continue;const generation=++this.generation;
       const send=(apiKey:string|null)=>this.options.runtime.privateRouteAuth({routeId:c.routeId,accountRef:c.accountRef,generation,apiKey});
@@ -56,7 +69,7 @@ export class RouteService {
     }};
     const pending=this.authQueue.then(work);this.authQueue=pending.catch(()=>{});await pending;
   }
-  async list():Promise<RouteResult<RouteView[]>>{try{const s=await this.prepare();let rows=parseRoutes(await this.options.runtime.request('inquello/routes/list',{}));await this.bind(rows,s);rows=parseRoutes(await this.options.runtime.request('inquello/routes/list',{}));if(!this.current(s))return{ok:false,reason:ROUTE_REASONS.changed};return{ok:true,value:rows.map(row=>this.authFailures.has(row.routeId)?{...row,enabled:false,credentialPresent:false,gate:'The selected configuration could not bind its current provider credential. Check the deployment/model/API identifiers and provider status; no other route was used.'}:row)};}catch(e){return this.failure(e);}}
+  async list():Promise<RouteResult<RouteView[]>>{try{const s=await this.prepare();let rows=parseRoutes(await this.options.runtime.request('inquello/routes/list',{}));await this.bind(rows,s);rows=parseRoutes(await this.options.runtime.request('inquello/routes/list',{}));if(this.options.syntheticFixtureBinding)await this.bind(rows,s);if(!this.current(s))return{ok:false,reason:ROUTE_REASONS.changed};return{ok:true,value:rows.map(row=>this.authFailures.has(row.routeId)?{...row,enabled:false,credentialPresent:false,gate:'The selected configuration could not bind its current provider credential. Check the deployment/model/API identifiers and provider status; no other route was used.'}:row)};}catch(e){return this.failure(e);}}
   async configure(input:ConfigureRouteInput):Promise<RouteResult<RouteView[]>>{try{const s=await this.prepare();const rows=parseRoutes(await this.options.runtime.request('inquello/routes/list',{}));if(!this.current(s))return{ok:false,reason:ROUTE_REASONS.changed};const current=rows.find(r=>r.routeId===input.routeId);if(!current||!current.configurable)return{ok:false,reason:ROUTE_REASONS.unknown};
     const {operationId,expectedRevision,...configuration}=input;const accountRef=current.configuration?.accountRef??randomUUID();
     await this.options.runtime.request('inquello/routes/configure',{operationId,expectedRevision,configuration:{...configuration,accountRef}});

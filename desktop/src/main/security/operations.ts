@@ -102,6 +102,7 @@ export const OPERATION_NAMES = [
   'provider.codexLogout',
   'organise.getWorkspaces',
   'organise.getTree',
+  'organise.recoverNavigation',
   'organise.search',
   'organise.reopen',
   'organise.setNavigation',
@@ -273,6 +274,7 @@ export interface ProviderOperations {
 
 /** Private Workspace organisation as the operations see it (main-owned; see `organise/service.ts`). */
 export interface OrganiseOperations {
+  recoverNavigation?(workspaceId:string):Promise<OrganiseResult<{accepted:true}>>;
   search(input:SearchInput):Promise<OrganiseResult<SearchView>>;
   reopen(input:ReopenInput):Promise<OrganiseResult<ReopenView>>;
   setNavigation(input:NavigationInput):Promise<OrganiseResult<TaskView>>;
@@ -540,6 +542,7 @@ export function createOperations(deps: OperationDeps): Operation[] {
     codexLogout,
     organiseWorkspaces,
     organiseTree,
+    {name:'organise.recoverNavigation',validate:treePayload,handle:({workspaceId}:{workspaceId:string})=>deps.organise.recoverNavigation?.(workspaceId)??Promise.resolve({ok:false,code:'failed',reason:'Current Workspace authority is unavailable. Refresh cannot restore revoked access.'})},
     {name:'organise.search',validate:searchPayload,handle:input=>deps.organise.search(input as SearchInput)},
     {name:'organise.reopen',validate:reopenPayload,handle:input=>deps.organise.reopen(input as ReopenInput)},
     {name:'organise.setNavigation',validate:navigationPayload,handle:input=>deps.organise.setNavigation(input as NavigationInput)},

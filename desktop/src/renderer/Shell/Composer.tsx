@@ -3,7 +3,7 @@
  * IME owns composition Enter, Shift+Enter inserts lines, Escape keeps the draft.
  * Unavailable Send remains focusable with a visible explanation.
  */
-import { useId, type KeyboardEvent, type ReactElement } from 'react';
+import { useId, type KeyboardEvent, type ReactElement, type ReactNode } from 'react';
 
 import { IconButton } from '../primitives';
 import type { DraftBinding } from './drafts';
@@ -34,9 +34,10 @@ export interface ComposerProps {
   readOnly?: boolean;
   onStop?: () => void;
   stopDisabledReason?: string;
+  routeLabel?: ReactNode;
 }
 
-export function Composer({ draft, onSend, disabledReason, autoFocus, readOnly, onStop, stopDisabledReason }: ComposerProps): ReactElement {
+export function Composer({ draft, onSend, disabledReason, autoFocus, readOnly, onStop, stopDisabledReason, routeLabel }: ComposerProps): ReactElement {
   const inputId = useId();
   const reason = !onSend ? sendReason(draft.value) : draft.value.trim() === '' ? SEND_EMPTY_REASON : disabledReason;
   const label = draft.taskId ? COMPOSER_LABEL : COMPOSER_LABEL_NO_TASK;
@@ -70,6 +71,7 @@ export function Composer({ draft, onSend, disabledReason, autoFocus, readOnly, o
         data-composer-input
       />
       <div className="iq-composer-actions">
+        {routeLabel}
         <span className="iq-composer-hint">Shift+Enter for a new line</span>
         {onStop && <IconButton variant="stop" label="Stop" disabledReason={stopDisabledReason} onPress={onStop} data-composer-stop />}
         <IconButton variant="send" label="Send" disabledReason={reason} onPress={() => { if (!readOnly) onSend?.(); }} data-composer-send />

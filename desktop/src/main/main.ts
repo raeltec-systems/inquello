@@ -4,10 +4,11 @@ import { wslDataStorage } from './runtime/wsl-data';
 import { ensurePrivateDirectory } from './runtime/private-paths';
 import {createDataAuthority} from './data/authority';
 import { taskBootstrap } from './tasks/bootstrap';
+import { smokeTaskSession } from './tasks/smoke-session';
 import { TaskService } from './tasks/service';
 import { notifySettledWork } from './usage/notifications';
 import { UsageService } from './usage/service';
-import { probeEnvironments } from './smoke-probe';
+import { probeEnvironments, probeQuota, probeVisualConversation } from './smoke-probe';
 import { EnvironmentService } from './environments/service';
 import { RouteService } from './routes/service';
 import { signOutWithCapabilities, providerLogoutWithCapabilities } from './capabilities/lifecycle';
@@ -149,7 +150,11 @@ import { createProviders, loadProviderDevConfig, PROVIDER_DEV_CONFIG_ENV, provid
 import { probeStartSurface, probeRoutes, probeCapabilities, probeComposer, probeData, probeIdentity, probeOrganise, probePermissions, probePolicy, probeProviders, probeRenderer, probeShellLayout, probeStates, probeToolBounds, SHELL_LAYOUT } from './smoke-probe';
 
 const navigationSmoke = !app.isPackaged && process.argv.includes('--smoke-navigation');
-const smoke = process.argv.includes('--smoke') || navigationSmoke;
+const quotaSmoke = !app.isPackaged && process.argv.includes('--smoke-quota');
+const visualSmoke = !app.isPackaged && process.argv.includes('--smoke-visual');
+const smoke = process.argv.includes('--smoke') || navigationSmoke || quotaSmoke || visualSmoke;
+let visualOk = false;
+let quotaOk = false;
 let navigationOk = false;
 // The smoke run keeps what main logs, so the providers probe can scan it for a leaked key.
 const recordedLogger = smoke ? recordingConsoleLogger() : undefined;
@@ -182,6 +187,7 @@ let routes: RouteService | undefined;
 let environments: EnvironmentService | undefined;
 let usage: UsageService | undefined;
 let tasks: TaskService | undefined;
+let armSmokeTaskSession: ((workspaceId:string)=>Promise<void>) | undefined;
 function notifySettingsChanged(settled: boolean): void {
   for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:policy-settings-changed', settled);
 }
@@ -262,7 +268,11 @@ function createWindow(): BrowserWindow {
     minHeight: WINDOW_MIN_HEIGHT,
     show: !smoke,
     title: 'Inquello',
-    webPreferences: secureWebPreferences(path.join(__dirname, '..', 'preload', 'preload.js')),
+    webPreferences: {
+      ...secureWebPreferences(path.join(__dirname, '..', 'preload', 'preload.js')),
+      // Only the unpackaged synthetic capture run needs hidden-window animation frames.
+      ...(visualSmoke ? { backgroundThrottling: false } : {}),
+    },
   });
   const id = window.webContents.id;
   trustedWebContentsIds.add(id);
@@ -278,7 +288,7 @@ function workingStorePath(userData: string): string {
 }
 
 function runtimeEnv(runtimeHome: string, workingStore: string): NodeJS.ProcessEnv {
-  return runtimeChildEnv(process.env, { serviceConfigEnv: SERVICE_CONFIG_ENV, codexHome: runtimeHome, workingStore, blocked: [PROVIDER_DEV_CONFIG_ENV, 'INQUELLO_SMOKE_SEED'] });
+  return runtimeChildEnv(process.env, { serviceConfigEnv: SERVICE_CONFIG_ENV, codexHome: runtimeHome, workingStore, blocked: [PROVIDER_DEV_CONFIG_ENV, 'INQUELLO_SMOKE_SEED', 'INQUELLO_QUOTA_FIXTURE', 'INQUELLO_VISUAL_FIXTURE'] });
 }
 
 const runtimeLifecycle = new RuntimeLifecycle();
@@ -400,6 +410,20 @@ async function chooseImportSource(): Promise<string | null> {
 }
 
 async function runSmokeProbe(contents: WebContents): Promise<void> {
+  if (visualSmoke) {
+    if (!identity || !organise || !policy || !runtime) throw new Error('Visual smoke services unavailable');
+    const report=await probeVisualConversation(contents,{identity,organise,policy,seedFile:process.env.INQUELLO_SMOKE_SEED??null,
+      isolatedRoot:app.getPath('userData'),fixtureFile:process.env.INQUELLO_VISUAL_FIXTURE??'',armSyntheticSession:async workspaceId=>{if(!armSmokeTaskSession)throw new Error('Synthetic session unavailable');await armSmokeTaskSession(workspaceId);},
+      runtimeRequest:<T,>(method:string,params?:unknown)=>runtime!.request<T>(method,params)});
+    visualOk=report.ok;process.stdout.write(`${JSON.stringify({event:'visual-conversation',...report})}\n`);return;
+  }
+  if (quotaSmoke) {
+    if (!identity || !organise || !routes || !policy || !runtime) throw new Error('Quota smoke services unavailable');
+    const report=await probeQuota(contents,{identity,organise,routes,policy,seedFile:process.env.INQUELLO_SMOKE_SEED??null,
+      isolatedRoot:app.getPath('userData'),fixtureFile:process.env.INQUELLO_QUOTA_FIXTURE??'',usageChanged,armSyntheticSession:async workspaceId=>{if(!armSmokeTaskSession)throw new Error('Synthetic session unavailable');await armSmokeTaskSession(workspaceId);},
+      runtimeRequest:<T,>(method:string,params?:unknown)=>runtime!.request<T>(method,params)});
+    quotaOk=report.ok;process.stdout.write(`${JSON.stringify({event:'quota',...report})}\n`);return;
+  }
   if (navigationSmoke) {
     if (!identity || !organise) throw new Error('Navigation services unavailable');
     const { probeSavedNavigation } = await import('./smoke-probe');
@@ -531,6 +555,8 @@ async function runSmokeProbe(contents: WebContents): Promise<void> {
 
 function exitCodeFor(exit: ExitInfo | undefined): number {
   if (!smoke) return 0;
+  if (visualSmoke) return handshakeOk && visualOk && exit?.exitCode === 0 && !exit.killed ? 0 : 1;
+  if (quotaSmoke) return handshakeOk && quotaOk && exit?.exitCode === 0 && !exit.killed ? 0 : 1;
   if (navigationSmoke) return handshakeOk && navigationOk && shellLayoutOk && exit?.exitCode === 0 && !exit.killed ? 0 : 1;
   return handshakeOk && privilegesOk && designOk && identityOk && dataOk && providersOk && organiseOk && statesOk && shellLayoutOk && composerOk && startSurfaceOk && policyOk && toolBoundsOk && permissionsOk && capabilitiesOk && routesOk && environmentsOk && exit !== undefined && exit.exitCode === 0 && !exit.killed ? 0 : 1;
 }
@@ -596,6 +622,13 @@ void app.whenReady().then(async () => {
   });
   const identitySession = identity.session;
   const sharedAuthority=identity.service;
+  const taskBootstrapOptions={env:process.env,packaged:app.isPackaged,userData,runtime:{
+    ready:()=>runtime?.state==='ready'&&runtimeConfigurationVerified,instance:()=>runtime,
+    request:<T,>(method:string,params?:unknown)=>runtime?runtime.request<T>(method,params):Promise.reject(new Error('Runtime unavailable')),
+  },identity:identitySession,currentSession:()=>sharedAuthority?identitySession.withAccess(access=>sharedAuthority.session(access)):Promise.resolve(null)};
+  const syntheticSmokeSession=(quotaSmoke||visualSmoke)?smokeTaskSession({...taskBootstrapOptions,enabled:true,seedFile:process.env.INQUELLO_SMOKE_SEED??''}):null;
+  armSmokeTaskSession=syntheticSmokeSession?.arm;
+  const trustedTaskBootstrap=syntheticSmokeSession?.bootstrap??taskBootstrap(taskBootstrapOptions);
   const organiseService = new OrganiseService({
     runtime: {
       ready: () => runtime?.state === 'ready' && runtimeConfigurationVerified,
@@ -605,6 +638,7 @@ void app.whenReady().then(async () => {
     identity: identitySession,
     service: identity.service,
     logger,
+    recoverSession:workspaceId=>trustedTaskBootstrap(workspaceId,{recoveryOnly:true}),
   });
   organise = organiseService;
   const policyRuntime = {
@@ -651,9 +685,10 @@ void app.whenReady().then(async () => {
   routes = new RouteService({
     runtime: { ...policyRuntime, privateRouteAuth: (params) => runtime ? runtime.privateRouteAuth(params) : Promise.reject(new Error('Runtime unavailable')), stop: async () => { await runtime?.stop(); } },
     identity: identitySession, syncPrincipal: () => organiseService.syncPrincipal(), providers: providerService, freshPolicy: (taskId) => policyService.reviewPolicy(taskId), applicableDataTier: taskId => tasks?.applicableDataTier(taskId) ?? Promise.resolve('unknown'),
+    ...(visualSmoke&&syntheticSmokeSession?{syntheticFixtureBinding:(route:import('./routes/types').RouteView)=>syntheticSmokeSession.verifyRoute(route)}:{}),
     onChanged: () => { environmentChanged(); for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:routes-changed'); },
   });
-  tasks = new TaskService({runtime: policyRuntime, identity: identitySession, bootstrap: taskBootstrap({env: process.env, packaged: app.isPackaged, userData, runtime: policyRuntime, identity: identitySession,currentSession:()=>sharedAuthority?identitySession.withAccess(access=>sharedAuthority.session(access)):Promise.resolve(null)}), syncPrincipal: () => organiseService.syncPrincipal(), prepareRoutes: () => routes!.list(), freshPolicy: workspaceId => policyService.startPolicy(workspaceId), askPermission: (taskId, command) => policyService.askRuntimePermission(taskId, command), routeApproval:(workspaceId,routeId)=>sharedAuthority?identitySession.withAccess(access=>sharedAuthority.routeApproval(access,workspaceId,routeId)):Promise.resolve(null),routeCheck:(workspaceId,request)=>sharedAuthority?identitySession.withAccess(access=>sharedAuthority.routeEligibilityCheck(access,workspaceId,request)):Promise.resolve(null),onAuthorityUnavailable:()=>{taskSessionChanged();usageChanged(true);}, onProgressChanged: () => { for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:tasks-progress-changed'); }, onAccepted: () => usageChanged()});
+  tasks = new TaskService({runtime: policyRuntime, identity: identitySession, bootstrap: trustedTaskBootstrap, syncPrincipal: () => organiseService.syncPrincipal(), prepareRoutes: () => routes!.list(), freshPolicy: workspaceId => policyService.startPolicy(workspaceId), askPermission: (taskId, command) => policyService.askRuntimePermission(taskId, command), routeApproval:(workspaceId,routeId)=>sharedAuthority?identitySession.withAccess(access=>sharedAuthority.routeApproval(access,workspaceId,routeId)):Promise.resolve(null),routeCheck:(workspaceId,request)=>sharedAuthority?identitySession.withAccess(access=>sharedAuthority.routeEligibilityCheck(access,workspaceId,request)):Promise.resolve(null),onAuthorityUnavailable:()=>{taskSessionChanged();usageChanged(true);}, onProgressChanged: () => { for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:tasks-progress-changed'); }, onAccepted: () => usageChanged()});
   usage = new UsageService({runtime: policyRuntime, identity: identitySession, policy: policyService, onChanged: usageChanged});
   environments = new EnvironmentService({runtime: policyRuntime, identity: identitySession, policy: policyService, routes});
   providerService.setRouteInvalidator((id) => routes!.invalidate(id));

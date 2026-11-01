@@ -36,7 +36,8 @@ it.each(['click','Enter'] as const)('explicit completed follow-up uses ordinary 
  await waitFor(()=>expect(send.getAttribute('aria-disabled')).not.toBe('true'));
  expect(screen.queryByRole('button',{name:'Resume'})).toBeNull();
  expect(x.api.resume).not.toHaveBeenCalled();
- expect(screen.getByRole('button',{name:'Stop'}).getAttribute('aria-disabled')).toBe('true');
+ expect(screen.queryByRole('button',{name:'Stop'})).toBeNull();
+ expect(screen.queryByText('Work is not running.')).toBeNull();
  const input=screen.getByRole('textbox');
  if(trigger==='click')fireEvent.click(send);else fireEvent.keyDown(input,{key:'Enter'});
  await waitFor(()=>expect(x.api.resume).toHaveBeenCalledWith({operationId:'op-1',taskId:'task-1',workspaceId:'workspace-1',request:'Exclude cancelled invoices'}));
@@ -81,4 +82,16 @@ it('completed follow-up is disabled after retained authority observation is inva
  expect(screen.getByRole('button',{name:'Send'}).getAttribute('aria-disabled')).toBe('true');
  fireEvent.click(screen.getByRole('button',{name:'Send'}));
  expect(x.api.resume).not.toHaveBeenCalled();
+});
+
+it('retains the focused Stop while interruption is pending even if completion arrives first',async()=>{
+ const x=fixture();let release!:(value:unknown)=>void;
+ x.api.stop.mockImplementation(()=>new Promise(resolve=>{release=resolve as typeof release;}));
+ render(<x.Controls/>);const stop=await screen.findByRole('button',{name:'Stop'});stop.focus();fireEvent.click(stop);
+ await x.update({...base,status:'completed'});
+ expect(screen.getByRole('button',{name:'Stop'})).toBe(stop);expect(document.activeElement).toBe(stop);
+ expect(stop.getAttribute('aria-disabled')).toBe('true');
+ await act(async()=>release({ok:true,value:receipt('stop','completed')}));
+ await waitFor(()=>expect(screen.queryByRole('button',{name:'Stop'})).toBeNull());
+ expect(screen.queryByText('Work is not running.')).toBeNull();
 });

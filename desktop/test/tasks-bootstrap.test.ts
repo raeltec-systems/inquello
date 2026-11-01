@@ -23,3 +23,18 @@ describe('current service session bootstrap',()=>{
   const old=run(workspace);await run(workspace);resolve(session('1'));await expect(old).rejects.toThrow();expect(x.request).toHaveBeenCalledTimes(1);
  });
 });
+
+
+describe('restricted explicit navigation recovery bootstrap',()=>{
+ it('uses main-owned synthetic configuration and sends only restrictive recoveryOnly',async()=>{
+  const x=setup();await x.run(workspace,{recoveryOnly:true});
+  expect(x.request).toHaveBeenCalledWith('inquello/tasks/bootstrap',{workspaceId:workspace,isolatedRoot:x.root,recoveryOnly:true});
+ });
+ it('does not silently succeed when packaged and no current service session exists',async()=>{
+  const x=setup(true);await expect(x.run(workspace,{recoveryOnly:true})).rejects.toThrow('Current session unavailable');expect(x.request).not.toHaveBeenCalled();
+ });
+ it('keeps current real service binding during recovery, not a fictional environment fallback',async()=>{
+  const x=setup(true);const run=taskBootstrap({env:x.env,packaged:true,userData:x.root,runtime:{ready:()=>true,instance:()=>1,request:x.request as never},identity:{principalId:()=>principal},currentSession:async()=>({session_id:workspace,revision:'2',principal:{principal_id:principal,revision:'1'}} as never)});
+  await run(workspace,{recoveryOnly:true});expect(x.request.mock.calls[0]?.[1]).toEqual({workspaceId:workspace,isolatedRoot:x.root,recoveryOnly:true,realSession:{sessionId:workspace,principalRevision:'1',sessionRevision:'2',generation:1}});
+ });
+});

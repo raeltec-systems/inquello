@@ -341,7 +341,7 @@ describe('Shell layout', () => {
       expect(control.getAttribute('aria-label')).toBe(tip.textContent);
       expect(tip.getAttribute('aria-hidden')).toBe('true');
     }
-    const css = fs.readFileSync(path.join(renderer, 'Shell', 'shell.css'), 'utf8');
+    const css = fs.readFileSync(path.join(renderer, 'Shell', 'shell.css'), 'utf8').replace(/\r\n/g, '\n');
     expect(css).toContain('.iq-rail-item:hover > .iq-rail-tip,\n.iq-rail-item:focus-within > .iq-rail-tip');
   });
 
@@ -670,8 +670,11 @@ it('keeps a refused reopen notice distinct before the idle welcome without expos
   const notice = await screen.findByText('This Task is unavailable. No cached work was opened.');
   const welcome = screen.getByText('What should we work on?');
   expect(notice.getAttribute('role')).toBe('status');
-  expect(notice.parentElement).toBe(welcome.parentElement?.parentElement);
-  expect(notice.compareDocumentPosition(welcome) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  const wrapper=notice.closest('[data-shell-notice]');
+  expect(wrapper).not.toBeNull();
+  expect(wrapper?.querySelector('[role="status"]')).toBe(notice);
+  expect(wrapper?.parentElement).toBe(welcome.parentElement?.parentElement);
+  expect(wrapper!.compareDocumentPosition(welcome) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(screen.getByText('Choose a Task in the Sidebar, or start one with New thread.')).toBeTruthy();
   expect(document.querySelector('[data-task-view]')).toBeNull();
 });

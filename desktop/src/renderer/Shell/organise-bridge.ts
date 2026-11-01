@@ -63,6 +63,7 @@ export interface WorkspacesState {
 export type Outcome<T> = { ok: true; value: T } | { ok: false; code: string; reason: string };
 
 export interface OrganiseBridge {
+  recoverNavigation?(input:{workspaceId:string}):Promise<unknown>;
   search?(input:SearchInput):Promise<unknown>;
   reopen?(input:ReopenInput):Promise<unknown>;
   setNavigation?(input:NavigationInput):Promise<unknown>;

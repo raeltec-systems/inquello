@@ -2,6 +2,7 @@
 import {useEffect,useRef,useState,type ReactElement} from 'react';
 import {Button} from '../primitives';
 import {Composer} from './Composer';
+import {TaskRouteLabel} from './TaskRouteLabel';
 import type {DraftBinding} from './drafts';
 import {taskValue,tasksBridge,type ProgressSnapshot,type LifecycleReceipt} from './tasks-bridge';
 
@@ -58,12 +59,13 @@ export function TaskLifecycle({taskId,workspaceId,draft,operationIds=()=>crypto.
   catch(error){if(mounted.current){setNotice(error instanceof Error?error.message:'The operation is unconfirmed. Your draft is preserved.');}}
   finally{if(mounted.current)setBusy(current=>current===kind?null:current);}
  };
+ const stopPending=busy==='stop'||pending.current?.kind==='stop'||view?.lifecycleOperations?.some(op=>op.kind==='stop'&&['reserved','dispatching','uncertain'].includes(op.status));
  const unavailable=busy?'Waiting for the current operation.':pending.current?'Reconciling the current operation.':!view?'Current Task access is unavailable.':!running&&!completed?'Use Resume to continue interrupted work.':undefined;
  return <section aria-label="Task controls">
   {view?.status==='cancelled'&&<p role="status">{interruptionSummary(view)}</p>}
   {view?.status==='uncertain'&&<p role="status">Work was interrupted or its outcome is uncertain. Resume is explicit; work does not restart automatically.</p>}
   {notice&&<p role="status">{notice}</p>}
   {resumable&&<Button onPress={()=>void execute('resume')} disabledReason={busy?'Reconciling the current operation.':undefined}>Resume</Button>}
-  <Composer draft={draft} onSend={()=>void execute(completed?'resume':'steer')} disabledReason={unavailable} onStop={view?()=>void execute('stop'):undefined} stopDisabledReason={busy==='stop'||pending.current?.kind==='stop'||view?.lifecycleOperations?.some(op=>op.kind==='stop'&&['reserved','dispatching','uncertain'].includes(op.status))?'Waiting for interruption confirmation.':!running?'Work is not running.':undefined}/>
+  <Composer draft={draft} routeLabel={<TaskRouteLabel taskId={taskId} workspaceId={workspaceId}/>} onSend={()=>void execute(completed?'resume':'steer')} disabledReason={unavailable} onStop={view&&(!completed||stopPending)?()=>void execute('stop'):undefined} stopDisabledReason={stopPending?'Waiting for interruption confirmation.':!running?'Work is not running.':undefined}/>
  </section>;
 }

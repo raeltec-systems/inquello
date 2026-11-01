@@ -125,13 +125,19 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
   // The periodic reload reads the current choice without re-creating itself.
   const chosenWorkspace = useRef<string | null>(null);
   const setWorkspaceId = (id: string | null) => {
+    recoveryRead.current++;setRecoveringNavigation(false);setNotice(null);
     setSavedHit(null);setOpenedEngagement(null);setSelectedQuestion(null);setSavedSurface(null);
     chosenWorkspace.current = id;
     setWorkspaceIdState(id);
   };
   const [tree, setTree] = useState<WorkspaceTree | null>(null);
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [noticeState,setNoticeState]=useState<{text:string;kind:'navigation-unavailable'|'info'}|null>(null);
+  const notice=noticeState?.text??null;
+  const setNotice=useCallback((text:string|null)=>setNoticeState(text===null?null:{text,kind:'info'}),[]);
+  const setNavigationNotice=useCallback((text:string)=>setNoticeState({text,kind:'navigation-unavailable'}),[]);
+  const [recoveringNavigation,setRecoveringNavigation]=useState(false);
+  const recoveryRead=useRef(0);
   const [savedSurface,setSavedSurface]=useState<'search'|'inbox'|null>(null);
   const [savedHit,setSavedHit]=useState<(ReopenView&{generation:number})|null>(null);
   const [openedEngagement,setOpenedEngagement]=useState<string|null>(null);
@@ -344,11 +350,11 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
         const unavailable=new Set((result.value.unavailableTasks??[]).map(item=>item.taskId));
         draftStore.retain(result.value.workspaceId, [...result.value.tasks.map((item) => item.taskId),...unavailable]);
         setAcceptedTasks(previous=>Object.fromEntries(Object.entries(previous).filter(([taskId])=>!unavailable.has(taskId))));
-        if(openTask.current&&unavailable.has(openTask.current)){setOpenTaskId(null);openTask.current=null;setStates(null);setTaskPolicy(null);setNotice('This Task is currently unavailable. Your draft is kept.');}
+        if(openTask.current&&unavailable.has(openTask.current)){setOpenTaskId(null);openTask.current=null;setStates(null);setTaskPolicy(null);setNavigationNotice('This Task is currently unavailable. Your draft is kept.');}
         setTree(result.value);
       } else {
         setTree(null); setAcceptedTasks({}); setStates(null); setTaskPolicy(null);
-        setOpenTaskId(null); openTask.current=null; setNotice(result.reason);
+        setOpenTaskId(null); openTask.current=null; setNavigationNotice(result.reason);
       }
       if (openTask.current && refreshInspection) await Promise.all([loadStates(openTask.current), loadPolicy(openTask.current)]);
     },
@@ -356,6 +362,7 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
   );
 
   const suppressPrivateContent = useCallback(() => {
+    recoveryRead.current++;setRecoveringNavigation(false);
     authorityGeneration.current++; authorizedWorkspaces.current=[];
     setState(null); setPerson(null); setTree(null); setAcceptedTasks({});
     setStates(null); setTaskPolicy(null); setOpenTaskId(null); openTask.current=null;
@@ -371,7 +378,7 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
       if (read!==workspaceRead.current || generation!==authorityGeneration.current) return;
       if (!next) {
         suppressPrivateContent();
-        setNotice('Your Workspaces could not be read.');
+        setNavigationNotice('Your Workspaces could not be read.');
         return;
       }
       // Drafts belong to one signed-in principal: none signed in, or a different one, clears them all.
@@ -400,13 +407,14 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
         setStartLocation(null); setShowStart(false); setPendingStart(false);
       }
       const chosen = current && ids.includes(current) ? current : (ids[0] ?? null);
+      if(current!==chosen){recoveryRead.current++;setRecoveringNavigation(false);setNotice(null);}
       chosenWorkspace.current = chosen;
       setWorkspaceIdState(chosen);
       await loadTree(chosen);
     } catch {
       if (read!==workspaceRead.current || generation!==authorityGeneration.current) return;
       suppressPrivateContent();
-      setNotice('Your Workspaces could not be read.');
+      setNavigationNotice('Your Workspaces could not be read.');
     }
   }, [bridge, loadTree, draftStore, suppressPrivateContent]);
 
@@ -433,6 +441,7 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
   useEffect(() => {
     const api = (globalThis as {inquello?:{tasks?:{onSessionChanged?:(listener:(identityChanged:boolean)=>void)=>()=>void}}}).inquello?.tasks;
     return api?.onSessionChanged?.((identityChanged) => {
+      recoveryRead.current++;setRecoveringNavigation(false);setNotice(null);
       authorityGeneration.current++; authorizedWorkspaces.current=[];
       setAcceptedTasks({}); setTree(null); setOpenTaskId(null); setState(null); setStates(null); setTaskPolicy(null);
       if (identityChanged) { draftStore.clear(); setPendingStart(false); setStartLocation(null); setShowStart(false); setState(null); setPerson(null); }
@@ -441,8 +450,30 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
     });
   }, [load, draftStore]);
 
+  /** Explicit recovery only. Clear old work first; no mutation or draft is replayed. */
+  const refreshWorkspace = async () => {
+    const id=chosenWorkspace.current;
+    if(!id||!bridge?.recoverNavigation||recoveringNavigation||noticeState?.kind!=='navigation-unavailable')return;
+    const read=++recoveryRead.current,nav=++navigationRead.current;
+    const generation=++authorityGeneration.current;
+    setRecoveringNavigation(true);setTree(null);setAcceptedTasks({});setStates(null);setTaskPolicy(null);
+    setOpenTaskId(null);openTask.current=null;setSavedHit(null);setOpenedEngagement(null);setSelectedQuestion(null);setSavedSurface(null);
+    setNavigationNotice('Checking current Workspace access. No work will be restarted.');
+    const current=()=>read===recoveryRead.current&&nav===navigationRead.current&&generation===authorityGeneration.current&&id===chosenWorkspace.current;
+    try{
+      const result=await bridge.recoverNavigation({workspaceId:id});
+      if(!current())return;
+      const accepted=parseOutcome(result,value=>typeof value==='object'&&value!==null&&(value as {accepted?:unknown}).accepted===true?{accepted:true}:null);
+      if(!accepted.ok){setNavigationNotice('Workspace access could not be restored. Refresh cannot restore revoked permissions; no work was restarted.');return;}
+      setNotice(null);
+      await load(); // A new authorized read, never reuse an old response or mutation.
+    }catch{if(current())setNavigationNotice('Workspace access is unavailable. Refresh cannot restore revoked permissions; no work was restarted.');}
+    finally{if(read===recoveryRead.current)setRecoveringNavigation(false);}
+  };
+
   /** Every foreground destination invalidates all older awaited navigation. */
   const selectDestination = () => {
+    recoveryRead.current++;setRecoveringNavigation(false);setNotice(null);
     navigationRead.current++;
     setSavedHit(null);setSelectedQuestion(null);setOpenedEngagement(null);
     return navigationRead.current;
@@ -489,7 +520,7 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
       acceptSaved(value);
       if(question)setSelectedQuestion({requestId:question.requestId,turnId:question.turnId,itemId:question.itemId,visit:navigationRead.current});
       return navigationRead.current;
-    }catch{if(read===navigationRead.current&&generation===authorityGeneration.current&&workspace===chosenWorkspace.current){setOpenTaskId(null);setNotice('This Task is unavailable. No cached work was opened.');}}
+    }catch{if(read===navigationRead.current&&generation===authorityGeneration.current&&workspace===chosenWorkspace.current){setOpenTaskId(null);setNavigationNotice('This Task is unavailable. No cached work was opened.');}}
   };
 
 
@@ -684,9 +715,13 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
           <main className="iq-thread" aria-label="Task work" hidden={workView === 'artifact'} data-thread>
             <div className="iq-shell-content">
               {notice ? (
-                <p className="iq-shell-notice" role="status" data-shell-notice>
-                  {notice}
-                </p>
+                <div className="iq-shell-notice" data-shell-notice>
+                  <p role="status">{notice}</p>
+                  {noticeState?.kind==='navigation-unavailable' && workspaceId && bridge?.recoverNavigation && <>
+                    <Button size="sm" onPress={()=>void refreshWorkspace()} pending={recoveringNavigation} pendingText="Checking Workspace access">Refresh workspace</Button>
+                    <p>Rechecks your current access. Revoked permissions remain denied; no Task or command is restarted.</p>
+                  </>}
+                </div>
               ) : null}
               {state?.signedIn && startLocation ? <StartView
                 key={`${ownerKey(person)}:${startLocation.workspaceId}`}

@@ -108,6 +108,8 @@ export interface OrganiseServiceOptions {
   /** Absent when the shared service is not configured. */
   service: WorkspaceRoutes | null;
   logger: Logger;
+  /** Explicit recovery only; main owns root/session and native enforces non-replacement. */
+  recoverSession?(workspaceId:string):Promise<void>;
 }
 
 export interface EngagementInput {
@@ -211,6 +213,33 @@ export class OrganiseService {
 
   constructor(private readonly options: OrganiseServiceOptions) {}
 
+  private recovering: {principal:string;runtime:unknown;workspaceId:string;generation:number;promise:Promise<OrganiseResult<{accepted:true}>>}|null=null;
+  /** Explicit read recovery. Never replay a mutation or reuse its queued disclosure. */
+  recoverNavigation(workspaceId:string):Promise<OrganiseResult<{accepted:true}>> {
+    const principal=this.options.identity.principalId(),runtime=this.options.runtime.instance(),generation=this.authorityGeneration;
+    if(!principal)return Promise.resolve(fail('signed-out',ORGANISE_REASONS.signedOut));
+    const old=this.recovering;
+    if(old&&old.principal===principal&&old.runtime===runtime&&old.workspaceId===workspaceId&&old.generation===generation)return old.promise;
+    if(old)return Promise.resolve(fail('failed',ORGANISE_REASONS.serviceDown));
+    const current=()=>principal===this.options.identity.principalId()&&runtime===this.options.runtime.instance()&&generation===this.authorityGeneration&&this.options.runtime.ready();
+    const entry={principal,runtime,workspaceId,generation,promise:Promise.resolve(null as unknown as OrganiseResult<{accepted:true}>)};
+    entry.promise=(async()=>{
+      try{
+        if(!this.options.runtime.ready())return fail<{accepted:true}>('runtime-unavailable',ORGANISE_REASONS.runtimeUnavailable);
+        if(!current())throw new Error();
+        await this.syncPrincipal();if(!current())throw new Error();
+        const before=await this.freshWorkspaces(principal);
+        if(!current()||!before.workspaces.some(w=>w.workspace_id===workspaceId)||!this.options.recoverSession)throw new Error();
+        await this.options.recoverSession(workspaceId);if(!current())throw new Error();
+        const after=await this.freshWorkspaces(principal);
+        if(!current()||JSON.stringify(before)!==JSON.stringify(after)||!after.workspaces.some(w=>w.workspace_id===workspaceId))throw new Error();
+        this.allowed={principal,ids:new Set(after.workspaces.map(w=>w.workspace_id))};
+        return {ok:true as const,value:{accepted:true as const}};
+      }catch{return fail<{accepted:true}>('failed',ORGANISE_REASONS.serviceDown);}
+    })().finally(()=>{if(this.recovering===entry)this.recovering=null;});
+    this.recovering=entry;return entry.promise;
+  }
+
   /** Binds the runtime connection to the current principal, if it changed. */
   async syncPrincipal(): Promise<void> {
     const { runtime, identity } = this.options;
@@ -263,7 +292,7 @@ export class OrganiseService {
         return fail('failed', ORGANISE_REASONS.storeUnavailable);
       default:
         this.options.logger.warn(`organise: runtime request failed (${(error as Error).message})`);
-        return fail(refusal ? 'failed' : 'runtime-unavailable', refusal ? ORGANISE_REASONS.failed : ORGANISE_REASONS.runtimeUnavailable);
+        return this.options.runtime.ready() ? fail('failed', ORGANISE_REASONS.serviceDown) : fail('runtime-unavailable', ORGANISE_REASONS.runtimeUnavailable);
     }
   }
 

@@ -143,6 +143,7 @@ import { BROAD_MODE_REACH } from './policy/views';
 import type { ProviderService } from './providers';
 import { isProviderCredentialVar } from './runtime/env';
 import { taskFiles } from './runtime/probe-task-files';
+import { RpcResponseError } from './runtime/errors';
 import type { BlockedKind } from './security/policy';
 
 /** Exercise main's identity transition hooks as well as the session itself. */
@@ -181,7 +182,9 @@ export async function probeSavedNavigation(contents: WebContents, options: {
       const row = await wait(() => qVisible('[data-task-id="${taskId}"] a'), ${SHELL_SETTLE_MS});
       require(row, 'Owned draft not shown').click();
       require(await wait(() => qVisible('[data-task-view="${taskId}"]'), ${SHELL_SETTLE_MS}), 'Draft did not open');
-      const menu = require(button('Organise Task'), 'Organise menu unavailable'); menu.click();
+      require(await openTaskInspector(), 'Task details did not open');
+      const menu = require(button('Organise Task'), 'Organise menu unavailable');
+      require(menu.getClientRects().length > 0, 'Organise menu is hidden'); menu.click();
       require(await wait(() => button('Pin'), 5000), 'Pin unavailable').click();
       require(await wait(() => qVisible('[data-task-id="${taskId}"]')?.textContent.includes('Pinned'), 5000), 'Pin did not persist to navigation');
       require(button('Organise Task'), 'Organise menu disappeared').click();
@@ -215,6 +218,7 @@ export async function probeSavedNavigation(contents: WebContents, options: {
       const hit = await wait(() => [...dialog.querySelectorAll('.iq-saved-results button')].find(el => el.textContent.includes('Procurement January')), 10000);
       require(hit, 'Archived search hit missing').click();
       require(await wait(() => !q('dialog[open]') && q('[data-task-view="${taskId}"]'), 10000), 'Archived hit did not reopen');
+      require(await openTaskInspector(), 'Reopened Task details did not open');
       require(q('[data-task-view]').textContent.includes('Opening does not unarchive'), 'Reopen silently unarchived');
       require(button('Organise Task'), 'Reopened Task menu unavailable').click();
       require(await wait(() => button('Unarchive'), 5000), 'Unarchive unavailable').click();
@@ -301,7 +305,7 @@ export const EXPECTED_BRIDGE_TREE = {
     codexLogout: 'function',
   },
   organise: {
-    search:'function',reopen:'function',setNavigation:'function',
+    search:'function',reopen:'function',setNavigation:'function',recoverNavigation:'function',
     getWorkspaces: 'function',
     getTree: 'function',
     createEngagement: 'function',
@@ -1653,6 +1657,12 @@ const SHELL_HELPERS = `
     workspace: text('[data-header-workspace]'),
     visibility: q('[data-header-visibility]') ? q('[data-header-visibility]').getAttribute('data-header-visibility') : null,
   });
+  const openTaskInspector = async () => {
+    const inspector = await wait(() => qVisible('[data-task-inspector]'), ${SHELL_SETTLE_MS});
+    if (!inspector) return false;
+    if (!inspector.open) inspector.querySelector(':scope > summary')?.click();
+    return inspector.open === true;
+  };
   const openShell = async () => {
     location.hash = '#shell';
     return !!(await wait(() => location.hash === '#shell' && visible(q('[data-shell]')) && qVisible('[data-sidebar]:not([data-sidebar-state="loading"])'), ${SHELL_SETTLE_MS}));
@@ -1732,7 +1742,8 @@ function shellMoveProbe(taskId: string): string {
     if (row) row.click();
     out.opened = !!(await wait(() => qVisible('[data-task-view=${JSON.stringify(taskId)}]'), 5000));
     out.headerBefore = readHeader();
-    out.movePressed = press('[data-task-move] button');
+    if (!(await openTaskInspector())) throw new Error('Task details did not open for Move');
+    out.movePressed = !!q('[data-task-move] button')?.getClientRects().length && press('[data-task-move] button');
     const target = await wait(() => [...document.querySelectorAll('[role="menuitemradio"]')].find((item) => item.textContent.includes('No Engagement')), 5000);
     if (target) target.click();
     out.moved = !!(await wait(() => q('[data-ad-hoc-tasks] [data-task-id=${JSON.stringify(taskId)}]'), ${SHELL_SETTLE_MS}));
@@ -1960,7 +1971,8 @@ function statesViewProbe(taskId: string): string {
     const row = await wait(() => qVisible('[data-task-id=${JSON.stringify(taskId)}] a'), ${SHELL_SETTLE_MS});
     if (row) row.click();
     out.opened = !!(await wait(() => qVisible('[data-task-view=${JSON.stringify(taskId)}]'), 5000));
-    out.shown = !!(await wait(() => q('[data-task-states] [data-state-dimension="run"][data-state-value="execution_finished"]'), ${SHELL_SETTLE_MS}));
+    if (!(await openTaskInspector())) throw new Error('Task details did not open for States');
+    out.shown = !!(await wait(() => { const state = q('[data-task-states] [data-state-dimension="run"][data-state-value="execution_finished"]'); const chip = state?.querySelector('.iq-status-chip'); return q('[data-task-inspector]')?.open && chip?.getClientRects().length ? state : null; }, ${SHELL_SETTLE_MS}));
     out.dimensions = [...document.querySelectorAll('[data-task-states] [data-state-dimension]')].map((row) => ({
       dimension: row.getAttribute('data-state-dimension'),
       value: row.getAttribute('data-state-value'),
@@ -2875,7 +2887,8 @@ function policyTaskProbe(taskId: string, operationId: string): string {
     const row = await wait(() => qVisible('[data-task-id=${JSON.stringify(taskId)}] a'), ${SHELL_SETTLE_MS});
     if (row) row.click();
     out.opened = !!(await wait(() => qVisible('[data-task-view=${JSON.stringify(taskId)}]'), ${SHELL_SETTLE_MS}));
-    const mode = await wait(() => q('[data-task-policy=${JSON.stringify(taskId)}] [data-broad-mode]'), ${POLICY_SETTLE_MS});
+    if (!(await openTaskInspector())) throw new Error('Task details did not open for Policy');
+    const mode = await wait(() => { const control = q('[data-task-policy=${JSON.stringify(taskId)}] [data-broad-mode]'); return control?.getClientRects().length ? control : null; }, ${POLICY_SETTLE_MS});
     const section = q('[data-task-policy]');
     out.status = mode ? mode.getAttribute('data-broad-mode-status') : null;
     out.effective = mode ? mode.getAttribute('data-broad-mode-effective') : null;
@@ -3094,7 +3107,8 @@ function toolBoundsRendererProbe(taskId: string, workspaceId: string): string {
     const out = { shellOpened: await openShell() };
     const row = await wait(() => qVisible('[data-task-id=${JSON.stringify(taskId)}] a'), ${SHELL_SETTLE_MS});
     if (row) row.click();
-    const reach = await wait(() => q('[data-task-reach=${JSON.stringify(taskId)}] [data-reach]'), ${POLICY_SETTLE_MS});
+    if (!(await wait(() => qVisible('[data-task-view=${JSON.stringify(taskId)}]'), ${SHELL_SETTLE_MS})) || !(await openTaskInspector())) throw new Error('Task details did not open for tool reach');
+    const reach = await wait(() => { const control = q('[data-task-reach=${JSON.stringify(taskId)}] [data-reach]'); return control?.getClientRects().length ? control : null; }, ${POLICY_SETTLE_MS});
     const section = q('[data-task-reach=${JSON.stringify(taskId)}]');
     out.bounded = reach ? reach.getAttribute('data-reach-bounded') : null;
     out.lines = reach ? [...reach.querySelectorAll('[data-reach-line]')].map((line) => ({ name: line.getAttribute('data-reach-line'), text: line.textContent })) : [];
@@ -3611,6 +3625,16 @@ export async function probeRoutes(contents:WebContents, options:Omit<OrganisePro
   report.ok=report.failures.length===0;return report;
 }
 
+/** Fixed diagnostics only; raw provider/RPC messages, methods and payloads never leave this helper. */
+export function quotaFixtureDiagnostic(error: unknown): string {
+  if (!(error instanceof RpcResponseError)) return '';
+  const code = Number.isSafeInteger(error.rpcCode) && error.rpcCode >= -2147483648 && error.rpcCode <= 2147483647 ? String(error.rpcCode) : 'unknown';
+  const data = error.data as { inquello?: { kind?: unknown } } | null;
+  const kind = data?.inquello?.kind;
+  const allowed = ['classification_unknown', 'fixture_unavailable', 'settings_required', 'settings_incompatible', 'authority_unknown', 'stale_authority', 'not_found', 'invalid', 'permission_required', 'reviewer_not_available', 'route_unavailable', 'store_unavailable', 'unauthenticated'];
+  return ` [rpcCode=${code}; kind=${typeof kind === 'string' && allowed.includes(kind) ? kind : 'unclassified'}]`;
+}
+
 // ---- local execution facts (Story 1.23), no probes or inference -----------------
 export async function probeEnvironments(contents: WebContents, options: OrganiseProbeOptions & {routes: import('./routes/service').RouteService; policy: PolicyService; usageChanged(privateScope:boolean):void}): Promise<{ok:boolean;failures:string[]}> {
   const failures: string[] = [];
@@ -3636,6 +3660,7 @@ export async function probeEnvironments(contents: WebContents, options: Organise
       if (!(await openShell())) return false;
       const row = await wait(() => qVisible('[data-task-id=${JSON.stringify(created.value.taskId)}] a'), ${SHELL_SETTLE_MS});
       if (!row) return false; row.click();
+      if (!(await openTaskInspector())) return false;
       const panel = await wait(() => { const node = q('[data-task-environment]'); return node?.textContent.includes('No processing route selected') ? node : null; }, ${POLICY_SETTLE_MS});
       if (!panel) return false;
       return panel.textContent.includes('This device (local host)') && panel.textContent.includes('runtime-owned configuration verified') && panel.textContent.includes('Story 8.1') && panel.textContent.includes('V2 revisit (OQ-13)') && [...panel.querySelectorAll('button[aria-disabled="true"]')].length >= 2;
@@ -3654,8 +3679,17 @@ export async function probeEnvironments(contents: WebContents, options: Organise
     const route = configuredRoute.value.find(row => row.routeId === 'claude-api-key');
     if (!route || route.enabled) throw new SmokeProbeFailure('Unexpected route eligibility');
     stage = 'route-select';
-    const selected = await options.routes.select({operationId:randomUUID(),expectedRevision:0,taskId:created.value.taskId,routeId:'claude-api-key',configurationRevision:route.revision});
-    if (!selected.ok) throw new SmokeProbeFailure('Synthetic selection unavailable: ' + selected.reason);
+    const selectInput:import('./routes/types').SelectRouteInput={operationId:randomUUID(),expectedRevision:0,taskId:created.value.taskId,routeId:'claude-api-key',configurationRevision:route.revision};
+    const selected = await options.routes.select(selectInput);
+    if (!selected.ok) {
+      // Diagnostic reconciliation only: keep the original failure, never substitute
+      // a new operation or turn a replay into acceptance of this smoke gate.
+      const diagnostic={readAvailable:false,readSelectedMatch:false,revisionMatch:false,replayAccepted:false,replayed:false};
+      const current=await options.routes.forTask(selectInput.taskId);
+      if(current.ok){diagnostic.readAvailable=true;diagnostic.readSelectedMatch=current.value.selected?.routeId===selectInput.routeId&&current.value.configurationRevision===selectInput.configurationRevision;diagnostic.revisionMatch=current.value.revision===selectInput.expectedRevision+1;}
+      try{const replay=await options.runtimeRequest<{revision:number;receipt?:{replayed?:boolean}}>('inquello/routes/task/set',selectInput);diagnostic.replayAccepted=true;diagnostic.replayed=replay.receipt?.replayed===true;}catch{/* Fixed booleans only; no payload or IDs. */}
+      throw new SmokeProbeFailure('Synthetic selection unavailable: '+selected.reason+'; reconciliation='+JSON.stringify(diagnostic));
+    }
     stage = 'mounted-route-update';
     const updated = await contents.executeJavaScript(`(async () => {
       ${SHELL_HELPERS}
@@ -3686,6 +3720,89 @@ export async function probeEnvironments(contents: WebContents, options: Organise
       return !!(await wait(() => { const node=q('[data-task-usage]'); const rows=node?.querySelectorAll('[data-usage-attempt]'); return rows?.length>=3 && node.textContent.includes('Local tool invocation — completed') && node.textContent.includes('Local tool invocation — failed') && node.textContent.includes('Unknown / Unknown') ? node : null; }, ${POLICY_SETTLE_MS}));
     })()`) as boolean;
     if (!history) failures.push('Native repeated/failed tool history did not reach mounted usage through production notifications');
+
+
+
+
+  } catch (error) { failures.push((error instanceof SmokeProbeFailure ? error.message : `Environment smoke could not finish at ${stage}; seeded identity and matching native runtime required`) + (stage === 'quota-fixture-refuse' ? quotaFixtureDiagnostic(error) : '')); }
+  finally { if (configured) { await smokeIdentity(contents, 'signOut'); await options.organise.syncPrincipal().catch(() => {}); } }
+  return {ok:failures.length===0,failures};
+}
+
+
+/** Diagnostic pixels only, bounded and scoped to the launch-owned fixture folder. */
+async function captureSmokeFailure(contents:WebContents,fixtureFile:string):Promise<{name:string;path:string;width:number;height:number}|null>{
+  let timer:ReturnType<typeof setTimeout>|undefined;
+  try{
+    if(!fixtureFile||!fs.existsSync(fixtureFile))return null;
+    const image=await Promise.race([contents.capturePage(),new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(new Error('Capture deadline')),2000);})]);
+    if(image.isEmpty())return null;
+    const folder=path.join(path.dirname(fixtureFile),'captures');fs.mkdirSync(folder,{recursive:true});
+    const file=path.join(folder,'failure-synthetic.png'),size=image.getSize();fs.writeFileSync(file,image.toPNG());
+    return{name:'failure-synthetic',path:file,width:size.width,height:size.height};
+  }catch{return null;}finally{if(timer)clearTimeout(timer);}
+}
+
+/** Dedicated debug-only Electron quota journey. The launcher supplies an isolated
+ * service Workspace and pinned loopback fixture; no renderer may classify data. */
+export async function probeQuota(contents: WebContents, options: OrganiseProbeOptions & {
+  routes: import('./routes/service').RouteService; policy: PolicyService;
+  usageChanged(privateScope:boolean):void; isolatedRoot:string; fixtureFile:string; armSyntheticSession(workspaceId:string):Promise<void>;
+}):Promise<{ok:boolean;failures:string[];failureCapture?:{name:string;path:string;width:number;height:number}}> {
+  const failures:string[]=[]; let stage='seeded-identity';
+  let failureCapture:{name:string;path:string;width:number;height:number}|null=null;
+  try {
+    const seed=JSON.parse(fs.readFileSync(options.seedFile??'', 'utf8')) as {workspace_id:string;invite_id:string};
+    const transport=JSON.parse(fs.readFileSync(options.fixtureFile,'utf8')) as {endpoint:string;certificate:number[]};
+    const endpoint=new URL(transport.endpoint);
+    if(endpoint.protocol!=='https:'||endpoint.hostname!=='127.0.0.1'||endpoint.pathname!=='/v1/messages'||!Array.isArray(transport.certificate)||transport.certificate.length>8192||transport.certificate.some(n=>!Number.isInteger(n)||n<0||n>255))throw new SmokeProbeFailure('Pinned local quota fixture unavailable');
+    if(!(await smokeIdentity(contents,'signIn')).ok)throw new SmokeProbeFailure('Quota identity unavailable');
+    const accepted=await options.identity.session.withAccess(access=>options.identity.service!.acceptInvite(access,seed.invite_id));
+    if(accepted?.workspace_id!==seed.workspace_id)throw new SmokeProbeFailure('Quota Workspace invitation unavailable');
+    await options.organise.syncPrincipal(); await options.organise.getWorkspaces();
+    stage='native-bootstrap';
+    fs.writeFileSync(path.join(options.isolatedRoot,'.inquello-fictional-audit-session'),'explicit isolated quota fixture');
+    await options.armSyntheticSession(seed.workspace_id);
+    const principal=options.identity.session.principalId();
+    const configuration={routeId:'claude-api-key',deployment:'anthropic-direct',model:'claude-sonnet-5-5',apiVersion:'2026-10-21',accountRef:principal,region:null};
+    await options.runtimeRequest('inquello/routes/configure',{operationId:randomUUID(),expectedRevision:0,configuration});
+    const bound=await options.runtimeRequest<{accepted:boolean;providerCalls:number}>('inquello/fixture/taskTransport',{workspaceId:seed.workspace_id,configurationRevision:1,routeId:'claude-api-key',...transport,failBeforeSampling:true});
+    if(!bound.accepted||bound.providerCalls!==0)throw new SmokeProbeFailure('Native quota transport refused');
+    const initialPolicy=await options.policy.startPolicy(seed.workspace_id);
+    const expectedExecution={automatic_permission_review:true,command_rules:[{prefix:['/usr/bin/true'],decision:'prompt'}]};
+    const execution=JSON.parse(JSON.stringify(initialPolicy?.execution??null));
+    if(!execution||execution.automatic_permission_review!==true||JSON.stringify(execution.command_rules)!==JSON.stringify(expectedExecution.command_rules)||Object.keys(execution).sort().join(',')!=='automatic_permission_review,command_rules')throw new SmokeProbeFailure('Quota service policy did not match explicit fixture policy');
+    stage='native-task-start';
+    const operationId=randomUUID();
+    type Run={taskId:string;threadId:string|null;status:string};
+    let run=await options.runtimeRequest<Run>('inquello/tasks/start',{operationId,workspaceId:seed.workspace_id,engagementId:null,folderId:null,request:'Fictional quota validation only. No customer data.',routeId:'claude-api-key',configurationRevision:1,reasoning:'default',speed:'default',workspacePolicy:initialPolicy});
+    const deadline=Date.now()+30_000;
+    while(!['failed','setup-failed','completed','cancelled','uncertain'].includes(run.status)&&Date.now()<deadline){await new Promise(resolve=>setTimeout(resolve,50));run=await options.runtimeRequest<Run>('inquello/tasks/reconcile',{operationId});}
+    if(run.status!=='failed'||!run.threadId)throw new SmokeProbeFailure('Quota native pre-sampling failure was not established');
+    const created={value:{taskId:run.taskId}};
+    const selected={value:await options.runtimeRequest<{revision:number}>('inquello/routes/task/read',{taskId:run.taskId})};
+    // No provider is needed after this pre-sampling failure. Retire our fixture
+    // credential BEFORE mounting ordinary route readers; otherwise they correctly
+    // invalidate the mismatched main/native credential and stale concurrent reads.
+    await options.runtimeRequest('inquello/routes/invalidate',{routeId:'claude-api-key',generation:Date.now(),taskId:null});
+    stage='mounted-native-task';
+    const mounted=await contents.executeJavaScript(`(async()=>{
+      ${SHELL_HELPERS}
+      const result={shell:false,sidebar:false,task:false,inspector:false,controls:false};
+      location.hash='#specimen';await wait(specimenReady,5000);result.shell=await openShell();if(!result.shell)return result;
+      const row=await wait(()=>qVisible('[data-task-id=${JSON.stringify(run.taskId)}] a'),${SHELL_SETTLE_MS});result.sidebar=!!row;if(!row)return result;row.click();
+      result.task=!!(await wait(()=>qVisible('[data-task-view=${JSON.stringify(run.taskId)}]'),${SHELL_SETTLE_MS}));if(!result.task)return result;
+      result.inspector=await openTaskInspector();if(!result.inspector)return result;
+      result.controls=!!(await wait(()=>qVisible('[data-task-usage] select[aria-label="Reasoning"]'),${POLICY_SETTLE_MS}));return result;
+    })()`) as {shell:boolean;sidebar:boolean;task:boolean;inspector:boolean;controls:boolean};
+    if(!mounted.controls)throw new SmokeProbeFailure('Classified quota Task controls did not mount; stages='+JSON.stringify(mounted));
+    stage='bounded-local-invocations';
+    for(const command of [['/bin/sh','-c','exit 0'],['/bin/sh','-c','exit 7'],['/bin/sh','-c','exit 0']]){
+      const result=await options.policy.runTool(run.taskId,command,{timeoutMs:30_000});if(!result.ok)throw new SmokeProbeFailure('Quota local invocation unavailable');
+    }
+    options.usageChanged(false);
+    const history=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}return !!(await wait(()=>{const node=qVisible('[data-task-usage]');return node&&node.querySelectorAll('[data-usage-attempt]').length>=3&&node.textContent.includes('Local tool invocation — completed')&&node.textContent.includes('Local tool invocation — failed')?node:null;},${POLICY_SETTLE_MS}));})()`);
+    if(!history)throw new SmokeProbeFailure('Quota prior local history did not mount');
     // Combined Story 1.24 gate: existing default-off debug fixture dispatcher,
     // production native reviewer/ledger, then the real mounted preload panel.
     // Default/release binaries reject the fixture method rather than bypass gates.
@@ -3716,26 +3833,27 @@ export async function probeEnvironments(contents: WebContents, options: Organise
         return !!(await wait(()=>{const node=q('[data-task-usage]');return node?.textContent.includes('synthetic fixture')&&!node.textContent.includes('older route revision')?node:null;},${POLICY_SETTLE_MS}));
       })()`) as boolean;
       if(!defaultsSaved)throw new SmokeProbeFailure('Mounted fixture defaults were not saved');
-      const retainedIds=await contents.executeJavaScript(`[...document.querySelectorAll('[data-task-usage] [data-usage-attempt]')].map(node=>node.getAttribute('data-usage-attempt'))`) as string[];
+      const nativeHistory=await options.runtimeRequest<{usage:{attempts:Array<{snapshot:{attempt_id:string;operation_kind:string}}>}}>('inquello/usage/read',{taskId:run.taskId});
+      const retainedIds=nativeHistory.usage.attempts.map(row=>row.snapshot.attempt_id);
+      if(nativeHistory.usage.attempts.filter(row=>row.snapshot.operation_kind==='local-tool').length<3)throw new SmokeProbeFailure('Quota native local history incomplete');
+      const allHistoryMounted=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}const retained=${JSON.stringify(retainedIds)};return !!(await wait(()=>{const panel=qVisible('[data-task-usage]');if(!panel||!panel.getClientRects().length)return false;const ids=[...panel.querySelectorAll('[data-usage-attempt]')].map(node=>node.getAttribute('data-usage-attempt'));return ids.length===retained.length&&retained.every(id=>ids.includes(id));},${POLICY_SETTLE_MS}));})()`);
+      if(!allHistoryMounted)throw new SmokeProbeFailure('Quota mounted history omitted retained native attempts');
       stage = 'quota-fixture-refuse';
       const refused=await fixture('refuse');
-      if(refused.accepted!==true||refused.refused!==true||refused.providerCalls!==0||(refused.retainedAttempts??0)<3)throw new SmokeProbeFailure('Native limit refusal did not prove zero provider calls and retained work');
+      if(refused.accepted!==true||refused.refused!==true||refused.providerCalls!==0||refused.retainedAttempts!==retainedIds.length)throw new SmokeProbeFailure('Native limit refusal did not prove zero provider calls and retained work');
       // Same main/preload notification function used after native tool/reviewer settlement.
       options.usageChanged(false);
       const mountedRefusal=await contents.executeJavaScript(`(async()=>{
         ${SHELL_HELPERS}
         const retained=${JSON.stringify(retainedIds)};
         return !!(await wait(()=>{const node=q('[data-task-usage]');if(!node)return null;const ids=[...node.querySelectorAll('[data-usage-attempt]')].map(row=>row.getAttribute('data-usage-attempt'));
-          return node.textContent.includes('Automated permission review — refused')&&node.textContent.includes('exhausted')&&node.textContent.includes('Codex plan/Workspace')&&node.textContent.includes('Use permitted human handling')&&retained.every(id=>ids.includes(id))?node:null;},${POLICY_SETTLE_MS}));
+          return node.textContent.includes('Automated permission review — refused')&&node.textContent.includes('exhausted')&&node.textContent.includes('Codex plan/Workspace')&&node.textContent.includes('Use permitted human handling')&&ids.length===retained.length+1&&retained.every(id=>ids.includes(id))?node:null;},${POLICY_SETTLE_MS}));
       })()`) as boolean;
       if(!mountedRefusal)failures.push('Native quota refusal did not reach mounted usage with retained prior work');
-    } finally {await fixture('clear').catch(()=>undefined);options.usageChanged(true);}
-
-
-
-  } catch (error) { failures.push(error instanceof SmokeProbeFailure ? error.message : `Environment smoke could not finish at ${stage}; seeded identity and matching native runtime required`); }
-  finally { if (configured) { await smokeIdentity(contents, 'signOut'); await options.organise.syncPrincipal().catch(() => {}); } }
-  return {ok:failures.length===0,failures};
+    } finally {try{await fixture('clear');}catch{failures.push('Quota fixture cleanup failed');}options.usageChanged(true);}
+  }catch(error){failures.push((error instanceof SmokeProbeFailure?error.message:`Quota smoke could not finish at ${stage}`)+quotaFixtureDiagnostic(error));failureCapture=await captureSmokeFailure(contents,options.fixtureFile);if(!failureCapture)failures.push('Diagnostic failure capture unavailable');}
+  finally {try{if(!(await smokeIdentity(contents,'signOut')).ok)failures.push('Quota sign-out failed');await options.organise.syncPrincipal();}catch{failures.push('Quota identity cleanup failed');}}
+  return{ok:failures.length===0,failures,...(failureCapture?{failureCapture}: {})};
 }
 
 /** Story 1.25 Start-surface probe only; never sends a request or claims provider acceptance. */
@@ -3759,4 +3877,149 @@ export async function probeStartSurface(contents:WebContents,options:Omit<Organi
  }catch{failures.push('Seeded Start surface could not be verified');}
  finally{await smokeIdentity(contents, 'signOut').catch(()=>undefined);await options.organise.syncPrincipal().catch(()=>undefined);}
  return{ok:failures.length===0,skipped:false,failures};
+}
+
+
+/** Actual Electron pixels from a native, pinned local synthetic conversation.
+ * The text is fixture-authored, not a live model result or product acceptance. */
+export async function probeVisualConversation(contents: WebContents, options: OrganiseProbeOptions & {
+  policy: PolicyService; isolatedRoot:string; fixtureFile:string; armSyntheticSession(workspaceId:string):Promise<void>;
+}):Promise<{ok:boolean;failures:string[];synthetic:true;settingsSurface:'existing-design-specimen';captures:{name:string;path:string;width:number;height:number}[]}> {
+  const failures:string[]=[],captures:{name:string;path:string;width:number;height:number}[]=[];
+  let stage='visual-fixture';
+  try {
+    const seed=JSON.parse(fs.readFileSync(options.seedFile??'','utf8')) as {workspace_id:string;invite_id:string};
+    const fixture=JSON.parse(fs.readFileSync(options.fixtureFile,'utf8')) as {endpoint:string;certificate:number[];answer:string;answers:string[];requests:string[];stateFile:string;captureDir:string};
+    const endpoint=new URL(fixture.endpoint),captureDir=path.join(path.dirname(options.fixtureFile),'captures');
+    if(endpoint.protocol!=='https:'||endpoint.hostname!=='127.0.0.1'||endpoint.pathname!=='/v1/messages'||
+       !Array.isArray(fixture.certificate)||fixture.certificate.length>8192||fixture.certificate.some(n=>!Number.isInteger(n)||n<0||n>255)||
+       !fixture.answer.startsWith('Synthetic visual QA response - generated by the local test fixture, not a live model.')||fixture.answer.length>4096||
+       path.resolve(fixture.captureDir)!==path.resolve(captureDir)||
+       !Array.isArray(fixture.answers)||fixture.answers.length!==4||fixture.answers.some(value=>typeof value!=='string'||!value.startsWith('Synthetic visual QA response - generated by the local test fixture, not a live model.')||value.length>4096)||
+       !Array.isArray(fixture.requests)||fixture.requests.length!==3||fixture.requests.some(value=>typeof value!=='string'||!value.startsWith('Synthetic UI ')||value.length>4096)||
+       path.resolve(fixture.stateFile)!==path.resolve(path.join(path.dirname(options.fixtureFile),'synthetic-journey-state.json')))throw new SmokeProbeFailure('Local visual fixture invalid');
+    fs.mkdirSync(captureDir,{recursive:false});
+    const boundedCaptureStep = <T,>(pending: Promise<T>, reason: string): Promise<T> => new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new SmokeProbeFailure(reason)), 8_000);
+      pending.then(value => { clearTimeout(timer); resolve(value); }, () => { clearTimeout(timer); reject(new SmokeProbeFailure(reason)); });
+    });
+    const capture=async(name:string)=>{
+      // Wait for actual layout/font completion, never a fixed screenshot delay.
+      await boundedCaptureStep(contents.executeJavaScript(`(async()=>{await document.fonts.ready;await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));})()`), 'Visual layout readiness unavailable');
+      const image=await boundedCaptureStep(contents.capturePage(), 'Actual Electron capture timed out'),size=image.getSize();
+      if(image.isEmpty()||size.width<640||size.height<480)throw new SmokeProbeFailure('Actual Electron capture unavailable');
+      const file=path.join(captureDir,`${name}.png`);fs.writeFileSync(file,image.toPNG());
+      captures.push({name,path:file,width:size.width,height:size.height});
+    };
+    stage='visual-identity';
+    if(!(await smokeIdentity(contents,'signIn')).ok)throw new SmokeProbeFailure('Visual identity unavailable');
+    const accepted=await options.identity.session.withAccess(access=>options.identity.service!.acceptInvite(access,seed.invite_id));
+    if(accepted?.workspace_id!==seed.workspace_id)throw new SmokeProbeFailure('Visual Workspace unavailable');
+    await options.organise.syncPrincipal();await options.organise.getWorkspaces();
+    const home=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}return await openShell()&&!q('[data-task-view]');})()`);
+    if(!home)throw new SmokeProbeFailure('Fresh home did not mount');
+    await capture('01-home-synthetic');
+    if(!(await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}location.hash='#specimen';return !!(await wait(specimenReady,${SHELL_SETTLE_MS}));})()`)))throw new SmokeProbeFailure('Visual setup surface unavailable');
+    stage='visual-native-start';
+    fs.writeFileSync(path.join(options.isolatedRoot,'.inquello-fictional-audit-session'),'explicit isolated visual fixture');
+    await options.armSyntheticSession(seed.workspace_id);
+    const principal=options.identity.session.principalId();
+    await options.runtimeRequest('inquello/routes/configure',{operationId:randomUUID(),expectedRevision:0,configuration:{routeId:'claude-api-key',deployment:'anthropic-direct',model:'claude-sonnet-5-5',apiVersion:'2026-10-21',accountRef:principal,region:null}});
+    const bound=await options.runtimeRequest<{accepted:boolean;providerCalls:number}>('inquello/fixture/taskTransport',{workspaceId:seed.workspace_id,configurationRevision:1,routeId:'claude-api-key',endpoint:fixture.endpoint,certificate:fixture.certificate,failBeforeSampling:false});
+    if(!bound.accepted||bound.providerCalls!==0)throw new SmokeProbeFailure('Visual pinned transport refused');
+    // All work below is submitted by actual renderer controls and named main operations.
+    // The probe never calls tasks/start, resume or stop directly.
+    const checkFixture=async(expected:number,stopped=false)=>{
+      const deadline=Date.now()+5000;
+      do{
+        let state:{calls:number;invalidCalls:number;heldCancelled:boolean;heldTimedOut:boolean;contextMatches:boolean[]}|null=null;
+        try{state=JSON.parse(fs.readFileSync(fixture.stateFile,'utf8'));}catch{/* The owned writer may be publishing a new observation. */}
+        if(state){
+          if(state.calls>expected||state.invalidCalls!==0||state.heldTimedOut||state.contextMatches.some(value=>value!==true))throw new SmokeProbeFailure('Synthetic UI dispatch/context assertion failed');
+          if(state.calls===expected&&state.contextMatches.length===expected&&(!stopped||state.heldCancelled))return;
+        }
+        await new Promise(resolve=>setTimeout(resolve,50));
+      }while(Date.now()<deadline);
+      throw new SmokeProbeFailure('Synthetic UI dispatch/context observation timed out');
+    };
+    const taskSnapshot=async(taskId:string)=>{
+      const result=await boundedCaptureStep(contents.executeJavaScript(`(async()=>{const response=await globalThis.inquello.tasks.activity({taskId:${JSON.stringify(taskId)},workspaceId:${JSON.stringify(seed.workspace_id)}});if(!response?.ok)throw new Error('Current synthetic Task unavailable');const value=response.value;return {taskId:value.taskId,threadId:value.threadId,runId:value.runId,status:value.status};})()`),'Synthetic current Task read timed out') as {taskId:string;threadId:string|null;runId:string;status:string};
+      if(result.taskId!==taskId||!result.threadId||!result.runId)throw new SmokeProbeFailure('Synthetic native Task binding unavailable');
+      return result;
+    };
+    const waitAnswer=async(taskId:string,answer:string,completed=true)=>contents.executeJavaScript(`(async()=>{
+      ${SHELL_HELPERS}
+      return !!(await wait(()=>{const task=qVisible('[data-task-view="'+${JSON.stringify(taskId)}+'"]');return task&&[...task.querySelectorAll('.iq-conversation-item--agent'+${JSON.stringify(completed?'[data-status="completed"]':'')}+' .iq-message-body .iq-progress-text')].some(node=>node.textContent===${JSON.stringify(answer)}&&node.getClientRects().length);},${POLICY_SETTLE_MS}));
+    })()`);
+    stage='visual-ui-first-send';
+    const taskId=await contents.executeJavaScript(`(async()=>{
+      ${SHELL_HELPERS}
+      if(!await openShell()||!press('[data-action="new-thread"]'))return null;
+      const start=await wait(()=>qVisible('[data-start-view]'),${SHELL_SETTLE_MS});if(!start)return null;
+      const route=await wait(()=>{const select=q('select[aria-label="Processing route"]',start);return select&&[...select.options].some(o=>o.value==='claude-api-key')?select:null;},${SHELL_SETTLE_MS});if(!route)return null;
+      const choose=(select,value)=>{Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(select,value);select.dispatchEvent(new Event('change',{bubbles:true}));};
+      choose(route,'claude-api-key');
+      const reasoning=await wait(()=>q('select[aria-label="Reasoning"]',start),${POLICY_SETTLE_MS}),speed=q('select[aria-label="Speed"]',start);
+      if(!reasoning||!speed||reasoning.disabled||speed.disabled)return null;choose(reasoning,'default');choose(speed,'default');
+      type(q('[data-composer-input]',start),${JSON.stringify(fixture.requests[0])});
+      const send=await wait(()=>{const button=q('[data-composer-send]',start);return button&&!button.disabled&&button.getAttribute('aria-disabled')!=='true'?button:null;},${SHELL_SETTLE_MS});if(!send)return null;send.click();
+      const task=await wait(()=>qVisible('[data-task-view]'),${POLICY_SETTLE_MS});return task?.getAttribute('data-task-view')??null;
+    })()`) as string|null;
+    if(!taskId)throw new SmokeProbeFailure('Actual UI Send did not accept a synthetic Task');
+    if(!(await waitAnswer(taskId,fixture.answers[0]!)))throw new SmokeProbeFailure('First synthetic assistant answer did not render');
+    const first=await taskSnapshot(taskId);if(first.status!=='completed')throw new SmokeProbeFailure('First synthetic native turn did not complete');
+    await checkFixture(1);
+    const collapsed=await contents.executeJavaScript(`(()=>{const details=document.querySelector('[data-task-view="'+${JSON.stringify(taskId)}+'"] [data-task-inspector]');return !!details&&!details.open;})()`);
+    if(!collapsed)throw new SmokeProbeFailure('Conversation inspector was not collapsed by default');
+    await capture('02-completed-conversation-synthetic');
+    const sendFollowup=async(request:string)=>contents.executeJavaScript(`(async()=>{
+      ${SHELL_HELPERS}
+      const task=qVisible('[data-task-view="'+${JSON.stringify(taskId)}+'"]');if(!task)return false;
+      type(q('[data-composer-input]',task),${JSON.stringify(request)});
+      const send=await wait(()=>{const button=q('[data-composer-send]',task);return button&&!button.disabled&&button.getAttribute('aria-disabled')!=='true'?button:null;},${SHELL_SETTLE_MS});if(!send)return false;send.click();return true;
+    })()`);
+    stage='visual-ui-completed-followup';
+    if(!(await sendFollowup(fixture.requests[1]!))||!(await waitAnswer(taskId,fixture.answers[1]!)))throw new SmokeProbeFailure('Completed conversation follow-up did not render');
+    const second=await taskSnapshot(taskId);
+    if(second.status!=='completed'||second.threadId!==first.threadId||second.runId===first.runId)throw new SmokeProbeFailure('Follow-up did not retain Task/thread with a new run');
+    await checkFixture(2);await capture('03-followup-conversation-synthetic');
+    stage='visual-ui-stop';
+    if(!(await sendFollowup(fixture.requests[2]!))||!(await waitAnswer(taskId,fixture.answers[2]!,false)))throw new SmokeProbeFailure('Held synthetic turn did not render before Stop');
+    const stopped=await contents.executeJavaScript(`(async()=>{
+      ${SHELL_HELPERS}
+      const task=qVisible('[data-task-view="'+${JSON.stringify(taskId)}+'"]');if(!task)return false;
+      const stop=await wait(()=>{const button=q('[data-composer-stop]',task);return button&&!button.disabled&&button.getAttribute('aria-disabled')!=='true'?button:null;},${SHELL_SETTLE_MS});if(!stop)return false;stop.click();
+      return !!(await wait(()=>[...task.querySelectorAll('button')].find(button=>button.textContent.trim()==='Resume'&&button.getClientRects().length&&!button.disabled),${POLICY_SETTLE_MS}));
+    })()`);
+    if(!stopped)throw new SmokeProbeFailure('Actual Stop did not expose explicit Resume');
+    const interrupted=await taskSnapshot(taskId);
+    if(interrupted.status!=='cancelled'||interrupted.threadId!==first.threadId||interrupted.runId===second.runId)throw new SmokeProbeFailure('Native interruption binding was not confirmed');
+    await checkFixture(3,true);await capture('04-interrupted-conversation-synthetic');
+    stage='visual-ui-reopen';
+    const reopened=await contents.executeJavaScript(`(async()=>{
+      ${SHELL_HELPERS}
+      if(!press('[data-action="new-thread"]')||!await wait(()=>qVisible('[data-start-view]'),${SHELL_SETTLE_MS}))return false;
+      const row=await wait(()=>qVisible('[data-task-id="'+${JSON.stringify(taskId)}+'"] a'),${SHELL_SETTLE_MS});if(!row)return false;row.click();
+      const task=await wait(()=>qVisible('[data-task-view="'+${JSON.stringify(taskId)}+'"]'),${SHELL_SETTLE_MS});if(!task)return false;
+      return !!(await wait(()=>[...task.querySelectorAll('button')].find(button=>button.textContent.trim()==='Resume'&&button.getClientRects().length&&!button.disabled),${POLICY_SETTLE_MS}));
+    })()`);
+    if(!reopened||!(await waitAnswer(taskId,fixture.answers[0]!))||!(await waitAnswer(taskId,fixture.answers[1]!)))throw new SmokeProbeFailure('Reopened interrupted Task did not retain conversation and Resume');
+    await checkFixture(3,true);await capture('05-reopened-conversation-synthetic');
+    stage='visual-ui-explicit-resume';
+    const resumed=await contents.executeJavaScript(`(()=>{const task=document.querySelector('[data-task-view="'+${JSON.stringify(taskId)}+'"]');const button=task&&[...task.querySelectorAll('button')].find(button=>button.textContent.trim()==='Resume'&&button.getClientRects().length&&!button.disabled&&button.getAttribute('aria-disabled')!=='true');if(!button)return false;button.click();return true;})()`);
+    if(!resumed||!(await waitAnswer(taskId,fixture.answers[3]!)))throw new SmokeProbeFailure('Explicit Resume did not complete the retained synthetic Task');
+    const last=await taskSnapshot(taskId);
+    if(last.status!=='completed'||last.threadId!==first.threadId||last.runId===interrupted.runId)throw new SmokeProbeFailure('Resume did not retain Task/thread with a new run');
+    await checkFixture(4,true);await capture('06-resumed-conversation-synthetic');
+    const details=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}return await openTaskInspector();})()`);
+    if(!details)throw new SmokeProbeFailure('Task details unavailable for visual capture');
+    await capture('07-task-details-synthetic');
+    stage='visual-settings';
+    const settings=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}location.hash='#specimen';return !!(await wait(specimenReady,${SHELL_SETTLE_MS}));})()`);
+    if(!settings)throw new SmokeProbeFailure('Existing Settings specimen unavailable');
+    await capture('08-settings-existing-specimen');
+    fs.writeFileSync(path.join(captureDir,'manifest.json'),JSON.stringify({synthetic:true,source:'Actual Electron capturePage; local pinned fixture response, not live inference',settingsSurface:'existing-design-specimen',captures},null,2));
+  }catch(error){failures.push(error instanceof SmokeProbeFailure?error.message:`Visual conversation failed at ${stage}${quotaFixtureDiagnostic(error)}`);const diagnostic=await captureSmokeFailure(contents,options.fixtureFile);if(diagnostic)captures.push(diagnostic);else failures.push('Diagnostic failure capture unavailable');}
+  finally {try{if(!(await smokeIdentity(contents,'signOut')).ok)failures.push('Visual identity cleanup failed');await options.organise.syncPrincipal();}catch{failures.push('Visual identity cleanup unavailable');}}
+  return{ok:failures.length===0,failures,synthetic:true,settingsSurface:'existing-design-specimen',captures};
 }
