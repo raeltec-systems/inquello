@@ -130,7 +130,8 @@ export class TaskService {
    const snapshot=await (kind==='stop'?this.readProgress(input,true,false):this.activity(input));if(!snapshot.ok||!this.current(entry.scope))throw new Error();
    const before=snapshot.value;entry.binding=before;
    if(kind!=='resume'&&(!['active','running'].includes(before.status)||before.turnId===null))return{ok:false,code:'refused',reason:'That turn has ended. Your instruction is preserved; no new turn was started.'};
-   if(kind==='resume'&&!['cancelled','uncertain','failed'].includes(before.status))return{ok:false,code:'refused',reason:'Only interrupted retained work can be resumed. No replacement Task was created.'};
+   if(kind==='resume'&&!['completed','cancelled','uncertain','failed'].includes(before.status))return{ok:false,code:'refused',reason:'Only completed or interrupted retained work can be continued. No replacement Task was created.'};
+   if(kind==='resume'&&before.status==='completed'&&!input.request?.trim())return{ok:false,code:'refused',reason:'Type a follow-up to continue this completed conversation. No new turn was started.'};
    const policy=await this.options.freshPolicy(input.workspaceId);if(!policy||!this.current(entry.scope))throw new Error();entry.dispatched=true;if(kind==='resume')this.pending.add(input.operationId);
    const raw=await this.options.runtime.request(`inquello/tasks/${kind}`,{operationId:input.operationId,taskId:input.taskId,workspacePolicy:policy,expectedRunId:before.runId,expectedRuntimeId:before.runtimeId,expectedTurnId:before.turnId,request:input.request});
    return{ok:true,value:await this.lifecycleReceipt(entry,raw,policy)};

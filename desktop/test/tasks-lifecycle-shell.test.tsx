@@ -29,3 +29,56 @@ it('retrieves bounded replacement pages with exact history reasons and resets on
 it('promotes the same stalled navigation Task into reserved full-read capacity without losing its request fence',async()=>{const x=fixture();const releases:Array<(v:unknown)=>void>=[];const activity=vi.fn(()=>new Promise(resolve=>releases.push(resolve)));let finish!:(v:unknown)=>void;x.api.progress.mockImplementation(()=>new Promise(resolve=>finish=resolve as typeof finish));Object.assign(x.api,{activity});const navigation=<><TaskActivityLabel taskId="task-1" workspaceId="workspace-1"/><TaskActivityLabel taskId="other-1" workspaceId="workspace-1"/><TaskActivityLabel taskId="other-2" workspaceId="workspace-1"/></>;const {rerender}=render(navigation);await waitFor(()=>expect(activity).toHaveBeenCalledTimes(3));rerender(<>{navigation}<x.Controls/></>);await waitFor(()=>expect(x.api.progress).toHaveBeenCalledTimes(1));await act(async()=>releases[0]!({ok:true,value:{...base,status:'completed'}}));await x.update(base);expect(x.api.progress).toHaveBeenCalledTimes(1);expect(screen.queryByText('Finished — review not recorded')).toBeNull();await act(async()=>finish({ok:true,value:base}));await screen.findByRole('button',{name:'Stop'});expect(screen.getByText('Running')).toBeTruthy();await act(async()=>releases.slice(1).forEach(release=>release({ok:false,reason:'unavailable'})));});
 it('clears private full-read content immediately while the fallback authority read is stalled',async()=>{const finding={id:'private',kind:'observation' as const,text:'Protected finding',checks:'unchecked' as const,checkScope:null,evidenceIds:[],basis:null};const x=fixture({...base,results:[finding]});let finish!:(v:unknown)=>void;const activity=vi.fn(()=>new Promise(resolve=>finish=resolve));Object.assign(x.api,{activity});render(<TaskProgress taskId="task-1" workspaceId="workspace-1"/>);await screen.findByText('Protected finding');x.api.progress.mockRejectedValue(new Error('disclosure refused'));await x.update(base);expect(activity).toHaveBeenCalledTimes(1);expect(screen.queryByText('Protected finding')).toBeNull();await act(async()=>finish({ok:true,value:base}));expect(screen.queryByText('Protected finding')).toBeNull();});
 it('shows selected current and historical page evidence under the same snapshot and clears it on invalidation',async()=>{const finding={id:'first',kind:'observation' as const,text:'First finding',checks:'unchecked' as const,checkScope:null,evidenceIds:[],basis:null,revision:2,state:'current' as const};const meta={snapshotId:'evidence-snapshot',currentOffset:0,currentTotal:2,currentNextOffset:1,historyOffset:0,historyTotal:2,historyNextOffset:1};const first={...base,results:[finding],resultHistory:[{...finding,revision:1,state:'superseded' as const}],resultPage:meta};const x=fixture(first);const original=x.api.progress.getMockImplementation()!;x.api.progress.mockImplementation(async(...args:unknown[])=>{const query=(args[0] as {resultPage?:{currentOffset:number;historyOffset:number}})?.resultPage;if(!query)return original();const historical=query.currentOffset===2,id=historical?'history-evidence':'current-evidence';return{ok:true,value:{...first,items:[{id,kind:'command',status:'completed',text:historical?'Retained first-turn evidence':'Current revised evidence'}],results:historical?[]:[{...finding,id:'second',evidenceIds:[id]}],resultHistory:historical?[{...finding,id:'second',revision:1,state:'superseded',evidenceIds:[id]}]:[],resultPage:{...meta,currentOffset:query.currentOffset,historyOffset:query.historyOffset,currentNextOffset:null,historyNextOffset:null}}};});render(<TaskProgress taskId="task-1" workspaceId="workspace-1"/>);fireEvent.click(await screen.findByRole('button',{name:'Next current results'}));await screen.findByText('Current revised evidence');expect(screen.getByRole('region',{name:'Evidence for current result page'})).toBeTruthy();fireEvent.click(screen.getByRole('button',{name:'Next historical results'}));await screen.findByText('Retained first-turn evidence');expect(screen.getByRole('region',{name:'Evidence for historical result page'})).toBeTruthy();expect(screen.getAllByText(/Command and tool content is untrusted source data/)).toHaveLength(2);await x.invalidate();expect(screen.queryByText('Current revised evidence')).toBeNull();expect(screen.queryByText('Retained first-turn evidence')).toBeNull();});
+
+it.each(['click','Enter'] as const)('explicit completed follow-up uses ordinary Send (%s), not steering or automatic Resume',async trigger=>{
+ const x=fixture({...base,status:'completed'});render(<x.Controls/>);
+ const send=screen.getByRole('button',{name:'Send'});
+ await waitFor(()=>expect(send.getAttribute('aria-disabled')).not.toBe('true'));
+ expect(screen.queryByRole('button',{name:'Resume'})).toBeNull();
+ expect(x.api.resume).not.toHaveBeenCalled();
+ expect(screen.getByRole('button',{name:'Stop'}).getAttribute('aria-disabled')).toBe('true');
+ const input=screen.getByRole('textbox');
+ if(trigger==='click')fireEvent.click(send);else fireEvent.keyDown(input,{key:'Enter'});
+ await waitFor(()=>expect(x.api.resume).toHaveBeenCalledWith({operationId:'op-1',taskId:'task-1',workspaceId:'workspace-1',request:'Exclude cancelled invoices'}));
+ expect(x.api.resume).toHaveBeenCalledTimes(1);expect(x.api.steer).not.toHaveBeenCalled();
+ await waitFor(()=>expect((input as HTMLTextAreaElement).value).toBe(''));
+ expect(screen.getByText('Continuing this Task with its retained history.')).toBeTruthy();
+});
+it('completed work never submits an empty follow-up or restarts while merely observed',async()=>{
+ const x=fixture({...base,status:'completed'});render(<x.Controls/>);
+ await waitFor(()=>expect(screen.getByRole('button',{name:'Send'}).getAttribute('aria-disabled')).not.toBe('true'));
+ const input=screen.getByRole('textbox');fireEvent.change(input,{target:{value:' \n\t'}});
+ expect(screen.getByRole('button',{name:'Send'}).getAttribute('aria-disabled')).toBe('true');
+ fireEvent.click(screen.getByRole('button',{name:'Send'}));fireEvent.keyDown(input,{key:'Enter'});
+ expect(x.api.resume).not.toHaveBeenCalled();expect(x.api.steer).not.toHaveBeenCalled();
+});
+it('completed follow-up coalesces Send while pending and preserves a subsequently edited draft',async()=>{
+ const x=fixture({...base,status:'completed'});let release!:(value:unknown)=>void;
+ x.api.resume.mockImplementation(()=>new Promise(r=>release=r as typeof release));render(<x.Controls/>);
+ const send=screen.getByRole('button',{name:'Send'});
+ await waitFor(()=>expect(send.getAttribute('aria-disabled')).not.toBe('true'));
+ const input=screen.getByRole('textbox');fireEvent.click(send);fireEvent.keyDown(input,{key:'Enter'});
+ await waitFor(()=>expect(x.api.resume).toHaveBeenCalledTimes(1));
+ expect((input as HTMLTextAreaElement).value).toBe('Exclude cancelled invoices');
+ fireEvent.change(input,{target:{value:'A second, unsent follow-up'}});
+ await act(async()=>release({ok:true,value:receipt('resume')}));
+ expect((input as HTMLTextAreaElement).value).toBe('A second, unsent follow-up');
+ expect(x.api.resume).toHaveBeenCalledTimes(1);
+});
+it('refused completed follow-up retains its draft without falling back to another turn',async()=>{
+ const x=fixture({...base,status:'completed'});
+ x.api.resume.mockResolvedValue({ok:false,code:'refused',reason:'Current route authority unavailable.'} as never);render(<x.Controls/>);
+ await waitFor(()=>expect(screen.getByRole('button',{name:'Send'}).getAttribute('aria-disabled')).not.toBe('true'));
+ fireEvent.click(screen.getByRole('button',{name:'Send'}));
+ await screen.findByText('Current route authority unavailable.');
+ expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('Exclude cancelled invoices');
+ expect(x.api.resume).toHaveBeenCalledTimes(1);expect(x.api.steer).not.toHaveBeenCalled();
+});
+it('completed follow-up is disabled after retained authority observation is invalidated',async()=>{
+ const x=fixture({...base,status:'completed'});render(<x.Controls/>);
+ await waitFor(()=>expect(screen.getByRole('button',{name:'Send'}).getAttribute('aria-disabled')).not.toBe('true'));
+ await x.invalidate();
+ expect(screen.getByRole('button',{name:'Send'}).getAttribute('aria-disabled')).toBe('true');
+ fireEvent.click(screen.getByRole('button',{name:'Send'}));
+ expect(x.api.resume).not.toHaveBeenCalled();
+});

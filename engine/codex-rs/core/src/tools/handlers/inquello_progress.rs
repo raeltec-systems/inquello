@@ -2,6 +2,8 @@
 use crate::function_tool::FunctionCallError;
 use crate::tools::context::{FunctionToolOutput, ToolInvocation, ToolPayload, boxed_tool_output};
 use crate::tools::registry::{CoreToolRuntime, ToolExecutor};
+use codex_protocol::items::{FunctionCallOutputItem, TurnItem};
+use codex_protocol::models::FunctionCallOutputBody;
 use codex_tools::{ResponsesApiTool, ToolName, ToolSpec};
 use inquello_protocol::progress::Publication;
 use serde_json::json;
@@ -10,6 +12,11 @@ pub struct InquelloProgressHandler;
 impl ToolExecutor<ToolInvocation> for InquelloProgressHandler {
     fn tool_name(&self) -> ToolName {
         ToolName::plain("inquello_progress")
+    }
+    fn supports_parallel_tool_calls(&self) -> bool {
+        // A bounded, authorized publication must remain available while a
+        // one-shot command is running; it grants no execution or filesystem effect.
+        true
     }
     fn spec(&self) -> ToolSpec {
         let reference = json!({"type":"array","items":{"type":"string"}});
@@ -57,6 +64,23 @@ impl ToolExecutor<ToolInvocation> for InquelloProgressHandler {
                 })?;
             let retained = serde_json::to_string(&publication)
                 .map_err(|_| FunctionCallError::Fatal("Publication unavailable".into()))?;
+            // Function output feeds model history; typed item events separately
+            // populate the indexed retained history used by progress and search.
+            // Session emission rechecks current private disclosure authority.
+            let item = TurnItem::FunctionCallOutput(FunctionCallOutputItem {
+                id: invocation.call_id.clone(),
+                name: "inquello_progress".into(),
+                namespace: None,
+                output: FunctionCallOutputBody::Text(retained.clone()),
+            });
+            invocation
+                .session
+                .emit_turn_item_started(invocation.turn.as_ref(), &item)
+                .await;
+            invocation
+                .session
+                .emit_turn_item_completed(invocation.turn.as_ref(), item)
+                .await;
             Ok(boxed_tool_output(FunctionToolOutput::from_text(
                 retained,
                 Some(true),
@@ -74,6 +98,12 @@ impl CoreToolRuntime for InquelloProgressHandler {
 mod tests {
     use super::*;
     use inquello_protocol::inference::{validate_arguments, validate_schema};
+    #[test]
+    fn bounded_publication_can_run_alongside_one_shot_evidence() {
+        assert!(InquelloProgressHandler.supports_parallel_tool_calls());
+        assert!(InquelloProgressHandler.is_builtin_control_tool());
+    }
+
     #[test]
     fn exact_publisher_schema_and_arguments_fit_current_route() {
         let ToolSpec::Function(tool) = InquelloProgressHandler.spec() else {

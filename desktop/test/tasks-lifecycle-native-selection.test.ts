@@ -9,8 +9,8 @@ describe('native lifecycle acceptance selection', () => {
     expect(() => verifySelection('0 tests, 0 benchmarks\n')).toThrow('not selected');
   });
   it('requires every maintained case on both provider bindings', () => {
-    expect(required).toHaveLength(36);
+    expect(required).toHaveLength(38);
     expect(() => verifySelection(required.slice(1).map(name => `${name}: test`).join('\n'))).toThrow(required[0]);
-    expect(verifySelection(required.map(name => `${name}: test`).join('\r\n')).size).toBe(36);
+    expect(verifySelection(required.map(name => `${name}: test`).join('\r\n')).size).toBe(38);
   });
 });

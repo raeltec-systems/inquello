@@ -281,13 +281,9 @@ pub struct SavedReadFence {
 }
 impl SqliteWorkingStore {
     pub async fn saved_read_fence(&self) -> Result<SavedReadFence, StoreError> {
-        use sqlx::ConnectOptions;
         let identity_file = open_saved_identity(&self.path)?;
         let identity = saved_file_identity(&identity_file)?;
-        let mut connection = sqlx::sqlite::SqliteConnectOptions::new()
-            .filename(&self.path)
-            .read_only(true)
-            .connect()
+        let mut connection = sqlite::open_read_only_connection(&self.path)
             .await
             .map_err(backend)?;
         let version = sqlx::query_scalar("PRAGMA data_version")

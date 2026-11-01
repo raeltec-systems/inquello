@@ -21,7 +21,46 @@ const LATE: &str = "INV-104 duplicated: potential K12,480; INV-105 distinct. Aut
 fn event(kind: &str, value: Value) -> String {
     format!("event: {kind}\ndata: {value}\n\n")
 }
+const FOLLOWUP_REQUEST: &str = "Explain why the earlier finding still needs vendor evidence.";
+const FOLLOWUP_ANSWER: &str = "The earlier finding remains an unchecked candidate; vendor evidence is needed before any conclusion.";
+
 fn streams(route: &str, scenario: &str) -> Vec<String> {
+    if scenario == "lifecycle-completed-followup" {
+        // The first two responses genuinely finish the original tool-using turn.
+        // Only the explicit follow-up may request this third, text-only response.
+        let mut responses = streams(route, "lifecycle-stop-resume");
+        let answer = if route == "codex-responses" {
+            event(
+                "response.created",
+                json!({"type":"response.created","response":{"id":"resp_followup","status":"in_progress"}}),
+            ) + &event(
+                "response.output_item.done",
+                json!({"type":"response.output_item.done","output_index":0,"item":{"type":"message","id":"msg_followup","role":"assistant","status":"completed","content":[{"type":"output_text","text":FOLLOWUP_ANSWER,"annotations":[]}]}}),
+            ) + &event(
+                "response.completed",
+                json!({"type":"response.completed","response":{"id":"resp_followup","status":"completed","end_turn":true,"output":[],"usage":{"input_tokens":24,"output_tokens":12,"total_tokens":36}}}),
+            )
+        } else {
+            event(
+                "message_start",
+                json!({"type":"message_start","message":{"id":"msg_followup","role":"assistant","model":"claude-sonnet-5-5","content":[],"usage":{"input_tokens":24}}}),
+            ) + &event(
+                "content_block_start",
+                json!({"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}),
+            ) + &event(
+                "content_block_delta",
+                json!({"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":FOLLOWUP_ANSWER}}),
+            ) + &event(
+                "content_block_stop",
+                json!({"type":"content_block_stop","index":0}),
+            ) + &event(
+                "message_delta",
+                json!({"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":12}}),
+            ) + &event("message_stop", json!({"type":"message_stop"}))
+        };
+        responses.push(answer);
+        return responses;
+    }
     let waiting = scenario == "revoke-running-tool" || scenario.starts_with("lifecycle-");
     let command = if waiting {
         "printf '%s' \"$$\" > output/pid.txt; readlink /proc/self/ns/pid > output/pid-namespace.txt; printf started > output/started.txt; n=0; while [ ! -f output/release.txt ] && [ \"$n\" -lt 300 ]; do sleep 0.1; n=$((n+1)); done; printf late > output/late.txt"
@@ -268,7 +307,10 @@ struct Fixture {
 }
 async fn fixture(route: &'static str, scenario: &'static str) -> Fixture {
     let hold_last = matches!(scenario, "revoke-model" | "lifecycle-revoke-during-resume");
-    let count = if scenario == "lifecycle-progress-cache" {
+    let count = if matches!(
+        scenario,
+        "lifecycle-progress-cache" | "lifecycle-completed-followup"
+    ) {
         3
     } else if scenario == "lifecycle-progress-continuity" {
         4
@@ -466,6 +508,58 @@ fn assert_fixture_shell_command(pid: u32) {
 }
 // Inspect actual persisted TurnContext configuration after the native writer
 // closes. This is fixture-side filesystem inspection, not a renderer capability.
+fn retained_user_messages(home: &std::path::Path, thread: &str) -> Vec<(String, Option<String>)> {
+    fn visit(dir: &std::path::Path, files: &mut Vec<std::path::PathBuf>) {
+        for entry in std::fs::read_dir(dir).expect("retained fixture history") {
+            let entry = entry.unwrap();
+            if entry.file_type().unwrap().is_dir() {
+                visit(&entry.path(), files);
+            } else if entry.path().extension().and_then(|s| s.to_str()) == Some("jsonl") {
+                files.push(entry.path());
+            }
+        }
+    }
+    let mut files = Vec::new();
+    visit(&home.join("sessions"), &mut files);
+    assert!(
+        !files.is_empty() && files.len() < 100,
+        "bounded retained fixture history"
+    );
+    let mut messages = Vec::new();
+    for file in files {
+        let text = std::fs::read_to_string(file).expect("closed retained rollout");
+        let mut lines = text.lines();
+        let first: Value = serde_json::from_str(lines.next().expect("rollout header")).unwrap();
+        if first["type"] != "session_meta" || first["payload"]["id"] != thread {
+            continue;
+        }
+        for line in lines.filter(|line| !line.is_empty()) {
+            let record = codex_rollout::parse_rollout_line_bytes(line.as_bytes()).unwrap();
+            match record.item {
+                codex_rollout::RolloutItem::EventMsg(
+                    codex_protocol::protocol::EventMsg::UserMessage(user),
+                ) => messages.push((user.message, user.client_id)),
+                codex_rollout::RolloutItem::EventMsg(
+                    codex_protocol::protocol::EventMsg::ItemCompleted(event),
+                ) => {
+                    if let codex_protocol::items::TurnItem::UserMessage(user) = event.item {
+                        messages.push((user.message(), user.client_id));
+                    }
+                }
+                codex_rollout::RolloutItem::EventMsg(
+                    codex_protocol::protocol::EventMsg::ItemStarted(event),
+                ) => {
+                    if let codex_protocol::items::TurnItem::UserMessage(user) = event.item {
+                        messages.push((user.message(), user.client_id));
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    messages
+}
+
 fn retained_sandbox_modes(home: &std::path::Path, thread: &str) -> Vec<(String, String)> {
     fn visit(dir: &std::path::Path, files: &mut Vec<std::path::PathBuf>) {
         if !dir.exists() {
@@ -705,6 +799,135 @@ pub(super) async fn run(
         )
         .await;
         assert!(observed["turnId"].as_str().is_some());
+        if scenario == "lifecycle-completed-followup" {
+            guest_observer::write(output.join("release.txt"), b"finish the original answer")
+                .unwrap();
+            let first = wait_progress(&mut server, &mut host, &task, &policy, |p| {
+                p["status"] == "completed"
+            })
+            .await;
+            assert_eq!(first["runId"], observed["runId"]);
+            assert_eq!(first["turnId"], observed["turnId"]);
+            assert!(first["items"].to_string().contains(LATE));
+            assert_eq!(fixture.requests.lock().await.len(), 2);
+            let completed = private_rpc(
+                &mut server,
+                &mut host,
+                "inquello/tasks/forThread",
+                json!({"threadId":thread}),
+            )
+            .await;
+            assert_eq!(completed["runId"], first["runId"]);
+            assert_eq!(completed["turnId"], first["turnId"]);
+            let followup_command = |request: Value| {
+                json!({"operationId":uuid::Uuid::new_v4().to_string(),"taskId":task,
+                    "expectedRunId":completed["runId"],"expectedRuntimeId":completed["runtimeId"],
+                    "expectedTurnId":completed["turnId"],"request":request,"workspacePolicy":policy})
+            };
+            for request in [Value::Null, json!(""), json!(" \n\t")] {
+                let refused = private_rpc(
+                    &mut server,
+                    &mut host,
+                    "inquello/tasks/resume",
+                    followup_command(request),
+                )
+                .await;
+                assert!(
+                    refused.get("rpcError").is_some(),
+                    "completed work requires an explicit nonblank follow-up: {refused}"
+                );
+                assert_eq!(fixture.requests.lock().await.len(), 2);
+            }
+            let unchanged = private_rpc(
+                &mut server,
+                &mut host,
+                "inquello/tasks/forThread",
+                json!({"threadId":thread}),
+            )
+            .await;
+            assert_eq!(unchanged["runId"], completed["runId"]);
+            assert_eq!(unchanged["turnId"], completed["turnId"]);
+            assert_eq!(
+                fixture.requests.lock().await.len(),
+                2,
+                "reading or refusing empty follow-up never starts another turn"
+            );
+            let followup = followup_command(json!(FOLLOWUP_REQUEST));
+            let admitted = private_rpc(
+                &mut server,
+                &mut host,
+                "inquello/tasks/resume",
+                followup.clone(),
+            )
+            .await;
+            assert_eq!(
+                admitted["status"], "admitted",
+                "completed follow-up: {admitted}"
+            );
+            assert_eq!(admitted["taskId"], task);
+            assert_eq!(admitted["threadId"], thread);
+            assert_ne!(admitted["runId"], completed["runId"]);
+            assert!(admitted["turnId"].as_str().is_some());
+            assert_ne!(admitted["turnId"], completed["turnId"]);
+            let replay = private_rpc(
+                &mut server,
+                &mut host,
+                "inquello/tasks/resume",
+                followup.clone(),
+            )
+            .await;
+            assert_eq!(replay["runId"], admitted["runId"]);
+            assert_eq!(replay["turnId"], admitted["turnId"]);
+            assert_eq!(replay["threadId"], thread);
+            let finished = wait_progress(&mut server, &mut host, &task, &policy, |p| {
+                p["status"] == "completed" && p["runId"] == admitted["runId"]
+            })
+            .await;
+            assert_eq!(finished["threadId"], thread);
+            assert_eq!(finished["turnId"], admitted["turnId"]);
+            assert!(finished["items"].to_string().contains(FOLLOWUP_REQUEST));
+            assert!(finished["items"].to_string().contains(FOLLOWUP_ANSWER));
+            let requests = fixture.requests.lock().await;
+            assert_eq!(
+                requests.len(),
+                3,
+                "one explicit new turn, with no replay/fallback"
+            );
+            let history = requests[2].to_string();
+            assert!(history.contains("Review fictional procurement: INV-104"));
+            assert!(
+                history.contains(LATE),
+                "prior answer reaches the real provider binding"
+            );
+            assert!(history.contains(FOLLOWUP_REQUEST));
+            drop(requests);
+            assert_eq!(
+                guest_observer::read(output.join("late.txt")).unwrap(),
+                "late"
+            );
+
+            // A later authority withdrawal prevents another explicit follow-up.
+            // Keep this after the positive control: restoring authority must not
+            // be fabricated merely to make the continued-turn witness succeed.
+            host.authority_available = false;
+            let denied = private_rpc(
+                &mut server,
+                &mut host,
+                "inquello/tasks/resume",
+                json!({"operationId":uuid::Uuid::new_v4().to_string(),"taskId":task,
+                    "expectedRunId":finished["runId"],"expectedRuntimeId":finished["runtimeId"],
+                    "expectedTurnId":finished["turnId"],"request":"A denied additional follow-up.",
+                    "workspacePolicy":policy}),
+            )
+            .await;
+            assert!(denied.get("rpcError").is_some());
+            assert!(!denied.to_string().contains(FOLLOWUP_ANSWER));
+            assert_eq!(fixture.requests.lock().await.len(), 3);
+            server.shutdown_gracefully().await.unwrap();
+            fixture.stop.send(()).unwrap();
+            fixture.task.await.unwrap();
+            return;
+        }
         if scenario == "lifecycle-progress-continuity" {
             let before = private_rpc(
                 &mut server,
@@ -764,9 +987,9 @@ pub(super) async fn run(
                         .unwrap(),
                 "cited command is older than the retained publication"
             );
-            // The exec tool yielded after 1s, but the retained native command
-            // remains live. Its later completion must invalidate even though
-            // the newest-created publication item has not changed.
+            // The one-shot command remains live while the parallel, non-effect
+            // publisher records newer findings. Its later completion must invalidate
+            // the snapshot even though the newest publication item has not changed.
             guest_observer::write(
                 output.join("release.txt"),
                 b"complete original evidence command",
@@ -870,27 +1093,41 @@ pub(super) async fn run(
             assert_eq!(still_running["status"], "running");
             assert_eq!(still_running["turnId"], observed["turnId"]);
         }
+        let mut timed_out_steer_operation = None;
         if scenario == "lifecycle-stop-inflight-steer" {
             host.authority_context["workingDatabase"] = json!(database);
             host.authority_context["concurrentStop"] = command_for(None);
             host.authority_context["holdSteerAuthority"] = json!(true);
-            let steer = private_rpc(
-                &mut server,
-                &mut host,
-                "inquello/tasks/steer",
-                command_for(Some(
-                    "Exclude cancelled invoices; preserve this draft if admission fails.",
-                )),
-            )
-            .await;
+            let guidance = command_for(Some(
+                "Exclude cancelled invoices; preserve this draft if admission fails.",
+            ));
+            let steering_operation = guidance["operationId"].as_str().unwrap().to_owned();
+            timed_out_steer_operation = Some(steering_operation.clone());
+            let steer = private_rpc(&mut server, &mut host, "inquello/tasks/steer", guidance).await;
             assert!(
                 host.authority_context["heldAuthorityRequest"].is_number()
                     || host.authority_context["heldAuthorityRequest"].is_string(),
                 "a real writer-held authority request must be withheld"
             );
             assert!(
-                steer.get("rpcError").is_some(),
-                "timed-out validation must not report admission: {steer}"
+                steer["rpcError"]["message"]
+                    .as_str()
+                    .is_some_and(|message| message.contains(
+                        "Lifecycle authority timed out before commit; no effect dispatched"
+                    )),
+                "writer-held admission must reach its exact bounded timeout, never admission: {steer}"
+            );
+            let reconciled = private_rpc(
+                &mut server,
+                &mut host,
+                "inquello/tasks/lifecycleReconcile",
+                json!({"operationId":steering_operation}),
+            )
+            .await;
+            assert!(
+                reconciled["rpcError"]["data"]["inquello"]["kind"] == "not_found"
+                    || reconciled["status"] == "rejected",
+                "timed-out admission leaves no admitted or dispatchable receipt: {reconciled}"
             );
             assert!(
                 host.authority_context["concurrentStopId"]
@@ -1638,6 +1875,23 @@ pub(super) async fn run(
             }
         }
         server.shutdown_gracefully().await.unwrap();
+        if let Some(operation) = timed_out_steer_operation {
+            // The writer is closed: absence is checked against flushed retained
+            // user messages, not a racing or filtered progress projection.
+            let messages = retained_user_messages(&home, &thread);
+            assert!(
+                messages
+                    .iter()
+                    .any(|(text, _)| text.contains("Review fictional procurement: INV-104")),
+                "positive control: the original permitted request is retained"
+            );
+            assert!(
+                messages
+                    .iter()
+                    .all(|(_, client_id)| client_id.as_deref() != Some(operation.as_str())),
+                "timed-out validation must never append its user-message operation"
+            );
+        }
         if scenario == "lifecycle-warm-policy-change" {
             let modes = retained_sandbox_modes(&home, &thread);
             let prior = observed["turnId"].as_str().unwrap();

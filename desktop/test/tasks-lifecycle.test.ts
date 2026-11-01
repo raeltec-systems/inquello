@@ -40,3 +40,52 @@ it('binds requested result pages to native snapshot and offsets at the main boun
 
 it('rejects unbounded or unbound result page renderer requests',()=>{const page={taskId:task,workspaceId:workspace,resultPage:{snapshotId:op,currentOffset:64,historyOffset:128}};expect(taskProgressPayload([page])).toEqual(page);for(const resultPage of [{currentOffset:64},{snapshotId:op,currentOffset:10000001},{snapshotId:op,currentOffset:-1},{snapshotId:op,threadId:'forged'},{snapshotId:'bad'}])expect(()=>taskProgressPayload([{...page,resultPage}])).toThrow();});
 it('a stale final-policy snapshot cannot discard a newly resumed question',async()=>{let reads=0,release!:(v:any)=>void;const policy={workspaceId:workspace};let snapshot={...base,status:'cancelled'};const request=vi.fn(async(method:string)=>{if(method==='inquello/tasks/progress')return snapshot;if(method==='inquello/tasks/forThread')return {...snapshot};return {...receipt('resume'),runId:workspace,turnId:'new-turn'};});const service=new TaskService({runtime:{ready:()=>true,instance:()=>1,request:request as never},identity:{principalId:()=>task},syncPrincipal:async()=>{},prepareRoutes:async()=>({ok:true}),freshPolicy:async()=>{if(++reads===2)return new Promise(r=>release=r);return policy as never;}});const old=service.progress(input);await vi.waitFor(()=>expect(release).toBeTypeOf('function'));expect(await service.resume({...input,request:null})).toMatchObject({ok:true});snapshot={...base,status:'running',runId:workspace,turnId:'new-turn'};let answered=false;const question=service.question(1,{threadId:'thread-1',turnId:'new-turn',itemId:'question-1',questions:[{id:'q',header:'Period',question:'Which period?',isOther:false,isSecret:false,options:null}]}).then(value=>{answered=true;return value;});await vi.waitFor(async()=>expect(await service.progress(input)).toMatchObject({ok:true,value:{questions:[{itemId:'question-1'}]}}));release(policy);await old;expect(answered).toBe(false);expect(await service.progress(input)).toMatchObject({ok:true,value:{questions:[{itemId:'question-1'}]}});service.invalidate();await question;});
+
+it('continues completed work only through the retained Resume route with a new run and the same thread',async()=>{
+ const x=setup();x.setSnapshot({...base,status:'completed'});
+ x.setOutcome({...receipt('resume'),runId:op,turnId:'turn-2'});
+ expect(await x.service.resume(input)).toMatchObject({ok:true,value:{threadId:'thread-1',runId:op,turnId:'turn-2'}});
+ expect(x.request).toHaveBeenCalledWith('inquello/tasks/resume',expect.objectContaining({expectedRunId:run,expectedRuntimeId:'runtime-1',expectedTurnId:'turn-1',request:input.request}));
+ expect(x.request.mock.calls.some(([method])=>['thread/start','turn/start','inquello/tasks/start','inquello/tasks/steer'].includes(method))).toBe(false);
+ expect(x.service.activeTasks()).toBe(1);
+ x.service.notification('turn/completed',{threadId:'thread-1',turn:{id:'turn-1'}});
+ expect(x.service.activeTasks()).toBe(1);
+ x.service.notification('turn/completed',{threadId:'thread-1',turn:{id:'turn-2'}});
+ expect(x.service.activeTasks()).toBe(0);
+});
+it.each([null,'',' \n\t'])('refuses an empty completed follow-up (%j) before native dispatch',async request=>{
+ const x=setup();x.setSnapshot({...base,status:'completed'});
+ expect(await x.service.resume({...input,request})).toMatchObject({ok:false,code:'refused'});
+ expect(x.request.mock.calls.map(([method])=>method)).toEqual(['inquello/tasks/progress']);
+});
+it('completed follow-up coalesces a repeated operation and reconciles rather than redispatching',async()=>{
+ const x=setup();x.setSnapshot({...base,status:'completed'});x.setOutcome({...receipt('resume'),runId:op,turnId:'turn-2'});
+ const first=x.service.resume(input),second=x.service.resume(input);expect(first).toBe(second);
+ await first;await x.service.resume(input);
+ expect(x.request.mock.calls.filter(([method])=>method==='inquello/tasks/resume')).toHaveLength(1);
+ expect(x.request.mock.calls.filter(([method])=>method==='inquello/tasks/lifecycleReconcile')).toHaveLength(1);
+ expect(await x.service.resume({...input,request:'Different follow-up'})).toMatchObject({ok:false,code:'refused'});
+});
+it('lost completed-follow-up acknowledgement is reconciled without a replacement or second dispatch',async()=>{
+ const x=setup();x.request.mockImplementation(async method=>{
+  if(method==='inquello/tasks/progress')return {...base,status:'completed'};
+  if(method==='inquello/tasks/resume')throw new Error('lost acknowledgement');
+  return {...receipt('resume'),runId:op,turnId:'turn-2'};
+ });
+ expect(await x.service.resume(input)).toMatchObject({ok:true,value:{kind:'resume',status:'admitted'}});
+ expect(x.request.mock.calls.map(([method])=>method)).toEqual(['inquello/tasks/progress','inquello/tasks/resume','inquello/tasks/lifecycleReconcile']);
+});
+it('completed follow-up refuses unavailable provider setup without dispatch or replacement',async()=>{
+ const request=vi.fn(async()=>({...base,status:'completed'}));
+ const service=new TaskService({runtime:{ready:()=>true,instance:()=>1,request:request as never},identity:{principalId:()=>task},syncPrincipal:async()=>{},prepareRoutes:async()=>({ok:false}),freshPolicy:async()=>({workspaceId:workspace} as never)});
+ expect(await service.resume(input)).toMatchObject({ok:false});
+ expect(request).not.toHaveBeenCalled();
+});
+it('completed follow-up does not expose an acknowledgement after current policy disappears',async()=>{
+ const x=setup();x.request.mockImplementation(async method=>{
+  if(method==='inquello/tasks/progress')return {...base,status:'completed'};
+  x.setPolicy(null);return {...receipt('resume'),runId:op,turnId:'turn-2'};
+ });
+ expect(await x.service.resume(input)).toMatchObject({ok:false,code:'uncertain'});
+ expect(x.request.mock.calls.filter(([method])=>method==='inquello/tasks/resume')).toHaveLength(1);
+});

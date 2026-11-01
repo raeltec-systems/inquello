@@ -516,10 +516,15 @@ fn lifecycle_current(i: &TaskLifecycleIntent, b: &TaskRunBinding) -> Result<(), 
             ) && b.turn_id.is_some()
                 && i.runtime_id == b.runtime_id
         }
-        TaskLifecycleKind::Resume => matches!(
-            b.status,
-            TaskRunStatus::Cancelled | TaskRunStatus::Failed | TaskRunStatus::Uncertain
-        ),
+        TaskLifecycleKind::Resume => {
+            matches!(
+                b.status,
+                TaskRunStatus::Cancelled | TaskRunStatus::Failed | TaskRunStatus::Uncertain
+            ) || (b.status == TaskRunStatus::Completed
+                && i.guidance
+                    .as_ref()
+                    .is_some_and(|text| !text.trim().is_empty()))
+        }
     };
     if !allowed {
         return Err(invalid(
@@ -788,6 +793,37 @@ impl TaskLifecycleStore for SqliteWorkingStore {
 }
 
 impl SqliteWorkingStore {
+    /// Close only this still-unclaimed reservation. A losing duplicate must not
+    /// overwrite another caller's durable dispatch or terminal acknowledgement.
+    pub async fn reject_reserved_task_lifecycle(
+        &self,
+        p: PrincipalId,
+        op: &str,
+        expected: &TaskRunBinding,
+    ) -> Result<(TaskLifecycleReceipt, bool), DomainError> {
+        OperationId::parse(op)?;
+        let mut tx = self
+            .pool()
+            .begin_with("BEGIN IMMEDIATE")
+            .await
+            .map_err(backend)?;
+        let (intent, mut receipt) = lifecycle_load(&mut tx, p, op)
+            .await?
+            .ok_or(DomainError::NotFound)?;
+        if &intent.expected != expected {
+            return Err(invalid(
+                "Lifecycle reservation belongs to another execution",
+            ));
+        }
+        if receipt.status != TaskLifecycleStatus::Reserved {
+            return Ok((receipt, false));
+        }
+        receipt.status = TaskLifecycleStatus::Rejected;
+        lifecycle_write(&mut tx, p, &receipt).await?;
+        tx.commit().await.map_err(backend)?;
+        Ok((receipt, true))
+    }
+
     pub async fn find_task_current_run(
         &self,
         p: PrincipalId,

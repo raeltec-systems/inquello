@@ -6472,18 +6472,16 @@ impl InquelloRequestProcessor {
         {
             Ok(claimed) => claimed,
             Err(error) => {
-                // Claim is transactional. A failed claim submitted no native
-                // input; close its reservation so restored authority can act.
-                let _ = store
-                    .finish_task_lifecycle(
-                        actor.principal_id,
-                        &params.operation_id,
-                        &run.runtime_id,
-                        &thread,
-                        run.turn_id.as_deref(),
-                        TaskLifecycleStatus::Rejected,
-                    )
-                    .await;
+                // A failed claim may have lost to a duplicate that already
+                // dispatched. Atomically reject only an unclaimed reservation;
+                // never rewrite the winning caller's receipt or dispatch again.
+                let (receipt, rejected) = store
+                    .reject_reserved_task_lifecycle(actor.principal_id, &params.operation_id, &run)
+                    .await
+                    .map_err(domain_error)?;
+                if !rejected {
+                    return self.lifecycle_response(connection, actor, receipt).await;
+                }
                 return Err(before_effect(domain_error(error)));
             }
         };

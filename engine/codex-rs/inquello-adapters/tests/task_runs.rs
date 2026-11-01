@@ -9,6 +9,22 @@ use uuid::Uuid;
 fn ok<T, E: std::fmt::Debug>(r: Result<T, E>) -> T {
     r.unwrap_or_else(|e| panic!("{e:?}"))
 }
+/// Test-only connection shim for injecting lock/trigger failures into an already
+/// initialized temporary store. Production connections remain in src/sqlite.rs.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "fixture-only SQLite fault injection shim"
+)]
+async fn fixture_pool(path: &std::path::Path) -> sqlx::SqlitePool {
+    ok(sqlx::sqlite::SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect_with(
+            sqlx::sqlite::SqliteConnectOptions::new()
+                .filename(path)
+                .create_if_missing(false),
+        )
+        .await)
+}
 fn actor(n: u8) -> Actor {
     Actor {
         principal_id: PrincipalId::from_uuid(Uuid::from_bytes([n; 16])),
@@ -298,11 +314,7 @@ async fn reservation_fence_rechecks_after_writer_wait_and_rolls_back_before_comm
     let c = intent();
     let authority = Arc::new(AtomicBool::new(true));
     let observed = Arc::new(AtomicUsize::new(0));
-    let lock_pool = ok(sqlx::SqlitePool::connect(&format!(
-        "sqlite://{}",
-        d.path().join("work.db").display()
-    ))
-    .await);
+    let lock_pool = fixture_pool(&d.path().join("work.db")).await;
     let lock = ok(lock_pool.begin_with("BEGIN IMMEDIATE").await);
     let waiting = {
         let s = s.clone();
@@ -602,7 +614,7 @@ async fn provenance_insert_failure_rolls_back_entire_reservation() {
     let a = actor(1);
     configure(&s, a).await;
     let c = intent();
-    let pool = ok(sqlx::SqlitePool::connect(&format!("sqlite://{}", path.display())).await);
+    let pool = fixture_pool(&path).await;
     ok(sqlx::query("CREATE TRIGGER reject_provenance BEFORE INSERT ON task_data_provenance BEGIN SELECT RAISE(ABORT,'fixture failure'); END").execute(&pool).await);
     assert!(
         s.reserve_task_run(
@@ -1167,7 +1179,7 @@ async fn native_inventory_checks_every_retained_lifecycle_identity() {
         );
         assert!(!valid.files.is_empty());
         assert_eq!(valid.workspaces[0].tasks.len(), 1);
-        let db = ok(sqlx::SqlitePool::connect(&format!("sqlite://{}", path.display())).await);
+        let db = fixture_pool(&path).await;
         let count_query = match table {
             "task_run_history" => "SELECT COUNT(*) FROM task_run_history",
             "task_lifecycle" => "SELECT COUNT(*) FROM task_lifecycle",
@@ -1579,4 +1591,175 @@ async fn stalled_inflight_steer_authority_releases_writer_for_stop() {
             }
         );
     }
+}
+
+#[tokio::test]
+async fn failed_duplicate_claim_cleanup_cannot_reject_the_winning_dispatch() {
+    for kind in [TaskLifecycleKind::Steer, TaskLifecycleKind::Stop] {
+        let d = ok(tempfile::tempdir());
+        let s = ok(SqliteWorkingStore::open(&d.path().join("work.db"), &[]).await);
+        let a = actor(1);
+        let b = running(&s, a).await;
+        let intent = lifecycle(b.clone(), kind, "duplicate-claim", "runtime");
+        ok(
+            s.reserve_task_lifecycle_fenced(a.principal_id, intent, |_| async { Ok(()) })
+                .await,
+        );
+        let (first, second) = tokio::join!(
+            s.claim_task_lifecycle_fenced(a.principal_id, "duplicate-claim", |_| async { Ok(()) }),
+            s.claim_task_lifecycle_fenced(a.principal_id, "duplicate-claim", |_| async { Ok(()) })
+        );
+        assert_ne!(first.is_ok(), second.is_ok(), "exactly one dispatch owner");
+        let (observed, rejected) = ok(s
+            .reject_reserved_task_lifecycle(a.principal_id, "duplicate-claim", &b)
+            .await);
+        assert!(
+            !rejected,
+            "losing caller cannot reject the winning dispatch"
+        );
+        assert_eq!(observed.status, TaskLifecycleStatus::Dispatching);
+        let status = if kind == TaskLifecycleKind::Stop {
+            TaskLifecycleStatus::Interrupted
+        } else {
+            TaskLifecycleStatus::Admitted
+        };
+        let settled = ok(s
+            .finish_task_lifecycle(
+                a.principal_id,
+                "duplicate-claim",
+                "runtime",
+                "thread-a",
+                Some("turn-a"),
+                status,
+            )
+            .await);
+        let (replayed, rejected) = ok(s
+            .reject_reserved_task_lifecycle(a.principal_id, "duplicate-claim", &b)
+            .await);
+        assert!(!rejected);
+        assert_eq!(
+            replayed, settled,
+            "cleanup cannot rewrite terminal acknowledgement"
+        );
+    }
+}
+
+#[tokio::test]
+async fn failed_validation_cleanup_rejects_only_the_bound_unclaimed_reservation() {
+    let d = ok(tempfile::tempdir());
+    let s = ok(SqliteWorkingStore::open(&d.path().join("work.db"), &[]).await);
+    let a = actor(1);
+    let b = running(&s, a).await;
+    ok(s.reserve_task_lifecycle_fenced(
+        a.principal_id,
+        lifecycle(b.clone(), TaskLifecycleKind::Steer, "unclaimed", "runtime"),
+        |_| async { Ok(()) },
+    )
+    .await);
+    assert!(
+        s.claim_task_lifecycle_fenced(a.principal_id, "unclaimed", |_| async {
+            Err(DomainError::InvalidCommand("authority withdrawn".into()))
+        })
+        .await
+        .is_err()
+    );
+    let mut stale = b.clone();
+    stale.turn_id = Some("another-turn".into());
+    assert!(
+        s.reject_reserved_task_lifecycle(a.principal_id, "unclaimed", &stale)
+            .await
+            .is_err()
+    );
+    assert!(
+        s.reject_reserved_task_lifecycle(actor(2).principal_id, "unclaimed", &b)
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        ok(s.find_task_lifecycle(a.principal_id, "unclaimed").await)
+            .unwrap()
+            .status,
+        TaskLifecycleStatus::Reserved
+    );
+    let (closed, rejected) = ok(s
+        .reject_reserved_task_lifecycle(a.principal_id, "unclaimed", &b)
+        .await);
+    assert!(rejected);
+    assert_eq!(closed.status, TaskLifecycleStatus::Rejected);
+    ok(s.reserve_task_lifecycle_fenced(
+        a.principal_id,
+        lifecycle(b, TaskLifecycleKind::Steer, "fresh-operation", "runtime"),
+        |_| async { Ok(()) },
+    )
+    .await);
+}
+
+#[tokio::test]
+async fn completed_followup_requires_explicit_guidance_and_retains_conversation_identity() {
+    let d = ok(tempfile::tempdir());
+    let s = ok(SqliteWorkingStore::open(&d.path().join("work.db"), &[]).await);
+    let a = actor(1);
+    let running = running(&s, a).await;
+    let completed = ok(s
+        .mark_task_run(
+            a.principal_id,
+            &running.operation_id,
+            TaskRunStatus::Completed,
+            Some("turn-a"),
+        )
+        .await);
+    for guidance in [None, Some("   ".to_owned())] {
+        let mut invalid = lifecycle(
+            completed.clone(),
+            TaskLifecycleKind::Resume,
+            "empty-followup",
+            "runtime",
+        );
+        invalid.guidance = guidance;
+        assert!(
+            s.reserve_task_lifecycle_fenced(a.principal_id, invalid, |_| async { Ok(()) })
+                .await
+                .is_err()
+        );
+        assert!(
+            ok(s.find_task_lifecycle(a.principal_id, "empty-followup")
+                .await)
+            .is_none()
+        );
+    }
+    let mut followup = lifecycle(
+        completed.clone(),
+        TaskLifecycleKind::Resume,
+        "explicit-followup",
+        "runtime",
+    );
+    followup.guidance = Some("Explain the completed findings in more detail".into());
+    ok(
+        s.reserve_task_lifecycle_fenced(a.principal_id, followup.clone(), |_| async { Ok(()) })
+            .await,
+    );
+    let claimed = ok(s
+        .claim_task_lifecycle_fenced(a.principal_id, "explicit-followup", |_| async { Ok(()) })
+        .await);
+    assert_eq!(claimed.binding.task_id, completed.task_id);
+    assert_eq!(claimed.binding.thread_id, completed.thread_id);
+    assert_ne!(claimed.binding.run_id, completed.run_id);
+    assert_eq!(claimed.binding.turn_id, None);
+    assert_eq!(
+        ok(s.prior_task_runs(a.principal_id, &completed.task_id).await),
+        vec![completed.clone()]
+    );
+    let (observed, rejected) = ok(s
+        .reject_reserved_task_lifecycle(a.principal_id, "explicit-followup", &completed)
+        .await);
+    assert!(
+        !rejected,
+        "new run identity does not let duplicate cleanup reject continuation"
+    );
+    assert_eq!(observed, claimed);
+    assert!(
+        s.claim_task_lifecycle_fenced(a.principal_id, "explicit-followup", |_| async { Ok(()) })
+            .await
+            .is_err()
+    );
 }

@@ -333,6 +333,9 @@ impl TaskLifecycleIntent {
                     .any(|c| c.is_control() && !matches!(c, '\n' | '\r' | '\t'))
         }) || (self.kind == TaskLifecycleKind::Steer && self.guidance.is_none())
             || (self.kind == TaskLifecycleKind::Stop && self.guidance.is_some())
+            || (self.kind == TaskLifecycleKind::Resume
+                && self.expected.status == TaskRunStatus::Completed
+                && self.guidance.is_none())
         {
             return Err(DomainError::InvalidCommand(
                 "invalid lifecycle guidance".into(),
@@ -383,4 +386,64 @@ pub trait TaskLifecycleStore: Send + Sync {
         turn: Option<&str>,
         status: TaskLifecycleStatus,
     ) -> impl Future<Output = Result<TaskLifecycleReceipt, DomainError>> + Send;
+}
+
+#[cfg(test)]
+mod lifecycle_validation_tests {
+    use super::*;
+
+    fn continuation(status: TaskRunStatus, guidance: Option<&str>) -> TaskLifecycleIntent {
+        TaskLifecycleIntent {
+            operation_id: "follow-up".into(),
+            kind: TaskLifecycleKind::Resume,
+            expected: TaskRunBinding {
+                operation_id: "original-start".into(),
+                task_id: "11111111-1111-4111-8111-111111111111".into(),
+                run_id: "previous-run".into(),
+                principal_id: "22222222-2222-4222-8222-222222222222".into(),
+                workspace_id: "33333333-3333-4333-8333-333333333333".into(),
+                runtime_id: "retained-runtime".into(),
+                thread_id: Some("retained-thread".into()),
+                turn_id: Some("previous-turn".into()),
+                status,
+                route_id: "codex-responses".into(),
+                configuration_revision: 1,
+                choices: Choices::default(),
+                setup_failure: None,
+            },
+            guidance: guidance.map(str::to_owned),
+            runtime_id: "current-runtime".into(),
+        }
+    }
+
+    #[test]
+    fn completed_continuation_requires_explicit_nonblank_guidance() {
+        for guidance in [None, Some(""), Some(" \n\t")] {
+            assert!(
+                continuation(TaskRunStatus::Completed, guidance)
+                    .validate()
+                    .is_err()
+            );
+        }
+        let command = continuation(TaskRunStatus::Completed, Some("  Explain that finding.\n"));
+        assert!(command.validate().is_ok());
+        assert_eq!(
+            command.guidance.as_deref(),
+            Some("  Explain that finding.\n")
+        );
+    }
+
+    #[test]
+    fn interrupted_resume_keeps_optional_guidance_and_verified_linkage() {
+        for status in [
+            TaskRunStatus::Cancelled,
+            TaskRunStatus::Failed,
+            TaskRunStatus::Uncertain,
+        ] {
+            assert!(continuation(status, None).validate().is_ok());
+        }
+        let mut command = continuation(TaskRunStatus::Completed, Some("Explain that finding."));
+        command.expected.thread_id = None;
+        assert!(command.validate().is_err());
+    }
 }

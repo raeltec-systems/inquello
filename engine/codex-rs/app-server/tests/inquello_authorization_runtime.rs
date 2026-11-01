@@ -280,3 +280,13 @@ async fn responses_search_stalled_admission_timeout() {
 async fn messages_search_stalled_admission_timeout() {
     driver::run("claude-api-key", "search-stalled-admission", None).await;
 }
+
+// Completed conversation follow-up is distinct from interrupted recovery.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn responses_lifecycle_completed_followup() {
+    driver::run("codex-responses", "lifecycle-completed-followup", None).await;
+}
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn messages_lifecycle_completed_followup() {
+    driver::run("claude-api-key", "lifecycle-completed-followup", None).await;
+}

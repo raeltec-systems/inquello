@@ -36,8 +36,50 @@ pub(super) async fn private_rpc(
         .send_request(method, Some(params))
         .await
         .expect("send private operation");
+    if method == "inquello/tasks/steer" && host.authority_context["holdSteerAuthority"] == true {
+        host.authority_context["heldSteerRpcId"] = json!(id);
+    }
     private_response(server, host, id).await
 }
+
+async fn current_authority_response(host: &PrivateTaskHost, mut params: Value) -> Value {
+    if !host.authority_available || params["workspaceId"] != host.workspace_id {
+        json!({"workspacePolicy":null})
+    } else if let Some(callback) = host.authority_callback.clone() {
+        params["fixtureContext"] = host.authority_context.clone();
+        callback(params).await
+    } else {
+        json!({"workspacePolicy":host.policy})
+    }
+}
+
+async fn release_steer_authority(
+    server: &mut TestAppServer,
+    host: &mut PrivateTaskHost,
+    response_id: i64,
+) {
+    if host.authority_context["heldSteerRpcId"].as_i64() != Some(response_id) {
+        return;
+    }
+    host.authority_context["holdSteerAuthority"] = json!(false);
+    host.authority_context["heldSteerRpcId"] = Value::Null;
+    let held = host
+        .authority_context
+        .as_object_mut()
+        .unwrap()
+        .remove("heldAuthorityRequests")
+        .unwrap_or_else(|| json!([]));
+    for request in held.as_array().expect("held authority requests") {
+        let id: codex_app_server_protocol::RequestId =
+            serde_json::from_value(request["id"].clone()).unwrap();
+        let response = current_authority_response(host, request["params"].clone()).await;
+        server
+            .send_response(id, response)
+            .await
+            .expect("release current authority after admission settles");
+    }
+}
+
 pub(super) async fn private_response(
     server: &mut TestAppServer,
     host: &mut PrivateTaskHost,
@@ -58,21 +100,25 @@ pub(super) async fn private_response(
             .expect("native message");
         match message {
             JSONRPCMessage::Response(response) if response.id == RequestId::Integer(id) => {
+                release_steer_authority(server, host, id).await;
                 return response.result;
             }
             JSONRPCMessage::Error(error) if error.id == RequestId::Integer(id) => {
+                release_steer_authority(server, host, id).await;
                 return json!({"rpcError":error.error});
             }
             JSONRPCMessage::Response(response) => {
                 let RequestId::Integer(other) = response.id else {
                     panic!("unexpected string response identity")
                 };
+                release_steer_authority(server, host, other).await;
                 host.pending.insert(other, response.result);
             }
             JSONRPCMessage::Error(error) => {
                 let RequestId::Integer(other) = error.id else {
                     panic!("unexpected string error identity")
                 };
+                release_steer_authority(server, host, other).await;
                 host.pending.insert(other, json!({"rpcError":error.error}));
             }
             JSONRPCMessage::Request(request) => match request.method.as_str() {
@@ -182,31 +228,31 @@ pub(super) async fn private_response(
                             };
                         db.close().await.unwrap();
                         if writer_held {
-                            // This is the actual admitted RPC future inside the
-                            // native SQLite validation fence, not an edited receipt.
-                            host.authority_context["holdSteerAuthority"] = json!(false);
+                            // Running-tool guards share this workspace callback. Hold
+                            // every writer-held callback until the target Steer settles,
+                            // rather than mistaking the first ambient guard for admission.
                             host.authority_context["heldAuthorityRequest"] =
                                 serde_json::to_value(&request.id).unwrap();
-                            let stop = host.authority_context["concurrentStop"].clone();
-                            let stop_id = server
-                                .send_request("inquello/tasks/stop", Some(stop))
-                                .await
-                                .unwrap();
-                            host.authority_context["concurrentStopId"] = json!(stop_id);
-                            continue; // Intentionally withhold this authority reply.
+                            host.authority_context
+                                .as_object_mut()
+                                .unwrap()
+                                .entry("heldAuthorityRequests")
+                                .or_insert_with(|| json!([]))
+                                .as_array_mut()
+                                .unwrap()
+                                .push(json!({"id":request.id,"params":request.params}));
+                            if host.authority_context["concurrentStopId"].is_null() {
+                                let stop = host.authority_context["concurrentStop"].clone();
+                                let stop_id = server
+                                    .send_request("inquello/tasks/stop", Some(stop))
+                                    .await
+                                    .unwrap();
+                                host.authority_context["concurrentStopId"] = json!(stop_id);
+                            }
+                            continue; // Release fresh authority only after Steer settles.
                         }
                     }
-                    let response = if !host.authority_available {
-                        json!({"workspacePolicy":null})
-                    } else if let Some(callback) = host.authority_callback.clone() {
-                        {
-                            let mut params = request.params.unwrap();
-                            params["fixtureContext"] = host.authority_context.clone();
-                            callback(params).await
-                        }
-                    } else {
-                        json!({"workspacePolicy":host.policy})
-                    };
+                    let response = current_authority_response(host, request.params.unwrap()).await;
                     server
                         .send_response(request.id, response)
                         .await

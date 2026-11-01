@@ -248,7 +248,7 @@ fn credentials_are_scoped_one_use_revocable_and_redacted() {
     store
         .invalidate(&request.binding.principal_id, "claude-api-key", 2)
         .expect("invalidate");
-    changed = request.binding.clone();
+    changed = request.binding;
     changed.attempt_id = uuid::Uuid::new_v4().to_string();
     assert!(store.lease(&changed).is_err());
 }
