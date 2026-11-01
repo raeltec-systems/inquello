@@ -170,6 +170,7 @@ pub fn take_inquello_working_store_env() {
     // SAFETY: app-server calls this synchronously at process startup, before spawning threads.
     unsafe { std::env::remove_var(INQUELLO_WORKING_STORE_ENV_VAR) };
     let _ = TAKEN_WORKING_STORE.set(path);
+    take_paid_session_env();
 }
 
 /// The configured store path: the value taken at startup or, for hosts that did
@@ -408,10 +409,38 @@ impl InquelloRequestProcessor {
                 "the Inquello working store is not configured",
             ));
         };
-        self.store
+        if let Some(profile) = paid_profile_config()? {
+            let metadata = std::fs::symlink_metadata(path).map_err(|_| {
+                poison_paid_session();
+                paid_refusal()
+            })?;
+            let canonical = std::fs::canonicalize(path).map_err(|_| {
+                poison_paid_session();
+                paid_refusal()
+            })?;
+            if !metadata.is_file()
+                || metadata.file_type().is_symlink()
+                || !canonical.starts_with(&profile.root)
+            {
+                poison_paid_session();
+                return Err(paid_refusal());
+            }
+        }
+        let store = self
+            .store
             .get_or_try_init(|| open_store(path, &self.agent_writable_roots))
             .await
-            .cloned()
+            .cloned()?;
+        if let Some(profile) = paid_profile_config()? {
+            let info = inquello_domain::get_store_info(&store)
+                .await
+                .map_err(domain_error)?;
+            if info.is_none_or(|info| info.store_id.to_string() != profile.store_id) {
+                poison_paid_session();
+                return Err(paid_refusal());
+            }
+        }
+        Ok(store)
     }
 
     async fn context(
@@ -1988,6 +2017,12 @@ async fn open_store(
     let info = inquello_domain::get_store_info(&store)
         .await
         .map_err(domain_error)?;
+    if paid_profile_requested() && info.is_none() {
+        return Err(refusal(
+            "qualification_refused",
+            "Paid qualification cannot initialize or reset a store",
+        ));
+    }
     if info.is_none() {
         inquello_domain::initialize_store(
             &store,
@@ -2217,4 +2252,284 @@ pub(crate) fn saved_timeout_error() -> JSONRPCErrorError {
         "search_unavailable",
         "Saved inspection timed out or was cancelled; try again",
     )
+}
+
+// Controlled one-process fictional qualification only. This is not an account
+// budget or a reusable permission. Restart requires fresh owner reconciliation.
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PaidSessionProfile {
+    root: PathBuf,
+    store_id: String,
+    principal_id: String,
+    workspace_id: String,
+    account_ref: String,
+}
+static PAID_SESSION_PROFILE: OnceLock<Result<Option<PaidSessionProfile>, ()>> = OnceLock::new();
+static PAID_SESSION_STATE: OnceLock<Mutex<PaidSessionState>> = OnceLock::new();
+#[derive(Default)]
+struct PaidSessionState {
+    scope: Option<String>,
+    runs: std::collections::HashSet<String>,
+    poisoned: bool,
+}
+impl PaidSessionState {
+    fn check(&mut self, scope: &str, run: &str, reserve: bool) -> Result<(), ()> {
+        if self.poisoned || self.scope.as_deref().is_some_and(|old| old != scope) {
+            self.poisoned = true;
+            return Err(());
+        }
+        if reserve {
+            if self.runs.len() >= 2 || !self.runs.insert(run.to_owned()) {
+                return Err(());
+            }
+            self.scope.get_or_insert_with(|| scope.to_owned());
+        }
+        Ok(())
+    }
+}
+fn paid_env_aliases_valid(keys: &[std::ffi::OsString]) -> bool {
+    keys.is_empty()
+        || (keys.len() == 1
+            && keys[0].as_os_str() == std::ffi::OsStr::new("INQUELLO_FICTIONAL_PAID_SESSION"))
+}
+fn take_paid_session_env() {
+    const KEY: &str = "INQUELLO_FICTIONAL_PAID_SESSION";
+    let aliases: Vec<_> = std::env::vars_os()
+        .map(|(key, _)| key)
+        .filter(|key| key.to_string_lossy().eq_ignore_ascii_case(KEY))
+        .collect();
+    let invalid_alias = !paid_env_aliases_valid(&aliases);
+    let value = std::env::var_os(KEY);
+    if !aliases.is_empty() {
+        codex_core::inquello_inference::restrict_to_paid_qualification();
+    }
+    // SAFETY: called only by the pre-thread startup environment capture.
+    for key in &aliases {
+        unsafe { std::env::remove_var(key) };
+    }
+    let parsed = if invalid_alias {
+        Err(())
+    } else {
+        match value {
+            None => Ok(None),
+            Some(value) => value.to_str().ok_or(()).and_then(|value| {
+                if !cfg!(all(feature = "inference-fixtures", debug_assertions))
+                    || value.len() > 4096
+                {
+                    return Err(());
+                }
+                let mut profile: PaidSessionProfile =
+                    serde_json::from_str(value).map_err(|_| ())?;
+                if !profile.root.is_absolute()
+                    || uuid::Uuid::parse_str(&profile.store_id).is_err()
+                    || uuid::Uuid::parse_str(&profile.principal_id).is_err()
+                    || profile.workspace_id.is_empty()
+                    || profile.account_ref.is_empty()
+                {
+                    return Err(());
+                }
+                profile.root = std::fs::canonicalize(&profile.root).map_err(|_| ())?;
+                Ok(Some(profile))
+            }),
+        }
+    };
+    let _ = PAID_SESSION_PROFILE.set(parsed);
+}
+fn paid_refusal() -> JSONRPCErrorError {
+    refusal(
+        "qualification_refused",
+        "Controlled fictional qualification ended or constraints changed; no dispatch, retry, reset or renewed allowance",
+    )
+}
+fn paid_profile_config() -> Result<Option<&'static PaidSessionProfile>, JSONRPCErrorError> {
+    match PAID_SESSION_PROFILE.get() {
+        None | Some(Ok(None)) => Ok(None),
+        Some(Ok(Some(profile))) => Ok(Some(profile)),
+        Some(Err(())) => Err(paid_refusal()),
+    }
+}
+pub(crate) fn paid_profile_requested() -> bool {
+    matches!(
+        PAID_SESSION_PROFILE.get(),
+        Some(Ok(Some(_))) | Some(Err(()))
+    )
+}
+fn poison_paid_session() {
+    if let Ok(mut state) = PAID_SESSION_STATE.get_or_init(Default::default).lock() {
+        state.poisoned = true;
+    }
+}
+pub(crate) fn paid_profile_rpc_allowed(method: &str) -> bool {
+    let armed = PAID_SESSION_STATE.get().is_some_and(|state| {
+        state
+            .lock()
+            .map_or(true, |state| state.scope.is_some() || state.poisoned)
+    });
+    paid_profile_method_allowed(paid_profile_requested(), armed, method)
+}
+fn paid_profile_method_allowed(requested: bool, armed: bool, method: &str) -> bool {
+    if !requested {
+        return true;
+    }
+    // Keep setup/auth, reads and safe shutdown available. Never expose a second
+    // raw runtime/model/tool dispatch path in the qualification process.
+    if method.starts_with("inquello/fixture/")
+        || method.starts_with("inquello/tools/")
+        || method.starts_with("inquello/reviewer/")
+        || method.starts_with("inquello/permissions/review")
+    {
+        return false;
+    }
+    if method.starts_with("inquello/") && !armed {
+        return true;
+    }
+    if matches!(
+        method,
+        "initialize"
+            | "account/login/start"
+            | "account/login/cancel"
+            | "account/logout"
+            | "account/read"
+            | "account/rateLimits/read"
+            | "model/list"
+            | "config/read"
+            | "configRequirements/read"
+            | "skills/list"
+            | "thread/read"
+            | "thread/list"
+            | "turn/interrupt"
+            | "inquello/session/setPrincipal"
+            | "inquello/session/clearPrincipal"
+            | "inquello/routes/privateAuth"
+            | "inquello/routes/invalidate"
+            | "inquello/tasks/bootstrap"
+            | "inquello/tasks/start"
+            | "inquello/tasks/resume"
+            | "inquello/tasks/stop"
+            | "inquello/tasks/preflight"
+            | "inquello/tasks/reconcile"
+            | "inquello/tasks/lifecycleReconcile"
+            | "inquello/tasks/forThread"
+            | "inquello/tasks/progress"
+            | "inquello/workspace/list"
+            | "inquello/workspace/tree"
+            | "inquello/workspace/search"
+            | "inquello/task/reopen"
+            | "inquello/policy/effective"
+            | "inquello/permissions/pending"
+    ) {
+        return true;
+    }
+    // Closed, read-only suffixes on the existing typed Inquello method set.
+    method.starts_with("inquello/")
+        && (method.ends_with("/read") || method.ends_with("/list") || method.ends_with("/status"))
+}
+#[cfg(test)]
+mod paid_session_counter_tests {
+    use super::PaidSessionState;
+    #[test]
+    fn launch_environment_rejects_ambiguous_aliases_without_reading_credentials() {
+        assert!(super::paid_env_aliases_valid(&[]));
+        assert!(super::paid_env_aliases_valid(&[
+            "INQUELLO_FICTIONAL_PAID_SESSION".into()
+        ]));
+        assert!(!super::paid_env_aliases_valid(&[
+            "inquello_fictional_paid_session".into()
+        ]));
+        assert!(!super::paid_env_aliases_valid(&[
+            "INQUELLO_FICTIONAL_PAID_SESSION".into(),
+            "inquello_fictional_paid_session".into()
+        ]));
+    }
+    #[test]
+    fn method_gate_keeps_safe_lifecycle_and_usage_reads_without_alternate_dispatch() {
+        for method in [
+            "inquello/tasks/resume",
+            "inquello/tasks/stop",
+            "inquello/tasks/lifecycleReconcile",
+            "inquello/tasks/reconcile",
+            "inquello/tasks/progress",
+            "inquello/tasks/forThread",
+            "inquello/usage/read",
+            "inquello/routes/list",
+            "inquello/routes/invalidate",
+            "inquello/session/setPrincipal",
+            "inquello/tasks/bootstrap",
+            "inquello/policy/effective",
+            "account/login/start",
+            "account/login/cancel",
+            "account/logout",
+            "account/read",
+            "inquello/permissions/pending",
+            "thread/read",
+        ] {
+            assert!(
+                super::paid_profile_method_allowed(true, true, method),
+                "{method}"
+            );
+        }
+        for method in [
+            "turn/start",
+            "thread/start",
+            "thread/resume",
+            "thread/compact/start",
+            "inquello/fixture/messagesTurn",
+            "inquello/fixture/taskTransport",
+            "inquello/permissions/review",
+            "inquello/tools/exec",
+        ] {
+            for armed in [false, true] {
+                assert!(
+                    !super::paid_profile_method_allowed(true, armed, method),
+                    "{method}"
+                );
+                assert!(
+                    super::paid_profile_method_allowed(false, armed, method),
+                    "{method}"
+                );
+            }
+        }
+        for method in [
+            "inquello/task/create",
+            "inquello/routes/configure",
+            "inquello/usage/set",
+        ] {
+            assert!(!super::paid_profile_method_allowed(true, true, method));
+            assert!(super::paid_profile_method_allowed(true, false, method));
+        }
+    }
+    #[test]
+    fn concurrent_reservations_cannot_exceed_two() {
+        let state = std::sync::Arc::new(std::sync::Mutex::new(PaidSessionState::default()));
+        let handles: Vec<_> = (0..16)
+            .map(|n| {
+                let state = state.clone();
+                std::thread::spawn(move || {
+                    state
+                        .lock()
+                        .unwrap()
+                        .check("scope", &format!("run-{n}"), true)
+                        .is_ok()
+                })
+            })
+            .collect();
+        let accepted = handles
+            .into_iter()
+            .map(|h| usize::from(h.join().unwrap()))
+            .sum::<usize>();
+        assert_eq!(accepted, 2);
+        assert_eq!(state.lock().unwrap().runs.len(), 2);
+    }
+    #[test]
+    fn two_total_reservations_never_refund_and_cannot_rearm() {
+        let mut state = PaidSessionState::default();
+        assert!(state.check("scope", "run-1", true).is_ok());
+        assert!(state.check("scope", "run-1", true).is_err());
+        assert!(state.check("scope", "run-2", true).is_ok());
+        assert!(state.check("scope", "run-3", true).is_err());
+        assert_eq!(state.runs.len(), 2);
+        assert!(state.check("replacement-runtime", "run-4", false).is_err());
+        assert!(state.check("scope", "run-4", true).is_err());
+    }
 }

@@ -7311,6 +7311,9 @@ impl ThreadRequestProcessor {
         // endpoint, authentication, or other exact-route properties.
         config.model_provider.request_max_retries = Some(0);
         config.model_provider.stream_max_retries = Some(0);
+        if authorization.0.paid_qualification() {
+            config.model_provider.supports_websockets = false;
+        }
         // Provider defaults explicitly clear inherited user/project values.
         config.model_reasoning_effort = if choices.reasoning == "default" {
             None
@@ -7332,6 +7335,9 @@ impl ThreadRequestProcessor {
             let mut expected = self.config.model_provider.clone();
             expected.request_max_retries = Some(0);
             expected.stream_max_retries = Some(0);
+            if authorization.0.paid_qualification() {
+                expected.supports_websockets = false;
+            }
             if config.model_provider != expected {
                 return Err(invalid_request(
                     "Retained provider differs from selected exact route; no fallback",

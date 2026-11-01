@@ -102,6 +102,16 @@ pub(crate) struct TurnSummary {
 
 const LIVE_CANONICAL_ORDER_LIMIT: usize = 4096;
 const LIVE_CANONICAL_ID_BYTES: usize = 128;
+const LIVE_MESSAGE_LIMIT: usize = 128;
+const LIVE_MESSAGE_BYTES: usize = 16_384;
+const LIVE_MESSAGE_TOTAL_BYTES: usize = 1_048_576;
+
+struct CanonicalLiveMessage {
+    thread: String,
+    id: String,
+    text: String,
+    finished: bool,
+}
 
 /// The presentation history uses synthetic item-N message IDs. Private progress
 /// must instead join retained rows to IDs observed in canonical lifecycle events.
@@ -109,6 +119,9 @@ const LIVE_CANONICAL_ID_BYTES: usize = 128;
 struct CanonicalLiveOrder {
     turn: Option<String>,
     ids: Vec<String>,
+    messages: Vec<CanonicalLiveMessage>,
+    message_bytes: usize,
+    message_overflowed: bool,
     overflowed: bool,
 }
 
@@ -137,6 +150,94 @@ impl CanonicalLiveOrder {
                 self.ids.push(id.to_owned());
             }
         }
+    }
+
+    fn start_message(
+        &mut self,
+        thread: &str,
+        turn: &str,
+        item: &codex_protocol::items::AgentMessageItem,
+    ) {
+        if self.for_turn(turn).is_none() || self.message_overflowed {
+            return;
+        }
+        // A repeated start is not permission to erase or replay accumulated text.
+        if self.messages.iter().any(|message| message.id == item.id) {
+            return;
+        }
+        let bytes = item
+            .content
+            .iter()
+            .map(|content| match content {
+                CoreAgentMessageContent::Text { text } => text.len(),
+            })
+            .fold(0usize, usize::saturating_add);
+        if self.messages.len() >= LIVE_MESSAGE_LIMIT
+            || bytes > LIVE_MESSAGE_BYTES
+            || self.message_bytes.saturating_add(bytes) > LIVE_MESSAGE_TOTAL_BYTES
+            || thread.is_empty()
+            || thread.len() > LIVE_CANONICAL_ID_BYTES
+        {
+            self.message_overflowed = true;
+            self.messages.clear();
+            return;
+        }
+        let mut text = String::with_capacity(bytes);
+        for content in &item.content {
+            let CoreAgentMessageContent::Text { text: part } = content;
+            text.push_str(part);
+        }
+        self.message_bytes += bytes;
+        self.messages.push(CanonicalLiveMessage {
+            thread: thread.to_owned(),
+            id: item.id.clone(),
+            text,
+            finished: false,
+        });
+    }
+
+    fn message_delta(&mut self, thread: &str, turn: &str, id: &str, delta: &str) {
+        if self.for_turn(turn).is_none() || self.message_overflowed {
+            return;
+        }
+        let Some(message) = self
+            .messages
+            .iter_mut()
+            .find(|message| message.thread == thread && message.id == id && !message.finished)
+        else {
+            return;
+        };
+        if message.text.len().saturating_add(delta.len()) > LIVE_MESSAGE_BYTES
+            || self.message_bytes.saturating_add(delta.len()) > LIVE_MESSAGE_TOTAL_BYTES
+        {
+            self.message_overflowed = true;
+            self.messages.clear();
+            return;
+        }
+        // Byte bounds are checked before appending; UTF-8 is never sliced.
+        message.text.push_str(delta);
+        self.message_bytes += delta.len();
+    }
+
+    fn messages_for_turn(&self, turn: &str) -> Option<Vec<ThreadItem>> {
+        self.for_turn(turn)?;
+        if self.message_overflowed {
+            return None;
+        }
+        Some(
+            self.messages
+                .iter()
+                .filter(|message| !message.text.is_empty())
+                .map(|message| ThreadItem::AgentMessage {
+                    id: message.id.clone(),
+                    text: message.text.clone(),
+                    phase: None,
+                    memory_citation: None,
+                    delivery: None,
+                    questions: None,
+                })
+                .collect(),
+        )
     }
 
     fn for_turn(&self, turn: &str) -> Option<&[String]> {
@@ -276,6 +377,10 @@ impl ThreadState {
         self.canonical_live_order.for_turn(turn)
     }
 
+    pub(crate) fn canonical_live_messages(&self, turn: &str) -> Option<Vec<ThreadItem>> {
+        self.canonical_live_order.messages_for_turn(turn)
+    }
+
     pub(crate) fn active_turn_snapshot(&self) -> Option<Turn> {
         self.current_turn_history.active_turn_snapshot()
     }
@@ -326,6 +431,41 @@ impl ThreadState {
                 if self.canonical_live_order.turn.as_deref() == Some(event_turn_id) =>
             {
                 self.canonical_live_order = CanonicalLiveOrder::default();
+            }
+            _ => {}
+        }
+        match event {
+            EventMsg::ItemStarted(payload) => {
+                if let CoreTurnItem::AgentMessage(item) = &payload.item {
+                    self.canonical_live_order.start_message(
+                        &payload.thread_id.to_string(),
+                        &payload.turn_id,
+                        item,
+                    );
+                }
+            }
+            EventMsg::AgentMessageContentDelta(payload) => self.canonical_live_order.message_delta(
+                &payload.thread_id,
+                &payload.turn_id,
+                &payload.item_id,
+                &payload.delta,
+            ),
+            EventMsg::ItemCompleted(payload) => {
+                if self.canonical_live_order.turn.as_deref() == Some(payload.turn_id.as_str()) {
+                    if let Some(message) =
+                        self.canonical_live_order
+                            .messages
+                            .iter_mut()
+                            .find(|message| {
+                                message.id == canonical_item_id(&payload.item)
+                                    && message.thread == payload.thread_id.to_string()
+                            })
+                    {
+                        // Retain bounded text until the turn ends. Durable rows win
+                        // during merge; late deltas may not change a completed item.
+                        message.finished = true;
+                    }
+                }
             }
             _ => {}
         }
@@ -482,6 +622,138 @@ mod tests {
                 collaboration_mode_kind: Default::default(),
             }),
         );
+    }
+
+    fn canonical_message(id: &str, text: &str) -> codex_protocol::items::AgentMessageItem {
+        codex_protocol::items::AgentMessageItem {
+            id: id.into(),
+            content: vec![CoreAgentMessageContent::Text { text: text.into() }],
+            phase: None,
+            memory_citation: None,
+            delivery: None,
+            questions: None,
+        }
+    }
+
+    #[test]
+    fn canonical_live_messages_bind_start_thread_turn_and_ignore_repeated_start() {
+        let mut order = CanonicalLiveOrder::default();
+        order.begin("turn");
+        order.record("turn", "canonical-agent");
+        order.start_message("thread", "turn", &canonical_message("canonical-agent", ""));
+        order.message_delta("wrong-thread", "turn", "canonical-agent", "hidden");
+        order.message_delta("thread", "wrong-turn", "canonical-agent", "hidden");
+        order.message_delta("thread", "turn", "item-1", "hidden");
+        order.message_delta("thread", "turn", "canonical-agent", "go");
+        order.start_message(
+            "thread",
+            "turn",
+            &canonical_message("canonical-agent", "replacement"),
+        );
+        // Equal deltas can be genuine repeated text: protocol has no sequence ID.
+        order.message_delta("thread", "turn", "canonical-agent", "go");
+        let messages = order.messages_for_turn("turn").unwrap();
+        assert_eq!(messages.len(), 1);
+        assert!(
+            matches!(&messages[0], ThreadItem::AgentMessage { id, text, .. }
+            if id == "canonical-agent" && text == "gogo")
+        );
+        assert!(order.messages_for_turn("wrong-turn").is_none());
+        order.begin("new-turn");
+        assert!(order.messages_for_turn("new-turn").unwrap().is_empty());
+    }
+
+    #[test]
+    fn canonical_live_message_utf8_limits_fail_closed_without_unbounded_clone() {
+        let mut order = CanonicalLiveOrder::default();
+        order.begin("turn");
+        order.record("turn", "agent");
+        order.start_message("thread", "turn", &canonical_message("agent", ""));
+        order.message_delta(
+            "thread",
+            "turn",
+            "agent",
+            &"\u{00e9}".repeat(LIVE_MESSAGE_BYTES / 2),
+        );
+        assert_eq!(order.messages[0].text.len(), LIVE_MESSAGE_BYTES);
+        assert!(order.messages_for_turn("turn").is_some());
+        order.message_delta("thread", "turn", "agent", "\u{00e9}");
+        assert!(order.messages_for_turn("turn").is_none());
+        assert!(order.messages.is_empty());
+        // A fresh turn restores display, never the overflowed old payload.
+        order.begin("next");
+        assert!(order.messages_for_turn("next").unwrap().is_empty());
+    }
+
+    #[test]
+    fn canonical_live_message_total_and_count_limits_are_bounded() {
+        let mut order = CanonicalLiveOrder::default();
+        order.begin("turn");
+        for n in 0..LIVE_MESSAGE_LIMIT {
+            let id = format!("agent-{n}");
+            order.record("turn", &id);
+            order.start_message("thread", "turn", &canonical_message(&id, "x"));
+        }
+        order.record("turn", "one-too-many");
+        order.start_message("thread", "turn", &canonical_message("one-too-many", ""));
+        assert!(order.messages_for_turn("turn").is_none());
+        order.begin("next");
+        for n in 0..(LIVE_MESSAGE_TOTAL_BYTES / LIVE_MESSAGE_BYTES) {
+            let id = format!("agent-{n}");
+            order.record("next", &id);
+            order.start_message(
+                "thread",
+                "next",
+                &canonical_message(&id, &"x".repeat(LIVE_MESSAGE_BYTES)),
+            );
+        }
+        order.record("next", "over-total");
+        order.start_message("thread", "next", &canonical_message("over-total", "x"));
+        assert!(order.messages_for_turn("next").is_none());
+    }
+
+    #[test]
+    fn canonical_live_message_completion_retains_bounded_text_but_rejects_late_delta() {
+        use codex_protocol::protocol::{
+            AgentMessageContentDeltaEvent, ItemCompletedEvent, ItemStartedEvent,
+        };
+        let mut state = ThreadState::default();
+        let thread = ThreadId::new();
+        let item = CoreTurnItem::AgentMessage(canonical_message("canonical", ""));
+        start_canonical_turn(&mut state, "turn");
+        state.track_current_turn_event(
+            "turn",
+            &EventMsg::ItemStarted(ItemStartedEvent {
+                thread_id: thread,
+                turn_id: "turn".into(),
+                item: item.clone(),
+                started_at_ms: 100,
+            }),
+        );
+        let delta = |text: &str| {
+            EventMsg::AgentMessageContentDelta(AgentMessageContentDeltaEvent {
+                thread_id: thread.to_string(),
+                turn_id: "turn".into(),
+                item_id: "canonical".into(),
+                delta: text.into(),
+            })
+        };
+        state.track_current_turn_event("turn", &delta("partial"));
+        state.track_current_turn_event(
+            "turn",
+            &EventMsg::ItemCompleted(ItemCompletedEvent {
+                thread_id: thread,
+                turn_id: "turn".into(),
+                item,
+                started_at_ms: Some(100),
+                completed_at_ms: 101,
+            }),
+        );
+        state.track_current_turn_event("turn", &delta("late"));
+        assert!(matches!(&state.canonical_live_messages("turn").unwrap()[0],
+            ThreadItem::AgentMessage { text, .. } if text == "partial"));
+        state.canonical_live_order = CanonicalLiveOrder::default();
+        assert!(state.canonical_live_messages("turn").is_none());
     }
 
     #[test]

@@ -132,6 +132,7 @@ impl MessageProcessor {
             binding,
             auth: Some(auth.clone()),
             max_output_tokens: 128,
+            paid_qualification: false,
             completed_tool_call_ids: completed,
             events,
             cancellation: CancellationToken::new(),

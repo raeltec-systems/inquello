@@ -2294,25 +2294,41 @@ async fn inference_tools_changes_follow_full_specs_across_turns() {
 fn host_output_limit_reaches_http_and_websocket_bodies_without_changing_defaults() {
     let client = test_model_client(SessionSource::Cli);
     let metadata = test_responses_metadata_for_client(
-        &client, None, format!("{}:0", client.state.thread_id), None,
+        &client,
+        None,
+        format!("{}:0", client.state.thread_id),
+        None,
         TestCodexResponsesRequestKind::Turn,
     );
     let build = |limit| {
-        client.build_responses_request(
-            &Prompt { max_output_tokens: limit, ..Default::default() },
-            &test_model_info(), None,
-            codex_protocol::config_types::ReasoningSummary::None,
-            None, &metadata, false,
-        ).expect("build request")
+        client
+            .build_responses_request(
+                &Prompt {
+                    max_output_tokens: limit,
+                    ..Default::default()
+                },
+                &test_model_info(),
+                None,
+                codex_protocol::config_types::ReasoningSummary::None,
+                None,
+                &metadata,
+                false,
+            )
+            .expect("build request")
     };
     for limit in [None, Some(4096)] {
         let request = build(limit);
         let http = serde_json::to_value(&request).expect("HTTP body");
         let ws = serde_json::to_value(codex_api::ResponsesWsRequest::ResponseCreate(
-            codex_api::ResponseCreateWsRequest::from(&request)
-        )).expect("WebSocket body");
+            codex_api::ResponseCreateWsRequest::from(&request),
+        ))
+        .expect("WebSocket body");
         for body in [http, ws] {
-            assert_eq!(body.get("max_output_tokens").and_then(serde_json::Value::as_u64), limit.map(u64::from));
+            assert_eq!(
+                body.get("max_output_tokens")
+                    .and_then(serde_json::Value::as_u64),
+                limit.map(u64::from)
+            );
             if limit.is_none() {
                 assert!(body.get("max_output_tokens").is_none());
             }
@@ -2320,8 +2336,238 @@ fn host_output_limit_reaches_http_and_websocket_bodies_without_changing_defaults
     }
     let bounded = build(Some(4096));
     let same = build(Some(4096));
-    assert_eq!(super::responses_request_properties_mismatch(&bounded, &same), None);
+    assert_eq!(
+        super::responses_request_properties_mismatch(&bounded, &same),
+        None
+    );
     for changed in [build(None), build(Some(2048))] {
-        assert_eq!(super::responses_request_properties_mismatch(&bounded, &changed), Some("max_output_tokens_changed"));
+        assert_eq!(
+            super::responses_request_properties_mismatch(&bounded, &changed),
+            Some("max_output_tokens_changed")
+        );
+    }
+}
+
+#[test]
+fn controlled_paid_body_refuses_unbounded_or_nontext_requests() {
+    let client = test_model_client(SessionSource::Cli);
+    let mut model = test_model_info();
+    model.slug = "gpt-6.1-terra".into();
+    let metadata = test_responses_metadata_for_client(
+        &client,
+        None,
+        format!("{}:0", client.state.thread_id),
+        None,
+        TestCodexResponsesRequestKind::Turn,
+    );
+    let prompt = Prompt {
+        input: vec![
+            serde_json::from_value(serde_json::json!({
+                "type":"message", "role":"user",
+                "content":[{"type":"input_text","text":"Fictional R01 only."}]
+            }))
+            .expect("message"),
+        ],
+        max_output_tokens: Some(1024),
+        paid_qualification: true,
+        ..Default::default()
+    };
+    let request = client
+        .build_responses_request(
+            &prompt,
+            &model,
+            None,
+            codex_protocol::config_types::ReasoningSummary::None,
+            None,
+            &metadata,
+            false,
+        )
+        .expect("request");
+    assert!(super::validate_paid_request(&request).is_ok());
+    let mut with_reasoning = request.clone();
+    with_reasoning.input.insert(
+        0,
+        ResponseItem::Reasoning {
+            id: None,
+            summary: vec![],
+            content: None,
+            encrypted_content: Some("bounded-prior-generated-reasoning".into()),
+            internal_chat_message_metadata_passthrough: None,
+        },
+    );
+    assert!(super::validate_paid_request(&with_reasoning).is_ok());
+    let wire = serde_json::to_value(&with_reasoning).expect("reasoning wire");
+    assert_eq!(
+        wire["input"][0]["encrypted_content"],
+        "bounded-prior-generated-reasoning"
+    );
+    let mut exact = request.clone();
+    exact.input = vec![
+        serde_json::from_value(serde_json::json!({
+            "type":"message", "role":"user", "content":[{"type":"input_text","text":""}]
+        }))
+        .expect("empty message"),
+    ];
+    let overhead = serde_json::to_vec(&exact).unwrap().len();
+    if let ResponseItem::Message { content, .. } = &mut exact.input[0] {
+        content[0] = ContentItem::InputText {
+            text: "x".repeat(32768 - overhead),
+        };
+    }
+    assert_eq!(serde_json::to_vec(&exact).unwrap().len(), 32768);
+    assert!(super::validate_paid_request(&exact).is_ok());
+    if let ResponseItem::Message { content, .. } = &mut exact.input[0] {
+        if let ContentItem::InputText { text } = &mut content[0] {
+            text.push('x');
+        }
+    }
+    assert_eq!(serde_json::to_vec(&exact).unwrap().len(), 32769);
+    assert!(super::validate_paid_request(&exact).is_err());
+    let mut image = request.clone();
+    if let ResponseItem::Message { content, .. } = &mut image.input[0] {
+        content.push(ContentItem::InputImage {
+            image: codex_protocol::models::ImageReference::Inline {
+                image_url: "https://example.invalid/fictional.png".into(),
+            },
+            detail: None,
+        });
+    }
+    assert!(super::validate_paid_request(&image).is_err());
+    let mut changed = request.clone();
+    changed.max_output_tokens = None;
+    assert!(super::validate_paid_request(&changed).is_err());
+    changed = request.clone();
+    changed.model = "different-model".into();
+    assert!(super::validate_paid_request(&changed).is_err());
+    changed = request.clone();
+    changed.tool_choice = "auto".into();
+    assert!(super::validate_paid_request(&changed).is_err());
+    changed = request.clone();
+    changed.parallel_tool_calls = true;
+    assert!(super::validate_paid_request(&changed).is_err());
+    changed = request.clone();
+    changed.input = vec![
+        serde_json::from_value(serde_json::json!({
+            "type":"message", "role":"user",
+            "content":[{"type":"input_text","text":"x".repeat(32769)}]
+        }))
+        .expect("large message"),
+    ];
+    assert!(super::validate_paid_request(&changed).is_err());
+    changed = request.clone();
+    changed.input = vec![
+        serde_json::from_value(serde_json::json!({
+            "type":"function_call", "name":"exec_command", "call_id":"call-test",
+            "arguments":"{}"
+        }))
+        .expect("tool call"),
+    ];
+    assert!(super::validate_paid_request(&changed).is_err());
+    changed = request.clone();
+    changed.service_tier = Some("priority".into());
+    assert!(super::validate_paid_request(&changed).is_err());
+}
+
+#[tokio::test]
+async fn controlled_cached_api_key_refuses_identity_or_revision_changes_without_refresh() {
+    use codex_api::AuthProvider;
+    let expected = CodexAuth::from_api_key("fictional-offline-key");
+    let manager =
+        codex_login::test_support::auth_manager_from_optional_auth(Some(expected.clone()));
+    let revision = *manager.auth_change_receiver().borrow();
+    let accepted = super::PaidCachedApiKeyAuth {
+        manager: manager.clone(),
+        expected: expected.clone(),
+        revision,
+    };
+    assert!(accepted.resolve_auth_headers().await.is_ok());
+    assert!(
+        !accepted
+            .refresh_after_unauthorized(http::HeaderMap::new())
+            .await
+    );
+    let stale_revision = super::PaidCachedApiKeyAuth {
+        manager,
+        expected: expected.clone(),
+        revision: revision.wrapping_add(1),
+    };
+    assert!(stale_revision.resolve_auth_headers().await.is_err());
+    for (case, current) in [
+        ("missing cached identity", None),
+        (
+            "different key with the same auth mode and revision",
+            Some(CodexAuth::from_api_key("different-fictional-key")),
+        ),
+        (
+            "different auth mode",
+            Some(CodexAuth::create_dummy_chatgpt_auth_for_testing()),
+        ),
+    ] {
+        let manager = codex_login::test_support::auth_manager_from_optional_auth(current);
+        let revision = *manager.auth_change_receiver().borrow();
+        let changed = super::PaidCachedApiKeyAuth {
+            manager,
+            expected: expected.clone(),
+            revision,
+        };
+        assert!(changed.resolve_auth_headers().await.is_err(), "{case}");
+        assert!(
+            !changed
+                .refresh_after_unauthorized(http::HeaderMap::new())
+                .await
+        );
+    }
+}
+
+/// Executes only fabricated transport operations: no socket or credential access.
+/// Zero is one initial request, not a default or unlimited retry budget.
+#[tokio::test]
+async fn controlled_zero_transport_retries_counts_one_initial_attempt_for_every_failure() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    for case in 0..7 {
+        let sends = AtomicUsize::new(0);
+        let result: std::result::Result<(), codex_client::TransportError> =
+            codex_client::run_with_retry(
+                codex_client::RetryPolicy {
+                    max_attempts: 0,
+                    base_delay: std::time::Duration::ZERO,
+                    // Even accidentally enabled retry categories cannot override zero.
+                    retry_on: codex_client::RetryOn {
+                        retry_429: true,
+                        retry_5xx: true,
+                        retry_transport: true,
+                    },
+                },
+                || {
+                    codex_client::Request::new(
+                        http::Method::POST,
+                        "https://example.invalid/offline".into(),
+                    )
+                },
+                |_, attempt| {
+                    sends.fetch_add(1, Ordering::SeqCst);
+                    assert_eq!(attempt, 0);
+                    let error = match case {
+                        0..=3 => codex_client::TransportError::Http {
+                            status: http::StatusCode::from_u16([401, 429, 500, 503][case]).unwrap(),
+                            url: None,
+                            headers: None,
+                            body: None,
+                            retry_after: None,
+                        },
+                        4 => codex_client::TransportError::Timeout,
+                        5 => codex_client::TransportError::Connection(
+                            codex_client::RouteAwareRequestError::Timeout,
+                        ),
+                        _ => codex_client::TransportError::Network(
+                            "fictional failed connection".into(),
+                        ),
+                    };
+                    std::future::ready(Err(error))
+                },
+            )
+            .await;
+        assert!(result.is_err());
+        assert_eq!(sends.load(Ordering::SeqCst), 1, "failure case {case}");
     }
 }

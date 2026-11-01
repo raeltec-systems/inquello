@@ -1220,6 +1220,66 @@ struct TaskGuard {
     tools: tokio::sync::Mutex<HashMap<String, (String, std::time::Instant)>>,
 }
 impl TaskGuard {
+    async fn paid_profile_check(&self, reserve: bool) -> Result<bool, JSONRPCErrorError> {
+        let Some(profile) = paid_profile_config()? else {
+            return Ok(false);
+        };
+        let session = self
+            .processor
+            .task_session(self.connection, self.actor, &self.run.workspace_id)
+            .await?;
+        let store = self.processor.store().await?;
+        let inherited = self
+            .processor
+            .routes
+            .responses
+            .as_ref()
+            .ok_or_else(paid_refusal)?;
+        let account = inherited.auth_binding().map_err(|_| paid_refusal())?;
+        if account.mode != codex_protocol::auth::AuthMode::ApiKey
+            || !inherited.binding_current(&account)
+        {
+            poison_paid_session();
+            return Err(paid_refusal());
+        }
+        let marker =
+            std::fs::symlink_metadata(session.root.join(".inquello-fictional-audit-session"))
+                .map_err(|_| paid_refusal())?;
+        if session.real.is_some()
+            || session.root != profile.root
+            || !marker.is_file()
+            || marker.file_type().is_symlink()
+            || self.actor.principal_id.to_string() != profile.principal_id
+            || self.run.workspace_id != profile.workspace_id
+            || self.configuration.route_id().as_str() != "codex-responses"
+            || self.configuration.deployment() != "openai-api"
+            || self.configuration.endpoint() != "https://api.openai.com/v1/responses"
+            || self.configuration.model() != "gpt-6.1-terra"
+            || self.configuration.api_version() != "responses-v1"
+            || self.configuration.account_ref() != profile.account_ref
+            || self.run.choices.speed != "default"
+        {
+            poison_paid_session();
+            return Err(paid_refusal());
+        }
+        let scope = format!(
+            "{}|{}|{}|{}|{}|{:?}|{}",
+            profile.store_id,
+            store.path().display(),
+            profile.principal_id,
+            profile.workspace_id,
+            self.processor.runtime_id,
+            self.connection,
+            self.generation
+        );
+        PAID_SESSION_STATE
+            .get_or_init(Default::default)
+            .lock()
+            .map_err(|_| paid_refusal())?
+            .check(&scope, &self.run.run_id, reserve)
+            .map_err(|_| paid_refusal())?;
+        Ok(true)
+    }
     async fn disclosure_recheck(&self) -> Result<(), JSONRPCErrorError> {
         let result: Result<(), JSONRPCErrorError> = async {
             if self.cancellation.is_cancelled()
@@ -1275,6 +1335,7 @@ impl TaskGuard {
         result
     }
     async fn recheck_inner(&self) -> Result<(), JSONRPCErrorError> {
+        self.paid_profile_check(false).await?;
         if self.cancellation.is_cancelled() || self.processor.actor(self.connection)? != self.actor
         {
             return Err(refusal("stale", "Private Task authorization was revoked"));
@@ -1423,6 +1484,10 @@ fn core_refusal(_: JSONRPCErrorError) -> CodexErr {
     )
 }
 impl TaskAuthorization for TaskGuard {
+    fn paid_qualification(&self) -> bool {
+        paid_profile_requested()
+    }
+
     fn execution_principal(&self) -> Option<String> {
         Some(self.actor.principal_id.to_string())
     }
@@ -1575,6 +1640,7 @@ impl TaskAuthorization for TaskGuard {
                 .map_err(|_| {
                     CodexErr::Fatal("Private turn attribution could not be retained".into())
                 })?;
+            let paid_qualification = self.paid_profile_check(true).await.map_err(core_refusal)?;
             let attempt_id = uuid::Uuid::new_v4().to_string();
             let binding = inquello_protocol::inference::Binding {
                 schema_version: 1,
@@ -1676,7 +1742,8 @@ impl TaskAuthorization for TaskGuard {
             Ok(AttemptContext {
                 binding,
                 auth: Some(self.processor.routes.auth.clone()),
-                max_output_tokens: 4096,
+                max_output_tokens: if paid_qualification { 1024 } else { 4096 },
+                paid_qualification,
                 completed_tool_call_ids: Vec::new(),
                 events,
                 cancellation: self.cancellation.clone(),
@@ -1691,6 +1758,11 @@ impl TaskAuthorization for TaskGuard {
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = CoreResult<()>> + Send + 'a>> {
         Box::pin(async move {
             self.recheck().await.map_err(core_refusal)?;
+            if paid_profile_requested() {
+                return Err(CodexErr::Fatal(
+                    "Tools are disabled for the controlled fictional session".into(),
+                ));
+            }
             if !matches!(
                 name,
                 "exec_command" | "inquello_progress" | "request_user_input"
@@ -3224,7 +3296,7 @@ impl ProgressCache {
     }
 }
 
-/// Ephemeral command activity only. Never written to rollout or used as an
+/// Ephemeral bounded activity only. Never written to rollout or used as an
 /// artifact/publication. Retained completed rows always take precedence.
 struct LiveProgressCommands {
     // Prevent allocator-address ABA across awaited identity checks.
@@ -3361,6 +3433,23 @@ fn live_progress_revision(durable: &str, live: Option<&LiveProgressCommands>) ->
     )
 }
 
+fn live_progress_fingerprint(
+    identity: &impl serde::Serialize,
+) -> Result<String, JSONRPCErrorError> {
+    use sha2::{Digest, Sha256};
+    let bytes = serde_json::to_vec(identity)
+        .map_err(|_| refusal("history_unavailable", "Live activity identity unavailable"))?;
+    Ok(format!("{:x}", Sha256::digest(bytes)))
+}
+
+fn live_progress_snapshot_matches(
+    expected: &str,
+    durable: &str,
+    live: Option<&LiveProgressCommands>,
+) -> bool {
+    live_progress_revision(durable, live) == expected
+}
+
 impl InquelloRequestProcessor {
     async fn live_progress_commands(
         &self,
@@ -3409,7 +3498,19 @@ impl InquelloRequestProcessor {
             .canonical_active_order(turn)
             .ok_or_else(|| refusal("history_unavailable", "Canonical live ordering unavailable"))?
             .to_vec();
-        let entries = bounded_live_commands(turn, items)?;
+        let mut entries = bounded_live_commands(turn, items)?;
+        let messages = state.canonical_live_messages(turn).ok_or_else(|| {
+            refusal(
+                "history_unavailable",
+                "Live message display exceeds its safe bound",
+            )
+        })?;
+        entries.extend(messages.into_iter().map(|item| ThreadItemEntry {
+            turn_id: turn.to_owned(),
+            item,
+            started_at_ms: None,
+            completed_at_ms: None,
+        }));
         if entries
             .iter()
             .any(|entry| !order.iter().any(|id| id == entry.item.id()))
@@ -3419,8 +3520,7 @@ impl InquelloRequestProcessor {
                 "Canonical live ordering has not caught up",
             ));
         }
-        use sha2::{Digest, Sha256};
-        let identity = serde_json::to_vec(&(
+        let fingerprint = live_progress_fingerprint(&(
             &run.run_id,
             &run.runtime_id,
             thread,
@@ -3429,11 +3529,10 @@ impl InquelloRequestProcessor {
             format!("{:p}", Arc::as_ptr(&loaded)),
             &order,
             &entries,
-        ))
-        .map_err(|_| refusal("history_unavailable", "Live activity identity unavailable"))?;
+        ))?;
         Ok(Some(LiveProgressCommands {
             runtime: Some(Arc::downgrade(&loaded)),
-            fingerprint: format!("{:x}", Sha256::digest(identity)),
+            fingerprint,
             turn: turn.to_owned(),
             order,
             entries,
@@ -3678,7 +3777,11 @@ impl InquelloRequestProcessor {
         } else {
             threads.inquello_progress_revision(thread).await?
         };
-        if live_progress_revision(&current_durable_revision, current_live.as_ref()) != revision {
+        if !live_progress_snapshot_matches(
+            &revision,
+            &current_durable_revision,
+            current_live.as_ref(),
+        ) {
             return Err(refusal(
                 "stale_snapshot",
                 "Retained output changed during reconstruction; refresh progress",
@@ -3770,7 +3873,8 @@ impl InquelloRequestProcessor {
                 "Workspace policy changed before progress disclosure",
             ));
         }
-        if live_progress_revision(&final_durable_revision, final_live.as_ref()) != revision {
+        if !live_progress_snapshot_matches(&revision, &final_durable_revision, final_live.as_ref())
+        {
             return Err(refusal(
                 "stale_snapshot",
                 "Live or retained output changed before progress disclosure",
@@ -4766,6 +4870,85 @@ mod progress_tests {
             "t",
             "t",
             &TurnStatus::Completed
+        ));
+    }
+
+    #[test]
+    fn canonical_live_agent_text_projects_running_and_durable_completion_wins() {
+        let message = entry(
+            json!({"type":"agentMessage","id":"canonical-agent","text":"partial"}),
+            false,
+        );
+        let live = LiveProgressCommands {
+            runtime: None,
+            fingerprint: "bounded-text-revision-1".into(),
+            turn: "turn-1".into(),
+            order: vec!["canonical-agent".into()],
+            entries: vec![message],
+        };
+        let first = project_progress(
+            merge_live_commands(Vec::new(), Some(&live)).unwrap(),
+            "turn-1",
+            false,
+        );
+        assert_eq!(first.items.len(), 1);
+        assert_eq!(first.items[0].role.as_deref(), Some("agent"));
+        assert_eq!(first.items[0].status, "running");
+        assert_eq!(first.items[0].text, "partial");
+        let complete = entry(
+            json!({"type":"agentMessage","id":"canonical-agent","text":"final"}),
+            true,
+        );
+        let rows = merge_live_commands(vec![complete], Some(&live)).unwrap();
+        assert_eq!(rows.len(), 1);
+        let last = project_progress(rows, "turn-1", false);
+        assert_eq!(last.items[0].status, "completed");
+        assert_eq!(last.items[0].text, "final");
+        let fingerprint = |entries: &[ThreadItemEntry]| {
+            live_progress_fingerprint(&(
+                "run-1",
+                "runtime-1",
+                "thread-1",
+                "turn-1",
+                7u64,
+                "0x123",
+                &live.order,
+                entries,
+            ))
+            .unwrap()
+        };
+        let original_fingerprint = fingerprint(&live.entries);
+        let mut changed_entries = live.entries.clone();
+        let ThreadItem::AgentMessage { text, .. } = &mut changed_entries[0].item else {
+            panic!("canonical agent fixture");
+        };
+        text.push_str(" next");
+        let changed_fingerprint = fingerprint(&changed_entries);
+        assert_ne!(original_fingerprint, changed_fingerprint);
+        let initial = LiveProgressCommands {
+            runtime: None,
+            fingerprint: original_fingerprint,
+            turn: live.turn.clone(),
+            order: live.order.clone(),
+            entries: live.entries.clone(),
+        };
+        let revision = live_progress_revision("same-durable", Some(&initial));
+        assert!(live_progress_snapshot_matches(
+            &revision,
+            "same-durable",
+            Some(&initial)
+        ));
+        let changed = LiveProgressCommands {
+            fingerprint: changed_fingerprint,
+            entries: changed_entries,
+            ..initial
+        };
+        // Same helper used after fresh disclosure checks rejects a text-only
+        // mutation captured under the listener lock: no stale display is emitted.
+        assert!(!live_progress_snapshot_matches(
+            &revision,
+            "same-durable",
+            Some(&changed)
         ));
     }
 

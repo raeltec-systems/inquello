@@ -16,6 +16,17 @@ use std::sync::{Mutex, OnceLock};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
+static PAID_PROCESS_ONLY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// Host startup restriction only: one-way and never an authorization grant.
+pub fn restrict_to_paid_qualification() {
+    PAID_PROCESS_ONLY.store(true, std::sync::atomic::Ordering::Release);
+}
+pub(crate) fn paid_process_only() -> bool {
+    PAID_PROCESS_ONLY.load(std::sync::atomic::Ordering::Acquire)
+}
+pub(crate) fn paid_dispatch_allowed(restricted: bool, owned: bool, bounded: bool) -> bool {
+    !restricted || (owned && bounded)
+}
 const RESPONSES_PREFIX: &str = "inquello:responses:v1:";
 const OPAQUE_PREFIX: &str = "inquello:messages:v1:";
 /// Host-owned guidance for bound private Tasks only. Never interpolate examined
@@ -37,6 +48,7 @@ pub struct AttemptContext {
     pub binding: Binding,
     pub auth: Option<AuthStore>,
     pub max_output_tokens: u32,
+    pub paid_qualification: bool,
     pub completed_tool_call_ids: Vec<String>,
     pub events: mpsc::Sender<Event>,
     pub cancellation: CancellationToken,
@@ -50,6 +62,9 @@ pub enum TaskTurnOutcome {
     Cancelled,
 }
 pub trait TaskAuthorization: Send + Sync {
+    fn paid_qualification(&self) -> bool {
+        false
+    }
     /// Bound host principal used only to derive an opaque per-profile executor
     /// scope. This value is never placed in the guest environment or RPC.
     fn execution_principal(&self) -> Option<String> {
@@ -160,6 +175,13 @@ pub fn mark_task_thread(thread_id: &str) -> std::result::Result<(), &'static str
 static TASK_AUTHORIZATIONS: OnceLock<
     Mutex<HashMap<String, std::sync::Weak<dyn TaskAuthorization>>>,
 > = OnceLock::new();
+pub(crate) fn is_paid_task_thread(thread_id: &str) -> bool {
+    TASK_AUTHORIZATIONS
+        .get()
+        .and_then(|map| map.lock().ok())
+        .and_then(|map| map.get(thread_id).and_then(std::sync::Weak::upgrade))
+        .is_some_and(|guard| guard.paid_qualification())
+}
 pub fn bind_task_authorization(
     thread_id: &str,
     authorization: &std::sync::Arc<dyn TaskAuthorization>,
@@ -226,7 +248,7 @@ pub fn is_task_thread(thread_id: &str) -> bool {
         .unwrap_or(true)
 }
 pub(crate) fn refuse_unbound_background(thread_id: &str) -> Result<()> {
-    if is_task_thread(thread_id) {
+    if paid_process_only() || is_task_thread(thread_id) {
         return Err(failure(
             "background memory, compaction and warmup are unavailable for bound Tasks",
         ));
@@ -283,7 +305,11 @@ pub(crate) fn request(prompt: &Prompt, context: &AttemptContext) -> Result<Infer
     if prompt.output_schema.is_some() || prompt.cyber_access_program.is_some() {
         return Err(failure("unsupported output schema or optional extension"));
     }
-    let definitions = codex_tools::create_tools_raw_json_for_responses_api(&prompt.tools)?;
+    let definitions = if context.paid_qualification {
+        codex_tools::create_tools_raw_json_for_responses_api(&[])?
+    } else {
+        codex_tools::create_tools_raw_json_for_responses_api(&prompt.tools)?
+    };
     let definitions =
         serde_json::to_value(definitions).map_err(|_| failure("invalid tool definitions"))?;
     let mut tools = Vec::new();
@@ -472,6 +498,11 @@ pub(crate) fn responses_prompt(prompt: &Prompt, context: &AttemptContext) -> Res
     request(prompt, context)?;
     let mut native = prompt.clone();
     native.max_output_tokens = Some(context.max_output_tokens);
+    native.paid_qualification = context.paid_qualification;
+    if context.paid_qualification {
+        native.tools = std::sync::Arc::default();
+        native.parallel_tool_calls = false;
+    }
     native.base_instructions.text = private_task_instructions(&prompt.base_instructions.text);
     for item in &mut native.input {
         let value =
@@ -1173,6 +1204,7 @@ mod tests {
             binding: request.binding,
             auth: None,
             max_output_tokens: 128,
+            paid_qualification: false,
             completed_tool_call_ids: vec![],
             events,
             cancellation: CancellationToken::new(),
@@ -2242,5 +2274,21 @@ mod retained_resume_fence_tests {
             authorize_thread_disclosure(&id).await,
             "late old cancellation cannot cancel the current retained run"
         );
+    }
+}
+
+#[cfg(test)]
+mod paid_dispatch_boundary_tests {
+    #[test]
+    fn restricted_process_needs_owned_and_bounded_generation() {
+        for owned in [false, true] {
+            for bounded in [false, true] {
+                assert_eq!(
+                    super::paid_dispatch_allowed(true, owned, bounded),
+                    owned && bounded
+                );
+                assert!(super::paid_dispatch_allowed(false, owned, bounded));
+            }
+        }
     }
 }

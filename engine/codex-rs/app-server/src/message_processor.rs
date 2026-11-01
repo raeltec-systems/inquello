@@ -704,6 +704,13 @@ impl MessageProcessor {
         transport: &AppServerTransport,
         session: Arc<ConnectionSessionState>,
     ) {
+        if !crate::request_processors::paid_profile_rpc_allowed(&request.method) {
+            self.outgoing.send_error(
+                ConnectionRequestId { connection_id, request_id: request.id },
+                invalid_request("Controlled fictional session forbids this mutation or alternate dispatch path"),
+            ).await;
+            return;
+        }
         // This branch does not exist in default or release binaries. Synthetic
         // loopback harness dispatches inference AND tools in this app-server process.
         #[cfg(all(feature = "inference-fixtures", debug_assertions))]

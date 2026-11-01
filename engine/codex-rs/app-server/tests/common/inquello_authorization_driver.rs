@@ -305,7 +305,11 @@ struct Fixture {
     stop: tokio::sync::oneshot::Sender<()>,
     task: tokio::task::JoinHandle<()>,
 }
-async fn fixture(route: &'static str, scenario: &'static str) -> Fixture {
+async fn fixture(
+    route: &'static str,
+    scenario: &'static str,
+    expected_model: &'static str,
+) -> Fixture {
     let hold_last = matches!(scenario, "revoke-model" | "lifecycle-revoke-during-resume");
     let count = if matches!(
         scenario,
@@ -394,6 +398,11 @@ async fn fixture(route: &'static str, scenario: &'static str) -> Fixture {
                         }
                         let body: Value =
                             serde_json::from_slice(&bytes[end + 4..end + 4 + length]).unwrap();
+                        assert_eq!(
+                            body["model"].as_str(),
+                            Some(expected_model),
+                            "every actual pinned-loopback request must retain the exact configured model identifier"
+                        );
                         if scenario == "lifecycle-progress-cache" && route == "claude-api-key" {
                             assert_eq!(
                                 body["tool_choice"]["disable_parallel_tool_use"], false,
@@ -655,7 +664,15 @@ pub(super) async fn run(
     )
     .unwrap();
     let model = if route == "codex-responses" {
-        "fixture-responses-20261031"
+        let selection = match std::env::var("INQUELLO_SYNTHETIC_RESPONSES_MODEL") {
+            Ok(value) => Some(value),
+            Err(std::env::VarError::NotPresent) => None,
+            Err(std::env::VarError::NotUnicode(_)) => {
+                panic!("synthetic model selector must be Unicode")
+            }
+        };
+        fixture_responses_model(selection.as_deref())
+            .expect("allowlisted synthetic model identifier")
     } else {
         "claude-sonnet-5-5"
     };
@@ -718,7 +735,7 @@ pub(super) async fn run(
     );
     let configuration = json!({"routeId":route,"deployment":if route=="codex-responses"{"openai-api"}else{"anthropic-direct"},"model":model,"apiVersion":if route=="codex-responses"{"responses-v1"}else{"2026-10-21"},"accountRef":principal,"region":null});
     assert!(private_rpc(&mut server,&mut host,"inquello/routes/configure",json!({"operationId":uuid::Uuid::new_v4(),"expectedRevision":0,"configuration":configuration})).await.get("rpcError").is_none());
-    let fixture = fixture(route, scenario).await;
+    let fixture = fixture(route, scenario, model).await;
     assert_eq!(private_rpc(&mut server,&mut host,"inquello/fixture/taskTransport",json!({"workspaceId":workspace,"configurationRevision":1,"routeId":route,"endpoint":fixture.endpoint,"certificate":fixture.certificate,"holdProgressPublication":scenario=="lifecycle-progress-cache"})).await["accepted"],true);
     let policy = host.policy.clone();
     let operation = uuid::Uuid::new_v4().to_string();
@@ -2696,4 +2713,43 @@ fn convert_saved_fixture_to_legacy(home: &std::path::Path, thread: &str) {
         changed, 1,
         "fixture converts both authoritative header and indexed mode"
     );
+}
+
+/// Selects only the label used by a synthetic catalog and pinned local transport.
+/// This is not a model capability, live-account, or organization eligibility claim.
+fn fixture_responses_model(selection: Option<&str>) -> Result<&'static str, &'static str> {
+    match selection {
+        None | Some("fixture-responses-20261031") => Ok("fixture-responses-20261031"),
+        Some("gpt-6.1-terra") => Ok("gpt-6.1-terra"),
+        Some(_) => Err("unsupported synthetic Responses model selector"),
+    }
+}
+
+#[test]
+fn synthetic_model_selector_preserves_default_and_exact_terra() {
+    assert_eq!(
+        fixture_responses_model(None),
+        Ok("fixture-responses-20261031")
+    );
+    assert_eq!(
+        fixture_responses_model(Some("fixture-responses-20261031")),
+        Ok("fixture-responses-20261031")
+    );
+    assert_eq!(
+        fixture_responses_model(Some("gpt-6.1-terra")),
+        Ok("gpt-6.1-terra")
+    );
+}
+#[test]
+fn synthetic_model_selector_refuses_unknown_or_normalized_labels() {
+    for value in [
+        "",
+        "gpt-6.1-terra ",
+        "GPT-6.1-TERRA",
+        "gpt-6.1",
+        "https://api.openai.com",
+        "fixture-responses-other",
+    ] {
+        assert!(fixture_responses_model(Some(value)).is_err());
+    }
 }

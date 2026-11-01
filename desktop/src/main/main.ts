@@ -121,7 +121,7 @@ import { CapabilityService } from './capabilities/service';
  * `tool-bounds`, `--smoke` runs the permissions probe and prints a
  * `permissions` line, which the run also requires to pass.
  */
-import { RuntimeLifecycle } from './runtime/lifecycle';
+import { RuntimeLifecycle, controlledPaidLaunchRequested } from './runtime/lifecycle';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -149,6 +149,7 @@ import { EscalationGate, PermissionMediator, PolicyService, taskFoldersRoot } fr
 import { createProviders, loadProviderDevConfig, PROVIDER_DEV_CONFIG_ENV, providersDir, type ProviderService } from './providers';
 import { probeStartSurface, probeRoutes, probeCapabilities, probeComposer, probeData, probeIdentity, probeOrganise, probePermissions, probePolicy, probeProviders, probeRenderer, probeShellLayout, probeStates, probeToolBounds, SHELL_LAYOUT } from './smoke-probe';
 
+const paidQualificationRequested = controlledPaidLaunchRequested(Object.keys(process.env), process.argv);
 const navigationSmoke = !app.isPackaged && process.argv.includes('--smoke-navigation');
 const quotaSmoke = !app.isPackaged && process.argv.includes('--smoke-quota');
 const visualSmoke = !app.isPackaged && process.argv.includes('--smoke-visual');
@@ -292,6 +293,9 @@ function runtimeEnv(runtimeHome: string, workingStore: string): NodeJS.ProcessEn
 }
 
 const runtimeLifecycle = new RuntimeLifecycle();
+// Trusted launch opt-in only. Native independently validates the complete
+// envelope/classification. No runtime restart grants another paid allowance.
+let paidQualificationRuntimeStarted = false;
 
 /** Runtime start/stop never overlap, including the initial asynchronous handshake. */
 function startRuntime(): Promise<void> {
@@ -300,6 +304,10 @@ function startRuntime(): Promise<void> {
 
 /** Starts a new runtime child; local-data recovery calls this only after copying is complete. */
 async function startRuntimeNow(): Promise<void> {
+  if (paidQualificationRequested) {
+    if (paidQualificationRuntimeStarted) throw new Error('The controlled fictional session cannot restart; reconcile consumed budget with the owner first');
+    paidQualificationRuntimeStarted = true;
+  }
   const settled = beginSettingsTransition();
   try {
   taskSessionChanged();
@@ -701,7 +709,12 @@ void app.whenReady().then(async () => {
     roots,
     journal: new ExportJournal(userData),
     runtime: {
-      stop: stopRuntime,
+      // Export also stops/restarts the runtime. It must wait until this
+      // controlled session ends; policy/inventory reads remain available.
+      stop: async () => {
+        if (paidQualificationRequested) throw new Error('Local-data mutation/export requires ending and reconciling the controlled fictional session');
+        await stopRuntime();
+      },
       start: startRuntime,
       activeTasks: () => tasks?.activeTasks() ?? 0,
       canQuiesceUncertainActivity: () => tasks?.canQuiesceUncertainActivity() ?? false,

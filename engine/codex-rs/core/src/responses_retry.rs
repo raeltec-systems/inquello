@@ -64,6 +64,9 @@ pub(crate) async fn handle_response_stream_error(
     request: ResponsesStreamRequest,
 ) -> Result<(), CodexErr> {
     let turn_context = &step_context.turn;
+    if crate::inquello_inference::is_paid_task_thread(&sess.thread_id.to_string()) {
+        return Err(err);
+    }
     // Messages recovery is explicit: a new attributable attempt follows effects
     // reconciliation, never Responses retry/model fallback.
     if turn_context.provider.info().wire_api == codex_model_provider_info::WireApi::Messages {

@@ -775,3 +775,43 @@ describe('data service', () => {
     expect(result).toEqual({ ok: false, reason: 'The local data action ran, but the runtime did not restart afterwards. Restart Inquello.' });
   });
 });
+
+describe('controlled session local-data stop fence', () => {
+  for (const action of ['export', 'import', 'delete'] as const) {
+    it(`refuses ${action} before any fixed-store mutation or restart`, async () => {
+      const h = harness();
+      const options = (h.service as unknown as { options: DataServiceOptions }).options;
+      const file = write(h.roots['user-data'], 'working/working.sqlite', 'fictional-store-sentinel');
+      const before = fs.readFileSync(file);
+      const destination = path.join(tempDir('controlled-export'), 'not-created');
+      h.setExport(destination);
+      if (action === 'import') {
+        const source = path.join(tempDir('controlled-valid-import'), 'export');
+        await exportData({policy, roots: h.roots, destination: source, attribution: ATTRIBUTION, journal: h.journal});
+        expect(readManifest(source).included.length).toBeGreaterThan(0);
+        h.setImport(source);
+      }
+      const stop = vi.fn(async () => { throw new Error('controlled session is active'); });
+      options.runtime.stop = stop;
+      const refusedGuestCall = async (): Promise<never> => { throw new Error('must not reach guest storage'); };
+      const erase = vi.fn(refusedGuestCall), ensureEmpty = vi.fn(refusedGuestCall), snapshot = vi.fn(refusedGuestCall);
+      const service = new DataService({...options, taskStorage: {
+        inspect: async () => ({files: 0, bytes: 0}),
+        erase, ensureEmpty, snapshot,
+      }});
+      const result = action === 'export' ? await service.exportData()
+        : action === 'import' ? await service.importData()
+        : await service.deleteData(['working-store']);
+      expect(result).toEqual({ok: false, reason: 'The runtime could not be stopped safely. The local data action was not completed.'});
+      expect(stop).toHaveBeenCalledTimes(1);
+      expect(fs.readFileSync(file)).toEqual(before);
+      expect(fs.existsSync(destination)).toBe(false);
+      expect(fs.existsSync(path.join(h.roots['user-data'], 'data', 'recovery-unvalidated'))).toBe(false);
+      expect(h.events).toEqual([]);
+      expect(erase).not.toHaveBeenCalled();
+      expect(ensureEmpty).not.toHaveBeenCalled();
+      expect(snapshot).not.toHaveBeenCalled();
+      expect((await service.getPolicy()).loaded).toBe(true);
+    });
+  }
+});
