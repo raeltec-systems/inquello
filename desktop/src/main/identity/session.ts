@@ -85,6 +85,7 @@ export const REASONS = {
   issuerRejected: 'The identity provider did not complete the sign-in.',
   serviceRejected: 'The shared service did not accept the sign-in.',
   interrupted: 'Sign-in was interrupted. Sign in again.',
+  callbackOccupied: 'The registered sign-in callback port is already in use. Close the application using it and sign in again. Inquello will not select another port.',
   cancelled: 'Sign-in was cancelled because the session was removed. Sign in again.',
   logoutPending: 'Sign-out is waiting for the shared service. Sign out again to retry.',
   signOutUnavailable: 'The shared service could not be reached, so you are still signed in.',
@@ -147,6 +148,9 @@ class SignInFailure extends Error {
 }
 
 export class IdentitySession {
+  private identityGeneration = 0;
+  /** Main-only authentication lifecycle fence; never projected to renderer. */
+  generation(): number { return this.identityGeneration; }
   private readonly config: ServiceConfig | null;
   private readonly configInvalid: boolean;
   private record: StoredSession | null = null;
@@ -263,13 +267,14 @@ export class IdentitySession {
     if (this.signingIn) return this.result(false, REASONS.inProgress);
     if (this.record?.pendingLogout) return this.result(false, REASONS.logoutPending);
     if (this.record) return this.result(true);
+    this.identityGeneration += 1;
     const token = {};
     this.signInToken = token;
     let reason: string | undefined;
     try {
       await this.runSignIn(this.config, token);
     } catch (error) {
-      reason = error instanceof SignInFailure ? error.reason : REASONS.interrupted;
+      reason = error instanceof SignInFailure ? error.reason : error instanceof LoopbackError && error.failure === 'port-occupied' ? REASONS.callbackOccupied : REASONS.interrupted;
       this.options.logger.warn(`identity: sign-in did not complete (${reason})`);
     } finally {
       if (this.signInToken === token) this.signInToken = null;
@@ -502,6 +507,7 @@ export class IdentitySession {
   // ---- logout --------------------------------------------------------------
 
   async signOut(): Promise<IdentityActionResult> {
+    this.identityGeneration += 1;
     if (this.configInvalid) return this.result(false, REASONS.configInvalid);
     // Signing out also cancels a sign-in that has not finished.
     this.cancelSignIn();
@@ -695,6 +701,7 @@ export class IdentitySession {
    * session then lapses on its own.
    */
   forgetLocally(): void {
+    this.identityGeneration += 1;
     const held = this.record !== null;
     this.cancelSignIn();
     this.dropRecord();
@@ -707,6 +714,7 @@ export class IdentitySession {
   }
 
   private dropRecord(): void {
+    this.identityGeneration += 1;
     this.record = null;
     this.options.vault.clear();
     this.persistFailed = false;

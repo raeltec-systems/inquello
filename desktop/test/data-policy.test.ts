@@ -90,6 +90,7 @@ describe('shipped register', () => {
       'task-folders',
       'recovery-quarantine',
       'runtime-lease',
+      'onboarding-drafts',
     ]);
     const disabled = policy.categories.filter((category) => !category.enabled).map((category) => category.id);
     expect(disabled).toEqual(expect.arrayContaining(['source-extracts', 'artifacts', 'shared-caches', 'unattended-work']));

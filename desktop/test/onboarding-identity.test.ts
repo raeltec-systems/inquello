@@ -48,3 +48,37 @@ describe('Story 1.31 native hosted identity compatibility', () => {
     await expect(client.discover()).rejects.toThrow();
   });
 });
+
+describe('Story 1.31 explicit issuer trust',()=>{
+  const pem='-----BEGIN CERTIFICATE-----\nfixture\n-----END CERTIFICATE-----';
+  const raw={service_url:'https://service.example.invalid',issuer_url:'https://tenant.auth0.com/',issuer_label:'Hosted identity',client_id:'native',ca_path:'service.pem',identity_profile:'auth0',issuer_trust:'system',callback_port:53682};
+  it('requires a registered fixed callback and explicit issuer trust for Auth0',()=>{
+    const {callback_port,...withoutPort}=raw;
+    const {issuer_trust,...withoutTrust}=raw;
+    expect(parseServiceConfig(JSON.stringify(withoutPort),()=>pem).kind).toBe('invalid');
+    expect(parseServiceConfig(JSON.stringify(withoutTrust),()=>pem).kind).toBe('invalid');
+    const {identity_profile,...withoutProfile}=raw;
+    expect(parseServiceConfig(JSON.stringify(withoutProfile),()=>pem).kind).toBe('invalid');
+    const c=parseServiceConfig(JSON.stringify(raw),()=>pem);
+    expect(c).toMatchObject({kind:'configured',config:{ca:pem,issuerCa:null,callbackPort:53682,identityProfile:'auth0'}});
+  });
+  it('supports a separate fixture issuer CA without changing service pinning',()=>{
+    const c=parseServiceConfig(JSON.stringify({...raw,issuer_trust:'custom-ca',issuer_ca_path:'issuer.pem'}),file=>file==='service.pem'?pem:pem+'\nissuer');
+    expect(c).toMatchObject({kind:'configured',config:{ca:pem,issuerCa:pem+'\nissuer'}});
+    expect(parseServiceConfig(JSON.stringify({...raw,issuer_trust:'custom-ca'}),()=>pem).kind).toBe('invalid');
+    expect(parseServiceConfig(JSON.stringify({...raw,issuer_ca_path:'issuer.pem'}),()=>pem).kind).toBe('invalid');
+    expect(parseServiceConfig(JSON.stringify({...raw,issuer_trust:'custom-ca',issuer_ca_path:'issuer.pem'}),()=>pem+'PRIVATE KEY').kind).toBe('invalid');
+  });
+});
+
+it('maps occupied registered callback to a clear refusal without opening the browser',async()=>{
+  const {IdentitySession,REASONS}=await import('../src/main/identity/session');
+  const {CredentialVault}=await import('../src/main/identity/vault');
+  const {LoopbackError}=await import('../src/main/identity/loopback');
+  const {CONFIG,FakeIssuer,FakeService,fakeSafeStorage}=await import('./identity-fakes');
+  const {recordingLogger}=await import('./helpers');
+  let opened=false;
+  const session=new IdentitySession({config:{kind:'configured',config:{...CONFIG,callbackPort:53682}},vault:new CredentialVault({safeStorage:fakeSafeStorage('basic_text'),platform:'linux',dir:'unused-memory-only'}),service:new FakeService(),issuer:new FakeIssuer(),openBrowser:async()=>{opened=true;},logger:recordingLogger(),startLoopback:async()=>{throw new LoopbackError('port-occupied');}});
+  expect(await session.signIn()).toMatchObject({ok:false,reason:REASONS.callbackOccupied});
+  expect(opened).toBe(false);
+});

@@ -1,3 +1,5 @@
+import type { OnboardingService } from '../onboarding/service';
+import { payload as onboardingPayload, createInput, acceptInput, workspaceInput, inviteInput, changeInput, removeInput, revokeInput, draftInput } from '../onboarding/contracts';
 import {searchPayload,reopenPayload,navigationPayload,type SearchInput,type SearchView,type ReopenInput,type ReopenView,type NavigationInput} from '../organise';
 import type { TaskService } from '../tasks/service';
 import { taskPreflightPayload, taskStartPayload, taskReconcilePayload, taskProgressPayload, taskActivityPayload, taskAnswerPayload, taskSteerPayload, taskStopPayload, taskResumePayload } from '../tasks/validators';
@@ -66,6 +68,19 @@ import { describeSender, isTrustedSender, type InvokeEventLike } from './sender'
 
 /** Every operation the preload exposes, in `<namespace>.<name>` form. */
 export const OPERATION_NAMES = [
+  'onboarding.getState',
+  'onboarding.saveDraft',
+  'onboarding.members',
+  'onboarding.createWorkspace',
+  'onboarding.acceptInvitation',
+  'onboarding.invite',
+  'onboarding.changeRoles',
+  'onboarding.removeMember',
+  'onboarding.revokeInvitation',
+  'onboarding.reconcile',
+  'onboarding.retry',
+  'onboarding.discardPending',
+  'identity.reauthenticate',
   'tasks.preflight',
   'tasks.start',
   'tasks.reconcile',
@@ -311,6 +326,7 @@ export interface PolicyOperations {
 }
 
 export interface OperationDeps {
+  onboarding?: OnboardingService;
   tasks?: Pick<TaskService, 'preflight' | 'start' | 'reconcile' | 'progress' | 'activity' | 'inbox' | 'settleLifecycle' | 'answer' | 'steer' | 'stop' | 'resume'>;
   usage?: Pick<UsageService, 'forTask' | 'set'>;
   environments?: Pick<EnvironmentService, 'forTask'>;
@@ -524,7 +540,27 @@ export function createOperations(deps: OperationDeps): Operation[] {
     { name: 'routes.forTask', validate: taskRoutePayload, handle: (input) => routes().forTask((input as {taskId:string}).taskId) },
     { name: 'routes.select', validate: selectRoutePayload, handle: (input) => routes().select(input as Parameters<RouteService['select']>[0]) },
   ];
+  const onboarding = () => {if(!deps.onboarding)throw new Error('Onboarding unavailable');return deps.onboarding;};
+  const onboardingOps: Operation[] = [{name:'onboarding.getState',validate:noPayload,handle:()=>onboarding().getState()},
+{name:'onboarding.saveDraft',validate:onboardingPayload(draftInput),handle:input=>onboarding().saveDraft(input as Parameters<OnboardingService['saveDraft']>[0])},
+{name:'onboarding.members',validate:onboardingPayload(workspaceInput),handle:input=>onboarding().members(input as Parameters<OnboardingService['members']>[0])},
+{name:'onboarding.createWorkspace',validate:onboardingPayload(createInput),handle:input=>onboarding().createWorkspace(input as Parameters<OnboardingService['createWorkspace']>[0])},
+{name:'onboarding.acceptInvitation',validate:onboardingPayload(acceptInput),handle:input=>onboarding().acceptInvitation(input as Parameters<OnboardingService['acceptInvitation']>[0])},
+{name:'onboarding.invite',validate:onboardingPayload(inviteInput),handle:input=>onboarding().invite(input as Parameters<OnboardingService['invite']>[0])},
+{name:'onboarding.changeRoles',validate:onboardingPayload(changeInput),handle:input=>onboarding().changeRoles(input as Parameters<OnboardingService['changeRoles']>[0])},
+{name:'onboarding.removeMember',validate:onboardingPayload(removeInput),handle:input=>onboarding().removeMember(input as Parameters<OnboardingService['removeMember']>[0])},
+{name:'onboarding.revokeInvitation',validate:onboardingPayload(revokeInput),handle:input=>onboarding().revokeInvitation(input as Parameters<OnboardingService['revokeInvitation']>[0])},
+{name:'onboarding.reconcile',validate:noPayload,handle:()=>onboarding().reconcile()},
+{name:'onboarding.retry',validate:noPayload,handle:()=>onboarding().retry()},
+{name:'onboarding.discardPending',validate:noPayload,handle:()=>onboarding().discardPending()},
+    {name:'identity.reauthenticate',validate:noPayload,handle:async()=>{
+      const signedOut=await deps.identity.signOut();
+      if(!signedOut.ok || signedOut.status.identity.state!=='signed-out') return toRendererResult(signedOut);
+      return toRendererResult(await deps.identity.signIn());
+    }},
+  ];
   return [
+    ...onboardingOps,
     ...routeOps, capabilityInventory, capabilityManage,
     getStatus,
     identityStatus,

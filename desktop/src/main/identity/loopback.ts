@@ -22,7 +22,7 @@ export const CALLBACK_PATH = '/callback';
 export const DEFAULT_CALLBACK_TIMEOUT_MS = 5 * 60 * 1000;
 const MAX_CODE_LENGTH = 2048;
 
-export type LoopbackFailure = 'timeout' | 'denied' | 'issuer-mismatch' | 'malformed' | 'closed';
+export type LoopbackFailure = 'timeout' | 'denied' | 'issuer-mismatch' | 'malformed' | 'closed' | 'port-occupied';
 
 export class LoopbackError extends Error {
   override name = 'LoopbackError';
@@ -136,9 +136,12 @@ export async function startLoopbackListener(options: LoopbackOptions): Promise<L
   });
 
   await new Promise<void>((resolve, reject) => {
-    server.once('error', reject);
+    const bindError = (error: NodeJS.ErrnoException) => {
+      reject(options.port !== undefined && error.code === 'EADDRINUSE' ? new LoopbackError('port-occupied') : error);
+    };
+    server.once('error', bindError);
     server.listen(options.port ?? 0, '127.0.0.1', () => {
-      server.off('error', reject);
+      server.off('error', bindError);
       resolve();
     });
   });

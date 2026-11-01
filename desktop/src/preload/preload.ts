@@ -30,6 +30,20 @@
  */
 import { contextBridge, ipcRenderer } from 'electron';
 
+const ONBOARDING_GET_STATE_CHANNEL = 'inquello:op:onboarding.getState';
+const ONBOARDING_SAVE_DRAFT_CHANNEL = 'inquello:op:onboarding.saveDraft';
+const ONBOARDING_MEMBERS_CHANNEL = 'inquello:op:onboarding.members';
+const ONBOARDING_CREATE_WORKSPACE_CHANNEL = 'inquello:op:onboarding.createWorkspace';
+const ONBOARDING_ACCEPT_INVITATION_CHANNEL = 'inquello:op:onboarding.acceptInvitation';
+const ONBOARDING_INVITE_CHANNEL = 'inquello:op:onboarding.invite';
+const ONBOARDING_CHANGE_ROLES_CHANNEL = 'inquello:op:onboarding.changeRoles';
+const ONBOARDING_REMOVE_MEMBER_CHANNEL = 'inquello:op:onboarding.removeMember';
+const ONBOARDING_REVOKE_INVITATION_CHANNEL = 'inquello:op:onboarding.revokeInvitation';
+const ONBOARDING_RECONCILE_CHANNEL = 'inquello:op:onboarding.reconcile';
+const ONBOARDING_RETRY_CHANNEL = 'inquello:op:onboarding.retry';
+const ONBOARDING_DISCARD_PENDING_CHANNEL = 'inquello:op:onboarding.discardPending';
+const IDENTITY_REAUTHENTICATE_CHANNEL = 'inquello:op:identity.reauthenticate';
+
 const GET_STATUS_CHANNEL = 'inquello:op:runtime.getStatus';
 const IDENTITY_STATUS_CHANNEL = 'inquello:op:identity.getStatus';
 const IDENTITY_SIGN_IN_CHANNEL = 'inquello:op:identity.signIn';
@@ -98,6 +112,20 @@ const TASKS_PREFLIGHT_CHANNEL = 'inquello:op:tasks.preflight';
 const TASKS_START_CHANNEL = 'inquello:op:tasks.start';
 const TASKS_RECONCILE_CHANNEL = 'inquello:op:tasks.reconcile';
 const api = Object.freeze({
+  onboarding: Object.freeze({
+    getState: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ONBOARDING_GET_STATE_CHANNEL, ...args),
+    saveDraft: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ONBOARDING_SAVE_DRAFT_CHANNEL, ...args),
+    members: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ONBOARDING_MEMBERS_CHANNEL, ...args),
+    createWorkspace: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ONBOARDING_CREATE_WORKSPACE_CHANNEL, ...args),
+    acceptInvitation: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ONBOARDING_ACCEPT_INVITATION_CHANNEL, ...args),
+    invite: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ONBOARDING_INVITE_CHANNEL, ...args),
+    changeRoles: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ONBOARDING_CHANGE_ROLES_CHANNEL, ...args),
+    removeMember: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ONBOARDING_REMOVE_MEMBER_CHANNEL, ...args),
+    revokeInvitation: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ONBOARDING_REVOKE_INVITATION_CHANNEL, ...args),
+    reconcile: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ONBOARDING_RECONCILE_CHANNEL, ...args),
+    retry: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ONBOARDING_RETRY_CHANNEL, ...args),
+    discardPending: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ONBOARDING_DISCARD_PENDING_CHANNEL, ...args),
+  }),
   tasks: Object.freeze({
     inbox: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(TASKS_INBOX_CHANNEL, ...args),
     steer: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(TASKS_STEER_CHANNEL, ...args),
@@ -167,6 +195,7 @@ const api = Object.freeze({
     getStatus: (): Promise<unknown> => ipcRenderer.invoke(GET_STATUS_CHANNEL),
   }),
   identity: Object.freeze({
+    reauthenticate: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(IDENTITY_REAUTHENTICATE_CHANNEL, ...args),
     /** Resolves with `{ identity, sharedService, credentialStorage, privateWork }`. Never a credential. */
     getStatus: (): Promise<unknown> => ipcRenderer.invoke(IDENTITY_STATUS_CHANNEL),
     /** Signs in through the system browser; resolves with `{ ok, reason?, status }`. */

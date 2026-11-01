@@ -288,13 +288,14 @@ const TAB_SETTLE_MS = 50;
 
 /** The tree `window.inquello` must expose, as `describe` renders it. */
 export const EXPECTED_BRIDGE_TREE = {
+  onboarding: {getState: 'function', saveDraft: 'function', members: 'function', createWorkspace: 'function', acceptInvitation: 'function', invite: 'function', changeRoles: 'function', removeMember: 'function', revokeInvitation: 'function', reconcile: 'function', retry: 'function', discardPending: 'function'},
   tasks: { inbox: 'function', steer: 'function', stop: 'function', resume: 'function',preflight:'function',start:'function',reconcile:'function',progress:'function',activity:'function',settleLifecycle:'function',answer:'function',onProgressChanged:'function',onSessionChanged:'function'},
   usage: { forTask: 'function', set: 'function', onChanged: 'function' },
   environments: { forTask: 'function', onChanged: 'function' },
   routes: { list: 'function', configure: 'function', forTask: 'function', select: 'function', onChanged: 'function' },
   capabilities: { onChanged: 'function', getInventory: 'function', manage: 'function' },
   runtime: { getStatus: 'function' },
-  identity: { getStatus: 'function', signIn: 'function', signOut: 'function' },
+  identity: { reauthenticate: 'function', getStatus: 'function', signIn: 'function', signOut: 'function' },
   data: { getPolicy: 'function', export: 'function', import: 'function', delete: 'function' },
   provider: {
     getStatus: 'function',

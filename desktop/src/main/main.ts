@@ -131,6 +131,9 @@ import { app, BrowserWindow, dialog, ipcMain, protocol, safeStorage, session, ty
 
 import schemaStamp from '../protocol/schema-stamp.json';
 import { DataService, ExportJournal, governedRoots, JOURNAL_DIR, loadShippedPolicy, type GovernedRoots, type DataServiceOptions, type ImportActionResult } from './data';
+import { OnboardingClient } from './onboarding/client';
+import { OnboardingStore } from './onboarding/store';
+import { OnboardingService } from './onboarding/service';
 import { createIdentity, headlessOpener, identityDir, SERVICE_CONFIG_ENV, type IdentityWiring } from './identity';
 import { openSystemBrowser } from './identity/browser';
 import { AppServerRuntime, consoleLogger, isProviderCredentialVar, recordingConsoleLogger, resolveAppServerBinary, runtimeChildEnv, writeRuntimeConfig, RUNTIME_OWNED_CONFIG_ARGS, verifyRuntimeOwnedConfig, type ExitInfo } from './runtime';
@@ -629,6 +632,12 @@ void app.whenReady().then(async () => {
     recordSecrets: smoke,
   });
   const identitySession = identity.session;
+  const onboardingConfig = identity.config.kind === 'configured' ? identity.config.config : null;
+  const onboardingService = new OnboardingService({
+    identity: identitySession,
+    client: onboardingConfig && identity.transport ? new OnboardingClient(onboardingConfig.serviceUrl,identity.transport) : null,
+    store: new OnboardingStore({dir:path.join(identityDir(app.getPath('userData')),'onboarding'),scope:JSON.stringify([onboardingConfig?.serviceUrl,onboardingConfig?.issuerUrl]),safeStorage,platform:process.platform}),
+  });
   const sharedAuthority=identity.service;
   const taskBootstrapOptions={env:process.env,packaged:app.isPackaged,userData,runtime:{
     ready:()=>runtime?.state==='ready'&&runtimeConfigurationVerified,instance:()=>runtime,
@@ -761,6 +770,7 @@ void app.whenReady().then(async () => {
   registerOperations(
     ipcMain,
     createOperations({
+      onboarding: onboardingService,
       capabilities,
       routes,
       environments,

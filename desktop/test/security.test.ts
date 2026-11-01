@@ -375,6 +375,19 @@ describe('operation registry', () => {
 
   it('registers exactly one fixed channel per named operation', () => {
     expect(OPERATION_NAMES).toEqual([
+      'onboarding.getState',
+      'onboarding.saveDraft',
+      'onboarding.members',
+      'onboarding.createWorkspace',
+      'onboarding.acceptInvitation',
+      'onboarding.invite',
+      'onboarding.changeRoles',
+      'onboarding.removeMember',
+      'onboarding.revokeInvitation',
+      'onboarding.reconcile',
+      'onboarding.retry',
+      'onboarding.discardPending',
+      'identity.reauthenticate',
       'tasks.preflight', 'tasks.start', 'tasks.reconcile', 'tasks.progress', 'tasks.activity', 'tasks.inbox', 'tasks.settleLifecycle', 'tasks.answer', 'tasks.steer', 'tasks.stop', 'tasks.resume',
       'usage.forTask', 'usage.set',
       'environments.forTask',
@@ -1001,12 +1014,13 @@ describe('host privilege source scan', () => {
     const uses = body.match(/ipcRenderer[^\n]*/g) ?? [];
     expect(uses.length).toBeGreaterThan(0);
     for (const use of uses) expect(use).toMatch(/^ipcRenderer\.(?:invoke\([A-Z_]+_CHANNEL(?:, \.\.\.args)?\)|(?:on|removeListener)\((?:CAPABILITIES|ROUTES|ENVIRONMENTS|USAGE|TASKS|TASKS_PROGRESS|POLICY_SETTINGS)_CHANGED_CHANNEL, handler\))/);
-    // Only the data operations, the two provider operations that take what the user entered, and the organise, state, policy and permissions operations forward arguments.
-    expect((body.match(/_CHANNEL, \.\.\.args\)/g) ?? []).length).toBe(47);
+    // Fixed payload operations forward arguments for main validation; onboarding/reauth include noPayload checks.
+    const onboardingForwarders = ["ONBOARDING_GET_STATE_CHANNEL, ...args)","ONBOARDING_SAVE_DRAFT_CHANNEL, ...args)","ONBOARDING_MEMBERS_CHANNEL, ...args)","ONBOARDING_CREATE_WORKSPACE_CHANNEL, ...args)","ONBOARDING_ACCEPT_INVITATION_CHANNEL, ...args)","ONBOARDING_INVITE_CHANNEL, ...args)","ONBOARDING_CHANGE_ROLES_CHANNEL, ...args)","ONBOARDING_REMOVE_MEMBER_CHANNEL, ...args)","ONBOARDING_REVOKE_INVITATION_CHANNEL, ...args)","ONBOARDING_RECONCILE_CHANNEL, ...args)","ONBOARDING_RETRY_CHANNEL, ...args)","ONBOARDING_DISCARD_PENDING_CHANNEL, ...args)","IDENTITY_REAUTHENTICATE_CHANNEL, ...args)"];
+    expect((body.match(/_CHANNEL, \.\.\.args\)/g) ?? []).length).toBe(60);
     expect(
       body
         .match(/[A-Z_]+_CHANNEL, \.\.\.args\)/g)
-        ?.every((use) => use.startsWith('TASKS_') || use.startsWith('USAGE_') || use.startsWith('ENVIRONMENTS_') || use.startsWith('ROUTES_') || use.startsWith('CAPABILITIES_') || use.startsWith('DATA_') || use.startsWith('PROVIDER_SET_CLAUDE_KEY_') || use.startsWith('PROVIDER_CODEX_LOGIN_') || use.startsWith('ORGANISE_') || use.startsWith('STATE_') || use.startsWith('POLICY_') || use.startsWith('PERMISSIONS_')),
+        ?.every((use) => onboardingForwarders.includes(use) || use.startsWith('TASKS_') || use.startsWith('USAGE_') || use.startsWith('ENVIRONMENTS_') || use.startsWith('ROUTES_') || use.startsWith('CAPABILITIES_') || use.startsWith('DATA_') || use.startsWith('PROVIDER_SET_CLAUDE_KEY_') || use.startsWith('PROVIDER_CODEX_LOGIN_') || use.startsWith('ORGANISE_') || use.startsWith('STATE_') || use.startsWith('POLICY_') || use.startsWith('PERMISSIONS_')),
     ).toBe(true);
     expect(preload.replace('ipcRenderer.on(TASKS_PROGRESS_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(TASKS_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(USAGE_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(ENVIRONMENTS_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(CAPABILITIES_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(ROUTES_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(POLICY_SETTINGS_CHANGED_CHANNEL, handler)', '')).not.toMatch(/\.on\(|\.send\(|sendSync|postMessage/);
   });

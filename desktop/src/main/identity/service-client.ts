@@ -1,8 +1,8 @@
 /**
  * HTTPS clients for the shared service and the OIDC issuer, used only by main.
  *
- * Every request goes over `https:` and trusts only the CA from the dev config,
- * passed as the per-request `ca` option with `rejectUnauthorized: true`. This
+ * Every request goes over `https:` with caller-selected pinned/service or
+ * explicit issuer public trust and `rejectUnauthorized: true`. This
  * module never touches the system trust store or `NODE_TLS_REJECT_UNAUTHORIZED`
  * and never skips verification.
  *
@@ -106,7 +106,7 @@ export interface HttpResponse {
 export type HttpsTransport = (request: HttpRequest) => Promise<HttpResponse>;
 
 /** The real transport: `node:https` with the configured CA as the only trust anchor. */
-export function httpsTransport(ca: string, timeoutMs = REQUEST_TIMEOUT_MS): HttpsTransport {
+export function httpsTransport(ca: string | string[] | undefined, timeoutMs = REQUEST_TIMEOUT_MS): HttpsTransport {
   return (request) =>
     new Promise<HttpResponse>((resolve, reject) => {
       const url = new URL(request.url);
