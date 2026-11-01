@@ -1,4 +1,5 @@
 import { configureDesktopStorage } from './runtime/desktop-storage';
+import { smokeCatalogArgs } from './runtime/smoke-catalog';
 import { wslDataStorage } from './runtime/wsl-data';
 import { ensurePrivateDirectory } from './runtime/private-paths';
 import {createDataAuthority} from './data/authority';
@@ -181,6 +182,24 @@ let routes: RouteService | undefined;
 let environments: EnvironmentService | undefined;
 let usage: UsageService | undefined;
 let tasks: TaskService | undefined;
+function notifySettingsChanged(settled: boolean): void {
+  for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:policy-settings-changed', settled);
+}
+function settingsChanged(): void {
+  notifySettingsChanged(policy?.invalidateSettings() ?? true);
+}
+/** Tokens belong to a single transition; nested runtime/identity work cannot settle its peer. */
+function beginSettingsTransition(): () => void {
+  const owner = policy;
+  const token = owner?.beginSettingsTransition();
+  notifySettingsChanged(false);
+  let finished = false;
+  return () => {
+    if (finished) return;
+    finished = true;
+    notifySettingsChanged(owner && token !== undefined ? owner.endSettingsTransition(token) : true);
+  };
+}
 function taskSessionChanged(identityChanged = false): void {
   tasks?.invalidate();
   for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:tasks-session-changed', identityChanged);
@@ -190,6 +209,7 @@ function usageChanged(privateScope = false): void {
   for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:usage-changed', privateScope);
 }
 function environmentChanged(privateScope = true): void {
+  if (privateScope) settingsChanged();
   if (privateScope) tasks?.invalidate();
   usageChanged(privateScope);
   environments?.invalidate();
@@ -270,6 +290,8 @@ function startRuntime(): Promise<void> {
 
 /** Starts a new runtime child; local-data recovery calls this only after copying is complete. */
 async function startRuntimeNow(): Promise<void> {
+  const settled = beginSettingsTransition();
+  try {
   taskSessionChanged();
   runtimeConfigurationVerified = false;
   environmentChanged();
@@ -294,14 +316,14 @@ async function startRuntimeNow(): Promise<void> {
   runtime = new AppServerRuntime({
     command: binary.path,
     commandArgsPrefix: smoke && !app.isPackaged
-      ? [...RUNTIME_OWNED_CONFIG_ARGS, '--disable-plugin-startup-tasks-for-tests']
+      ? [...RUNTIME_OWNED_CONFIG_ARGS, ...smokeCatalogArgs(smoke, app.isPackaged, app.getAppPath()), '--disable-plugin-startup-tasks-for-tests']
       : RUNTIME_OWNED_CONFIG_ARGS,
     env: runtimeEnv(runtimeHome, workingStore),
     clientInfo: { name: 'inquello_desktop', title: 'Inquello', version: app.getVersion() },
     schemaStamp,
     stderrLogPath: path.join(app.getPath('logs'), 'app-server-stderr.log'),
     logger,
-    onNotification: ({ method, params }) => { tasks?.notification(method, params); providers?.codex.handleNotification(method, params); if (method === 'account/updated') void routes?.invalidate('codex-responses'); capabilities?.handleNotification(method, params); if (['app/list/updated','skills/changed','mcpServer/startupStatus/updated','mcpServerStatus','mcpServer/oauthLogin/completed','account/updated'].includes(method)) for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:capabilities-changed'); },
+    onNotification: ({ method, params }) => { tasks?.notification(method, params); providers?.codex.handleNotification(method, params); if (method === 'account/updated') void routes?.invalidate('codex-responses'); capabilities?.handleNotification(method, params); if (method === 'account/updated') settingsChanged(); if (['app/list/updated','skills/changed','mcpServer/startupStatus/updated','mcpServerStatus','mcpServer/oauthLogin/completed','account/updated'].includes(method)) for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:capabilities-changed'); },
     onServerRequest: (method, params, id) => method === 'inquello/context/authorize' ? organise?.authorizeContext(params) ?? {available:false,snapshot:null,serviceEngagementIds:[]} : method === 'item/tool/requestUserInput' ? tasks?.question(id, params) ?? {answers:{}} : method === 'inquello/tasks/authority' ? tasks?.authority(params) ?? {workspacePolicy:null} : escalations.answer(method, params),
   });
   runtime.on('state', ({ state, error }) => {
@@ -331,6 +353,7 @@ async function startRuntimeNow(): Promise<void> {
   handshakeOk = true;
   // A new runtime process has no principal bound yet.
   await organise?.syncPrincipal().catch((error: unknown) => logger.warn(`organise: principal not bound after start (${(error as Error).message})`));
+  } finally { settled(); }
 }
 
 function stopRuntime(): Promise<void> {
@@ -338,6 +361,8 @@ function stopRuntime(): Promise<void> {
 }
 
 async function stopRuntimeNow(): Promise<void> {
+  const settled = beginSettingsTransition();
+  try {
   taskSessionChanged();
   permissionMediator?.declineAll();
   await routes?.quiesce();
@@ -350,6 +375,7 @@ async function stopRuntimeNow(): Promise<void> {
   tasks?.runtimeStopped(current);
   capabilities?.clearConnectionTracking();
   logger.info(`app-server stopped (code ${exit.exitCode}, signal ${exit.signal}, killed ${exit.killed})`);
+  } finally { settled(); }
 }
 
 function exportStamp(): string {
@@ -652,8 +678,8 @@ void app.whenReady().then(async () => {
         return state.state === 'signed-in' ? { displayName: state.displayName, issuerLabel: state.issuerLabel } : null;
       },
       holdsSession: () => identitySession.holdsSession(),
-      signOut: async () => ({ ok: (await identitySession.signOut()).ok }),
-      forgetLocally: () => identitySession.forgetLocally(),
+      signOut: async () => { const settled = beginSettingsTransition(); try { return { ok: (await identitySession.signOut()).ok }; } finally { settled(); } },
+      forgetLocally: () => { const settled = beginSettingsTransition(); try { return identitySession.forgetLocally(); } finally { settled(); } },
     },
     providers: {
       forgetClaudeKey: () => providerService.forgetClaudeKey(),
@@ -696,8 +722,8 @@ void app.whenReady().then(async () => {
       runtimeVersion: schemaStamp.runtimeVersion,
       identity: {
         getStatus: () => identitySession.getStatus(),
-        signIn: async () => { taskSessionChanged(true); permissionMediator?.declineAll(); await routes?.quiesce(); if (capabilities && !(await capabilities.quiesce())) await stopRuntime(); const result = await afterIdentityChange(await identitySession.signIn()); capabilities?.resume(); routes?.resume(); return result; },
-        signOut: async () => { taskSessionChanged(true); permissionMediator?.declineAll(); await routes?.quiesce(); const result = await signOutWithCapabilities({capabilities, stopRuntime, signOut: () => identitySession.signOut(), afterIdentityChange}); routes?.resume(); return result; },
+        signIn: async () => { const settled = beginSettingsTransition(); try { taskSessionChanged(true); permissionMediator?.declineAll(); await routes?.quiesce(); if (capabilities && !(await capabilities.quiesce())) await stopRuntime(); const result = await afterIdentityChange(await identitySession.signIn()); capabilities?.resume(); routes?.resume(); return result; } finally { settled(); } },
+        signOut: async () => { const settled = beginSettingsTransition(); try { taskSessionChanged(true); permissionMediator?.declineAll(); await routes?.quiesce(); const result = await signOutWithCapabilities({capabilities, stopRuntime, signOut: () => identitySession.signOut(), afterIdentityChange}); routes?.resume(); return result; } finally { settled(); } },
       },
       data: {
         getPolicy: () => service.getPolicy(),

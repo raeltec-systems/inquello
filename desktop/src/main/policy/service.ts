@@ -210,6 +210,25 @@ export class PolicyService {
     return this.linuxTasks.tasks;
   }
   private authorityGeneration=0;
+  private settingsGeneration = 0;
+  private settingsTransitionId = 0;
+  private readonly settingsTransitions = new Set<number>();
+  /** Each identity/runtime transition must settle its own token; overlapping work stays blocked. */
+  beginSettingsTransition(): number {
+    const token = ++this.settingsTransitionId;
+    this.settingsTransitions.add(token);
+    this.settingsGeneration++;
+    return token;
+  }
+  endSettingsTransition(token: number): boolean {
+    if (this.settingsTransitions.delete(token)) this.settingsGeneration++;
+    return this.settingsTransitions.size === 0;
+  }
+  invalidateSettings(): boolean {
+    this.settingsGeneration++;
+    return this.settingsTransitions.size === 0;
+  }
+
   private readonly highest=new Map<string,{epoch:bigint;policy:bigint}>();
   /** The sandbox check per runtime process. */
   private sandboxCheck: { runtime: unknown; key: string; available: Promise<boolean> } | null = null;
@@ -506,16 +525,23 @@ export class PolicyService {
   /** S07: the effective policy of each of the principal's Workspaces, and the Capability Contract. */
   async settings(): Promise<SettingsPolicyView> {
     const base = { environmentLabel: ENVIRONMENT_LABEL, capabilities: [...DEFAULT_CAPABILITIES] };
-    if (!this.options.identity.principalId()) return { ...base, signedIn: false, workspaces: [], reason: POLICY_REASONS.signedOut };
+    const principal = this.options.identity.principalId(), runtime = this.options.runtime.instance(), generation = this.settingsGeneration;
+    const unavailable = (): SettingsPolicyView => ({ ...base, signedIn: this.options.identity.principalId() !== null, workspaces: [], reason: this.options.identity.principalId() ? POLICY_REASONS.policyUnavailable : POLICY_REASONS.signedOut });
+    const current = () => this.settingsTransitions.size === 0 && generation === this.settingsGeneration && principal === this.options.identity.principalId() && runtime === this.options.runtime.instance() && this.options.runtime.ready();
+    if (!principal) return { ...base, signedIn: false, workspaces: [], reason: POLICY_REASONS.signedOut };
+    if (!current()) return unavailable();
     const listing = await this.options.organise.getWorkspaces();
+    if (!current()) return unavailable();
     if (!listing.signedIn) return { ...base, signedIn: false, workspaces: [], reason: POLICY_REASONS.signedOut };
     const workspaces: WorkspacePolicyEntry[] = [];
     let capabilities = base.capabilities;
     for (const workspace of listing.workspaces) {
       const result = await this.forWorkspace(workspace.workspaceId);
+      if (!current()) return unavailable();
       if (result.ok) capabilities = result.value.capabilities;
       workspaces.push({ workspaceId: workspace.workspaceId, name: workspace.name, policy: result.ok ? result.value : null, reason: result.ok ? null : result.reason });
     }
+    if (!current()) return unavailable();
     return { ...base, capabilities, signedIn: true, workspaces, reason: workspaces.length === 0 ? POLICY_REASONS.notAMember : null };
   }
 

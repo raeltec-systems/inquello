@@ -178,12 +178,12 @@ export async function probeSavedNavigation(contents: WebContents, options: {
     const taskId = created.taskId;
     await evaluate(`
       require(await openShell(), 'Shell unavailable');
-      const row = await wait(() => q('[data-task-id="${taskId}"] a'), ${SHELL_SETTLE_MS});
+      const row = await wait(() => qVisible('[data-task-id="${taskId}"] a'), ${SHELL_SETTLE_MS});
       require(row, 'Owned draft not shown').click();
-      require(await wait(() => q('[data-task-view="${taskId}"]'), ${SHELL_SETTLE_MS}), 'Draft did not open');
+      require(await wait(() => qVisible('[data-task-view="${taskId}"]'), ${SHELL_SETTLE_MS}), 'Draft did not open');
       const menu = require(button('Organise Task'), 'Organise menu unavailable'); menu.click();
       require(await wait(() => button('Pin'), 5000), 'Pin unavailable').click();
-      require(await wait(() => q('[data-task-id="${taskId}"]')?.textContent.includes('Pinned'), 5000), 'Pin did not persist to navigation');
+      require(await wait(() => qVisible('[data-task-id="${taskId}"]')?.textContent.includes('Pinned'), 5000), 'Pin did not persist to navigation');
       require(button('Organise Task'), 'Organise menu disappeared').click();
       require(await wait(() => button('Archive'), 5000), 'Archive unavailable').click();
       require(await wait(() => !q('[data-task-id="${taskId}"]'), 5000), 'Archived Task remained in navigation');
@@ -218,7 +218,7 @@ export async function probeSavedNavigation(contents: WebContents, options: {
       require(q('[data-task-view]').textContent.includes('Opening does not unarchive'), 'Reopen silently unarchived');
       require(button('Organise Task'), 'Reopened Task menu unavailable').click();
       require(await wait(() => button('Unarchive'), 5000), 'Unarchive unavailable').click();
-      require(await wait(() => q('[data-task-id="${taskId}"]'), 5000), 'Unarchive did not restore navigation');
+      require(await wait(() => qVisible('[data-task-id="${taskId}"]'), 5000), 'Unarchive did not restore navigation');
       const tree = await globalThis.inquello.organise.getTree({workspaceId:${JSON.stringify(workspaceId)}});
       const task = tree.ok && tree.value.tasks.find(t => t.taskId === '${taskId}');
       require(task?.pinned && !task.archived && task.runtimeThreadId === null, 'Navigation changed execution or lost the Task');
@@ -312,7 +312,7 @@ export const EXPECTED_BRIDGE_TREE = {
     moveTask: 'function',
   },
   state: { list: 'function', recordTaskState: 'function' },
-  policy: { getSettings: 'function', forTask: 'function', setBroadMode: 'function' },
+  policy: { onSettingsChanged: 'function', getSettings: 'function', forTask: 'function', setBroadMode: 'function' },
   permissions: { pending: 'function', decide: 'function', getRules: 'function', setUserRules: 'function' },
 } as const;
 
@@ -1630,6 +1630,10 @@ const SHELL_HELPERS = `
     return predicate();
   };
   const q = (selector, root) => (root || document).querySelector(selector);
+  // Settings hides the persistent Shell; DOM presence alone is not readiness.
+  const visible = (element) => !!element && !element.closest('[hidden]');
+  const qVisible = (selector, root) => [...(root || document).querySelectorAll(selector)].find(visible) || null;
+  const specimenReady = () => location.hash === '#specimen' && !visible(q('[data-shell]')) && !!qVisible('.specimen');
   const press = (selector) => {
     const element = q(selector);
     if (!element || element.getAttribute('aria-disabled') === 'true') return false;
@@ -1651,7 +1655,7 @@ const SHELL_HELPERS = `
   });
   const openShell = async () => {
     location.hash = '#shell';
-    return !!(await wait(() => q('[data-sidebar]'), ${SHELL_SETTLE_MS}));
+    return !!(await wait(() => location.hash === '#shell' && visible(q('[data-shell]')) && qVisible('[data-sidebar]:not([data-sidebar-state="loading"])'), ${SHELL_SETTLE_MS}));
   };
 `;
 
@@ -1704,7 +1708,7 @@ function shellCreateProbe(workspaceId: string): string {
     const created = await globalThis.inquello.organise.createTask({operationId:crypto.randomUUID(),workspaceId:${JSON.stringify(workspaceId)},engagementId:out.engagementId,folderId:out.folderId,title:'Untitled thread'});
     if (!created.ok) return out;
     location.hash = '#specimen';
-    await wait(() => !q('[data-shell]'), 5000);
+    await wait(specimenReady, 5000);
     await openShell();
     const task = await wait(() => q('[data-folder-id] [data-task-id]'), ${SHELL_SETTLE_MS});
     out.taskId = task ? task.getAttribute('data-task-id') : null;
@@ -1722,11 +1726,11 @@ function shellMoveProbe(taskId: string): string {
   return `(async () => {
     ${SHELL_HELPERS}
     location.hash = '#specimen';
-    await wait(() => !q('[data-shell]'), 5000);
+    await wait(specimenReady, 5000);
     const out = { shellOpened: await openShell() };
-    const row = await wait(() => q('[data-task-id=${JSON.stringify(taskId)}] a'), ${SHELL_SETTLE_MS});
+    const row = await wait(() => qVisible('[data-task-id=${JSON.stringify(taskId)}] a'), ${SHELL_SETTLE_MS});
     if (row) row.click();
-    out.opened = !!(await wait(() => q('[data-task-view=${JSON.stringify(taskId)}]'), 5000));
+    out.opened = !!(await wait(() => qVisible('[data-task-view=${JSON.stringify(taskId)}]'), 5000));
     out.headerBefore = readHeader();
     out.movePressed = press('[data-task-move] button');
     const target = await wait(() => [...document.querySelectorAll('[role="menuitemradio"]')].find((item) => item.textContent.includes('No Engagement')), 5000);
@@ -1951,11 +1955,11 @@ function statesViewProbe(taskId: string): string {
   return `(async () => {
     ${SHELL_HELPERS}
     location.hash = '#specimen';
-    await wait(() => !q('[data-shell]'), 5000);
+    await wait(specimenReady, 5000);
     const out = { shellOpened: await openShell() };
-    const row = await wait(() => q('[data-task-id=${JSON.stringify(taskId)}] a'), ${SHELL_SETTLE_MS});
+    const row = await wait(() => qVisible('[data-task-id=${JSON.stringify(taskId)}] a'), ${SHELL_SETTLE_MS});
     if (row) row.click();
-    out.opened = !!(await wait(() => q('[data-task-view=${JSON.stringify(taskId)}]'), 5000));
+    out.opened = !!(await wait(() => qVisible('[data-task-view=${JSON.stringify(taskId)}]'), 5000));
     out.shown = !!(await wait(() => q('[data-task-states] [data-state-dimension="run"][data-state-value="execution_finished"]'), ${SHELL_SETTLE_MS}));
     out.dimensions = [...document.querySelectorAll('[data-task-states] [data-state-dimension]')].map((row) => ({
       dimension: row.getAttribute('data-state-dimension'),
@@ -2223,12 +2227,12 @@ function shellLayoutOpenProbe(taskId: string | null): string {
   return `(async () => {
     ${SHELL_HELPERS}
     location.hash = '#specimen';
-    await wait(() => !q('[data-shell]'), 5000);
+    await wait(specimenReady, 5000);
     const out = { shellOpened: await openShell() };
     if (${JSON.stringify(taskId)}) {
-      const row = await wait(() => q('[data-task-id=${JSON.stringify(taskId ?? '')}] a'), ${SHELL_SETTLE_MS});
+      const row = await wait(() => qVisible('[data-task-id=${JSON.stringify(taskId ?? '')}] a'), ${SHELL_SETTLE_MS});
       if (row) row.click();
-      out.opened = !!(await wait(() => q('[data-task-view=${JSON.stringify(taskId ?? '')}]'), 5000));
+      out.opened = !!(await wait(() => qVisible('[data-task-view=${JSON.stringify(taskId ?? '')}]'), 5000));
     }
     return out;
   })()`;
@@ -2513,15 +2517,15 @@ export const COMPOSER_EMPTY_REASON = 'Type a request to send.';
 
 const COMPOSER_HELPERS = `
   ${SHELL_HELPERS}
-  const composer = () => q('[data-composer]');
-  const field = () => q('[data-composer-input]');
-  const sendButton = () => q('[data-composer-send]');
+  const composer = () => qVisible('[data-composer]');
+  const field = () => qVisible('[data-composer-input]');
+  const sendButton = () => qVisible('[data-composer-send]');
   const described = (element) => element ? (element.getAttribute('aria-describedby') || '').split(' ').map((id) => { const el = document.getElementById(id); return el ? el.textContent : ''; }).join(' ') : null;
   const openTask = async (taskId) => {
-    const row = await wait(() => q('[data-task-id="' + taskId + '"] a'), ${SHELL_SETTLE_MS});
+    const row = await wait(() => qVisible('[data-task-id="' + taskId + '"] a'), ${SHELL_SETTLE_MS});
     if (!row) return false;
     row.click();
-    return !!(await wait(() => q('[data-task-view="' + taskId + '"]') && field() && composer().getAttribute('data-composer-task') === taskId, 5000));
+    return !!(await wait(() => qVisible('[data-task-view="' + taskId + '"]') && field() && composer().getAttribute('data-composer-task') === taskId, 5000));
   };
   const readField = (expected) => {
     const el = field();
@@ -2550,7 +2554,7 @@ function composerTypeProbe(taskA: string, taskB: string): string {
   return `(async () => {
     ${COMPOSER_HELPERS}
     location.hash = '#specimen';
-    await wait(() => !q('[data-shell]'), 5000);
+    await wait(specimenReady, 5000);
     const out = { shellOpened: await openShell() };
     out.openedA = await openTask(${JSON.stringify(taskA)});
     if (!out.openedA) return out;
@@ -2608,7 +2612,7 @@ const COMPOSER_SIGN_OUT_PROBE = `(async () => {
   out.reached = !!(await wait(() => q('[data-account][data-identity-state="signed-out"]'), ${ACCOUNT_SETTLE_MS}));
   out.shellOpened = await openShell();
   out.signedOutShown = !!(await wait(() => q('[data-sidebar][data-sidebar-state="signed-out"]'), ${SHELL_SETTLE_MS}));
-  out.composerShown = !!composer();
+  out.composerShown = !!q('[data-composer]'); // Sign-out must clear even hidden private drafts.
   return out;
 })()`;
 
@@ -2617,7 +2621,7 @@ function composerAfterProbe(taskA: string, taskB: string): string {
   return `(async () => {
     ${COMPOSER_HELPERS}
     location.hash = '#specimen';
-    await wait(() => !q('[data-shell]'), 5000);
+    await wait(specimenReady, 5000);
     const out = { shellOpened: await openShell() };
     out.openedA = await openTask(${JSON.stringify(taskA)});
     out.a = readField('');
@@ -2631,10 +2635,10 @@ function composerAfterProbe(taskA: string, taskB: string): string {
 const COMPOSER_SIGNED_OUT_READ = `(async () => {
   ${COMPOSER_HELPERS}
   location.hash = '#specimen';
-  await wait(() => !q('[data-shell]'), 5000);
+  await wait(specimenReady, 5000);
   const out = { shellOpened: await openShell() };
   out.signedOutShown = !!(await wait(() => q('[data-sidebar][data-sidebar-state="signed-out"]'), ${SHELL_SETTLE_MS}));
-  out.composerShown = !!composer();
+  out.composerShown = !!q('[data-composer]'); // Sign-out must clear even hidden private drafts.
   return out;
 })()`;
 
@@ -2827,7 +2831,7 @@ function policySettingsProbe(workspaceId: string | null): string {
   return `(async () => {
     ${SHELL_HELPERS}
     location.hash = '#specimen';
-    await wait(() => !q('[data-shell]'), 5000);
+    await wait(specimenReady, 5000);
     const loaded = await wait(() => {
       const section = q('[data-policy-section][data-policy-loaded="true"]');
       if (!section) return null;
@@ -2866,11 +2870,11 @@ function policyTaskProbe(taskId: string, operationId: string): string {
   return `(async () => {
     ${SHELL_HELPERS}
     location.hash = '#specimen';
-    await wait(() => !q('[data-shell]'), 5000);
+    await wait(specimenReady, 5000);
     const out = { shellOpened: await openShell() };
-    const row = await wait(() => q('[data-task-id=${JSON.stringify(taskId)}] a'), ${SHELL_SETTLE_MS});
+    const row = await wait(() => qVisible('[data-task-id=${JSON.stringify(taskId)}] a'), ${SHELL_SETTLE_MS});
     if (row) row.click();
-    out.opened = !!(await wait(() => q('[data-task-view=${JSON.stringify(taskId)}]'), ${SHELL_SETTLE_MS}));
+    out.opened = !!(await wait(() => qVisible('[data-task-view=${JSON.stringify(taskId)}]'), ${SHELL_SETTLE_MS}));
     const mode = await wait(() => q('[data-task-policy=${JSON.stringify(taskId)}] [data-broad-mode]'), ${POLICY_SETTLE_MS});
     const section = q('[data-task-policy]');
     out.status = mode ? mode.getAttribute('data-broad-mode-status') : null;
@@ -3086,9 +3090,9 @@ function toolBoundsRendererProbe(taskId: string, workspaceId: string): string {
   return `(async () => {
     ${SHELL_HELPERS}
     location.hash = '#specimen';
-    await wait(() => !q('[data-shell]'), 5000);
+    await wait(specimenReady, 5000);
     const out = { shellOpened: await openShell() };
-    const row = await wait(() => q('[data-task-id=${JSON.stringify(taskId)}] a'), ${SHELL_SETTLE_MS});
+    const row = await wait(() => qVisible('[data-task-id=${JSON.stringify(taskId)}] a'), ${SHELL_SETTLE_MS});
     if (row) row.click();
     const reach = await wait(() => q('[data-task-reach=${JSON.stringify(taskId)}] [data-reach]'), ${POLICY_SETTLE_MS});
     const section = q('[data-task-reach=${JSON.stringify(taskId)}]');
@@ -3097,7 +3101,7 @@ function toolBoundsRendererProbe(taskId: string, workspaceId: string): string {
     out.sandbox = section && q('[data-task-sandbox]', section) ? { status: q('[data-task-sandbox]', section).getAttribute('data-task-sandbox'), text: q('[data-task-sandbox]', section).textContent } : null;
     out.sectionText = section ? section.textContent : null;
     location.hash = '#specimen';
-    await wait(() => !q('[data-shell]'), 5000);
+    await wait(specimenReady, 5000);
     await wait(() => q('[data-policy-workspace=${JSON.stringify(workspaceId)}] [data-reach]'), ${POLICY_SETTLE_MS});
     const workspace = q('[data-policy-workspace=${JSON.stringify(workspaceId)}] [data-reach]');
     out.settingsReach = workspace ? workspace.textContent : null;
@@ -3300,9 +3304,9 @@ function permissionRulesProbe(rules: ReadonlyArray<{ prefix: string[]; decision:
 function permissionCardProbe(taskId: string, press: 'deny' | 'run', skip: readonly string[]): string {
   return `(async () => {
     ${SHELL_HELPERS}
-    const out = { shellOpened: !!q('[data-shell]') || await openShell() };
+    const out = { shellOpened: visible(q('[data-shell]')) || await openShell() };
     if (!q('[data-task-view=${JSON.stringify(taskId)}]')) {
-      const row = await wait(() => q('[data-task-id=${JSON.stringify(taskId)}] a'), ${SHELL_SETTLE_MS});
+      const row = await wait(() => qVisible('[data-task-id=${JSON.stringify(taskId)}] a'), ${SHELL_SETTLE_MS});
       if (row) row.click();
     }
     const skip = ${JSON.stringify(skip)};
@@ -3553,7 +3557,7 @@ export async function probeCapabilities(contents: WebContents, options: Capabili
       report.renderer = await contents.executeJavaScript(`(async () => {
         ${SHELL_HELPERS}
         location.hash = '#specimen';
-        await wait(() => !q('[data-shell]'), 5000);
+        await wait(specimenReady, 5000);
         const section = await wait(() => q('[data-capabilities-section][data-capabilities-loaded="true"]'), ${POLICY_SETTLE_MS});
         if (!section) return {kinds:[],builtins:0,providerSeparate:false,providerText:'',text:''};
         const provider = q('[data-provider-session]', section);
@@ -3610,21 +3614,27 @@ export async function probeRoutes(contents:WebContents, options:Omit<OrganisePro
 // ---- local execution facts (Story 1.23), no probes or inference -----------------
 export async function probeEnvironments(contents: WebContents, options: OrganiseProbeOptions & {routes: import('./routes/service').RouteService; policy: PolicyService; usageChanged(privateScope:boolean):void}): Promise<{ok:boolean;failures:string[]}> {
   const failures: string[] = [];
+  // Fixed local stage names only: never include raw RPC, provider or credential errors.
+  let stage = 'seeded-identity';
   const configured = options.identity.config.kind === 'configured';
   try {
     if (!configured) throw new SmokeProbeFailure('Seeded topology unavailable');
     const seed = JSON.parse(fs.readFileSync(options.seedFile ?? '', 'utf8')) as {workspace_id?:string};
     if (!seed.workspace_id || !(await smokeIdentity(contents, 'signIn')).ok) throw new SmokeProbeFailure('Seeded identity unavailable');
+    stage = 'principal-sync';
     await options.organise.syncPrincipal();
+    stage = 'task-create';
     const created = await options.organise.createTask({operationId:randomUUID(),workspaceId:seed.workspace_id,engagementId:null,folderId:null,title:'Synthetic environment inspection smoke'});
     if (!created.ok) throw new SmokeProbeFailure('Task unavailable');
+    stage = 'native-environment-read';
     const result = await contents.executeJavaScript(`globalThis.inquello.environments.forTask({taskId:${JSON.stringify(created.value.taskId)}})`) as import('./environments/types').TaskEnvironmentResult;
     if (!result.ok || result.value.executionLabel !== 'This device (local host)' || result.value.readiness !== 'ready' || result.value.inference.status !== 'none' || !result.value.remoteGate.includes('Story 8.1') || result.value.hostedSandboxGate !== 'V2 revisit (OQ-13)') failures.push('Environment inspection did not preserve distinct local execution, empty inference and disabled remote gates');
+    stage = 'mounted-environment';
     const rendered = await contents.executeJavaScript(`(async () => {
       ${SHELL_HELPERS}
-      location.hash = '#specimen'; await wait(() => !q('[data-shell]'), 5000);
+      location.hash = '#specimen'; await wait(specimenReady, 5000);
       if (!(await openShell())) return false;
-      const row = await wait(() => q('[data-task-id=${JSON.stringify(created.value.taskId)}] a'), ${SHELL_SETTLE_MS});
+      const row = await wait(() => qVisible('[data-task-id=${JSON.stringify(created.value.taskId)}] a'), ${SHELL_SETTLE_MS});
       if (!row) return false; row.click();
       const panel = await wait(() => { const node = q('[data-task-environment]'); return node?.textContent.includes('No processing route selected') ? node : null; }, ${POLICY_SETTLE_MS});
       if (!panel) return false;
@@ -3633,16 +3643,20 @@ export async function probeEnvironments(contents: WebContents, options: Organise
     if (!rendered) throw new SmokeProbeFailure('Environment panel did not render');
     // Safe synthetic selection through the real service emits main/preload invalidation.
     // No refresh click, renderer test event, credentials or inference call is used.
+    stage = 'route-catalog';
     const catalog = await options.routes.list();
     if (!catalog.ok) throw new SmokeProbeFailure('Routes unavailable');
     const candidate = catalog.value.find(route => route.routeId === 'claude-api-key');
     if (!candidate || candidate.enabled) throw new SmokeProbeFailure('Synthetic disabled route unavailable');
+    stage = 'route-configure';
     const configuredRoute = await options.routes.configure({operationId:randomUUID(),expectedRevision:candidate.revision,routeId:'claude-api-key',deployment:'anthropic-direct',model:'claude-sonnet-5-5',apiVersion:'2026-10-21',region:null});
     if (!configuredRoute.ok) throw new SmokeProbeFailure('Synthetic configuration unavailable');
     const route = configuredRoute.value.find(row => row.routeId === 'claude-api-key');
     if (!route || route.enabled) throw new SmokeProbeFailure('Unexpected route eligibility');
+    stage = 'route-select';
     const selected = await options.routes.select({operationId:randomUUID(),expectedRevision:0,taskId:created.value.taskId,routeId:'claude-api-key',configurationRevision:route.revision});
     if (!selected.ok) throw new SmokeProbeFailure('Synthetic selection unavailable: ' + selected.reason);
+    stage = 'mounted-route-update';
     const updated = await contents.executeJavaScript(`(async () => {
       ${SHELL_HELPERS}
       return !!(await wait(() => { const panel = q('[data-task-environment]'); return panel?.textContent.includes('Explicit processing route') && panel.textContent.includes('claude-sonnet-5-5') && panel.textContent.includes('Unknown') && !panel.textContent.includes('No processing route selected') ? panel : null; }, ${POLICY_SETTLE_MS}));
@@ -3650,6 +3664,7 @@ export async function probeEnvironments(contents: WebContents, options: Organise
     if (!updated) failures.push('Mounted environment panel did not update via production route invalidation');
     // Story 1.24: mounted choices follow the same real main/preload notification.
     // Persist defaults explicitly; this does not enable the disabled route or call a provider.
+    stage = 'mounted-usage-settings';
     const usageChoices = await contents.executeJavaScript(`(async () => {
       ${SHELL_HELPERS}
       const panel = await wait(() => { const node=q('[data-task-usage]'); return node?.querySelector('select[aria-label="Reasoning"]:not(:disabled)') ? node : null; }, ${POLICY_SETTLE_MS});
@@ -3660,10 +3675,12 @@ export async function probeEnvironments(contents: WebContents, options: Organise
     })()`) as boolean;
     if (!usageChoices) failures.push('Mounted usage choices did not save explicit defaults');
     // Harmless local invocations, repeated and failed, are accounted at the real boundary.
+    stage = 'bounded-local-invocations';
     for (const command of [['/bin/sh','-c','exit 0'],['/bin/sh','-c','exit 7'],['/bin/sh','-c','exit 0']]) {
       const run=await options.policy.runTool(created.value.taskId,command,{timeoutMs:30_000});
       if (!run.ok) throw new SmokeProbeFailure('Synthetic local invocation unavailable');
     }
+    stage = 'mounted-usage-history';
     const history = await contents.executeJavaScript(`(async () => {
       ${SHELL_HELPERS}
       return !!(await wait(() => { const node=q('[data-task-usage]'); const rows=node?.querySelectorAll('[data-usage-attempt]'); return rows?.length>=3 && node.textContent.includes('Local tool invocation — completed') && node.textContent.includes('Local tool invocation — failed') && node.textContent.includes('Unknown / Unknown') ? node : null; }, ${POLICY_SETTLE_MS}));
@@ -3672,6 +3689,7 @@ export async function probeEnvironments(contents: WebContents, options: Organise
     // Combined Story 1.24 gate: existing default-off debug fixture dispatcher,
     // production native reviewer/ledger, then the real mounted preload panel.
     // Default/release binaries reject the fixture method rather than bypass gates.
+    stage = 'quota-fixture-setup';
     const latestCatalog=await options.routes.list();
     if(!latestCatalog.ok)throw new SmokeProbeFailure('Fixture route catalog unavailable');
     const codex=latestCatalog.value.find(row=>row.routeId==='codex-responses');
@@ -3686,6 +3704,7 @@ export async function probeEnvironments(contents: WebContents, options: Organise
     if(!workspacePolicy)throw new SmokeProbeFailure('Fixture private policy unavailable');
     const fixture=(phase:'prepare'|'refuse'|'clear')=>options.runtimeRequest<{accepted?:boolean;providerCalls?:number;retainedAttempts?:number;refused?:boolean}>('inquello/fixture/messagesTurn',{scenario:'usage-limit',phase,taskId:created.value.taskId,workspacePolicy});
     try {
+      stage = 'quota-fixture-prepare';
       const prepared=await fixture('prepare');
       if(prepared.accepted!==true||prepared.providerCalls!==0)throw new SmokeProbeFailure('Isolated native quota fixture unavailable');
       options.usageChanged(true);
@@ -3698,6 +3717,7 @@ export async function probeEnvironments(contents: WebContents, options: Organise
       })()`) as boolean;
       if(!defaultsSaved)throw new SmokeProbeFailure('Mounted fixture defaults were not saved');
       const retainedIds=await contents.executeJavaScript(`[...document.querySelectorAll('[data-task-usage] [data-usage-attempt]')].map(node=>node.getAttribute('data-usage-attempt'))`) as string[];
+      stage = 'quota-fixture-refuse';
       const refused=await fixture('refuse');
       if(refused.accepted!==true||refused.refused!==true||refused.providerCalls!==0||(refused.retainedAttempts??0)<3)throw new SmokeProbeFailure('Native limit refusal did not prove zero provider calls and retained work');
       // Same main/preload notification function used after native tool/reviewer settlement.
@@ -3713,7 +3733,7 @@ export async function probeEnvironments(contents: WebContents, options: Organise
 
 
 
-  } catch (error) { failures.push(error instanceof SmokeProbeFailure ? error.message : 'Environment smoke could not finish; seeded identity and matching native runtime required'); }
+  } catch (error) { failures.push(error instanceof SmokeProbeFailure ? error.message : `Environment smoke could not finish at ${stage}; seeded identity and matching native runtime required`); }
   finally { if (configured) { await smokeIdentity(contents, 'signOut'); await options.organise.syncPrincipal().catch(() => {}); } }
   return {ok:failures.length===0,failures};
 }

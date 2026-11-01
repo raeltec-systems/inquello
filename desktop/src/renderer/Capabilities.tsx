@@ -19,7 +19,7 @@ import { ProcessingRoutes } from './ProcessingRoutes';
  * text comes from main. Values render through StatusChip's custom label path,
  * so nothing here is ever green or reads as approved.
  */
-import { useCallback, useEffect, useState, type ReactElement } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 
 import { parseSettingsPolicy, policyBridge, type CapabilityItem, type PolicyItem, type SettingsPolicyItem } from './policy-bridge';
 import { StatusChip } from './primitives';
@@ -83,25 +83,35 @@ export function Capabilities(): ReactElement {
   const [view, setView] = useState<SettingsPolicyItem | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    if (!bridge) return;
-    try {
-      const next = parseSettingsPolicy(await bridge.getSettings());
-      if (next) {
-        setView(next);
-        setNotice(null);
-      } else setNotice('The policy could not be read.');
-    } catch {
-      setNotice('The policy could not be read.');
-    }
-  }, [bridge]);
-
   useEffect(() => {
     if (!bridge) return;
+    let active = true, generation = 0, settled = true;
+    const load = async () => {
+      if (!active || !settled) return;
+      const request = ++generation;
+      try {
+        const next = parseSettingsPolicy(await bridge.getSettings());
+        if (!active || request !== generation || !settled) return;
+        setView(next);
+        setNotice(next ? null : 'The policy could not be read.');
+      } catch {
+        if (active && request === generation) { setView(null); setNotice('The policy could not be read.'); }
+      }
+    };
+    const changed = (ready: boolean) => {
+      if (!active) return;
+      ++generation;
+      settled = ready;
+      // Remove prior-principal policy and capability children before any new read.
+      setView(null);
+      setNotice(ready ? null : 'Account or runtime is changing. Current policy is unavailable.');
+      if (ready) void load();
+    };
+    const unsubscribe = bridge.onSettingsChanged?.(changed);
     void load();
     const timer = setInterval(() => void load(), REFRESH_MS);
-    return () => clearInterval(timer);
-  }, [bridge, load]);
+    return () => { active = false; ++generation; clearInterval(timer); unsubscribe?.(); };
+  }, [bridge]);
 
   const capabilities = view?.capabilities ?? FALLBACK_CAPABILITIES;
   return (

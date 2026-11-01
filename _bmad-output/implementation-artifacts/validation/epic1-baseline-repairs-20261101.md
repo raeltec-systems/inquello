@@ -21,3 +21,12 @@ Targeted domain/adapter/native/renderer regressions, fresh native builds, matchi
 - Full native/desktop/Electron reruns and owner visual review remain pending. No guest-certification or real-data eligibility claim.
 
 All changes stay on feat/epic-1-secure-private-desktop with regular local commits. No push, deployment, new installs, live provider calls, guest/shared WSL restart, or eligibility promotion is authorized.
+
+## Settings and smoke checkpoint (12:49 UTC)
+- Fresh CLI/app-server build passed. Supported protocol regeneration produced 816 files against engine tree a1615ba23d01ff3a695bed746bd7cd032b7c8fd9.
+- Added token-counted settings transitions, principal/runtime/generation fences, immediate prior-scope clearing and settled refresh. Data-deletion identity callbacks use the same transition discipline.
+- Corrected smoke readiness for a retained-but-hidden Shell; bounds and sign-out private-DOM assertions remain strict.
+- Synthetic smoke now selects the bundled static model catalog on every runtime start. Missing, malformed or empty catalog fails closed; normal and packaged launches are unchanged. This prevents the remote model-discovery request seen in the original synthetic smoke log.
+- Focused desktop regression: 289 tests across 8 files passed, including explicit follow-up, current-scope settings, security bridge, static catalog and data-identity transition cases. The first run exposed a missing explicit event-channel allowlist entry in its security assertion; the named channel was added and the complete focused set rerun.
+- Independent review found the alternate data-identity callback gap, now repaired; no other must-fix issue found in reviewed settings/static-catalog paths.
+- Full desktop validation and the rebuilt native 62-case inventory remain in progress; these checks do not establish Epic acceptance.

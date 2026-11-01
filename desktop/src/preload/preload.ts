@@ -59,6 +59,7 @@ const ORGANISE_MOVE_TASK_CHANNEL = 'inquello:op:organise.moveTask';
 const STATE_LIST_CHANNEL = 'inquello:op:state.list';
 const STATE_RECORD_TASK_STATE_CHANNEL = 'inquello:op:state.recordTaskState';
 const POLICY_SETTINGS_CHANNEL = 'inquello:op:policy.getSettings';
+const POLICY_SETTINGS_CHANGED_CHANNEL = 'inquello:policy-settings-changed';
 const POLICY_FOR_TASK_CHANNEL = 'inquello:op:policy.forTask';
 const POLICY_SET_BROAD_MODE_CHANNEL = 'inquello:op:policy.setBroadMode';
 const PERMISSIONS_PENDING_CHANNEL = 'inquello:op:permissions.pending';
@@ -224,6 +225,12 @@ const api = Object.freeze({
     recordTaskState: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(STATE_RECORD_TASK_STATE_CHANNEL, ...args),
   }),
   policy: Object.freeze({
+    onSettingsChanged: (listener: (settled: boolean) => void): (() => void) => {
+      if (typeof listener !== 'function') throw new Error('expected a listener');
+      const handler = (_event: unknown, settled: unknown) => listener(settled === true);
+      ipcRenderer.on(POLICY_SETTINGS_CHANGED_CHANNEL, handler);
+      return () => ipcRenderer.removeListener(POLICY_SETTINGS_CHANGED_CHANNEL, handler);
+    },
     /** Resolves with each Workspace's effective policy on this device and the Capability Contract. Takes no arguments. */
     getSettings: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(POLICY_SETTINGS_CHANNEL, ...args),
     /** `{ taskId }`; resolves with `{ ok, value }` (the Task's policy and broader mode) or `{ ok: false, reason }`. */

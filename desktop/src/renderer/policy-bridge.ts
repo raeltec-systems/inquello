@@ -87,6 +87,7 @@ export interface SettingsPolicyItem {
 }
 
 export interface PolicyBridge {
+  onSettingsChanged?(listener: (settled: boolean) => void): () => void;
   getSettings(): Promise<unknown>;
   forTask(request: { taskId: string }): Promise<unknown>;
   setBroadMode(request: { operationId: string; taskId: string; expectedRevision: number; mode: BroadMode; confirmation: string | null }): Promise<unknown>;

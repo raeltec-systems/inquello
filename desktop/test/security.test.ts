@@ -873,6 +873,13 @@ describe('preload', () => {
     expect(usageListener).toHaveBeenCalledWith(false);
     usageHandler({}, true); expect(usageListener).toHaveBeenLastCalledWith(true); unsubUsage();
     expect(removeListener).toHaveBeenCalledWith('inquello:usage-changed', usageHandler);
+    const settingsChanged = (api as {policy:{onSettingsChanged(listener:(settled:boolean)=>void):()=>void}}).policy.onSettingsChanged;
+    const settingsListener = vi.fn(); const unsubSettings = settingsChanged(settingsListener);
+    const settingsHandler = on.mock.calls.find(call => call[0] === 'inquello:policy-settings-changed')![1];
+    settingsHandler({secret:'not forwarded'}, {principal:'not forwarded'});
+    expect(settingsListener).toHaveBeenLastCalledWith(false);
+    settingsHandler({}, true); expect(settingsListener).toHaveBeenLastCalledWith(true);
+    unsubSettings(); expect(removeListener).toHaveBeenCalledWith('inquello:policy-settings-changed', settingsHandler);
     type Op = (...args: unknown[]) => Promise<unknown>;
     const typed = api as {
       runtime: { getStatus: Op };
@@ -988,7 +995,7 @@ describe('host privilege source scan', () => {
     const body = preload.replace(/^import .* from 'electron';$/m, '');
     const uses = body.match(/ipcRenderer[^\n]*/g) ?? [];
     expect(uses.length).toBeGreaterThan(0);
-    for (const use of uses) expect(use).toMatch(/^ipcRenderer\.(?:invoke\([A-Z_]+_CHANNEL(?:, \.\.\.args)?\)|(?:on|removeListener)\((?:CAPABILITIES|ROUTES|ENVIRONMENTS|USAGE|TASKS|TASKS_PROGRESS)_CHANGED_CHANNEL, handler\))/);
+    for (const use of uses) expect(use).toMatch(/^ipcRenderer\.(?:invoke\([A-Z_]+_CHANNEL(?:, \.\.\.args)?\)|(?:on|removeListener)\((?:CAPABILITIES|ROUTES|ENVIRONMENTS|USAGE|TASKS|TASKS_PROGRESS|POLICY_SETTINGS)_CHANGED_CHANNEL, handler\))/);
     // Only the data operations, the two provider operations that take what the user entered, and the organise, state, policy and permissions operations forward arguments.
     expect((body.match(/_CHANNEL, \.\.\.args\)/g) ?? []).length).toBe(46);
     expect(
@@ -996,7 +1003,7 @@ describe('host privilege source scan', () => {
         .match(/[A-Z_]+_CHANNEL, \.\.\.args\)/g)
         ?.every((use) => use.startsWith('TASKS_') || use.startsWith('USAGE_') || use.startsWith('ENVIRONMENTS_') || use.startsWith('ROUTES_') || use.startsWith('CAPABILITIES_') || use.startsWith('DATA_') || use.startsWith('PROVIDER_SET_CLAUDE_KEY_') || use.startsWith('PROVIDER_CODEX_LOGIN_') || use.startsWith('ORGANISE_') || use.startsWith('STATE_') || use.startsWith('POLICY_') || use.startsWith('PERMISSIONS_')),
     ).toBe(true);
-    expect(preload.replace('ipcRenderer.on(TASKS_PROGRESS_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(TASKS_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(USAGE_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(ENVIRONMENTS_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(CAPABILITIES_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(ROUTES_CHANGED_CHANNEL, handler)', '')).not.toMatch(/\.on\(|\.send\(|sendSync|postMessage/);
+    expect(preload.replace('ipcRenderer.on(TASKS_PROGRESS_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(TASKS_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(USAGE_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(ENVIRONMENTS_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(CAPABILITIES_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(ROUTES_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(POLICY_SETTINGS_CHANGED_CHANNEL, handler)', '')).not.toMatch(/\.on\(|\.send\(|sendSync|postMessage/);
   });
 });
 

@@ -252,3 +252,50 @@ it('keeps exact pending cancellation mounted when a known Workspace policy becom
     expect(manage).toHaveBeenCalledWith({workspaceId:WORKSPACE,kind:'mcp_server',id:'pending',action:'cancel'});
   } finally { interval.mockRestore(); }
 });
+
+
+describe('mounted settings identity/runtime invalidation', () => {
+  const settings = (name: string) => ({ signedIn: true, environmentLabel: 'Local device', workspaces: [{ workspaceId: WORKSPACE, name, policy: policy(), reason: null }], capabilities, reason: null });
+  it('clears prior-scope settings immediately and waits for the settled notification', async () => {
+    let changed!: (settled: boolean) => void;
+    const unsubscribe = vi.fn();
+    const getSettings = vi.fn().mockResolvedValueOnce(settings('Previous principal')).mockResolvedValueOnce(settings('Current principal'));
+    (globalThis as { inquello?: unknown }).inquello = { policy: { getSettings, onSettingsChanged: (listener: typeof changed) => { changed = listener; return unsubscribe; } } };
+    const rendered = render(<Capabilities />);
+    await screen.findByRole('region', { name: 'Policy for Previous principal' });
+    act(() => changed(false));
+    expect(screen.queryByRole('region', { name: 'Policy for Previous principal' })).toBeNull();
+    expect(document.querySelector('[data-capabilities-section]')).toBeNull();
+    expect(getSettings).toHaveBeenCalledTimes(1);
+    act(() => changed(true));
+    await screen.findByRole('region', { name: 'Policy for Current principal' });
+    expect(screen.queryByRole('region', { name: 'Policy for Previous principal' })).toBeNull();
+    rendered.unmount(); expect(unsubscribe).toHaveBeenCalledOnce();
+  });
+
+  it('discards a late old-scope response after the new settled scope rendered', async () => {
+    let changed!: (settled: boolean) => void;
+    let release!: (value: ReturnType<typeof settings>) => void;
+    const old = new Promise<ReturnType<typeof settings>>(resolve => { release = resolve; });
+    const getSettings = vi.fn().mockReturnValueOnce(old).mockResolvedValueOnce(settings('Current principal'));
+    (globalThis as { inquello?: unknown }).inquello = { policy: { getSettings, onSettingsChanged: (listener: typeof changed) => { changed = listener; return () => {}; } } };
+    render(<Capabilities />);
+    act(() => { changed(false); changed(true); });
+    await screen.findByRole('region', { name: 'Policy for Current principal' });
+    await act(async () => { release(settings('Previous principal')); await old; });
+    expect(screen.queryByRole('region', { name: 'Policy for Previous principal' })).toBeNull();
+    expect(screen.getByRole('region', { name: 'Policy for Current principal' })).toBeTruthy();
+  });
+
+  it('removes stale capability children when a settled refresh fails', async () => {
+    let changed!: (settled: boolean) => void;
+    const getSettings = vi.fn().mockResolvedValueOnce(settings('Previous principal')).mockRejectedValueOnce(new Error('unavailable'));
+    (globalThis as { inquello?: unknown }).inquello = { policy: { getSettings, onSettingsChanged: (listener: typeof changed) => { changed = listener; return () => {}; } } };
+    render(<Capabilities />);
+    await screen.findByRole('region', { name: 'Policy for Previous principal' });
+    act(() => changed(true));
+    await screen.findByText('The policy could not be read.');
+    expect(document.querySelector('[data-policy-workspace]')).toBeNull();
+    expect(document.querySelector('[data-capabilities-section]')).toBeNull();
+  });
+});

@@ -146,7 +146,7 @@ function harness(options: { runtime?: (method: string, params: Record<string, un
     taskFolders: options.taskFolders ?? null,
     sandboxProbeTarget: null,
   });
-  return { policy, calls, serviceCalls, identity };
+  return { policy, calls, serviceCalls, identity, runtime };
 }
 
 describe('policy views', () => {
@@ -610,4 +610,42 @@ describe('post-dispatch uncertainty preserves effects and private outputs', () =
       expect(h.state.commands).toHaveLength(1);
     });
   }
+});
+
+
+describe('settings scope fences', () => {
+  it.each(['principal', 'runtime', 'invalidation'] as const)('discards all workspace labels when %s changes during a policy read', async change => {
+    let release!: (value: InquelloPolicyEffectiveResponse) => void;
+    const pending = new Promise<InquelloPolicyEffectiveResponse>(resolve => { release = resolve; });
+    const h = harness({ runtime: () => pending });
+    const reading = h.policy.settings();
+    await vi.waitFor(() => expect(h.calls.length).toBeGreaterThan(0));
+    if (change === 'principal') h.identity.principal = '22222222-2222-4222-8222-222222222222';
+    if (change === 'runtime') h.runtime.instance = () => 'replacement-runtime';
+    if (change === 'invalidation') h.policy.invalidateSettings();
+    release(response());
+    expect(await reading).toMatchObject({ workspaces: [], capabilities: DEFAULT_CAPABILITIES });
+  });
+
+  it('keeps overlapping transitions blocked until each exact token settles', async () => {
+    const h = harness();
+    const identity = h.policy.beginSettingsTransition();
+    const runtime = h.policy.beginSettingsTransition();
+    expect(h.policy.endSettingsTransition(identity)).toBe(false);
+    expect(h.policy.endSettingsTransition(identity)).toBe(false);
+    expect(h.policy.invalidateSettings()).toBe(false);
+    expect(await h.policy.settings()).toMatchObject({ workspaces: [] });
+    expect(h.calls).toHaveLength(0);
+    expect(h.policy.endSettingsTransition(runtime)).toBe(true);
+    expect((await h.policy.settings()).workspaces).toHaveLength(1);
+  });
+
+  it('does not disclose settings after a settled but failed runtime restart', async () => {
+    const h = harness();
+    const token = h.policy.beginSettingsTransition();
+    h.runtime.ready = () => false;
+    expect(h.policy.endSettingsTransition(token)).toBe(true);
+    expect(await h.policy.settings()).toMatchObject({ workspaces: [] });
+    expect(h.calls).toHaveLength(0);
+  });
 });
