@@ -106,14 +106,14 @@ describe.skipIf(!databaseConfigured)('identity against the dev topology', () => 
     expect(signedIn).toEqual({
       ok: true,
       status: {
-        identity: { state: 'signed-in', displayName: 'Synthetic Developer', issuerLabel: 'Synthetic test issuer' },
+        identity: { state: 'signed-in', displayName: 'Chanda Mwansa', issuerLabel: 'Synthetic test issuer' },
         sharedService: 'available',
         credentialStorage: 'os-backed',
         privateWork: 'local',
       },
     });
     const first = stored(dir)!;
-    expect((await service.session(first.accessCredential)).principal.display_name).toBe('Synthetic Developer');
+    expect((await service.session(first.accessCredential)).principal.display_name).toBe('Chanda Mwansa');
 
     // Rotation replaces both credentials and the old access credential stops working.
     expect(await identity.refreshNow()).toBe(true);
@@ -203,7 +203,7 @@ describe.skipIf(!databaseConfigured)('identity against the dev topology', () => 
     await identity.signIn();
     expect(await stopTopology()).toBe(0);
     expect(await identity.getStatus()).toEqual({
-      identity: { state: 'signed-in', displayName: 'Synthetic Developer', issuerLabel: 'Synthetic test issuer' },
+      identity: { state: 'signed-in', displayName: 'Chanda Mwansa', issuerLabel: 'Synthetic test issuer' },
       sharedService: 'unavailable',
       credentialStorage: 'os-backed',
       privateWork: 'local',

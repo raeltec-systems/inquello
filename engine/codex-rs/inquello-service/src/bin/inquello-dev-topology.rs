@@ -69,8 +69,9 @@ const CLIENT_ID: &str = "inquello-desktop-synthetic";
 const REDIRECT_URI: &str = "http://127.0.0.1/callback";
 const ISSUER_LABEL: &str = "Synthetic test issuer";
 const SUBJECT: &str = "synthetic-developer";
-const SUBJECT_NAME: &str = "Synthetic Developer";
-const SUBJECT_EMAIL: &str = "developer@synthetic.invalid";
+// Plausible fictional display metadata; the stable synthetic subject and issuer stay unchanged.
+const SUBJECT_NAME: &str = "Chanda Mwansa";
+const SUBJECT_EMAIL: &str = "chanda.mwansa@mupeta.invalid";
 
 const USAGE: &str = "usage: inquello-dev-topology [--service-bind ADDR] [--issuer-bind ADDR] \
 [--ca-dir DIR] [--config-out FILE] [--drop-stale] [--access-lifetime-secs N] [--exit-on-stdin-eof] \

@@ -256,7 +256,7 @@ describe('dev config', () => {
 
 describe('smoke identity evaluation', () => {
   const status = (state: string, extra: Record<string, unknown> = {}) => ({
-    identity: { state, ...(state === 'signed-in' ? { displayName: 'Synthetic Developer', issuerLabel: 'Synthetic test issuer' } : {}) },
+    identity: { state, ...(state === 'signed-in' ? { displayName: 'Chanda Mwansa', issuerLabel: 'Synthetic test issuer' } : {}) },
     sharedService: 'available',
     credentialStorage: 'os-backed',
     privateWork: 'local',
