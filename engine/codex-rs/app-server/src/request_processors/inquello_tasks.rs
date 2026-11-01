@@ -2657,6 +2657,8 @@ pub(super) struct TaskFixture {
     principal: PrincipalId,
     workspace: String,
     revision: u64,
+    root: PathBuf,
+    session_cancellation: CancellationToken,
     endpoint: String,
     certificate: Vec<u8>,
 }
@@ -2677,7 +2679,8 @@ impl InquelloRequestProcessor {
                 .await
                 .get(&connection)
                 .is_some_and(|f| {
-                    f.principal == actor.principal_id
+                    !f.session_cancellation.is_cancelled()
+                        && f.principal == actor.principal_id
                         && f.workspace == workspace
                         && f.revision == revision
                         && config.route_id() == f.route_id
@@ -2690,6 +2693,127 @@ impl InquelloRequestProcessor {
             false
         }
     }
+
+    /// Main-process debug harness proof only: no credential or caller verdict.
+    /// The ordinary runtime still owns classification, admission and inference.
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    pub(crate) async fn task_fixture_status(
+        &self,
+        connection: ConnectionId,
+        raw: Option<serde_json::Value>,
+    ) -> Result<serde_json::Value, JSONRPCErrorError> {
+        #[derive(serde::Deserialize)]
+        #[serde(rename_all = "camelCase", deny_unknown_fields)]
+        struct Input {
+            workspace_id: String,
+            route_id: String,
+            configuration_revision: u64,
+        }
+        let denied = || {
+            refusal(
+                "fixture_unavailable",
+                "Current owned synthetic fixture unavailable",
+            )
+        };
+        let input: Input = serde_json::from_value(raw.ok_or_else(denied)?).map_err(|_| denied())?;
+        let route_id = routes::RouteId::parse(&input.route_id).ok_or_else(denied)?;
+        let (store, actor) = self.context(connection).await?;
+        let fixture = self
+            .task_fixtures
+            .lock()
+            .await
+            .get(&connection)
+            .cloned()
+            .ok_or_else(denied)?;
+        let session = self
+            .task_session(connection, actor, &input.workspace_id)
+            .await?;
+        if fixture.principal != actor.principal_id
+            || fixture.workspace != input.workspace_id
+            || fixture.revision != input.configuration_revision
+            || fixture.route_id != route_id
+            || fixture.session_cancellation.is_cancelled()
+            || session.real.is_some()
+            || session.root != fixture.root
+        {
+            return Err(denied());
+        }
+        let root = std::fs::canonicalize(&fixture.root).map_err(|_| denied())?;
+        let marker = std::fs::symlink_metadata(root.join(".inquello-fictional-audit-session"))
+            .map_err(|_| denied())?;
+        let store_parent = self
+            .store_path
+            .as_ref()
+            .and_then(|p| p.parent())
+            .and_then(|p| std::fs::canonicalize(p).ok())
+            .ok_or_else(denied)?;
+        if root != fixture.root
+            || !root.is_dir()
+            || !marker.is_file()
+            || marker.file_type().is_symlink()
+            || !store_parent.starts_with(&root)
+        {
+            return Err(denied());
+        }
+        match route_id {
+            routes::RouteId::ClaudeApiKey => {
+                inquello_adapters::anthropic::MessagesClient::fixture_from_der(
+                    &fixture.endpoint,
+                    &fixture.certificate,
+                )
+                .map_err(|_| denied())?;
+            }
+            routes::RouteId::CodexResponses => {
+                codex_core::inquello_inference::fixtures::validate_responses_transport(
+                    &fixture.endpoint,
+                    &fixture.certificate,
+                )
+                .map_err(|_| denied())?;
+            }
+        }
+        self.authorize_task_disclosure(connection, actor, &input.workspace_id)
+            .await?;
+        // Match route records and credential generation under the same route lock
+        // used by configuration, replacement and invalidation.
+        let state = self.routes.state.lock().await;
+        let (_, candidate) = store
+            .load_candidate_route(actor.principal_id, route_id)
+            .await
+            .map_err(|_| denied())?;
+        let candidate = candidate
+            .filter(|c| {
+                c.revision.get() == input.configuration_revision
+                    && c.configuration.account_ref() == actor.principal_id.to_string()
+            })
+            .ok_or_else(denied)?;
+        let current = self.task_fixtures.lock().await;
+        if self.actor(connection)? != actor
+            || session.cancellation.is_cancelled()
+            || fixture.session_cancellation.is_cancelled()
+            || !current.get(&connection).is_some_and(|f| {
+                f.principal == fixture.principal
+                    && f.workspace == fixture.workspace
+                    && f.route_id == fixture.route_id
+                    && f.revision == fixture.revision
+                    && f.root == fixture.root
+                    && !f.session_cancellation.is_cancelled()
+            })
+            || state.credential(actor.principal_id, &candidate.configuration) != Some(1)
+            || state.generations.get(&(actor.principal_id, route_id)) != Some(&1)
+            || state.credentials.len() != 1
+            || self
+                .routes
+                .responses
+                .as_ref()
+                .and_then(|r| r.provider.auth_manager())
+                .and_then(|a| a.auth_cached())
+                .is_some()
+        {
+            return Err(denied());
+        }
+        Ok(json!({"accepted":true}))
+    }
+
     /// Test transport configuration only. Never creates work or returns a response
     /// pretending to be a model; the normal tasks/start path runs the retained turn.
     #[cfg(all(feature = "inference-fixtures", debug_assertions))]
@@ -2756,12 +2880,10 @@ impl InquelloRequestProcessor {
             }
         }
         let (store, actor) = self.context(connection).await?;
-        if self
+        let session = self
             .task_session(connection, actor, &input.workspace_id)
-            .await?
-            .real
-            .is_some()
-        {
+            .await?;
+        if session.real.is_some() {
             return Err(refusal(
                 "fixture_unavailable",
                 "Fixture refuses a real-data session",
@@ -2783,9 +2905,11 @@ impl InquelloRequestProcessor {
                 )
             })?;
         let mut state = self.routes.state.lock().await;
-        if state
-            .credential(actor.principal_id, &candidate.configuration)
-            .is_some()
+        if self.actor(connection)? != actor
+            || session.cancellation.is_cancelled()
+            || state
+                .credential(actor.principal_id, &candidate.configuration)
+                .is_some()
             || state
                 .generations
                 .contains_key(&(actor.principal_id, route_id))
@@ -2840,6 +2964,8 @@ impl InquelloRequestProcessor {
                 principal: actor.principal_id,
                 workspace: input.workspace_id,
                 revision: input.configuration_revision,
+                root: session.root,
+                session_cancellation: session.cancellation,
                 endpoint: input.endpoint,
                 certificate: input.certificate,
             },
@@ -6563,6 +6689,290 @@ mod bootstrap_order_tests {
         let binding = processor.task_sessions.lock().await[&CONNECTION].clone();
         assert!(binding.real.is_none());
         assert!(!binding.cancellation.is_cancelled());
+    }
+
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    async fn status_fixture(
+        root: &std::path::Path,
+        prepare: bool,
+    ) -> (
+        Arc<InquelloRequestProcessor>,
+        Arc<OutgoingMessageSender>,
+        tokio::sync::mpsc::Receiver<OutgoingEnvelope>,
+        serde_json::Value,
+    ) {
+        std::fs::write(root.join(".inquello-fictional-audit-session"), "synthetic").unwrap();
+        let (mut processor, outgoing, rx) = fixture(root).await;
+        Arc::get_mut(&mut processor).unwrap().task_layer_fixture =
+            Some((DeviceRequirements::default(), UserConfig::default()));
+        let mut bootstrap = params(root, 1);
+        bootstrap.real_session = None;
+        processor
+            .tasks_bootstrap(CONNECTION, bootstrap)
+            .await
+            .unwrap();
+        processor.route_configure(CONNECTION,serde_json::from_value(json!({
+            "operationId":"status-route","expectedRevision":0,"configuration":{
+                "routeId":"claude-api-key","deployment":"anthropic-direct","model":"claude-sonnet-5-5",
+                "apiVersion":"2026-10-21","accountRef":PRINCIPAL,"region":null
+            }
+        })).unwrap()).await.unwrap();
+        let cert = rcgen::generate_simple_self_signed(vec!["127.0.0.1".into()])
+            .unwrap()
+            .cert
+            .der()
+            .to_vec();
+        let transport = json!({"workspaceId":WORKSPACE,"routeId":"claude-api-key","configurationRevision":1,
+            "endpoint":"https://127.0.0.1:1/v1/messages","certificate":cert});
+        if prepare {
+            processor
+                .prepare_task_fixture(CONNECTION, Some(transport.clone()))
+                .await
+                .unwrap();
+        }
+        (processor, outgoing, rx, transport)
+    }
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    fn status_input() -> serde_json::Value {
+        json!({"workspaceId":WORKSPACE,"routeId":"claude-api-key","configurationRevision":1})
+    }
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    async fn allowed_status(
+        processor: &InquelloRequestProcessor,
+        outgoing: &OutgoingMessageSender,
+        rx: &mut tokio::sync::mpsc::Receiver<OutgoingEnvelope>,
+    ) -> Result<serde_json::Value, JSONRPCErrorError> {
+        let (result, ()) = tokio::join!(
+            processor.task_fixture_status(CONNECTION, Some(status_input())),
+            async {
+                let id = request_id(rx).await;
+                allow(outgoing, id).await;
+            }
+        );
+        result
+    }
+
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    #[tokio::test]
+    async fn fixture_status_returns_only_current_owned_proof_and_cleans_up() {
+        let dir = tempfile::tempdir().unwrap();
+        let (processor, outgoing, mut rx, _) = status_fixture(dir.path(), true).await;
+        for _ in 0..2 {
+            assert_eq!(
+                allowed_status(&processor, &outgoing, &mut rx)
+                    .await
+                    .unwrap(),
+                json!({"accepted":true})
+            );
+        }
+        assert_eq!(processor.routes.state.lock().await.credentials.len(), 1);
+        processor.connection_closed(CONNECTION).await;
+        assert!(
+            !processor
+                .task_fixtures
+                .lock()
+                .await
+                .contains_key(&CONNECTION)
+        );
+        assert!(processor.routes.state.lock().await.credentials.is_empty());
+        assert!(
+            processor
+                .task_fixture_status(CONNECTION, Some(status_input()))
+                .await
+                .is_err()
+        );
+    }
+
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    #[tokio::test]
+    async fn fixture_status_rejects_scope_and_caller_assertion_mismatches() {
+        let dir = tempfile::tempdir().unwrap();
+        let (processor, _, _, _) = status_fixture(dir.path(), true).await;
+        for (field, value) in [
+            ("workspaceId", json!("11111111-1111-4111-8111-111111111112")),
+            ("routeId", json!("codex-responses")),
+            ("configurationRevision", json!(2)),
+            ("accepted", json!(true)),
+            ("endpoint", json!("https://example.com/v1/messages")),
+        ] {
+            let mut input = status_input();
+            input[field] = value;
+            assert!(
+                processor
+                    .task_fixture_status(CONNECTION, Some(input))
+                    .await
+                    .is_err()
+            );
+        }
+        assert!(
+            processor
+                .task_fixture_status(ConnectionId(999), Some(status_input()))
+                .await
+                .is_err()
+        );
+        processor.principals_guard().insert(
+            CONNECTION,
+            PrincipalId::parse("22222222-2222-4222-8222-222222222222").unwrap(),
+        );
+        assert!(
+            processor
+                .task_fixture_status(CONNECTION, Some(status_input()))
+                .await
+                .is_err()
+        );
+    }
+
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    #[tokio::test]
+    async fn fixture_status_rejects_session_replacement_and_real_data() {
+        let dir = tempfile::tempdir().unwrap();
+        let (processor, _, _, _) = status_fixture(dir.path(), true).await;
+        {
+            let mut sessions = processor.task_sessions.lock().await;
+            let session = sessions.get_mut(&CONNECTION).unwrap();
+            session.real =
+                Some(serde_json::from_value(params(dir.path(), 1).real_session.unwrap()).unwrap());
+        }
+        assert!(
+            processor
+                .task_fixture_status(CONNECTION, Some(status_input()))
+                .await
+                .is_err()
+        );
+        {
+            let mut sessions = processor.task_sessions.lock().await;
+            let session = sessions.get_mut(&CONNECTION).unwrap();
+            session.real = None;
+            session.cancellation.cancel();
+            session.cancellation = CancellationToken::new();
+        }
+        assert!(
+            processor
+                .task_fixture_status(CONNECTION, Some(status_input()))
+                .await
+                .is_err()
+        );
+    }
+
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    #[tokio::test]
+    async fn fixture_status_rejects_replaced_or_additional_credentials() {
+        let dir = tempfile::tempdir().unwrap();
+        let (processor, outgoing, mut rx, _) = status_fixture(dir.path(), true).await;
+        let principal = PrincipalId::parse(PRINCIPAL).unwrap();
+        let key = (principal, routes::RouteId::ClaudeApiKey);
+        {
+            let mut state = processor.routes.state.lock().await;
+            state.generations.insert(key, 2);
+            state.credentials.insert(key, (PRINCIPAL.into(), 2));
+        }
+        assert!(
+            allowed_status(&processor, &outgoing, &mut rx)
+                .await
+                .is_err()
+        );
+        {
+            let mut state = processor.routes.state.lock().await;
+            state.generations.insert(key, 1);
+            state.credentials.insert(key, (PRINCIPAL.into(), 1));
+            state.credentials.insert(
+                (principal, routes::RouteId::CodexResponses),
+                ("nonfixture-account".into(), 2),
+            );
+        }
+        assert!(
+            allowed_status(&processor, &outgoing, &mut rx)
+                .await
+                .is_err()
+        );
+    }
+
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    #[tokio::test]
+    async fn fixture_status_rejects_missing_marker_and_nonloopback_transport() {
+        let dir = tempfile::tempdir().unwrap();
+        let (processor, _, _, _) = status_fixture(dir.path(), true).await;
+        std::fs::remove_file(dir.path().join(".inquello-fictional-audit-session")).unwrap();
+        assert!(
+            processor
+                .task_fixture_status(CONNECTION, Some(status_input()))
+                .await
+                .is_err()
+        );
+        std::fs::write(
+            dir.path().join(".inquello-fictional-audit-session"),
+            "synthetic",
+        )
+        .unwrap();
+        processor
+            .task_fixtures
+            .lock()
+            .await
+            .get_mut(&CONNECTION)
+            .unwrap()
+            .endpoint = "https://example.com/v1/messages".into();
+        assert!(
+            processor
+                .task_fixture_status(CONNECTION, Some(status_input()))
+                .await
+                .is_err()
+        );
+    }
+
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    #[tokio::test]
+    async fn fixture_status_requires_fresh_authority() {
+        let dir = tempfile::tempdir().unwrap();
+        let (processor, outgoing, mut rx, _) = status_fixture(dir.path(), true).await;
+        let (result, ()) = tokio::join!(
+            processor.task_fixture_status(CONNECTION, Some(status_input())),
+            async {
+                let id = request_id(&mut rx).await;
+                outgoing
+                    .notify_client_response(CONNECTION, id, json!({"workspacePolicy":null}))
+                    .await;
+            }
+        );
+        assert!(result.is_err());
+    }
+
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    #[tokio::test]
+    async fn fixture_transport_refuses_existing_ordinary_provider_credential() {
+        let dir = tempfile::tempdir().unwrap();
+        let (processor, _, _, transport) = status_fixture(dir.path(), false).await;
+        // A fictional key installed through the ordinary private-auth path,
+        // not through fixture preparation; no network/provider request occurs.
+        processor
+            .route_private_auth(
+                CONNECTION,
+                serde_json::from_value(json!({
+                    "routeId":"claude-api-key","accountRef":PRINCIPAL,"generation":2,
+                    "apiKey":"sk-ant-unit-test-ordinary-binding-only"
+                }))
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert!(
+            processor
+                .prepare_task_fixture(CONNECTION, Some(transport))
+                .await
+                .is_err()
+        );
+        assert!(
+            !processor
+                .task_fixtures
+                .lock()
+                .await
+                .contains_key(&CONNECTION)
+        );
+        assert!(
+            processor
+                .task_fixture_status(CONNECTION, Some(status_input()))
+                .await
+                .is_err()
+        );
     }
 
     #[tokio::test]

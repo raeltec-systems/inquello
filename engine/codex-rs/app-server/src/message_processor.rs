@@ -146,6 +146,17 @@ fn reject_private_handoff_transport(
         || origin != crate::transport::ConnectionOrigin::Stdio)
 }
 
+#[cfg(all(feature = "inference-fixtures", debug_assertions))]
+fn fixture_status_transport_allowed(
+    initialized: bool,
+    transport: &AppServerTransport,
+    origin: crate::transport::ConnectionOrigin,
+) -> bool {
+    initialized
+        && matches!(transport, AppServerTransport::Stdio)
+        && origin == crate::transport::ConnectionOrigin::Stdio
+}
+
 fn reject_obsolete_request_fields(request: &JSONRPCRequest) -> Result<(), JSONRPCErrorError> {
     reject_removed_permission_profile(request)?;
     Ok(())
@@ -714,6 +725,54 @@ impl MessageProcessor {
                 Ok(response) => {
                     self.outgoing
                         .send_response_as(id, ClientResponsePayload::InquelloFixture(response))
+                        .await
+                }
+                Err(error) => self.outgoing.send_error(id, error).await,
+            }
+            return;
+        }
+        #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+        if request.method == "inquello/fixture/taskTransportStatus" {
+            let id = ConnectionRequestId {
+                connection_id,
+                request_id: request.id,
+            };
+            if !fixture_status_transport_allowed(session.initialized(), transport, session.origin) {
+                self.outgoing
+                    .send_error(id, invalid_request("Fixture status requires private stdio"))
+                    .await;
+                return;
+            }
+            // Raw fixture methods precede ordinary dispatch registration. Bind the
+            // proof to its original authority through BOTH output queues.
+            self.outgoing
+                .register_request_context(crate::outgoing_message::RequestContext::new(
+                    id.clone(),
+                    "inquello/fixture/taskTransportStatus",
+                    tracing::Span::none(),
+                    None,
+                ))
+                .await;
+            let fence = self.outgoing.capture_private_fence(connection_id).await;
+            self.outgoing.fence_request(&id, fence.clone()).await;
+            match self
+                .inquello_processor
+                .task_fixture_status(connection_id, request.params)
+                .await
+            {
+                Ok(value) => {
+                    self.outgoing
+                        .send_response_as_checked(
+                            id,
+                            ClientResponsePayload::InquelloFixture(value),
+                            move || {
+                                if fence.as_ref().is_some_and(|f| f.is_current()) {
+                                    Ok(())
+                                } else {
+                                    Err(invalid_request("Fixture status authority changed"))
+                                }
+                            },
+                        )
                         .await
                 }
                 Err(error) => self.outgoing.send_error(id, error).await,
@@ -2623,6 +2682,45 @@ mod inquello_fixture;
 mod private_handoff_transport_tests {
     use super::*;
     use crate::transport::ConnectionOrigin;
+
+    #[test]
+    fn fixture_status_has_no_typed_protocol_fallback() {
+        // Default/release builds omit the raw debug branch. This proves ordinary
+        // protocol dispatch cannot expose the fixture method as a fallback.
+        let request = serde_json::json!({"id":1,"method":"inquello/fixture/taskTransportStatus",
+            "params":{"workspaceId":"5d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e",
+                "routeId":"claude-api-key","configurationRevision":1}});
+        assert!(serde_json::from_value::<ClientRequest>(request).is_err());
+    }
+
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    #[test]
+    fn fixture_status_requires_initialized_private_stdio_transport_and_origin() {
+        let websocket = AppServerTransport::WebSocket {
+            bind_address: "127.0.0.1:0".parse().unwrap(),
+        };
+        for initialized in [false, true] {
+            for transport in [
+                &AppServerTransport::Stdio,
+                &websocket,
+                &AppServerTransport::Off,
+            ] {
+                for origin in [
+                    ConnectionOrigin::Stdio,
+                    ConnectionOrigin::InProcess,
+                    ConnectionOrigin::WebSocket,
+                    ConnectionOrigin::RemoteControl,
+                ] {
+                    assert_eq!(
+                        fixture_status_transport_allowed(initialized, transport, origin),
+                        initialized
+                            && matches!(transport, AppServerTransport::Stdio)
+                            && origin == ConnectionOrigin::Stdio
+                    );
+                }
+            }
+        }
+    }
     #[test]
     fn bootstrap_and_credentials_require_both_private_stdio_transport_and_origin() {
         let websocket = AppServerTransport::WebSocket {
