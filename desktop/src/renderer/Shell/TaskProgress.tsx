@@ -90,6 +90,10 @@ export function TaskProgress({taskId,workspaceId,selectedQuestion}:{taskId:strin
  };
  return <section className="iq-task-progress" aria-label="Task progress">
   <h2 className="iq-visually-hidden">Work</h2>{questionNotice&&<p role="status">{questionNotice}</p>}{notice&&<p role="status">{notice}</p>}<div className="iq-visually-hidden" aria-live="polite" aria-atomic="true">{announcement}</div>
+  {(!view||view.historyIncomplete)&&<div data-conversation-display-notice>
+   {view?.historyIncomplete&&<p role="status">Some conversation content is unavailable or incomplete. Refresh to check again; this does not start or stop work.</p>}
+   <Button onPress={()=>refreshTaskObservation(taskId,workspaceId)}>Refresh conversation</Button>
+  </div>}
   {!view&&<p className="iq-artifact-status">Artifact information unavailable</p>}
   {view&&<>
    <details className="iq-execution-details"><summary>Execution details and plan</summary>

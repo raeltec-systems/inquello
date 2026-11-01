@@ -3964,6 +3964,10 @@ export async function probeVisualConversation(contents: WebContents, options: Or
       ${SHELL_HELPERS}
       return !!(await wait(()=>{const task=qVisible('[data-task-view="'+${JSON.stringify(taskId)}+'"]');return task&&[...task.querySelectorAll('.iq-conversation-item--agent'+${JSON.stringify(completed?'[data-status="completed"]':'')}+' .iq-message-body .iq-progress-text')].some(node=>node.textContent===${JSON.stringify(answer)}&&node.getClientRects().length);},${POLICY_SETTLE_MS}));
     })()`);
+    const latestAnswerVisible=async(taskId:string,answer:string)=>contents.executeJavaScript(`(async()=>{
+      ${SHELL_HELPERS}
+      return !!(await wait(()=>{const task=qVisible('[data-task-view="'+${JSON.stringify(taskId)}+'"]');const thread=task?.closest('.iq-thread');if(!task||!thread)return false;const clip=thread.getBoundingClientRect();return [...task.querySelectorAll('.iq-conversation-item--agent .iq-message-body .iq-progress-text')].some(node=>{if(node.textContent!==${JSON.stringify(answer)})return false;const rect=node.getBoundingClientRect();return rect.height>0&&rect.bottom>clip.top&&rect.bottom<=clip.bottom+2&&rect.top<clip.bottom;});},${SHELL_SETTLE_MS}));
+    })()`);
     stage='visual-ui-first-send';
     const taskId=await contents.executeJavaScript(`(async()=>{
       ${SHELL_HELPERS}
@@ -3996,9 +4000,12 @@ export async function probeVisualConversation(contents: WebContents, options: Or
     if(!(await sendFollowup(fixture.requests[1]!))||!(await waitAnswer(taskId,fixture.answers[1]!)))throw new SmokeProbeFailure('Completed conversation follow-up did not render');
     const second=await taskSnapshot(taskId,'completed');
     if(second.status!=='completed'||second.threadId!==first.threadId||second.runId===first.runId)throw new SmokeProbeFailure('Follow-up did not retain Task/thread with a new run');
+    if(!(await latestAnswerVisible(taskId,fixture.answers[1]!)))throw new SmokeProbeFailure('Completed follow-up remained outside the conversation viewport');
     await checkFixture(2);await capture('03-followup-conversation-synthetic');
     stage='visual-ui-stop';
     if(!(await sendFollowup(fixture.requests[2]!))||!(await waitAnswer(taskId,fixture.answers[2]!,false)))throw new SmokeProbeFailure('Held synthetic turn did not render before Stop');
+    if(!(await latestAnswerVisible(taskId,fixture.answers[2]!)))throw new SmokeProbeFailure('Live streamed answer remained outside the conversation viewport');
+    await capture('03b-live-streaming-conversation-synthetic');
     const stopped=await contents.executeJavaScript(`(async()=>{
       ${SHELL_HELPERS}
       const task=qVisible('[data-task-controls="'+${JSON.stringify(taskId)}+'"]');if(!task)return false;
@@ -4009,6 +4016,14 @@ export async function probeVisualConversation(contents: WebContents, options: Or
     const interrupted=await taskSnapshot(taskId,'cancelled');
     if(interrupted.status!=='cancelled'||interrupted.threadId!==first.threadId||interrupted.runId===second.runId)throw new SmokeProbeFailure('Native interruption binding was not confirmed');
     await checkFixture(3,true);await capture('04-interrupted-conversation-synthetic');
+    const readerJump=await contents.executeJavaScript(`(async()=>{
+      ${SHELL_HELPERS}
+      const task=qVisible('[data-task-view="'+${JSON.stringify(taskId)}+'"]'),thread=task?.closest('.iq-thread');if(!thread)return false;
+      thread.scrollTop=0;thread.dispatchEvent(new Event('scroll'));
+      const jump=await wait(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.trim()==='Jump to latest'&&button.getClientRects().length&&!button.disabled),${SHELL_SETTLE_MS});
+      if(!jump)return false;await new Promise(resolve=>setTimeout(resolve,200));if(thread.scrollTop>2)return false;jump.click();return true;
+    })()`);
+    if(!readerJump||!(await latestAnswerVisible(taskId,fixture.answers[2]!)))throw new SmokeProbeFailure('Reader scroll-up or explicit Jump to latest did not behave correctly');
     stage='visual-ui-reopen';
     const reopened=await contents.executeJavaScript(`(async()=>{
       ${SHELL_HELPERS}
@@ -4019,11 +4034,13 @@ export async function probeVisualConversation(contents: WebContents, options: Or
     })()`);
     if(!reopened||!(await waitAnswer(taskId,fixture.answers[0]!))||!(await waitAnswer(taskId,fixture.answers[1]!)))throw new SmokeProbeFailure('Reopened interrupted Task did not retain conversation and Resume');
     await checkFixture(3,true);await capture('05-reopened-conversation-synthetic');
+    await contents.executeJavaScript(`(()=>{const thread=document.querySelector('[data-task-view="'+${JSON.stringify(taskId)}+'"]')?.closest('.iq-thread');if(thread){thread.scrollTop=0;thread.dispatchEvent(new Event('scroll'));}})()`);
     stage='visual-ui-explicit-resume';
     const resumed=await contents.executeJavaScript(`(()=>{const task=document.querySelector('[data-task-controls="'+${JSON.stringify(taskId)}+'"]');const button=task&&[...task.querySelectorAll('button')].find(button=>button.textContent.trim()==='Resume'&&button.getClientRects().length&&!button.disabled&&button.getAttribute('aria-disabled')!=='true');if(!button)return false;button.click();return true;})()`);
     if(!resumed||!(await waitAnswer(taskId,fixture.answers[3]!)))throw new SmokeProbeFailure('Explicit Resume did not complete the retained synthetic Task');
     const last=await taskSnapshot(taskId,'completed');
     if(last.status!=='completed'||last.threadId!==first.threadId||last.runId===interrupted.runId)throw new SmokeProbeFailure('Resume did not retain Task/thread with a new run');
+    if(!(await latestAnswerVisible(taskId,fixture.answers[3]!)))throw new SmokeProbeFailure('Resumed answer remained outside the conversation viewport');
     await checkFixture(4,true);await capture('06-resumed-conversation-synthetic');
     const details=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}return await openTaskInspector();})()`);
     if(!details)throw new SmokeProbeFailure('Task details unavailable for visual capture');

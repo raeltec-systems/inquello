@@ -3,6 +3,7 @@ import {Inbox,useInbox,type InputRequest,type QuestionSelection} from './Inbox';
 import {reopenView,type ReopenView} from '../../main/organise/navigation';
 import {taskValue,tasksBridge,parseProgress} from './tasks-bridge';
 import {TaskLifecycle} from './TaskLifecycle';
+import {useConversationFollow} from './use-conversation-follow';
 /**
  * The desktop Shell (Story 1.14): Sidebar, Header and the open Task.
  *
@@ -656,7 +657,8 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
   // The draft follows the Task actually shown; a Task that vanished falls back to the no-Task draft.
   const draft = useDraftBinding(task?.taskId ?? null, draftStore, task?.workspaceId ?? null);
   const startDraft = useDraftBinding(null, draftStore);
-  const composer = !state?.signedIn || showStart ? null : renderComposer ? renderComposer(draft) : task?.runtimeThreadId || (task&&acceptedFor(task.taskId)) ? <TaskLifecycle key={`${runtimeEpoch}:${task!.taskId}`} taskId={task!.taskId} workspaceId={task!.workspaceId} draft={draft} operationIds={operationIds}/> : <Composer draft={draft} />;
+  const conversationFollow=useConversationFollow(state?.signedIn&&!showStart&&task?JSON.stringify([ownerKey(person),task.workspaceId,task.taskId,runtimeEpoch]):null,!active||workView==='artifact'||!!savedHit?.hit||!!selectedQuestion||!!savedSurface);
+  const composer = !state?.signedIn || showStart ? null : renderComposer ? renderComposer(draft) : task?.runtimeThreadId || (task&&acceptedFor(task.taskId)) ? <TaskLifecycle key={`${runtimeEpoch}:${task!.taskId}`} taskId={task!.taskId} workspaceId={task!.workspaceId} draft={draft} operationIds={operationIds} onContinuationRequested={conversationFollow.continuation}/> : <Composer draft={draft} />;
 
   return (
     <div
@@ -712,8 +714,8 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
               />
             </div>
           ) : null}
-          <main className="iq-thread" aria-label="Task work" hidden={workView === 'artifact'} data-thread>
-            <div className="iq-shell-content">
+          <main ref={conversationFollow.threadRef} className="iq-thread" aria-label="Task work" hidden={workView === 'artifact'} data-thread>
+            <div ref={conversationFollow.contentRef} className="iq-shell-content">
               {notice ? (
                 <div className="iq-shell-notice" data-shell-notice>
                   <p role="status">{notice}</p>
@@ -786,6 +788,7 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
             />
           ) : null}
           <div className="iq-composer-slot" data-composer-slot={composer ? 'filled' : 'empty'}>
+            {conversationFollow.away&&<Button size="sm" onPress={conversationFollow.jump}>Jump to latest</Button>}
             {composer}
           </div>
         </div>

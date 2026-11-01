@@ -105,3 +105,59 @@ it('offers deliberate resend after a running-to-completed race without replaying
  expect(document.querySelector('[data-task-controls="task-1"]')?.getAttribute('data-task-controls-status')).toBe('completed');
  fireEvent.click(screen.getByRole('button',{name:'Send'}));await waitFor(()=>expect(x.api.resume).toHaveBeenCalledTimes(1));expect(x.api.steer).toHaveBeenCalledTimes(1);
 });
+
+it('keeps a visible display explanation and read-only refresh beside independently authorized Stop',async()=>{
+ const x=fixture(); x.api.progress.mockRejectedValue(new Error('history_unavailable'));
+ const activity=vi.fn(async()=>({ok:true,value:base}));Object.assign(x.api,{activity});
+ render(<><x.Controls/><TaskProgress taskId="task-1" workspaceId="workspace-1"/></>);
+ const notice=await screen.findByText(/Some conversation content is unavailable or incomplete/);
+ expect(notice.closest('details')).toBeNull();
+ expect(document.querySelector<HTMLDetailsElement>('.iq-execution-details')!.open).toBe(false);
+ const stop=await screen.findByRole('button',{name:'Stop'});
+ expect(stop.getAttribute('aria-disabled')).not.toBe('true');
+ expect(document.body.textContent).not.toContain('history_unavailable');
+ const reads=x.api.progress.mock.calls.length;
+ fireEvent.click(screen.getByRole('button',{name:'Refresh conversation'}));
+ await waitFor(()=>expect(x.api.progress.mock.calls.length).toBeGreaterThan(reads));
+ await screen.findByText(/Some conversation content is unavailable or incomplete/);
+ expect(x.api.stop).not.toHaveBeenCalled();expect(x.api.steer).not.toHaveBeenCalled();expect(x.api.resume).not.toHaveBeenCalled();
+ fireEvent.click(await screen.findByRole('button',{name:'Stop'}));
+ await waitFor(()=>expect(x.api.stop).toHaveBeenCalledTimes(1));
+});
+it('does not retain protected content or offer Stop when both history and current status refuse',async()=>{
+ const x=fixture();x.api.progress.mockRejectedValue(new Error('history_unavailable'));
+ const activity=vi.fn(async()=>({ok:false,reason:'Access unavailable'}));Object.assign(x.api,{activity});
+ render(<><x.Controls/><TaskProgress taskId="task-1" workspaceId="workspace-1"/></>);
+ await waitFor(()=>expect(activity).toHaveBeenCalled());
+ await screen.findByText(/Progress unavailable. Private content and pending answers have been cleared./);
+ expect(screen.queryByRole('button',{name:'Stop'})).toBeNull();
+ expect(x.api.stop).not.toHaveBeenCalled();expect(x.api.resume).not.toHaveBeenCalled();
+ expect(document.body.textContent).not.toContain('history_unavailable');
+});
+
+it('session invalidation cannot republish late fallback status or hide the unavailable notice',async()=>{
+ const x=fixture();x.api.progress.mockRejectedValue(new Error('history_unavailable'));
+ let release!:(value:unknown)=>void;
+ const activity=vi.fn(()=>new Promise(resolve=>{release=resolve;}));Object.assign(x.api,{activity});
+ render(<><x.Controls/><TaskProgress taskId="task-1" workspaceId="workspace-1"/></>);
+ await waitFor(()=>expect(activity).toHaveBeenCalledTimes(1));
+ await x.invalidate();
+ await act(async()=>release({ok:true,value:base}));
+ expect(screen.queryByRole('button',{name:'Stop'})).toBeNull();
+ expect(screen.getByText(/Progress unavailable. Private content and pending answers have been cleared./).closest('details')).toBeNull();
+ expect(x.api.stop).not.toHaveBeenCalled();expect(x.api.steer).not.toHaveBeenCalled();expect(x.api.resume).not.toHaveBeenCalled();
+});
+
+it.each(['completed','cancelled'] as const)('only explicit admitted continuation requests follow-latest (%s)',async status=>{
+ const x=fixture({...base,status}),admitted=vi.fn(),requested=vi.fn(()=>admitted);
+ render(<TaskLifecycle taskId="task-1" workspaceId="workspace-1" operationIds={()=>'op-1'} draft={{taskId:'task-1',value:'Continue',onChange:()=>{}}} onContinuationRequested={requested}/>);
+ const name=status==='completed'?'Send':'Resume';const button=await screen.findByRole('button',{name});
+ await waitFor(()=>expect(button.getAttribute('aria-disabled')).not.toBe('true'));
+ expect(requested).not.toHaveBeenCalled();fireEvent.click(button);await waitFor(()=>expect(admitted).toHaveBeenCalledTimes(1));expect(requested).toHaveBeenCalledTimes(1);
+});
+it('refused continuation never rearms conversation follow',async()=>{
+ const x=fixture({...base,status:'completed'});x.api.resume.mockResolvedValue({ok:false,code:'refused',reason:'Unavailable'} as never);
+ const admitted=vi.fn(),requested=vi.fn(()=>admitted);
+ render(<TaskLifecycle taskId="task-1" workspaceId="workspace-1" draft={{taskId:'task-1',value:'Continue',onChange:()=>{}}} onContinuationRequested={requested}/>);
+ const send=screen.getByRole('button',{name:'Send'});await waitFor(()=>expect(send.getAttribute('aria-disabled')).not.toBe('true'));fireEvent.click(send);await screen.findByText('Unavailable');expect(requested).toHaveBeenCalledTimes(1);expect(admitted).not.toHaveBeenCalled();
+});
