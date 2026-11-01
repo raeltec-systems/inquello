@@ -3911,7 +3911,7 @@ export async function probeVisualConversation(contents: WebContents, options: Or
       const file=path.join(captureDir,`${name}.png`);fs.writeFileSync(file,image.toPNG());
       captures.push({name,path:file,width:size.width,height:size.height});
     };
-    await contents.executeJavaScript(`Object.defineProperty(globalThis,'__iqSyntheticStartTrace',{value:[],configurable:true});`);
+    await contents.executeJavaScript(`void Object.defineProperty(globalThis,'__iqSyntheticStartTrace',{value:[],configurable:true});`);
     stage='visual-identity';
     if(!(await smokeIdentity(contents,'signIn')).ok)throw new SmokeProbeFailure('Visual identity unavailable');
     const accepted=await options.identity.session.withAccess(access=>options.identity.service!.acceptInvite(access,seed.invite_id));
