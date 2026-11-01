@@ -55,6 +55,20 @@ pub(crate) fn router(state: Arc<AppState>) -> Router {
         .route("/v1/session/commands", post(session_command))
         .route("/v1/memberships", get(memberships))
         .route("/v1/workspaces", get(list_workspaces))
+        .route("/v1/onboarding/commands", post(onboarding_command))
+        .route(
+            "/v1/onboarding/receipts/{operation}",
+            get(onboarding_receipt),
+        )
+        .route("/v1/invitations", get(onboarding_invitations))
+        .route(
+            "/v1/workspaces/{workspace_id}/receipts/{operation}",
+            get(onboarding_workspace_receipt),
+        )
+        .route(
+            "/v1/workspaces/{workspace_id}/members",
+            get(onboarding_members),
+        )
         .route("/v1/workspaces/{workspace_id}/roles", get(workspace_roles))
         .route(
             "/v1/workspaces/{workspace_id}/execution-policy",
@@ -344,6 +358,70 @@ async fn validate_export_receipt(
             let access = required_bearer(&headers).map_err(ApiError::on_workspace_route)?;
             let receipt_id = workspaces::path_id(&receipt_id)?;
             crate::export_receipts::validate(&state, access, receipt_id, parse(&body)?).await
+        }
+        .await,
+    )
+}
+
+async fn onboarding_command(
+    State(state): SharedState,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    respond(
+        async {
+            crate::onboarding::command(&state, required_bearer(&headers)?, parse(&body)?).await
+        }
+        .await,
+    )
+}
+async fn onboarding_receipt(
+    State(state): SharedState,
+    Path(operation): Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    respond(
+        async { crate::onboarding::receipt(&state, required_bearer(&headers)?, &operation).await }
+            .await,
+    )
+}
+async fn onboarding_invitations(State(state): SharedState, headers: HeaderMap) -> Response {
+    respond(
+        async { crate::onboarding::invitations(&state, required_bearer(&headers)?).await }.await,
+    )
+}
+async fn onboarding_members(
+    State(state): SharedState,
+    Path(workspace_id): Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    respond(
+        async {
+            crate::onboarding::members(
+                &state,
+                required_bearer(&headers)?,
+                workspaces::path_id(&workspace_id)?,
+            )
+            .await
+        }
+        .await,
+    )
+}
+
+async fn onboarding_workspace_receipt(
+    State(state): SharedState,
+    Path((workspace_id, operation)): Path<(String, String)>,
+    headers: HeaderMap,
+) -> Response {
+    respond(
+        async {
+            crate::onboarding::workspace_receipt(
+                &state,
+                required_bearer(&headers)?,
+                workspaces::path_id(&workspace_id)?,
+                &operation,
+            )
+            .await
         }
         .await,
     )

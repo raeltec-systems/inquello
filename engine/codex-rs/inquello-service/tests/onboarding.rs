@@ -1,0 +1,752 @@
+//! Deterministic Story 1.31 contracts; fictional identities, disposable databases.
+#![cfg(feature = "test-issuer")]
+#![allow(clippy::expect_used, reason = "test assertions")]
+mod support;
+use chrono::TimeDelta;
+use inquello_protocol::error::ErrorKind;
+use inquello_protocol::{
+    command::CommandResponse, login::SessionCredentials, onboarding::InvitationsView,
+};
+use serde_json::{Value, json};
+use support::Harness;
+use uuid::Uuid;
+
+async fn verified(h: &Harness, subject: &str) -> SessionCredentials {
+    h.sign_in_with(subject, |mut f| {
+        f.email_verified = true;
+        f
+    })
+    .await
+}
+async fn envelope(h: &Harness, operation: &str, expected: &str, payload: Value) -> Value {
+    json!({"command_epoch":h.command_epoch().await,"operation_id":operation,
+        "expected_revision":expected,"schema_version":1,"payload":payload})
+}
+async fn create(h: &Harness, who: &SessionCredentials, op: &str) -> CommandResponse {
+    let body = envelope(
+        h,
+        op,
+        "0",
+        json!({"command":"create_workspace","name":"Alder & Finch"}),
+    )
+    .await;
+    h.post(
+        "/v1/onboarding/commands",
+        &body,
+        Some(who.access_credential.expose()),
+    )
+    .await
+    .ok()
+}
+async fn workspace_command(
+    h: &Harness,
+    who: &SessionCredentials,
+    workspace: Uuid,
+    expected: &str,
+    payload: Value,
+) -> support::Response {
+    let body = json!({"command_epoch":h.command_epoch().await,"operation_id":Uuid::new_v4().to_string(),
+        "workspace_id":workspace,"expected_revision":expected,"schema_version":1,"payload":payload});
+    h.post(
+        &format!("/v1/workspaces/{workspace}/commands"),
+        &body,
+        Some(who.access_credential.expose()),
+    )
+    .await
+}
+
+#[tokio::test]
+async fn creation_requires_signed_fresh_proof_and_atomic_receipt() {
+    let h = Harness::start().await;
+    let unverified = h.sign_in("Maya").await;
+    let body = envelope(
+        &h,
+        "unverified",
+        "0",
+        json!({"command":"create_workspace","name":"Alder"}),
+    )
+    .await;
+    h.post(
+        "/v1/onboarding/commands",
+        &body,
+        Some(unverified.access_credential.expose()),
+    )
+    .await
+    .assert_error(ErrorKind::Denied);
+    assert_eq!(h.count("SELECT count(*) FROM workspaces").await, 0);
+    let owner = verified(&h, "Maya").await;
+    let body = envelope(
+        &h,
+        "create-once",
+        "0",
+        json!({"command":"create_workspace","name":"Alder & Finch"}),
+    )
+    .await;
+    let (a, b) = tokio::join!(
+        h.post(
+            "/v1/onboarding/commands",
+            &body,
+            Some(owner.access_credential.expose())
+        ),
+        h.post(
+            "/v1/onboarding/commands",
+            &body,
+            Some(owner.access_credential.expose())
+        )
+    );
+    let a: CommandResponse = a.ok();
+    let b: CommandResponse = b.ok();
+    assert_eq!(a.receipt_id, b.receipt_id);
+    assert_eq!(h.count("SELECT count(*) FROM workspaces").await, 1);
+    assert_eq!(h.count("SELECT count(*) FROM memberships").await, 1);
+    let mut changed = body.clone();
+    changed["payload"]["name"] = json!("Other");
+    h.post(
+        "/v1/onboarding/commands",
+        &changed,
+        Some(owner.access_credential.expose()),
+    )
+    .await
+    .assert_error(ErrorKind::VersionConflict);
+    h.clock.advance(TimeDelta::minutes(6));
+    let fresh_operation = envelope(
+        &h,
+        "expired-proof",
+        "0",
+        json!({"command":"create_workspace","name":"Other"}),
+    )
+    .await;
+    h.post(
+        "/v1/onboarding/commands",
+        &fresh_operation,
+        Some(owner.access_credential.expose()),
+    )
+    .await
+    .assert_error(ErrorKind::Denied);
+    let refreshed: SessionCredentials = h.refresh(owner.refresh_credential.expose()).await.ok();
+    h.post(
+        "/v1/onboarding/commands",
+        &fresh_operation,
+        Some(refreshed.access_credential.expose()),
+    )
+    .await
+    .assert_error(ErrorKind::Denied);
+    // Reconciliation remains readable after issuer proof expiry, with current membership.
+    let receipt: Option<CommandResponse> = h
+        .get(
+            "/v1/onboarding/receipts/create-once",
+            Some(refreshed.access_credential.expose()),
+        )
+        .await
+        .ok();
+    assert_eq!(receipt.expect("receipt").receipt_id, a.receipt_id);
+    h.finish().await;
+}
+
+#[tokio::test]
+async fn verified_recipient_accepts_exact_roles_and_other_identity_is_unavailable() {
+    let h = Harness::start().await;
+    let owner = verified(&h, "Maya").await;
+    let recipient = verified(&h, "Theo").await;
+    let wrong = verified(&h, "Nora").await;
+    let workspace = create(&h, &owner, "create").await.resource_id;
+    let issued: CommandResponse = workspace_command(
+        &h,
+        &owner,
+        workspace,
+        "0",
+        json!({"command":"issue_email_invite","email":"Theo@SYNTHETIC.INVALID","roles":["member"]}),
+    )
+    .await
+    .ok();
+    let saved: Option<CommandResponse> = h
+        .get(
+            &format!(
+                "/v1/workspaces/{workspace}/receipts/{}",
+                issued.operation_id
+            ),
+            Some(owner.access_credential.expose()),
+        )
+        .await
+        .ok();
+    assert_eq!(
+        saved.expect("workspace receipt").receipt_id,
+        issued.receipt_id
+    );
+    let absent: Option<CommandResponse> = h
+        .get(
+            &format!("/v1/workspaces/{workspace}/receipts/not-issued"),
+            Some(owner.access_credential.expose()),
+        )
+        .await
+        .ok();
+    assert!(absent.is_none());
+    let listed: InvitationsView = h
+        .get(
+            "/v1/invitations",
+            Some(recipient.access_credential.expose()),
+        )
+        .await
+        .ok();
+    assert_eq!(listed.invitations.len(), 1);
+    assert_eq!(listed.invitations[0].roles, vec!["member"]);
+    let hidden: InvitationsView = h
+        .get("/v1/invitations", Some(wrong.access_credential.expose()))
+        .await
+        .ok();
+    assert!(hidden.invitations.is_empty());
+    let body = envelope(
+        &h,
+        "accept",
+        "1",
+        json!({"command":"accept_invitation","invite_id":issued.resource_id}),
+    )
+    .await;
+    let denied = h
+        .post(
+            "/v1/onboarding/commands",
+            &body,
+            Some(wrong.access_credential.expose()),
+        )
+        .await;
+    denied.assert_error(ErrorKind::Denied);
+    let missing = envelope(
+        &h,
+        "missing",
+        "1",
+        json!({"command":"accept_invitation","invite_id":Uuid::new_v4()}),
+    )
+    .await;
+    let absent = h
+        .post(
+            "/v1/onboarding/commands",
+            &missing,
+            Some(wrong.access_credential.expose()),
+        )
+        .await;
+    assert_eq!(denied.body, absent.body);
+    let accepted: CommandResponse = h
+        .post(
+            "/v1/onboarding/commands",
+            &body,
+            Some(recipient.access_credential.expose()),
+        )
+        .await
+        .ok();
+    assert_eq!(accepted.resource_id, workspace);
+    let replay: CommandResponse = h
+        .post(
+            "/v1/onboarding/commands",
+            &body,
+            Some(recipient.access_credential.expose()),
+        )
+        .await
+        .ok();
+    assert_eq!(accepted.receipt_id, replay.receipt_id);
+    // Last owner and escalation refused without changing original authority.
+    let members: inquello_protocol::onboarding::MembersView = h
+        .get(
+            &format!("/v1/workspaces/{workspace}/members"),
+            Some(owner.access_credential.expose()),
+        )
+        .await
+        .ok();
+    let owner_id = members
+        .members
+        .iter()
+        .find(|m| m.roles == vec!["owner"])
+        .expect("owner")
+        .principal_id;
+    workspace_command(
+        &h,
+        &owner,
+        workspace,
+        "1",
+        json!({"command":"remove_member","principal_id":owner_id}),
+    )
+    .await
+    .assert_error(ErrorKind::VersionConflict);
+    assert_eq!(
+        workspace_command(
+            &h,
+            &recipient,
+            workspace,
+            "1",
+            json!({"command":"change_roles","principal_id":owner_id,"roles":["owner"]})
+        )
+        .await
+        .body["error"]["kind"],
+        json!("denied")
+    );
+    let recipient_id = members
+        .members
+        .iter()
+        .find(|m| m.roles == vec!["member"])
+        .expect("member")
+        .principal_id;
+    workspace_command(
+        &h,
+        &owner,
+        workspace,
+        "1",
+        json!({"command":"remove_member","principal_id":recipient_id}),
+    )
+    .await
+    .ok::<CommandResponse>();
+    assert_eq!(
+        h.get(
+            "/v1/onboarding/receipts/accept",
+            Some(recipient.access_credential.expose())
+        )
+        .await
+        .body["error"]["kind"],
+        json!("denied")
+    );
+    h.finish().await;
+}
+
+#[tokio::test]
+async fn expired_revoked_and_stale_invites_never_grant_membership() {
+    let h = Harness::start().await;
+    let owner = verified(&h, "Maya").await;
+    let recipient = verified(&h, "Theo").await;
+    let workspace = create(&h, &owner, "create").await.resource_id;
+    let issued: CommandResponse = workspace_command(&h,&owner,workspace,"0",json!({"command":"issue_email_invite","email":"Theo@synthetic.invalid","roles":["reviewer"]})).await.ok();
+    let stale = envelope(
+        &h,
+        "stale",
+        "2",
+        json!({"command":"accept_invitation","invite_id":issued.resource_id}),
+    )
+    .await;
+    h.post(
+        "/v1/onboarding/commands",
+        &stale,
+        Some(recipient.access_credential.expose()),
+    )
+    .await
+    .assert_error(ErrorKind::VersionConflict);
+    workspace_command(
+        &h,
+        &owner,
+        workspace,
+        "1",
+        json!({"command":"revoke_invite","invite_id":issued.resource_id}),
+    )
+    .await
+    .ok::<CommandResponse>();
+    let body = envelope(
+        &h,
+        "revoked",
+        "1",
+        json!({"command":"accept_invitation","invite_id":issued.resource_id}),
+    )
+    .await;
+    h.post(
+        "/v1/onboarding/commands",
+        &body,
+        Some(recipient.access_credential.expose()),
+    )
+    .await
+    .assert_error(ErrorKind::Denied);
+    assert_eq!(h.count("SELECT count(*) FROM memberships").await, 1);
+    h.finish().await;
+}
+
+#[tokio::test]
+async fn default_private_derive_is_not_peer_task_share_export_or_tool_authority() {
+    let h = Harness::start().await;
+    let owner = verified(&h, "Maya").await;
+    let member = verified(&h, "Theo").await;
+    let workspace = create(&h, &owner, "create").await.resource_id;
+    let invite: CommandResponse = workspace_command(
+        &h,
+        &owner,
+        workspace,
+        "0",
+        json!({"command":"issue_email_invite","email":"Theo@synthetic.invalid","roles":["member"]}),
+    )
+    .await
+    .ok();
+    let accept = envelope(
+        &h,
+        "accept",
+        "1",
+        json!({"command":"accept_invitation","invite_id":invite.resource_id}),
+    )
+    .await;
+    let joined: CommandResponse = h
+        .post(
+            "/v1/onboarding/commands",
+            &accept,
+            Some(member.access_credential.expose()),
+        )
+        .await
+        .ok();
+    assert_eq!(joined.authorization_epoch.expect("epoch").get(), 2);
+    let members: inquello_protocol::onboarding::MembersView = h
+        .get(
+            &format!("/v1/workspaces/{workspace}/members"),
+            Some(owner.access_credential.expose()),
+        )
+        .await
+        .ok();
+    let owner_id = members
+        .members
+        .iter()
+        .find(|m| m.roles == vec!["owner"])
+        .expect("owner")
+        .principal_id;
+    let member_id = members
+        .members
+        .iter()
+        .find(|m| m.roles == vec!["member"])
+        .expect("member")
+        .principal_id;
+    let task = Uuid::new_v4();
+    // Only content-registration test metadata; neither membership nor authorization is injected.
+    sqlx::query("INSERT INTO resource_registrations (workspace_id,resource_id,kind,creator_principal_id) VALUES ($1,$2,'private_task',$3)")
+        .bind(workspace).bind(task).bind(member_id).execute(&h.pool).await.expect("private fixture");
+    let path = format!("/v1/workspaces/{workspace}/access-checks");
+    h.post(
+        &path,
+        &json!({"action":"derive","resource":{"kind":"private_task","resource_id":task}}),
+        Some(member.access_credential.expose()),
+    )
+    .await
+    .ok::<inquello_protocol::workspace::AccessCheckResponse>();
+    let denied = h
+        .post(
+            &path,
+            &json!({"action":"read","resource":{"kind":"private_task","resource_id":task}}),
+            Some(owner.access_credential.expose()),
+        )
+        .await;
+    let absent = h.post(&path,&json!({"action":"read","resource":{"kind":"private_task","resource_id":Uuid::new_v4()}}),Some(owner.access_credential.expose())).await;
+    assert_eq!(denied.body, absent.body);
+    for action in ["share", "export"] {
+        assert_eq!(
+            h.post(
+                &path,
+                &json!({"action":action,"resource":{"kind":"private_task","resource_id":task}}),
+                Some(member.access_credential.expose())
+            )
+            .await
+            .body["error"]["kind"],
+            "denied"
+        );
+    }
+    let policy: inquello_protocol::workspace::ExecutionPolicyView = h
+        .get(
+            &format!("/v1/workspaces/{workspace}/execution-policy"),
+            Some(member.access_credential.expose()),
+        )
+        .await
+        .ok();
+    assert_eq!(
+        policy.execution.expect("execution").mcp_tools,
+        Some(inquello_protocol::workspace::Access::Denied)
+    );
+    // Fresh proof required for customer-workspace role grants; refresh cannot extend it.
+    h.clock.advance(TimeDelta::minutes(6));
+    workspace_command(
+        &h,
+        &owner,
+        workspace,
+        "1",
+        json!({"command":"change_roles","principal_id":member_id,"roles":["owner"]}),
+    )
+    .await
+    .assert_error(ErrorKind::Denied);
+    let _ = owner_id;
+    h.finish().await;
+}
+
+#[tokio::test]
+async fn recipient_discovery_hides_withdrawn_grantor_and_expired_invites() {
+    let h = Harness::start().await;
+    let owner = verified(&h, "Maya").await;
+    let member = verified(&h, "Theo").await;
+    let workspace = create(&h, &owner, "create").await.resource_id;
+    let invite: CommandResponse = workspace_command(
+        &h,
+        &owner,
+        workspace,
+        "0",
+        json!({"command":"issue_email_invite","email":"Theo@synthetic.invalid","roles":["member"]}),
+    )
+    .await
+    .ok();
+    // Force expiry in disposable DB to test invite expiry independently of proof expiry.
+    sqlx::query("UPDATE invites SET expires_at=$2 WHERE invite_id=$1")
+        .bind(invite.resource_id)
+        .bind(h.now())
+        .execute(&h.pool)
+        .await
+        .expect("expire fixture");
+    let empty: InvitationsView = h
+        .get("/v1/invitations", Some(member.access_credential.expose()))
+        .await
+        .ok();
+    assert!(empty.invitations.is_empty());
+    let body = envelope(
+        &h,
+        "expired",
+        "1",
+        json!({"command":"accept_invitation","invite_id":invite.resource_id}),
+    )
+    .await;
+    h.post(
+        "/v1/onboarding/commands",
+        &body,
+        Some(member.access_credential.expose()),
+    )
+    .await
+    .assert_error(ErrorKind::Denied);
+    let current: CommandResponse = workspace_command(
+        &h,
+        &owner,
+        workspace,
+        "0",
+        json!({"command":"issue_email_invite","email":"Theo@synthetic.invalid","roles":["member"]}),
+    )
+    .await
+    .ok();
+    // Principal disablement has no public fixture API; isolate this authorization fact.
+    sqlx::query("UPDATE principals SET status='disabled' WHERE principal_id=(SELECT issued_by FROM invites WHERE invite_id=$1)")
+        .bind(current.resource_id).execute(&h.pool).await.expect("disable grantor fixture");
+    let empty: InvitationsView = h
+        .get("/v1/invitations", Some(member.access_credential.expose()))
+        .await
+        .ok();
+    assert!(empty.invitations.is_empty());
+    let body = envelope(
+        &h,
+        "withdrawn",
+        "1",
+        json!({"command":"accept_invitation","invite_id":current.resource_id}),
+    )
+    .await;
+    h.post(
+        "/v1/onboarding/commands",
+        &body,
+        Some(member.access_credential.expose()),
+    )
+    .await
+    .assert_error(ErrorKind::Denied);
+    h.finish().await;
+}
+
+#[tokio::test]
+async fn same_verified_email_from_another_issuer_never_matches_or_links() {
+    use inquello_protocol::login::LoginTransaction;
+    use inquello_service::test_issuer::{TestIssuer, TokenFixture};
+    let foreign = TestIssuer::with_issuer("https://other-issuer.invalid/");
+    let h = Harness::start_with(
+        |config| {
+            config
+                .issuers
+                .push(foreign.issuer_config(support::CLIENT_ID, &[support::REDIRECT_URI]))
+        },
+        reqwest::Client::new(),
+    )
+    .await;
+    let owner = verified(&h, "Maya").await;
+    let workspace = create(&h, &owner, "create").await.resource_id;
+    let invite: CommandResponse = workspace_command(
+        &h,
+        &owner,
+        workspace,
+        "0",
+        json!({"command":"issue_email_invite","email":"Theo@synthetic.invalid","roles":["member"]}),
+    )
+    .await
+    .ok();
+    let transaction: LoginTransaction = h.post("/v1/login/transactions",&json!({
+        "issuer":foreign.issuer(),"client_id":support::CLIENT_ID,"redirect_uri":support::REDIRECT_URI,"device_id":Uuid::new_v4()
+    }),None).await.ok();
+    let mut claims = TokenFixture::valid(
+        &foreign,
+        support::CLIENT_ID,
+        "Theo",
+        &transaction.nonce,
+        h.now(),
+    );
+    claims.email_verified = true;
+    let token = foreign.sign(&claims);
+    h.remember(&token);
+    let foreign_session: SessionCredentials = h.bootstrap(&transaction, &token).await.ok();
+    let empty: InvitationsView = h
+        .get(
+            "/v1/invitations",
+            Some(foreign_session.access_credential.expose()),
+        )
+        .await
+        .ok();
+    assert!(empty.invitations.is_empty());
+    let body = envelope(
+        &h,
+        "foreign",
+        "1",
+        json!({"command":"accept_invitation","invite_id":invite.resource_id}),
+    )
+    .await;
+    h.post(
+        "/v1/onboarding/commands",
+        &body,
+        Some(foreign_session.access_credential.expose()),
+    )
+    .await
+    .assert_error(ErrorKind::Denied);
+    let local = verified(&h, "Theo").await;
+    let local_view: inquello_protocol::session::SessionView = h
+        .get("/v1/session", Some(local.access_credential.expose()))
+        .await
+        .ok();
+    let foreign_view: inquello_protocol::session::SessionView = h
+        .get(
+            "/v1/session",
+            Some(foreign_session.access_credential.expose()),
+        )
+        .await
+        .ok();
+    assert_ne!(
+        local_view.principal.principal_id,
+        foreign_view.principal.principal_id
+    );
+    h.finish().await;
+}
+
+#[tokio::test]
+async fn missing_false_and_stale_verified_email_cannot_create_or_accept() {
+    let h = Harness::start().await;
+    let owner = verified(&h, "Maya").await;
+    let workspace = create(&h, &owner, "create").await.resource_id;
+    let invite: CommandResponse = workspace_command(
+        &h,
+        &owner,
+        workspace,
+        "0",
+        json!({"command":"issue_email_invite","email":"Theo@synthetic.invalid","roles":["member"]}),
+    )
+    .await
+    .ok();
+    for missing in [true, false] {
+        let transaction = h.create_transaction(Uuid::new_v4()).await;
+        let mut claims = h.valid_fixture("Theo", &transaction).claims();
+        if missing {
+            claims
+                .as_object_mut()
+                .expect("claims")
+                .remove("email_verified");
+        }
+        let token = h.issuer.sign_claims(&claims);
+        h.remember(&token);
+        let session: SessionCredentials = h.bootstrap(&transaction, &token).await.ok();
+        let body = envelope(
+            &h,
+            &Uuid::new_v4().to_string(),
+            "0",
+            json!({"command":"create_workspace","name":"No grant"}),
+        )
+        .await;
+        h.post(
+            "/v1/onboarding/commands",
+            &body,
+            Some(session.access_credential.expose()),
+        )
+        .await
+        .assert_error(ErrorKind::Denied);
+        let body = envelope(
+            &h,
+            &Uuid::new_v4().to_string(),
+            "1",
+            json!({"command":"accept_invitation","invite_id":invite.resource_id}),
+        )
+        .await;
+        h.post(
+            "/v1/onboarding/commands",
+            &body,
+            Some(session.access_credential.expose()),
+        )
+        .await
+        .assert_error(ErrorKind::Denied);
+    }
+    let stale = verified(&h, "Theo").await;
+    h.clock.advance(TimeDelta::minutes(6));
+    let refreshed: SessionCredentials = h.refresh(stale.refresh_credential.expose()).await.ok();
+    let body = envelope(
+        &h,
+        "stale-proof",
+        "1",
+        json!({"command":"accept_invitation","invite_id":invite.resource_id}),
+    )
+    .await;
+    h.post(
+        "/v1/onboarding/commands",
+        &body,
+        Some(refreshed.access_credential.expose()),
+    )
+    .await
+    .assert_error(ErrorKind::Denied);
+    assert_eq!(h.count("SELECT count(*) FROM workspaces").await, 1);
+    assert_eq!(h.count("SELECT count(*) FROM memberships").await, 1);
+    h.finish().await;
+}
+
+#[tokio::test]
+async fn proof_expiring_while_waiting_for_grantor_lock_rolls_back_grant_and_receipt() {
+    let h = Harness::start().await;
+    let owner = verified(&h, "Maya").await;
+    let member = verified(&h, "Theo").await;
+    let workspace = create(&h, &owner, "create").await.resource_id;
+    let invite: CommandResponse = workspace_command(
+        &h,
+        &owner,
+        workspace,
+        "0",
+        json!({"command":"issue_email_invite","email":"Theo@synthetic.invalid","roles":["member"]}),
+    )
+    .await
+    .ok();
+    let body = envelope(
+        &h,
+        "wait-expiry",
+        "1",
+        json!({"command":"accept_invitation","invite_id":invite.resource_id}),
+    )
+    .await;
+    let mut blocker = h.pool.begin().await.expect("blocker");
+    sqlx::query("SELECT 1 FROM memberships WHERE workspace_id=$1 FOR UPDATE")
+        .bind(workspace)
+        .execute(&mut *blocker)
+        .await
+        .expect("hold grantor membership");
+    let (response, ()) = tokio::join!(
+        h.post(
+            "/v1/onboarding/commands",
+            &body,
+            Some(member.access_credential.expose())
+        ),
+        async {
+            tokio::time::timeout(std::time::Duration::from_secs(5),async {
+                loop {
+                    let waiting: bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%memberships%')")
+                        .fetch_one(&h.pool).await.expect("observe lock wait");
+                    if waiting { break; }
+                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                }
+            }).await.expect("accept waits on grantor row");
+            h.clock.advance(TimeDelta::minutes(6));
+            blocker.rollback().await.expect("release blocker");
+        }
+    );
+    response.assert_error(ErrorKind::Denied);
+    assert_eq!(h.count("SELECT count(*) FROM memberships").await, 1);
+    assert_eq!(
+        h.count("SELECT count(*) FROM operation_receipts WHERE command='accept_invitation'")
+            .await,
+        0
+    );
+    h.finish().await;
+}

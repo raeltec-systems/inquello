@@ -222,6 +222,27 @@ async fn apply(
                 epoch_event: None,
             })
         }
+        WorkspaceCommand::IssueEmailInvite { email, roles } => {
+            expect_revision(0, expected)?;
+            let email = crate::oidc::normalize_email(email)
+                .ok_or_else(|| ApiError::unsupported_contract("invalid invitation email"))?;
+            validate_roles(&authority.policy, roles)?;
+            let issuer: String =
+                sqlx::query_scalar("SELECT issuer FROM principals WHERE principal_id = $1")
+                    .bind(authority.principal_id)
+                    .fetch_one(&mut *conn)
+                    .await?;
+            let invite_id = Uuid::new_v4();
+            sqlx::query("INSERT INTO invites (invite_id, workspace_id, issuer, subject, recipient_email, roles, policy_revision, issued_by, state, revision, created_at, expires_at) VALUES ($1,$2,$3,'email-pending',$4,$5,$6,$7,'pending',1,$8,$9)")
+                .bind(invite_id).bind(workspace_id).bind(issuer).bind(email).bind(roles)
+                .bind(policy_revision).bind(authority.principal_id).bind(now)
+                .bind(now + state.lifetimes.invite).execute(&mut *conn).await?;
+            Ok(Applied {
+                resource_id: invite_id,
+                revision: 1,
+                epoch_event: None,
+            })
+        }
         WorkspaceCommand::RevokeInvite { invite_id } => {
             let row = sqlx::query(
                 "SELECT state, revision FROM invites \
@@ -522,6 +543,25 @@ pub(crate) async fn handle(
     }
 
     authority.require(Action::ManageMembership)?;
+    let onboarding_created: bool =
+        sqlx::query_scalar("SELECT onboarding_created FROM workspaces WHERE workspace_id=$1")
+            .bind(workspace_id)
+            .fetch_one(&mut *tx)
+            .await?;
+    if onboarding_created && matches!(envelope.payload, WorkspaceCommand::IssueInvite { .. }) {
+        return Err(ApiError::unsupported_contract(
+            "customer workspaces use verified-email invitations",
+        ));
+    }
+    let fresh_required = matches!(envelope.payload, WorkspaceCommand::IssueEmailInvite { .. })
+        || (onboarding_created
+            && matches!(
+                envelope.payload,
+                WorkspaceCommand::ChangeRoles { .. } | WorkspaceCommand::AddEngagementMember { .. }
+            ));
+    if fresh_required {
+        crate::onboarding::fresh_email(&mut tx, &auth, now).await?;
+    }
     let applied = apply(
         &mut tx,
         state,
@@ -566,6 +606,17 @@ pub(crate) async fn handle(
     .bind(now)
     .execute(&mut *tx)
     .await?;
+    if fresh_required {
+        let final_auth = sessions::authenticate(
+            &mut tx,
+            access,
+            state.clock.as_ref(),
+            LockMode::Update,
+            LockMode::Share,
+        )
+        .await?;
+        crate::onboarding::fresh_email(&mut tx, &final_auth, state.clock.now()).await?;
+    }
     tx.commit()
         .await
         .map_err(|error| ApiError::uncertain(&error))?;

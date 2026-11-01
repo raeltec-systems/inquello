@@ -6,7 +6,9 @@
  * line `inquello-dev-topology` prints. Without the variable the shared service
  * is `not-configured` and nothing is contacted.
  *
- * Both URLs must be `https:` origins (no path, query, fragment or user info).
+ * The service URL is an HTTPS origin. The issuer is an exact HTTPS URL, with
+ * optional path/trailing slash, but no query, fragment or user info. An optional
+ * callback_port selects an exactly registered fixed native callback.
  * The CA certificate at `ca_path` is the only trust anchor for these requests:
  * it is passed as a per-request `ca` option and never added to the system
  * trust store. The issuer label shown in the UI comes from this file, never
@@ -27,6 +29,8 @@ export interface ServiceConfig {
   ca: string;
   /** The public native client ID registered with the issuer. */
   clientId: string;
+  /** Explicitly registered Auth0 loopback port. No fallback if occupied. */
+  callbackPort?: number;
 }
 
 export type ConfigResult = { kind: 'not-configured' } | { kind: 'invalid'; reason: string } | { kind: 'configured'; config: ServiceConfig };
@@ -60,11 +64,13 @@ export function parseServiceConfig(text: string, readFile: (path: string) => str
   }
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return { kind: 'invalid', reason: 'the configuration is not an object' };
   const record = raw as Record<string, unknown>;
-  const keys = Object.keys(record).sort();
+  const keys = Object.keys(record).filter(key => key !== 'callback_port').sort();
+  const callbackPort = record.callback_port;
+  if (callbackPort !== undefined && (typeof callbackPort !== 'number' || !Number.isInteger(callbackPort) || callbackPort < 1024 || callbackPort > 65535)) return { kind: 'invalid', reason: 'callback_port must be an explicit unprivileged port' };
   if (JSON.stringify(keys) !== JSON.stringify([...KEYS].sort())) return { kind: 'invalid', reason: 'the configuration keys are not the expected ones' };
   const serviceUrl = httpsOrigin(record.service_url);
-  const issuerUrl = httpsOrigin(record.issuer_url);
-  if (!serviceUrl || !issuerUrl) return { kind: 'invalid', reason: 'service_url and issuer_url must be https origins' };
+  const issuerUrl = httpsIssuer(record.issuer_url);
+  if (!serviceUrl || !issuerUrl) return { kind: 'invalid', reason: 'service_url must be an https origin and issuer_url an exact https issuer' };
   const { issuer_label: issuerLabel, client_id: clientId, ca_path: caPath } = record;
   if (typeof issuerLabel !== 'string' || issuerLabel.trim() === '' || issuerLabel.length > 120) {
     return { kind: 'invalid', reason: 'issuer_label must be a short non-empty string' };
@@ -79,7 +85,7 @@ export function parseServiceConfig(text: string, readFile: (path: string) => str
   }
   if (ca.length > MAX_CA_BYTES || !ca.includes('-----BEGIN CERTIFICATE-----')) return { kind: 'invalid', reason: 'ca_path does not hold a PEM certificate' };
   if (ca.includes('PRIVATE KEY')) return { kind: 'invalid', reason: 'ca_path must hold only certificates' };
-  return { kind: 'configured', config: { serviceUrl, issuerUrl, issuerLabel: issuerLabel.trim(), ca, clientId } };
+  return { kind: 'configured', config: { serviceUrl, issuerUrl, issuerLabel: issuerLabel.trim(), ca, clientId, ...(callbackPort === undefined ? {} : { callbackPort: callbackPort as number }) } };
 }
 
 /** Reads the configuration named by `INQUELLO_SERVICE_CONFIG`, if any. */
@@ -97,4 +103,15 @@ export function loadServiceConfig(env: NodeJS.ProcessEnv): ConfigResult {
     if (fs.statSync(path).size > MAX_CA_BYTES) throw new Error('CA file too large');
     return fs.readFileSync(path, 'utf8');
   });
+}
+
+/** Preserve the exact issuer string, including path/trailing slash. */
+export function httpsIssuer(value: unknown): string | null {
+  if (typeof value !== 'string' || value.length > 2048) return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) return null;
+    if (url.toString() !== value && url.origin !== value) return null;
+    return value;
+  } catch { return null; }
 }

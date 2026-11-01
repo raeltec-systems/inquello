@@ -298,6 +298,7 @@ export class IdentitySession {
       state,
       issuer: config.issuerUrl,
       timeoutMs: this.options.callbackTimeoutMs,
+      port: config.callbackPort,
     });
     try {
       let transaction;

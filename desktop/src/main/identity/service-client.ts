@@ -328,7 +328,7 @@ function endpointOn(issuer: string, value: unknown): string | null {
   if (typeof value !== 'string') return null;
   try {
     const url = new URL(value);
-    return url.protocol === 'https:' && url.origin === new URL(issuer).origin && !url.hash ? url.toString() : null;
+    return url.protocol === 'https:' && url.origin === new URL(issuer).origin && !url.username && !url.password && !url.hash ? url.toString() : null;
   } catch {
     return null;
   }
@@ -343,7 +343,7 @@ export class IssuerClient implements Issuer {
   async discover(): Promise<IssuerEndpoints> {
     let response: HttpResponse;
     try {
-      response = await this.transport({ url: `${this.issuerUrl}/.well-known/openid-configuration`, method: 'GET' });
+      response = await this.transport({ url: `${this.issuerUrl.replace(/\/$/, '')}/.well-known/openid-configuration`, method: 'GET' });
     } catch {
       throw new IssuerError('transport');
     }

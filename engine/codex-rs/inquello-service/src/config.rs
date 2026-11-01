@@ -75,7 +75,9 @@ pub struct IssuerConfig {
     pub client_id: String,
     /// The exact redirect URIs a login transaction may bind.
     pub redirect_uris: Vec<String>,
-    /// The issuer's public signing keys. Every key needs a `kid`.
+    /// Pinned signing keys for offline deployments. Every key needs a `kid`.
+    /// An empty set explicitly enables HTTPS discovery/JWKS rotation; no fallback
+    /// to expired keys is allowed. Discovery must report this exact issuer.
     pub jwks: JwkSet,
 }
 
@@ -295,9 +297,7 @@ impl ServiceConfig {
             {
                 return Err(invalid("at least one non-empty redirect URI is required"));
             }
-            if issuer.jwks.keys.is_empty() {
-                return Err(invalid("at least one signing key is required"));
-            }
+            // An empty set selects bounded online discovery, not disabled validation.
         }
         self.lifetimes.validate()?;
         if self.database.max_connections == 0 {

@@ -666,7 +666,7 @@ pub(crate) async fn accept_invite(
         return Err(invite_refused("workspace kind not enabled"));
     }
     let invite = sqlx::query(
-        "SELECT issuer, subject, roles, issued_by, state, expires_at, revision \
+        "SELECT issuer, subject, roles, issued_by, state, expires_at, revision, recipient_email \
          FROM invites WHERE invite_id = $1 AND workspace_id = $2 FOR UPDATE",
     )
     .bind(invite_id)
@@ -687,6 +687,9 @@ pub(crate) async fn accept_invite(
     }
     if now >= expires_at {
         return Err(invite_refused("invite expired"));
+    }
+    if invite.try_get::<Option<String>, _>("recipient_email")?.is_some() {
+        return Err(invite_refused("email invitation requires explicit onboarding acceptance"));
     }
     // Bound to (issuer, subject) exactly. Email is never consulted.
     if bound_issuer != issuer || bound_subject != subject {

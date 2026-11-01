@@ -49,6 +49,7 @@ export interface LoopbackOptions {
   /** When the callback carries `iss`, it must equal this issuer. */
   issuer: string;
   timeoutMs?: number;
+  port?: number;
 }
 
 const PAGE_HEADERS = {
@@ -72,6 +73,7 @@ function single(params: URLSearchParams, name: string): string | null | undefine
 
 export async function startLoopbackListener(options: LoopbackOptions): Promise<LoopbackListener> {
   const timeoutMs = options.timeoutMs ?? DEFAULT_CALLBACK_TIMEOUT_MS;
+  if (options.port !== undefined && (!Number.isInteger(options.port) || options.port < 1024 || options.port > 65535)) throw new Error('invalid callback port');
   let settled = false;
   let resolveCallback!: (value: LoopbackCallback) => void;
   let rejectCallback!: (error: LoopbackError) => void;
@@ -135,7 +137,7 @@ export async function startLoopbackListener(options: LoopbackOptions): Promise<L
 
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject);
-    server.listen(0, '127.0.0.1', () => {
+    server.listen(options.port ?? 0, '127.0.0.1', () => {
       server.off('error', reject);
       resolve();
     });

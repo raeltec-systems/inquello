@@ -45,6 +45,7 @@ mod error;
 mod export_receipts;
 mod login;
 mod oidc;
+mod onboarding;
 pub mod postgres;
 pub mod route_eligibility;
 mod routes;

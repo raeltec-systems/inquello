@@ -145,12 +145,13 @@ pub(crate) async fn bootstrap(
         .issuer(&open.issuer)
         .ok_or_else(|| ApiError::unauthenticated("transaction issuer no longer configured"))?;
     let claims = issuer
-        .validate(
+        .validate_current(
             id_token,
             &open.nonce,
             checked_at,
             state.lifetimes.id_token_clock_skew,
         )
+        .await
         .map_err(|rejection| {
             tracing::info!(
                 login_transaction_id = %request.login_transaction_id,
@@ -255,6 +256,15 @@ pub(crate) async fn bootstrap(
     .bind(session_expires_at)
     .execute(&mut *tx)
     .await?;
+    if let Some(email) = &claims.verified_email {
+        sqlx::query("UPDATE sessions SET verified_email = $2, email_proof_issued_at = $3, email_proof_expires_at = $4 WHERE session_id = $1")
+            .bind(session_id)
+            .bind(email)
+            .bind(claims.issued_at)
+            .bind(claims.expires_at)
+            .execute(&mut *tx)
+            .await?;
+    }
     let issued = sessions::issue_credentials(
         &mut tx,
         state,

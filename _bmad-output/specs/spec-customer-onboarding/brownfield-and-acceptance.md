@@ -13,7 +13,7 @@
 
 ## Proposed implementation boundaries
 
-One cohesive customer-onboarding goal, proposed Story 1.31. The owner approved verified-user self-service creation and email invitations with verified-recipient acceptance and no automatic account linking. Auth0 hosted OIDC is selected; the build checkpoint remains pending. The compatibility pilot must establish the exact permitted loopback callback registration without relaxing state, PKCE, issuer or origin checks. No vendor setup is authorized.
+One cohesive customer-onboarding goal, proposed Story 1.31. The owner approved verified-user self-service creation and email invitations with verified-recipient acceptance and no automatic account linking. Auth0 hosted OIDC is selected; the build checkpoint was approved for implementation. The compatibility pilot must establish the exact permitted loopback callback registration without relaxing state, PKCE, issuer or origin checks. No vendor setup is authorized.
 
 A workspace-create transaction must authenticate its caller, apply the approved creation eligibility and server-owned initial policy, create exactly one initial owner membership, and retain an operation receipt. It cannot accept caller-defined grants or elevate an existing workspace. No auto-joining by email domain.
 
@@ -51,3 +51,22 @@ Tests must cover service transactions against disposable PostgreSQL, protocol fi
 - [Loopback confirmation](https://support.auth0.com/center/s/article/end-of-life-rollout-for-defaulting-to-skip-login-confirmation-for-non-verifiable-callback-uris): retain Auth0's login confirmation; never disable it or rely on silent `prompt=none`.
 
 These are engineering compatibility requirements, not proof of a live tenant. Do not create vendor accounts, register applications, configure credentials or change trust without separate approval.
+
+
+## Approved invitation and callback implementation contract (2026-11-01)
+A colleague without an account first uses the configured hosted signup/sign-in, proves their email there, then discovers only current invitations matching that server-validated proof and exact issuer. Discovery never creates or links accounts; acceptance is an explicit revision-bound operation. Raw email text, an opaque invitation UUID, local display claims, another issuer, missing/false verified-email claims, expired token proof or proof older than ten minutes cannot grant access. Local credential refresh does not renew issuer proof. Mailbox matching preserves local-part case and lowercases the ASCII DNS domain; there is no dot/plus stripping.
+
+Invitations expire, can be revoked, and redeem once. A retry of the same committed operation reconciles its original receipt only while current membership remains authorized. Different operation identifiers do not silently regrant membership. Missing/wrong-account/expired/revoked invitations have the same safe unavailable result. Discovery also checks current grantor and policy before disclosure.
+
+The service increment creates pending invitations visible through authenticated recipient discovery only. It does **not** claim external email delivery. No delivery bearer token exists in this path, so there is no plaintext token to store or replay; the invitation UUID is a non-authorizing reference. The approved story still requires a configurable delivery adapter and durable outbox/retry implementation; only live provider setup and external sends require separate authorization. That implementation must preserve one invite/one receipt across retries, store only hashes for any subsequently introduced bearer secret, and expose queued/failed/delivered separately from accepted. Missing delivery configuration must be explained by the UI, not displayed as successful email.
+
+Auth0 compatibility uses an explicitly configured fixed unprivileged loopback port registered exactly as `http://127.0.0.1:<port>/callback`. Bind first, refuse occupied ports, and never silently select a replacement. State, nonce, PKCE, exact issuer and callback checks remain unchanged. Existing ephemeral synthetic fixtures are not evidence of real Auth0 registration. The real-tenant pilot remains separately authorized and pending.
+
+Additional required negative coverage:
+| Case | Expected result |
+| --- | --- |
+| Missing or false signed verified-email claim | Creation and email acceptance denied; no membership side effect |
+| Stale or expired signed proof, including after service refresh | Reauthenticate through hosted identity; no grant |
+| Same email at a different issuer/subject | No automatic account link; foreign issuer cannot discover/redeem |
+| Unknown/rotated/revoked JWKS key | Rate-limited refresh, exact issuer; never stale-key fallback after cache expiry |
+| Default member's own Task vs peer/administrator | Own private derive can pass its independent gates; peer Task/share/export/tools remain denied |

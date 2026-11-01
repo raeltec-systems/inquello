@@ -2,12 +2,13 @@
 title: 'Story 1.31: Onboard customers into secure private workspaces'
 type: 'feature'
 created: '2026-11-01'
-status: 'ready-for-dev'
+status: 'in-progress'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '99918b0f7924bfd727b2de337498f265b017ca74'
 context:
   - '{project-root}/_bmad-output/specs/spec-customer-onboarding/SPEC.md'
+  - '{project-root}/_bmad-output/specs/spec-customer-onboarding/service-desktop-handoff.md'
 ---
 
 <frozen-after-approval reason="human-owned intent; draft until owner decisions and checkpoint approval">
@@ -64,9 +65,18 @@ context:
 
 ## Implementation Notes
 
-- No unresolved product choices. Validate ephemeral loopback registration; never weaken callback/PKCE checks to fit a provider.
+- No unresolved product choices. Auth0 uses an explicitly configured, exactly registered fixed `http://127.0.0.1:<port>/callback`; bind before opening the browser and fail if occupied, without port fallback. Ephemeral ports remain the existing synthetic/operator compatibility path only. The real-tenant callback pilot is pending; never weaken state/PKCE/issuer checks.
 - Migrations add invitation/proof/receipt state; use disposable databases first. Vendor accounts, delivery, trust and production mutations require separate approval.
 - Changes span service/protocol, named desktop IPC and onboarding/team UI; no password backend or provider Organizations dependency.
+
+### Sequential implementation checkpoint (2026-11-01)
+- Implemented service/protocol foundation: signed boolean verified-email proof is session-bound to issuer/subject and bounded by both token expiry and 10 minutes from issuer `iat`; refreshing service credentials never renews proof.
+- Explicit online JWKS mode uses an empty configured keyset: exact issuer discovery, same-origin HTTPS JWKS, no redirects, bounded response/key counts, five-minute hard cache lifetime, 30-second unknown-key refresh budget and single-flight refresh. Non-empty configured keys retain the existing pinned/offline mode.
+- Creation and acceptance have principal-scoped operation receipts; workspace membership commands retain existing receipts. New read-only receipt endpoints reconcile without replaying mutations. Acceptance is one-use, checks invitation revision/current policy/current grantor, and increments workspace authority epoch.
+- Default Owner/Member include `derive` so onboarding reaches core private conversation work. This is not execution: independent route qualification/data tier/provider consent/current membership/creator checks remain mandatory. No share/export/tool/network authority is granted. This rationale was confirmed by the integrating parent during the build.
+- Invitation email matching preserves local-part case and canonicalizes the ASCII domain only. It is never an account-link key. An opaque invitation ID is not a bearer capability; server-validated issuer-bound proof plus deliberate acceptance authorize redemption. No delivery credential/token is emitted or stored, and no external email is sent by this increment.
+- Desktop identity foundation adds exact path/trailing-slash issuers and explicit fixed callback ports with occupied-port failure; signup/team views, named onboarding IPC, durable client drafts/uncertain-state reconciliation and the actual two-person Electron journey remain to implement.
+- Whole Story 1.31 remains **in-progress**. This checkpoint is not customer acceptance, production tenant qualification or delivery success. Tests/evidence are recorded after execution; no incomplete checkbox is marked done.
 
 ## Spec Change Log
 
@@ -74,7 +84,19 @@ context:
 
 ## Verification
 
+The following are whole-story verification targets; only the executed checkpoint evidence below is complete.
+
 - `cargo test --locked --offline -j1 -p inquello-domain -p inquello-protocol -p inquello-service --features inquello-service/test-issuer`: disposable-database contracts and negative cases pass.
 - `cargo clippy --locked --offline -j1 -p inquello-domain -p inquello-protocol -p inquello-service --features inquello-service/test-issuer --all-targets -- -D warnings`: clean.
 - Matched native/protocol rebuild; `pnpm run build` and relevant `pnpm test`: pass without changing timeouts.
 - Actual Electron onboarding plus existing conversation/Stop/Resume regression; inspect keyboard/focus/resize and two-user isolation. Production issuer and delivery acceptance remain separate.
+
+### Executed service/identity checkpoint evidence (2026-11-01)
+
+- Full locked/offline single-job domain/protocol/service test command above: **256 passed, 0 failed** on final source. Includes 8 new onboarding integration tests and 2 new signed-proof/cache-rotation tests; disposable PostgreSQL and synthetic topology only. Log: `.tmp/story131-service-verified.log`.
+- Strict all-targets clippy command above: **exit 0**. Async key refresh uses a semaphore and never holds a cache mutex across network I/O. Log: `.tmp/story131-clippy-final.log`.
+- `desktop/pnpm run build`: **exit 0** (main/renderer TypeScript, data-policy validation, Vite). Existing Vite future config-loader warning remains. Log: `.tmp/story131-desktop-build.log`.
+- No timeout values were increased, no dependencies downloaded, no real accounts/email/provider requests or trust-store changes performed.
+- **Not yet executed:** new desktop identity Vitest cases, matched codex-cli/app-server rebuild, Electron onboarding/keyboard/focus/resize pixels and conversation/Stop/Resume regression.
+- **Not yet implemented:** approved configurable Resend delivery/outbox/retry, named onboarding IPC/main service, durable client drafts, signup/reauthentication/team UI and truthful delivery statuses. See the context handoff for exact DTOs, separate issuer TLS trust, production fixed-port requirement, and remaining disabled-principal last-admin coverage.
+- Story and sprint remain **in-progress**; this checkpoint is not full Story 1.31 acceptance.

@@ -220,7 +220,7 @@ describe('dev config', () => {
 
   it.each([
     ['plain http', { ...valid, service_url: 'http://127.0.0.1:4443' }],
-    ['a path', { ...valid, issuer_url: 'https://127.0.0.1:4444/tenant' }],
+    ['a service path', { ...valid, service_url: 'https://127.0.0.1:4443/tenant' }],
     ['user info', { ...valid, service_url: 'https://u:p@127.0.0.1:4443' }],
     ['an extra key', { ...valid, extra: true }],
     ['a missing key', { ...valid, client_id: undefined }],

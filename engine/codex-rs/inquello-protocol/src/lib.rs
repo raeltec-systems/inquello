@@ -27,6 +27,7 @@ pub mod login;
 pub mod session;
 mod values;
 pub mod workspace;
+pub mod onboarding;
 
 pub use values::CommandEpoch;
 pub use values::Revision;
