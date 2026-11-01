@@ -98,10 +98,18 @@ struct RawClaims {
     nonce: Option<String>,
     #[serde(default)]
     email: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "boolean_verified_email")]
     email_verified: bool,
     #[serde(default)]
     name: Option<String>,
+}
+
+/// Preserve legacy sign-in for non-standard claim types without treating any
+/// truthy/string/numeric value as verified proof. JWT validation is unchanged.
+fn boolean_verified_email<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<bool, D::Error> {
+    Ok(serde_json::Value::deserialize(deserializer)?.as_bool() == Some(true))
 }
 
 fn key_algorithm(jwk: &Jwk) -> Option<Algorithm> {

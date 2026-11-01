@@ -1418,3 +1418,60 @@ async fn managed_invitation_read_waits_and_rechecks_withdrawn_authority() {
     assert!(!response.body.to_string().contains("Theo@"));
     h.finish().await;
 }
+
+#[tokio::test]
+async fn nonboolean_signed_email_verified_preserves_login_but_never_grants_proof() {
+    let h = Harness::start().await;
+    for value in [
+        json!("true"),
+        json!("false"),
+        json!(1),
+        json!(0),
+        json!({}),
+        json!({"verified":true}),
+        json!([]),
+        json!([true]),
+        Value::Null,
+        json!(false),
+    ] {
+        let transaction = h.create_transaction(Uuid::new_v4()).await;
+        let mut claims = h.valid_fixture("Maya", &transaction).claims();
+        claims["email_verified"] = value;
+        let token = h.issuer.sign_claims(&claims);
+        h.remember(&token);
+        let session: SessionCredentials = h.bootstrap(&transaction, &token).await.ok();
+        let body = envelope(
+            &h,
+            &Uuid::new_v4().to_string(),
+            "0",
+            json!({"command":"create_workspace","name":"Not verified"}),
+        )
+        .await;
+        h.post(
+            "/v1/onboarding/commands",
+            &body,
+            Some(session.access_credential.expose()),
+        )
+        .await
+        .assert_error(ErrorKind::Denied);
+        h.get("/v1/invitations", Some(session.access_credential.expose()))
+            .await
+            .assert_error(ErrorKind::Denied);
+    }
+    assert_eq!(h.count("SELECT count(*) FROM workspaces").await, 0);
+    assert_eq!(
+        h.count("SELECT count(*) FROM sessions WHERE verified_email IS NOT NULL")
+            .await,
+        0
+    );
+    // Exact JSON boolean true remains the sole qualifying proof.
+    let owner = verified(&h, "Maya").await;
+    create(&h, &owner, "actual-boolean-true").await;
+    assert_eq!(h.count("SELECT count(*) FROM workspaces").await, 1);
+    assert_eq!(
+        h.count("SELECT count(*) FROM sessions WHERE verified_email IS NOT NULL")
+            .await,
+        1
+    );
+    h.finish().await;
+}
