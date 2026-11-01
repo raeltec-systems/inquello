@@ -929,12 +929,22 @@ pub(super) async fn run(
             return;
         }
         if scenario == "lifecycle-progress-continuity" {
-            let before = private_rpc(
-                &mut server,
-                &mut host,
-                "inquello/tasks/progress",
-                json!({"taskId":task,"workspacePolicy":policy}),
-            )
+            // The marker proves command admission, not completion of the parallel
+            // progress publication. Use the existing bounded readiness helper;
+            // require both retained findings while the original run is still live.
+            let before = wait_progress(&mut server, &mut host, &task, &policy, |p| {
+                p["status"] == "running"
+                    && p["results"].as_array().is_some_and(|rows| {
+                        rows.iter().any(|r| {
+                            r["id"] == "result:unaffected"
+                                && r["sourceTurnId"] == observed["turnId"]
+                        }) && rows.iter().any(|r| {
+                            r["id"] == "result:duplicates"
+                                && r["revision"] == 1
+                                && r["changeReason"] == "Initial invoice comparison"
+                        })
+                    })
+            })
             .await;
             assert!(
                 before.get("rpcError").is_none(),
