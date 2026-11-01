@@ -658,3 +658,20 @@ it('the maintained native smoke closes Search between independent Ctrl and Cmd s
  const start=source.indexOf('async function probeShellKeys('),end=source.indexOf('const SHELL_THEME_READ',start);const body=source.slice(start,end);
  expect(body).toMatch(/pressKey\(contents, 'K', \['control'\]\);\s*await pressKey\(contents, 'Escape'\);\s*await pressKey\(contents, 'K', \['meta'\]\)/);
 });
+
+it('keeps a refused reopen notice distinct before the idle welcome without exposing cached work', async () => {
+  const main = fakeMain();
+  const original = (globalThis as { inquello?: object }).inquello;
+  Object.assign(globalThis, { inquello: {
+    ...original, organise: { ...main.organise, reopen: vi.fn(async () => { throw new Error('unavailable'); }) },
+  } });
+  render(<Shell onShowSpecimen={() => undefined} />);
+  await userEvent.setup().click(await screen.findByRole('link', { name: 'Bank confirmations' }));
+  const notice = await screen.findByText('This Task is unavailable. No cached work was opened.');
+  const welcome = screen.getByText('What should we work on?');
+  expect(notice.getAttribute('role')).toBe('status');
+  expect(notice.parentElement).toBe(welcome.parentElement?.parentElement);
+  expect(notice.compareDocumentPosition(welcome) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(screen.getByText('Choose a Task in the Sidebar, or start one with New thread.')).toBeTruthy();
+  expect(document.querySelector('[data-task-view]')).toBeNull();
+});
