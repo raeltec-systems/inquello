@@ -108,7 +108,7 @@ const REFUSED = ['Read-only file system', 'Operation not permitted', 'Permission
 const MISSING = ['No such file or directory', 'Directory nonexistent'] as const;
 type FileError = (typeof REFUSED)[number] | (typeof MISSING)[number];
 const FILE_ERROR = new RegExp(
-  String.raw`(?:'([^'\n]+)'|‘([^’\n]+)’|"([^"\n]+)"|([^\s:'"‘’]+))\s*:\s*(${[...REFUSED, ...MISSING].join('|')})`,
+  String.raw`(?:'([^'\n]+)'|‘([^’\n]+)’|"([^"\n]+)"|((?:[A-Za-z]:[\\/])?[^\s:'"‘’]+))\s*:\s*(${[...REFUSED, ...MISSING].join('|')})`,
   'g',
 );
 
