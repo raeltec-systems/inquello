@@ -70,6 +70,7 @@ export function Composer({ draft, onSend, disabledReason, autoFocus, readOnly, o
         data-composer-input
       />
       <div className="iq-composer-actions">
+        <span className="iq-composer-hint">Shift+Enter for a new line</span>
         {onStop && <IconButton variant="stop" label="Stop" disabledReason={stopDisabledReason} onPress={onStop} data-composer-stop />}
         <IconButton variant="send" label="Send" disabledReason={reason} onPress={() => { if (!readOnly) onSend?.(); }} data-composer-send />
       </div>

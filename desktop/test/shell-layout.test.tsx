@@ -164,6 +164,7 @@ it('completes pin and archive without waiting for an unrelated sandbox inspectio
   await waitFor(() => expect(forTask).toHaveBeenCalled());
   const inspections = forTask.mock.calls.length;
   const user = userEvent.setup();
+  await user.click(screen.getByText('Task details and controls'));
   await user.click(screen.getByRole('button', { name: 'Organise Task' }));
   await user.click(screen.getByRole('menuitem', { name: 'Pin', exact: true }));
   expect(await screen.findByText('Navigation preference saved.')).toBeTruthy();

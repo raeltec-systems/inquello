@@ -201,6 +201,7 @@ describe('Shell', () => {
     renderShell();
     await waitFor(() => expect(sidebar().dataset.sidebarState).toBe('ready'));
     await user.click(await screen.findByRole('link', { name: 'Original' }));
+    await user.click(screen.getByText('Task details and controls'));
     // Someone else's change lands first.
     main.tasks[0]!.revision = 2;
     const title = screen.getByLabelText('Task title') as HTMLInputElement;
@@ -218,6 +219,7 @@ describe('Shell', () => {
     const user = userEvent.setup();
     renderShell();
     await user.click(await screen.findByRole('link', { name: 'Loose' }));
+    await user.click(screen.getByText('Task details and controls'));
     await user.click(screen.getByRole('button', { name: 'Move' }));
     await user.click(screen.getByRole('menuitemradio', { name: 'FY26 audit' }));
     await waitFor(() => expect(main.bridge.moveTask).toHaveBeenCalledWith(expect.objectContaining({ taskId: uuid(4), engagementId: uuid(3), folderId: null, expectedRevision: 1 })));

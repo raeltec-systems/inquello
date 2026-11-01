@@ -32,7 +32,7 @@ import { TaskEnvironment } from './TaskEnvironment';
 import { TaskUsage } from './TaskUsage';
 
 export function AcceptedRequest({accepted}:{accepted:StartedTask}):ReactElement {
-  return <section aria-label="Accepted request"><h2>Request</h2><p style={{whiteSpace:'pre-wrap'}}>{accepted.request}</p><p role="status">{['active','running'].includes(accepted.status) ? 'Initial execution accepted by the runtime.' : `Initial execution: ${accepted.status}.`}</p>{accepted.reason && <p>{accepted.reason}</p>}<p>Execution state is not analytical review or Professional Approval.</p></section>;
+  return <section aria-label="Accepted request"><details className="iq-request-receipt"><summary>Initial request</summary><h2>Request</h2><p style={{whiteSpace:'pre-wrap'}}>{accepted.request}</p><p role="status">{['active','running'].includes(accepted.status) ? 'Initial execution accepted by the runtime.' : `Initial execution: ${accepted.status}.`}</p>{accepted.reason && <p>{accepted.reason}</p>}<p>Execution state is not analytical review or Professional Approval.</p></details></section>;
 }
 
 export interface MoveTarget {
@@ -176,6 +176,8 @@ export function TaskView({
     <section className="iq-task" aria-label="Task" data-task-view={task.taskId}>
       {accepted && <AcceptedRequest accepted={accepted}/>}
       {(accepted || task.runtimeThreadId) && <TaskProgress key={task.taskId} taskId={task.taskId} workspaceId={task.workspaceId} selectedQuestion={selectedQuestion}/> }
+      <details className="iq-task-inspector" data-task-inspector>
+        <summary>Task details and controls</summary>
       <div className="iq-task-tools">
         {onNavigation&&<Menu label="Organise Task" items={[
           {label:task.pinned?'Unpin':'Pin',disabledReason:busy?'Saving navigation.':navigation?'Retry the pending navigation change first.':undefined,onSelect:()=>void navigate(!task.pinned,!!task.archived)},
@@ -203,6 +205,7 @@ export function TaskView({
       <TaskUsage taskId={task.taskId} />
       <TaskStates states={states && states.taskId === task.taskId ? states : null} notice={statesNotice} />
       <TaskPolicy policy={policy && policy.taskId === task.taskId ? policy : null} notice={policyNotice} onSetMode={onSetMode} />
+      </details>
       {!accepted && !task.runtimeThreadId && <div className="iq-thread-placeholder" data-thread-placeholder>
         <p className="iq-thread-placeholder-title">{task.runtimeThreadId ? 'This Task has a retained runtime thread.' : 'This Task has no thread yet.'}</p>
         <p className="iq-thread-placeholder-body">

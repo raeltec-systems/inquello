@@ -77,6 +77,7 @@ describe('Task environment facts', () => {
   it('refresh preserves an unsaved Task title', async () => {
     const h = setup(); const task = { taskId, title: 'Saved title', workspaceId: taskId, engagementId: null, folderId: null, revision: 0, runtimeThreadId: null, sourceRefs: [] } as unknown as TaskItem;
     render(<TaskView task={task} engagements={[]} folders={[]} onRename={vi.fn()} onMove={vi.fn()} newOperationId={() => 'operation'} />);
+    await userEvent.click(screen.getByText('Task details and controls'));
     const input = screen.getByRole('textbox', { name: 'Task title' }); await userEvent.clear(input); await userEvent.type(input, 'Unsent draft');
     await screen.findByText('Anthropic'); act(() => h.change()); await waitFor(() => expect(h.forTask).toHaveBeenCalledTimes(2)); expect(input).toHaveProperty('value', 'Unsent draft');
   });

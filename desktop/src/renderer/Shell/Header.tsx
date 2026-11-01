@@ -28,7 +28,7 @@ export function Header({ task, engagement, workspace }: HeaderProps): ReactEleme
     <header className="iq-header" data-header>
       <div className="iq-header-main">
         <span className="iq-header-title" data-header-title>
-          {task ? task.title : 'No Task open'}
+          {task ? task.title : 'Inquello'}
         </span>
         {task ? (
           <span className="iq-header-private" data-header-visibility="private">

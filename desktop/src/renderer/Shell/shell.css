@@ -806,3 +806,95 @@ a.iq-nav-row:hover {
 .iq-saved-dialog h2,.iq-saved-dialog h3,.iq-saved-hit h2 { font:var(--type-title); }
 .iq-saved-dialog p,.iq-saved-hit p { color:var(--text-secondary); }
 .iq-saved-hit:focus-visible { outline:2px solid var(--blue-600);outline-offset:2px; }
+
+
+/* Conversation-first presentation. Existing layout thresholds and brand tokens remain authoritative. */
+.iq-sidebar { background: var(--ink-50); gap: var(--space-4); }
+.iq-sidebar-top { padding-block: var(--space-2); }
+.iq-nav-row { padding-block: var(--space-2); border-radius: var(--radius-lg); }
+.iq-nav-row[aria-current='page'], .iq-nav-row[aria-pressed='true'] { background: var(--ink-100); }
+.iq-sidebar-engagement-name { font-weight: 500; }
+.iq-sidebar-footer { border-top: 1px solid var(--border-default); padding-top: var(--space-4); }
+.iq-header { border-bottom-color: transparent; }
+.iq-saved-toolbar { border-bottom: 0; padding-inline: var(--space-4); }
+.iq-shell-content { padding-top: var(--space-8); padding-bottom: var(--space-8); }
+.iq-task-progress { margin-top: 0; }
+.iq-task-progress > .iq-progress-items { margin-block: var(--space-6); }
+.iq-progress-items.iq-conversation-items > li {
+  border: 0; padding: 0; margin-block: var(--space-6); min-width: 0;
+}
+.iq-conversation-item--user { display: flex; flex-direction: column; align-items: flex-end; }
+.iq-conversation-item--user .iq-message-body {
+  max-width: 85%; border-radius: var(--radius-composer);
+  background: var(--ink-900); color: var(--text-inverse);
+  padding: var(--space-3) var(--space-4);
+}
+.iq-conversation-item--agent .iq-message-body,
+.iq-conversation-item--unknown .iq-message-body { max-width: 100%; padding-block: var(--space-2); }
+.iq-message-body .iq-progress-text { margin: 0; line-height: 1.7; overflow-wrap: anywhere; }
+.iq-message-source { margin-top: var(--space-2); max-width: 100%; font: var(--type-caption); color: var(--text-secondary); }
+.iq-message-source p { margin-block: var(--space-2); overflow-wrap: anywhere; }
+.iq-message-source summary { cursor: pointer; width: fit-content; }
+.iq-conversation-item--user .iq-message-source { text-align: right; }
+.iq-work-log-row { min-width: 0; font: var(--type-ui); }
+.iq-work-log-row > summary {
+  display: flex; align-items: baseline; gap: var(--space-3);
+  padding: var(--space-2) 0; cursor: pointer; color: var(--text-secondary);
+  list-style: none;
+}
+.iq-work-log-row > summary::before { content: '›'; flex: none; font-size: 1.2em; }
+.iq-work-log-row[open] > summary::before { transform: rotate(90deg); }
+.iq-work-log-kind { flex: 0 1 auto; }
+.iq-work-log-status { min-width: 0; font: var(--type-caption); overflow-wrap: anywhere; }
+[data-status='running'] > .iq-work-log-row > summary { color: var(--blue-700); }
+[data-status='failed'] > .iq-work-log-row > summary { font-weight: 500; }
+.iq-work-log-details {
+  max-height: 24rem; overflow: auto; padding: var(--space-2) var(--space-3);
+  margin-left: var(--space-3); border-left: 1px solid var(--border-default);
+  user-select: text; cursor: auto; overscroll-behavior: contain;
+}
+.iq-work-log-details .iq-progress-text { font: var(--type-mono, var(--type-body)); white-space: pre-wrap; overflow-wrap: anywhere; }
+.iq-execution-details, .iq-task-inspector {
+  margin-block: var(--space-4); padding-block: var(--space-2);
+  border-bottom: 1px solid var(--border-default); font: var(--type-ui);
+}
+.iq-execution-details > summary, .iq-task-inspector > summary {
+  cursor: pointer; color: var(--text-secondary); padding-block: var(--space-2);
+}
+.iq-task-inspector[open] > summary { margin-bottom: var(--space-4); }
+.iq-task-inspector > .iq-task-tools { margin-top: var(--space-3); }
+.iq-task-inspector .iq-task-rename { flex-wrap: wrap; }
+.iq-task-inspector p { overflow-wrap: anywhere; }
+.iq-task-inspector select { max-width: 100%; }
+.iq-task-progress summary:focus-visible, .iq-task-inspector > summary:focus-visible {
+  outline: 2px solid var(--blue-600); outline-offset: 3px; border-radius: var(--radius-sm);
+}
+.iq-composer-slot[data-composer-slot='filled'] { padding-top: var(--space-3); }
+.iq-composer { border-color: var(--border-default); padding: var(--space-4); }
+.iq-composer-input { min-height: calc(2 * 1.55em); }
+.iq-composer-actions { align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.iq-composer-hint { margin-right: auto; color: var(--text-secondary); font: var(--type-caption); }
+.iq-composer-actions > .iq-action { max-width: 100%; }
+.iq-progress-question { padding: var(--space-5); border-radius: var(--radius-composer); }
+.iq-progress-option { padding: var(--space-2); border-radius: var(--radius-md); }
+.iq-progress-option:has(input:checked) { background: var(--surface-selected); }
+.iq-progress-option:focus-within { outline: 2px solid var(--blue-600); outline-offset: 2px; }
+.iq-start { padding-top: clamp(var(--space-8), 12vh, var(--space-16)); }
+.iq-start h1 { font-size: 1.8rem; line-height: 1.3; margin-bottom: var(--space-3); }
+.iq-start > label { max-width: 100%; }
+.iq-start .iq-composer { margin-top: var(--space-6); }
+@media (max-width: 700px) {
+  .iq-shell-content { padding-top: var(--space-4); }
+  .iq-conversation-item--user .iq-message-body { max-width: 95%; }
+  .iq-composer-hint { flex-basis: 100%; }
+  .iq-work-log-row > summary { flex-wrap: wrap; column-gap: var(--space-2); }
+  .iq-start { padding-top: var(--space-6); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .iq-work-log-row > summary::before { transition: none; }
+}
+
+.iq-request-receipt, .iq-tool-guidance { color: var(--text-secondary); font: var(--type-caption); margin-block: var(--space-3); }
+.iq-request-receipt > summary, .iq-tool-guidance > summary { cursor: pointer; padding-block: var(--space-1); }
+.iq-request-receipt > summary:focus-visible { outline: 2px solid var(--blue-600); outline-offset: 3px; }
+.iq-request-receipt h2 { font: var(--type-ui); }

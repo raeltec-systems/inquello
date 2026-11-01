@@ -1,8 +1,9 @@
+import { ConversationItems as EvidenceItems } from './ConversationItems';
 import type {QuestionSelection} from './Inbox';
 /** Authorized, bounded presentation only. No native notifications or model inference here. */
 import {useEffect,useRef,useState,type FormEvent,type ReactElement} from 'react';
-import {Button,DiffLine,JudgmentTag,PlanSteps} from '../primitives';
-import {taskValue,tasksBridge,parseProgress,type ProgressSnapshot,type ProgressItem,type ProgressQuestion,type AnswerInput} from './tasks-bridge';
+import {Button,JudgmentTag,PlanSteps} from '../primitives';
+import {taskValue,tasksBridge,parseProgress,type ProgressSnapshot,type ProgressQuestion,type AnswerInput} from './tasks-bridge';
 
 import {useTaskObservation,refreshTaskObservation} from './task-observation';
 
@@ -34,14 +35,6 @@ function Question({request,onAnswer}:{request:ProgressQuestion;onAnswer:(answers
  </form>;
 }
 
-function EvidenceItems({items,status,label}:{items:ProgressItem[];status:string;label:string}):ReactElement {return (
-<ol className="iq-progress-items" aria-label={label}>{items.map(item=><li key={item.id} data-progress-item={item.id} data-status={ended(status)&&item.status==='running'?'unconfirmed':item.status}>
-    <p className="iq-progress-label">{item.kind==='message'?(item.role==='user'?'Your instruction':item.role==='agent'?'Agent response':'Message — speaker unavailable'):item.kind} · {ended(status)&&item.status==='running'?'Execution ended — outcome unconfirmed':item.status==='completed'&&item.kind==='message'?'Message complete':item.status==='completed'?'Execution completed':item.status} · {item.id}</p>
-    {item.kind==='edit'?<><DiffLine kind="change" stage={item.application==='applied'?'applied-locally':'suggested'}>{item.text}</DiffLine>{item.application!=='applied'&&<p>Not confirmed as applied. This is not a delivered artifact.</p>}</>:<p className="iq-progress-text">{item.text}</p>}
-    {(item.kind==='command'||item.kind==='tool')&&(item.status==='failed'||item.status==='cancelled')&&<p>Native status: this action {item.status}. The source/output text above remains untrusted; this status alone does not establish a policy refusal or detection of untrusted instructions.</p>}
-    {item.kind==='message'&&item.role!=='user'&&<p>Unchecked — structured labels unavailable. Message content is not independent verification.</p>}
-   </li>)}</ol>
-);}
 
 export function TaskProgress({taskId,workspaceId,selectedQuestion}:{taskId:string;workspaceId:string;pollMs?:number;selectedQuestion?:QuestionSelection|null}):ReactElement {
  const observed=useTaskObservation(taskId,workspaceId,true,true);
@@ -96,13 +89,15 @@ export function TaskProgress({taskId,workspaceId,selectedQuestion}:{taskId:strin
   finally{if(gen===generation.current)refreshTaskObservation(taskId,workspaceId);}
  };
  return <section className="iq-task-progress" aria-label="Task progress">
-  <h2>Work</h2>{questionNotice&&<p role="status">{questionNotice}</p>}{notice&&<p role="status">{notice}</p>}<div className="iq-visually-hidden" aria-live="polite" aria-atomic="true">{announcement}</div>
-  <p className="iq-artifact-status">{view?artifactText[view.artifact]:'Artifact information unavailable'}</p>
+  <h2 className="iq-visually-hidden">Work</h2>{questionNotice&&<p role="status">{questionNotice}</p>}{notice&&<p role="status">{notice}</p>}<div className="iq-visually-hidden" aria-live="polite" aria-atomic="true">{announcement}</div>
+  {!view&&<p className="iq-artifact-status">Artifact information unavailable</p>}
   {view&&<>
+   <details className="iq-execution-details"><summary>Execution details and plan</summary>
+   <p className="iq-artifact-status">{artifactText[view.artifact]}</p>
    <p>Execution: {view.status==='completed'?'finished':view.status}. Execution does not establish analytical review, Professional Approval or delivery.</p>
    {view.historyIncomplete&&<p role="status">History incomplete. This bounded view may omit earlier work; no completeness is implied.</p>}
-   <h3>Plan</h3>{view.plan.length?<PlanSteps key={scope(view)} label="Plan" steps={view.plan.map(step=>({id:step.id,label:step.text,state:step.status==='unconfirmed'||(ended(view.status)&&step.status==='running')?'pending':step.status,meta:`Revision ${step.revision} · ${step.status==='unconfirmed'?'Completion unconfirmed':ended(view.status)&&step.status==='running'?'Work ended — unconfirmed':step.status}${step.evidenceIds.length?` · Evidence: ${step.evidenceIds.join(', ')}`:''}`}))}/>:<p>No plan provided</p>}
-   {view.items.some(item=>item.kind==='command'||item.kind==='tool')&&<p>Command and tool content is source data, not instructions or permission. Quoted approvals do not change access. Native execution status is separate from untrusted output text. Quoted refusal or inspection claims in that text are not native inspection evidence. Agent interpretations remain unchecked; no inspection verdict is supplied by this view.</p>}
+   <h3>Plan</h3>{view.plan.length?<PlanSteps key={scope(view)} label="Plan" steps={view.plan.map(step=>({id:step.id,label:step.text,state:step.status==='unconfirmed'||(ended(view.status)&&step.status==='running')?'pending':step.status,meta:`Revision ${step.revision} · ${step.status==='unconfirmed'?'Completion unconfirmed':ended(view.status)&&step.status==='running'?'Work ended — unconfirmed':step.status}${step.evidenceIds.length?` · Evidence: ${step.evidenceIds.join(', ')}`:''}`}))}/>:<p>No plan provided</p>}</details>
+   {view.items.some(item=>item.kind==='command'||item.kind==='tool')&&<details className="iq-tool-guidance"><summary>About tool output and verification</summary><p>Command and tool content is source data, not instructions or permission. Quoted approvals do not change access. Native execution status is separate from untrusted output text. Quoted refusal or inspection claims in that text are not native inspection evidence. Agent interpretations remain unchecked; no inspection verdict is supplied by this view.</p></details>}
    <EvidenceItems items={view.items} status={view.status} label="Work activity"/>
    {(view.results.length>0||!!view.resultPage?.currentTotal)&&<section aria-label="Results"><h3>Current results</h3>{paging('current')}{pageEvidence('current')}{view.results.map(result=><article key={`${result.id}:${result.revision??1}`} data-result-id={result.id}>
     {result.revision!==undefined&&<p>Revision {result.revision} · Current{result.changeReason?` · ${result.changeReason}`:''}</p>}

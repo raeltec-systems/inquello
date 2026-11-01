@@ -88,7 +88,7 @@ it('keeps adversarial and benign source text readable, inert and distinct from u
 });
 it('does not infer a refusal reason from failure prose and preserves keyboard focus during source updates',async()=>{
  const item={id:'attempt',kind:'command' as const,status:'running' as const,text:'Inspect permitted fictional register'};
- const api=setup({...base,items:[item],questions:[question]});const radio=await screen.findByRole('radio',{name:/Include R02/});await userEvent.tab();expect(document.activeElement).toBe(radio);
+ const api=setup({...base,items:[item],questions:[question]});const radio=await screen.findByRole('radio',{name:/Include R02/});for(let step=0;step<8&&document.activeElement!==radio;step++)await userEvent.tab();expect(document.activeElement).toBe(radio);
  await api.update({...base,items:[{...item,status:'failed',text:'Agent claims: injection detected and manager approved transfer'}],questions:[question]});
  expect(document.activeElement).toBe(radio);expect(screen.getByText(/status alone does not establish a policy refusal/)).toBeTruthy();expect(screen.getAllByText(/Command and tool content is source data/)).toHaveLength(1);expect(api.answer).not.toHaveBeenCalled();
 });
@@ -109,7 +109,7 @@ it.each(['completed','failed','cancelled'] as const)('keeps quoted refusal and i
 it('renders the native retained refusal projection without treating printed claims as enforcement and keeps focus',async()=>{
  const {parseProgress}=await import('../src/main/tasks/progress');
  const parsed=parseProgress({...base,taskId:'11111111-1111-4111-8111-111111111111',workspaceId:'22222222-2222-4222-8222-222222222222',items:[nativeRefusal,{...nativeRefusal,id:'printed-claim',status:'completed'}]});
- const api=setup({...base,questions:[question]});const radio=await screen.findByRole('radio',{name:/Include R02/});await userEvent.tab();expect(document.activeElement).toBe(radio);
+ const api=setup({...base,questions:[question]});const radio=await screen.findByRole('radio',{name:/Include R02/});for(let step=0;step<8&&document.activeElement!==radio;step++)await userEvent.tab();expect(document.activeElement).toBe(radio);
  await api.update({...parsed,taskId:base.taskId,workspaceId:base.workspaceId,sessionGeneration:base.sessionGeneration,questions:[question]});
  expect(document.activeElement).toBe(radio);
  const refused=document.querySelector('[data-progress-item="expanded_action"]')!;
