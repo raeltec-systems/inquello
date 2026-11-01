@@ -750,3 +750,398 @@ async fn proof_expiring_while_waiting_for_grantor_lock_rolls_back_grant_and_rece
     );
     h.finish().await;
 }
+
+#[tokio::test]
+async fn disabled_principal_cannot_be_the_remaining_administrator() {
+    let h = Harness::start().await;
+    let owner = verified(&h, "Maya").await;
+    let other = verified(&h, "Theo").await;
+    let workspace = create(&h, &owner, "create").await.resource_id;
+    let invite: CommandResponse = workspace_command(
+        &h,
+        &owner,
+        workspace,
+        "0",
+        json!({"command":"issue_email_invite","email":"Theo@synthetic.invalid","roles":["owner"]}),
+    )
+    .await
+    .ok();
+    let accept = envelope(
+        &h,
+        "accept",
+        "1",
+        json!({"command":"accept_invitation","invite_id":invite.resource_id}),
+    )
+    .await;
+    h.post(
+        "/v1/onboarding/commands",
+        &accept,
+        Some(other.access_credential.expose()),
+    )
+    .await
+    .ok::<CommandResponse>();
+    let members: inquello_protocol::onboarding::MembersView = h
+        .get(
+            &format!("/v1/workspaces/{workspace}/members"),
+            Some(owner.access_credential.expose()),
+        )
+        .await
+        .ok();
+    let owner_id: Uuid =
+        sqlx::query_scalar("SELECT principal_id FROM principals WHERE subject='Maya'")
+            .fetch_one(&h.pool)
+            .await
+            .expect("owner");
+    let other_id = members
+        .members
+        .iter()
+        .find(|m| m.principal_id != owner_id)
+        .expect("second owner")
+        .principal_id;
+    sqlx::query("UPDATE principals SET status='disabled' WHERE principal_id=$1")
+        .bind(other_id)
+        .execute(&h.pool)
+        .await
+        .expect("disable fixture");
+    for payload in [
+        json!({"command":"remove_member","principal_id":owner_id}),
+        json!({"command":"change_roles","principal_id":owner_id,"roles":["member"]}),
+    ] {
+        workspace_command(&h, &owner, workspace, "1", payload)
+            .await
+            .assert_error(ErrorKind::VersionConflict);
+    }
+    assert_eq!(
+        h.count("SELECT count(*) FROM memberships WHERE status='active'")
+            .await,
+        2
+    );
+    h.finish().await;
+}
+
+#[derive(Default)]
+struct FakeDelivery {
+    account: String,
+    calls: std::sync::Mutex<Vec<(String, inquello_service::delivery::EmailPayload)>>,
+    outcomes:
+        std::sync::Mutex<std::collections::VecDeque<inquello_service::delivery::DeliveryOutcome>>,
+}
+impl inquello_service::delivery::DeliveryTransport for FakeDelivery {
+    fn configuration_id(&self) -> String {
+        format!("fictional-local-fake-account:{}", self.account)
+    }
+    fn send<'a>(
+        &'a self,
+        key: &'a str,
+        payload: &'a inquello_service::delivery::EmailPayload,
+    ) -> inquello_service::delivery::DeliveryFuture<'a> {
+        Box::pin(async move {
+            self.calls
+                .lock()
+                .expect("calls")
+                .push((key.into(), payload.clone()));
+            self.outcomes
+                .lock()
+                .expect("outcomes")
+                .pop_front()
+                .unwrap_or(inquello_service::delivery::DeliveryOutcome::Uncertain)
+        })
+    }
+}
+async fn invite_for_delivery(
+    h: &Harness,
+    owner: &SessionCredentials,
+    workspace: Uuid,
+) -> CommandResponse {
+    workspace_command(
+        h,
+        owner,
+        workspace,
+        "0",
+        json!({"command":"issue_email_invite","email":"Theo@synthetic.invalid","roles":["member"]}),
+    )
+    .await
+    .ok()
+}
+async fn delivery_state(h: &Harness, id: Uuid) -> String {
+    sqlx::query_scalar("SELECT state FROM invitation_deliveries WHERE invite_id=$1")
+        .bind(id)
+        .fetch_one(&h.pool)
+        .await
+        .expect("state")
+}
+#[tokio::test]
+async fn outbox_is_atomic_private_and_retries_identical_payload_after_uncertainty() {
+    use inquello_service::delivery::{DeliveryConfig, DeliveryOutcome, dispatch_one};
+    let h = Harness::start().await;
+    let owner = verified(&h, "Maya").await;
+    let stranger = verified(&h, "Theo").await;
+    let workspace = create(&h, &owner, "create").await.resource_id;
+    let body = json!({"command_epoch":h.command_epoch().await,"operation_id":"invite-once","workspace_id":workspace,"expected_revision":"0","schema_version":1,
+        "payload":{"command":"issue_email_invite","email":"Theo@synthetic.invalid","roles":["member"]}});
+    let path = format!("/v1/workspaces/{workspace}/commands");
+    let first: CommandResponse = h
+        .post(&path, &body, Some(owner.access_credential.expose()))
+        .await
+        .ok();
+    let retry: CommandResponse = h
+        .post(&path, &body, Some(owner.access_credential.expose()))
+        .await
+        .ok();
+    assert_eq!(first.receipt_id, retry.receipt_id);
+    assert_eq!(
+        h.count("SELECT count(*) FROM invitation_deliveries").await,
+        1
+    );
+    assert_eq!(
+        delivery_state(&h, first.resource_id).await,
+        "not_configured"
+    );
+    let path = format!("/v1/workspaces/{workspace}/invitation-deliveries");
+    let denied = h
+        .get(&path, Some(stranger.access_credential.expose()))
+        .await;
+    let absent = h
+        .get(
+            &format!("/v1/workspaces/{}/invitation-deliveries", Uuid::new_v4()),
+            Some(stranger.access_credential.expose()),
+        )
+        .await;
+    assert_eq!(denied.status.as_u16(), 403);
+    assert_eq!(denied.body["error"]["kind"], "denied");
+    assert_eq!(denied.body, absent.body);
+
+    let status = h
+        .get(&path, Some(owner.access_credential.expose()))
+        .await
+        .body;
+    assert!(!status.to_string().contains("Theo@"));
+    assert!(!status.to_string().contains("idempotency"));
+    let fake = std::sync::Arc::new(FakeDelivery::default());
+    fake.outcomes.lock().expect("outcomes").extend([
+        DeliveryOutcome::Uncertain,
+        DeliveryOutcome::ProviderAccepted(Uuid::new_v4().to_string()),
+    ]);
+    let config = DeliveryConfig::new("notifications@synthetic.invalid".into(), fake.clone())
+        .expect("config");
+    assert!(
+        dispatch_one(&h.pool, h.clock.as_ref(), &config)
+            .await
+            .expect("dispatch")
+    );
+    assert_eq!(delivery_state(&h, first.resource_id).await, "retry_pending");
+    assert!(
+        !dispatch_one(&h.pool, h.clock.as_ref(), &config)
+            .await
+            .expect("backoff")
+    );
+    h.clock.advance(TimeDelta::minutes(1));
+    // Renaming the workspace cannot change the persisted retry body.
+    sqlx::query("UPDATE workspaces SET name='Renamed Alder' WHERE workspace_id=$1")
+        .bind(workspace)
+        .execute(&h.pool)
+        .await
+        .expect("rename fixture");
+    let changed = DeliveryConfig::new("notifications@synthetic.invalid".into(), fake.clone())
+        .expect("config");
+    assert!(
+        dispatch_one(&h.pool, h.clock.as_ref(), &changed)
+            .await
+            .expect("retry")
+    );
+    assert_eq!(
+        delivery_state(&h, first.resource_id).await,
+        "provider_accepted"
+    );
+    {
+        let calls = fake.calls.lock().expect("calls");
+        assert_eq!(calls.len(), 2);
+        assert_eq!(calls[0].0, calls[1].0);
+        assert!(calls[0].1 == calls[1].1);
+        assert!(!calls[0].1.text.contains(&first.resource_id.to_string()));
+    }
+    assert!(
+        !dispatch_one(&h.pool, h.clock.as_ref(), &changed)
+            .await
+            .expect("settled")
+    );
+    h.finish().await;
+}
+#[tokio::test]
+async fn outbox_reclaims_crash_lease_stops_before_dedup_expiry_and_skips_revocation() {
+    use inquello_service::delivery::{DeliveryConfig, dispatch_one};
+    let h = Harness::start().await;
+    let owner = verified(&h, "Maya").await;
+    let workspace = create(&h, &owner, "create").await.resource_id;
+    let a = invite_for_delivery(&h, &owner, workspace).await;
+    let b = invite_for_delivery(&h, &owner, workspace).await;
+    workspace_command(
+        &h,
+        &owner,
+        workspace,
+        "1",
+        json!({"command":"revoke_invite","invite_id":b.resource_id}),
+    )
+    .await
+    .ok::<CommandResponse>();
+    let fake = std::sync::Arc::new(FakeDelivery::default());
+    let config = DeliveryConfig::new("notifications@synthetic.invalid".into(), fake.clone())
+        .expect("config");
+    dispatch_one(&h.pool, h.clock.as_ref(), &config)
+        .await
+        .expect("first");
+    dispatch_one(&h.pool, h.clock.as_ref(), &config)
+        .await
+        .expect("second");
+    assert_eq!(delivery_state(&h, b.resource_id).await, "cancelled");
+    // Simulate process loss after pre-send commit; no send while lease is live.
+    sqlx::query("UPDATE invitation_deliveries SET state='sending',lease_until=$2,next_attempt_at=NULL WHERE invite_id=$1")
+        .bind(a.resource_id).bind(h.now()+TimeDelta::minutes(1)).execute(&h.pool).await.expect("crash fixture");
+    assert!(
+        !dispatch_one(&h.pool, h.clock.as_ref(), &config)
+            .await
+            .expect("live lease")
+    );
+    h.clock.advance(TimeDelta::minutes(1));
+    assert!(
+        dispatch_one(&h.pool, h.clock.as_ref(), &config)
+            .await
+            .expect("reclaim")
+    );
+    h.clock.advance(TimeDelta::hours(23));
+    assert!(
+        dispatch_one(&h.pool, h.clock.as_ref(), &config)
+            .await
+            .expect("expired horizon")
+    );
+    assert_eq!(
+        delivery_state(&h, a.resource_id).await,
+        "manual_reconciliation_required"
+    );
+    assert_eq!(fake.calls.lock().expect("calls").len(), 2);
+    assert!(
+        !dispatch_one(&h.pool, h.clock.as_ref(), &config)
+            .await
+            .expect("no automatic replay")
+    );
+    h.finish().await;
+}
+
+#[tokio::test]
+async fn outbox_config_change_after_lost_response_requires_manual_reconciliation() {
+    use inquello_service::delivery::{DeliveryConfig, dispatch_one};
+    let h = Harness::start().await;
+    let owner = verified(&h, "Maya").await;
+    let workspace = create(&h, &owner, "create").await.resource_id;
+    let invitation = invite_for_delivery(&h, &owner, workspace).await;
+    let fake = std::sync::Arc::new(FakeDelivery::default());
+    let config = DeliveryConfig::new("notifications@synthetic.invalid".into(), fake.clone())
+        .expect("config");
+    dispatch_one(&h.pool, h.clock.as_ref(), &config)
+        .await
+        .expect("uncertain");
+    h.clock.advance(TimeDelta::minutes(1));
+    let changed = DeliveryConfig::new("changed@synthetic.invalid".into(), fake.clone())
+        .expect("changed config");
+    dispatch_one(&h.pool, h.clock.as_ref(), &changed)
+        .await
+        .expect("fence");
+    assert_eq!(
+        delivery_state(&h, invitation.resource_id).await,
+        "manual_reconciliation_required"
+    );
+    assert_eq!(fake.calls.lock().expect("calls").len(), 1);
+    assert!(
+        !dispatch_one(&h.pool, h.clock.as_ref(), &config)
+            .await
+            .expect("no silent reset")
+    );
+    h.finish().await;
+}
+
+#[tokio::test]
+async fn outbox_concurrent_workers_claim_once_and_backward_clock_cannot_replay() {
+    use inquello_service::delivery::{DeliveryConfig, dispatch_one};
+    let h = Harness::start().await;
+    let owner = verified(&h, "Maya").await;
+    let workspace = create(&h, &owner, "create").await.resource_id;
+    let invitation = invite_for_delivery(&h, &owner, workspace).await;
+    let fake = std::sync::Arc::new(FakeDelivery::default());
+    let config = DeliveryConfig::new("notifications@synthetic.invalid".into(), fake.clone())
+        .expect("config");
+    let (a, b) = tokio::join!(
+        dispatch_one(&h.pool, h.clock.as_ref(), &config),
+        dispatch_one(&h.pool, h.clock.as_ref(), &config)
+    );
+    assert_eq!(
+        u8::from(a.expect("worker a")) + u8::from(b.expect("worker b")),
+        1
+    );
+    assert_eq!(fake.calls.lock().expect("calls").len(), 1);
+    h.clock.advance(TimeDelta::hours(-1));
+    assert!(
+        !dispatch_one(&h.pool, h.clock.as_ref(), &config)
+            .await
+            .expect("backward clock")
+    );
+    assert_eq!(fake.calls.lock().expect("calls").len(), 1);
+    h.clock.advance(TimeDelta::hours(1) + TimeDelta::minutes(1));
+    let changed = std::sync::Arc::new(FakeDelivery {
+        account: "different-provider-account".into(),
+        ..FakeDelivery::default()
+    });
+    let config = DeliveryConfig::new("notifications@synthetic.invalid".into(), changed.clone())
+        .expect("changed account");
+    dispatch_one(&h.pool, h.clock.as_ref(), &config)
+        .await
+        .expect("account fence");
+    assert_eq!(
+        delivery_state(&h, invitation.resource_id).await,
+        "manual_reconciliation_required"
+    );
+    assert!(changed.calls.lock().expect("calls").is_empty());
+    h.finish().await;
+}
+
+#[tokio::test]
+async fn queued_delivery_rechecks_current_grantor_and_policy_without_sending() {
+    use inquello_service::delivery::{DeliveryConfig, dispatch_one};
+    for change in ["disabled", "removed", "role_changed", "policy_changed"] {
+        let h = Harness::start().await;
+        let owner = verified(&h, "Maya").await;
+        let workspace = create(&h, &owner, "create").await.resource_id;
+        let invitation = invite_for_delivery(&h, &owner, workspace).await;
+        // Deterministic authority facts in a disposable DB, not UI acceptance proof.
+        match change {
+            "disabled" => {
+                sqlx::query("UPDATE principals SET status='disabled' WHERE principal_id=(SELECT issued_by FROM invites WHERE invite_id=$1)").bind(invitation.resource_id).execute(&h.pool).await.expect("disable");
+            }
+            "removed" => {
+                sqlx::query("UPDATE memberships SET status='removed',roles=ARRAY[]::text[] WHERE workspace_id=$1").bind(workspace).execute(&h.pool).await.expect("remove");
+            }
+            "role_changed" => {
+                sqlx::query("UPDATE memberships SET roles=ARRAY['member'] WHERE workspace_id=$1")
+                    .bind(workspace)
+                    .execute(&h.pool)
+                    .await
+                    .expect("role change");
+            }
+            _ => {
+                sqlx::query("UPDATE workspace_policies SET document=jsonb_set(document,'{roles}',(SELECT jsonb_agg(CASE WHEN role->>'id'='owner' THEN jsonb_set(role,'{actions}','[\"read\"]'::jsonb) ELSE role END) FROM jsonb_array_elements(document->'roles') AS role)) WHERE workspace_id=$1").bind(workspace).execute(&h.pool).await.expect("policy change");
+            }
+        }
+        let fake = std::sync::Arc::new(FakeDelivery::default());
+        let config = DeliveryConfig::new("notifications@synthetic.invalid".into(), fake.clone())
+            .expect("config");
+        dispatch_one(&h.pool, h.clock.as_ref(), &config)
+            .await
+            .expect("eligible check");
+        assert_eq!(
+            delivery_state(&h, invitation.resource_id).await,
+            "cancelled",
+            "{change}"
+        );
+        assert!(fake.calls.lock().expect("calls").is_empty());
+        h.finish().await;
+    }
+}

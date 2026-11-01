@@ -58,6 +58,7 @@ const TABLES: &[&str] = &[
     "engagements",
     "engagement_memberships",
     "invites",
+    "invitation_deliveries",
     "operator_receipts",
     "workspace_events",
     "resource_registrations",

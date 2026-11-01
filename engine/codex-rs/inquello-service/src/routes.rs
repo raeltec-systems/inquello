@@ -62,6 +62,10 @@ pub(crate) fn router(state: Arc<AppState>) -> Router {
         )
         .route("/v1/invitations", get(onboarding_invitations))
         .route(
+            "/v1/workspaces/{workspace_id}/invitation-deliveries",
+            get(invitation_deliveries),
+        )
+        .route(
             "/v1/workspaces/{workspace_id}/receipts/{operation}",
             get(onboarding_workspace_receipt),
         )
@@ -425,4 +429,17 @@ async fn onboarding_workspace_receipt(
         }
         .await,
     )
+}
+
+async fn invitation_deliveries(
+    State(state): SharedState,
+    Path(workspace_id): Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    let result = async {
+        let access = required_bearer(&headers).map_err(ApiError::on_workspace_route)?;
+        crate::delivery::statuses(&state, access, workspaces::path_id(&workspace_id)?).await
+    }
+    .await;
+    respond(result)
 }

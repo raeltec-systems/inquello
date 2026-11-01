@@ -688,8 +688,13 @@ pub(crate) async fn accept_invite(
     if now >= expires_at {
         return Err(invite_refused("invite expired"));
     }
-    if invite.try_get::<Option<String>, _>("recipient_email")?.is_some() {
-        return Err(invite_refused("email invitation requires explicit onboarding acceptance"));
+    if invite
+        .try_get::<Option<String>, _>("recipient_email")?
+        .is_some()
+    {
+        return Err(invite_refused(
+            "email invitation requires explicit onboarding acceptance",
+        ));
     }
     // Bound to (issuer, subject) exactly. Email is never consulted.
     if bound_issuer != issuer || bound_subject != subject {

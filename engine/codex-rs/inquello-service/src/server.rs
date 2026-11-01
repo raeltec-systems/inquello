@@ -71,6 +71,7 @@ pub struct RunningService {
     https: bool,
     shutdown: Option<oneshot::Sender<()>>,
     task: JoinHandle<std::io::Result<()>>,
+    delivery_task: Option<JoinHandle<()>>,
 }
 
 impl RunningService {
@@ -91,6 +92,10 @@ impl RunningService {
 
     /// Stops accepting connections and waits for in-flight requests.
     pub async fn shutdown(mut self) {
+        if let Some(task) = self.delivery_task.take() {
+            task.abort();
+            let _ = task.await;
+        }
         if let Some(sender) = self.shutdown.take() {
             let _ = sender.send(());
         }
@@ -112,6 +117,15 @@ fn delta(value: Duration) -> Result<TimeDelta, ConfigError> {
 pub async fn start(
     config: ServiceConfig,
     clock: Arc<dyn Clock>,
+) -> Result<RunningService, StartError> {
+    start_with_delivery(config, clock, None).await
+}
+
+/// Delivery is disabled unless the caller supplies an explicit configuration.
+pub async fn start_with_delivery(
+    config: ServiceConfig,
+    clock: Arc<dyn Clock>,
+    delivery: Option<crate::delivery::DeliveryConfig>,
 ) -> Result<RunningService, StartError> {
     config.validate()?;
     let issuers = config
@@ -151,7 +165,20 @@ pub async fn start(
         issuers,
         lifetimes,
     });
-    let service = serve(listener, tls_config, routes::router(state))?;
+    let delivery_pool = state.pool.clone();
+    let delivery_clock = state.clock.clone();
+    let mut service = serve(listener, tls_config, routes::router(state))?;
+    if let Some(config) = delivery {
+        service.delivery_task = Some(tokio::spawn(async move {
+            loop {
+                // Bounded cadence, no tight retry loop or sensitive error logging.
+                let _ =
+                    crate::delivery::dispatch_one(&delivery_pool, delivery_clock.as_ref(), &config)
+                        .await;
+                tokio::time::sleep(Duration::from_secs(5)).await;
+            }
+        }));
+    }
     tracing::info!(local_addr = %service.local_addr, https = service.https, "inquello service listening");
     Ok(service)
 }
@@ -188,6 +215,7 @@ pub(crate) fn serve(
         https,
         shutdown: Some(sender),
         task,
+        delivery_task: None,
     })
 }
 

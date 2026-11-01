@@ -24,10 +24,10 @@
 pub mod command;
 pub mod error;
 pub mod login;
+pub mod onboarding;
 pub mod session;
 mod values;
 pub mod workspace;
-pub mod onboarding;
 
 pub use values::CommandEpoch;
 pub use values::Revision;

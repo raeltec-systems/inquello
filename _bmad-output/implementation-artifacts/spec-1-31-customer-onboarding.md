@@ -100,3 +100,12 @@ The following are whole-story verification targets; only the executed checkpoint
 - **Not yet executed:** new desktop identity Vitest cases, matched codex-cli/app-server rebuild, Electron onboarding/keyboard/focus/resize pixels and conversation/Stop/Resume regression.
 - **Not yet implemented:** approved configurable Resend delivery/outbox/retry, named onboarding IPC/main service, durable client drafts, signup/reauthentication/team UI and truthful delivery statuses. See the context handoff for exact DTOs, separate issuer TLS trust, production fixed-port requirement, and remaining disabled-principal last-admin coverage.
 - Story and sprint remain **in-progress**; this checkpoint is not full Story 1.31 acceptance.
+
+### Executed delivery checkpoint evidence (2026-11-01)
+
+- Added atomic invitation outbox and explicit opt-in Resend transport/worker/CLI; default remains disabled. Durable exact payload/idempotency key, configuration identity fence, attempt leases and a conservative 23-hour uncertain-retry cutoff prevent silent replay outside provider deduplication bounds. Administrator delivery statuses are safe projections only.
+- Dispatch rechecks current grantor principal/membership/policy eligibility before network I/O. Disabled principals no longer count as eligible remaining administrators. No DB locks are held over delivery I/O; already-in-flight notices cannot be recalled and grant no access. Concurrent operator disablement is not claimed as a globally serialized last-administrator invariant.
+- Full locked/offline single-job domain/protocol/service test command above: **262 passed, 0 failed**, including 14 onboarding integration tests. Tests use disposable PostgreSQL and injected fake delivery transports; no real email/provider endpoint was activated. Log: `.tmp/story131-delivery-tests.log`.
+- Strict all-targets clippy command above: **exit 0**. Log: `.tmp/story131-delivery-clippy.log`. `git diff --check` clean (line-ending warnings only).
+- Operator opt-in scheduler/worker configuration and exact delivery status semantics are documented in `engine/codex-rs/inquello-service/DELIVERY.md` (repository-relative path). No accounts, API keys, external delivery, certificates, trust changes or paid inference were configured.
+- This supersedes only the earlier "delivery/outbox/retry not implemented" gap. Named desktop onboarding IPC, encrypted principal-bound drafts/receipt reconciliation, signup/team UI, matched native rebuild/new desktop tests and actual Electron acceptance remain incomplete. Story/sprint stay **in-progress**.

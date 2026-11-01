@@ -25,6 +25,8 @@ use std::time::Duration;
 use uuid::Uuid;
 
 const USAGE: &str = "usage:
+  inquello-service delivery dispatch --config PRIVATE_JSON [--database-url URL]
+
   inquello-service admin create-workspace --name NAME --policy FILE \\
       --first-admin-issuer ISSUER --first-admin-subject SUBJECT \\
       --invite-lifetime-seconds N [--kind internal_company] [--operator NAME] \\
@@ -118,6 +120,49 @@ fn now() -> chrono::DateTime<chrono::Utc> {
 
 async fn run(args: &[String]) -> Result<String, CliError> {
     match args {
+        [delivery, dispatch, rest @ ..] if delivery == "delivery" && dispatch == "dispatch" => {
+            // Explicit one-notification worker invocation. NEVER inspect inherited
+            // provider secrets. Without --config and enabled:true no provider exists.
+            let mut flags = flags(rest, &["config", "database-url"])?;
+            let path = take(&mut flags, "config")?;
+            #[derive(serde::Deserialize)]
+            #[serde(deny_unknown_fields)]
+            struct DeliveryFile {
+                enabled: bool,
+                sender: String,
+                api_key_file: std::path::PathBuf,
+            }
+            let document = std::fs::read_to_string(&path).map_err(|_| {
+                CliError::Usage("cannot read private delivery configuration".into())
+            })?;
+            let config: DeliveryFile = serde_json::from_str(&document)
+                .map_err(|_| CliError::Usage("invalid delivery configuration".into()))?;
+            if !config.enabled {
+                return Ok("{\"state\":\"not_configured\"}".into());
+            }
+            if !config.api_key_file.is_absolute() {
+                return Err(CliError::Usage(
+                    "delivery secret file must be an absolute path".into(),
+                ));
+            }
+            let key = std::fs::read_to_string(&config.api_key_file)
+                .map_err(|_| CliError::Usage("cannot read private delivery secret".into()))?;
+            let delivery = inquello_service::delivery::DeliveryConfig::resend(
+                config.sender,
+                key.trim().into(),
+            )
+            .map_err(|_| CliError::Usage("invalid delivery configuration".into()))?;
+            let pool = admin::open(&database(&mut flags)?).await?;
+            let outcome =
+                inquello_service::delivery::dispatch_one(&pool, &SystemClock, &delivery).await;
+            pool.close().await;
+            let processed = outcome.map_err(|_| {
+                CliError::Usage(
+                    "delivery outcome unavailable; reconcile durable outbox before retry".into(),
+                )
+            })?;
+            Ok(serde_json::json!({"processed":processed}).to_string())
+        }
         [admin, command, rest @ ..] if admin == "admin" && command == "create-workspace" => {
             let mut flags = flags(
                 rest,

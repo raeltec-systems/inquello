@@ -55,3 +55,29 @@ pub struct MembersView {
     pub workspace_id: Uuid,
     pub members: Vec<MemberView>,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct InvitationDeliveryView {
+    pub invite_id: Uuid,
+    /// provider_accepted means accepted by the provider, never inbox delivery.
+    pub state: InvitationDeliveryState,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InvitationDeliveryState {
+    NotConfigured,
+    Pending,
+    Sending,
+    ProviderAccepted,
+    RetryPending,
+    ManualReconciliationRequired,
+    Cancelled,
+    Failed,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct InvitationDeliveriesView {
+    pub workspace_id: Uuid,
+    pub deliveries: Vec<InvitationDeliveryView>,
+}

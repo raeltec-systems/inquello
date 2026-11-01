@@ -108,8 +108,8 @@ async fn keep_an_administrator(
         return Ok(());
     }
     let others: Vec<Vec<String>> = sqlx::query_scalar(
-        "SELECT roles FROM memberships \
-         WHERE workspace_id = $1 AND principal_id <> $2 AND status = 'active'",
+        "SELECT m.roles FROM memberships m JOIN principals p USING(principal_id) \
+         WHERE m.workspace_id = $1 AND m.principal_id <> $2 AND m.status = 'active' AND p.status = 'active'",
     )
     .bind(authority.workspace.workspace_id)
     .bind(excluding)
@@ -234,9 +234,10 @@ async fn apply(
                     .await?;
             let invite_id = Uuid::new_v4();
             sqlx::query("INSERT INTO invites (invite_id, workspace_id, issuer, subject, recipient_email, roles, policy_revision, issued_by, state, revision, created_at, expires_at) VALUES ($1,$2,$3,'email-pending',$4,$5,$6,$7,'pending',1,$8,$9)")
-                .bind(invite_id).bind(workspace_id).bind(issuer).bind(email).bind(roles)
+                .bind(invite_id).bind(workspace_id).bind(issuer).bind(&email).bind(roles)
                 .bind(policy_revision).bind(authority.principal_id).bind(now)
                 .bind(now + state.lifetimes.invite).execute(&mut *conn).await?;
+            crate::delivery::enqueue(conn, invite_id, &email, now).await?;
             Ok(Applied {
                 resource_id: invite_id,
                 revision: 1,
