@@ -2,7 +2,7 @@
 title: 'Story 1.31: Onboard customers into secure private workspaces'
 type: 'feature'
 created: '2026-11-01'
-status: 'draft'
+status: 'ready-for-dev'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '99918b0f7924bfd727b2de337498f265b017ca74'
