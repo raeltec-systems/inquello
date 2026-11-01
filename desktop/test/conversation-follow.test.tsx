@@ -1,12 +1,16 @@
 // @vitest-environment jsdom
+import {Suspense,startTransition,useState} from 'react';
 import {act,cleanup,fireEvent,render,screen} from '@testing-library/react';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import {useConversationFollow} from '../src/renderer/Shell/use-conversation-follow';
 let resize:()=>void,disconnected=0,control:ReturnType<typeof useConversationFollow>;
+const pendingRender=new Promise<void>(()=>{});
+let suspendedRender=false;
 beforeEach(()=>{vi.stubGlobal('ResizeObserver',class {constructor(callback:()=>void){resize=callback;}observe(){}disconnect(){disconnected++;}});disconnected=0;});
 afterEach(()=>{cleanup();vi.unstubAllGlobals();});
-function View({scope='owner/workspace/task/runtime',blocked=false}:{scope?:string;blocked?:boolean}){
+function View({scope='owner/workspace/task/runtime',blocked=false,suspend=false}:{scope?:string;blocked?:boolean;suspend?:boolean}){
  control=useConversationFollow(scope,blocked);
+ if(suspend){suspendedRender=true;throw pendingRender;}
  return <><main ref={control.threadRef}><div ref={control.contentRef}><section className="iq-task-progress">Conversation</section><details><summary>Inspector</summary></details></div></main><input aria-label="Draft"/>{control.away&&<button onClick={control.jump}>Jump to latest</button>}</>;
 }
 function geometry(){const thread=document.querySelector('main')!,conversation=document.querySelector('.iq-task-progress')!;let height=600;
@@ -47,4 +51,19 @@ it('browser forward scroll anchoring during growth preserves following',()=>{
  render(<View/>);const g=geometry();g.grow(600);g.setHeight(900);g.thread.scrollTop=520;fireEvent.scroll(g.thread);
  expect(g.thread.scrollTop).toBe(800);g.scroll(25);g.grow(1000);expect(g.thread.scrollTop).toBe(25);
  expect(screen.getByRole('button',{name:'Jump to latest'})).toBeTruthy();
+});
+
+it.each(['scope','blocked'] as const)('uncommitted %s transition cannot invalidate the committed conversation',async kind=>{
+ let begin!:()=>void;
+ function ConcurrentView(){
+  const [pending,setPending]=useState(false);
+  begin=()=>startTransition(()=>setPending(true));
+  return <Suspense fallback={<p>Pending navigation</p>}><View scope={pending&&kind==='scope'?'uncommitted-owner/task/runtime':'owner/workspace/task/runtime'} blocked={pending&&kind==='blocked'} suspend={pending}/></Suspense>;
+ }
+ suspendedRender=false;render(<ConcurrentView/>);const g=geometry();g.grow(600);
+ const committed=control;g.scroll(40);const admitted=committed.continuation();
+ await act(async()=>{begin();});
+ expect(suspendedRender).toBe(true);expect(screen.queryByText('Pending navigation')).toBeNull();
+ act(()=>admitted());expect(g.thread.scrollTop).toBe(500);
+ g.grow(800);expect(g.thread.scrollTop).toBe(700);
 });

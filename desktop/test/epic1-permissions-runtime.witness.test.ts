@@ -203,6 +203,7 @@ describe.runIf(process.env.INQUELLO_EPIC1_DIAGNOSTICS === '1')('diagnostic-only 
       let terminal: Awaited<typeof started> | undefined;
       const runSettled = Promise.allSettled([started]);
       let background: Promise<PromiseSettledResult<unknown>[]> = Promise.resolve([]);
+      let backgroundRejected = false;
       try {
         // Bounded readiness, not a fixed sleep. Main's mediator expires at 20s.
         const deadline=Date.now()+10_000;
@@ -244,10 +245,11 @@ describe.runIf(process.env.INQUELLO_EPIC1_DIAGNOSTICS === '1')('diagnostic-only 
       } finally {
         // Settle only our own pending run (the fixed mediator expiry denies by default).
         const settled = await Promise.all([runSettled, background]);
-        const rejected = settled.some(group => group.some(result => result.status === 'rejected'));
+        backgroundRejected = settled.some(group => group.some(result => result.status === 'rejected'));
         console.info(JSON.stringify({scenario:concurrent?'concurrent-read-denial':'baseline-denial',trace}));
-        if(rejected)throw new Error('Synthetic permission background work rejected');
       }
+      // A primary assertion/rejection wins; background failure matters only if it passed.
+      if(backgroundRejected)throw new Error('Synthetic permission background work rejected');
     }
   }, 120_000);
 });

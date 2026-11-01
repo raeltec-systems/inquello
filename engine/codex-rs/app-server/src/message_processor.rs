@@ -902,6 +902,21 @@ impl MessageProcessor {
         outbound_initialized: &AtomicBool,
         cancellation: tokio_util::sync::CancellationToken,
     ) {
+        if !paid_typed_request_allowed(
+            &request,
+            crate::request_processors::paid_profile_rpc_allowed,
+        ) {
+            self.outgoing
+                .send_error(
+                    ConnectionRequestId {
+                        connection_id,
+                        request_id: request.id().clone(),
+                    },
+                    invalid_request("Controlled fictional session forbids this mutation or alternate dispatch path"),
+                )
+                .await;
+            return;
+        }
         if reject_private_handoff_transport(request.method_name(), None, session.origin) {
             self.outgoing
                 .send_error(
@@ -2779,5 +2794,38 @@ mod private_handoff_transport_tests {
             Some(&websocket),
             ConnectionOrigin::WebSocket
         ));
+    }
+}
+
+// Typed embedders must consult the same method policy as raw JSON transport.
+// Injecting the predicate keeps unit tests isolated from the one-way process latch.
+fn paid_typed_request_allowed(request: &ClientRequest, policy: impl FnOnce(&str) -> bool) -> bool {
+    policy(request.method_name())
+}
+
+#[cfg(test)]
+mod paid_typed_dispatch_tests {
+    use super::*;
+
+    #[test]
+    fn typed_request_consults_paid_method_policy_before_dispatch() {
+        let start: ClientRequest = serde_json::from_value(serde_json::json!({
+            "id": 17, "method": "thread/start", "params": {}
+        }))
+        .expect("typed thread start");
+        let called = std::cell::Cell::new(false);
+        assert!(!paid_typed_request_allowed(&start, |method| {
+            called.set(true);
+            assert_eq!(method, "thread/start");
+            false
+        }));
+        assert!(called.get());
+        // Ordinary process policy remains permissive; this helper does not
+        // unconditionally prohibit typed clients or mutate global test state.
+        assert!(paid_typed_request_allowed(&start, |_| true));
+        assert_eq!(
+            start.id(),
+            &codex_app_server_protocol::RequestId::Integer(17)
+        );
     }
 }

@@ -3490,6 +3490,7 @@ impl ProgressCache {
 /// Ephemeral bounded activity only. Never written to rollout or used as an
 /// artifact/publication. Retained completed rows always take precedence.
 struct LiveProgressCommands {
+    display_incomplete: bool,
     // Prevent allocator-address ABA across awaited identity checks.
     runtime: Option<std::sync::Weak<codex_core::CodexThread>>,
     fingerprint: String,
@@ -3498,15 +3499,73 @@ struct LiveProgressCommands {
     entries: Vec<ThreadItemEntry>,
 }
 
+#[derive(Clone, Copy, Debug, serde::Serialize)]
+enum LiveDisplayFailure {
+    ItemBound,
+    CanonicalOrderUnavailable,
+    CommandBound,
+    MessageBound,
+    ProjectionUnavailable,
+}
+
+fn live_display_refusal(_failure: LiveDisplayFailure) -> JSONRPCErrorError {
+    refusal(
+        "history_unavailable",
+        "Live activity display exceeds its safe projection",
+    )
+}
+
+type LiveDisplayProjection = (
+    Vec<String>,
+    Vec<ThreadItemEntry>,
+    Option<LiveDisplayFailure>,
+);
+
+/// These are local display constraints, never authentication/authorization errors.
+/// Recovering only a current status tuple does not authorize or disclose its text.
+fn bounded_live_display(
+    turn: &str,
+    items: &[ThreadItem],
+    order: Option<&[String]>,
+    messages: Option<Vec<ThreadItem>>,
+    activity_only: bool,
+) -> Result<LiveDisplayProjection, JSONRPCErrorError> {
+    let projected = (|| {
+        if items.len() > 4096 || items.iter().any(|item| item.id().len() > 128) {
+            return Err(LiveDisplayFailure::ItemBound);
+        }
+        let order = order.ok_or(LiveDisplayFailure::CanonicalOrderUnavailable)?;
+        if order.len() > 4096 || order.iter().any(|id| id.is_empty() || id.len() > 128) {
+            return Err(LiveDisplayFailure::CanonicalOrderUnavailable);
+        }
+        let mut entries = bounded_live_commands(turn, items)?;
+        let messages = messages.ok_or(LiveDisplayFailure::MessageBound)?;
+        entries.extend(messages.into_iter().map(|item| ThreadItemEntry {
+            turn_id: turn.to_owned(),
+            item,
+            started_at_ms: None,
+            completed_at_ms: None,
+        }));
+        Ok((order.to_vec(), entries))
+    })();
+    match projected {
+        Ok((order, entries)) => Ok((order, entries, None)),
+        Err(failure)
+            if activity_only && !matches!(failure, LiveDisplayFailure::ProjectionUnavailable) =>
+        {
+            // No partially accumulated items are disclosed on any bound failure.
+            Ok((Vec::new(), Vec::new(), Some(failure)))
+        }
+        Err(failure) => Err(live_display_refusal(failure)),
+    }
+}
+
 fn bounded_live_commands(
     turn: &str,
     items: &[ThreadItem],
-) -> Result<Vec<ThreadItemEntry>, JSONRPCErrorError> {
+) -> Result<Vec<ThreadItemEntry>, LiveDisplayFailure> {
     if items.len() > 100_000 {
-        return Err(refusal(
-            "history_unavailable",
-            "Live activity exceeds its safe bound",
-        ));
+        return Err(LiveDisplayFailure::ItemBound);
     }
     let mut entries = Vec::new();
     let mut bytes = 0usize;
@@ -3527,10 +3586,7 @@ fn bounded_live_commands(
             || entries.len() >= 128
             || bytes > 1_048_576
         {
-            return Err(refusal(
-                "history_unavailable",
-                "Live command activity exceeds its safe bound",
-            ));
+            return Err(LiveDisplayFailure::CommandBound);
         }
         // Only fields consumed by the closed progress projector are copied.
         // In particular, never clone arbitrary live output/model context.
@@ -3539,7 +3595,7 @@ fn bounded_live_commands(
             "cwd":"/", "processId":null, "status":"inProgress",
             "commandActions":[], "aggregatedOutput":null, "exitCode":null, "durationMs":null
         }))
-        .map_err(|_| refusal("history_unavailable", "Live command projection unavailable"))?;
+        .map_err(|_| LiveDisplayFailure::ProjectionUnavailable)?;
         entries.push(ThreadItemEntry {
             turn_id: turn.to_owned(),
             item,
@@ -3646,6 +3702,7 @@ impl InquelloRequestProcessor {
         &self,
         threads: &super::super::ThreadRequestProcessor,
         run: &TaskRunBinding,
+        activity_only: bool,
     ) -> Result<Option<LiveProgressCommands>, JSONRPCErrorError> {
         if run.runtime_id != self.runtime_id || run.status != TaskRunStatus::Running {
             return Ok(None);
@@ -3676,32 +3733,16 @@ impl InquelloRequestProcessor {
         ) {
             return Ok(None);
         }
-        // Bound IDs before cloning; unrelated live payloads are never copied.
-        if items.len() > 4096 || items.iter().any(|item| item.id().len() > 128) {
-            return Err(refusal(
-                "history_unavailable",
-                "Live turn ordering exceeds its safe bound",
-            ));
-        }
-        // The presentation builder's legacy message IDs are not the canonical
-        // IDs retained by the store. Join only with actual lifecycle event IDs.
-        let order = state
-            .canonical_active_order(turn)
-            .ok_or_else(|| refusal("history_unavailable", "Canonical live ordering unavailable"))?
-            .to_vec();
-        let mut entries = bounded_live_commands(turn, items)?;
-        let messages = state.canonical_live_messages(turn).ok_or_else(|| {
-            refusal(
-                "history_unavailable",
-                "Live message display exceeds its safe bound",
-            )
-        })?;
-        entries.extend(messages.into_iter().map(|item| ThreadItemEntry {
-            turn_id: turn.to_owned(),
-            item,
-            started_at_ms: None,
-            completed_at_ms: None,
-        }));
+        // Bound canonical display data under this same current-listener lock.
+        // Status-only recovery still carries the exact current runtime/run identity.
+        let (order, entries, display_failure) = bounded_live_display(
+            turn,
+            items,
+            state.canonical_active_order(turn),
+            state.canonical_live_messages(turn),
+            activity_only,
+        )?;
+        let display_incomplete = display_failure.is_some();
         if entries
             .iter()
             .any(|entry| !order.iter().any(|id| id == entry.item.id()))
@@ -3720,8 +3761,10 @@ impl InquelloRequestProcessor {
             format!("{:p}", Arc::as_ptr(&loaded)),
             &order,
             &entries,
+            display_failure,
         ))?;
         Ok(Some(LiveProgressCommands {
+            display_incomplete,
             runtime: Some(Arc::downgrade(&loaded)),
             fingerprint,
             turn: turn.to_owned(),
@@ -3841,7 +3884,9 @@ impl InquelloRequestProcessor {
                 "Retained projection identity unavailable",
             )
         })?;
-        let live = self.live_progress_commands(threads, &run).await?;
+        let live = self
+            .live_progress_commands(threads, &run, params.activity_only)
+            .await?;
         let durable_revision = if params.activity_only {
             String::new()
         } else {
@@ -3885,7 +3930,7 @@ impl InquelloRequestProcessor {
                         .map_or_else(Vec::new, |value| value.entries.clone()),
                     &allowed_turns,
                     turn.as_deref(),
-                    false,
+                    live.as_ref().is_some_and(|value| value.display_incomplete),
                 )),
                 0,
             )
@@ -3962,7 +4007,9 @@ impl InquelloRequestProcessor {
                 "Result page is outside this retained snapshot",
             ));
         }
-        let current_live = self.live_progress_commands(threads, &run).await?;
+        let current_live = self
+            .live_progress_commands(threads, &run, params.activity_only)
+            .await?;
         let current_durable_revision = if params.activity_only {
             String::new()
         } else {
@@ -4038,7 +4085,9 @@ impl InquelloRequestProcessor {
         )?;
         // No cached live activity survives listener replacement, completion or
         // a changed loaded runtime while the authority checks above awaited.
-        let final_live = self.live_progress_commands(threads, &latest).await?;
+        let final_live = self
+            .live_progress_commands(threads, &latest, params.activity_only)
+            .await?;
         let final_durable_revision = if params.activity_only {
             String::new()
         } else {
@@ -5066,12 +5115,109 @@ mod progress_tests {
     }
 
     #[test]
+    fn live_display_bounds_refuse_history_but_allow_explicit_incomplete_activity() {
+        let order = vec!["cmd-1".to_owned()];
+        let running = command("inProgress", None).item;
+        let too_many = vec![running.clone(); 4097];
+        let too_many_commands = vec![running.clone(); 129];
+        let oversized_order = vec!["canonical".to_owned(); 4097];
+        let mut maximum_command = running.clone();
+        if let ThreadItem::CommandExecution { command, .. } = &mut maximum_command {
+            *command = "x".repeat(16_384);
+        }
+        let excessive_command_bytes = vec![maximum_command; 65];
+        let mut long_command = running.clone();
+        if let ThreadItem::CommandExecution { command, .. } = &mut long_command {
+            *command = "x".repeat(16_385);
+        }
+        let mut long_id = running.clone();
+        if let ThreadItem::CommandExecution { id, .. } = &mut long_id {
+            *id = "x".repeat(129);
+        }
+        let cases: Vec<(Vec<ThreadItem>, Option<&[String]>, bool)> = vec![
+            (Vec::new(), None, true),
+            (too_many, Some(&order), true),
+            (too_many_commands, Some(&order), true),
+            (excessive_command_bytes, Some(&order), true),
+            (Vec::new(), Some(&oversized_order), true),
+            (vec![long_command], Some(&order), true),
+            (vec![long_id], Some(&order), true),
+            (Vec::new(), Some(&order), false),
+        ];
+        for (items, canonical_order, has_messages) in cases {
+            let messages = || has_messages.then(Vec::new);
+            assert!(
+                bounded_live_display("turn-1", &items, canonical_order, messages(), false).is_err()
+            );
+            let (ids, entries, failure) =
+                bounded_live_display("turn-1", &items, canonical_order, messages(), true).unwrap();
+            assert!(ids.is_empty());
+            assert!(entries.is_empty());
+            assert!(failure.is_some());
+            let allowed = std::collections::HashSet::from(["turn-1".to_owned()]);
+            let snapshot = canonical_progress(entries, &allowed, Some("turn-1"), failure.is_some());
+            assert!(snapshot.history_incomplete);
+            assert!(snapshot.items.is_empty());
+            assert!(snapshot.results.is_empty());
+        }
+        let (_, _, failure) =
+            bounded_live_display("turn-1", &[], Some(&order), Some(Vec::new()), true).unwrap();
+        assert!(failure.is_none());
+    }
+
+    #[test]
+    fn live_message_overflow_marker_changes_the_final_activity_fence() {
+        let order = vec!["agent".to_owned()];
+        let entries: Vec<ThreadItemEntry> = Vec::new();
+        let make = |incomplete| LiveProgressCommands {
+            display_incomplete: incomplete,
+            runtime: None,
+            turn: "turn-1".into(),
+            order: order.clone(),
+            entries: Vec::new(),
+            fingerprint: live_progress_fingerprint(&(
+                "run",
+                "runtime",
+                "thread",
+                "turn-1",
+                1u64,
+                "0x123",
+                &order,
+                &entries,
+                incomplete.then_some(LiveDisplayFailure::MessageBound),
+            ))
+            .unwrap(),
+        };
+        let before = make(false);
+        let revision = live_progress_revision("", Some(&before));
+        assert!(live_progress_snapshot_matches(&revision, "", Some(&before)));
+        let overflow = make(true);
+        assert!(!live_progress_snapshot_matches(
+            &revision,
+            "",
+            Some(&overflow)
+        ));
+        let overflow_revision = live_progress_revision("", Some(&overflow));
+        assert!(live_progress_snapshot_matches(
+            &overflow_revision,
+            "",
+            Some(&overflow)
+        ));
+        assert!(!live_progress_snapshot_matches(
+            &overflow_revision,
+            "",
+            None
+        ));
+    }
+
+    #[test]
     fn canonical_live_agent_text_projects_running_and_durable_completion_wins() {
         let message = entry(
             json!({"type":"agentMessage","id":"canonical-agent","text":"partial"}),
             false,
         );
         let live = LiveProgressCommands {
+            display_incomplete: false,
             runtime: None,
             fingerprint: "bounded-text-revision-1".into(),
             turn: "turn-1".into(),
@@ -5118,6 +5264,7 @@ mod progress_tests {
         let changed_fingerprint = fingerprint(&changed_entries);
         assert_ne!(original_fingerprint, changed_fingerprint);
         let initial = LiveProgressCommands {
+            display_incomplete: false,
             runtime: None,
             fingerprint: original_fingerprint,
             turn: live.turn.clone(),
@@ -5131,6 +5278,7 @@ mod progress_tests {
             Some(&initial)
         ));
         let changed = LiveProgressCommands {
+            display_incomplete: false,
             fingerprint: changed_fingerprint,
             entries: changed_entries,
             ..initial
@@ -5152,6 +5300,7 @@ mod progress_tests {
             true,
         );
         let live = LiveProgressCommands {
+            display_incomplete: false,
             runtime: None,
             fingerprint: "runtime-listener-1-running".into(),
             turn: "turn-1".into(),
@@ -5179,6 +5328,7 @@ mod progress_tests {
             live_progress_revision("same", None)
         );
         let replacement = LiveProgressCommands {
+            display_incomplete: false,
             fingerprint: "runtime-listener-2".into(),
             ..live
         };
@@ -5197,6 +5347,7 @@ mod progress_tests {
             true,
         );
         let mut live = LiveProgressCommands {
+            display_incomplete: false,
             runtime: None,
             fingerprint: "live".into(),
             turn: "turn-1".into(),
@@ -5218,6 +5369,7 @@ mod progress_tests {
     #[test]
     fn live_merge_refuses_listener_lag_instead_of_inventing_order() {
         let live = LiveProgressCommands {
+            display_incomplete: false,
             runtime: None,
             fingerprint: "live".into(),
             turn: "turn-1".into(),

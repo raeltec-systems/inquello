@@ -2494,10 +2494,15 @@ fn controlled_paid_body_refuses_unbounded_or_nontext_requests() {
     assert!(super::validate_paid_request(&changed).is_err());
 
     changed = request.clone();
-    changed.input = vec![request.input[0].clone(); 64];
+    let short_item: ResponseItem = serde_json::from_value(serde_json::json!({
+        "type": "message", "role": "user",
+        "content": [{"type": "input_text", "text": "R01"}]
+    }))
+    .expect("short cardinality fixture");
+    changed.input = vec![short_item.clone(); 64];
     assert!(serde_json::to_vec(&changed).unwrap().len() < 32768);
     assert!(super::validate_paid_request(&changed).is_ok());
-    changed.input.push(request.input[0].clone());
+    changed.input.push(short_item);
     // Isolate the item-count guard: this invalid 65-item body is still below the byte cap.
     assert!(serde_json::to_vec(&changed).unwrap().len() < 32768);
     assert!(super::validate_paid_request(&changed).is_err());

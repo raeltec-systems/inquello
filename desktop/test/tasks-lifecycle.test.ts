@@ -89,3 +89,29 @@ it('completed follow-up does not expose an acknowledgement after current policy 
  expect(await x.service.resume(input)).toMatchObject({ok:false,code:'uncertain'});
  expect(x.request.mock.calls.filter(([method])=>method==='inquello/tasks/resume')).toHaveLength(1);
 });
+
+it('Stop uses fresh incomplete activity when full live text exceeds its display bound',async()=>{
+ const x=setup();
+ x.request.mockImplementation(async(method:string,...args:any[])=>{
+  if(method==='inquello/tasks/progress'){
+   if(args[0]?.activityOnly!==true)throw new Error('history_unavailable');
+   return {...base,historyIncomplete:true,items:[]};
+  }
+  if(method==='inquello/tasks/stop')return receipt('stop','interrupted');
+  throw new Error('unexpected');
+ });
+ expect(await x.service.progress(input)).toMatchObject({ok:false});
+ expect(await x.service.stop({...input,request:null})).toMatchObject({ok:true,value:{status:'interrupted'}});
+ expect(x.request).toHaveBeenCalledWith('inquello/tasks/stop',expect.objectContaining({
+  expectedRunId:run,expectedRuntimeId:'runtime-1',expectedTurnId:'turn-1',
+ }));
+});
+it('incomplete live display never authorizes Stop after fresh authority is revoked',async()=>{
+ const x=setup();
+ x.request.mockImplementation(async(method:string)=>{
+  if(method==='inquello/tasks/progress'){x.setPolicy(null);return {...base,historyIncomplete:true,items:[]};}
+  throw new Error('unexpected mutation');
+ });
+ expect(await x.service.stop({...input,request:null})).toMatchObject({ok:false});
+ expect(x.request.mock.calls.some(([method])=>method==='inquello/tasks/stop')).toBe(false);
+});

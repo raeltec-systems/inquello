@@ -6,7 +6,10 @@ export function useConversationFollow(scope:string|null,blocked:boolean){
  const threadRef=useRef<HTMLElement>(null),contentRef=useRef<HTMLDivElement>(null);
  const [away,setAway]=useState(false);
  const state=useRef<FollowState>({scope,blocked,following:true,reader:0,alive:false,scrollTop:0});
- const current=useRef({scope,blocked});current.current={scope,blocked};
+ const current=useRef({scope,blocked});
+ // Only committed navigation can invalidate the active observer. A suspended or
+ // discarded concurrent render must not leak its scope into the current view.
+ useLayoutEffect(()=>{current.current={scope,blocked};},[scope,blocked]);
  const target=()=>{
   const thread=threadRef.current,conversation=contentRef.current?.querySelector<HTMLElement>('.iq-task-progress');
   if(!thread||!conversation||thread.hidden||thread.clientHeight<=0)return null;
