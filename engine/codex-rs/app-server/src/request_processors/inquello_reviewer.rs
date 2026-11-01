@@ -990,7 +990,7 @@ impl InquelloRequestProcessor {
         let run = async {
             request.validate().ok()?;
             #[cfg(test)]
-            let fixture = self.fixture_enabled(&self.routes.state.lock().await);
+            let fixture = self.fixture_enabled(&*self.routes.state.lock().await);
             #[cfg(not(test))]
             let fixture = false;
             #[cfg(test)]

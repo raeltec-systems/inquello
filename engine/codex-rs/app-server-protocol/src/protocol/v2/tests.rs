@@ -4290,6 +4290,8 @@ fn plugin_install_params_serialization_omits_force_remote_sync() {
             remote_marketplace_name: None,
             install_attempt_id: Some("94c79f7b-cceb-4415-9a3e-b51b2f718d43".to_string()),
             plugin_name: "gmail".to_string(),
+            skip_authentication: false,
+            mcp_admission: None,
         })
         .unwrap(),
         json!({
@@ -4297,6 +4299,8 @@ fn plugin_install_params_serialization_omits_force_remote_sync() {
             "remoteMarketplaceName": null,
             "installAttemptId": "94c79f7b-cceb-4415-9a3e-b51b2f718d43",
             "pluginName": "gmail",
+            "skipAuthentication": false,
+            "mcpAdmission": null,
         }),
     );
 
@@ -4312,6 +4316,8 @@ fn plugin_install_params_serialization_omits_force_remote_sync() {
             remote_marketplace_name: None,
             install_attempt_id: None,
             plugin_name: "gmail".to_string(),
+            skip_authentication: false,
+            mcp_admission: None,
         },
     );
 
@@ -4327,6 +4333,8 @@ fn plugin_install_params_serialization_omits_force_remote_sync() {
             remote_marketplace_name: Some("openai-curated-remote".to_string()),
             install_attempt_id: None,
             plugin_name: "gmail".to_string(),
+            skip_authentication: false,
+            mcp_admission: None,
         },
     );
 }

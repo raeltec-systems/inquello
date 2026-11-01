@@ -719,7 +719,7 @@ pub(super) async fn run(
     let configuration = json!({"routeId":route,"deployment":if route=="codex-responses"{"openai-api"}else{"anthropic-direct"},"model":model,"apiVersion":if route=="codex-responses"{"responses-v1"}else{"2026-10-21"},"accountRef":principal,"region":null});
     assert!(private_rpc(&mut server,&mut host,"inquello/routes/configure",json!({"operationId":uuid::Uuid::new_v4(),"expectedRevision":0,"configuration":configuration})).await.get("rpcError").is_none());
     let fixture = fixture(route, scenario).await;
-    assert_eq!(private_rpc(&mut server,&mut host,"inquello/fixture/taskTransport",json!({"workspaceId":workspace,"configurationRevision":1,"routeId":route,"endpoint":fixture.endpoint,"certificate":fixture.certificate})).await["accepted"],true);
+    assert_eq!(private_rpc(&mut server,&mut host,"inquello/fixture/taskTransport",json!({"workspaceId":workspace,"configurationRevision":1,"routeId":route,"endpoint":fixture.endpoint,"certificate":fixture.certificate,"holdProgressPublication":scenario=="lifecycle-progress-cache"})).await["accepted"],true);
     let policy = host.policy.clone();
     let operation = uuid::Uuid::new_v4().to_string();
     host.authority_context = json!({"configuration":configuration,"operationId":operation});

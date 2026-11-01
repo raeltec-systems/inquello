@@ -167,6 +167,13 @@ impl ThreadState {
         self.listener_command_tx.clone()
     }
 
+    /// Borrowed view lets private progress bound and filter activity before cloning.
+    pub(crate) fn active_turn_items(
+        &self,
+    ) -> Option<(&str, &codex_app_server_protocol::TurnStatus, &[ThreadItem])> {
+        self.current_turn_history.active_turn_items()
+    }
+
     pub(crate) fn active_turn_snapshot(&self) -> Option<Turn> {
         self.current_turn_history.active_turn_snapshot()
     }

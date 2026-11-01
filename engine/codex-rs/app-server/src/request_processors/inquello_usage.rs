@@ -75,7 +75,7 @@ impl InquelloRequestProcessor {
             });
         }
         #[cfg(test)]
-        if self.fixture_enabled(&self.routes.state.lock().await) {
+        if self.fixture_enabled(&*self.routes.state.lock().await) {
             return Ok(Capabilities {
                 reasoning: vec!["default".into(), "low".into(), "high".into()],
                 speeds: vec!["default".into(), "priority".into()],

@@ -446,11 +446,16 @@ mod tests {
             connection_id,
             message,
             write_complete_tx: _,
+            private_fence,
         } = envelope
         else {
             panic!("expected connection-targeted warning notification");
         };
         assert_eq!(connection_id, subscribed_connection);
+        assert!(
+            private_fence.is_none(),
+            "ordinary extension fixture has no private scope"
+        );
         let OutgoingMessage::AppServerNotification(envelope) = message else {
             panic!("expected app-server warning notification");
         };
@@ -505,11 +510,16 @@ mod tests {
             connection_id,
             message,
             write_complete_tx: _,
+            private_fence,
         } = envelope
         else {
             panic!("expected connection-targeted warning notification");
         };
         assert_eq!(connection_id, subscribed_connection);
+        assert!(
+            private_fence.is_none(),
+            "ordinary extension fixture has no private scope"
+        );
         let OutgoingMessage::AppServerNotification(envelope) = message else {
             panic!("expected app-server warning notification");
         };
@@ -565,11 +575,16 @@ mod tests {
             connection_id,
             message,
             write_complete_tx: _,
+            private_fence,
         } = envelope
         else {
             panic!("expected connection-targeted warning notification");
         };
         assert_eq!(connection_id, subscribed_connection);
+        assert!(
+            private_fence.is_none(),
+            "ordinary extension fixture has no private scope"
+        );
         let OutgoingMessage::AppServerNotification(envelope) = message else {
             panic!("expected app-server warning notification");
         };

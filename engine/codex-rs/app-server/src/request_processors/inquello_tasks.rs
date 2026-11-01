@@ -1612,6 +1612,33 @@ impl TaskAuthorization for TaskGuard {
                     }
                 }
             }
+            #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+            if name == "inquello_progress" && call_id == "publish_initial" {
+                if let Some(fixture) = self
+                    .fixture
+                    .as_ref()
+                    .filter(|f| f.hold_progress_publication)
+                {
+                    let observed = async {
+                        loop {
+                            if fixture.progress_observed_run.lock().await.as_deref()
+                                == Some(self.run.run_id.as_str())
+                            {
+                                break;
+                            }
+                            fixture.progress_observed.notified().await;
+                        }
+                    };
+                    tokio::select! {
+                        _ = self.cancellation.cancelled() => return Err(CodexErr::Fatal("Fixture publication cancelled".into())),
+                        result = tokio::time::timeout(std::time::Duration::from_secs(30), observed) => {
+                            result.map_err(|_| CodexErr::Fatal("Fixture requires observed live command before publication".into()))?;
+                        }
+                    }
+                    // A fixture synchronization point is never a grant.
+                    self.recheck().await.map_err(core_refusal)?;
+                }
+            }
             let _ = (arguments, call_id); // Native handler validates schema and resolves argv.
             Ok(())
         })
@@ -2366,6 +2393,9 @@ pub(super) struct TaskFixture {
     hold_ack_for_question: bool,
     question_checks: Arc<std::sync::atomic::AtomicUsize>,
     question_answered: Arc<tokio::sync::Notify>,
+    hold_progress_publication: bool,
+    progress_observed_run: Arc<tokio::sync::Mutex<Option<String>>>,
+    progress_observed: Arc<tokio::sync::Notify>,
     fail_before_sampling: bool,
     principal: PrincipalId,
     workspace: String,
@@ -2427,6 +2457,8 @@ impl InquelloRequestProcessor {
             fail_before_sampling: bool,
             #[serde(default)]
             hold_ack_for_question: bool,
+            #[serde(default)]
+            hold_progress_publication: bool,
         }
         let input: Input = serde_json::from_value(
             raw.ok_or_else(|| refusal("fixture_unavailable", "Missing fixture parameters"))?,
@@ -2544,6 +2576,9 @@ impl InquelloRequestProcessor {
                 hold_ack_for_question: input.hold_ack_for_question,
                 question_checks: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
                 question_answered: Arc::new(tokio::sync::Notify::new()),
+                hold_progress_publication: input.hold_progress_publication,
+                progress_observed_run: Arc::new(tokio::sync::Mutex::new(None)),
+                progress_observed: Arc::new(tokio::sync::Notify::new()),
                 fail_before_sampling: input.fail_before_sampling,
                 principal: actor.principal_id,
                 workspace: input.workspace_id,
@@ -2796,6 +2831,8 @@ pub(super) struct ProgressCache {
     canonical: Arc<InquelloTasksProgressResponse>,
     bytes: usize,
     cancellation: CancellationToken,
+    // Keep the allocation identity reserved without keeping an unloaded runtime alive.
+    _live_runtime: Option<std::sync::Weak<codex_core::CodexThread>>,
 }
 
 impl ProgressCache {
@@ -2804,7 +2841,208 @@ impl ProgressCache {
     }
 }
 
+/// Ephemeral command activity only. Never written to rollout or used as an
+/// artifact/publication. Retained completed rows always take precedence.
+struct LiveProgressCommands {
+    // Prevent allocator-address ABA across awaited identity checks.
+    runtime: Option<std::sync::Weak<codex_core::CodexThread>>,
+    fingerprint: String,
+    turn: String,
+    order: Vec<String>,
+    entries: Vec<ThreadItemEntry>,
+}
+
+fn bounded_live_commands(
+    turn: &str,
+    items: &[ThreadItem],
+) -> Result<Vec<ThreadItemEntry>, JSONRPCErrorError> {
+    if items.len() > 100_000 {
+        return Err(refusal(
+            "history_unavailable",
+            "Live activity exceeds its safe bound",
+        ));
+    }
+    let mut entries = Vec::new();
+    let mut bytes = 0usize;
+    for item in items {
+        let ThreadItem::CommandExecution {
+            id,
+            command,
+            status: CommandExecutionStatus::InProgress,
+            ..
+        } = item
+        else {
+            continue;
+        };
+        bytes = bytes.saturating_add(id.len()).saturating_add(command.len());
+        if id.is_empty()
+            || id.len() > 128
+            || command.len() > 16_384
+            || entries.len() >= 128
+            || bytes > 1_048_576
+        {
+            return Err(refusal(
+                "history_unavailable",
+                "Live command activity exceeds its safe bound",
+            ));
+        }
+        // Only fields consumed by the closed progress projector are copied.
+        // In particular, never clone arbitrary live output/model context.
+        let item = serde_json::from_value(json!({
+            "type":"commandExecution", "id":id, "command":command,
+            "cwd":"/", "processId":null, "status":"inProgress",
+            "commandActions":[], "aggregatedOutput":null, "exitCode":null, "durationMs":null
+        }))
+        .map_err(|_| refusal("history_unavailable", "Live command projection unavailable"))?;
+        entries.push(ThreadItemEntry {
+            turn_id: turn.to_owned(),
+            item,
+            started_at_ms: None,
+            completed_at_ms: None,
+        });
+    }
+    Ok(entries)
+}
+
+fn merge_live_commands(
+    mut durable: Vec<ThreadItemEntry>,
+    live: Option<&LiveProgressCommands>,
+) -> Result<Vec<ThreadItemEntry>, JSONRPCErrorError> {
+    let Some(live) = live.filter(|live| !live.entries.is_empty()) else {
+        return Ok(durable);
+    };
+    let order: HashMap<&str, usize> = live
+        .order
+        .iter()
+        .enumerate()
+        .map(|(index, id)| (id.as_str(), index))
+        .collect();
+    if durable
+        .iter()
+        .any(|entry| entry.turn_id == live.turn && !order.contains_key(entry.item.id()))
+    {
+        // Persistence precedes listener delivery. Retry rather than manufacture
+        // chronology if a newly durable item has not reached the live listener.
+        return Err(refusal(
+            "stale_snapshot",
+            "Live listener has not caught up with retained output",
+        ));
+    }
+    let retained: std::collections::HashSet<_> = durable
+        .iter()
+        .map(|entry| (entry.turn_id.clone(), entry.item.id().to_owned()))
+        .collect();
+    durable.extend(
+        live.entries
+            .iter()
+            .filter(|entry| {
+                !retained.contains(&(entry.turn_id.clone(), entry.item.id().to_owned()))
+            })
+            .cloned(),
+    );
+    // Only the current turn receives transient additions. Older durable turns
+    // retain their original order; current rows follow actual listener order.
+    let mut current = Vec::new();
+    durable.retain(|entry| {
+        if entry.turn_id == live.turn {
+            current.push(entry.clone());
+            false
+        } else {
+            true
+        }
+    });
+    current.sort_by_key(|entry| order.get(entry.item.id()).copied());
+    durable.extend(current);
+    Ok(durable)
+}
+
+fn live_progress_scope_current(
+    same_runtime: bool,
+    run_running: bool,
+    listener_matches: bool,
+    expected_turn: &str,
+    actual_turn: &str,
+    turn_status: &TurnStatus,
+) -> bool {
+    same_runtime
+        && run_running
+        && listener_matches
+        && expected_turn == actual_turn
+        && matches!(turn_status, TurnStatus::InProgress)
+}
+
+fn live_progress_revision(durable: &str, live: Option<&LiveProgressCommands>) -> String {
+    format!(
+        "{durable}:live:{}",
+        live.map_or("none", |value| value.fingerprint.as_str())
+    )
+}
+
 impl InquelloRequestProcessor {
+    async fn live_progress_commands(
+        &self,
+        threads: &super::super::ThreadRequestProcessor,
+        run: &TaskRunBinding,
+    ) -> Result<Option<LiveProgressCommands>, JSONRPCErrorError> {
+        if run.runtime_id != self.runtime_id || run.status != TaskRunStatus::Running {
+            return Ok(None);
+        }
+        let (Some(thread), Some(turn)) = (run.thread_id.as_deref(), run.turn_id.as_deref()) else {
+            return Ok(None);
+        };
+        let id = codex_protocol::ThreadId::from_string(thread)
+            .map_err(|_| refusal("stale", "Invalid live Task thread"))?;
+        let Ok(loaded) = threads.thread_manager.get_thread(id).await else {
+            return Ok(None);
+        };
+        let state = threads.thread_state_manager.thread_state(id).await;
+        let state = state.lock().await;
+        if !state.listener_matches(&loaded) {
+            return Ok(None);
+        }
+        let Some((live_turn, status, items)) = state.active_turn_items() else {
+            return Ok(None);
+        };
+        if !live_progress_scope_current(
+            run.runtime_id == self.runtime_id,
+            run.status == TaskRunStatus::Running,
+            state.listener_matches(&loaded),
+            turn,
+            live_turn,
+            status,
+        ) {
+            return Ok(None);
+        }
+        // Bound IDs before cloning; unrelated live payloads are never copied.
+        if items.len() > 4096 || items.iter().any(|item| item.id().len() > 128) {
+            return Err(refusal(
+                "history_unavailable",
+                "Live turn ordering exceeds its safe bound",
+            ));
+        }
+        let order: Vec<String> = items.iter().map(|item| item.id().to_owned()).collect();
+        let entries = bounded_live_commands(turn, items)?;
+        use sha2::{Digest, Sha256};
+        let identity = serde_json::to_vec(&(
+            &run.run_id,
+            &run.runtime_id,
+            thread,
+            turn,
+            state.listener_generation,
+            format!("{:p}", Arc::as_ptr(&loaded)),
+            &order,
+            &entries,
+        ))
+        .map_err(|_| refusal("history_unavailable", "Live activity identity unavailable"))?;
+        Ok(Some(LiveProgressCommands {
+            runtime: Some(Arc::downgrade(&loaded)),
+            fingerprint: format!("{:x}", Sha256::digest(identity)),
+            turn: turn.to_owned(),
+            order,
+            entries,
+        }))
+    }
+
     /// Hydration reads canonical item status, never a terminal turn summary. A
     /// private subscription and renderer-provided thread IDs are not authority.
     pub(crate) async fn tasks_progress(
@@ -2916,11 +3154,13 @@ impl InquelloRequestProcessor {
                 "Retained projection identity unavailable",
             )
         })?;
-        let revision = if params.activity_only {
+        let live = self.live_progress_commands(threads, &run).await?;
+        let durable_revision = if params.activity_only {
             String::new()
         } else {
             threads.inquello_progress_revision(thread).await?
         };
+        let revision = live_progress_revision(&durable_revision, live.as_ref());
         let mut analytical_turns = allowed_turns.iter().collect::<Vec<_>>();
         analytical_turns.sort();
         let analysis_key = serde_json::to_string(&(
@@ -2954,7 +3194,8 @@ impl InquelloRequestProcessor {
         let (canonical, bytes) = if params.activity_only {
             (
                 Arc::new(canonical_progress(
-                    Vec::new(),
+                    live.as_ref()
+                        .map_or_else(Vec::new, |value| value.entries.clone()),
                     &allowed_turns,
                     turn.as_deref(),
                     false,
@@ -2994,6 +3235,7 @@ impl InquelloRequestProcessor {
                 }
             })
             .await?;
+            let entries = merge_live_commands(entries, live.as_ref())?;
             let canonical =
                 canonical_progress(entries, &allowed_turns, turn.as_deref(), incomplete);
             let bytes = serde_json::to_vec(&canonical)
@@ -3033,7 +3275,13 @@ impl InquelloRequestProcessor {
                 "Result page is outside this retained snapshot",
             ));
         }
-        if !params.activity_only && threads.inquello_progress_revision(thread).await? != revision {
+        let current_live = self.live_progress_commands(threads, &run).await?;
+        let current_durable_revision = if params.activity_only {
+            String::new()
+        } else {
+            threads.inquello_progress_revision(thread).await?
+        };
+        if live_progress_revision(&current_durable_revision, current_live.as_ref()) != revision {
             return Err(refusal(
                 "stale_snapshot",
                 "Retained output changed during reconstruction; refresh progress",
@@ -3077,13 +3325,14 @@ impl InquelloRequestProcessor {
             }
             cache.push(ProgressCache {
                 key,
-                revision,
+                revision: revision.clone(),
                 analysis_key,
                 analysis_digest,
                 snapshot_id: snapshot_id.clone(),
                 canonical: canonical.clone(),
                 bytes,
                 cancellation: session.cancellation.clone(),
+                _live_runtime: live.as_ref().and_then(|value| value.runtime.clone()),
             });
         }
         // Cache lock acquisition and revision reads are awaited too. A late old
@@ -3099,6 +3348,27 @@ impl InquelloRequestProcessor {
             return Err(refusal(
                 "stale",
                 "Task incarnation changed before snapshot publication",
+            ));
+        }
+        // No cached live activity survives listener replacement, completion or
+        // a changed loaded runtime while the authority checks above awaited.
+        let final_live = self.live_progress_commands(threads, &latest).await?;
+        let final_durable_revision = if params.activity_only {
+            String::new()
+        } else {
+            threads.inquello_progress_revision(thread).await?
+        };
+        let final_policy_current = self
+            .task_read_policy_current(actor.principal_id, &params.workspace_policy)
+            .await;
+        if live_progress_revision(&final_durable_revision, final_live.as_ref()) != revision
+            || !final_policy_current
+            || session.cancellation.is_cancelled()
+            || self.actor(connection)? != actor
+        {
+            return Err(refusal(
+                "stale_snapshot",
+                "Live or retained output changed before disclosure",
             ));
         }
         let mut snapshot = display_progress_page(&canonical, requested);
@@ -3127,6 +3397,43 @@ impl InquelloRequestProcessor {
         };
         snapshot.artifact = progress_artifact(&task.artifact_refs).into();
         finish_progress(&mut snapshot);
+        #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+        if snapshot
+            .items
+            .iter()
+            .any(|item| item.id == "call_authorized" && item.status == "running")
+            && live.as_ref().is_some_and(|value| {
+                value
+                    .entries
+                    .iter()
+                    .any(|entry| entry.item.id() == "call_authorized")
+            })
+        {
+            let fixture = self.task_fixtures.lock().await.get(&connection).cloned();
+            if let Some(fixture) = fixture.filter(|fixture| {
+                fixture.hold_progress_publication
+                    && fixture.principal == actor.principal_id
+                    && fixture.workspace == params.workspace_policy.workspace_id
+            }) {
+                *fixture.progress_observed_run.lock().await = Some(snapshot.run_id.clone());
+                fixture.progress_observed.notify_one();
+            }
+        }
+        // Policy and fixture locks above can await while Resume changes the run.
+        // Read the binding last; no await may follow this disclosure fence.
+        let final_binding = store
+            .find_task_current_run(actor.principal_id, &params.task_id)
+            .await
+            .map_err(domain_error)?;
+        if session.cancellation.is_cancelled()
+            || self.actor(connection)? != actor
+            || final_binding.as_ref() != Some(&latest)
+        {
+            return Err(refusal(
+                "session_changed",
+                "Private authority changed before progress disclosure",
+            ));
+        }
         Ok(Some(snapshot.into()))
     }
 }
@@ -3982,6 +4289,138 @@ fn finish_progress(snapshot: &mut InquelloTasksProgressResponse) {
 #[cfg(test)]
 mod progress_tests {
     use super::*;
+
+    #[test]
+    fn live_commands_are_bounded_filtered_and_never_copy_output() {
+        let running = command("inProgress", None).item;
+        let completed = command("completed", Some(0)).item;
+        let message = entry(
+            json!({"type":"agentMessage","id":"message","text":"not live evidence"}),
+            true,
+        )
+        .item;
+        let rows = bounded_live_commands("turn-1", &[message, running.clone(), completed]).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert!(rows[0].completed_at_ms.is_none());
+        let value = serde_json::to_value(&rows[0].item).unwrap();
+        assert!(value["aggregatedOutput"].is_null());
+        assert!(bounded_live_commands("turn-1", &vec![running.clone(); 129]).is_err());
+        let mut oversized = running;
+        if let ThreadItem::CommandExecution { command, .. } = &mut oversized {
+            *command = "x".repeat(16_385);
+        }
+        assert!(bounded_live_commands("turn-1", &[oversized]).is_err());
+    }
+
+    #[test]
+    fn live_scope_rejects_old_runtime_listener_turn_and_terminal_state() {
+        assert!(live_progress_scope_current(
+            true,
+            true,
+            true,
+            "t",
+            "t",
+            &TurnStatus::InProgress
+        ));
+        assert!(!live_progress_scope_current(
+            false,
+            true,
+            true,
+            "t",
+            "t",
+            &TurnStatus::InProgress
+        ));
+        assert!(!live_progress_scope_current(
+            true,
+            false,
+            true,
+            "t",
+            "t",
+            &TurnStatus::InProgress
+        ));
+        assert!(!live_progress_scope_current(
+            true,
+            true,
+            false,
+            "t",
+            "t",
+            &TurnStatus::InProgress
+        ));
+        assert!(!live_progress_scope_current(
+            true,
+            true,
+            true,
+            "old",
+            "new",
+            &TurnStatus::InProgress
+        ));
+        assert!(!live_progress_scope_current(
+            true,
+            true,
+            true,
+            "t",
+            "t",
+            &TurnStatus::Completed
+        ));
+    }
+
+    #[test]
+    fn live_running_evidence_changes_on_completion_without_reordering_or_duplicate() {
+        let body = json!({"version":1,"plan":[],"results":[{"id":"finding","kind":"observation","text":"Check","evidenceIds":["cmd-1"]}]});
+        let publication = entry(
+            json!({"type":"functionCallOutput","id":"pub","name":"inquello_progress","namespace":null,"output":body.to_string()}),
+            true,
+        );
+        let live = LiveProgressCommands {
+            runtime: None,
+            fingerprint: "runtime-listener-1-running".into(),
+            turn: "turn-1".into(),
+            order: vec!["cmd-1".into(), "pub".into()],
+            entries: bounded_live_commands("turn-1", &[command("inProgress", None).item]).unwrap(),
+        };
+        let rows = merge_live_commands(vec![publication.clone()], Some(&live)).unwrap();
+        assert_eq!(rows[0].item.id(), "cmd-1");
+        assert_eq!(rows[1].item.id(), "pub");
+        let first = project_progress(rows, "turn-1", false);
+        assert_eq!(first.items[0].status, "running");
+        assert_eq!(first.results[0].evidence_ids, vec!["cmd-1"]);
+        let completed = command("completed", Some(0));
+        let rows = merge_live_commands(vec![completed, publication], Some(&live)).unwrap();
+        assert_eq!(rows.len(), 2);
+        assert!(
+            rows[0].completed_at_ms.is_some(),
+            "durable completion beats stale live start"
+        );
+        let last = project_progress(rows, "turn-1", false);
+        assert_eq!(last.items[0].status, "completed");
+        assert_ne!(analytical_digest(&first), analytical_digest(&last));
+        assert_ne!(
+            live_progress_revision("same", Some(&live)),
+            live_progress_revision("same", None)
+        );
+        let replacement = LiveProgressCommands {
+            fingerprint: "runtime-listener-2".into(),
+            ..live
+        };
+        assert_ne!(
+            live_progress_revision("same", Some(&replacement)),
+            "same:live:runtime-listener-1-running"
+        );
+    }
+
+    #[test]
+    fn live_merge_refuses_listener_lag_instead_of_inventing_order() {
+        let live = LiveProgressCommands {
+            runtime: None,
+            fingerprint: "live".into(),
+            turn: "turn-1".into(),
+            order: vec!["cmd-1".into()],
+            entries: bounded_live_commands("turn-1", &[command("inProgress", None).item]).unwrap(),
+        };
+        let not_yet_observed = revised_result("new", 1, "current", "Finding", "turn-1");
+        assert!(merge_live_commands(vec![not_yet_observed], Some(&live)).is_err());
+    }
+
     fn revised_result(
         id: &str,
         revision: u32,
@@ -4144,6 +4583,7 @@ mod progress_tests {
             canonical: canonical.clone(),
             bytes: 1,
             cancellation: token.clone(),
+            _live_runtime: None,
         };
         assert!(entry.matches("principal-session-run-lineage-policy", "item:42"));
         assert!(Arc::ptr_eq(&entry.canonical, &canonical));
