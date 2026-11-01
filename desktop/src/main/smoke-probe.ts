@@ -3911,6 +3911,7 @@ export async function probeVisualConversation(contents: WebContents, options: Or
       const file=path.join(captureDir,`${name}.png`);fs.writeFileSync(file,image.toPNG());
       captures.push({name,path:file,width:size.width,height:size.height});
     };
+    await contents.executeJavaScript(`Object.defineProperty(globalThis,'__iqSyntheticStartTrace',{value:[],configurable:true});`);
     stage='visual-identity';
     if(!(await smokeIdentity(contents,'signIn')).ok)throw new SmokeProbeFailure('Visual identity unavailable');
     const accepted=await options.identity.session.withAccess(access=>options.identity.service!.acceptInvite(access,seed.invite_id));
@@ -3964,9 +3965,9 @@ export async function probeVisualConversation(contents: WebContents, options: Or
       ${SHELL_HELPERS}
       return !!(await wait(()=>{const task=qVisible('[data-task-view="'+${JSON.stringify(taskId)}+'"]');return task&&[...task.querySelectorAll('.iq-conversation-item--agent'+${JSON.stringify(completed?'[data-status="completed"]':'')}+' .iq-message-body .iq-progress-text')].some(node=>node.textContent===${JSON.stringify(answer)}&&node.getClientRects().length);},${POLICY_SETTLE_MS}));
     })()`);
-    const latestAnswerVisible=async(taskId:string,answer:string)=>contents.executeJavaScript(`(async()=>{
+    const latestAnswerVisible=async(taskId:string,answer:string,role:'agent'|'user'='agent')=>contents.executeJavaScript(`(async()=>{
       ${SHELL_HELPERS}
-      return !!(await wait(()=>{const task=qVisible('[data-task-view="'+${JSON.stringify(taskId)}+'"]');const thread=task?.closest('.iq-thread');if(!task||!thread)return false;const clip=thread.getBoundingClientRect();return [...task.querySelectorAll('.iq-conversation-item--agent .iq-message-body .iq-progress-text')].some(node=>{if(node.textContent!==${JSON.stringify(answer)})return false;const rect=node.getBoundingClientRect();return rect.height>0&&rect.bottom>clip.top&&rect.bottom<=clip.bottom+2&&rect.top<clip.bottom;});},${SHELL_SETTLE_MS}));
+      return !!(await wait(()=>{const task=qVisible('[data-task-view="'+${JSON.stringify(taskId)}+'"]');const thread=task?.closest('.iq-thread');if(!task||!thread)return false;const clip=thread.getBoundingClientRect();return [...task.querySelectorAll('.iq-conversation-item--'+${JSON.stringify(role)}+' .iq-message-body .iq-progress-text')].some(node=>{if(node.textContent!==${JSON.stringify(answer)})return false;const rect=node.getBoundingClientRect();return rect.height>0&&rect.bottom>clip.top&&rect.bottom<=clip.bottom+2&&rect.top<clip.bottom;});},${SHELL_SETTLE_MS}));
     })()`);
     stage='visual-ui-first-send';
     const taskId=await contents.executeJavaScript(`(async()=>{
@@ -4023,7 +4024,11 @@ export async function probeVisualConversation(contents: WebContents, options: Or
       const jump=await wait(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.trim()==='Jump to latest'&&button.getClientRects().length&&!button.disabled),${SHELL_SETTLE_MS});
       if(!jump)return false;await new Promise(resolve=>setTimeout(resolve,200));if(thread.scrollTop>2)return false;jump.click();return true;
     })()`);
-    if(!readerJump||!(await latestAnswerVisible(taskId,fixture.answers[2]!)))throw new SmokeProbeFailure('Reader scroll-up or explicit Jump to latest did not behave correctly');
+    if(!readerJump)throw new SmokeProbeFailure('Reader scroll-up preservation or explicit Jump control failed');
+    // Stop may discard the uncommitted live assistant fragment. This is an explicit
+    // UX limitation, not proof of durable partial-answer retention. Check the latest
+    // retained user prompt; live partial visibility was separately required before Stop.
+    if(!(await latestAnswerVisible(taskId,fixture.requests[2]!,'user')))throw new SmokeProbeFailure('Jump did not reveal the latest retained user prompt');
     stage='visual-ui-reopen';
     const reopened=await contents.executeJavaScript(`(async()=>{
       ${SHELL_HELPERS}
@@ -4051,6 +4056,12 @@ export async function probeVisualConversation(contents: WebContents, options: Or
     await capture('08-settings-existing-specimen');
     fs.writeFileSync(path.join(captureDir,'manifest.json'),JSON.stringify({synthetic:true,source:'Actual Electron capturePage; local pinned fixture response, not live inference',settingsSurface:'existing-design-specimen',captures},null,2));
   }catch(error){failures.push(error instanceof SmokeProbeFailure?error.message:`Visual conversation failed at ${stage}${quotaFixtureDiagnostic(error)}`);const diagnostic=await captureSmokeFailure(contents,options.fixtureFile);if(diagnostic)captures.push(diagnostic);else failures.push('Diagnostic failure capture unavailable');}
-  finally {try{if(!(await smokeIdentity(contents,'signOut')).ok)failures.push('Visual identity cleanup failed');await options.organise.syncPrincipal();}catch{failures.push('Visual identity cleanup unavailable');}}
+  finally {
+    // Record BEFORE sign-out, so cleanup refusals cannot masquerade as the cause.
+    try{
+      const timeline=await contents.executeJavaScript(`(()=>{const rows=globalThis.__iqSyntheticStartTrace;delete globalThis.__iqSyntheticStartTrace;if(!Array.isArray(rows))return [];const events=['start-send','start-accepted','shell-accepted','tree-start','tree-result','shell-committed'];const keys=['foreground','workspaceAllowed','scopeCurrent','selected','taskPresent','receiptPresent','showStart','ok','hasTasks','selectedUnavailable'];return rows.slice(0,128).filter(row=>row&&events.includes(row.event)&&Number.isSafeInteger(row.ms)&&row.ms>=0).map(row=>({event:row.event,ms:row.ms,flags:Object.fromEntries(keys.filter(key=>typeof row.flags?.[key]==='boolean').map(key=>[key,row.flags[key]])),...(Number.isSafeInteger(row.read)&&row.read>=0?{read:row.read}:{})}));})()`);
+      console.info(JSON.stringify({event:'visual-start-timeline',beforeCleanup:true,timeline}));
+    }catch{console.info(JSON.stringify({event:'visual-start-timeline',beforeCleanup:true,unavailable:true}));}
+    try{if(!(await smokeIdentity(contents,'signOut')).ok)failures.push('Visual identity cleanup failed');await options.organise.syncPrincipal();}catch{failures.push('Visual identity cleanup unavailable');}}
   return{ok:failures.length===0,failures,synthetic:true,settingsSurface:'existing-design-specimen',captures};
 }

@@ -1,3 +1,4 @@
+import {smokeStartTrace} from './smoke-start-trace';
 import {Search} from './Search';
 import {Inbox,useInbox,type InputRequest,type QuestionSelection} from './Inbox';
 import {reopenView,type ReopenView} from '../../main/organise/navigation';
@@ -336,16 +337,22 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
     void loadPolicy(openTaskId);
   }, [openTaskId, loadStates, loadPolicy]);
 
+  const treeTraceRead=useRef(0);
   const loadTree = useCallback(
     async (id: string | null, refreshInspection = true) => {
       if (!bridge || !id) {
         setTree(null);
         return;
       }
-      const generation = authorityGeneration.current;
+      const generation = authorityGeneration.current,read=++treeTraceRead.current;
+      smokeStartTrace('tree-start',{selected:!!openTask.current},read);
       const result = parseOutcome(await bridge.getTree({ workspaceId: id }), parseTree);
+      smokeStartTrace('tree-result',{ok:result.ok,scopeCurrent:generation===authorityGeneration.current,workspaceAllowed:chosenWorkspace.current===id&&authorizedWorkspaces.current.includes(id),selected:!!openTask.current,hasTasks:result.ok&&result.value.tasks.length>0,taskPresent:result.ok&&result.value.tasks.some(item=>item.taskId===openTask.current),selectedUnavailable:result.ok&&(result.value.unavailableTasks??[]).some(item=>item.taskId===openTask.current)},read);
       if (generation !== authorityGeneration.current) return;
       if (chosenWorkspace.current !== id || !authorizedWorkspaces.current.includes(id)) return;
+      // An earlier successful inventory cannot erase a newer accepted Task or
+      // restore data after a newer refusal. Refusals always remain fail-closed.
+      if (result.ok && read !== treeTraceRead.current) return;
       if (result.ok) {
         // A Task that is gone (deleted) takes its draft with it.
         const unavailable=new Set((result.value.unavailableTasks??[]).map(item=>item.taskId));
@@ -650,6 +657,7 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
     const entry=acceptedTasks[id];
     return authorizedWorkspace && entry?.workspaceId===workspaceId ? entry.binding : undefined;
   };
+  useEffect(()=>{smokeStartTrace('shell-committed',{foreground:active,selected:!!openTaskId,taskPresent:!!task,receiptPresent:!!(openTaskId&&acceptedFor(openTaskId)),showStart});},[active,openTaskId,task,acceptedTasks,showStart,authorizedWorkspace]);
   const engagement = useMemo(() => (task?.engagementId ? (tree?.engagements.find((item) => item.engagementId === task.engagementId) ?? null) : null), [tree, task]);
   const workspace = state?.workspaces.find((item) => item.workspaceId === workspaceId) ?? null;
 
@@ -730,6 +738,7 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
                 {...startLocation} onPendingChange={setPendingStart} runtimeEpoch={runtimeEpoch} draft={startDraft} active={showStart && active} operationIds={operationIds}
                 onAccepted={(accepted) => {
                   const origin=startLocation;
+                  smokeStartTrace('shell-accepted',{workspaceAllowed:authorizedWorkspaces.current.includes(origin.workspaceId),foreground:activeStart.current.active&&activeStart.current.location===origin&&chosenWorkspace.current===origin.workspaceId});
                   if (!authorizedWorkspaces.current.includes(origin.workspaceId)) return;
                   setAcceptedTasks(previous => ({...previous,[accepted.taskId]:{workspaceId:origin.workspaceId,binding:accepted}}));
                   // Async acknowledgement may outlive this Start's foreground visit.
