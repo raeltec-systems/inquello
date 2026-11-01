@@ -3764,6 +3764,9 @@ export async function probeQuota(contents: WebContents, options: OrganiseProbeOp
     fs.writeFileSync(path.join(options.isolatedRoot,'.inquello-fictional-audit-session'),'explicit isolated quota fixture');
     await options.armSyntheticSession(seed.workspace_id);
     const principal=options.identity.session.principalId();
+    // Match the passing native quota witness: configure both candidates before
+    // starting work. A later candidate edit correctly invalidates inference state.
+    await options.runtimeRequest('inquello/routes/configure',{operationId:randomUUID(),expectedRevision:0,configuration:{routeId:'codex-responses',deployment:'openai-api',model:'fixture-model-20261030',apiVersion:'responses-v1',accountRef:principal,region:null}});
     const configuration={routeId:'claude-api-key',deployment:'anthropic-direct',model:'claude-sonnet-5-5',apiVersion:'2026-10-21',accountRef:principal,region:null};
     await options.runtimeRequest('inquello/routes/configure',{operationId:randomUUID(),expectedRevision:0,configuration});
     const bound=await options.runtimeRequest<{accepted:boolean;providerCalls:number}>('inquello/fixture/taskTransport',{workspaceId:seed.workspace_id,configurationRevision:1,routeId:'claude-api-key',...transport,failBeforeSampling:true});
@@ -3811,10 +3814,8 @@ export async function probeQuota(contents: WebContents, options: OrganiseProbeOp
     if(!latestCatalog.ok)throw new SmokeProbeFailure('Fixture route catalog unavailable');
     const codex=latestCatalog.value.find(row=>row.routeId==='codex-responses');
     if(!codex)throw new SmokeProbeFailure('Fixture Codex route unavailable');
-    const configuredCodex=await options.routes.configure({operationId:randomUUID(),expectedRevision:codex.revision,routeId:'codex-responses',deployment:'openai-api',model:'fixture-model-20261030',apiVersion:'responses-v1',region:null});
-    if(!configuredCodex.ok)throw new SmokeProbeFailure('Fixture route configuration unavailable');
-    const codexRevision=configuredCodex.value.find(row=>row.routeId==='codex-responses')?.revision;
-    if(codexRevision===undefined)throw new SmokeProbeFailure('Fixture route revision unavailable');
+    const codexRevision=codex.revision;
+    if(codexRevision!==1||codex.configuration?.accountRef!==principal||codex.configuration.model!=='fixture-model-20261030'||codex.configuration.deployment!=='openai-api'||codex.configuration.apiVersion!=='responses-v1')throw new SmokeProbeFailure('Fixture route revision unavailable');
     const codexSelection=await options.routes.select({operationId:randomUUID(),expectedRevision:selected.value.revision,taskId:created.value.taskId,routeId:'codex-responses',configurationRevision:codexRevision});
     if(!codexSelection.ok)throw new SmokeProbeFailure('Fixture route selection unavailable');
     const workspacePolicy=await options.policy.reviewPolicy(created.value.taskId);

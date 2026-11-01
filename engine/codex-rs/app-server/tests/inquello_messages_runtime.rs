@@ -371,6 +371,31 @@ async fn usage_limit_fixture_refuses_at_native_boundary_and_preserves_local_work
         .expect("initial native history")
         .clone();
     assert!(private_rpc(&mut server,&mut host,"inquello/routes/task/set",json!({"operationId":"usage-select","expectedRevision":1,"taskId":task,"routeId":"codex-responses","configurationRevision":1})).await.get("rpcError").is_none());
+    // Retire only our pinned pre-sampling fixture before ordinary quota readers.
+    assert!(
+        private_rpc(
+            &mut server,
+            &mut host,
+            "inquello/routes/invalidate",
+            json!({"routeId":"claude-api-key","taskId":null,"generation":2})
+        )
+        .await
+        .get("rpcError")
+        .is_none()
+    );
+    let quota_status =
+        || json!({"workspaceId":WORKSPACE,"routeId":"codex-responses","configurationRevision":1});
+    assert!(
+        private_rpc(
+            &mut server,
+            &mut host,
+            "inquello/fixture/taskTransportStatus",
+            quota_status()
+        )
+        .await
+        .get("rpcError")
+        .is_some()
+    );
     let scenario = |phase: &str| json!({"scenario":"usage-limit","phase":phase,"taskId":task,"workspacePolicy":policy});
     assert_eq!(
         private_rpc(
@@ -381,6 +406,29 @@ async fn usage_limit_fixture_refuses_at_native_boundary_and_preserves_local_work
         )
         .await["providerCalls"],
         0
+    );
+    assert_eq!(
+        private_rpc(
+            &mut server,
+            &mut host,
+            "inquello/fixture/taskTransportStatus",
+            quota_status()
+        )
+        .await,
+        json!({"accepted":true})
+    );
+    let mut stale_status = quota_status();
+    stale_status["configurationRevision"] = json!(2);
+    assert!(
+        private_rpc(
+            &mut server,
+            &mut host,
+            "inquello/fixture/taskTransportStatus",
+            stale_status
+        )
+        .await
+        .get("rpcError")
+        .is_some()
     );
     assert!(private_rpc(&mut server,&mut host,"inquello/usage/set",json!({"operationId":"usage-defaults","expectedRevision":1,"routeRevision":2,"taskId":task,"reasoning":"default","speed":"default"})).await.get("rpcError").is_none());
     let folder = directory.path().join("tasks").join(&task);
@@ -440,6 +488,17 @@ async fn usage_limit_fixture_refuses_at_native_boundary_and_preserves_local_work
         )
         .await["accepted"],
         true
+    );
+    assert!(
+        private_rpc(
+            &mut server,
+            &mut host,
+            "inquello/fixture/taskTransportStatus",
+            quota_status()
+        )
+        .await
+        .get("rpcError")
+        .is_some()
     );
     assert!(
         fixture.requests.lock().await.is_empty(),

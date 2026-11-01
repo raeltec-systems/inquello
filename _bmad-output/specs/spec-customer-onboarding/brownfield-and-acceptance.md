@@ -41,3 +41,13 @@ Use existing Inquello branding and accessible primitives; adapt only relevant pi
 ## Verification boundary
 
 Tests must cover service transactions against disposable PostgreSQL, protocol fixtures, main/preload sender and payload validation, renderer interaction, and an actual Electron journey using normal onboarding operations. Retain current conversation, Stop/Resume, provider isolation and paid-budget guards. Live identity/email setup and paid inference require their own deployment/credential authorization; no synthetic pass substitutes for them.
+
+## Auth0 compatibility implementation references
+
+- [OIDC scopes](https://auth0.com/docs/get-started/apis/scopes/openid-connect-scopes): request `openid profile email`; require the boolean verified claim from server-validated identity, never display text.
+- [JWKS](https://auth0.com/docs/secure/tokens/json-web-tokens/json-web-key-sets): multiple keys, bounded caching, rate-limited unknown-key refresh and explicit revoked-key expiry behavior.
+- [Hosted signup](https://support.auth0.com/center/s/article/How-to-Redirect-Users-directly-to-the-Hosted-Signup-Page): `screen_hint=signup` on the normal authorization request, not a separate password implementation.
+- [Callback matching](https://support.auth0.com/center/s/article/Callback-URL-Mismatch-Error-Is-Not-in-the-List-of-Allowed-Callback-URLs) describes exact port matching; arbitrary ephemeral-port registration is not established. Candidate: explicitly configured fixed `127.0.0.1` callback registered exactly, listener bound before external browser launch, clear occupied-port refusal, no arbitrary callback fallback. Test Windows listener ownership, wrong state, replay and cancellation.
+- [Loopback confirmation](https://support.auth0.com/center/s/article/end-of-life-rollout-for-defaulting-to-skip-login-confirmation-for-non-verifiable-callback-uris): retain Auth0's login confirmation; never disable it or rely on silent `prompt=none`.
+
+These are engineering compatibility requirements, not proof of a live tenant. Do not create vendor accounts, register applications, configure credentials or change trust without separate approval.

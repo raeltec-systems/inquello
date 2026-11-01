@@ -655,6 +655,7 @@ mod tests {
 
 #[cfg(all(feature = "inference-fixtures", debug_assertions))]
 pub(super) struct UsageLimitFixture {
+    pub(super) connection: ConnectionId,
     pub(super) task: String,
     pub(super) principal: PrincipalId,
     pub(super) route_revision: u64,
@@ -699,11 +700,9 @@ impl InquelloRequestProcessor {
         };
         if phase == "clear" {
             let mut state = self.routes.state.lock().await;
-            if state
-                .usage_fixture
-                .as_ref()
-                .is_some_and(|f| f.task == task && f.principal == actor.principal_id)
-            {
+            if state.usage_fixture.as_ref().is_some_and(|f| {
+                f.connection == connection && f.task == task && f.principal == actor.principal_id
+            }) {
                 self.routes
                     .cancel_task(&mut state, actor.principal_id, task);
                 state
@@ -748,6 +747,9 @@ impl InquelloRequestProcessor {
             let mut state = self.routes.state.lock().await;
             if state.usage_fixture.is_some()
                 || state
+                    .generations
+                    .contains_key(&(actor.principal_id, routes::RouteId::CodexResponses))
+                || state
                     .credentials
                     .contains_key(&(actor.principal_id, routes::RouteId::CodexResponses))
             {
@@ -757,7 +759,11 @@ impl InquelloRequestProcessor {
                 (actor.principal_id, routes::RouteId::CodexResponses),
                 (selected.configuration.account_ref().into(), 1),
             );
+            state
+                .generations
+                .insert((actor.principal_id, routes::RouteId::CodexResponses), 1);
             state.usage_fixture = Some(UsageLimitFixture {
+                connection,
                 task: task.into(),
                 principal: actor.principal_id,
                 route_revision: route.revision.get(),
@@ -771,7 +777,8 @@ impl InquelloRequestProcessor {
         {
             let state = self.routes.state.lock().await;
             if !state.usage_fixture.as_ref().is_some_and(|f| {
-                f.task == task
+                f.connection == connection
+                    && f.task == task
                     && f.principal == actor.principal_id
                     && f.route_revision == route.revision.get()
             }) {

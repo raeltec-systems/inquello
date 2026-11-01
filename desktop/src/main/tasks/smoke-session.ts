@@ -5,7 +5,7 @@ import {taskBootstrap} from './bootstrap';
 import {object,uuid} from '../usage/types';
 import type {RouteView} from '../routes/types';
 type BootstrapOptions=Parameters<typeof taskBootstrap>[0];
-export function smokeTaskSession(options:BootstrapOptions & {enabled:boolean;seedFile:string;diagnostic?:(stage:'scope'|'binding'|'native-proof'|'native-response'|'post-scope'|'accepted',kind:'none'|'transport-fence'|'fixture_unavailable'|'authority_unknown'|'stale'|'not_found'|'other')=>void}) {
+export function smokeTaskSession(options:BootstrapOptions & {enabled:boolean;allowQuotaRoute?:boolean;seedFile:string;diagnostic?:(stage:'scope'|'binding'|'native-proof'|'native-response'|'post-scope'|'accepted',kind:'none'|'transport-fence'|'fixture_unavailable'|'authority_unknown'|'stale'|'not_found'|'other')=>void}) {
  let bound:ReturnType<typeof taskBootstrap>|null=null;
  let owner:string|null=null,workspace:string|null=null;
  let instance:unknown;
@@ -21,7 +21,12 @@ export function smokeTaskSession(options:BootstrapOptions & {enabled:boolean;see
   if(!options.enabled||options.packaged||!bound||!workspace||!owner||options.identity.principalId()!==owner||options.runtime.instance()!==instance||!options.runtime.ready())throw unavailable();
   stage='binding';
   const configuration=route.configuration;
-  if(!configuration||configuration.routeId!=='claude-api-key'||route.routeId!==configuration.routeId||configuration.accountRef!==owner)throw unavailable();
+  if(!configuration||route.routeId!==configuration.routeId||configuration.accountRef!==owner)throw unavailable();
+  const quota=options.allowQuotaRoute===true&&configuration.routeId==='codex-responses'&&configuration.deployment==='openai-api'&&configuration.model==='fixture-model-20261030'&&configuration.apiVersion==='responses-v1'&&configuration.region===null;
+  if(configuration.routeId!=='claude-api-key'&&!quota)throw unavailable();
+  // A disabled, credential-absent row grants nothing and needs no provider handoff.
+  // Only the dedicated quota profile has a staged/retired configuration.
+  if(options.allowQuotaRoute===true&&!route.credentialPresent){if(route.enabled)throw unavailable();return;}
   stage='native-proof';
   const result=object(await options.runtime.request('inquello/fixture/taskTransportStatus',{workspaceId:workspace,routeId:configuration.routeId,configurationRevision:route.revision}));
   stage='native-response';

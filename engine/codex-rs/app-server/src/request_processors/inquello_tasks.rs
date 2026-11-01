@@ -2988,13 +2988,33 @@ impl InquelloRequestProcessor {
             .get(&connection)
             .cloned()
             .ok_or_else(denied)?;
+        // Quota is a native, connection-bound no-dispatch fixture, not a
+        // renderer assertion or a second transport. Its parent remains the
+        // original pinned pre-sampling synthetic Task session.
+        let quota = {
+            let state = self.routes.state.lock().await;
+            state
+                .usage_fixture
+                .as_ref()
+                .filter(|f| {
+                    route_id == routes::RouteId::CodexResponses
+                        && f.connection == connection
+                        && f.principal == actor.principal_id
+                        && f.provider_calls == 0
+                })
+                .map(|f| (f.task.clone(), f.route_revision))
+        };
         let session = self
             .task_session(connection, actor, &input.workspace_id)
             .await?;
         if fixture.principal != actor.principal_id
             || fixture.workspace != input.workspace_id
-            || fixture.revision != input.configuration_revision
-            || fixture.route_id != route_id
+            || (quota.is_none()
+                && (fixture.revision != input.configuration_revision
+                    || fixture.route_id != route_id))
+            || (quota.is_some()
+                && (fixture.route_id != routes::RouteId::ClaudeApiKey
+                    || !fixture.fail_before_sampling))
             || fixture.session_cancellation.is_cancelled()
             || session.real.is_some()
             || session.root != fixture.root
@@ -3018,7 +3038,7 @@ impl InquelloRequestProcessor {
         {
             return Err(denied());
         }
-        match route_id {
+        match fixture.route_id {
             routes::RouteId::ClaudeApiKey => {
                 inquello_adapters::anthropic::MessagesClient::fixture_from_der(
                     &fixture.endpoint,
@@ -3049,6 +3069,41 @@ impl InquelloRequestProcessor {
                     && c.configuration.account_ref() == actor.principal_id.to_string()
             })
             .ok_or_else(denied)?;
+        if let Some((task, revision)) = &quota {
+            let route = routes::task_route(&store, actor, task)
+                .await
+                .map_err(|_| denied())?;
+            let selected = route
+                .current
+                .as_ref()
+                .filter(|_| !route.stale_configuration)
+                .ok_or_else(denied)?;
+            if route.workspace_id.to_string() != input.workspace_id
+                || route.revision.get() != *revision
+                || selected.configuration_revision.get() != input.configuration_revision
+                || selected.configuration != candidate.configuration
+                || selected.configuration.route_id() != routes::RouteId::CodexResponses
+                || selected.configuration.deployment() != "openai-api"
+                || selected.configuration.model() != "fixture-model-20261030"
+                || selected.configuration.api_version() != "responses-v1"
+                || selected.configuration.region().is_some()
+                || store
+                    .task_data_tier(actor.principal_id, task)
+                    .await
+                    .map_err(|_| denied())?
+                    .as_deref()
+                    != Some("synthetic")
+                || !state.usage_fixture.as_ref().is_some_and(|f| {
+                    f.connection == connection
+                        && f.task == *task
+                        && f.principal == actor.principal_id
+                        && f.route_revision == *revision
+                        && f.provider_calls == 0
+                })
+            {
+                return Err(denied());
+            }
+        }
         let current = self.task_fixtures.lock().await;
         if self.actor(connection)? != actor
             || session.cancellation.is_cancelled()
@@ -7497,6 +7552,271 @@ mod bootstrap_order_tests {
         assert!(
             processor
                 .task_fixture_status(CONNECTION, Some(status_input()))
+                .await
+                .is_err()
+        );
+    }
+
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    async fn quota_status_fixture(
+        root: &std::path::Path,
+        tier: NativeTaskDataTier,
+    ) -> (
+        Arc<InquelloRequestProcessor>,
+        Arc<OutgoingMessageSender>,
+        tokio::sync::mpsc::Receiver<OutgoingEnvelope>,
+        String,
+    ) {
+        let (processor, outgoing, rx, mut transport) = status_fixture(root, false).await;
+        processor.route_configure(CONNECTION, serde_json::from_value(json!({
+            "operationId":"quota-status-route","expectedRevision":0,"configuration":{
+                "routeId":"codex-responses","deployment":"openai-api","model":"fixture-model-20261030",
+                "apiVersion":"responses-v1","accountRef":PRINCIPAL,"region":null
+            }
+        })).unwrap()).await.unwrap();
+        transport["failBeforeSampling"] = json!(true);
+        processor
+            .prepare_task_fixture(CONNECTION, Some(transport))
+            .await
+            .unwrap();
+        processor
+            .routes_invalidate(
+                CONNECTION,
+                InquelloRoutesInvalidateParams {
+                    route_id: Some("claude-api-key".into()),
+                    task_id: None,
+                    generation: 2,
+                },
+            )
+            .await
+            .unwrap();
+        let (store, actor) = processor.context(CONNECTION).await.unwrap();
+        let run = store
+            .reserve_task_run(
+                actor.principal_id,
+                StartTaskIntent {
+                    operation_id: uuid::Uuid::new_v4().to_string(),
+                    workspace_id: WORKSPACE.into(),
+                    engagement_id: None,
+                    folder_id: None,
+                    request: "Fictional quota proof".into(),
+                    route_id: "codex-responses".into(),
+                    configuration_revision: 1,
+                    choices: usage::Choices::default(),
+                },
+                "quota-status-runtime",
+                1,
+                tier,
+            )
+            .await
+            .unwrap();
+        let route = routes::task_route(&store, actor, &run.task_id)
+            .await
+            .unwrap();
+        {
+            // Unit-test state setup only; integration below exercises prepare.
+            let mut state = processor.routes.state.lock().await;
+            let key = (actor.principal_id, routes::RouteId::CodexResponses);
+            state.credentials.insert(key, (PRINCIPAL.into(), 1));
+            state.generations.insert(key, 1);
+            state.usage_fixture = Some(super::super::usage_bridge::UsageLimitFixture {
+                connection: CONNECTION,
+                task: run.task_id.clone(),
+                principal: actor.principal_id,
+                route_revision: route.revision.get(),
+                provider_calls: 0,
+            });
+        }
+        (processor, outgoing, rx, run.task_id)
+    }
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    fn quota_status_input() -> serde_json::Value {
+        json!({"workspaceId":WORKSPACE,"routeId":"codex-responses","configurationRevision":1})
+    }
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    async fn allowed_quota_status(
+        processor: &InquelloRequestProcessor,
+        outgoing: &OutgoingMessageSender,
+        rx: &mut tokio::sync::mpsc::Receiver<OutgoingEnvelope>,
+    ) -> Result<serde_json::Value, JSONRPCErrorError> {
+        let (result, ()) = tokio::join!(
+            processor.task_fixture_status(CONNECTION, Some(quota_status_input())),
+            async {
+                let id = request_id(rx).await;
+                allow(outgoing, id).await;
+            }
+        );
+        result
+    }
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    #[tokio::test]
+    async fn quota_fixture_status_returns_only_current_bound_proof_and_refuses_clear() {
+        let dir = tempfile::tempdir().unwrap();
+        let (processor, outgoing, mut rx, _) =
+            quota_status_fixture(dir.path(), NativeTaskDataTier::Synthetic).await;
+        assert_eq!(
+            allowed_quota_status(&processor, &outgoing, &mut rx)
+                .await
+                .unwrap(),
+            json!({"accepted":true})
+        );
+        processor.routes.state.lock().await.usage_fixture = None;
+        assert!(
+            processor
+                .task_fixture_status(CONNECTION, Some(quota_status_input()))
+                .await
+                .is_err()
+        );
+    }
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    #[tokio::test]
+    async fn quota_fixture_status_rejects_other_connection_owner_and_session() {
+        for kind in ["connection", "owner", "session", "real-session"] {
+            let dir = tempfile::tempdir().unwrap();
+            let (processor, _, _, _) =
+                quota_status_fixture(dir.path(), NativeTaskDataTier::Synthetic).await;
+            match kind {
+                "connection" => {
+                    processor
+                        .routes
+                        .state
+                        .lock()
+                        .await
+                        .usage_fixture
+                        .as_mut()
+                        .unwrap()
+                        .connection = ConnectionId(999)
+                }
+                "owner" => {
+                    processor
+                        .routes
+                        .state
+                        .lock()
+                        .await
+                        .usage_fixture
+                        .as_mut()
+                        .unwrap()
+                        .principal =
+                        PrincipalId::parse("22222222-2222-4222-8222-222222222222").unwrap()
+                }
+                "session" => processor
+                    .task_sessions
+                    .lock()
+                    .await
+                    .get(&CONNECTION)
+                    .unwrap()
+                    .cancellation
+                    .cancel(),
+                _ => {
+                    processor
+                        .task_sessions
+                        .lock()
+                        .await
+                        .get_mut(&CONNECTION)
+                        .unwrap()
+                        .real = Some(
+                        serde_json::from_value(params(dir.path(), 1).real_session.unwrap())
+                            .unwrap(),
+                    )
+                }
+            }
+            assert!(
+                processor
+                    .task_fixture_status(CONNECTION, Some(quota_status_input()))
+                    .await
+                    .is_err(),
+                "{kind}"
+            );
+        }
+    }
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    #[tokio::test]
+    async fn quota_fixture_status_rejects_generation_additional_credential_and_route_revision() {
+        for kind in [
+            "generation",
+            "additional",
+            "task-revision",
+            "configuration-revision",
+        ] {
+            let dir = tempfile::tempdir().unwrap();
+            let (processor, outgoing, mut rx, _) =
+                quota_status_fixture(dir.path(), NativeTaskDataTier::Synthetic).await;
+            let principal = PrincipalId::parse(PRINCIPAL).unwrap();
+            let mut input = quota_status_input();
+            {
+                let mut state = processor.routes.state.lock().await;
+                match kind {
+                    "generation" => {
+                        state
+                            .generations
+                            .insert((principal, routes::RouteId::CodexResponses), 2);
+                    }
+                    "additional" => {
+                        state.credentials.insert(
+                            (principal, routes::RouteId::ClaudeApiKey),
+                            (PRINCIPAL.into(), 2),
+                        );
+                    }
+                    "task-revision" => {
+                        state.usage_fixture.as_mut().unwrap().route_revision += 1;
+                    }
+                    _ => {
+                        input["configurationRevision"] = json!(2);
+                    }
+                }
+            }
+            let (result, ()) = tokio::join!(
+                processor.task_fixture_status(CONNECTION, Some(input)),
+                async {
+                    let id = request_id(&mut rx).await;
+                    allow(&outgoing, id).await;
+                }
+            );
+            assert!(result.is_err(), "{kind}");
+        }
+    }
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    #[tokio::test]
+    async fn quota_fixture_status_rechecks_fixture_after_fresh_authority_await() {
+        let dir = tempfile::tempdir().unwrap();
+        let (processor, outgoing, mut rx, _) =
+            quota_status_fixture(dir.path(), NativeTaskDataTier::Synthetic).await;
+        let (result, ()) = tokio::join!(
+            processor.task_fixture_status(CONNECTION, Some(quota_status_input())),
+            async {
+                let id = request_id(&mut rx).await;
+                processor.routes.state.lock().await.usage_fixture = None;
+                allow(&outgoing, id).await;
+            }
+        );
+        assert!(result.is_err());
+    }
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    #[tokio::test]
+    async fn quota_fixture_status_refuses_revoked_authority() {
+        let dir = tempfile::tempdir().unwrap();
+        let (processor, outgoing, mut rx, _) =
+            quota_status_fixture(dir.path(), NativeTaskDataTier::Synthetic).await;
+        let (result, ()) = tokio::join!(
+            processor.task_fixture_status(CONNECTION, Some(quota_status_input())),
+            async {
+                let id = request_id(&mut rx).await;
+                outgoing
+                    .notify_client_response(CONNECTION, id, json!({"workspacePolicy":null}))
+                    .await;
+            }
+        );
+        assert!(result.is_err());
+    }
+
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    #[tokio::test]
+    async fn quota_fixture_status_rejects_real_task_classification() {
+        let dir = tempfile::tempdir().unwrap();
+        let (processor, outgoing, mut rx, _) =
+            quota_status_fixture(dir.path(), NativeTaskDataTier::Real).await;
+        assert!(
+            allowed_quota_status(&processor, &outgoing, &mut rx)
                 .await
                 .is_err()
         );

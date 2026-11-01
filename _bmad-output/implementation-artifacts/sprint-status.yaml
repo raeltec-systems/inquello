@@ -33,7 +33,7 @@
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 
 generated: 10-27-2026 19:11
-last_updated: 2026-10-31
+last_updated: 2026-11-01
 project: inquello
 project_key: INQUELLO
 tracking_system: file-system
@@ -85,6 +85,8 @@ development_status:
   1-28-gate-current-route-real-data-use-on-negative-authorization-e: in-progress
   1-29-steer-stop-and-recover-the-same-private-task: in-progress
   1-30-find-and-reopen-only-permitted-saved-work: in-progress # 2026-11-01 scoped native 14 distinct witnesses, desktop/schema 417 + affected shell 74, Electron navigation pass; manual/epic acceptance remains open
+  # Owner-approved extension 2026-11-01; preserves Story 1.11 operator-only historical scope.
+  1-31-customer-onboarding: ready-for-dev
   2-1-understand-an-existing-work-folder-with-precise-references: backlog
   2-2-use-images-and-screenshots-as-attributable-context: backlog
   2-3-capture-selections-and-application-snapshots-with-saved-or-l: backlog

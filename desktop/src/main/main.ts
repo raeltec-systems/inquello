@@ -634,7 +634,7 @@ void app.whenReady().then(async () => {
     ready:()=>runtime?.state==='ready'&&runtimeConfigurationVerified,instance:()=>runtime,
     request:<T,>(method:string,params?:unknown)=>runtime?runtime.request<T>(method,params):Promise.reject(new Error('Runtime unavailable')),
   },identity:identitySession,currentSession:()=>sharedAuthority?identitySession.withAccess(access=>sharedAuthority.session(access)):Promise.resolve(null)};
-  const syntheticSmokeSession=(quotaSmoke||visualSmoke)?smokeTaskSession({...taskBootstrapOptions,enabled:true,seedFile:process.env.INQUELLO_SMOKE_SEED??'',diagnostic:(stage,kind)=>logger.info(`smoke fixture proof: ${stage}/${kind}`)}):null;
+  const syntheticSmokeSession=(quotaSmoke||visualSmoke)?smokeTaskSession({...taskBootstrapOptions,enabled:true,allowQuotaRoute:quotaSmoke,seedFile:process.env.INQUELLO_SMOKE_SEED??'',diagnostic:(stage,kind)=>logger.info(`smoke fixture proof: ${stage}/${kind}`)}):null;
   armSmokeTaskSession=syntheticSmokeSession?.arm;
   const trustedTaskBootstrap=syntheticSmokeSession?.bootstrap??taskBootstrap(taskBootstrapOptions);
   const organiseService = new OrganiseService({
@@ -693,7 +693,7 @@ void app.whenReady().then(async () => {
   routes = new RouteService({
     runtime: { ...policyRuntime, privateRouteAuth: (params) => runtime ? runtime.privateRouteAuth(params) : Promise.reject(new Error('Runtime unavailable')), stop: async () => { await runtime?.stop(); } },
     identity: identitySession, syncPrincipal: () => organiseService.syncPrincipal(), providers: providerService, freshPolicy: (taskId) => policyService.reviewPolicy(taskId), applicableDataTier: taskId => tasks?.applicableDataTier(taskId) ?? Promise.resolve('unknown'),
-    ...(visualSmoke&&syntheticSmokeSession?{syntheticFixtureBinding:(route:import('./routes/types').RouteView)=>syntheticSmokeSession.verifyRoute(route)}:{}),
+    ...((visualSmoke||quotaSmoke)&&syntheticSmokeSession?{syntheticFixtureBinding:(route:import('./routes/types').RouteView)=>syntheticSmokeSession.verifyRoute(route)}:{}),
     onChanged: () => { environmentChanged(); for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:routes-changed'); },
   });
   tasks = new TaskService({runtime: policyRuntime, identity: identitySession, bootstrap: trustedTaskBootstrap, syncPrincipal: () => organiseService.syncPrincipal(), prepareRoutes: () => routes!.list(), freshPolicy: workspaceId => policyService.startPolicy(workspaceId), askPermission: (taskId, command) => policyService.askRuntimePermission(taskId, command), routeApproval:(workspaceId,routeId)=>sharedAuthority?identitySession.withAccess(access=>sharedAuthority.routeApproval(access,workspaceId,routeId)):Promise.resolve(null),routeCheck:(workspaceId,request)=>sharedAuthority?identitySession.withAccess(access=>sharedAuthority.routeEligibilityCheck(access,workspaceId,request)):Promise.resolve(null),onAuthorityUnavailable:()=>{taskSessionChanged();usageChanged(true);}, ...((quotaSmoke||visualSmoke)?{authorityDiagnostic:(stage:string,scope:string)=>logger.info(`smoke Task authority: ${stage}/${scope}`)}:{}), onProgressChanged: () => { for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:tasks-progress-changed'); }, onAccepted: () => usageChanged()});

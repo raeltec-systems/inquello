@@ -4,14 +4,14 @@ import {smokeTaskSession} from '../src/main/tasks/smoke-session';
 import type {RouteView} from '../src/main/routes/types';
 const principal='11111111-1111-4111-8111-111111111111',workspace='22222222-2222-4222-8222-222222222222',other='33333333-3333-4333-8333-333333333333';
 const dirs:string[]=[];afterEach(()=>{for(const dir of dirs.splice(0))fs.rmSync(dir,{recursive:true,force:true});});
-function setup({packaged=false,enabled=true}={}){
+function setup({packaged=false,enabled=true,allowQuotaRoute=false}={}){
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'inquello-smoke-session-'));dirs.push(root);
  const seedFile=path.join(root,'seed.json');fs.writeFileSync(seedFile,JSON.stringify({workspace_id:workspace,invite_id:other,workspace_name:'Synthetic'}));
  fs.writeFileSync(path.join(root,'.inquello-fictional-audit-session'),'explicit synthetic only');
  let owner:string|null=principal,runtimeInstance=1;
  const request=vi.fn(async(_method:string,_params?:unknown)=>({accepted:true}));
  const env:NodeJS.ProcessEnv={};
- const session=smokeTaskSession({env,packaged,enabled,userData:root,seedFile,runtime:{ready:()=>true,instance:()=>runtimeInstance,request:request as never},identity:{principalId:()=>owner},currentSession:async()=>{throw new Error('Must never fall back to real session');}});
+ const session=smokeTaskSession({env,packaged,enabled,allowQuotaRoute,userData:root,seedFile,runtime:{ready:()=>true,instance:()=>runtimeInstance,request:request as never},identity:{principalId:()=>owner},currentSession:async()=>{throw new Error('Must never fall back to real session');}});
  return{root,seedFile,request,env,session,setOwner:(value:string|null)=>{owner=value;},restartRuntime:()=>{runtimeInstance++;}};
 }
 describe('owned dedicated smoke bootstrap',()=>{
@@ -91,5 +91,30 @@ describe('native verified smoke route binding',()=>{
  it('refuses a native denial and never substitutes a main asserted verdict',async()=>{
   const x=setup();await x.session.arm(workspace);x.request.mockResolvedValue({accepted:false});
   await expect(x.session.verifyRoute(route())).rejects.toThrow();
+ });
+});
+
+describe('dedicated quota-only ordinary reader proof',()=>{
+ const quota=():RouteView=>({routeId:'codex-responses',provider:'Codex',configurable:true,configuration:{routeId:'codex-responses',deployment:'openai-api',model:'fixture-model-20261030',apiVersion:'responses-v1',accountRef:principal,region:null},endpoint:null,revision:1,credentialPresent:true,adapterSupported:true,verification:'not_verified',enabled:false,gate:'Synthetic fixture only',limits:[],evidence:[],executionFlow:'local',inferenceFlow:'synthetic',connectorFlow:'none'});
+ it('does not admit quota configuration in visual or ordinary profile',async()=>{
+  const x=setup();await x.session.arm(workspace);await expect(x.session.verifyRoute(quota())).rejects.toThrow();expect(x.request).toHaveBeenCalledTimes(1);
+ });
+ it('leaves credential-absent disabled configurations unbound without native admission',async()=>{
+  const x=setup({allowQuotaRoute:true});await x.session.arm(workspace);const route={...quota(),credentialPresent:false};await x.session.verifyRoute(route);expect(x.request).toHaveBeenCalledTimes(1);
+  await expect(x.session.verifyRoute({...route,enabled:true})).rejects.toThrow();
+ });
+ it('requires current native proof for a present quota fixture credential',async()=>{
+  const x=setup({allowQuotaRoute:true});await x.session.arm(workspace);await x.session.verifyRoute(quota());
+  expect(x.request).toHaveBeenLastCalledWith('inquello/fixture/taskTransportStatus',{workspaceId:workspace,routeId:'codex-responses',configurationRevision:1});
+  x.request.mockResolvedValueOnce({accepted:false});await expect(x.session.verifyRoute(quota())).rejects.toThrow();
+ });
+ it.each(['model','deployment','apiVersion','accountRef','region'] as const)('rejects another quota %s before native proof',async key=>{
+  const x=setup({allowQuotaRoute:true});await x.session.arm(workspace);const route=quota();(route.configuration as unknown as Record<string,unknown>)[key]=key==='accountRef'?other:'other';
+  await expect(x.session.verifyRoute(route)).rejects.toThrow();expect(x.request).toHaveBeenCalledTimes(1);
+ });
+ it.each(['identity','runtime'] as const)('rejects quota proof after %s changes during await',async kind=>{
+  const x=setup({allowQuotaRoute:true});await x.session.arm(workspace);let done!:(value:{accepted:boolean})=>void;
+  x.request.mockImplementationOnce(async()=>new Promise(resolve=>{done=resolve;}));const pending=x.session.verifyRoute(quota()),rejected=expect(pending).rejects.toThrow();
+  if(kind==='identity')x.setOwner(other);else x.restartRuntime();done({accepted:true});await rejected;
  });
 });
