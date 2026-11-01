@@ -18,6 +18,8 @@ context:
 
 **Approach:** Provide one complete signup/sign-in, create-or-join, invitation, membership and private-work entry journey using existing identity and authorization services. This is new scope beyond Story 1.11's deliberate operator-only bootstrap, not a correction to its historical acceptance.
 
+**Owner decisions (2026-11-01):** Verified users may create and own a new workspace only. Hosted identity owns signup/login/recovery. Owners invite colleagues by email; acceptance requires the correct verified identity, never automatic linking by matching email text. Provider selection remains pending evaluation.
+
 ## Boundaries & Constraints
 
 **Always:** Immutable issuer/subject identity; server-owned permissions; operation receipts and expected revisions; OS-backed secrets; validated named IPC; creator-private Tasks. Preserve conversation, Stop/Resume, provider isolation and paid-test bounds. First ownership applies only to the newly created workspace. Confirm member/invitation changes explicitly and reconcile uncertain outcomes before retrying.
@@ -38,9 +40,7 @@ context:
 
 ## Open Questions
 
-1. **Creation eligibility:** self-service for verified signed-in users (recommended; new workspace only), or operator-approved creation?
-2. **Signup service:** which hosted OIDC provider supplies signup, recovery and verified-email claims? Prefer an existing organization provider if available; otherwise choose managed OIDC. The repository's issuer is synthetic only.
-3. **Invitations:** email delivery and verified-recipient redemption (recommended; new policy), or registered exact-identity invitations only (smaller but less familiar)? Existing email metadata is not verified identity.
+1. **Signup provider:** Which hosted OIDC provider supplies signup, recovery and verified-email claims? Owner requested evaluation; no vendor is selected. The repository's issuer is synthetic only.
 
 ## Code Map
 

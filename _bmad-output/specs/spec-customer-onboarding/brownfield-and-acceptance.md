@@ -7,16 +7,17 @@
 - `engine/codex-rs/inquello-service/src/routes.rs` has GET workspaces, role and membership commands, and invite acceptance, but no workspace creation endpoint or pending-invitation discovery.
 - `admin.rs` bootstraps workspaces transactionally through the operator CLI. `workspace_commands.rs` and `workspaces.rs` implement invitations, roles, removal, receipts and authorization epochs.
 - `oidc.rs` validates signature, issuer, audience, nonce, lifetime and subject. Its current IdentityClaims carries display email/name but no email_verified authority. Raw email therefore cannot safely redeem an invitation.
+- Current native-client contract uses Authorization Code/PKCE S256, ephemeral `http://127.0.0.1:<port>/callback`, and `openid profile email`; service validates nonce/issuer/audience/azp/signature/subject. Static JWKS configuration needs a production rotation design. Desktop config currently accepts HTTPS origins only, so path-based issuers require a deliberate exact-issuer/endpoint trust extension, not weaker validation.
 - Story 1.11 explicitly selected operator-only bootstrap and exact issuer/subject invitations. Story 1.14 organizes already-accessible workspaces. The new customer journey changes scope; do not rewrite either historical completed contract.
 - Public Codex login code is an OAuth/PKCE client of hosted account services, not their signup or workspace backend source.
 
 ## Proposed implementation boundaries
 
-One cohesive customer-onboarding goal, proposed Story 1.31. Until owner decisions are recorded, all creation/provider/email semantics remain draft.
+One cohesive customer-onboarding goal, proposed Story 1.31. The owner approved verified-user self-service creation and email invitations with verified-recipient acceptance and no automatic account linking. Provider choice and the build checkpoint remain pending.
 
 A workspace-create transaction must authenticate its caller, apply the approved creation eligibility and server-owned initial policy, create exactly one initial owner membership, and retain an operation receipt. It cannot accept caller-defined grants or elevate an existing workspace. No auto-joining by email domain.
 
-Invite discovery must reveal only invitations already bound to the authenticated recipient. If email invitations are approved, specify verified claim provenance, normalization, expiry, token hashing/one-time redemption, wrong-account behavior, delivery retry and no cross-issuer linking before implementation. Delivery success is distinct from membership acceptance. Do not expose a global account search.
+Invite discovery must reveal only invitations already bound to the authenticated recipient. For approved email invitations, specify verified claim provenance, normalization, expiry, token hashing/one-time redemption, wrong-account behavior, delivery retry and no cross-issuer linking before implementation. Delivery success is distinct from membership acceptance. Do not expose a global account search.
 
 Reuse policy-defined roles; membership management is distinct from content authority. New workspace defaults must not enable broader tools, sharing/export, automatic permission review or real-data model processing. Preserve the last eligible administrator and revoke cached/in-flight authority on removal.
 

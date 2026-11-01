@@ -40,7 +40,8 @@ A customer cannot currently reach the private desktop workflow without operator-
 - Extend the approved operator-only baseline explicitly; preserve its historical spec and existing operator path.
 - Reuse current PKCE and membership services plus selected T3 presentation patterns with exact provenance/MIT notices, not T3's backend or Clerk authority wholesale.
 - Use plausible fictional names while retaining test classification in metadata. No accounts, invitations, trust-store changes or paid requests are authorized merely by spec/build work.
-- Resolve creation eligibility, production identity provider and invitation identity policy before implementing those semantics.
+- Owner-approved policy: verified users may create a new workspace and own only that workspace; owners invite by email, requiring the correct verified identity without automatic email-based account linking.
+- Select the hosted identity provider and approve the build spec before implementing provider-dependent semantics.
 
 ## Non-goals
 
@@ -53,6 +54,4 @@ From a fresh desktop profile, two fictional people use the actual onboarding con
 
 ## Open Questions
 
-1. **Creation:** Any eligible verified signed-in user may create a new workspace, or operator approval is required? Recommend self-service creation confined to the new workspace.
-2. **Identity:** Which hosted OIDC service owns real signup, recovery and verified-email claims? Prefer an existing organization service if available; otherwise choose a managed provider before implementation.
-3. **Invitations:** Familiar email delivery for new users, or invitations only to already-registered exact identities? Recommend email delivery with verified-recipient redemption and immutable identity binding, explicitly extending the old email-never-matches rule.
+1. **Identity provider:** Which hosted OIDC service owns real signup, recovery and verified-email claims? The owner requested provider evaluation; no vendor is selected. Signup remains separate from inference authentication.
