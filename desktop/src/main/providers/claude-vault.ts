@@ -1,3 +1,4 @@
+import { ensurePrivateDirectory, restrictPrivateFile } from '../runtime/private-paths';
 /**
  * The Claude API key vault (Story 1.13): where the main process keeps the
  * user's Claude API key.
@@ -111,12 +112,11 @@ export class ClaudeKeyVault {
       this.memory = clean;
       return;
     }
-    fs.mkdirSync(this.options.dir, { recursive: true, mode: 0o700 });
-    fs.chmodSync(this.options.dir, 0o700);
+    ensurePrivateDirectory(this.options.dir);
     const temp = `${this.filePath}.${process.pid}.${randomUUID()}.tmp`;
     try {
       fs.writeFileSync(temp, this.options.safeStorage.encryptString(JSON.stringify(clean)), { mode: 0o600, flag: 'wx' });
-      fs.chmodSync(temp, 0o600);
+      restrictPrivateFile(temp);
       fs.renameSync(temp, this.filePath);
     } finally {
       fs.rmSync(temp, { force: true });

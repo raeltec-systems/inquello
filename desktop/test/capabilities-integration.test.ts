@@ -22,7 +22,7 @@ import { AppServerRuntime, resolveAppServerBinary, runtimeChildEnv, writeRuntime
 import { CapabilityService } from '../src/main/capabilities/service';
 import { CodexAccount } from '../src/main/providers';
 import { fakeSafeStorage } from './identity-fakes';
-import { recordingLogger, removeTempDirs, tempDir } from './helpers';
+import { recordingLogger, removeTempDirs, removeGuestTaskStorage, tempDir } from './helpers';
 
 const desktop = path.resolve(__dirname, '..');
 const topologyBinary =
@@ -120,7 +120,7 @@ describe.skipIf(!databaseConfigured)('capabilities against the real runtime and 
     const home = path.join(dir,'home'); fs.mkdirSync(home);
     runtimeOptions = {
       command: keyringTools ? 'dbus-run-session' : appServer.path,
-      commandArgsPrefix: keyringTools ? ['--','sh','-c','echo -n testpw | gnome-keyring-daemon --unlock --components=secrets >/dev/null; exec "$0" "$@"',appServer.path,...RUNTIME_OWNED_CONFIG_ARGS] : [...RUNTIME_OWNED_CONFIG_ARGS],
+      commandArgsPrefix: keyringTools ? ['--','sh','-c','echo -n testpw | gnome-keyring-daemon --unlock --components=secrets >/dev/null; exec "$0" "$@"',appServer.path,'--disable-plugin-startup-tasks-for-tests',...RUNTIME_OWNED_CONFIG_ARGS] : ['--disable-plugin-startup-tasks-for-tests',...RUNTIME_OWNED_CONFIG_ARGS],
       env: runtimeChildEnv({...environment,HOME:home}, { serviceConfigEnv: SERVICE_CONFIG_ENV, codexHome: runtimeHome, workingStore }),
       clientInfo: { name: 'inquello_desktop', title: 'Inquello', version: '0.0.0-test' },
       schemaStamp,
@@ -153,6 +153,7 @@ describe.skipIf(!databaseConfigured)('capabilities against the real runtime and 
     await runtime?.stop();
     if (fixture) await new Promise<void>((resolve,reject) => fixture.close(error => error ? reject(error) : resolve()));
     await stopTopology();
+    await removeGuestTaskStorage();
     removeTempDirs();
   });
 

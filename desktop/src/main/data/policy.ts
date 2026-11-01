@@ -46,7 +46,7 @@ export type DataRoot = (typeof DATA_ROOTS)[number];
 export const DATA_STORES = ['os-credential-store'] as const;
 export type DataStore = (typeof DATA_STORES)[number];
 
-export type DataLocation = { root: DataRoot; globs: readonly string[] } | { store: DataStore; entry: string };
+export type DataLocation = { root: DataRoot; globs: readonly string[]; executor?: 'wsl-task-storage' } | { store: DataStore; entry: string };
 
 export const RETENTION_RULES = ['until-owner-deletes', 'unknown'] as const;
 export type Retention = (typeof RETENTION_RULES)[number];
@@ -132,11 +132,11 @@ function parseLocation(value: unknown, where: string): DataLocation {
     const location = exactKeys(value, where, ['store', 'entry']);
     return { store: oneOf(location.store, DATA_STORES, `${where}.store`), entry: text(location.entry, `${where}.entry`) };
   }
-  const location = exactKeys(value, where, ['root', 'globs']);
+  const location = exactKeys(value, where, ['root', 'globs'], ['executor']);
   const root = oneOf(location.root, DATA_ROOTS, `${where}.root`);
   if (!Array.isArray(location.globs) || location.globs.length === 0) fail(`${where}.globs`, 'expected a non-empty list');
   const globs = location.globs.map((glob, i) => validGlob(text(glob, `${where}.globs[${i}]`), where));
-  return { root, globs };
+  return { root, globs, ...(location.executor === undefined ? {} : { executor: oneOf(location.executor, ['wsl-task-storage'] as const, `${where}.executor`) }) };
 }
 
 /** True for a category whose data lives in an OS credential store rather than in files. */

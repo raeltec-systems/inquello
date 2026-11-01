@@ -1,3 +1,4 @@
+import { ensurePrivateDirectory } from '../runtime/private-paths';
 /**
  * Bounded tool runs (Story 1.19): the Task folder, the translation of the
  * runtime's own results into denials, and the escalation gate.
@@ -59,10 +60,8 @@ export function taskFolderPaths(root: string, taskId: string): { working: string
 /** Creates the Task's folder and its output folder, private to this user; returns their paths. */
 export function ensureTaskFolder(root: string, taskId: string): { working: string; output: string } {
   const paths = taskFolderPaths(root, taskId);
-  fs.mkdirSync(path.resolve(root), { recursive: true, mode: 0o700 });
-  fs.mkdirSync(paths.output, { recursive: true, mode: 0o700 });
   for (const dir of [path.resolve(root), paths.working, paths.output]) {
-    if (process.platform !== 'win32') fs.chmodSync(dir, 0o700);
+    ensurePrivateDirectory(dir);
   }
   return paths;
 }
@@ -99,6 +98,10 @@ export interface DenialContext {
   boundaries: readonly ReachBoundary[];
   /** Whether a path exists on this device (outside the sandbox). */
   exists?: (file: string) => boolean;
+  /** Guest paths are POSIX even when their policy authority runs on Windows. */
+  pathStyle?: 'posix';
+  /** Paths excluded from the guest namespace by the installed sandbox. */
+  hidden?: (file: string) => boolean;
 }
 
 const REFUSED = ['Read-only file system', 'Operation not permitted', 'Permission denied'] as const;
@@ -109,9 +112,9 @@ const FILE_ERROR = new RegExp(
   'g',
 );
 
-function inside(parent: string, child: string): boolean {
-  const rel = path.relative(path.resolve(parent), path.resolve(child));
-  return rel === '' || (rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel));
+function inside(parent: string, child: string, paths = path): boolean {
+  const rel = paths.relative(paths.resolve(parent), paths.resolve(child));
+  return rel === '' || (rel !== '..' && !rel.startsWith(`..${paths.sep}`) && !paths.isAbsolute(rel));
 }
 
 /** The boundaries a path outside the Task folder is held to: every permitted location. */
@@ -149,10 +152,11 @@ function networkDenials(output: string): ToolDenial[] {
 }
 
 function fileDenial(file: string, error: FileError, context: DenialContext): ToolDenial | null {
+  const paths = context.pathStyle === 'posix' ? path.posix : path;
   const exists = context.exists ?? ((candidate: string) => fs.existsSync(candidate));
   const refused = (REFUSED as readonly string[]).includes(error);
   const boundaryOf = (kind: ReachBoundary['kind']) => context.boundaries.find((boundary) => boundary.kind === kind) ?? null;
-  const within = inside(context.output, file) ? boundaryOf('output_folder') : inside(context.working, file) ? boundaryOf('working_folder') : null;
+  const within = inside(context.output, file, paths) ? boundaryOf('output_folder') : inside(context.working, file, paths) ? boundaryOf('working_folder') : null;
   if (within) {
     // Inside the Task folder: only a refused write to a read-only boundary is the sandbox's.
     if (refused && within.access === 'read') return { kind: 'filesystem', text: outsideDenialText(within.label), boundary: within.label, destination: null };
@@ -165,7 +169,7 @@ function fileDenial(file: string, error: FileError, context: DenialContext): Too
     const label = system?.label ?? permittedText(context.boundaries);
     return { kind: 'filesystem', text: outsideDenialText(label), boundary: label, destination: null };
   }
-  if (error === 'Operation not permitted' || (!refused && (exists(file) || exists(path.dirname(file))))) {
+  if (error === 'Operation not permitted' || context.hidden?.(file) || (!refused && (exists(file) || exists(paths.dirname(file))))) {
     // Refused outright, or hidden by the sandbox although it exists on this device.
     const label = permittedText(context.boundaries);
     return { kind: 'filesystem', text: outsideDenialText(label), boundary: label, destination: null };
@@ -179,11 +183,12 @@ function fileDenial(file: string, error: FileError, context: DenialContext): Too
  */
 export function translateDenials(result: ExecResult, context: DenialContext): ToolDenial[] {
   if (!context.bounded) return [];
+  const paths = context.pathStyle === 'posix' ? path.posix : path;
   const denials = networkDenials(`${result.stdout}\n${result.stderr}`);
   for (const match of result.stderr.matchAll(FILE_ERROR)) {
     const raw = match[1] ?? match[2] ?? match[3] ?? match[4] ?? '';
     if (!raw) continue;
-    const file = path.isAbsolute(raw) ? raw : path.resolve(context.working, raw);
+    const file = paths.isAbsolute(raw) ? raw : paths.resolve(context.working, raw);
     const denial = fileDenial(file, match[5] as FileError, context);
     if (denial) denials.push(denial);
   }

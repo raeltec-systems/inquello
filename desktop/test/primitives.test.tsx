@@ -375,7 +375,7 @@ describe('TextField', () => {
 });
 
 describe('component tokens', () => {
-  const design = parseYaml(/^---\n([\s\S]*?)\n---\n/.exec(designMd)![1]!) as { components: Record<string, Record<string, string>> };
+  const design = parseYaml(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/.exec(designMd)![1]!) as { components: Record<string, Record<string, string>> };
 
   it.each(Object.keys(components))('%s equals DESIGN.md components, both ways', (name) => {
     expect(components[name as keyof typeof components]).toEqual(design.components[name]);

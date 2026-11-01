@@ -24,7 +24,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { isInside, takeInventory, type GovernedRoots, type HeldFile } from './inventory';
+import { isInside, takeInventory, type GovernedRoots, type HeldFile, type Inventory } from './inventory';
 import type { ExportJournal } from './journal';
 import type { DataPolicy, DataRoot } from './policy';
 
@@ -79,6 +79,9 @@ export interface ExportManifest {
 }
 
 export interface ExportOptions {
+  /** Main-created quiescent snapshot, retaining counts for uncopied exclusions. */
+  inventory?: Inventory;
+  extraOmissions?: ManifestOmission[];
   policy: DataPolicy;
   roots: GovernedRoots;
   /** The directory the user chose. It must not exist yet, or be empty. */
@@ -235,7 +238,7 @@ export async function exportData(options: ExportOptions): Promise<ExportResult> 
   for (const root of Object.values(roots)) {
     if (isInside(root, destination)) throw new ExportError('the export folder must be outside Inquello’s own data folders');
   }
-  const inventory = takeInventory(policy, roots);
+  const inventory = options.inventory ?? takeInventory(policy, roots);
   const byCategory = new Map<string, HeldFile[]>();
   for (const file of inventory.files) {
     if (!file.category) continue;
@@ -245,7 +248,7 @@ export async function exportData(options: ExportOptions): Promise<ExportResult> 
   const created = claimDestination(destination);
   try {
     const included: ManifestCategory[] = [];
-    const omissions: ManifestOmission[] = [];
+    const omissions: ManifestOmission[] = [...(options.extraOmissions ?? [])];
     for (const category of policy.categories) {
       const held = byCategory.get(category.id) ?? [];
       if (category.export.mode === 'included' && category.enabled && !category.credentials) {

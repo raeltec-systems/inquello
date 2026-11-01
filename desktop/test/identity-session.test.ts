@@ -19,7 +19,10 @@ import { CONFIG, FakeIssuer, FakeService, fakeOpener, fakeSafeStorage, httpGet, 
 import { recordingLogger, removeTempDirs, tempDir, waitFor } from './helpers';
 
 afterAll(() => removeTempDirs());
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
 
 interface World {
   service: FakeService;
@@ -96,8 +99,10 @@ describe('sign-in', () => {
 
     // Stored encrypted with mode 0600; no secret in plaintext.
     const file = path.join(w.dir, SESSION_FILE);
-    expect(fs.statSync(file).mode & 0o777).toBe(0o600);
-    expect(fs.statSync(w.dir).mode & 0o777).toBe(0o700);
+    if (process.platform !== 'win32') {
+      expect(fs.statSync(file).mode & 0o777).toBe(0o600);
+      expect(fs.statSync(w.dir).mode & 0o777).toBe(0o700);
+    }
     const stored = fileText(w.dir);
     for (const secret of session.knownSecrets()) expect(stored.includes(secret)).toBe(false);
     expect(session.knownSecrets().length).toBeGreaterThanOrEqual(6);
@@ -125,14 +130,18 @@ describe('wrong state', () => {
   it('rejects a mismatched state, stays signing-in until the timeout, then signs out', async () => {
     const w = world();
     w.mode = 'wrong-state';
-    const session = w.make({ callbackTimeoutMs: 600 });
+    // Keep real loopback HTTP, but advance its deadline deliberately after
+    // observing rejection. A busy Windows runner must not race a 600 ms timer.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const session = w.make({ callbackTimeoutMs: 60_000 });
     const pending = session.signIn();
-    await waitFor(() => w.callbacks.length === 1);
+    await vi.waitFor(() => expect(w.callbacks).toHaveLength(1));
     // The mismatched callback was refused with 400 and the listener kept waiting.
     expect(await httpGet(w.callbacks[0]!)).toBe(400);
     expect(session.snapshot().identity).toEqual({ state: 'signing-in' });
     expect((await session.getStatus()).identity).toEqual({ state: 'signing-in' });
 
+    await vi.advanceTimersByTimeAsync(60_000);
     const result = await pending;
     expect(result).toMatchObject({ ok: false, reason: REASONS.timedOut, status: { identity: { state: 'signed-out' } } });
     expect(w.service.calls).not.toContain('bootstrap');

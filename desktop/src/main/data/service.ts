@@ -33,7 +33,7 @@ import { deleteCategories, DeleteError, validateDeletion, type DeleteReport } fr
 import { exportData, ExportError, type Attribution, type ManifestOmission } from './export';
 import { importData, pinImportPlan, ImportError,readManifest, type ImportPublication, quarantinePublications } from './import';
 import {FILES_DIR,type ExportManifest} from './export';
-import { takeInventory, type GovernedRoots, type Inventory } from './inventory';
+import { isInside, takeInventory, type GovernedRoots, type Inventory } from './inventory';
 import type { ExportJournal } from './journal';
 import { isStoreCategory, realDataBlockers, type BlockerKind, type DataPolicy, type PolicyLoad } from './policy';
 
@@ -72,6 +72,12 @@ export interface ProviderControl {
 }
 
 export interface DataServiceOptions {
+  taskStorage?: {
+    inspect(): Promise<{ files: number; bytes: number }>;
+    snapshot(policy: DataPolicy, roots: GovernedRoots): Promise<{ roots: GovernedRoots; inventory: Inventory; omissions: ManifestOmission[]; dispose(): void }>;
+    ensureEmpty(): Promise<void>;
+    erase(): Promise<{ files: number; bytes: number }>;
+  };
   load: PolicyLoad;
   authority?:DataAuthority;
   roots: GovernedRoots;
@@ -177,12 +183,22 @@ export class DataService {
     return this.policy ? takeInventory(this.policy, this.options.roots) : null;
   }
 
-  getPolicy(): PolicyView {
+  async getPolicy(): Promise<PolicyView> {
     const policy = this.policy;
     if (!policy) {
       return { loaded: false, policyOwner: null, notice: null, categories: [], blockers: realDataBlockers(this.options.load).map(blockerView) };
     }
     const inventory = takeInventory(policy, this.options.roots);
+    const blockers = realDataBlockers(this.options.load, inventory).map(blockerView);
+    if (this.options.taskStorage) {
+      try {
+        const held = await this.options.taskStorage.inspect();
+        inventory.held['task-folders']!.files += held.files;
+        inventory.held['task-folders']!.bytes += held.bytes;
+      } catch {
+        blockers.push({ kind: 'unclassified', category: 'task-folders', detail: 'Linux Task storage could not be inspected. Its file counts are unavailable; stop running Tasks and refresh.' });
+      }
+    }
     return {
       loaded: true,
       policyOwner: policy.policy_owner,
@@ -201,7 +217,7 @@ export class DataService {
         recovery: category.recovery,
         held: { files: inventory.held[category.id]!.files, bytes: inventory.held[category.id]!.bytes },
       })),
-      blockers: realDataBlockers(this.options.load, inventory).map(blockerView),
+      blockers,
     };
   }
 
@@ -225,17 +241,23 @@ export class DataService {
       if (this.activityBlocks()) return { ok: false, reason: DATA_REASONS.exportTaskRunning };
       const destination = await this.options.chooseExportDestination();
       if (!destination) return { ok: false, reason: DATA_REASONS.cancelled };
+      if (Object.values(this.options.roots).some(root => isInside(root, destination))) return { ok: false, reason: 'Choose an export folder outside Inquello storage.' };
       // The chooser can stay open while another operation starts work.
       if (this.activityBlocks()) return { ok: false, reason: DATA_REASONS.exportTaskRunning };
       return this.withRuntimeStopped<ExportActionResult>(async () => {
         let createdDestination: string | undefined;
+        let snapshot: Awaited<ReturnType<NonNullable<DataServiceOptions['taskStorage']>['snapshot']>> | undefined;
         try {
           if(fs.existsSync(this.recoveryMarker())){this.recoveryUnsafe=true;throw new DataAuthorityError();}
-          const provenance=await this.inspect();
+          snapshot = await this.options.taskStorage?.snapshot(this.policy!, this.options.roots);
+          const roots = snapshot?.roots ?? this.options.roots;
+          const provenance=await this.inspect(roots);
           await this.authorize(provenance,'export');
           const result = await exportData({
             policy: this.policy!,
-            roots: this.options.roots,
+            roots,
+            inventory: snapshot?.inventory,
+            extraOmissions: snapshot?.omissions,
             destination,
             journal: {append:()=>{}},
             provenFiles:new Map(provenance.files.map(file=>[path.resolve(file.path),file])),
@@ -270,6 +292,8 @@ export class DataService {
           if (createdDestination) { try { fs.rmSync(createdDestination, {recursive:true,force:true}); } catch { /* The owner may already have copied bytes; no recall claim. */ } }
           this.options.logger.warn('data: export failed; protected details withheld');
           return { ok: false, reason: error instanceof DataAuthorityError?DATA_AUTHORITY_UNAVAILABLE:error instanceof ExportError ? sentence(error.message) : 'The export could not be completed. Already exported copies cannot be recalled.' };
+        } finally {
+          snapshot?.dispose();
         }
       });
     });
@@ -286,6 +310,7 @@ export class DataService {
         const publications: ImportPublication[]=[];
         let manifest:ExportManifest|undefined;
         try{
+          await this.options.taskStorage?.ensureEmpty();
           manifest=pinImportPlan(readManifest(source));
           const files=this.manifestFiles(manifest);
           const reference=manifest.provenance,digest=this.manifestDigest(manifest);
@@ -365,6 +390,7 @@ export class DataService {
 
       return this.withRuntimeStopped(async () => {
         try {
+          const guestRemoved = categories.includes('task-folders') ? await this.options.taskStorage?.erase() : undefined;
           if (categories.includes(CLAUDE_KEY_VAULT)) {
             try {
               await this.options.providers.forgetClaudeKey();
@@ -382,6 +408,10 @@ export class DataService {
             clearBrowserProfile: this.options.clearBrowserProfile,
             notes,
           });
+          if (guestRemoved) {
+            const removed = report.removed.find(entry => entry.category === 'task-folders');
+            if (removed) removed.filesRemoved += guestRemoved.files;
+          }
           if (categories.includes(CLAUDE_KEY_VAULT) && this.options.providers.holdsClaudeKey()) {
             return { ok: false as const, reason: 'The Claude API key could not be removed and is still stored. Remove it in Providers.' };
           }

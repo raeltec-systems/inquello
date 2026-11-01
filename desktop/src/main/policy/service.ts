@@ -43,6 +43,8 @@
  *   changed policy or reach requires a fresh invocation and permission.
  */
 import { isDeepStrictEqual } from 'node:util';
+import { preflightWsl } from '../runtime/wsl';
+import { WslTasks, withTaskTransferLock } from '../runtime/wsl-tasks';
 
 import { RpcResponseError } from '../runtime/errors';
 import type { Logger } from '../runtime/logger';
@@ -143,6 +145,8 @@ export interface PolicyOrganise {
 }
 
 export interface PolicyServiceOptions {
+  /** Main-only host selection; isolated unit harnesses can model another OS. */
+  executionPlatform?: NodeJS.Platform;
   runtime: OrganiseRuntime;
   identity: OrganiseIdentity;
   organise: PolicyOrganise;
@@ -158,6 +162,7 @@ export interface PolicyServiceOptions {
 }
 
 interface TaskContext {
+  transferRecovery?: BroadMode;
   layer: InquelloWorkspaceExecutionPolicy;
   response: InquelloPolicyEffectiveResponse;
   folders: { working: string; output: string } | null;
@@ -197,10 +202,17 @@ function workspaceLayer(view: ExecutionPolicyView): InquelloWorkspaceExecutionPo
 }
 
 export class PolicyService {
+  private linuxTasks: { principal: string; tasks: WslTasks } | null = null;
+  private get usesWsl(): boolean { return (this.options.executionPlatform ?? process.platform) === 'win32'; }
+  private taskBackend(principal: string): WslTasks {
+    if (!this.options.taskFolders) throw new Error(POLICY_REASONS.noTaskFolders);
+    if (this.linuxTasks?.principal !== principal) this.linuxTasks = { principal, tasks: new WslTasks(this.options.taskFolders, principal) };
+    return this.linuxTasks.tasks;
+  }
   private authorityGeneration=0;
   private readonly highest=new Map<string,{epoch:bigint;policy:bigint}>();
   /** The sandbox check per runtime process. */
-  private sandboxCheck: { runtime: unknown; available: Promise<boolean> } | null = null;
+  private sandboxCheck: { runtime: unknown; key: string; available: Promise<boolean> } | null = null;
 
   constructor(private readonly options: PolicyServiceOptions) {}
 
@@ -348,7 +360,7 @@ export class PolicyService {
    * runtime confirmed the caller created the Task) and the answer carries
    * the tool profile in the runtime's own form.
    */
-  private async taskContext(taskId: string, withFolder: boolean): Promise<PolicyResult<TaskContext>> {
+  private async taskContext(taskId: string, withFolder: boolean, inspectTransfer = false): Promise<PolicyResult<TaskContext>> {
     const principal = this.options.identity.principalId();
     const runtime = this.options.runtime.instance();
     const current = (): PolicyResult<true> => {
@@ -387,6 +399,36 @@ export class PolicyService {
       this.options.logger.warn('policy: the runtime omitted the Task policy');
       return fail('failed', POLICY_REASONS.failed);
     }
+    if (withFolder && this.usesWsl) {
+      try {
+        const backend = this.taskBackend(principal!);
+        const pending = await backend.settledBinding(taskId);
+        checkpoint = current();
+        if (!checkpoint.ok) return checkpoint;
+        if (pending?.state === 'transferring') {
+          if (inspectTransfer) return { ok: true, value: {
+            layer: layer.value, response: response.value, folders,
+            transferRecovery: pending.backend === 'windows' ? 'full_access'
+              : response.value.task.broadMode.effectiveMode === 'no_prompt' ? 'no_prompt' : 'standard',
+          } };
+          return fail('failed', 'This Task has an interrupted file transfer. Confirm the same execution mode again to retry its retained source files. Nothing can run until recovery finishes.');
+        }
+        if (response.value.task.reach.bounded) {
+          preflightWsl();
+          await backend.transition(taskId, 'linux');
+        } else {
+          const binding = backend.binding(taskId);
+          if (binding && (binding.backend !== 'windows' || binding.state !== 'ready')) {
+            return fail('failed', 'Confirm Full access again to finish transferring this Task to Windows. Its source files are retained.');
+          }
+        }
+        checkpoint = current();
+        if (!checkpoint.ok) return checkpoint;
+      } catch (error) {
+        this.options.logger.warn(`policy: Task execution storage is unavailable (${(error as Error).message})`);
+        return fail('sandbox-unavailable', POLICY_REASONS.sandboxUnavailable);
+      }
+    }
     return { ok: true, value: { layer: layer.value, response: response.value, folders } };
   }
 
@@ -398,19 +440,36 @@ export class PolicyService {
    */
   private sandboxAvailable(context: TaskContext, taskId: string): Promise<boolean> {
     const runtime = this.options.runtime.instance();
-    if (this.sandboxCheck && this.sandboxCheck.runtime === runtime) return this.sandboxCheck.available;
+    const principal = this.options.identity.principalId();
+    const key = this.usesWsl ? JSON.stringify([taskId, context.layer, context.response.task?.runtimeProfile]) : '';
+    if (this.sandboxCheck && this.sandboxCheck.runtime === runtime && this.sandboxCheck.key === key) return this.sandboxCheck.available;
     const target = this.options.sandboxProbeTarget;
     const available = (async () => {
-      if (!target || !context.folders) return false;
+      const folders = context.folders;
+      if (!target || !folders) return false;
       try {
-        const result = await this.options.runtime.request<CommandExecResponse>('inquello/tools/exec', {
+        const dispatch = () => this.options.runtime.request<CommandExecResponse>('inquello/tools/exec', {
           workspacePolicy: context.layer,
           taskId,
-          taskFolder: context.folders.working,
+          taskFolder: folders.working,
           command: [],
           sandboxProbeTarget: target,
           timeoutMs: 20_000,
         });
+        // A probe owns the same guest Task lock as a real command. Serialize
+        // it with commands/transfers, including concurrent UI cache misses.
+        let result: CommandExecResponse;
+        if (this.usesWsl) {
+          if (!principal) return false;
+          const backend = this.taskBackend(principal);
+          result = await withTaskTransferLock(`${backend.scope}/${taskId}`, () => {
+            if (!this.localPreflight(runtime).ok || this.options.identity.principalId() !== principal) throw new Error('Sandbox probe authority changed');
+            const binding = backend.binding(taskId);
+            if (binding?.backend !== 'linux' || binding.state !== 'ready') throw new Error('Sandbox probe backend is unavailable');
+            preflightWsl();
+            return dispatch();
+          });
+        } else result = await dispatch();
         if (result.exitCode !== 0) this.options.logger.warn(`policy: the local sandbox check failed (exit ${result.exitCode})`);
         return result.exitCode === 0;
       } catch (error) {
@@ -418,7 +477,7 @@ export class PolicyService {
         return false;
       }
     })();
-    this.sandboxCheck = { runtime, available };
+    this.sandboxCheck = { runtime, key, available };
     return available;
   }
 
@@ -475,13 +534,22 @@ export class PolicyService {
    * sandbox applies on this device (the check creates the Task's folder).
    */
   async forTask(taskId: string): Promise<PolicyResult<TaskPolicyView>> {
-    const context = await this.taskContext(taskId, this.options.taskFolders !== null);
+    const context = await this.taskContext(taskId, this.options.taskFolders !== null, true);
     if (!context.ok) return context;
     const task = context.value.response.task!;
     try {
       const bounded = task.reach.bounded === true;
-      const available = bounded ? await this.sandboxAvailable(context.value, taskId) : false;
-      return { ok: true, value: taskPolicyView(context.value.response, task, available) };
+      const available = bounded && !context.value.transferRecovery ? await this.sandboxAvailable(context.value, taskId) : false;
+      const view = taskPolicyView(context.value.response, task, available);
+      if (context.value.transferRecovery) {
+        view.transferRecovery = context.value.transferRecovery;
+        view.sandbox = { status: 'unavailable', label: 'File transfer interrupted. Retry the same execution mode to finish transferring its retained source files. Nothing can run until recovery finishes.' };
+      }
+      if (this.usesWsl) {
+        view.environmentLabel = bounded ? 'Linux on this device' : 'Windows on this device';
+        if (bounded && available) view.sandbox.label = 'Linux sandbox in WSL on this device.';
+      }
+      return { ok: true, value: view };
     } catch (error) {
       this.options.logger.warn(`policy: the runtime answer was not understood (${(error as Error).message})`);
       return fail('failed', POLICY_REASONS.failed);
@@ -494,6 +562,7 @@ export class PolicyService {
    * against the mode and refuses a mode the policy does not permit.
    */
   async setBroadMode(input: SetBroadModeInput): Promise<PolicyResult<TaskPolicyView>> {
+    const runtime = this.options.runtime.instance();
     const prepared = await this.prepare();
     if (!prepared.ok) return prepared;
     const task = await this.taskWorkspace(input.taskId);
@@ -511,6 +580,20 @@ export class PolicyService {
         actorRef: null,
         workspacePolicy: layer.value,
       });
+      if (this.usesWsl && this.options.taskFolders) {
+        if (!this.localPreflight(runtime).ok || prepared.value !== this.options.identity.principalId()) return fail('permission-denied', POLICY_REASONS.permissionContextChanged);
+        ensureTaskFolder(this.options.taskFolders, input.taskId);
+        const backend = this.taskBackend(prepared.value);
+        const target = input.mode === 'full_access' ? 'windows' : 'linux';
+        const binding = backend.binding(input.taskId);
+        if (binding?.state === 'transferring') {
+          if (binding.backend !== target) return fail('failed', 'Finish the interrupted transfer by confirming its original execution mode. The retained source files have not been discarded.');
+          await backend.recover(input.taskId);
+        } else if (target === 'windows') {
+          await backend.transition(input.taskId, target);
+        }
+        if (!this.localPreflight(runtime).ok || prepared.value !== this.options.identity.principalId()) return fail('permission-denied', POLICY_REASONS.permissionContextChanged);
+      }
     } catch (error) {
       return this.runtimeFailure(error, input.mode);
     }
@@ -577,8 +660,8 @@ export class PolicyService {
     }
     if (!this.localPreflight(runtime).ok) return fail('runtime-unavailable', POLICY_REASONS.runtimeUnavailable);
     if (!sameOwnerAndRuntime()) return fail('permission-denied', POLICY_REASONS.permissionContextChanged);
-    const exec = (current: TaskContext, permissionRequestId: string | null) =>
-      this.options.runtime.request<CommandExecResponse>('inquello/tools/exec', {
+    const exec = async (current: TaskContext, permissionRequestId: string | null) => {
+      const dispatch = () => this.options.runtime.request<CommandExecResponse>('inquello/tools/exec', {
         workspacePolicy: current.layer,
         taskId,
         taskFolder: current.folders!.working,
@@ -586,6 +669,17 @@ export class PolicyService {
         timeoutMs: options.timeoutMs ?? 60_000,
         permissionRequestId,
       });
+      if (!this.usesWsl) return dispatch();
+      const backend = this.taskBackend(principal!);
+      return withTaskTransferLock(`${backend.scope}/${taskId}`, async () => {
+        if (!sameOwnerAndRuntime() || !this.localPreflight(runtime).ok) throw new Error('Execution context changed');
+        if (current.response.task!.reach.bounded) preflightWsl();
+        const binding = backend.binding(taskId);
+        const expected = current.response.task!.reach.bounded ? 'linux' : 'windows';
+        if ((binding && (binding.backend !== expected || binding.state !== 'ready')) || (!binding && expected === 'linux')) throw new Error('Execution backend transfer is incomplete');
+        return dispatch();
+      });
+    };
     const uncertain = () => fail<ToolRunView>('failed', POLICY_REASONS.executionOutcomeUncertain);
     const dispatchFailure = (error: unknown) => !this.localPreflight(runtime).ok || !sameOwnerAndRuntime() || !refusalOf(error) ? uncertain() : this.runtimeFailure<ToolRunView>(error);
     let result: CommandExecResponse;
@@ -636,11 +730,23 @@ export class PolicyService {
     }
     if (!this.localPreflight(runtime).ok || !sameOwnerAndRuntime()) return uncertain();
     const run = { exitCode: Number(result.exitCode), stdout: String(result.stdout ?? ''), stderr: String(result.stderr ?? '') };
+    if (this.usesWsl && reach.bounded) {
+      const root = this.taskBackend(principal!).guestRoot(taskId);
+      folders = { working: root, output: `${root}/output` };
+    }
     return {
       ok: true,
       value: {
         ...run,
-        denials: translateDenials(run, { working: folders.working, output: folders.output, bounded: reach.bounded, boundaries: reach.boundaries }),
+        denials: translateDenials(run, {
+          working: folders.working, output: folders.output, bounded: reach.bounded, boundaries: reach.boundaries,
+          ...(this.usesWsl && reach.bounded ? {
+            pathStyle: 'posix' as const,
+            exists: () => false,
+            hidden: (file: string) => (file.startsWith('/var/lib/inquello/tasks/') && file !== folders.working && !file.startsWith(`${folders.working}/`))
+              || file.startsWith('/mnt/') || file.startsWith('/run/WSL/'),
+          } : {}),
+        }),
         permissionRequestId,
       },
     };

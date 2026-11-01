@@ -38,7 +38,7 @@ const importDir = path.join(designDir, 'imports', 'inquello-design-system');
 const designMd = fs.readFileSync(path.join(designDir, 'DESIGN.md'), 'utf8');
 
 function frontmatter(): Record<string, any> {
-  const match = /^---\n([\s\S]*?)\n---\n/.exec(designMd);
+  const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n/.exec(designMd);
   if (!match?.[1]) throw new Error('DESIGN.md has no frontmatter');
   return parseYaml(match[1]) as Record<string, any>;
 }

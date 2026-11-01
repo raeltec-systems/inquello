@@ -25,6 +25,7 @@ import {
 } from '../src/main/policy';
 import { RpcConnection } from '../src/main/runtime';
 import { recordingLogger, removeTempDirs, tempDir } from './helpers';
+import { expectPrivatePath } from './private-paths';
 
 const TASK = '3a1b2c3d-4e5f-4a6b-8c7d-8e9f0a1b2c3d';
 const OTHER = '4b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e';
@@ -51,7 +52,7 @@ describe('the Task folder', () => {
     const folders = ensureTaskFolder(root, TASK);
     expect(folders).toEqual({ working: path.join(root, TASK), output: path.join(root, TASK, 'output') });
     expect(fs.statSync(folders.output).isDirectory()).toBe(true);
-    if (process.platform !== 'win32') for (const dir of [root, folders.working, folders.output]) expect(fs.statSync(dir).mode & 0o777).toBe(0o700);
+    for (const dir of [root, folders.working, folders.output]) expectPrivatePath(dir, 0o700);
     // Again: nothing changes.
     expect(ensureTaskFolder(root, TASK)).toEqual(folders);
     expect(() => taskFolderPaths(root, '../escape')).toThrow();
@@ -123,6 +124,18 @@ describe('denial translation', () => {
     expect(translateDenials({ exitCode: 1, stdout: '', stderr: 'sh: 1: cannot create /etc/x: Read-only file system\n' }, { ...context, bounded: false, boundaries: [] })).toEqual([]);
     // A sandbox failure with nothing attributable.
     expect(run('bwrap: setting up uid map: Permission denied\n').map((denial) => denial.text)).toEqual([DENIAL_SANDBOX]);
+  });
+
+  it('interprets Linux guest paths independently of the host OS', () => {
+    const guest = {
+      working: '/var/lib/inquello/tasks/scope/one', output: '/var/lib/inquello/tasks/scope/one/output',
+      bounded: true, boundaries: READ_ONLY, pathStyle: 'posix' as const,
+      exists: () => false, hidden: (file: string) => file.startsWith('/var/lib/inquello/tasks/scope/two/'),
+    };
+    const translate = (stderr: string) => translateDenials({ exitCode: 1, stdout: '', stderr }, guest);
+    expect(translate('sh: cannot create output/result: Read-only file system').map(value => value.boundary)).toEqual(['output folder (read-only)']);
+    expect(translate('cat: /var/lib/inquello/tasks/scope/two/private: No such file or directory').map(value => value.kind)).toEqual(['filesystem']);
+    expect(translate('cat: output/missing: No such file or directory')).toEqual([]);
   });
 });
 

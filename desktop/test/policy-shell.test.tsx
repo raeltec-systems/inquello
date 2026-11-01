@@ -206,6 +206,29 @@ describe('the Task policy and execution mode', () => {
     expect(document.querySelector('[data-broad-mode-suspended]')!.textContent).toContain('This Task runs in Standard mode.');
     expect(document.querySelector('[data-broad-mode-reach]')).toBeNull();
   });
+
+  it('offers the retained transfer target again without enabling a different mode', async () => {
+    const onSetMode = vi.fn(async () => null);
+    const current = taskPolicy({ status: 'active', recorded: 'full_access', fullAvailable: true });
+    current.transferRecovery = 'full_access';
+    current.sandbox = { status: 'unavailable', label: 'File transfer interrupted. Nothing can run.' };
+    render(<TaskPolicy policy={current} onSetMode={onSetMode} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Return to Standard' }));
+    expect(onSetMode).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'Retry Full access…' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Turn on Full access' }));
+    expect(onSetMode).toHaveBeenCalledWith('full_access', FULL_REACH);
+  });
+
+  it('allows retrying an interrupted Standard transfer', async () => {
+    const onSetMode = vi.fn(async () => null);
+    const current = taskPolicy();
+    current.transferRecovery = 'standard';
+    current.sandbox = { status: 'unavailable', label: 'File transfer interrupted. Nothing can run.' };
+    render(<TaskPolicy policy={current} onSetMode={onSetMode} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Retry Standard' }));
+    expect(onSetMode).toHaveBeenCalledWith('standard', null);
+  });
 });
 
 it('preserves the local MCP outside-sandbox rule in the renderer policy bridge', () => {

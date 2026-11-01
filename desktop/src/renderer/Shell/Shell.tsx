@@ -330,7 +330,7 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
   }, [openTaskId, loadStates, loadPolicy]);
 
   const loadTree = useCallback(
-    async (id: string | null) => {
+    async (id: string | null, refreshInspection = true) => {
       if (!bridge || !id) {
         setTree(null);
         return;
@@ -350,7 +350,7 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
         setTree(null); setAcceptedTasks({}); setStates(null); setTaskPolicy(null);
         setOpenTaskId(null); openTask.current=null; setNotice(result.reason);
       }
-      if (openTask.current) await Promise.all([loadStates(openTask.current), loadPolicy(openTask.current)]);
+      if (openTask.current && refreshInspection) await Promise.all([loadStates(openTask.current), loadPolicy(openTask.current)]);
     },
     [bridge, loadStates, loadPolicy, draftStore],
   );
@@ -494,7 +494,7 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
 
 
   /** Runs one mutation, then re-reads the tree; a refusal is shown, never hidden. */
-  const mutate = async <T,>(call: () => Promise<unknown>, parse: (value: unknown) => T | null): Promise<Outcome<T>> => {
+  const mutate = async <T,>(call: () => Promise<unknown>, parse: (value: unknown) => T | null, refreshInspection = true): Promise<Outcome<T>> => {
     let result: Outcome<T>;
     try {
       result = parseOutcome(await call(), parse);
@@ -502,7 +502,7 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
       result = { ok: false, code: 'failed', reason: 'The request did not complete.' };
     }
     if (result.ok) setNotice(null);
-    await loadTree(chosenWorkspace.current);
+    await loadTree(chosenWorkspace.current, refreshInspection);
     return result;
   };
 
@@ -569,7 +569,10 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
 
   const setNavigation = (task:TaskItem,pinned:boolean,archived:boolean,operationId:string,expectedRevision:number):Promise<Outcome<TaskItem>> => {
     if(!bridge?.setNavigation)return Promise.resolve({ok:false,code:'failed',reason:'Navigation preferences are unavailable.'});
-    return mutate(()=>bridge.setNavigation!({operationId,workspaceId:task.workspaceId,taskId:task.taskId,expectedRevision,pinned,archived}),parseTask);
+    // Personal navigation changes require a fresh authorized tree, but do not
+    // change execution policy. A slow sandbox inspection must not hold Pin or
+    // Archive in their saving state after the navigation write has completed.
+    return mutate(()=>bridge.setNavigation!({operationId,workspaceId:task.workspaceId,taskId:task.taskId,expectedRevision,pinned,archived}),parseTask,false);
   };
   const reconnect = (destination:string) => {onShowSpecimen();setTimeout(()=>{const target=document.getElementById(destination)??document.querySelector<HTMLElement>(`[data-provider-action="${destination}"]`);target?.focus();target?.scrollIntoView?.({block:'center'});},100);};
   const signIn = async () => {

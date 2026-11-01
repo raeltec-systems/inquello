@@ -136,6 +136,7 @@ function harness(options: { runtime?: (method: string, params: Record<string, un
     engagementCreation: { enabled: true },
   };
   const policy = new PolicyService({
+    executionPlatform: 'linux',
     permissions: new PermissionMediator({ runtime, logger: recordingLogger(), newId: () => '00000000-0000-4000-8000-0000000000aa' }),
     runtime,
     identity: organiseIdentity,
@@ -435,6 +436,7 @@ function pendingToolHarness() {
   };
   const mediator = new PermissionMediator({ runtime, logger: recordingLogger(), newId: () => requestId, setTimer: () => 0, clearTimer: () => undefined });
   const policy = new PolicyService({
+    executionPlatform: 'linux',
     runtime,
     identity: {
       principalId: () => state.principal,

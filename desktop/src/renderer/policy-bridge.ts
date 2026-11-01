@@ -62,6 +62,7 @@ export interface BroadModeOption {
 }
 
 export interface TaskPolicyItem extends PolicyItem {
+  transferRecovery?: BroadMode;
   taskId: string;
   broadMode: {
     label: string;
@@ -202,8 +203,10 @@ export function parseTaskPolicy(value: unknown): TaskPolicyItem | null {
   const sandboxLabel = text(sandbox?.label);
   const sandboxStatus = sandbox?.status;
   if (sandboxLabel === null || (sandboxStatus !== 'available' && sandboxStatus !== 'unavailable' && sandboxStatus !== 'not-applicable')) return null;
+  if (r.transferRecovery !== undefined && (!isMode(r.transferRecovery) || sandboxStatus !== 'unavailable')) return null;
   return {
     ...base,
+    ...(isMode(r.transferRecovery) ? { transferRecovery: r.transferRecovery } : {}),
     taskId,
     broadMode: { label, revision, recorded: broad.recorded, status, effectiveMode: broad.effectiveMode, reach, statusLabel, suspendedReason },
     options,

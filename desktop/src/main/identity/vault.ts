@@ -1,3 +1,4 @@
+import { ensurePrivateDirectory, restrictPrivateFile } from '../runtime/private-paths';
 /**
  * The credential vault: where the main process keeps the Inquello session.
  *
@@ -128,8 +129,7 @@ export class CredentialVault {
   }
 
   private ensureDir(): void {
-    fs.mkdirSync(this.options.dir, { recursive: true, mode: 0o700 });
-    fs.chmodSync(this.options.dir, 0o700);
+    ensurePrivateDirectory(this.options.dir);
   }
 
   private writePrivate(file: string, data: Buffer | string): void {
@@ -137,7 +137,7 @@ export class CredentialVault {
     const temp = `${file}.${process.pid}.${randomUUID()}.tmp`;
     try {
       fs.writeFileSync(temp, data, { mode: 0o600, flag: 'wx' });
-      fs.chmodSync(temp, 0o600);
+      restrictPrivateFile(temp);
       fs.renameSync(temp, file);
     } finally {
       fs.rmSync(temp, { force: true });

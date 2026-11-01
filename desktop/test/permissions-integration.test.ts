@@ -1,3 +1,4 @@
+import { taskFiles } from './task-files';
 /**
  * Story 1.20 end to end: command rules and permission to act through the
  * single path (`PolicyService.runTool`, the `PermissionMediator`, the real
@@ -39,7 +40,7 @@ import {
 } from '../src/main/policy';
 import { AppServerRuntime, resolveAppServerBinary, runtimeChildEnv, writeRuntimeConfig } from '../src/main/runtime';
 import { fakeSafeStorage } from './identity-fakes';
-import { recordingLogger, removeTempDirs, tempDir } from './helpers';
+import { recordingLogger, removeTempDirs, removeGuestTaskStorage, tempDir } from './helpers';
 
 const desktop = path.resolve(__dirname, '..');
 const topologyBinary =
@@ -129,11 +130,17 @@ describe.skipIf(!databaseConfigured)('permission to act against the real runtime
     writeRuntimeConfig(runtimeHome);
     runtime = new AppServerRuntime({
       command: appServer.path,
+    commandArgsPrefix: ['--disable-plugin-startup-tasks-for-tests'],
       env: runtimeChildEnv(process.env, { serviceConfigEnv: SERVICE_CONFIG_ENV, codexHome: runtimeHome, workingStore }),
       clientInfo: { name: 'inquello_desktop', title: 'Inquello', version: '0.0.0-test' },
       schemaStamp,
       stderrLogPath: path.join(dir, 'logs', 'app-server-stderr.log'),
       logger: recordingLogger(),
+      onServerRequest: async (method, params) => {
+        if (method === 'inquello/context/authorize') return organise?.authorizeContext(params) ?? { available: false, snapshot: null, serviceEngagementIds: [] };
+        if (method === 'inquello/tasks/authority') return { workspacePolicy: await policy?.startPolicy((params as { workspaceId: string }).workspaceId) ?? null };
+        return undefined;
+      },
     });
     await runtime.start();
     const transport = httpsTransport(config.ca);
@@ -160,6 +167,7 @@ describe.skipIf(!databaseConfigured)('permission to act against the real runtime
   afterAll(async () => {
     await runtime?.stop();
     await stopTopology();
+    await removeGuestTaskStorage();
     removeTempDirs();
   });
 
@@ -186,10 +194,10 @@ describe.skipIf(!databaseConfigured)('permission to act against the real runtime
     expect(card.alternatives.map((alternative) => alternative.label)).toEqual(['Deny', 'Deny and add a rule to always ask', 'Deny and forbid this prefix']);
     expect(ok(await policy.decidePermission({ operationId: randomUUID(), requestId: card.requestId, choice: 'deny' }))).toMatchObject({ outcome: 'denied', text: 'Denied: nothing ran.' });
     expect(await denied).toMatchObject({ ok: false, code: 'permission-denied' });
-    expect(fs.existsSync(path.join(settings.folders.output, 'asked.txt'))).toBe(false);
+    expect(await taskFiles(settings.folders.working, identity.principalId()!).read('output/asked.txt')).toBeNull();
     // A stale confirmation is refused and runs nothing.
     expect(await policy.decidePermission({ operationId: randomUUID(), requestId: card.requestId, choice: 'run' })).toMatchObject({ ok: false, code: 'not-pending', reason: NO_LONGER_PENDING });
-    expect(fs.existsSync(path.join(settings.folders.output, 'asked.txt'))).toBe(false);
+    expect(await taskFiles(settings.folders.working, identity.principalId()!).read('output/asked.txt')).toBeNull();
 
     // Run: this one request runs, still inside the Task's profile.
     const allowed = policy.runTool(task, argv, { timeoutMs: 30_000 });
@@ -198,11 +206,11 @@ describe.skipIf(!databaseConfigured)('permission to act against the real runtime
     expect(ok(await policy.decidePermission({ operationId: randomUUID(), requestId: second.requestId, choice: 'run' })).outcome).toBe('allowed');
     const ran = ok(await allowed);
     expect(ran.permissionRequestId).toBe(second.requestId);
-    expect(fs.existsSync(path.join(settings.folders.output, 'asked.txt'))).toBe(true);
+    expect(await taskFiles(settings.folders.working, identity.principalId()!).read('output/asked.txt')).toBe('');
     // Allow never lifts the sandbox: the write outside is denied with its boundary.
     expect(ran.exitCode).not.toBe(0);
     expect(texts(ran)).toEqual([outsideDenialText(PERMITTED)]);
-    expect(fs.existsSync(path.join(path.dirname(settings.folders.working), other, 'outside.txt'))).toBe(false);
+    expect(await taskFiles(path.join(path.dirname(settings.folders.working), other), identity.principalId()!).read('outside.txt')).toBeNull();
     // The permission was for that one request: the next run asks again.
     const again = policy.runTool(task, argv, { timeoutMs: 30_000 });
     const third = await cardFor(task, command);
@@ -253,7 +261,7 @@ describe.skipIf(!databaseConfigured)('permission to act against the real runtime
     expect(off.workspaces[0]!.reviewer).toEqual({ enabled: false, state: 'off', label: 'Automated permission review: off. Every request comes to you.' });
     usePolicy({ automatic_permission_review: true, command_rules: [{ prefix: ['/usr/bin/touch'], decision: 'prompt' }] });
     const on = await policy.permissionSettings();
-    expect(on.workspaces[0]!.reviewer).toEqual({ enabled: true, state: 'not_available', label: 'Automated permission review: not available (no processing route)' });
+    expect(on.workspaces[0]!.reviewer).toEqual({ enabled: true, state: 'not_available', label: 'Automated permission review: not available (no verified eligible Task route)' });
     const task = await newTask('Reviewer on');
     expect(ok(await policy.forTask(task)).reviewer.state).toBe('not_available');
     // The request still comes to the person.
@@ -282,7 +290,7 @@ describe.skipIf(!databaseConfigured)('permission to act against the real runtime
     });
     const result = await expiring.runTool(task, ['/usr/bin/touch', 'output/late.txt']);
     expect(result).toMatchObject({ ok: false, code: 'permission-denied' });
-    expect(fs.existsSync(path.join(settings.folders.output, 'late.txt'))).toBe(false);
+    expect(await taskFiles(settings.folders.working, identity.principalId()!).read('output/late.txt')).toBeNull();
     expect(ok(await policy.pendingPermissions(task))).toEqual([]);
   }, 60_000);
 });

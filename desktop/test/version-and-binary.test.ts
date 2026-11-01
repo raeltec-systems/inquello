@@ -83,10 +83,10 @@ describe('runtimeChildEnv', () => {
       },
       { serviceConfigEnv: 'INQUELLO_SERVICE_CONFIG' },
     );
-    expect(env).toEqual({ PATH: '/bin', CODEX_HOME: '/h' });
+    expect(env).toEqual({ PATH: '/bin', CODEX_HOME: '/h', INQUELLO_SANDBOX_LOG_RETENTION: 'until-owner-deletes' });
   });
 
   it('sets CODEX_HOME when given', () => {
-    expect(runtimeChildEnv({ CODEX_HOME: '/a' }, { serviceConfigEnv: 'X', codexHome: '/b' })).toEqual({ CODEX_HOME: '/b' });
+    expect(runtimeChildEnv({ CODEX_HOME: '/a' }, { serviceConfigEnv: 'X', codexHome: '/b' })).toEqual({ CODEX_HOME: '/b', INQUELLO_SANDBOX_LOG_RETENTION: 'until-owner-deletes' });
   });
 });

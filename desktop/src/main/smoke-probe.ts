@@ -1,3 +1,4 @@
+import { isPrivatePath } from './runtime/private-paths';
 /**
  * `--smoke` renderer privilege probe (AD-5).
  *
@@ -128,18 +129,115 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 
 import type { WebContents } from 'electron';
 
-import { digestFile, exportedFilePath, governedRoots, importData, isInside, readManifest, ruleBlockers, takeInventory, type DataService, type GovernedRoots } from './data';
+import { digestFile, exportedFilePath, governedRoots, isInside, readManifest, ruleBlockers, takeInventory, type DataService, type GovernedRoots, type ImportActionResult } from './data';
 import type { IdentityWiring } from './identity';
 import type { CapabilityService } from './capabilities/service';
 import type { CapabilityInventory, CapabilityResult } from './capabilities/types';
 import type { OrganiseService, TaskView } from './organise';
 import { EXECUTION_SANDBOX_STATUS, networkDenialText, outsideDenialText, type PolicyService, type ToolDenial } from './policy';
+import { BROAD_MODE_REACH } from './policy/views';
 import type { ProviderService } from './providers';
 import { isProviderCredentialVar } from './runtime/env';
+import { taskFiles } from './runtime/probe-task-files';
 import type { BlockedKind } from './security/policy';
+
+/** Exercise main's identity transition hooks as well as the session itself. */
+function smokeIdentity(contents: WebContents, action: 'signIn' | 'signOut'): Promise<{ ok: boolean }> {
+  return contents.executeJavaScript(`globalThis.inquello.identity.${action}()`);
+}
+
+/** Story 1.30 only: real named IPC, native persistence and Chromium modal behavior.
+ * Retained conversation/Inbox races are covered by the native and renderer suites;
+ * this probe creates an owned metadata draft, never fabricated conversation history.
+ */
+export async function probeSavedNavigation(contents: WebContents, options: {
+  seedFile: string | null; identity: IdentityWiring; restartRuntime: () => Promise<void>;
+}): Promise<{ ok: boolean; failures: string[]; checks: string[] }> {
+  const checks: string[] = [], failures: string[] = [];
+  const evaluate = <T,>(body: string): Promise<T> => contents.executeJavaScript(`(async () => {
+    ${SHELL_HELPERS}
+    const require = (value, message) => { if (!value) throw new Error(message); return value; };
+    const button = (name, root = document) => [...root.querySelectorAll('button,[role="menuitem"]')].find(el => !el.disabled && el.getAttribute('aria-disabled') !== 'true' && (el.getAttribute('aria-label') || document.getElementById(el.getAttribute('aria-labelledby'))?.textContent || el.textContent).trim() === name);
+    ${body}
+  })()`);
+  try {
+    const seed = JSON.parse(fs.readFileSync(options.seedFile ?? '', 'utf8')) as { workspace_id: string; invite_id: string };
+    if (!(await smokeIdentity(contents, 'signIn')).ok) throw new Error('Seeded sign-in failed');
+    const workspaceId = seed.workspace_id;
+    const accepted = await options.identity.session.withAccess(access => options.identity.service!.acceptInvite(access, seed.invite_id));
+    if (accepted?.workspace_id !== workspaceId) throw new Error('Fictional Workspace invitation was not accepted');
+    const created = await evaluate<{ taskId: string }>(`
+      await globalThis.inquello.organise.getWorkspaces();
+      const result = await globalThis.inquello.organise.createTask({ operationId: ${JSON.stringify(randomUUID())}, workspaceId: ${JSON.stringify(workspaceId)}, engagementId: null, folderId: null, title: 'Procurement January–June navigation audit' });
+      require(result.ok, 'Could not create owned draft'); return result.value;
+    `);
+    const taskId = created.taskId;
+    await evaluate(`
+      require(await openShell(), 'Shell unavailable');
+      const row = await wait(() => q('[data-task-id="${taskId}"] a'), ${SHELL_SETTLE_MS});
+      require(row, 'Owned draft not shown').click();
+      require(await wait(() => q('[data-task-view="${taskId}"]'), ${SHELL_SETTLE_MS}), 'Draft did not open');
+      const menu = require(button('Organise Task'), 'Organise menu unavailable'); menu.click();
+      require(await wait(() => button('Pin'), 5000), 'Pin unavailable').click();
+      require(await wait(() => q('[data-task-id="${taskId}"]')?.textContent.includes('Pinned'), 5000), 'Pin did not persist to navigation');
+      require(button('Organise Task'), 'Organise menu disappeared').click();
+      require(await wait(() => button('Archive'), 5000), 'Archive unavailable').click();
+      require(await wait(() => !q('[data-task-id="${taskId}"]'), 5000), 'Archived Task remained in navigation');
+    `);
+    checks.push('Pin and archive through actual Task menus');
+    await options.restartRuntime();
+    await evaluate(`
+      const result = await globalThis.inquello.organise.getTree({workspaceId:${JSON.stringify(workspaceId)}});
+      const task = result.ok && result.value.tasks.find(t => t.taskId === '${taskId}');
+      require(task?.pinned && task?.archived && task.runtimeThreadId === null, 'Restart lost preferences or started execution');
+    `);
+    checks.push('Native restart preserves pin/archive without execution');
+    contents.focus();
+    for (const modifier of ['control', 'meta'] as const) {
+      await pressKey(contents, 'K', [modifier]);
+      await evaluate(`require(await wait(() => q('dialog[open][aria-label="Search saved work"] input[type="search"]'), 5000), 'Shortcut did not open Search');`);
+      await pressKey(contents, 'Escape');
+      await evaluate(`require(!q('dialog[open]'), 'Escape did not close Search');`);
+    }
+    checks.push('Independent Ctrl+K / Cmd+K and Escape in Chromium');
+    await pressKey(contents, 'K', ['control']);
+    await evaluate(`
+      const dialog = require(q('dialog[open]'), 'Search missing');
+      type(q('input[type="search"]', dialog), 'Procurement January');
+      q('form', dialog).requestSubmit();
+      require(await wait(() => dialog.textContent.includes('No matches in'), 10000), 'Archived work appeared without explicit filter');
+      q('input[type="checkbox"]', dialog).click();
+      q('form', dialog).requestSubmit();
+      const hit = await wait(() => [...dialog.querySelectorAll('.iq-saved-results button')].find(el => el.textContent.includes('Procurement January')), 10000);
+      require(hit, 'Archived search hit missing').click();
+      require(await wait(() => !q('dialog[open]') && q('[data-task-view="${taskId}"]'), 10000), 'Archived hit did not reopen');
+      require(q('[data-task-view]').textContent.includes('Opening does not unarchive'), 'Reopen silently unarchived');
+      require(button('Organise Task'), 'Reopened Task menu unavailable').click();
+      require(await wait(() => button('Unarchive'), 5000), 'Unarchive unavailable').click();
+      require(await wait(() => q('[data-task-id="${taskId}"]'), 5000), 'Unarchive did not restore navigation');
+      const tree = await globalThis.inquello.organise.getTree({workspaceId:${JSON.stringify(workspaceId)}});
+      const task = tree.ok && tree.value.tasks.find(t => t.taskId === '${taskId}');
+      require(task?.pinned && !task.archived && task.runtimeThreadId === null, 'Navigation changed execution or lost the Task');
+    `);
+    checks.push('Explicit archive filter, fresh reopen and unarchive without provider credentials');
+    if (!(await smokeIdentity(contents, 'signOut')).ok) throw new Error('Sign-out failed');
+    await evaluate(`
+      const result = await globalThis.inquello.organise.search({workspaceId:${JSON.stringify(workspaceId)},query:'Procurement January',includeArchived:true,cursor:null});
+      require(!result.ok, 'Signed-out search disclosed saved work');
+      require(await wait(() => !q('[data-task-view]') && !q('.iq-saved-results'), 5000), 'Signed-out renderer retained saved work');
+    `);
+    checks.push('Sign-out removes rendered work and denies fresh search');
+  } catch (error) {
+    failures.push(error instanceof Error ? error.message : String(error));
+  } finally {
+    await smokeIdentity(contents, 'signOut').catch(() => undefined);
+  }
+  return { ok: failures.length === 0, failures, checks };
+}
 
 const PROBE_TARGET = 'https://example.com/';
 const NAVIGATION_SETTLE_MS = 500;
@@ -504,7 +602,7 @@ export function evaluatePrivileges(
   for (const name of FORBIDDEN_GLOBALS) {
     if (probe.globals[name] !== 'undefined') failures.push(`renderer has ${name} (${probe.globals[name] ?? 'not probed'})`);
   }
-  if (JSON.stringify(probe.bridge) !== JSON.stringify(EXPECTED_BRIDGE_TREE)) {
+  if (!isDeepStrictEqual(probe.bridge, EXPECTED_BRIDGE_TREE)) {
     failures.push(`inquello exposes ${JSON.stringify(probe.bridge)}`);
   }
   const status = probe.status as { state?: unknown; runtimeVersion?: unknown } | undefined;
@@ -856,7 +954,7 @@ export interface IdentityProbeRead {
   afterSignIn?: unknown;
   domAfterSignIn?: AccountRead | null;
   /** The vault while signed in. */
-  vault?: { exists: boolean; mode: number | null; dirMode: number | null; plaintextSecrets: number };
+  vault?: { exists: boolean; mode: number | null; dirMode: number | null; windowsAclPrivate?: boolean; plaintextSecrets: number };
   signOut?: { pressed: boolean; reached: boolean };
   afterSignOut?: unknown;
   domAfterSignOut?: AccountRead | null;
@@ -908,8 +1006,9 @@ export function evaluateIdentity(read: IdentityProbeRead): IdentityReport {
     if (read.domAfterSignIn?.identity !== 'signed-in' || read.domAfterSignIn.sharedService !== 'available') failures.push('the Account block does not show signed-in with the service available');
     if (!read.vault?.exists) failures.push('no encrypted credential file was written');
     else {
-      if (read.vault.mode !== 0o600) failures.push(`the credential file mode is ${read.vault.mode?.toString(8)}, not 600`);
-      if (read.vault.dirMode !== 0o700) failures.push(`the identity directory mode is ${read.vault.dirMode?.toString(8)}, not 700`);
+      if (read.vault.windowsAclPrivate === false) failures.push('the credential paths have an unsafe Windows ACL');
+      if (read.vault.windowsAclPrivate === undefined && read.vault.mode !== 0o600) failures.push(`the credential file mode is ${read.vault.mode?.toString(8)}, not 600`);
+      if (read.vault.windowsAclPrivate === undefined && read.vault.dirMode !== 0o700) failures.push(`the identity directory mode is ${read.vault.dirMode?.toString(8)}, not 700`);
       if (read.vault.plaintextSecrets !== 0) failures.push(`${read.vault.plaintextSecrets} secret(s) appear in plaintext in the credential file`);
     }
     if (read.secretsChecked < MIN_SECRETS) failures.push(`only ${read.secretsChecked} secrets were recorded for the leak check`);
@@ -931,6 +1030,12 @@ export function evaluateIdentity(read: IdentityProbeRead): IdentityReport {
     secretsChecked: read.secretsChecked,
     rendererLeaks: read.rendererLeaks,
   };
+}
+
+function windowsAclRead(file: string): { windowsAclPrivate?: boolean } {
+  return process.platform === 'win32'
+    ? { windowsAclPrivate: isPrivatePath(file, 'file') && isPrivatePath(path.dirname(file), 'directory') }
+    : {};
 }
 
 function modeOf(file: string): number | null {
@@ -959,7 +1064,7 @@ export async function probeIdentity(contents: WebContents, identity: IdentityWir
     } catch {
       exists = false;
     }
-    read.vault = { exists, mode: modeOf(file), dirMode: modeOf(path.dirname(file)), plaintextSecrets };
+    read.vault = { exists, mode: modeOf(file), dirMode: modeOf(path.dirname(file)), ...windowsAclRead(file), plaintextSecrets };
     seen.push((await contents.executeJavaScript(RENDERER_DUMP)) as string);
     const second = (await contents.executeJavaScript(SIGN_OUT_PROBE)) as Pick<IdentityProbeRead, 'signOut' | 'afterSignOut' | 'domAfterSignOut'>;
     Object.assign(read, second);
@@ -980,6 +1085,7 @@ export async function probeIdentity(contents: WebContents, identity: IdentityWir
 export const REQUIRED_OMISSIONS = ['identity-session', 'chromium-profile'] as const;
 
 export interface DataProbeRead {
+  unownedHistoryRefused: boolean;
   policyLoaded: boolean;
   ruleBlockers: number;
   categories: number;
@@ -988,7 +1094,7 @@ export interface DataProbeRead {
   disabledHeld: string[];
   renderer: { policyLoaded: boolean; categories: number; blockShown: boolean; pathRejected: boolean };
   export: { ok: boolean; reason?: string; included: Record<string, number>; omissions: string[] };
-  import: { ok: boolean; reason?: string; restored: number; notRestored: number; byteIdentical: boolean; syntheticRestored: boolean };
+  import: { ok: boolean; reason?: string; restored: number; notRestored: number; byteIdentical: boolean; ownedMetadataRestored: boolean };
 }
 
 export interface DataReport extends DataProbeRead {
@@ -1009,13 +1115,14 @@ export function evaluateData(read: DataProbeRead): DataReport {
   if (!read.renderer.blockShown) failures.push('the Local data block did not list the categories');
   if (!read.renderer.pathRejected) failures.push('a renderer-supplied path to data.export was not rejected');
   if (!read.export.ok) failures.push(`the export failed: ${read.export.reason ?? 'no reason'}`);
-  if (!read.export.included['task-history']) failures.push('the export did not include task history');
+  if (!read.unownedHistoryRefused) failures.push('unowned synthetic history was not refused');
+  if (!read.export.included['working-store']) failures.push('the export did not include owned Task metadata');
   for (const id of REQUIRED_OMISSIONS) if (!read.export.omissions.includes(id)) failures.push(`the export did not declare ${id} as omitted`);
   if (!read.import.ok) failures.push(`the reimport failed: ${read.import.reason ?? 'no reason'}`);
   const exported = Object.values(read.export.included).reduce((sum, count) => sum + count, 0);
   if (read.import.restored !== exported || read.import.notRestored !== 0) failures.push(`reimport restored ${read.import.restored} of ${exported} files`);
   if (!read.import.byteIdentical) failures.push('reimported files differ from the export');
-  if (!read.import.syntheticRestored) failures.push('the synthetic session file did not come back byte-identical');
+  if (!read.import.ownedMetadataRestored) failures.push('owned Task metadata did not come back byte-identical');
   return { ok: failures.length === 0, failures, ...read };
 }
 
@@ -1048,6 +1155,10 @@ function realpathOrNull(file: string | null): string | null {
 export interface DataProbeOptions {
   service: DataService;
   roots: GovernedRoots;
+  identity: IdentityWiring;
+  organise: OrganiseService;
+  seedFile: string | null;
+  recover(roots: GovernedRoots, source: string): Promise<ImportActionResult>;
   /** `codexHome` from the runtime's handshake. */
   codexHome: string | null;
   tempBase?: string;
@@ -1058,6 +1169,7 @@ export async function probeData(contents: WebContents, options: DataProbeOptions
   const { service, roots } = options;
   const policy = service.policy;
   const read: DataProbeRead = {
+    unownedHistoryRefused: false,
     policyLoaded: policy !== null,
     ruleBlockers: policy ? ruleBlockers(policy).length : 0,
     categories: policy?.categories.length ?? 0,
@@ -1069,11 +1181,11 @@ export async function probeData(contents: WebContents, options: DataProbeOptions
     disabledHeld: [],
     renderer: { policyLoaded: false, categories: 0, blockShown: false, pathRejected: false },
     export: { ok: false, included: {}, omissions: [] },
-    import: { ok: false, restored: 0, notRestored: 0, byteIdentical: false, syntheticRestored: false },
+    import: { ok: false, restored: 0, notRestored: 0, byteIdentical: false, ownedMetadataRestored: false },
   };
   if (!policy) return evaluateData(read);
 
-  // A synthetic session file, so the round trip carries task history.
+  // A filename or a synthetic flag cannot establish ownership of history.
   const sessionRel = `sessions/2026/10/28/rollout-smoke-${randomUUID()}.jsonl`;
   const sessionFile = path.join(roots['runtime-home'], ...sessionRel.split('/'));
   const sessionBytes = `${JSON.stringify({ type: 'session_meta', payload: { id: randomUUID(), source: 'inquello-smoke', synthetic: true } })}\n`;
@@ -1089,6 +1201,17 @@ export async function probeData(contents: WebContents, options: DataProbeOptions
 
   const temps: string[] = [];
   try {
+    const signIn = await contents.executeJavaScript('globalThis.inquello.identity.signIn()') as { ok: boolean };
+    if (!signIn.ok) throw new Error('Data smoke sign-in failed');
+    await options.organise.syncPrincipal();
+    const seed = JSON.parse(fs.readFileSync(options.seedFile ?? '', 'utf8')) as { workspace_id: string; invite_id: string };
+    const accepted = await options.identity.session.withAccess(access => options.identity.service!.acceptInvite(access, seed.invite_id));
+    if (accepted?.workspace_id !== seed.workspace_id) throw new Error('Data smoke Workspace invitation failed');
+    const task = await options.organise.createTask({ operationId: randomUUID(), workspaceId: seed.workspace_id, engagementId: null, folderId: null, title: 'Synthetic recovery draft' });
+    if (!task.ok) throw new Error(task.reason);
+    const refused = await service.exportData();
+    read.unownedHistoryRefused = !refused.ok && refused.reason.includes('ownership');
+    fs.rmSync(sessionFile, { force: true });
     const exported = await service.exportData();
     if (!exported.ok) {
       read.export = { ok: false, reason: exported.reason, included: {}, omissions: [] };
@@ -1105,7 +1228,9 @@ export async function probeData(contents: WebContents, options: DataProbeOptions
     temps.push(target);
     const targetRoots = governedRoots(path.join(target, 'user-data'), path.join(target, 'user-data', 'logs'));
     try {
-      const result = await importData({ policy, roots: targetRoots, source: exported.export.path });
+      const recovered = await options.recover(targetRoots, exported.export.path);
+      if (!recovered.ok) throw new Error(recovered.reason);
+      const result = recovered.import;
       const manifest = readManifest(exported.export.path);
       let identical = true;
       for (const entry of manifest.included) {
@@ -1116,22 +1241,21 @@ export async function probeData(contents: WebContents, options: DataProbeOptions
           if (!digest || digest.sha256 !== file.sha256 || original?.sha256 !== file.sha256) identical = false;
         }
       }
-      const syntheticBack = fs.existsSync(path.join(targetRoots['runtime-home'], ...sessionRel.split('/')))
-        ? fs.readFileSync(path.join(targetRoots['runtime-home'], ...sessionRel.split('/')), 'utf8')
-        : null;
+      const metadata = manifest.included.find(entry => entry.category === 'working-store');
       read.import = {
         ok: true,
         restored: result.restored.reduce((sum, entry) => sum + entry.files, 0),
         notRestored: result.notRestored.length,
         byteIdentical: identical,
-        syntheticRestored: syntheticBack === sessionBytes,
+        ownedMetadataRestored: identical && Boolean(metadata?.files.length) && !fs.existsSync(path.join(targetRoots['runtime-home'], ...sessionRel.split('/'))),
       };
     } catch (error) {
-      read.import = { ok: false, reason: (error as Error).message, restored: 0, notRestored: 0, byteIdentical: false, syntheticRestored: false };
+      read.import = { ok: false, reason: (error as Error).message, restored: 0, notRestored: 0, byteIdentical: false, ownedMetadataRestored: false };
     }
   } finally {
     for (const dir of temps) fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
     fs.rmSync(sessionFile, { force: true });
+    await contents.executeJavaScript('globalThis.inquello.identity.signOut()');
   }
   return evaluateData(read);
 }
@@ -1237,7 +1361,7 @@ export interface ProviderProbeRead {
     extraRejected: boolean;
   } | null;
   connectedStatus: { claude: string; storage: string; codex: string; account: string | null } | null;
-  vault: { exists: boolean; mode: number | null; dirMode: number | null; plaintext: boolean };
+  vault: { exists: boolean; mode: number | null; dirMode: number | null; windowsAclPrivate?: boolean; plaintext: boolean };
   authJson: boolean;
   /** Provider status before and after Inquello sign-out (both routes connected). */
   identitySignOut: { identityBefore: string; identityAfter: string; providersUnchanged: boolean } | null;
@@ -1283,8 +1407,9 @@ export function evaluateProviders(read: ProviderProbeRead): ProvidersReport {
   if (s && s.storage !== 'os-backed') failures.push(`the Claude key storage is ${s.storage}, not os-backed`);
   if (!read.vault.exists) failures.push('the Claude key vault file was not written');
   else {
-    if (read.vault.mode !== 0o600) failures.push(`the Claude key vault mode is ${read.vault.mode?.toString(8)}, not 600`);
-    if (read.vault.dirMode !== 0o700) failures.push(`the providers directory mode is ${read.vault.dirMode?.toString(8)}, not 700`);
+    if (read.vault.windowsAclPrivate === false) failures.push('the provider credential paths have an unsafe Windows ACL');
+    if (read.vault.windowsAclPrivate === undefined && read.vault.mode !== 0o600) failures.push(`the Claude key vault mode is ${read.vault.mode?.toString(8)}, not 600`);
+    if (read.vault.windowsAclPrivate === undefined && read.vault.dirMode !== 0o700) failures.push(`the providers directory mode is ${read.vault.dirMode?.toString(8)}, not 700`);
     if (read.vault.plaintext) failures.push('the Claude key appears in plaintext in the vault file');
   }
   if (read.authJson) failures.push('the runtime wrote auth.json');
@@ -1403,7 +1528,7 @@ export async function probeProviders(contents: WebContents, options: ProviderPro
   }
   read.initial = { claude: initial.claude.state, codex: initial.codex.state };
   // With the shared service configured, be signed in, so the sign-out below is a real one.
-  if (identity.config.kind === 'configured') await identity.session.signIn();
+  if (identity.config.kind === 'configured') await contents.executeJavaScript('globalThis.inquello.identity.signIn()');
   const identityBefore = JSON.stringify(await identity.session.getStatus());
 
   const temps: string[] = [];
@@ -1417,17 +1542,26 @@ export async function probeProviders(contents: WebContents, options: ProviderPro
     const vaultFile = providers.vault.filePath;
     try {
       const bytes = fs.readFileSync(vaultFile);
-      read.vault = { exists: true, mode: modeOf(vaultFile), dirMode: modeOf(path.dirname(vaultFile)), plaintext: needles.some((needle) => bytes.includes(Buffer.from(needle, 'utf8'))) };
+      read.vault = { exists: true, mode: modeOf(vaultFile), dirMode: modeOf(path.dirname(vaultFile)), ...windowsAclRead(vaultFile), plaintext: needles.some((needle) => bytes.includes(Buffer.from(needle, 'utf8'))) };
     } catch {
       read.vault = { exists: false, mode: null, dirMode: null, plaintext: false };
     }
     read.authJson = fs.existsSync(path.join(roots['runtime-home'], 'auth.json'));
     read.identityUnchanged = JSON.stringify(await identity.session.getStatus()) === identityBefore;
 
+    // Export while signed in, through current native ownership and service
+    // authorization. A signed-out export is intentionally unavailable.
+    const exported = await options.data.exportData();
+    read.exportOk = exported.ok;
+    if (exported.ok) {
+      temps.push(path.dirname(exported.export.path));
+      for (const file of filesUnder(exported.export.path)) search(`export:${path.relative(exported.export.path, file)}`, fs.readFileSync(file));
+    }
+
     // Sign out of Inquello while both routes are connected: provider states stay.
     const beforeSignOut = JSON.stringify(statusSummary(await providers.getStatus()));
     const identityStateBefore = (await identity.session.getStatus()).identity.state;
-    await identity.session.signOut();
+    await contents.executeJavaScript('globalThis.inquello.identity.signOut()');
     const identityStateAfter = (await identity.session.getStatus()).identity.state;
     read.identitySignOut = {
       identityBefore: identityStateBefore,
@@ -1437,12 +1571,6 @@ export async function probeProviders(contents: WebContents, options: ProviderPro
     const identityAfterSignOut = JSON.stringify(await identity.session.getStatus());
 
     // Everything the sentinel could leak into while it is held.
-    const exported = await options.data.exportData();
-    read.exportOk = exported.ok;
-    if (exported.ok) {
-      temps.push(path.dirname(exported.export.path));
-      for (const file of filesUnder(exported.export.path)) search(`export:${path.relative(exported.export.path, file)}`, fs.readFileSync(file));
-    }
     for (const root of [roots['user-data'], roots.logs]) {
       for (const file of filesUnder(root)) {
         try {
@@ -1537,7 +1665,9 @@ const SHELL_SIGNED_OUT_PROBE = `(async () => {
   return out;
 })()`;
 
-/** Creates an Engagement, a folder and a Task in it through the Shell, then reads the Header. */
+/** Creates the Engagement/folder through the Shell, verifies New thread opens
+ * the unsent start surface, then seeds an owned draft through the named bridge
+ * for navigation checks. No inference is started to fabricate saved work. */
 function shellCreateProbe(workspaceId: string): string {
   return `(async () => {
     ${SHELL_HELPERS}
@@ -1568,8 +1698,17 @@ function shellCreateProbe(workspaceId: string): string {
     const folder = await wait(() => q('[data-folder-id]'), ${SHELL_SETTLE_MS});
     out.folderId = folder ? folder.getAttribute('data-folder-id') : null;
     out.newTaskPressed = press('[data-folder-id] [data-action="new-folder-task"]');
+    out.newTaskDraftShown = !!(await wait(() => q('[data-start-view] textarea'), 5000));
+    const before = await globalThis.inquello.organise.getTree({workspaceId:${JSON.stringify(workspaceId)}});
+    out.newTaskCreatedNothing = before.ok && !before.value.tasks.some(task => task.folderId === out.folderId);
+    const created = await globalThis.inquello.organise.createTask({operationId:crypto.randomUUID(),workspaceId:${JSON.stringify(workspaceId)},engagementId:out.engagementId,folderId:out.folderId,title:'Untitled thread'});
+    if (!created.ok) return out;
+    location.hash = '#specimen';
+    await wait(() => !q('[data-shell]'), 5000);
+    await openShell();
     const task = await wait(() => q('[data-folder-id] [data-task-id]'), ${SHELL_SETTLE_MS});
     out.taskId = task ? task.getAttribute('data-task-id') : null;
+    if (task) q('a', task)?.click();
     await wait(() => text('[data-header-client]'), 5000);
     out.header = readHeader();
     out.openTaskShown = !!q('[data-task-view] [data-thread-placeholder]');
@@ -1624,12 +1763,14 @@ export interface OrganiseProbeRead {
     newFolderPressed: boolean;
     folderId: string | null;
     newTaskPressed: boolean;
+    newTaskDraftShown: boolean;
+    newTaskCreatedNothing: boolean;
     taskId: string | null;
     header: HeaderRead;
     openTaskShown: boolean;
     shareControls: number;
   };
-  attached?: boolean;
+  fabricatedAttachmentRefused?: boolean;
   before?: TaskView | null;
   move?: { shellOpened: boolean; opened: boolean; headerBefore: HeaderRead; movePressed: boolean; moved: boolean; notice: string | null; headerAfter: HeaderRead };
   after?: TaskView | null;
@@ -1661,6 +1802,7 @@ export function evaluateOrganise(read: OrganiseProbeRead): OrganiseReport {
   if (!read.inviteAccepted) failures.push('the seeded Workspace invite was not accepted');
   const create = read.create;
   if (!create?.shellOpened || !create.ready) failures.push('the Shell did not show the seeded Workspace');
+  if (!create?.newTaskDraftShown || !create.newTaskCreatedNothing) failures.push('New thread did not open an unsent draft without creating saved work');
   if (!create?.engagementId) failures.push(`no Engagement was created through the Sidebar${create?.engagementNotice ? ` (${create.engagementNotice})` : ''}`);
   if (!create?.folderId) failures.push('no folder was created through the Sidebar');
   if (!create?.taskId) failures.push('no Task was created in the folder through the Sidebar');
@@ -1673,14 +1815,14 @@ export function evaluateOrganise(read: OrganiseProbeRead): OrganiseReport {
   if (create?.header.visibility !== 'private') failures.push('the Header does not show the Task as private');
   if (!create?.openTaskShown) failures.push('the opened Task did not show its placeholder thread area');
   if (create?.shareControls !== 0) failures.push('a Share control is shown');
-  if (!read.attached) failures.push('the synthetic thread ref could not be attached');
+  if (!read.fabricatedAttachmentRefused) failures.push('a fabricated thread binding was not refused');
   const before = read.before;
   const after = read.after;
   if (!read.move?.moved) failures.push(`the Task was not moved through the Move menu${read.move?.notice ? ` (${read.move.notice})` : ''}`);
   if (!before || !after) failures.push('the Task could not be read before and after the move');
   else {
     if (after.taskId !== before.taskId) failures.push('the move changed the Task ID');
-    if (after.runtimeThreadId !== SMOKE_THREAD_REF || before.runtimeThreadId !== SMOKE_THREAD_REF) failures.push('the move changed the thread ref');
+    if (after.runtimeThreadId !== null || before.runtimeThreadId !== null) failures.push('the draft acquired an unauthorized thread binding');
     if (JSON.stringify(after.sourceRefs) !== JSON.stringify(before.sourceRefs) || JSON.stringify(after.artifactRefs) !== JSON.stringify(before.artifactRefs)) {
       failures.push('the move changed the references');
     }
@@ -1725,11 +1867,17 @@ export async function probeOrganise(contents: WebContents, options: OrganiseProb
     read.seedRead = workspaceId !== null && inviteId !== null;
     if (!workspaceId || !inviteId) return evaluateOrganise(read);
 
-    read.signedIn = (await identity.session.signIn()).ok;
+    read.signedIn = (await smokeIdentity(contents, 'signIn')).ok;
     await organise.syncPrincipal();
     const service = identity.service;
-    const accepted = service ? await identity.session.withAccess((access) => service.acceptInvite(access, inviteId)) : null;
-    read.inviteAccepted = accepted?.workspace_id === workspaceId;
+    // The data probe may already have consumed this one-use invitation. Verify
+    // current membership instead of replaying a completed invitation.
+    const memberships = service ? await identity.session.withAccess(access => service.workspaces(access)) : null;
+    read.inviteAccepted = memberships?.workspaces.some(workspace => workspace.workspace_id === workspaceId) ?? false;
+    if (!read.inviteAccepted) {
+      const accepted = service ? await identity.session.withAccess((access) => service.acceptInvite(access, inviteId)) : null;
+      read.inviteAccepted = accepted?.workspace_id === workspaceId;
+    }
 
     read.create = (await contents.executeJavaScript(shellCreateProbe(workspaceId))) as OrganiseProbeRead['create'];
     const taskId = read.create?.taskId ?? null;
@@ -1743,7 +1891,7 @@ export async function probeOrganise(contents: WebContents, options: OrganiseProb
     const attached = created
       ? await organise.attachThread({ operationId: randomUUID(), workspaceId, taskId, expectedRevision: created.revision, runtimeThreadId: SMOKE_THREAD_REF })
       : null;
-    read.attached = attached?.ok === true;
+    read.fabricatedAttachmentRefused = attached?.ok === false;
     read.before = await findTask();
     read.move = (await contents.executeJavaScript(shellMoveProbe(taskId))) as OrganiseProbeRead['move'];
     read.after = await findTask();
@@ -1760,7 +1908,7 @@ export async function probeOrganise(contents: WebContents, options: OrganiseProb
   } catch (error) {
     read.error = (error as Error).message;
   } finally {
-    const signOut = await identity.session.signOut().catch(() => ({ ok: false }));
+    const signOut = await smokeIdentity(contents, 'signOut').catch(() => ({ ok: false }));
     await organise.syncPrincipal().catch(() => undefined);
     read.signedOutAtEnd = signOut.ok;
   }
@@ -1960,7 +2108,7 @@ export async function probeStates(contents: WebContents, options: OrganiseProbeO
     read.seedRead = workspaceId !== null;
     if (!workspaceId) return evaluateStates(read);
 
-    read.signedIn = (await identity.session.signIn()).ok;
+    read.signedIn = (await smokeIdentity(contents, 'signIn')).ok;
     await organise.syncPrincipal();
     // The Shell lists only Workspaces the service names; this also remembers them.
     await organise.getWorkspaces();
@@ -2011,7 +2159,7 @@ export async function probeStates(contents: WebContents, options: OrganiseProbeO
   } catch (error) {
     read.error = (error as Error).message;
   } finally {
-    const signOut = await identity.session.signOut().catch(() => ({ ok: false }));
+    const signOut = await smokeIdentity(contents, 'signOut').catch(() => ({ ok: false }));
     await organise.syncPrincipal().catch(() => undefined);
     read.signedOutAtEnd = signOut.ok;
   }
@@ -2294,7 +2442,7 @@ export async function probeShellLayout(contents: WebContents, options: ShellLayo
         seed = {};
       }
       const workspaceId = typeof seed.workspace_id === 'string' ? seed.workspace_id : null;
-      read.signedIn = (await identity.session.signIn()).ok;
+      read.signedIn = (await smokeIdentity(contents, 'signIn')).ok;
       await organise.syncPrincipal();
       await organise.getWorkspaces();
       if (workspaceId) {
@@ -2347,7 +2495,7 @@ export async function probeShellLayout(contents: WebContents, options: ShellLayo
       // The window may already be gone.
     }
     if (configured) {
-      const signOut = await identity.session.signOut().catch(() => ({ ok: false }));
+      const signOut = await smokeIdentity(contents, 'signOut').catch(() => ({ ok: false }));
       await organise.syncPrincipal().catch(() => undefined);
       read.signedOutAtEnd = signOut.ok;
     }
@@ -2628,7 +2776,7 @@ export async function probeComposer(contents: WebContents, options: Omit<Organis
       seed = {};
     }
     const workspaceId = typeof seed.workspace_id === 'string' ? seed.workspace_id : null;
-    read.signedIn = (await identity.session.signIn()).ok;
+    read.signedIn = (await smokeIdentity(contents, 'signIn')).ok;
     await organise.syncPrincipal();
     await organise.getWorkspaces();
     const create = async (title: string) => {
@@ -2650,14 +2798,14 @@ export async function probeComposer(contents: WebContents, options: Omit<Organis
 
     read.signOut = (await contents.executeJavaScript(COMPOSER_SIGN_OUT_PROBE)) as ComposerProbeRead['signOut'];
     await organise.syncPrincipal().catch(() => undefined);
-    read.signedInAgain = (await identity.session.signIn()).ok;
+    read.signedInAgain = (await smokeIdentity(contents, 'signIn')).ok;
     await organise.syncPrincipal();
     read.after = (await contents.executeJavaScript(composerAfterProbe(a, b))) as ComposerProbeRead['after'];
   } catch (error) {
     read.error = (error as Error).message;
   } finally {
     if (configured) {
-      const signOut = await identity.session.signOut().catch(() => ({ ok: false }));
+      const signOut = await smokeIdentity(contents, 'signOut').catch(() => ({ ok: false }));
       await organise.syncPrincipal().catch(() => undefined);
       read.signedOutAtEnd = signOut.ok;
     }
@@ -2668,11 +2816,11 @@ export async function probeComposer(contents: WebContents, options: Omit<Organis
 // ---- effective managed policy (Story 1.18) -----------------------------------------
 
 const POLICY_SETTLE_MS = 20_000;
-const POLICY_SETTING_NAMES = ['sandbox', 'approval', 'network', 'mcp_tools', 'extensions', 'full_access', 'no_prompt'] as const;
+const POLICY_SETTING_NAMES = ['sandbox', 'approval', 'network', 'mcp_tools', 'extensions', 'allow_local_mcp_servers', 'full_access', 'no_prompt'] as const;
 const NOT_ENABLED = 'Not enabled — eligibility verification required';
 /** Wording a broader mode or the policy must never use. */
 const APPROVAL_WORDING = /approv|review|accept|professional/i;
-const FULL_ACCESS_REACH = 'Full access: commands on this Task run without sandbox limits on this device, and you will not be asked before actions.';
+const FULL_ACCESS_REACH = BROAD_MODE_REACH.full_access;
 
 /** Reads S07 in Settings: every setting with its source, the device layer and the Capability Contract. */
 function policySettingsProbe(workspaceId: string | null): string {
@@ -2702,7 +2850,9 @@ function policySettingsProbe(workspaceId: string | null): string {
       id: row.getAttribute('data-capability'),
       text: row.textContent,
     }));
-    out.wording = section ? ${APPROVAL_WORDING.toString()}.test(section.textContent) : true;
+    // Broader execution modes must not imply professional approval. Other
+    // settings legitimately describe approval requirements for tool connections.
+    out.wording = workspace ? ${APPROVAL_WORDING.toString()}.test([...workspace.querySelectorAll('[data-policy-setting="full_access"], [data-policy-setting="no_prompt"]')].map(row => row.textContent).join(' ')) : true;
     out.chips = section ? [...section.querySelectorAll('.iq-status-chip')].map((chip) => {
       const style = getComputedStyle(chip);
       return { className: chip.className, color: style.color, background: style.backgroundColor, border: style.borderTopColor };
@@ -2720,7 +2870,7 @@ function policyTaskProbe(taskId: string, operationId: string): string {
     const out = { shellOpened: await openShell() };
     const row = await wait(() => q('[data-task-id=${JSON.stringify(taskId)}] a'), ${SHELL_SETTLE_MS});
     if (row) row.click();
-    out.opened = !!(await wait(() => q('[data-task-view=${JSON.stringify(taskId)}]'), 5000));
+    out.opened = !!(await wait(() => q('[data-task-view=${JSON.stringify(taskId)}]'), ${SHELL_SETTLE_MS}));
     const mode = await wait(() => q('[data-task-policy=${JSON.stringify(taskId)}] [data-broad-mode]'), ${POLICY_SETTLE_MS});
     const section = q('[data-task-policy]');
     out.status = mode ? mode.getAttribute('data-broad-mode-status') : null;
@@ -2901,7 +3051,7 @@ export async function probePolicy(contents: WebContents, options: PolicyProbeOpt
     const workspaceId = typeof seed.workspace_id === 'string' ? seed.workspace_id : null;
     read.seedRead = workspaceId !== null;
     if (!workspaceId) return evaluatePolicy(read);
-    read.signedIn = (await identity.session.signIn()).ok;
+    read.signedIn = (await smokeIdentity(contents, 'signIn')).ok;
     await organise.syncPrincipal();
     await organise.getWorkspaces();
     const created = await organise.createTask({ operationId: randomUUID(), workspaceId, engagementId: null, folderId: null, title: 'Smoke policy' });
@@ -2918,7 +3068,7 @@ export async function probePolicy(contents: WebContents, options: PolicyProbeOpt
   } catch (error) {
     read.error = (error as Error).message;
   } finally {
-    const signOut = await identity.session.signOut().catch(() => ({ ok: false }));
+    const signOut = await smokeIdentity(contents, 'signOut').catch(() => ({ ok: false }));
     await organise.syncPrincipal().catch(() => undefined);
     read.signedOutAtEnd = signOut.ok;
   }
@@ -3076,7 +3226,7 @@ export async function probeToolBounds(contents: WebContents, options: ToolBounds
     const workspaceId = typeof seed.workspace_id === 'string' ? seed.workspace_id : null;
     read.seedRead = workspaceId !== null;
     if (!workspaceId) return evaluateToolBounds(read);
-    read.signedIn = (await identity.session.signIn()).ok;
+    read.signedIn = (await smokeIdentity(contents, 'signIn')).ok;
     await organise.syncPrincipal();
     await organise.getWorkspaces();
     const a = await organise.createTask({ operationId: randomUUID(), workspaceId, engagementId: null, folderId: null, title: 'Smoke tool bounds' });
@@ -3088,25 +3238,26 @@ export async function probeToolBounds(contents: WebContents, options: ToolBounds
     const settingsB = await policy.effectiveThreadSettings(b.value.taskId);
     if (!settingsA.ok || !settingsB.ok) throw new Error(`the thread settings could not be computed (${settingsA.ok ? '' : settingsA.reason} ${settingsB.ok ? '' : settingsB.reason})`);
     const folders = settingsA.value.folders;
-    const other = settingsB.value.folders.working;
-    const mode = fs.statSync(folders.working).mode & 0o777;
+    const files = taskFiles(folders.working, identity.session.principalId()!);
+    const otherFiles = taskFiles(settingsB.value.folders.working, identity.session.principalId()!);
+    const other = otherFiles.root;
     read.profile = {
       bounded: settingsA.value.reach.bounded,
       sandbox: settingsA.value.profile.sandbox,
       writableCount: settingsA.value.profile.writableRoots.length,
       allowlist: settingsA.value.profile.networkAllowlist,
       folderUnderUserData: isInside(options.userDataDir, folders.working),
-      private: process.platform === 'win32' || mode === 0o700,
+      private: isPrivatePath(folders.working, 'directory'),
     };
     // Another Task's synthetic file, written on this device by main.
-    fs.writeFileSync(path.join(other, 'synthetic-secret.txt'), 'synthetic', { mode: 0o600 });
+    await otherFiles.write('synthetic-secret.txt', 'synthetic');
     const inside = await toolRun(policy, taskA, ['/bin/sh', '-c', 'printf tool-bounds > output/a.txt && cat output/a.txt'], (out) => out === 'tool-bounds');
-    read.writeInside = { ...inside, fileOnDevice: fs.existsSync(path.join(folders.output, 'a.txt')) };
-    const outsideFile = path.join(other, 'written-by-another-task.txt');
+    read.writeInside = { ...inside, fileOnDevice: (await files.read('output/a.txt')) === 'tool-bounds' };
+    const outsideFile = `${other.replaceAll('\\', '/')}/written-by-another-task.txt`;
     const outside = await toolRun(policy, taskA, ['/bin/sh', '-c', 'printf x > "$1"', 'tool-bounds', outsideFile]);
-    read.writeOutside = { ...outside, fileOnDevice: fs.existsSync(outsideFile) };
+    read.writeOutside = { ...outside, fileOnDevice: (await otherFiles.read('written-by-another-task.txt')) !== null };
     read.writeSystem = await toolRun(policy, taskA, ['/bin/sh', '-c', 'printf x > /etc/inquello-tool-bounds']);
-    read.readOutside = await toolRun(policy, taskA, ['/bin/cat', path.join(other, 'synthetic-secret.txt')], (out) => out.includes('synthetic'));
+    read.readOutside = await toolRun(policy, taskA, ['/bin/cat', `${other.replaceAll('\\', '/')}/synthetic-secret.txt`], (out) => out.includes('synthetic'));
     read.network = await toolRun(policy, taskA, ['curl', '-sS', '-m', '20', `http://${TOOL_BOUNDS_DESTINATION}/`]);
     read.continued = await toolRun(policy, taskA, ['/bin/sh', '-c', 'cat output/a.txt'], (out) => out === 'tool-bounds');
     const ui = (await contents.executeJavaScript(toolBoundsRendererProbe(taskA, workspaceId))) as NonNullable<ToolBoundsProbeRead['renderer']> & { pageText?: string | null };
@@ -3118,7 +3269,7 @@ export async function probeToolBounds(contents: WebContents, options: ToolBounds
   } catch (error) {
     read.error = (error as Error).message;
   } finally {
-    const signOut = await identity.session.signOut().catch(() => ({ ok: false }));
+    const signOut = await smokeIdentity(contents, 'signOut').catch(() => ({ ok: false }));
     await organise.syncPrincipal().catch(() => undefined);
     read.signedOutAtEnd = signOut.ok;
   }
@@ -3176,7 +3327,7 @@ function permissionCardProbe(taskId: string, press: 'deny' | 'run', skip: readon
     out.pressed = target ? target.textContent : null;
     if (target) target.click();
     out.cardGone = !!(await wait(() => !q('[data-permission-request="' + out.requestId + '"][data-permission-state="pending"]'), ${PERMISSION_SETTLE_MS}));
-    const note = q('[data-permission-outcome="' + out.requestId + '"]');
+    const note = await wait(() => q('[data-permission-outcome="' + out.requestId + '"]'), ${PERMISSION_SETTLE_MS});
     out.outcome = note ? note.textContent : null;
     return out;
   })()`;
@@ -3293,7 +3444,7 @@ export async function probePermissions(contents: WebContents, options: Permissio
     const workspaceId = typeof seed.workspace_id === 'string' ? seed.workspace_id : null;
     read.seedRead = workspaceId !== null;
     if (!workspaceId) return evaluatePermissions(read, command);
-    read.signedIn = (await identity.session.signIn()).ok;
+    read.signedIn = (await smokeIdentity(contents, 'signIn')).ok;
     await organise.syncPrincipal();
     await organise.getWorkspaces();
     const created = await organise.createTask({ operationId: randomUUID(), workspaceId, engagementId: null, folderId: null, title: 'Smoke permissions' });
@@ -3305,7 +3456,8 @@ export async function probePermissions(contents: WebContents, options: Permissio
     const otherSettings = await policy.effectiveThreadSettings(other.value.taskId);
     if (!settings.ok || !otherSettings.ok) throw new Error('the thread settings could not be computed');
     const folders = settings.value.folders;
-    const outside = path.join(otherSettings.value.folders.working, PERMISSION_FILE);
+    const files = taskFiles(folders.working, identity.session.principalId()!);
+    const otherFiles = taskFiles(otherSettings.value.folders.working, identity.session.principalId()!);
     // Relative to the Task's working folder, so no device path is quoted or reported.
     const argv = [...PERMISSION_PROMPT_PREFIX, `output/${PERMISSION_FILE}`, `../${other.value.taskId}/${PERMISSION_FILE}`];
     command = argv.join(' ');
@@ -3332,7 +3484,7 @@ export async function probePermissions(contents: WebContents, options: Permissio
     const deniedRun = policy.runTool(taskId, argv, { timeoutMs: 30_000 });
     const deniedCard = (await contents.executeJavaScript(permissionCardProbe(taskId, 'deny', []))) as PermissionCardRead;
     const denied = await deniedRun;
-    read.denied = { card: deniedCard, run: denied.ok ? { ok: true } : { ok: false, code: denied.code, reason: denied.reason }, fileOnDevice: fs.existsSync(path.join(folders.output, PERMISSION_FILE)) };
+    read.denied = { card: deniedCard, run: denied.ok ? { ok: true } : { ok: false, code: denied.code, reason: denied.reason }, fileOnDevice: (await files.read(`output/${PERMISSION_FILE}`)) !== null };
 
     // Allow: runs once, inside the sandbox.
     const allowedRun = policy.runTool(taskId, argv, { timeoutMs: 30_000 });
@@ -3343,7 +3495,7 @@ export async function probePermissions(contents: WebContents, options: Permissio
       run: allowed.ok
         ? { ok: true, exitCode: allowed.value.exitCode, denials: allowed.value.denials.map((denial) => denial.text), permissionRequestId: allowed.value.permissionRequestId }
         : { ok: false, code: allowed.code },
-      fileOnDevice: fs.existsSync(path.join(folders.output, PERMISSION_FILE)) && !fs.existsSync(outside),
+      fileOnDevice: (await files.read(`output/${PERMISSION_FILE}`)) !== null && (await otherFiles.read(PERMISSION_FILE)) === null,
     };
 
     // Forbid: refused with the rule and its source, without a card.
@@ -3360,7 +3512,7 @@ export async function probePermissions(contents: WebContents, options: Permissio
   } finally {
     const cleared = (await contents.executeJavaScript(permissionRulesProbe([], randomUUID())).catch(() => null)) as { ok?: unknown } | null;
     read.rulesCleared = cleared?.ok === true;
-    const signOut = await identity.session.signOut().catch(() => ({ ok: false }));
+    const signOut = await smokeIdentity(contents, 'signOut').catch(() => ({ ok: false }));
     await organise.syncPrincipal().catch(() => undefined);
     read.signedOutAtEnd = signOut.ok;
   }
@@ -3388,7 +3540,7 @@ export async function probeCapabilities(contents: WebContents, options: Capabili
     } else {
       const seed = JSON.parse(fs.readFileSync(options.seedFile ?? '', 'utf8')) as {workspace_id?: string};
       if (!seed.workspace_id) throw new Error('the seeded Workspace is unavailable');
-      if (!(await options.identity.session.signIn()).ok) throw new Error('could not sign in for the capability probe');
+      if (!(await smokeIdentity(contents, 'signIn')).ok) throw new Error('could not sign in for the capability probe');
       await options.organise.syncPrincipal(); await options.organise.getWorkspaces();
       report.inventory = await options.capabilities.getInventory(seed.workspace_id);
       if (!report.inventory.available || report.inventory.stale) report.failures.push('runtime inventory was not current');
@@ -3420,7 +3572,7 @@ export async function probeCapabilities(contents: WebContents, options: Capabili
   } catch { report.failures.push('capabilities smoke could not finish; inspect local runtime availability and seeded topology'); }
   finally {
     if (configured) {
-      report.signedOutAtEnd = (await options.identity.session.signOut().catch(() => ({ok:false}))).ok;
+      report.signedOutAtEnd = (await smokeIdentity(contents, 'signOut').catch(() => ({ok:false}))).ok;
       await options.organise.syncPrincipal().catch(() => undefined);
       if (!report.signedOutAtEnd) report.failures.push('could not sign out after the capabilities probe');
     }
@@ -3430,26 +3582,28 @@ export async function probeCapabilities(contents: WebContents, options: Capabili
 }
 
 // ---- governed processing routes (Story 1.22) ------------------------------------
+/** Fixed probe diagnostics only; runtime/provider error text never enters reports. */
+class SmokeProbeFailure extends Error {}
 export interface RoutesReport { ok:boolean; failures:string[]; configured:boolean; verification:'configuration-only'; inferenceFixture:'not-run'; renderer?:{present:boolean;noDefault:boolean;unknownRegion:boolean}; selected?:boolean; reopened?:boolean }
 /** No provider call or credential verification. Packaged inference fixtures remain a separate required gate. */
 export async function probeRoutes(contents:WebContents, options:Omit<OrganiseProbeOptions,'runtimeRequest'> & {routes: import('./routes/service').RouteService}):Promise<RoutesReport>{
   const report:RoutesReport={ok:false,failures:[],configured:options.identity.config.kind==='configured',verification:'configuration-only',inferenceFixture:'not-run'};
   try{
     if(!report.configured){report.failures.push('Seeded identity/runtime topology unavailable; route smoke unmet');return report;}
-    const seed=JSON.parse(fs.readFileSync(options.seedFile??'','utf8')) as {workspace_id?:string};if(!seed.workspace_id)throw new Error('Missing seed');
-    if(!(await options.identity.session.signIn()).ok)throw new Error('Sign-in unavailable');await options.organise.syncPrincipal();options.routes.resume();
-    const initial=await options.routes.list();if(!initial.ok)throw new Error('Routes unavailable');
-    const candidate=initial.value.find(r=>r.routeId==='claude-api-key');if(!candidate)throw new Error('Missing Claude route');
-    const saved=await options.routes.configure({operationId:randomUUID(),expectedRevision:candidate.revision,routeId:'claude-api-key',deployment:'anthropic-direct',model:'claude-sonnet-5-5',apiVersion:'2026-10-21',region:null});if(!saved.ok)throw new Error('Configuration refused');
+    const seed=JSON.parse(fs.readFileSync(options.seedFile??'','utf8')) as {workspace_id?:string};if(!seed.workspace_id)throw new SmokeProbeFailure('Missing seed');
+    if(!(await smokeIdentity(contents, 'signIn')).ok)throw new SmokeProbeFailure('Sign-in unavailable');await options.organise.syncPrincipal();options.routes.resume();
+    const initial=await options.routes.list();if(!initial.ok)throw new SmokeProbeFailure('Routes unavailable');
+    const candidate=initial.value.find(r=>r.routeId==='claude-api-key');if(!candidate)throw new SmokeProbeFailure('Missing Claude route');
+    const saved=await options.routes.configure({operationId:randomUUID(),expectedRevision:candidate.revision,routeId:'claude-api-key',deployment:'anthropic-direct',model:'claude-sonnet-5-5',apiVersion:'2026-10-21',region:null});if(!saved.ok)throw new SmokeProbeFailure('Configuration refused');
     const route=saved.value.find(r=>r.routeId==='claude-api-key');if(!route?.configuration||route.configuration.region!==null||route.enabled)report.failures.push('Configuration or unknown region falsely established eligibility');
-    const created=await options.organise.createTask({operationId:randomUUID(),workspaceId:seed.workspace_id,engagementId:null,folderId:null,title:'Synthetic processing route smoke'});if(!created.ok)throw new Error('Task unavailable');
+    const created=await options.organise.createTask({operationId:randomUUID(),workspaceId:seed.workspace_id,engagementId:null,folderId:null,title:'Synthetic processing route smoke'});if(!created.ok)throw new SmokeProbeFailure('Task unavailable');
     const before=await options.routes.forTask(created.value.taskId);if(!before.ok||before.value.selected!==null)report.failures.push('A new Task had an implicit default route');
     const selected=await options.routes.select({operationId:randomUUID(),expectedRevision:0,taskId:created.value.taskId,routeId:'claude-api-key',configurationRevision:route!.revision});report.selected=selected.ok;
     const reopened=await options.routes.forTask(created.value.taskId);report.reopened=reopened.ok&&reopened.value.selected?.configuration?.model==='claude-sonnet-5-5';if(!report.selected||!report.reopened)report.failures.push('Explicit Task route did not reopen');
-    report.renderer=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}location.hash='#specimen';const section=await wait(()=>q('[data-processing-route="claude-api-key"]'),${POLICY_SETTLE_MS});const text=section?.closest('[data-processing-routes]')?.textContent??'';return{present:!!section,noDefault:text.includes('No implicit default'),unknownRegion:text.includes('Unknown')};})()`);
+    report.renderer=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}location.hash='#specimen';const section=await wait(()=>q('[data-processing-route="claude-api-key"]'),${POLICY_SETTLE_MS});const routeText=section?.closest('[data-processing-routes]')?.textContent??'';return{present:!!section,noDefault:routeText.includes('No implicit default'),unknownRegion:routeText.includes('Unknown')};})()`);
     if(!report.renderer?.present||!report.renderer.noDefault||!report.renderer.unknownRegion)report.failures.push('Processing routes did not render truthful states');
-  }catch{report.failures.push('Route smoke could not finish; native runtime/topology required');}
-  finally{if(report.configured){await options.routes.quiesce();await options.identity.session.signOut();await options.organise.syncPrincipal().catch(()=>{});options.routes.resume();}}
+  }catch(error){report.failures.push(error instanceof SmokeProbeFailure ? error.message : 'Route smoke could not finish; native runtime/topology required');}
+  finally{if(report.configured){await options.routes.quiesce();await smokeIdentity(contents, 'signOut');await options.organise.syncPrincipal().catch(()=>{});options.routes.resume();}}
   report.ok=report.failures.length===0;return report;
 }
 
@@ -3458,12 +3612,12 @@ export async function probeEnvironments(contents: WebContents, options: Organise
   const failures: string[] = [];
   const configured = options.identity.config.kind === 'configured';
   try {
-    if (!configured) throw new Error('Seeded topology unavailable');
+    if (!configured) throw new SmokeProbeFailure('Seeded topology unavailable');
     const seed = JSON.parse(fs.readFileSync(options.seedFile ?? '', 'utf8')) as {workspace_id?:string};
-    if (!seed.workspace_id || !(await options.identity.session.signIn()).ok) throw new Error('Seeded identity unavailable');
+    if (!seed.workspace_id || !(await smokeIdentity(contents, 'signIn')).ok) throw new SmokeProbeFailure('Seeded identity unavailable');
     await options.organise.syncPrincipal();
     const created = await options.organise.createTask({operationId:randomUUID(),workspaceId:seed.workspace_id,engagementId:null,folderId:null,title:'Synthetic environment inspection smoke'});
-    if (!created.ok) throw new Error('Task unavailable');
+    if (!created.ok) throw new SmokeProbeFailure('Task unavailable');
     const result = await contents.executeJavaScript(`globalThis.inquello.environments.forTask({taskId:${JSON.stringify(created.value.taskId)}})`) as import('./environments/types').TaskEnvironmentResult;
     if (!result.ok || result.value.executionLabel !== 'This device (local host)' || result.value.readiness !== 'ready' || result.value.inference.status !== 'none' || !result.value.remoteGate.includes('Story 8.1') || result.value.hostedSandboxGate !== 'V2 revisit (OQ-13)') failures.push('Environment inspection did not preserve distinct local execution, empty inference and disabled remote gates');
     const rendered = await contents.executeJavaScript(`(async () => {
@@ -3476,19 +3630,19 @@ export async function probeEnvironments(contents: WebContents, options: Organise
       if (!panel) return false;
       return panel.textContent.includes('This device (local host)') && panel.textContent.includes('runtime-owned configuration verified') && panel.textContent.includes('Story 8.1') && panel.textContent.includes('V2 revisit (OQ-13)') && [...panel.querySelectorAll('button[aria-disabled="true"]')].length >= 2;
     })()`) as boolean;
-    if (!rendered) throw new Error('Environment panel did not render');
+    if (!rendered) throw new SmokeProbeFailure('Environment panel did not render');
     // Safe synthetic selection through the real service emits main/preload invalidation.
     // No refresh click, renderer test event, credentials or inference call is used.
     const catalog = await options.routes.list();
-    if (!catalog.ok) throw new Error('Routes unavailable');
+    if (!catalog.ok) throw new SmokeProbeFailure('Routes unavailable');
     const candidate = catalog.value.find(route => route.routeId === 'claude-api-key');
-    if (!candidate || candidate.enabled) throw new Error('Synthetic disabled route unavailable');
+    if (!candidate || candidate.enabled) throw new SmokeProbeFailure('Synthetic disabled route unavailable');
     const configuredRoute = await options.routes.configure({operationId:randomUUID(),expectedRevision:candidate.revision,routeId:'claude-api-key',deployment:'anthropic-direct',model:'claude-sonnet-5-5',apiVersion:'2026-10-21',region:null});
-    if (!configuredRoute.ok) throw new Error('Synthetic configuration unavailable');
+    if (!configuredRoute.ok) throw new SmokeProbeFailure('Synthetic configuration unavailable');
     const route = configuredRoute.value.find(row => row.routeId === 'claude-api-key');
-    if (!route || route.enabled) throw new Error('Unexpected route eligibility');
+    if (!route || route.enabled) throw new SmokeProbeFailure('Unexpected route eligibility');
     const selected = await options.routes.select({operationId:randomUUID(),expectedRevision:0,taskId:created.value.taskId,routeId:'claude-api-key',configurationRevision:route.revision});
-    if (!selected.ok) throw new Error('Synthetic selection unavailable');
+    if (!selected.ok) throw new SmokeProbeFailure('Synthetic selection unavailable: ' + selected.reason);
     const updated = await contents.executeJavaScript(`(async () => {
       ${SHELL_HELPERS}
       return !!(await wait(() => { const panel = q('[data-task-environment]'); return panel?.textContent.includes('Explicit processing route') && panel.textContent.includes('claude-sonnet-5-5') && panel.textContent.includes('Unknown') && !panel.textContent.includes('No processing route selected') ? panel : null; }, ${POLICY_SETTLE_MS}));
@@ -3508,7 +3662,7 @@ export async function probeEnvironments(contents: WebContents, options: Organise
     // Harmless local invocations, repeated and failed, are accounted at the real boundary.
     for (const command of [['/bin/sh','-c','exit 0'],['/bin/sh','-c','exit 7'],['/bin/sh','-c','exit 0']]) {
       const run=await options.policy.runTool(created.value.taskId,command,{timeoutMs:30_000});
-      if (!run.ok) throw new Error('Synthetic local invocation unavailable');
+      if (!run.ok) throw new SmokeProbeFailure('Synthetic local invocation unavailable');
     }
     const history = await contents.executeJavaScript(`(async () => {
       ${SHELL_HELPERS}
@@ -3519,21 +3673,21 @@ export async function probeEnvironments(contents: WebContents, options: Organise
     // production native reviewer/ledger, then the real mounted preload panel.
     // Default/release binaries reject the fixture method rather than bypass gates.
     const latestCatalog=await options.routes.list();
-    if(!latestCatalog.ok)throw new Error('Fixture route catalog unavailable');
+    if(!latestCatalog.ok)throw new SmokeProbeFailure('Fixture route catalog unavailable');
     const codex=latestCatalog.value.find(row=>row.routeId==='codex-responses');
-    if(!codex)throw new Error('Fixture Codex route unavailable');
+    if(!codex)throw new SmokeProbeFailure('Fixture Codex route unavailable');
     const configuredCodex=await options.routes.configure({operationId:randomUUID(),expectedRevision:codex.revision,routeId:'codex-responses',deployment:'openai-api',model:'fixture-model-20261030',apiVersion:'responses-v1',region:null});
-    if(!configuredCodex.ok)throw new Error('Fixture route configuration unavailable');
+    if(!configuredCodex.ok)throw new SmokeProbeFailure('Fixture route configuration unavailable');
     const codexRevision=configuredCodex.value.find(row=>row.routeId==='codex-responses')?.revision;
-    if(codexRevision===undefined)throw new Error('Fixture route revision unavailable');
+    if(codexRevision===undefined)throw new SmokeProbeFailure('Fixture route revision unavailable');
     const codexSelection=await options.routes.select({operationId:randomUUID(),expectedRevision:selected.value.revision,taskId:created.value.taskId,routeId:'codex-responses',configurationRevision:codexRevision});
-    if(!codexSelection.ok)throw new Error('Fixture route selection unavailable');
+    if(!codexSelection.ok)throw new SmokeProbeFailure('Fixture route selection unavailable');
     const workspacePolicy=await options.policy.reviewPolicy(created.value.taskId);
-    if(!workspacePolicy)throw new Error('Fixture private policy unavailable');
+    if(!workspacePolicy)throw new SmokeProbeFailure('Fixture private policy unavailable');
     const fixture=(phase:'prepare'|'refuse'|'clear')=>options.runtimeRequest<{accepted?:boolean;providerCalls?:number;retainedAttempts?:number;refused?:boolean}>('inquello/fixture/messagesTurn',{scenario:'usage-limit',phase,taskId:created.value.taskId,workspacePolicy});
     try {
       const prepared=await fixture('prepare');
-      if(prepared.accepted!==true||prepared.providerCalls!==0)throw new Error('Isolated native quota fixture unavailable');
+      if(prepared.accepted!==true||prepared.providerCalls!==0)throw new SmokeProbeFailure('Isolated native quota fixture unavailable');
       options.usageChanged(true);
       const defaultsSaved=await contents.executeJavaScript(`(async()=>{
         ${SHELL_HELPERS}
@@ -3542,10 +3696,10 @@ export async function probeEnvironments(contents: WebContents, options: Organise
         const save=[...panel.querySelectorAll('button')].find(button=>button.textContent==='Save Task settings');if(!save)return false;save.click();
         return !!(await wait(()=>{const node=q('[data-task-usage]');return node?.textContent.includes('synthetic fixture')&&!node.textContent.includes('older route revision')?node:null;},${POLICY_SETTLE_MS}));
       })()`) as boolean;
-      if(!defaultsSaved)throw new Error('Mounted fixture defaults were not saved');
+      if(!defaultsSaved)throw new SmokeProbeFailure('Mounted fixture defaults were not saved');
       const retainedIds=await contents.executeJavaScript(`[...document.querySelectorAll('[data-task-usage] [data-usage-attempt]')].map(node=>node.getAttribute('data-usage-attempt'))`) as string[];
       const refused=await fixture('refuse');
-      if(refused.accepted!==true||refused.refused!==true||refused.providerCalls!==0||(refused.retainedAttempts??0)<3)throw new Error('Native limit refusal did not prove zero provider calls and retained work');
+      if(refused.accepted!==true||refused.refused!==true||refused.providerCalls!==0||(refused.retainedAttempts??0)<3)throw new SmokeProbeFailure('Native limit refusal did not prove zero provider calls and retained work');
       // Same main/preload notification function used after native tool/reviewer settlement.
       options.usageChanged(false);
       const mountedRefusal=await contents.executeJavaScript(`(async()=>{
@@ -3559,8 +3713,8 @@ export async function probeEnvironments(contents: WebContents, options: Organise
 
 
 
-  } catch { failures.push('Environment smoke could not finish; seeded identity and matching native runtime required'); }
-  finally { if (configured) { await options.identity.session.signOut(); await options.organise.syncPrincipal().catch(() => {}); } }
+  } catch (error) { failures.push(error instanceof SmokeProbeFailure ? error.message : 'Environment smoke could not finish; seeded identity and matching native runtime required'); }
+  finally { if (configured) { await smokeIdentity(contents, 'signOut'); await options.organise.syncPrincipal().catch(() => {}); } }
   return {ok:failures.length===0,failures};
 }
 
@@ -3571,7 +3725,7 @@ export async function probeStartSurface(contents:WebContents,options:Omit<Organi
  try {
   const seed=JSON.parse(fs.readFileSync(options.seedFile??'','utf8')) as {workspace_id?:string};
   if(!seed.workspace_id)throw new Error('Seeded Workspace unavailable');
-  if(!(await options.identity.session.signIn()).ok)throw new Error('Seeded identity unavailable');
+  if(!(await smokeIdentity(contents, 'signIn')).ok)throw new Error('Seeded identity unavailable');
   await options.organise.syncPrincipal();await options.organise.getWorkspaces();
   const before=await options.organise.getTree(seed.workspace_id);if(!before.ok)throw new Error('Private tree unavailable');
   const read=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}
@@ -3583,6 +3737,6 @@ export async function probeStartSurface(contents:WebContents,options:Omit<Organi
   for(const key of ['opened','prompt','focused','empty','disabled','later'])if(read[key]!==true)failures.push(`Start surface ${key} not established`);
   const after=await options.organise.getTree(seed.workspace_id);if(!after.ok||after.value.tasks.length!==before.value.tasks.length)failures.push('New thread changed persisted Tasks before Send');
  }catch{failures.push('Seeded Start surface could not be verified');}
- finally{await options.identity.session.signOut().catch(()=>undefined);await options.organise.syncPrincipal().catch(()=>undefined);}
+ finally{await smokeIdentity(contents, 'signOut').catch(()=>undefined);await options.organise.syncPrincipal().catch(()=>undefined);}
  return{ok:failures.length===0,skipped:false,failures};
 }

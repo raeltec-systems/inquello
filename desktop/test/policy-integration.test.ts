@@ -28,7 +28,7 @@ import { OrganiseService } from '../src/main/organise';
 import { BROAD_MODE_REACH, PermissionMediator, PolicyService } from '../src/main/policy';
 import { AppServerRuntime, resolveAppServerBinary, runtimeChildEnv } from '../src/main/runtime';
 import { fakeSafeStorage } from './identity-fakes';
-import { recordingLogger, removeTempDirs, tempDir } from './helpers';
+import { recordingLogger, removeTempDirs, removeGuestTaskStorage, tempDir } from './helpers';
 
 const desktop = path.resolve(__dirname, '..');
 const topologyBinary =
@@ -55,6 +55,7 @@ let runtime: AppServerRuntime;
 let identity: IdentitySession;
 let organise: OrganiseService;
 let policy: PolicyService;
+let stricterPolicy = false;
 
 async function startTopology(dir: string): Promise<void> {
   if (!fs.existsSync(topologyBinary)) throw new Error(`build the dev topology first: ${topologyBinary} is missing`);
@@ -105,11 +106,17 @@ describe.skipIf(!databaseConfigured)('the effective policy against the real runt
     fs.mkdirSync(path.dirname(workingStore), { recursive: true, mode: 0o700 });
     runtime = new AppServerRuntime({
       command: appServer.path,
+    commandArgsPrefix: ['--disable-plugin-startup-tasks-for-tests'],
       env: runtimeChildEnv(process.env, { serviceConfigEnv: SERVICE_CONFIG_ENV, codexHome: runtimeHome, workingStore }),
       clientInfo: { name: 'inquello_desktop', title: 'Inquello', version: '0.0.0-test' },
       schemaStamp,
       stderrLogPath: path.join(dir, 'logs', 'app-server-stderr.log'),
       logger: recordingLogger(),
+      onServerRequest: async (method, params) => {
+        if (method === 'inquello/context/authorize') return organise?.authorizeContext(params) ?? { available: false, snapshot: null, serviceEngagementIds: [] };
+        if (method === 'inquello/tasks/authority') return { workspacePolicy: await policy?.startPolicy((params as { workspaceId: string }).workspaceId) ?? null };
+        return undefined;
+      },
     });
     await runtime.start();
     const transport = httpsTransport(config.ca);
@@ -126,12 +133,19 @@ describe.skipIf(!databaseConfigured)('the effective policy against the real runt
     expect((await identity.withAccess((access) => service.acceptInvite(access, seed.invite_id)))?.workspace_id).toBe(seed.workspace_id);
     const organiseRuntime = { ready: () => runtime.state === 'ready', instance: () => runtime, request: <T,>(method: string, params?: unknown) => runtime.request<T>(method, params) };
     organise = new OrganiseService({ runtime: organiseRuntime, identity, service, logger: recordingLogger() });
-    policy = new PolicyService({ runtime: organiseRuntime, identity, organise, service, logger: recordingLogger(), taskFolders: path.join(dir, 'tasks'), sandboxProbeTarget: path.dirname(workingStore), permissions: new PermissionMediator({ runtime: organiseRuntime, logger: recordingLogger(), newId: randomUUID }) });
+    // Keep the independently requested current authority consistent with the
+    // synthetic policy update below, as in the tool-boundary integration cases.
+    const policyService = { executionPolicy: async (access: Parameters<SharedServiceClient['executionPolicy']>[0], workspaceId: string) => {
+      const current = await service.executionPolicy(access, workspaceId);
+      return stricterPolicy ? { ...current, policy_revision: '2', execution: { sandbox: 'read_only' } } : current;
+    } };
+    policy = new PolicyService({ runtime: organiseRuntime, identity, organise, service: policyService, logger: recordingLogger(), taskFolders: path.join(dir, 'tasks'), sandboxProbeTarget: path.dirname(workingStore), permissions: new PermissionMediator({ runtime: organiseRuntime, logger: recordingLogger(), newId: randomUUID }) });
   }, 120_000);
 
   afterAll(async () => {
     await runtime?.stop();
     await stopTopology();
+    await removeGuestTaskStorage();
     removeTempDirs();
   });
 
@@ -185,8 +199,9 @@ describe.skipIf(!databaseConfigured)('the effective policy against the real runt
     });
 
     // A later, stricter policy revision suspends it: the Task runs as standard.
+    stricterPolicy = true;
     const stricter = await runtime.request<{ task: { broadMode: { status: string; effectiveMode: string; governing: unknown }; threadSettings: { sandbox: string } } }>('inquello/policy/effective', {
-      workspacePolicy: { workspaceId: seed.workspace_id, policyRevision: 2, authorizationEpoch: 2, execution: { sandbox: 'read_only' } },
+      workspacePolicy: { workspaceId: seed.workspace_id, policyRevision: 2, authorizationEpoch: 1, execution: { sandbox: 'read_only' } },
       taskId: task.taskId,
     });
     expect(stricter.task.broadMode).toEqual({ ...stricter.task.broadMode, status: 'suspended', effectiveMode: 'standard', governing: { kind: 'inquello_default', revision: null } });
@@ -203,5 +218,5 @@ describe.skipIf(!databaseConfigured)('the effective policy against the real runt
     } finally {
       await runtime.request('inquello/session/setPrincipal', { principalId: identity.principalId() });
     }
-  });
+  }, 120_000);
 });

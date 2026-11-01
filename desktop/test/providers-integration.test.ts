@@ -83,7 +83,7 @@ async function startRuntime(options: { keyring: boolean; base?: NodeJS.ProcessEn
   const base = options.base ?? isolatedEnv(home, options.keyring ? {} : { DBUS_SESSION_BUS_ADDRESS: 'unix:path=/nonexistent/inquello-test-bus' });
   const runtime = new AppServerRuntime({
     command: options.keyring ? 'dbus-run-session' : binary.path,
-    commandArgsPrefix: options.keyring ? ['--', 'sh', '-c', UNLOCK, binary.path] : [],
+    commandArgsPrefix: options.keyring ? ['--', 'sh', '-c', UNLOCK, binary.path, '--disable-plugin-startup-tasks-for-tests'] : ['--disable-plugin-startup-tasks-for-tests'],
     env: runtimeChildEnv(base, { serviceConfigEnv: 'INQUELLO_SERVICE_CONFIG', codexHome: roots['runtime-home'], blocked: ['INQUELLO_PROVIDER_DEV_CONFIG'] }),
     clientInfo: { name: 'inquello_desktop', title: 'Inquello', version: '0.0.0-test' },
     schemaStamp,
@@ -332,11 +332,14 @@ describe.skipIf(!keyringTools)('Codex login in the OS keyring (real app-server, 
 });
 
 describe('Codex login without an OS keyring (real app-server)', () => {
-  it('fails with the stated reason and stores nothing, with no auth.json fallback (matrix: Codex API-key login, keyring missing)', async () => {
+  // The D-Bus isolation below only disables the Linux keyring. It must not
+  // attempt a synthetic login against the host Windows or macOS keyring.
+  it.skipIf(process.platform !== 'linux')('fails with the stated reason and stores nothing, with no auth.json fallback (matrix: Codex API-key login, keyring missing)', async () => {
     const h = await startRuntime({ keyring: false });
     const providers = providerService(h);
     const apiKey = `sk-proj-inquello-test-${randomUUID()}`;
     const result = await providers.codexLogin({ type: 'apiKey', apiKey });
+    if (result.ok) await providers.codexLogout();
     expect(result).toMatchObject({ ok: false, reason: CODEX_REASONS.keyringUnavailable, status: { codex: { state: 'not-connected' } } });
     expect(await h.runtime.request('account/read', {})).toMatchObject({ account: null });
     expect(fs.existsSync(path.join(h.roots['runtime-home'], 'auth.json'))).toBe(false);

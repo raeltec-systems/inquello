@@ -52,10 +52,12 @@ export function runtimeChildEnv(
   const env: NodeJS.ProcessEnv = {};
   for (const [key, value] of Object.entries(base)) {
     const upper = key.toUpperCase();
-    if (blocked.has(upper) || upper.startsWith('CODEX_INTERNAL_') || isProviderCredentialVar(upper) || upper === WORKING_STORE_ENV) continue;
+    if (blocked.has(upper) || upper.startsWith('CODEX_INTERNAL_') || isProviderCredentialVar(upper) || upper === WORKING_STORE_ENV || upper === 'INQUELLO_SANDBOX_LOG_RETENTION') continue;
     env[key] = value;
   }
   if (options.codexHome !== undefined) env.CODEX_HOME = options.codexHome;
   if (options.workingStore !== undefined) env[WORKING_STORE_ENV] = options.workingStore;
+  // Match the owner-approved local data register, not the upstream rotating-log default.
+  env.INQUELLO_SANDBOX_LOG_RETENTION = 'until-owner-deletes';
   return env;
 }

@@ -253,7 +253,7 @@ export interface IdentityOperations {
 
 /** The local data service as the operations see it (main-owned; see `data/service.ts`). */
 export interface DataOperations {
-  getPolicy(): PolicyView;
+  getPolicy(): PolicyView | Promise<PolicyView>;
   exportData(): Promise<ExportActionResult>;
   importData(): Promise<ImportActionResult>;
   deleteData(categories: readonly string[]): Promise<DeleteActionResult>;

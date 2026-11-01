@@ -183,6 +183,7 @@ describe('bridge parsing', () => {
 
 describe('smoke data evaluation', () => {
   const good: DataProbeRead = {
+    unownedHistoryRefused: true,
     policyLoaded: true,
     ruleBlockers: 0,
     categories: 13,
@@ -190,8 +191,8 @@ describe('smoke data evaluation', () => {
     unclassified: [],
     disabledHeld: [],
     renderer: { policyLoaded: true, categories: 13, blockShown: true, pathRejected: true },
-    export: { ok: true, included: { 'task-history': 1, 'desktop-stderr-log': 1 }, omissions: ['identity-session', 'chromium-profile', 'runtime-state'] },
-    import: { ok: true, restored: 2, notRestored: 0, byteIdentical: true, syntheticRestored: true },
+    export: { ok: true, included: { 'working-store': 2 }, omissions: ['identity-session', 'chromium-profile', 'runtime-state'] },
+    import: { ok: true, restored: 2, notRestored: 0, byteIdentical: true, ownedMetadataRestored: true },
   };
 
   it('passes a clean run', () => {
@@ -199,6 +200,8 @@ describe('smoke data evaluation', () => {
   });
 
   it.each<[string, (read: DataProbeRead) => void, RegExp]>([
+    ['accepted unowned history', (r) => (r.unownedHistoryRefused = false), /unowned synthetic history/],
+    ['missing owned metadata', (r) => (r.import.ownedMetadataRestored = false), /owned Task metadata/],
     ['an unclassified file', (r) => (r.unclassified = ['runtime-home:x']), /unclassified files: runtime-home:x/],
     ['a runtime home outside userData', (r) => (r.runtimeHome.underUserData = false), /not under userData/],
     ['a different CODEX_HOME', (r) => (r.runtimeHome.matchesHandshake = false), /CODEX_HOME/],

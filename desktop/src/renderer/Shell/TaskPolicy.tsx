@@ -145,27 +145,29 @@ export function TaskPolicy({ policy, notice = null, onSetMode }: TaskPolicyProps
             ) : null}
             <div className="iq-task-mode-actions">
               {policy.options.map((option) => {
-                const current = broad?.status === 'active' && broad.effectiveMode === option.mode;
+                const retry = policy.transferRecovery === option.mode;
+                const current = !retry && broad?.status === 'active' && broad.effectiveMode === option.mode;
+                const recoveryBlocked = policy.transferRecovery && !retry ? 'Finish the interrupted transfer first.' : undefined;
                 return (
                   <Button
                     key={option.mode}
                     variant="secondary"
                     size="sm"
                     data-broad-mode-option={option.mode}
-                    disabledReason={current ? `${option.title} is on for this Task.` : (option.unavailableReason ?? unavailable)}
+                    disabledReason={recoveryBlocked ?? (current ? `${option.title} is on for this Task.` : (option.unavailableReason ?? unavailable))}
                     onPress={() => {
                       opener.current = document.activeElement as HTMLElement | null;
                       setMessage(null);
                       setConfirming(option);
                     }}
                   >
-                    {`Use ${option.title}…`}
+                    {`${retry ? 'Retry' : 'Use'} ${option.title}…`}
                   </Button>
                 );
               })}
-              {broad && broad.recorded !== 'standard' ? (
-                <Button variant="quiet" size="sm" data-broad-mode-option="standard" pending={busy && !confirming} disabledReason={busy ? undefined : unavailable} onPress={() => void apply('standard', null)}>
-                  Return to Standard
+              {broad && (broad.recorded !== 'standard' || policy.transferRecovery === 'standard') ? (
+                <Button variant="quiet" size="sm" data-broad-mode-option="standard" pending={busy && !confirming} disabledReason={policy.transferRecovery && policy.transferRecovery !== 'standard' ? 'Finish the interrupted transfer first.' : busy ? undefined : unavailable} onPress={() => void apply('standard', null)}>
+                  {policy.transferRecovery === 'standard' ? 'Retry Standard' : 'Return to Standard'}
                 </Button>
               ) : null}
             </div>

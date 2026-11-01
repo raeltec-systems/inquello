@@ -1,3 +1,5 @@
+import { taskFiles } from './task-files';
+import { expectPrivatePath } from './private-paths';
 /**
  * Story 1.19 end to end: every filesystem and network row of the I/O matrix
  * through the single path (`PolicyService.effectiveThreadSettings` and
@@ -40,7 +42,7 @@ import {
 } from '../src/main/policy';
 import { AppServerRuntime, resolveAppServerBinary, runtimeChildEnv, writeRuntimeConfig } from '../src/main/runtime';
 import { fakeSafeStorage } from './identity-fakes';
-import { recordingLogger, removeTempDirs, tempDir } from './helpers';
+import { recordingLogger, removeTempDirs, removeGuestTaskStorage, tempDir } from './helpers';
 
 const desktop = path.resolve(__dirname, '..');
 const topologyBinary =
@@ -119,11 +121,17 @@ describe.skipIf(!databaseConfigured)('bounded tool reads, writes and network aga
     writeRuntimeConfig(runtimeHome);
     runtime = new AppServerRuntime({
       command: appServer.path,
+    commandArgsPrefix: ['--disable-plugin-startup-tasks-for-tests'],
       env: runtimeChildEnv(process.env, { serviceConfigEnv: SERVICE_CONFIG_ENV, codexHome: runtimeHome, workingStore }),
       clientInfo: { name: 'inquello_desktop', title: 'Inquello', version: '0.0.0-test' },
       schemaStamp,
       stderrLogPath: path.join(dir, 'logs', 'app-server-stderr.log'),
       logger: recordingLogger(),
+      onServerRequest: async (method, params) => {
+        if (method === 'inquello/context/authorize') return organise?.authorizeContext(params) ?? { available: false, snapshot: null, serviceEngagementIds: [] };
+        if (method === 'inquello/tasks/authority') return { workspacePolicy: await policy?.startPolicy((params as { workspaceId: string }).workspaceId) ?? null };
+        return undefined;
+      },
     });
     await runtime.start();
     const transport = httpsTransport(config.ca);
@@ -150,8 +158,25 @@ describe.skipIf(!databaseConfigured)('bounded tool reads, writes and network aga
   afterAll(async () => {
     await runtime?.stop();
     await stopTopology();
+    await removeGuestTaskStorage();
     removeTempDirs();
   });
+
+  it('serializes concurrent Task sandbox inspection with real tool execution', async () => {
+    usePolicy(null);
+    const first = await newTask('Concurrent inspection');
+    const other = await newTask('Concurrent inspection other');
+    ok(await policy.effectiveThreadSettings(first));
+    ok(await policy.effectiveThreadSettings(other));
+    // Alternating Tasks evicts the last-probe cache while another check may
+    // still own the executor. Neither a UI read nor a tool may collide with it.
+    const views = [first, other, first, other, first].map(task => policy.forTask(task));
+    const commands = [0, 7, 0].map(code => policy.runTool(first, ['/bin/sh', '-c', `exit ${code}`], {timeoutMs:30_000}));
+    for (const view of await Promise.all(views)) expect(ok(view).sandbox.status).toBe('available');
+    const results = (await Promise.all(commands)).map(ok);
+    expect(results.map(result => result.exitCode)).toEqual([0, 7, 0]);
+    expect(results.every(result => result.stdout === '' && result.stderr === '')).toBe(true);
+  }, 120_000);
 
   it('keeps a standard Task inside its folder, read-only system locations and no destinations', async () => {
     usePolicy(null);
@@ -160,22 +185,24 @@ describe.skipIf(!databaseConfigured)('bounded tool reads, writes and network aga
     const settings = ok(await policy.effectiveThreadSettings(task));
     expect(settings.profile).toMatchObject({ sandbox: 'permission-profile', permissionProfileId: `inquello-task-${task}`, networkAllowlist: [] });
     expect(settings.profile.writableRoots).toEqual([settings.folders.working, settings.folders.output]);
-    expect(fs.statSync(settings.folders.working).mode & 0o777).toBe(0o700);
+    expectPrivatePath(settings.folders.working, 0o700);
     const otherFolder = ok(await policy.effectiveThreadSettings(other)).folders.working;
-    fs.writeFileSync(path.join(otherFolder, 'synthetic.txt'), 'synthetic secret');
+    const files = taskFiles(settings.folders.working, identity.principalId()!);
+    const otherFiles = taskFiles(otherFolder, identity.principalId()!);
+    await otherFiles.write('synthetic.txt', 'synthetic secret');
 
     // Write inside: succeeds and the file exists on the device.
     const inside = await run(task, ['/bin/sh', '-c', 'printf bounded > output/a.txt && cat output/a.txt']);
     expect([inside.exitCode, inside.stdout, inside.denials]).toEqual([0, 'bounded', []]);
-    expect(fs.readFileSync(path.join(settings.folders.output, 'a.txt'), 'utf8')).toBe('bounded');
+    expect(await files.read('output/a.txt')).toBe('bounded');
 
     // Write outside, into another Task's folder: denied, boundary named, nothing written.
-    const target = path.join(otherFolder, 'from-another-task.txt');
+    const target = `${otherFiles.root}/from-another-task.txt`;
     const outside = await run(task, ['/bin/sh', '-c', 'printf x > "$1"', 'bounds', target]);
     expect(outside.exitCode).not.toBe(0);
     expect(texts(outside)).toEqual([outsideDenialText(PERMITTED)]);
     expect(outside.denials[0]).toMatchObject({ kind: 'filesystem', boundary: PERMITTED });
-    expect(fs.existsSync(target)).toBe(false);
+    expect(await otherFiles.read('from-another-task.txt')).toBeNull();
 
     // A system location is read only.
     const system = await run(task, ['/bin/sh', '-c', 'printf x > /etc/inquello-tool-bounds']);
@@ -185,7 +212,7 @@ describe.skipIf(!databaseConfigured)('bounded tool reads, writes and network aga
     expect((await run(task, ['/bin/sh', '-c', 'test -r /etc/passwd'])).exitCode).toBe(0);
 
     // Read outside: another Task's folder is not reachable.
-    const read = await run(task, ['/bin/cat', path.join(otherFolder, 'synthetic.txt')]);
+    const read = await run(task, ['/bin/cat', `${otherFiles.root}/synthetic.txt`]);
     expect(read.exitCode).not.toBe(0);
     expect(read.stdout).not.toContain('synthetic secret');
     expect(texts(read)).toEqual([outsideDenialText(PERMITTED)]);
@@ -203,11 +230,11 @@ describe.skipIf(!databaseConfigured)('bounded tool reads, writes and network aga
     // Continue: a permitted command after the denials succeeds; the earlier output stays.
     const after = await run(task, ['/bin/sh', '-c', 'cat output/a.txt && printf more > output/b.txt']);
     expect([after.exitCode, after.stdout, after.denials]).toEqual([0, 'bounded', []]);
-    expect(fs.readFileSync(path.join(settings.folders.output, 'b.txt'), 'utf8')).toBe('more');
+    expect(await files.read('output/b.txt')).toBe('more');
 
     // The Task view shows the reach in plain words, never a path.
     const view = ok(await policy.forTask(task));
-    expect(view.sandbox).toEqual({ status: 'available', label: 'Local OS sandbox on this device.' });
+    expect(view.sandbox).toEqual({ status: 'available', label: process.platform === 'win32' ? 'Linux sandbox in WSL on this device.' : 'Local OS sandbox on this device.' });
     expect(view.reach.lines.map((line) => line.label)).toEqual(['Can read', 'Can write to', 'Can contact']);
     expect(view.reach.lines.find((line) => line.name === 'contact')!.value).toBe('No network destinations. Every destination is blocked.');
     expect(JSON.stringify(view)).not.toContain(settings.folders.working);
@@ -238,7 +265,7 @@ describe.skipIf(!databaseConfigured)('bounded tool reads, writes and network aga
     expect(texts(folder)).toEqual([outsideDenialText('working folder (read-only)')]);
     const output = await run(task, ['/bin/sh', '-c', 'printf x > output/a.txt']);
     expect(texts(output)).toEqual([outsideDenialText('output folder (read-only)')]);
-    expect(fs.existsSync(path.join(settings.folders.working, 'notes.txt'))).toBe(false);
+    expect(await taskFiles(settings.folders.working, identity.principalId()!).read('notes.txt')).toBeNull();
     // Reading the folder still works.
     expect((await run(task, ['/bin/sh', '-c', 'ls output'])).exitCode).toBe(0);
   }, 120_000);
@@ -254,7 +281,11 @@ describe.skipIf(!databaseConfigured)('bounded tool reads, writes and network aga
     const view = ok(await policy.forTask(task));
     expect(view.sandbox.status).toBe('not-applicable');
     // The only unsandboxed path: the working store is visible.
-    const visible = await run(task, ['/bin/sh', '-c', 'test -e "$1"', 'bounds', workingStoreDir]);
+    const visibilityCommand = process.platform === 'win32'
+      ? [path.join(process.env.SystemRoot!, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'),
+          '-NoProfile', '-NonInteractive', '-Command', `if (Test-Path -LiteralPath '${workingStoreDir.replace(/'/g, "''")}') { exit 0 } else { exit 1 }`]
+      : ['/bin/sh', '-c', 'test -e "$1"', 'bounds', workingStoreDir];
+    const visible = await run(task, visibilityCommand);
     expect([visible.exitCode, visible.denials]).toEqual([0, []]);
   }, 120_000);
 
@@ -276,6 +307,6 @@ describe.skipIf(!databaseConfigured)('bounded tool reads, writes and network aga
     });
     expect(await unchecked.runTool(task, ['/bin/sh', '-c', 'printf x > output/never.txt'])).toEqual({ ok: false, code: 'sandbox-unavailable', reason: POLICY_REASONS.sandboxUnavailable });
     expect(ok(await unchecked.forTask(task)).sandbox).toEqual({ status: 'unavailable', label: 'Local sandbox unavailable on this device' });
-    expect(fs.existsSync(path.join(path.dirname(runtimeHome), 'tasks', task, 'output', 'never.txt'))).toBe(false);
+    expect(await taskFiles(path.join(path.dirname(runtimeHome), 'tasks', task), identity.principalId()!).read('output/never.txt')).toBeNull();
   }, 120_000);
 });

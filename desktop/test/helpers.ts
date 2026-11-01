@@ -16,7 +16,10 @@ export function recordingLogger(): RecordingLogger {
   return {
     messages,
     info: (message) => messages.push(`info: ${message}`),
-    warn: (message) => messages.push(`warn: ${message}`),
+    warn: (message) => {
+      messages.push(`warn: ${message}`);
+      if (process.env.INQUELLO_TEST_POLICY_DIAGNOSTICS === '1' && message.startsWith('policy:')) console.warn(message);
+    },
     error: (message) => messages.push(`error: ${message}`),
   };
 }
@@ -32,6 +35,17 @@ export function tempDir(prefix: string): string {
 /** Removes temp dirs created so far; call only after their children have exited. */
 export function removeTempDirs(): void {
   for (const dir of createdDirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+}
+
+/** Erase only guest scopes belonging to this file's synthetic temp profiles.
+ * Call after runtime children exit, before deleting their host profile locators. */
+export async function removeGuestTaskStorage(): Promise<void> {
+  if (process.platform !== 'win32') return;
+  const { wslDataStorage } = await import('../src/main/runtime/wsl-data');
+  for (const dir of createdDirs) {
+    const parent = path.join(dir, 'tasks');
+    if (fs.existsSync(parent)) await wslDataStorage(parent, () => null).erase();
+  }
 }
 
 export interface FakeRuntime {

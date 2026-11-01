@@ -25,6 +25,7 @@ import {
 } from '../src/main/security/operations';
 import type { ProviderStatus } from '../src/main/providers/status';
 import type { PolicyView } from '../src/main/data/service';
+import { BROAD_MODE_REACH } from '../src/main/policy/views';
 import type { IdentityStatus } from '../src/main/identity/session';
 import {
   CONTENT_SECURITY_POLICY,
@@ -298,7 +299,7 @@ describe('operation registry', () => {
   it('validates policy payloads in main: the reach must be confirmed, and no actor, principal or policy passes (Story 1.18)', async () => {
     const taskId = '3a1b2c3d-4e5f-4a6b-8c7d-8e9f0a1b2c3d';
     const operationId = '0a1b2c3d-4e5f-4a6b-8c7d-8e9f0a1b2c3d';
-    const reach = 'Full access: commands on this Task run without sandbox limits on this device, and you will not be asked before actions.';
+    const reach = BROAD_MODE_REACH.full_access;
     const set = { operationId, taskId, expectedRevision: 0, mode: 'full_access', confirmation: reach };
     for (const bad of [
       { ...set, confirmation: null },
@@ -1011,6 +1012,12 @@ describe('smoke privilege evaluation', () => {
 
   it('passes a clean renderer', () => {
     expect(evaluatePrivileges(clean, 'blocked', APP, '0.165.0')).toMatchObject({ ok: true, failures: [] });
+  });
+
+  it('compares exact bridge keys and values regardless of insertion order', () => {
+    const bridge = Object.fromEntries(Object.entries(EXPECTED_BRIDGE_TREE).reverse().map(([name, methods]) => [name, Object.fromEntries(Object.entries(methods).reverse())]));
+    expect(evaluatePrivileges({ ...clean, bridge }, 'blocked', APP, '0.165.0').ok).toBe(true);
+    expect(evaluatePrivileges({ ...clean, bridge: { ...bridge, tasks: { ...bridge.tasks, rawRpc: 'function' } } }, 'blocked', APP, '0.165.0').ok).toBe(false);
   });
 
   it.each<[string, Partial<RendererProbeResult>, 'blocked' | 'allowed']>([

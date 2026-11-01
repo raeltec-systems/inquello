@@ -35,11 +35,12 @@
         "globs": [
           "logs_*.sqlite",
           "logs_*.sqlite-*",
-          "log/**"
+          "log/**",
+          ".sandbox/sandbox.*.log"
         ]
       },
       "enabled": true,
-      "credentials": false,
+      "credentials": true,
       "owner": "Original native owners; opaque mixed log ownership is not established",
       "rule_owner": "Organisation data-policy owner (OQ-2)",
       "retention": "until-owner-deletes",
@@ -49,7 +50,7 @@
         "reason": "Opaque logs have no provable per-Task ownership or category lineage; stopping the runtime does not grant export rights"
       },
       "deletion": "Delete Runtime logs in Local data (the runtime is stopped, the files are removed, then the runtime restarts)",
-      "recovery": "Not recoverable once deleted; the runtime starts a new log on its next start"
+      "recovery": "Not recoverable once deleted; the runtime starts a new log on its next start. Windows sandbox logs can contain command previews and error details, including secrets; they are excluded from export. Inquello disables automatic sandbox-log pruning to honor owner-directed deletion."
     },
     {
       "id": "runtime-state",
@@ -340,7 +341,8 @@
         "root": "user-data",
         "globs": [
           "tasks/**"
-        ]
+        ],
+        "executor": "wsl-task-storage"
       },
       "enabled": true,
       "credentials": false,
@@ -351,8 +353,8 @@
       "export": {
         "mode": "included"
       },
-      "deletion": "Delete Task working folders in Local data (the runtime is stopped, every Task's working folder and Output folder is removed, then the runtime restarts)",
-      "recovery": "Reimport an earlier export while no Task working folders exist; otherwise not recoverable Story 1.28: native ownership and category provenance plus current Workspace/route authority are mandatory. Recovery stages exact service-receipted bytes and rechecks current access before publication/reopen; historical sessions, approval receipts and manifest attribution never restore permission. Unknown legacy/mixed provenance remains unavailable with an explicit reason."
+      "deletion": "Delete Task working folders in Local data after all workloads stop. This removes the profile's Windows Task folders, dedicated Linux Task files, execution bindings and migration recovery copies; exported copies remain.",
+      "recovery": "Linux Task files are authoritative for bounded Windows Tasks. Verified exports stage their current bytes on D: and require native ownership and current authority. Migration recovery copies remain on D: until owner deletion and are not exported as current Task content. Import requires empty guest storage; imported files receive no execution authority."
     },
     {
       "id": "provider-credentials",

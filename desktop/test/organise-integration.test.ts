@@ -89,11 +89,22 @@ describe.skipIf(!databaseConfigured)('organise against the real runtime and the 
     fs.mkdirSync(path.dirname(workingStore), { recursive: true, mode: 0o700 });
     runtime = new AppServerRuntime({
       command: appServer.path,
+      // Metadata tests use a fresh profile; external plugin cloning is unrelated
+      // and can leave Git descendants holding it open during Windows cleanup.
+      commandArgsPrefix: ['--disable-plugin-startup-tasks-for-tests'],
       env: runtimeChildEnv(process.env, { serviceConfigEnv: SERVICE_CONFIG_ENV, codexHome: runtimeHome, workingStore }),
       clientInfo: { name: 'inquello_desktop', title: 'Inquello', version: '0.0.0-test' },
       schemaStamp,
       stderrLogPath: path.join(dir, 'logs', 'app-server-stderr.log'),
       logger: recordingLogger(),
+      onServerRequest: async (method, params) => {
+        if (method === 'inquello/context/authorize') return organise?.authorizeContext(params) ?? { available: false, snapshot: null, serviceEngagementIds: [] };
+        if (method === 'inquello/tasks/authority') {
+          const view = await identity.withAccess(access => service.executionPolicy(access, (params as { workspaceId: string }).workspaceId));
+          return { workspacePolicy: view ? { workspaceId: view.workspace_id, policyRevision: Number(view.policy_revision), authorizationEpoch: Number(view.authorization_epoch), execution: view.execution } : null };
+        }
+        return undefined;
+      },
     });
     await runtime.start();
 
@@ -150,7 +161,7 @@ describe.skipIf(!databaseConfigured)('organise against the real runtime and the 
     });
   });
 
-  it('creates Engagements, a folder and Tasks, and moves a Task keeping its ID, thread ref and references', async () => {
+  it('creates Engagements, folders and private drafts, preserving identity and references on move', async () => {
     const workspaceId = seed.workspace_id;
     const audit = ok(
       await organise.createEngagement({
@@ -181,13 +192,15 @@ describe.skipIf(!databaseConfigured)('organise against the real runtime and the 
     expect(tree.folders).toEqual([planning]);
     expect(tree.tasks.find((task) => task.taskId === inFolder.taskId)).toMatchObject({ engagementId: audit.engagementId, folderId: planning.folderId });
 
-    const attached = ok(await organise.attachThread({ operationId: randomUUID(), workspaceId, taskId: inFolder.taskId, expectedRevision: 1, runtimeThreadId: 'thread-synthetic-1' }));
+    // This suite covers draft organisation. Real retained-thread binding and
+    // movement require the native Task lifecycle witnesses, not fabricated IDs.
+    const attached = inFolder;
     const moved = ok(
       await organise.moveTask({ operationId: randomUUID(), workspaceId, taskId: inFolder.taskId, expectedRevision: attached.revision, engagementId: review.engagementId, folderId: null }),
     );
     expect(moved).toMatchObject({
       taskId: inFolder.taskId,
-      runtimeThreadId: 'thread-synthetic-1',
+      runtimeThreadId: null,
       sourceRefs: attached.sourceRefs,
       artifactRefs: attached.artifactRefs,
       visibility: 'private',
@@ -262,21 +275,21 @@ describe.skipIf(!databaseConfigured)('organise against the real runtime and the 
     }
   });
 
-  it('with the shared service stopped, Tasks still list and Engagement creation is disabled with its reason', async () => {
+  it('with current authority unavailable, cached private work is inaccessible and Engagement creation is disabled', async () => {
     const before = ok(await organise.getTree(seed.workspace_id));
     await stopTopology();
     const view = await organise.getWorkspaces();
     expect(view).toEqual({
       signedIn: true,
       sharedService: 'unavailable',
-      workspaces: [{ workspaceId: seed.workspace_id, name: 'Synthetic Audit Co', source: 'local' }],
+      workspaces: [],
       engagementCreation: { enabled: false, reason: ORGANISE_REASONS.serviceDown },
     });
-    const after = ok(await organise.getTree(seed.workspace_id));
-    expect(after.tasks.map((task) => task.taskId).sort()).toEqual(before.tasks.map((task) => task.taskId).sort());
+    expect(before.tasks.length).toBeGreaterThan(0);
+    expect(await organise.getTree(seed.workspace_id)).toMatchObject({ ok: false });
     expect(await organise.createEngagement({ operationId: randomUUID(), workspaceId: seed.workspace_id, name: 'x', objectives: '', scope: '', clientEntity: null, periodStart: null, periodEnd: null })).toMatchObject({
       ok: false,
-      code: 'service-unavailable',
+      code: 'not-found',
     });
   });
 });

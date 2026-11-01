@@ -24,6 +24,7 @@ describe('real app-server over stdio', () => {
     const logger = recordingLogger();
     const runtime = new AppServerRuntime({
       command: binary.path,
+    commandArgsPrefix: ['--disable-plugin-startup-tasks-for-tests'],
       env,
       clientInfo: { name: 'inquello_desktop', title: 'Inquello', version: '0.0.0-test' },
       schemaStamp,
@@ -56,6 +57,7 @@ describe('real app-server over stdio', () => {
     const env: NodeJS.ProcessEnv = { ...process.env, CODEX_HOME: home, CODEX_INTERNAL_ORIGINATOR_OVERRIDE: 'Codex Desktop' };
     const runtime = new AppServerRuntime({
       command: binary.path,
+    commandArgsPrefix: ['--disable-plugin-startup-tasks-for-tests'],
       env,
       clientInfo: { name: 'inquello_desktop', title: 'Inquello', version: '0.0.0-test' },
       schemaStamp,
@@ -79,6 +81,7 @@ describe('real app-server over stdio', () => {
     );
     const runtime = new AppServerRuntime({
       command: binary.path,
+    commandArgsPrefix: ['--disable-plugin-startup-tasks-for-tests'],
       env,
       clientInfo: { name: 'inquello_desktop', title: 'Inquello', version: '0.0.0-test' },
       schemaStamp,

@@ -144,6 +144,37 @@ afterEach(() => {
   Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1024 });
 });
 
+it('completes pin and archive without waiting for an unrelated sandbox inspection', async () => {
+  const main = fakeMain();
+  const original = (globalThis as { inquello?: object }).inquello;
+  const forTask = vi.fn(() => new Promise(() => {}));
+  const setNavigation = vi.fn(async (input: { taskId: string; pinned: boolean; archived: boolean }) => {
+    const index = main.tasks.findIndex(item => item.taskId === input.taskId);
+    const saved = { ...main.tasks[index]!, pinned: input.pinned, archived: input.archived, revision: main.tasks[index]!.revision + 1 };
+    main.tasks[index] = saved;
+    return { ok: true, value: saved };
+  });
+  (globalThis as { inquello?: unknown }).inquello = {
+    ...original, organise: { ...main.organise, setNavigation }, policy: { forTask },
+  };
+  let operation = 900;
+  render(<Shell onShowSpecimen={() => undefined} operationIds={() => uuid(operation++)}/>);
+  await waitFor(() => expect(nav().dataset.sidebarState).toBe('ready'));
+  await openTask('Bank confirmations');
+  await waitFor(() => expect(forTask).toHaveBeenCalled());
+  const inspections = forTask.mock.calls.length;
+  const user = userEvent.setup();
+  await user.click(screen.getByRole('button', { name: 'Organise Task' }));
+  await user.click(screen.getByRole('menuitem', { name: 'Pin', exact: true }));
+  expect(await screen.findByText('Navigation preference saved.')).toBeTruthy();
+  await user.click(screen.getByRole('button', { name: 'Organise Task' }));
+  await user.click(screen.getByRole('menuitem', { name: 'Archive', exact: true }));
+  expect(await screen.findByText(/Archived from navigation/)).toBeTruthy();
+  expect(within(nav()).queryByRole('link', { name: 'Bank confirmations' })).toBeNull();
+  expect(forTask).toHaveBeenCalledTimes(inspections);
+  expect(setNavigation).toHaveBeenCalledTimes(2);
+});
+
 describe('layout modes (pure)', () => {
   it('takes every width from the DESIGN tokens', () => {
     expect(SIDEBAR_WIDTH).toBe(Number.parseFloat(spacing['sidebar-width']));

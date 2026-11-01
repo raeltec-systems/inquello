@@ -1,3 +1,4 @@
+import { expectPrivatePath } from './private-paths';
 /**
  * Story 1.10b building blocks: PKCE and state, the loopback listener, the
  * vault's fail-closed backend detection and file handling, and the dev config.
@@ -159,9 +160,9 @@ describe('vault', () => {
     expect(vault.deviceId()).toBe(deviceId);
     vault.save(record());
     const file = path.join(dir, SESSION_FILE);
-    expect(fs.statSync(file).mode & 0o777).toBe(0o600);
-    expect(fs.statSync(path.join(dir, DEVICE_FILE)).mode & 0o777).toBe(0o600);
-    expect(fs.statSync(dir).mode & 0o777).toBe(0o700);
+    expectPrivatePath(file, 0o600);
+    expectPrivatePath(path.join(dir, DEVICE_FILE), 0o600);
+    expectPrivatePath(dir, 0o700);
     const bytes = fs.readFileSync(file);
     expect(bytes.includes(Buffer.from('iqa_access-secret-value'))).toBe(false);
     expect(bytes.includes(Buffer.from('iqr_refresh-secret-value'))).toBe(false);
@@ -280,6 +281,12 @@ describe('smoke identity evaluation', () => {
 
   it('passes a clean configured run', () => {
     expect(evaluateIdentity(clean)).toMatchObject({ ok: true, failures: [] });
+  });
+
+  it('uses observed Windows ACL protection and refuses an unsafe ACL', () => {
+    const windows = { ...clean, vault: { ...clean.vault!, mode: 0o666, dirMode: 0o777, windowsAclPrivate: true } };
+    expect(evaluateIdentity(windows).ok).toBe(true);
+    expect(evaluateIdentity({ ...windows, vault: { ...windows.vault, windowsAclPrivate: false } }).ok).toBe(false);
   });
 
   it.each<[string, Partial<IdentityProbeRead>]>([

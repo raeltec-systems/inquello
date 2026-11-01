@@ -772,3 +772,11 @@ The continuation's measured checks and pending gates are recorded in
 These corrections do not promote route eligibility or accept Epic 1. Final
 source-matched build/protocol, native fixture and Electron results supersede
 earlier snapshot limitations only when recorded as executed.
+
+The scoped Story 1.30 continuation now records passing native build/format,
+fourteen distinct search/reopen witnesses, supported protocol regeneration and
+real Windows Electron navigation/layout. It fixes retained revision watermarks,
+Messages item/delta ordering and private tool schema selection, and corrects
+legacy-format/concurrent-Stop/idle-guest fixtures without weakening authority.
+See `_bmad-output/implementation-artifacts/validation/story130-windows-scoped-20261101.md`
+for measured results and remaining manual, release and cumulative epic gates.

@@ -106,7 +106,7 @@ describe('export (matrix: Export)', () => {
     for (const file of allFiles(destination)) expect(fs.readFileSync(file, 'utf8')).not.toContain(SESSION_SECRET);
     expect(fs.existsSync(path.join(destination, MANIFEST_FILE))).toBe(true);
     expect(journal.read()).toEqual([{ path: destination, exportedAt: '2026-10-28T12:00:00.000Z', categories: ['task-history', 'working-store', 'task-folders'] }]);
-    expect(fs.statSync(journal.file).mode & 0o777).toBe(0o600);
+    if (process.platform !== 'win32') expect(fs.statSync(journal.file).mode & 0o777).toBe(0o600);
     expect(journal.file).toBe(path.join(userData, 'data', 'export-journal.json'));
   });
 
@@ -526,10 +526,43 @@ function harness(): Harness {
 }
 
 describe('data service', () => {
-  it('getPolicy lists every category with owner, rule, enabled flag and held counts, plus blockers (matrix: Inspect)', () => {
+  it('uses guest inspection and refuses host deletion when guest deletion is unconfirmed', async () => {
+    const h = harness();
+    const options = (h.service as unknown as { options: DataServiceOptions }).options;
+    const file = path.join(h.roots['user-data'], 'tasks', 'synthetic', 'keep.txt');
+    fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, 'keep');
+    const service = new DataService({ ...options, taskStorage: {
+      inspect: async () => { throw new Error('guest unavailable'); },
+      snapshot: async () => { throw new Error('not used'); },
+      ensureEmpty: async () => { throw new Error('not empty'); },
+      erase: async () => { throw new Error('active executor'); },
+    } });
+    expect((await service.getPolicy()).blockers).toContainEqual(expect.objectContaining({ category: 'task-folders', detail: expect.stringContaining('counts are unavailable') }));
+    expect((await service.deleteData(['task-folders'])).ok).toBe(false);
+    expect(fs.readFileSync(file, 'utf8')).toBe('keep');
+    expect(h.events).toEqual(['runtime:stop', 'runtime:start']);
+  });
+
+  it('disposes a quiescent execution snapshot after export', async () => {
+    const h = harness();
+    const options = (h.service as unknown as { options: DataServiceOptions }).options;
+    const service = new DataService({ ...options, taskStorage: {
+      inspect: async () => ({ files: 0, bytes: 0 }),
+      snapshot: async (policy, roots) => {
+        h.events.push('guest:snapshot');
+        return { roots, inventory: takeInventory(policy, roots), omissions: [], dispose: () => { h.events.push('guest:dispose'); } };
+      },
+      ensureEmpty: async () => undefined,
+      erase: async () => ({ files: 0, bytes: 0 }),
+    } });
+    expect((await service.exportData()).ok).toBe(true);
+    expect(h.events).toEqual(['runtime:stop', 'guest:snapshot', 'guest:dispose', 'runtime:start']);
+  });
+
+  it('getPolicy lists every category with owner, rule, enabled flag and held counts, plus blockers (matrix: Inspect)', async () => {
     const h = harness();
     write(h.roots['runtime-home'], 'unexpected.bin', 'x');
-    const view = h.service.getPolicy();
+    const view = await h.service.getPolicy();
     expect(view.loaded).toBe(true);
     expect(view.categories).toHaveLength(policy.categories.length);
     expect(view.categories[0]).toEqual({
@@ -554,7 +587,7 @@ describe('data service', () => {
   it('blocks every action when the register did not load', async () => {
     const h = harness();
     const broken = new DataService({authority:fixtureDataAuthority(), ...(h.service as unknown as { options: DataServiceOptions }).options, load: { ok: false, error: 'bad' } });
-    expect(broken.getPolicy()).toMatchObject({ loaded: false, categories: [], blockers: [{ kind: 'policy-invalid' }] });
+    expect(await broken.getPolicy()).toMatchObject({ loaded: false, categories: [], blockers: [{ kind: 'policy-invalid' }] });
     await expect(broken.exportData()).resolves.toEqual({ ok: false, reason: 'The local data policy did not load, so local data actions are blocked.' });
   });
 

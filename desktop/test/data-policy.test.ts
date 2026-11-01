@@ -199,6 +199,7 @@ describe('globs and classification', () => {
     expect(classify(policy, 'user-data', 'working/working.runtime-lease')?.id).toBe('runtime-lease');
     expect(classify(policy, 'runtime-home', 'logs_2.sqlite')?.id).toBe('runtime-logs');
     expect(classify(policy, 'runtime-home', 'logs_2.sqlite-wal')?.id).toBe('runtime-logs');
+    expect(classify(policy, 'runtime-home', '.sandbox/sandbox.2026-11-01.log')).toMatchObject({ id: 'runtime-logs', credentials: true, retention: 'until-owner-deletes', export: { mode: 'excluded' } });
     expect(classify(policy, 'runtime-home', 'state_5.sqlite')?.id).toBe('runtime-state');
     expect(classify(policy, 'runtime-home', 'sessions/2026/10/28/rollout-x.jsonl')?.id).toBe('task-history');
     expect(classify(policy, 'runtime-home', 'archived_sessions/rollout-x.jsonl')?.id).toBe('task-history');

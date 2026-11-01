@@ -40,13 +40,19 @@ async function startRuntime(roots: GovernedRoots, base: NodeJS.ProcessEnv, worki
   if (workingStore) fs.mkdirSync(path.dirname(workingStore), { recursive: true, mode: 0o700 });
   const runtime = new AppServerRuntime({
     command: binary.path,
+    commandArgsPrefix: ['--disable-plugin-startup-tasks-for-tests'],
     env: runtimeChildEnv(base, { serviceConfigEnv: 'INQUELLO_SERVICE_CONFIG', codexHome: roots['runtime-home'], workingStore }),
     clientInfo: { name: 'inquello_desktop', title: 'Inquello', version: '0.0.0-test' },
     schemaStamp,
     stderrLogPath: path.join(roots.logs, 'app-server-stderr.log'),
     logger: recordingLogger(),
     // Explicit fake service policy: this test proves lifecycle/filesystem only.
-    onServerRequest: (method,params) => method==='inquello/tasks/authority'&&(params as {workspaceId?:string})?.workspaceId===fixtureWorkspace ? {workspacePolicy:{workspaceId:fixtureWorkspace,policyRevision:1,authorizationEpoch:1,execution:null}} : undefined,
+    onServerRequest: (method,params) => {
+      if ((params as {workspaceId?:string})?.workspaceId !== fixtureWorkspace) return undefined;
+      if (method === 'inquello/tasks/authority') return {workspacePolicy:{workspaceId:fixtureWorkspace,policyRevision:1,authorizationEpoch:1,execution:null}};
+      if (method === 'inquello/context/authorize') return {available:true,snapshot:'fictional-recovery-snapshot',serviceEngagementIds:[]};
+      return undefined;
+    },
   });
   runtimes.push(runtime);
   await runtime.start();

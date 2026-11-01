@@ -1,3 +1,6 @@
+import { configureDesktopStorage } from './runtime/desktop-storage';
+import { wslDataStorage } from './runtime/wsl-data';
+import { ensurePrivateDirectory } from './runtime/private-paths';
 import {createDataAuthority} from './data/authority';
 import { taskBootstrap } from './tasks/bootstrap';
 import { TaskService } from './tasks/service';
@@ -125,7 +128,7 @@ import path from 'node:path';
 import { app, BrowserWindow, dialog, ipcMain, protocol, safeStorage, session, type WebContents } from 'electron';
 
 import schemaStamp from '../protocol/schema-stamp.json';
-import { DataService, ExportJournal, governedRoots, JOURNAL_DIR, loadShippedPolicy, type GovernedRoots } from './data';
+import { DataService, ExportJournal, governedRoots, JOURNAL_DIR, loadShippedPolicy, type GovernedRoots, type DataServiceOptions, type ImportActionResult } from './data';
 import { createIdentity, headlessOpener, identityDir, SERVICE_CONFIG_ENV, type IdentityWiring } from './identity';
 import { openSystemBrowser } from './identity/browser';
 import { AppServerRuntime, consoleLogger, isProviderCredentialVar, recordingConsoleLogger, resolveAppServerBinary, runtimeChildEnv, writeRuntimeConfig, RUNTIME_OWNED_CONFIG_ARGS, verifyRuntimeOwnedConfig, type ExitInfo } from './runtime';
@@ -144,7 +147,9 @@ import { EscalationGate, PermissionMediator, PolicyService, taskFoldersRoot } fr
 import { createProviders, loadProviderDevConfig, PROVIDER_DEV_CONFIG_ENV, providersDir, type ProviderService } from './providers';
 import { probeStartSurface, probeRoutes, probeCapabilities, probeComposer, probeData, probeIdentity, probeOrganise, probePermissions, probePolicy, probeProviders, probeRenderer, probeShellLayout, probeStates, probeToolBounds, SHELL_LAYOUT } from './smoke-probe';
 
-const smoke = process.argv.includes('--smoke');
+const navigationSmoke = !app.isPackaged && process.argv.includes('--smoke-navigation');
+const smoke = process.argv.includes('--smoke') || navigationSmoke;
+let navigationOk = false;
 // The smoke run keeps what main logs, so the providers probe can scan it for a leaked key.
 const recordedLogger = smoke ? recordingConsoleLogger() : undefined;
 const logger = recordedLogger ?? consoleLogger;
@@ -196,6 +201,7 @@ const escalations = new EscalationGate({ newId: randomUUID, resolveRouteFor: thr
 let identity: IdentityWiring | undefined;
 let providers: ProviderService | undefined;
 let dataService: DataService | undefined;
+let smokeRecover: ((roots: GovernedRoots, source: string) => Promise<ImportActionResult>) | undefined;
 let roots: GovernedRoots | undefined;
 /** `webContents` ids main created for app windows; the only trusted operation senders. */
 const trustedWebContentsIds = new Set<number>();
@@ -205,11 +211,12 @@ let quitting = false;
 
 if (smoke) {
   // Keep the smoke run's Electron profile, and with it the runtime home, out of
-  // the user's real ones. Chromium holds the profile open until the process
-  // ends, so it lives at a fixed, reused path; the runtime home inside it is
-  // cleared at the start of every smoke run.
-  app.setPath('userData', path.join(os.tmpdir(), 'inquello-smoke-user-data'));
+  // the user's real ones. Each run gets a fresh directory because Chromium
+  // and runtime descendants may still hold a prior disposable profile open.
+  app.setPath('userData', path.join(process.platform === 'win32' ? 'D:\\Inquello\\tmp' : os.tmpdir(), `inquello-smoke-${randomUUID()}`));
 }
+
+if (process.platform === 'win32') configureDesktopStorage(app, app.getPath('userData'));
 
 // Every renderer is sandboxed; must be called before `ready`.
 app.enableSandbox();
@@ -270,9 +277,9 @@ async function startRuntimeNow(): Promise<void> {
   if (!roots) throw new Error('local data roots were not set up');
   if(fs.existsSync(path.join(roots['user-data'],'data','recovery-unvalidated')))throw new Error('Recovered data awaits current validation; the runtime remains stopped');
   const runtimeHome = roots['runtime-home'];
-  fs.mkdirSync(runtimeHome, { recursive: true, mode: 0o700 });
+  ensurePrivateDirectory(runtimeHome);
   const workingStore = workingStorePath(app.getPath('userData'));
-  fs.mkdirSync(path.dirname(workingStore), { recursive: true, mode: 0o700 });
+  ensurePrivateDirectory(path.dirname(workingStore));
   // Preserve runtime management edits; immutable startup overrides enforce credential safety.
   writeRuntimeConfig(runtimeHome);
   providers?.codex.runtimeReset();
@@ -286,7 +293,9 @@ async function startRuntimeNow(): Promise<void> {
   logger.info(`starting app-server (${binary.source}): ${binary.path}`);
   runtime = new AppServerRuntime({
     command: binary.path,
-    commandArgsPrefix: RUNTIME_OWNED_CONFIG_ARGS,
+    commandArgsPrefix: smoke && !app.isPackaged
+      ? [...RUNTIME_OWNED_CONFIG_ARGS, '--disable-plugin-startup-tasks-for-tests']
+      : RUNTIME_OWNED_CONFIG_ARGS,
     env: runtimeEnv(runtimeHome, workingStore),
     clientInfo: { name: 'inquello_desktop', title: 'Inquello', version: app.getVersion() },
     schemaStamp,
@@ -365,6 +374,31 @@ async function chooseImportSource(): Promise<string | null> {
 }
 
 async function runSmokeProbe(contents: WebContents): Promise<void> {
+  if (navigationSmoke) {
+    if (!identity || !organise) throw new Error('Navigation services unavailable');
+    const { probeSavedNavigation } = await import('./smoke-probe');
+    const report = await probeSavedNavigation(contents, {
+      identity,
+      seedFile: process.env.INQUELLO_SMOKE_SEED ?? null,
+      restartRuntime: async () => { await stopRuntime(); await startRuntime(); },
+    });
+    navigationOk = report.ok;
+    process.stdout.write(`${JSON.stringify({ event: 'saved-navigation', ...report })}\n`);
+    const window = BrowserWindow.fromWebContents(contents);
+    const minimum = window?.getMinimumSize();
+    const layout = await probeShellLayout(contents, {
+      identity, organise, seedFile: process.env.INQUELLO_SMOKE_SEED ?? null,
+      resize: (width, height) => {
+        if (width === SHELL_LAYOUT.windowMinWidth) window?.setMinimumSize(0, 0);
+        window?.setContentSize(width, height);
+        if (width === WINDOW_WIDTH && height === WINDOW_HEIGHT && minimum) window?.setMinimumSize(minimum[0]!, minimum[1]!);
+      },
+      restore: { width: WINDOW_WIDTH, height: WINDOW_HEIGHT },
+    });
+    shellLayoutOk = layout.ok;
+    process.stdout.write(`${JSON.stringify({ event: 'shell-layout', ...layout })}\n`);
+    return;
+  }
   const { privileges, design } = await probeRenderer(contents, blocked, schemaStamp.runtimeVersion);
   privilegesOk = privileges.ok;
   designOk = design.ok;
@@ -377,8 +411,8 @@ async function runSmokeProbe(contents: WebContents): Promise<void> {
   identityOk = report.ok;
   process.stdout.write(`${JSON.stringify({ event: 'identity', ...report })}\n`);
   if (!report.ok) logger.error(`identity probe failed: ${report.failures.join('; ')}`);
-  if (!dataService || !roots) throw new Error('local data was not wired');
-  const data = await probeData(contents, { service: dataService, roots, codexHome: runtime?.handshake?.codexHome ?? null, tempBase: os.tmpdir() });
+  if (!dataService || !roots || !organise || !smokeRecover) throw new Error('local data was not wired');
+  const data = await probeData(contents, { service: dataService, roots, identity, organise, seedFile: process.env.INQUELLO_SMOKE_SEED ?? null, recover: smokeRecover, codexHome: runtime?.handshake?.codexHome ?? null, tempBase: os.tmpdir() });
   dataOk = data.ok;
   process.stdout.write(`${JSON.stringify({ event: 'data', ...data })}\n`);
   if (!data.ok) logger.error(`data probe failed: ${data.failures.join('; ')}`);
@@ -416,12 +450,20 @@ async function runSmokeProbe(contents: WebContents): Promise<void> {
   process.stdout.write(`${JSON.stringify({ event: 'states', ...statesReport })}\n`);
   if (!statesReport.ok) logger.error(`states probe failed: ${statesReport.failures.join('; ')}`);
   const window = BrowserWindow.fromWebContents(contents);
+  const nativeMinimum = window?.getMinimumSize();
   const layoutReport = await probeShellLayout(contents, {
     identity,
     organise,
     seedFile: process.env.INQUELLO_SMOKE_SEED ?? null,
     // Smoke-only: the probe sizes the real window's content area to each layout width.
-    resize: (width, height) => window?.setContentSize(width, height),
+    resize: (width, height) => {
+      // Test the exact CSS minimum, independently of Windows' native frame/DPI
+      // rounding (125% scaling rounds the normal minimum viewport up by 2 px).
+      // Restore the original native constraint with the normal window size.
+      if (width === SHELL_LAYOUT.windowMinWidth) window?.setMinimumSize(0, 0);
+      window?.setContentSize(width, height);
+      if (width === WINDOW_WIDTH && height === WINDOW_HEIGHT && nativeMinimum) window?.setMinimumSize(nativeMinimum[0]!, nativeMinimum[1]!);
+    },
     restore: { width: WINDOW_WIDTH, height: WINDOW_HEIGHT },
   });
   shellLayoutOk = layoutReport.ok;
@@ -463,6 +505,7 @@ async function runSmokeProbe(contents: WebContents): Promise<void> {
 
 function exitCodeFor(exit: ExitInfo | undefined): number {
   if (!smoke) return 0;
+  if (navigationSmoke) return handshakeOk && navigationOk && shellLayoutOk && exit?.exitCode === 0 && !exit.killed ? 0 : 1;
   return handshakeOk && privilegesOk && designOk && identityOk && dataOk && providersOk && organiseOk && statesOk && shellLayoutOk && composerOk && startSurfaceOk && policyOk && toolBoundsOk && permissionsOk && capabilitiesOk && routesOk && environmentsOk && exit !== undefined && exit.exitCode === 0 && !exit.killed ? 0 : 1;
 }
 
@@ -590,7 +633,8 @@ void app.whenReady().then(async () => {
   providerService.setRouteInvalidator((id) => routes!.invalidate(id));
   const policyLoad = loadShippedPolicy();
   if (!policyLoad.ok) logger.error(`local data policy did not load; local data actions are blocked: ${policyLoad.error}`);
-  const service = new DataService({
+  const dataOptions: DataServiceOptions = {
+    ...(process.platform === 'win32' ? { taskStorage: wslDataStorage(taskFoldersRoot(userData), () => identitySession.principalId()) } : {}),
     authority:createDataAuthority({identity:identitySession,service:sharedAuthority,storeName:path.basename(workingStorePath(userData)),binary:()=>resolveAppServerBinary({env:process.env,isPackaged:app.isPackaged,resourcesPath:process.resourcesPath,appPath:app.getAppPath()}).path,env:()=>runtimeEnv(roots!['runtime-home'],workingStorePath(userData))}),
     load: policyLoad,
     roots,
@@ -627,7 +671,18 @@ void app.whenReady().then(async () => {
     appVersion: app.getVersion(),
     runtimeVersion: schemaStamp.runtimeVersion,
     logger,
-  });
+  };
+  const service = new DataService(dataOptions);
+  if (smoke) smokeRecover = async (targetRoots, source) => new DataService({
+    ...dataOptions,
+    roots: targetRoots,
+    taskStorage: undefined,
+    journal: new ExportJournal(targetRoots['user-data']),
+    chooseImportSource: async () => source,
+    // This separate, empty recovery profile has no running app-server or guest
+    // Tasks. Native inspection and live service receipt validation still run.
+    runtime: { stop: async () => {}, start: async () => {}, activeTasks: () => 0 },
+  }).importData();
   dataService = service;
   registerOperations(
     ipcMain,

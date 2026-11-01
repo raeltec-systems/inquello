@@ -324,6 +324,7 @@ describe('runtime env', () => {
   it('names the working store only when main gives it, dropping an inherited value', () => {
     const inherited = { PATH: '/bin', [WORKING_STORE_ENV]: '/tmp/elsewhere.sqlite' };
     expect(runtimeChildEnv(inherited, { serviceConfigEnv: 'INQUELLO_SERVICE_CONFIG' })[WORKING_STORE_ENV]).toBeUndefined();
+    expect(runtimeChildEnv({ inquello_sandbox_log_retention: 'rotate' }, { serviceConfigEnv: 'INQUELLO_SERVICE_CONFIG' })).toEqual({ INQUELLO_SANDBOX_LOG_RETENTION: 'until-owner-deletes' });
     expect(runtimeChildEnv(inherited, { serviceConfigEnv: 'INQUELLO_SERVICE_CONFIG', workingStore: '/data/working/working.sqlite' })[WORKING_STORE_ENV]).toBe('/data/working/working.sqlite');
   });
 });

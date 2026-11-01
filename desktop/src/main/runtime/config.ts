@@ -1,3 +1,4 @@
+import { ensurePrivateDirectory, restrictPrivateFile } from './private-paths';
 /**
  * Persistent runtime-owned configuration (Story 1.21).
  * Initialize it once; subsequent plugin/MCP/config-writer edits survive restart.
@@ -39,12 +40,12 @@ export const RUNTIME_OWNED_CONFIG_ARGS: readonly string[] = [
 
 /** Initializes `config.toml` once; returns its path, preserving runtime-owned edits. */
 export function writeRuntimeConfig(runtimeHome: string): string {
-  fs.mkdirSync(runtimeHome, { recursive: true, mode: 0o700 });
+  ensurePrivateDirectory(runtimeHome);
   const file = path.join(runtimeHome, RUNTIME_CONFIG_FILE);
   try {
     const stat = fs.lstatSync(file);
     if (!stat.isFile() || stat.isSymbolicLink()) throw new Error('runtime config must be a regular file');
-    fs.chmodSync(file, 0o600);
+    restrictPrivateFile(file);
     return file;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
@@ -52,7 +53,7 @@ export function writeRuntimeConfig(runtimeHome: string): string {
   const temp = `${file}.${process.pid}.${randomUUID()}.tmp`;
   try {
     fs.writeFileSync(temp, RUNTIME_CONFIG_TOML, { mode: 0o600, flag: 'wx' });
-    fs.chmodSync(temp, 0o600);
+    restrictPrivateFile(temp);
     fs.renameSync(temp, file);
   } finally {
     fs.rmSync(temp, { force: true });

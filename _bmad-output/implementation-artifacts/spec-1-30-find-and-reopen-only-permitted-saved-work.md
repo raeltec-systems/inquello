@@ -178,3 +178,22 @@ The full-suite failures remain the two Git/generated-inventory assertions and ni
 The initial dependency copy accidentally flattened pnpm symlinks, causing unrelated module/type resolution failures; those attempts are retained in `validation/story130-final-initial-environment/`, not counted as product verification. Dependencies were then copied preserving their existing link structure, with no install/download, and all final checks rerun.
 
 Round 2 triage and narrow patches address all routed corrections. R2-B2 remains the documented low-impact fail-closed unrelated-write retry residual; native latency requires measurement. R2-B10 remains an owner-run validation gate. The three independent layers completed for both recorded rounds. No additional review loop was needed for this type-only completion. Native compile/fmt/tests, matching generated protocol, actual browser/Windows modal and file-identity behavior, populated native latency, and cumulative Epic 1 auditor acceptance remain open. No eligibility promotion, provider call, credentials, push, merge or deployment occurred. Status remains **in-progress, reviewed candidate**, not accepted.
+
+## Scoped Windows validation continuation — 2026-11-01
+
+The owner requested fixing only Story 1.30 validation blockers and committing and
+pushing the existing epic branch. Native compilation, formatting, supported
+protocol regeneration and desktop build/typechecks now pass. All fourteen native
+navigation witnesses have passing execution evidence (ten from the initial run,
+four corrected cases rerun successfully). The focused desktop/schema selection
+passed 417 tests; after fixing Pin/Archive waiting for unrelated sandbox
+inspection, all 74 tests in the affected shell suites passed. The scoped actual
+Windows Electron navigation/layout run exited 0 with both required reports.
+
+See [measured results and remaining gates](validation/story130-windows-scoped-20261101.md)
+for exact commands, logs, hashes and the distinction between automated evidence
+and manual acceptance. These results supersede the corresponding unavailable
+checks in the candidate recovery record above. No full current-tree epic suite,
+release certification, fresh guest certification, live provider usefulness or
+cumulative owner acceptance is claimed. Story remains in progress for those
+acceptance gates; Epic 1 is not accepted and no eligibility is promoted.

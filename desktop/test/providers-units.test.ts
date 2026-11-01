@@ -1,3 +1,4 @@
+import { expectPrivatePath } from './private-paths';
 /**
  * Story 1.13 units: the Claude key vault and form check, the provider
  * service's Claude states, the free key check against a local fake HTTPS
@@ -106,8 +107,8 @@ describe('Claude key vault', () => {
     const v = vault();
     expect(v.storage).toBe('os-backed');
     v.save({ version: 1, key: KEY, state: 'stored-unverified' });
-    expect(fs.statSync(v.filePath).mode & 0o777).toBe(0o600);
-    expect(fs.statSync(path.dirname(v.filePath)).mode & 0o777).toBe(0o700);
+    expectPrivatePath(v.filePath, 0o600);
+    expectPrivatePath(path.dirname(v.filePath), 0o700);
     expect(path.basename(v.filePath)).toBe('claude.bin');
     expect(path.basename(path.dirname(v.filePath))).toBe('providers');
     expect(fs.readFileSync(v.filePath).includes(Buffer.from(KEY))).toBe(false);
@@ -463,7 +464,7 @@ describe('runtime environment (matrix: Inherited env key)', () => {
       },
       { serviceConfigEnv: 'INQUELLO_SERVICE_CONFIG', codexHome: '/rh', blocked: [PROVIDER_DEV_CONFIG_ENV] },
     );
-    expect(env).toEqual({ PATH: '/usr/bin', GITHUB_TOKEN: 'gh', CODEX_HOME: '/rh' });
+    expect(env).toEqual({ PATH: '/usr/bin', GITHUB_TOKEN: 'gh', CODEX_HOME: '/rh', INQUELLO_SANDBOX_LOG_RETENTION: 'until-owner-deletes' });
   });
 });
 
@@ -478,7 +479,7 @@ describe('runtime config.toml', () => {
     expect(text).toMatch(/^cli_auth_credentials_store = "keyring"$/m);
     expect(text).toMatch(/^\[features\]\n(?:#.*\n)*secret_auth_storage = false$/m);
     expect(text).not.toMatch(/"file"|model/);
-    expect(fs.statSync(file).mode & 0o777).toBe(0o600);
+    expectPrivatePath(file, 0o600);
     expect(fs.readdirSync(home)).toEqual(['config.toml']);
   });
 });
@@ -658,7 +659,7 @@ describe('data policy: provider categories', () => {
     expect(inventory.disabledHeld).toEqual([{ category: 'provider-credentials', path: 'runtime-home:auth.json' }]);
   });
 
-  it('refuses to delete the keyring entry through Local data, and leaves it out of the deletable list', () => {
+  it('refuses to delete the keyring entry through Local data, and leaves it out of the deletable list', async () => {
     expect(() => validateDeletion(policy, ['codex-keyring-entry'])).toThrow(/OS credential store; remove it in Providers/);
     expect(() => validateDeletion(policy, ['claude-key-vault', 'runtime-config'])).not.toThrow();
     const userData = tempDir('providers-deletable');
@@ -678,7 +679,7 @@ describe('data policy: provider categories', () => {
     });
     expect(service.deletableCategories()).toContain('claude-key-vault');
     expect(service.deletableCategories()).not.toContain('codex-keyring-entry');
-    expect(service.getPolicy().categories.find((category) => category.id === 'codex-keyring-entry')).toMatchObject({ location: 'os-credential-store', held: { files: 0 } });
+    expect((await service.getPolicy()).categories.find((category) => category.id === 'codex-keyring-entry')).toMatchObject({ location: 'os-credential-store', held: { files: 0 } });
   });
 
   it('validates a store location strictly', () => {

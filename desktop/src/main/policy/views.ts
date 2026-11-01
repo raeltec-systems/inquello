@@ -39,9 +39,15 @@ export const BROAD_MODE_TITLE: Record<BroadMode, string> = {
 
 /** The reach each mode states; a broader mode is confirmed with exactly this text. */
 export const BROAD_MODE_REACH: Record<BroadMode, string> = {
-  standard: 'Standard: commands on this Task run inside the sandbox on this device, and you are asked before actions as the policy requires.',
-  no_prompt: 'No prompt: commands on this Task run inside the sandbox on this device, and you will not be asked before actions.',
-  full_access: 'Full access: commands on this Task run without sandbox limits on this device, and you will not be asked before actions.',
+  standard: process.platform === 'win32'
+    ? 'Standard: this Task runs in the Linux sandbox on this device. Files are transferred when switching from Windows. You are asked before actions as the policy requires.'
+    : 'Standard: commands on this Task run inside the sandbox on this device, and you are asked before actions as the policy requires.',
+  no_prompt: process.platform === 'win32'
+    ? 'No prompt: commands on this Task run in the Linux sandbox on this device, and you will not be asked before actions.'
+    : 'No prompt: commands on this Task run inside the sandbox on this device, and you will not be asked before actions.',
+  full_access: process.platform === 'win32'
+    ? 'Full access: this Task switches from Linux to Windows after its files are transferred. Commands run without sandbox limits on this device, and you will not be asked before actions.'
+    : 'Full access: commands on this Task run without sandbox limits on this device, and you will not be asked before actions.',
 };
 
 export const SETTING_LABEL: Record<SettingName, string> = {
@@ -174,6 +180,8 @@ export interface ThreadSettingsView {
 }
 
 export interface TaskPolicyView extends PolicyView {
+  /** An interrupted transfer may only retry its retained target/source. */
+  transferRecovery?: BroadMode;
   taskId: string;
   broadMode: BroadModeView;
   /** Each broader mode, its reach and, when unavailable, the rule that prevents it. */
