@@ -272,6 +272,25 @@ pub struct SavedQueueGuard {
     _transaction: sqlx::Transaction<'static, sqlx::Sqlite>,
 }
 
+#[derive(Clone, Copy, Debug)]
+enum SavedSealStage {
+    Begin,
+    VersionRead,
+    IdentityOpen,
+    IdentityRead,
+    VersionChanged,
+    FileChanged,
+}
+
+fn saved_seal_failure(stage: SavedSealStage, error: StoreError) -> StoreError {
+    // Fixed stages only: never expose SQL, paths, identity values or raw errors.
+    #[cfg(debug_assertions)]
+    eprintln!("[inquello] saved-read seal: {stage:?}");
+    #[cfg(not(debug_assertions))]
+    let _ = stage;
+    error
+}
+
 pub struct SavedReadFence {
     connection: sqlx::SqliteConnection,
     version: i64,
@@ -308,16 +327,25 @@ impl SqliteWorkingStore {
             .pool
             .begin_with("BEGIN IMMEDIATE")
             .await
-            .map_err(backend)?;
+            .map_err(|error| saved_seal_failure(SavedSealStage::Begin, backend(error)))?;
         let current: i64 = sqlx::query_scalar("PRAGMA data_version")
             .fetch_one(&mut fence.connection)
             .await
-            .map_err(backend)?;
-        let current_file = open_saved_identity(&fence.path)?;
-        let same_file = saved_file_identity(&current_file)? == fence.identity;
+            .map_err(|error| saved_seal_failure(SavedSealStage::VersionRead, backend(error)))?;
+        let current_file = open_saved_identity(&fence.path)
+            .map_err(|error| saved_seal_failure(SavedSealStage::IdentityOpen, error))?;
+        let same_file = saved_file_identity(&current_file)
+            .map_err(|error| saved_seal_failure(SavedSealStage::IdentityRead, error))?
+            == fence.identity;
         if current != fence.version || !same_file {
-            return Err(StoreError::Backend(
-                "Saved work changed during inspection".into(),
+            let stage = if !same_file {
+                SavedSealStage::FileChanged
+            } else {
+                SavedSealStage::VersionChanged
+            };
+            return Err(saved_seal_failure(
+                stage,
+                StoreError::Backend("Saved work changed during inspection".into()),
             ));
         }
         Ok(SavedQueueGuard { _transaction: tx })

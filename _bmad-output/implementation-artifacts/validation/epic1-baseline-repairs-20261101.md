@@ -137,3 +137,9 @@ The 62-case authorization runtime matrix completed in 1423.53 seconds: **61 pass
 - Probe defects corrected: controls are a sibling of TaskView; completed item rendering is not native turn completion; rejected reads are distinct from timeouts. Probe waits for actual completed composer state and re-reads only exact stale-snapshot/superseded read refusals under the existing deadline. It never retries a mutation or an authority refusal.
 - Runs UCL5Xn/n4pFmD/eRopSW exposed intermittent read refusal. Enum-only main diagnostics distinguish native, parse and authority stages without logging payloads. FKUyb5 separately reproduced workspace/tree stale_snapshot clearing navigation before Send; no model call occurred. Narrow fenced read-retry repair is under test. No full four-call Stop/reopen/Resume pass is claimed.
 - Reviewed Phase1 HTTP/WebSocket max_output_tokens propagation applied after all 12 baseline hashes matched; compile/tests pending. This alone is not a paid-test budget bound. No credentials accessed and no paid calls made.
+
+### 17:40 UTC output-cap and saved-read diagnostics
+
+- Phase1 core compiled. Counted outgoing HTTP/WebSocket body/omission/mismatch test passed1/1 (`phase1-core-cap-counted-1734.log`); private Responses normalization/output-limit0-and65537 refusal test passed1/1 (`phase1-private-prompt-1734.log`). Initial exact short-name filter selected0 tests and is NOT evidence.
+- Saved-store regression passed3/3, including new concurrent empty reads and existing other-connection mutation/refreshed read checks (`saved-fence-stage-tests-1734.log`). Fixed-enum debug diagnostics distinguish BEGIN, PRAGMA, file-identity and actual version changes without altering public refusal or fences. No evidence yet identifies the actual Electron failure stage; app-server rebuild pending.
+- Phase1 is NOT an aggregate dollar limit. Phase2 remains outside checkout under review; no live inference or secret access.

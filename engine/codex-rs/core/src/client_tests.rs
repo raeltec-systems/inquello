@@ -2289,3 +2289,39 @@ async fn inference_tools_changes_follow_full_specs_across_turns() {
         );
     }
 }
+
+#[test]
+fn host_output_limit_reaches_http_and_websocket_bodies_without_changing_defaults() {
+    let client = test_model_client(SessionSource::Cli);
+    let metadata = test_responses_metadata_for_client(
+        &client, None, format!("{}:0", client.state.thread_id), None,
+        TestCodexResponsesRequestKind::Turn,
+    );
+    let build = |limit| {
+        client.build_responses_request(
+            &Prompt { max_output_tokens: limit, ..Default::default() },
+            &test_model_info(), None,
+            codex_protocol::config_types::ReasoningSummary::None,
+            None, &metadata, false,
+        ).expect("build request")
+    };
+    for limit in [None, Some(4096)] {
+        let request = build(limit);
+        let http = serde_json::to_value(&request).expect("HTTP body");
+        let ws = serde_json::to_value(codex_api::ResponsesWsRequest::ResponseCreate(
+            codex_api::ResponseCreateWsRequest::from(&request)
+        )).expect("WebSocket body");
+        for body in [http, ws] {
+            assert_eq!(body.get("max_output_tokens").and_then(serde_json::Value::as_u64), limit.map(u64::from));
+            if limit.is_none() {
+                assert!(body.get("max_output_tokens").is_none());
+            }
+        }
+    }
+    let bounded = build(Some(4096));
+    let same = build(Some(4096));
+    assert_eq!(super::responses_request_properties_mismatch(&bounded, &same), None);
+    for changed in [build(None), build(Some(2048))] {
+        assert_eq!(super::responses_request_properties_mismatch(&bounded, &changed), Some("max_output_tokens_changed"));
+    }
+}

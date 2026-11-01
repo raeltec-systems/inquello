@@ -471,6 +471,7 @@ pub(crate) fn request(prompt: &Prompt, context: &AttemptContext) -> Result<Infer
 pub(crate) fn responses_prompt(prompt: &Prompt, context: &AttemptContext) -> Result<Prompt> {
     request(prompt, context)?;
     let mut native = prompt.clone();
+    native.max_output_tokens = Some(context.max_output_tokens);
     native.base_instructions.text = private_task_instructions(&prompt.base_instructions.text);
     for item in &mut native.input {
         let value =
@@ -1335,8 +1336,15 @@ mod tests {
             context.binding.api_version = "responses-v1".into();
             let native = responses_prompt(&prompt, &context).expect("Responses payload prompt");
             assert_eq!(native.base_instructions.text, expected);
+            assert_eq!(native.max_output_tokens, Some(context.max_output_tokens));
+            assert_eq!(prompt.max_output_tokens, None);
             let repeated = responses_prompt(&native, &context).expect("repeat normalization");
             assert_eq!(repeated.base_instructions.text, expected);
+            assert_eq!(repeated.max_output_tokens, Some(context.max_output_tokens));
+            context.max_output_tokens = 0;
+            assert!(responses_prompt(&prompt, &context).is_err());
+            context.max_output_tokens = 65537;
+            assert!(responses_prompt(&prompt, &context).is_err());
             assert_eq!(prompt.base_instructions.text, base);
         }
     }

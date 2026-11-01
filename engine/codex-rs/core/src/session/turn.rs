@@ -1732,6 +1732,7 @@ pub(crate) fn build_prompt(
         output_schema_strict: !crate::guardian::is_basic_session_source(
             &turn_context.session_source,
         ),
+        max_output_tokens: None,
         cyber_access_program: turn_context.cyber_access_program,
     }
 }

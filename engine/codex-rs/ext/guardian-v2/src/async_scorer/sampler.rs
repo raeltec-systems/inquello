@@ -247,6 +247,7 @@ impl LunaSampler {
             input,
             tools: None,
             tool_choice: "none".to_owned(),
+            max_output_tokens: None,
             parallel_tool_calls: false,
             reasoning: Some(Reasoning {
                 effort: Some(request.reasoning_effort.clone()),

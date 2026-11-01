@@ -399,6 +399,7 @@ fn responses_request_properties_mismatch(
         input: _,
         tools: previous_tools,
         tool_choice: previous_tool_choice,
+        max_output_tokens: previous_max_output_tokens,
         parallel_tool_calls: previous_parallel_tool_calls,
         reasoning: previous_reasoning,
         store: previous_store,
@@ -416,6 +417,7 @@ fn responses_request_properties_mismatch(
         input: _,
         tools: current_tools,
         tool_choice: current_tool_choice,
+        max_output_tokens: current_max_output_tokens,
         parallel_tool_calls: current_parallel_tool_calls,
         reasoning: current_reasoning,
         store: current_store,
@@ -435,6 +437,8 @@ fn responses_request_properties_mismatch(
         "model_changed"
     } else if previous_tools != current_tools {
         "tools_changed"
+    } else if previous_max_output_tokens != current_max_output_tokens {
+        "max_output_tokens_changed"
     } else if previous_tool_choice != current_tool_choice {
         "tool_choice_changed"
     } else if previous_parallel_tool_calls != current_parallel_tool_calls {
@@ -1118,6 +1122,7 @@ impl ModelClient {
             input,
             tools,
             tool_choice: "auto".to_string(),
+            max_output_tokens: prompt.max_output_tokens,
             parallel_tool_calls: prompt.parallel_tool_calls && !model_info.use_responses_lite,
             reasoning: Some(reasoning),
             store: false,
