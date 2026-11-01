@@ -148,6 +148,37 @@
       "processing_scope": "Not enabled. No dispatch, selection, transfer or automatic upload. Execution remains This device (local host), separately from inference.",
       "eligibility": "disabled",
       "evidence": []
+    },
+    {
+      "id": "processing.codex-responses",
+      "owner": "Inquello retained-runtime Responses adapter and Task authorization mediation",
+      "supply": "Inherited Codex Responses transport through the Inquello fork; exact Terra configuration exercised against a pinned local synthetic provider fixture, not a live OpenAI account",
+      "versions": {
+        "model": "gpt-6.1-terra",
+        "api": "responses-v1",
+        "deployment": "openai-api",
+        "endpoint": "https://api.openai.com/v1/responses"
+      },
+      "limits": [
+        "Exact-model-label Responses runtime qualification passed 31/31 pinned-loopback synthetic cases, with 2/2 model-selector controls; source and binary identities are recorded in the referenced evidence.",
+        "Synthetic fixture qualification is not evidence of live provider access, model quality, pricing, billing, latency or production eligibility",
+        "No real-data eligibility or independent organization approval is supplied by this entry",
+        "The separately authorized paid fictional session remains constrained by its native exact-profile, dispatch, input, output, tool, retry and restart guards; this entry is not a budget or authority override",
+        "No ChatGPT deployment, alternate model, alternate API identifier, Anthropic route or provider fallback is qualified"
+      ],
+      "identity": "The current Inquello creator identity and Workspace authority are separate from the OpenAI API account; a connected OS-keyring credential does not grant route eligibility or Workspace access",
+      "formats": [
+        "Responses text request and streamed response fixtures with retained Task progress and lifecycle evidence"
+      ],
+      "processing_scope": "Synthetic-only qualification of the exact OpenAI API Responses configuration. Qualification traffic used a local pinned fixture; subsequently authorized fictional live prompts use OpenAI. No customer or real data is eligible.",
+      "eligibility": "synthetic-only",
+      "evidence": [
+        {
+          "kind": "synthetic",
+          "status": "passed",
+          "reference": "_bmad-output/implementation-artifacts/validation/terra-responses-synthetic-20261101.json#tests"
+        }
+      ]
     }
   ]
 }

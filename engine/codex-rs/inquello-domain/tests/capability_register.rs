@@ -245,6 +245,7 @@ fn seed_register_enables_only_synthetic_entries() {
         vec![
             (SEED_ID, Enablement::SyntheticOnly),
             ("execution_sandbox", Enablement::SyntheticOnly),
+            ("processing.codex-responses", Enablement::SyntheticOnly),
         ]
     );
     assert_eq!(enablement(SEED_ID), Enablement::SyntheticOnly);
@@ -519,4 +520,102 @@ fn unbound_negative_reference_no_longer_enables_real_data() {
         CapabilityRegister::from_json(&value.to_string()),
         "exact-build",
     );
+}
+
+#[test]
+fn terra_responses_evidence_is_synthetic_and_exact_configuration_only() {
+    use inquello_domain::routes::{
+        DataTier, RouteConfiguration, RouteConfigurationInput, RouteVerification, route_eligibility,
+    };
+    let register = CapabilityRegister::load_embedded().unwrap();
+    let entry = register.entry("processing.codex-responses").unwrap();
+    assert_eq!(entry.enablement(), Enablement::SyntheticOnly);
+    assert!(entry.negative_authorization.is_none());
+    assert_eq!(
+        register.enablement("processing.claude-api-key"),
+        Enablement::Disabled
+    );
+    let input = RouteConfigurationInput {
+        route_id: "codex-responses".into(),
+        deployment: "openai-api".into(),
+        model: "gpt-6.1-terra".into(),
+        api_version: "responses-v1".into(),
+        account_ref: "00000000-0000-4000-8000-000000000001".into(),
+        region: None,
+    };
+    let configuration = RouteConfiguration::parse(input.clone()).unwrap();
+    let allowed = route_eligibility(Some(&configuration), true, true, DataTier::Synthetic);
+    assert!(allowed.enabled);
+    assert_eq!(
+        allowed.verification,
+        RouteVerification::VerifiedForSynthetic
+    );
+    for (credential, adapter, tier) in [
+        (false, true, DataTier::Synthetic),
+        (true, false, DataTier::Synthetic),
+        (true, true, DataTier::Real),
+    ] {
+        assert!(!route_eligibility(Some(&configuration), credential, adapter, tier).enabled);
+    }
+    for (model, api, deployment) in [
+        ("gpt-6.1-luna", "responses-v1", "openai-api"),
+        ("gpt-6.1-terra", "responses-v2", "openai-api"),
+        ("gpt-6.1-terra", "responses-v1", "chatgpt-codex"),
+    ] {
+        let mut other = input.clone();
+        other.model = model.into();
+        other.api_version = api.into();
+        other.deployment = deployment.into();
+        let other = RouteConfiguration::parse(other).unwrap();
+        let denied = route_eligibility(Some(&other), true, true, DataTier::Synthetic);
+        assert!(!denied.enabled);
+        assert_eq!(denied.verification, RouteVerification::NotVerified);
+    }
+    assert!(!route_eligibility(None, true, true, DataTier::Synthetic).enabled);
+}
+
+#[test]
+fn terra_evidence_records_executed_fixture_cases_not_live_provider_proof() {
+    let path = repo_root().join(
+        "_bmad-output/implementation-artifacts/validation/terra-responses-synthetic-20261101.json",
+    );
+    let evidence: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(evidence["tests"]["passed"], 31);
+    assert_eq!(evidence["tests"]["failed"], 0);
+    assert_eq!(evidence["tests"]["ignored"], 0);
+    assert_eq!(evidence["tests"]["selectorPassed"], 2);
+    let cases = evidence["tests"]["cases"].as_array().unwrap();
+    assert_eq!(cases.len(), 31);
+    let unique: std::collections::BTreeSet<_> = cases.iter().map(|v| v.as_str().unwrap()).collect();
+    assert_eq!(unique.len(), 31);
+    assert!(unique.iter().all(|name| name.starts_with("responses_")));
+    assert!(unique.contains("responses_lifecycle_warm_policy_change"));
+    assert!(unique.contains("responses_lifecycle_completed_followup"));
+    assert_eq!(evidence["transport"]["liveProvider"], false);
+    assert_eq!(evidence["transport"]["realCredentials"], false);
+    assert_eq!(evidence["transport"]["pinnedLoopback"], true);
+    assert_eq!(evidence["model"], "gpt-6.1-terra");
+    assert_eq!(evidence["deployment"], "openai-api");
+    assert_eq!(evidence["api"], "responses-v1");
+}
+
+#[test]
+fn terra_route_does_not_accept_caller_supplied_endpoint_or_eligibility() {
+    use inquello_domain::routes::RouteConfigurationInput;
+    let value = serde_json::json!({
+        "route_id": "codex-responses", "deployment": "openai-api",
+        "model": "gpt-6.1-terra", "api_version": "responses-v1",
+        "account_ref": "00000000-0000-4000-8000-000000000001", "region": null
+    });
+    for (field, injected) in [
+        (
+            "endpoint",
+            Value::from("https://untrusted.invalid/v1/responses"),
+        ),
+        ("eligibility", Value::from("real-data-eligible")),
+    ] {
+        let mut other = value.clone();
+        other[field] = injected;
+        assert!(serde_json::from_value::<RouteConfigurationInput>(other).is_err());
+    }
 }
