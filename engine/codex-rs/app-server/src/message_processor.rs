@@ -755,28 +755,40 @@ impl MessageProcessor {
                 .await;
             let fence = self.outgoing.capture_private_fence(connection_id).await;
             self.outgoing.fence_request(&id, fence.clone()).await;
-            match self
-                .inquello_processor
-                .task_fixture_status(connection_id, request.params)
-                .await
-            {
-                Ok(value) => {
-                    self.outgoing
-                        .send_response_as_checked(
-                            id,
-                            ClientResponsePayload::InquelloFixture(value),
-                            move || {
-                                if fence.as_ref().is_some_and(|f| f.is_current()) {
-                                    Ok(())
-                                } else {
-                                    Err(invalid_request("Fixture status authority changed"))
-                                }
-                            },
-                        )
+            // Fresh authority sends a server request back to main. Do not await it
+            // in the transport input loop: that same loop must receive its reply.
+            // Capture the ORIGINAL fence above, before scheduling, so replacement
+            // authority cannot revive an already admitted proof.
+            let processor = Arc::clone(self);
+            let pending =
+                QueuedInitializedRequest::new(Arc::clone(&session.rpc_gate), async move {
+                    match processor
+                        .inquello_processor
+                        .task_fixture_status(connection_id, request.params)
                         .await
-                }
-                Err(error) => self.outgoing.send_error(id, error).await,
-            }
+                    {
+                        Ok(value) => {
+                            processor
+                                .outgoing
+                                .send_response_as_checked(
+                                    id,
+                                    ClientResponsePayload::InquelloFixture(value),
+                                    move || {
+                                        if fence.as_ref().is_some_and(|f| f.is_current()) {
+                                            Ok(())
+                                        } else {
+                                            Err(invalid_request("Fixture status authority changed"))
+                                        }
+                                    },
+                                )
+                                .await
+                        }
+                        Err(error) => processor.outgoing.send_error(id, error).await,
+                    }
+                });
+            tokio::spawn(async move {
+                pending.run().await;
+            });
             return;
         }
         #[cfg(all(feature = "inference-fixtures", debug_assertions))]
@@ -2673,6 +2685,10 @@ mod thread_lifecycle_tests;
 #[cfg(test)]
 #[path = "message_processor_workspace_routing_tests.rs"]
 mod workspace_routing_tests;
+
+#[cfg(all(test, feature = "inference-fixtures", debug_assertions))]
+#[path = "message_processor_fixture_dispatch_tests.rs"]
+mod fixture_dispatch_tests;
 
 #[cfg(all(feature = "inference-fixtures", debug_assertions))]
 #[path = "inquello_fixture.rs"]

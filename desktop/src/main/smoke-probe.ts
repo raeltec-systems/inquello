@@ -3927,6 +3927,9 @@ export async function probeVisualConversation(contents: WebContents, options: Or
     await options.runtimeRequest('inquello/routes/configure',{operationId:randomUUID(),expectedRevision:0,configuration:{routeId:'claude-api-key',deployment:'anthropic-direct',model:'claude-sonnet-5-5',apiVersion:'2026-10-21',accountRef:principal,region:null}});
     const bound=await options.runtimeRequest<{accepted:boolean;providerCalls:number}>('inquello/fixture/taskTransport',{workspaceId:seed.workspace_id,configurationRevision:1,routeId:'claude-api-key',endpoint:fixture.endpoint,certificate:fixture.certificate,failBeforeSampling:false});
     if(!bound.accepted||bound.providerCalls!==0)throw new SmokeProbeFailure('Visual pinned transport refused');
+    stage='visual-native-proof';
+    const proof=await options.runtimeRequest<{accepted:boolean}>('inquello/fixture/taskTransportStatus',{workspaceId:seed.workspace_id,configurationRevision:1,routeId:'claude-api-key'});
+    if(proof.accepted!==true)throw new SmokeProbeFailure('Visual native transport proof refused');
     // All work below is submitted by actual renderer controls and named main operations.
     // The probe never calls tasks/start, resume or stop directly.
     const checkFixture=async(expected:number,stopped=false)=>{

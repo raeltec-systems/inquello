@@ -10,10 +10,12 @@ const https=require('node:https'),readline=require('node:readline');
 const desktop=path.resolve(__dirname,'..'),root=path.dirname(desktop);
 const suffix=process.platform==='win32'?'.exe':'';
 const navigationOnly=process.argv.includes('--navigation');
+const isolatedPhase=process.argv.includes('--visual-only')?'visual':process.argv.includes('--quota-only')?'quota':null;
+if((navigationOnly&&isolatedPhase)||(process.argv.includes('--visual-only')&&process.argv.includes('--quota-only')))throw new Error('Choose one isolated smoke phase');
 if(process.platform==='win32'&&!/^D:[\\/]/i.test(os.tmpdir()))throw new Error('Set TEMP and TMP to D: before this smoke run');
 const dir=fs.mkdtempSync(path.join(os.tmpdir(),'inquello-seeded-smoke-'));
 const normalRequired=navigationOnly?['saved-navigation','shell-layout']:['renderer-privileges','design','identity','data','providers','organise','states','shell-layout','composer','start-surface','policy','tool-bounds','permissions','capabilities','routes','environments'];
-const required=navigationOnly?normalRequired:[...normalRequired,'quota','visual-conversation'];
+const required=isolatedPhase?[isolatedPhase==='visual'?'visual-conversation':'quota']:navigationOnly?normalRequired:[...normalRequired,'quota','visual-conversation'];
 console.log(`Smoke logs: ${dir}`);
 function ownedExit(child,ms){return new Promise(resolve=>{
   if(child.exitCode!==null||child.signalCode!==null||child.pid===undefined)return resolve(true);
@@ -125,6 +127,7 @@ async function launch(phase){
   }
 }
 (async()=>{
+  if(isolatedPhase){const result=await launch(isolatedPhase);console.log(JSON.stringify({ok:result.ok,isolatedPhase,required:required.length,missingOrFailed:result.missing}));process.exitCode=result.ok?0:1;return;}
   const normal=await launch('normal');
   // Run both even when a normal assertion failed; aggregate never hides either failure.
   const quota=navigationOnly?null:await launch('quota');
