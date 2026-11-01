@@ -6,13 +6,13 @@ const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
 const {spawn,execFileSync}=require('node:child_process');
 const {X509Certificate}=require('node:crypto');
 const {createOwnedProcessGuard}=require('./smoke-processes.cjs');
+const {settleSmokePhase}=require('./smoke-phase.cjs');
 const https=require('node:https'),readline=require('node:readline');
 const desktop=path.resolve(__dirname,'..'),root=path.dirname(desktop);
 const suffix=process.platform==='win32'?'.exe':'';
 const navigationOnly=process.argv.includes('--navigation');
 const isolatedPhase=process.argv.includes('--visual-only')?'visual':process.argv.includes('--quota-only')?'quota':null;
 if((navigationOnly&&isolatedPhase)||(process.argv.includes('--visual-only')&&process.argv.includes('--quota-only')))throw new Error('Choose one isolated smoke phase');
-if(process.platform==='win32'&&!/^D:[\\/]/i.test(os.tmpdir()))throw new Error('Set TEMP and TMP to D: before this smoke run');
 const dir=fs.mkdtempSync(path.join(os.tmpdir(),'inquello-seeded-smoke-'));
 const normalRequired=navigationOnly?['saved-navigation','shell-layout']:['renderer-privileges','design','identity','data','providers','organise','states','shell-layout','composer','start-surface','policy','tool-bounds','permissions','capabilities','routes','environments'];
 const required=isolatedPhase?[isolatedPhase==='visual'?'visual-conversation':'quota']:navigationOnly?normalRequired:[...normalRequired,'quota','visual-conversation'];
@@ -90,9 +90,10 @@ async function launch(phase){
   if(quota)policy.execution={automatic_permission_review:true,command_rules:[{prefix:['/usr/bin/true'],decision:'prompt'}]};
   const policyFile=path.join(folder,'fictional-policy.json');fs.writeFileSync(policyFile,JSON.stringify(policy));
   let topology,tls,electron,electronGuard,out,err;
-  let cleanRuntimeExit=false;
-  try{
+  let cleanRuntimeExit=false,stage='fixture-setup';
+  const result=await settleSmokePhase(async()=>{
     if(quota||visual)tls=await localTls(folder,visual);
+    stage='topology-readiness';
     topology=spawn(process.env.INQUELLO_DEV_TOPOLOGY_BIN??path.join(root,`engine/codex-rs/target/debug/inquello-dev-topology${suffix}`),['--exit-on-stdin-eof','--seed-workspace',quota?'Synthetic quota audit':visual?'Synthetic visual QA audit':'Synthetic recovery audit','--seed-out',seed,'--seed-policy',policyFile],{env:process.env,stdio:['pipe','pipe','inherit'],windowsHide:true});
     const lines=readline.createInterface({input:topology.stdout});
     const line=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Synthetic topology readiness timed out')),60000);lines.once('line',text=>{clearTimeout(timer);resolve(text);});topology.once('error',()=>{clearTimeout(timer);reject(new Error('Synthetic topology unavailable'));});topology.once('exit',()=>{clearTimeout(timer);reject(new Error('Synthetic topology exited before readiness'));});});
@@ -100,11 +101,13 @@ async function launch(phase){
     const output=path.join(folder,'smoke.stdout.log');out=fs.openSync(output,'w');err=fs.openSync(path.join(folder,'smoke.stderr.log'),'w');
     const env={...process.env,INQUELLO_SERVICE_CONFIG:config,INQUELLO_SMOKE_SEED:seed};
     delete env.INQUELLO_QUOTA_FIXTURE;delete env.INQUELLO_VISUAL_FIXTURE;if(quota)env.INQUELLO_QUOTA_FIXTURE=tls.file;if(visual)env.INQUELLO_VISUAL_FIXTURE=tls.file;
+    stage='electron-journey';
     const electronBinary=path.join(desktop,`node_modules/electron/dist/electron${suffix}`);
     electron=spawn(electronBinary,['.',quota?'--smoke-quota':visual?'--smoke-visual':navigationOnly?'--smoke-navigation':'--smoke'],{cwd:desktop,env,stdio:['ignore',out,err],windowsHide:true,detached:process.platform!=='win32'});
     electronGuard=createOwnedProcessGuard(electron,{executable:electronBinary});
     const code=await new Promise((resolve,reject)=>{const deadline=setTimeout(()=>{reject(new Error('Owned Electron smoke deadline exceeded'));},600000);electron.once('error',()=>{clearTimeout(deadline);reject(new Error('Owned Electron smoke unavailable'));});electron.once('exit',code=>{clearTimeout(deadline);resolve(code);});});
     fs.closeSync(out);out=undefined;fs.closeSync(err);err=undefined;
+    stage='phase-report';
     const reports=fs.readFileSync(output,'utf8').split(/\r?\n/).flatMap(line=>{try{return[JSON.parse(line)];}catch{return[];}});
     // Assertion failure may exit 1 after a verified clean runtime shutdown.
     cleanRuntimeExit=reports.some(report=>report.event==='runtime-exit'&&report.state==='stopped'&&report.exit?.exitCode===0&&report.exit.killed===false);
@@ -115,25 +118,27 @@ async function launch(phase){
     const ok=code===0&&missing.length===0&&zeroFixtureCalls&&visualFixtureCalls&&reports.some(report=>report.event==='handshake'&&report.versionCheck==='passed');
     console.log(JSON.stringify({phase,exitCode:code,required:expected.length,missingOrFailed:missing,zeroFixtureCalls,...(visual?{localSyntheticCalls:tls.calls(),invalidFixtureCalls:tls.invalidCalls()}: {})}));
     return{ok,missing,events:reports.filter(report=>report.ok===true).map(report=>report.event)};
-  }finally{
+  },async()=>{
     const errors=[];
-    try{if(electronGuard)await electronGuard.stop(cleanRuntimeExit);else if(electron?.pid!==undefined)throw new Error('Owned Electron identity unavailable');}catch{errors.push('electron-tree-unresolved');}
+    try{if(electronGuard)await electronGuard.stop(cleanRuntimeExit);else if(electron?.pid!==undefined)errors.push('electron-tree-unresolved');}catch{errors.push('electron-tree-unresolved');}
     try{if(out!==undefined)fs.closeSync(out);}catch{errors.push('stdout-close');}
     try{if(err!==undefined)fs.closeSync(err);}catch{errors.push('stderr-close');}
     try{await stopTopology(topology);}catch{errors.push('topology-stop');}
     try{await tls?.close();}catch{errors.push('tls-stop');}
-    if(tls&&(!visual?tls.calls()!==0:!tls.journeyValid()))errors.push('unexpected-fixture-dispatch');
-    if(errors.length)throw new Error('Owned smoke cleanup failed: '+errors.join(','));
-  }
+    return errors;
+  },()=>stage);
+  console.log(JSON.stringify({phase,phaseResult:result}));
+  return result;
 }
 (async()=>{
-  if(isolatedPhase){const result=await launch(isolatedPhase);console.log(JSON.stringify({ok:result.ok,isolatedPhase,required:required.length,missingOrFailed:result.missing}));process.exitCode=result.ok?0:1;return;}
+  if(isolatedPhase){const result=await launch(isolatedPhase);console.log(JSON.stringify({ok:result.ok,isolatedPhase,required:required.length,missingOrFailed:result.missing,cleanupErrors:result.cleanupErrors,primaryFailure:result.primaryFailure}));process.exitCode=result.ok?0:1;return;}
   const normal=await launch('normal');
-  // Run both even when a normal assertion failed; aggregate never hides either failure.
-  const quota=navigationOnly?null:await launch('quota');
-  const visual=navigationOnly?null:await launch('visual');
+  // Continue assertion failures, but never launch another phase over unresolved owned resources.
+  const skipped={ok:false,missing:[],events:[],cleanupErrors:[],primaryFailure:'previous-phase-cleanup-unresolved'};
+  const quota=navigationOnly?null:normal.cleanupErrors.length?skipped:await launch('quota');
+  const visual=navigationOnly?null:normal.cleanupErrors.length||quota.cleanupErrors.length?skipped:await launch('visual');
   const observed=[...normal.events,...(quota?.events??[]),...(visual?.events??[])];
   const missing=required.filter(event=>!observed.includes(event));
   const ok=normal.ok&&(navigationOnly||(quota?.ok===true&&visual?.ok===true))&&missing.length===0;
-  console.log(JSON.stringify({ok,required:required.length,missingOrFailed:missing}));process.exitCode=ok?0:1;
+  console.log(JSON.stringify({ok,required:required.length,missingOrFailed:missing,phases:{normal,quota,visual}}));process.exitCode=ok?0:1;
 })().catch(()=>{console.error('Synthetic smoke launcher failed; inspect isolated reports.');process.exitCode=1;});
