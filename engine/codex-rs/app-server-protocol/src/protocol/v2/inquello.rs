@@ -100,8 +100,10 @@ pub struct InquelloWorkspaceTreeParams {
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
 pub struct InquelloWorkspaceTreeResponse {
-    #[serde(skip)] #[schemars(skip)] #[ts(skip)]
-    pub internal_disclosure_fence:String,
+    #[serde(skip)]
+    #[schemars(skip)]
+    #[ts(skip)]
+    pub internal_disclosure_fence: String,
     pub workspace_id: String,
     pub engagements: Vec<InquelloEngagement>,
     pub folders: Vec<InquelloFolder>,
@@ -112,8 +114,10 @@ pub struct InquelloWorkspaceTreeResponse {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
-pub struct InquelloUnavailableTask { pub task_id:String, pub reason:String }
-
+pub struct InquelloUnavailableTask {
+    pub task_id: String,
+    pub reason: String,
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
@@ -157,8 +161,10 @@ pub enum InquelloTaskVisibility {
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
 pub struct InquelloTask {
-    #[serde(default)] pub pinned: bool,
-    #[serde(default)] pub archived: bool,
+    #[serde(default)]
+    pub pinned: bool,
+    #[serde(default)]
+    pub archived: bool,
     pub task_id: String,
     pub workspace_id: String,
     pub creator_principal_id: String,
@@ -995,7 +1001,9 @@ pub struct InquelloRouteView {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
-pub struct InquelloRoutesListResponse { pub routes: Vec<InquelloRouteView> }
+pub struct InquelloRoutesListResponse {
+    pub routes: Vec<InquelloRouteView>,
+}
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[ts(export_to = "v2/")]
@@ -1008,11 +1016,16 @@ pub struct InquelloRouteConfigureParams {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
-pub struct InquelloRouteConfigureResponse { pub route: InquelloRouteView, pub receipt: InquelloReceipt }
+pub struct InquelloRouteConfigureResponse {
+    pub route: InquelloRouteView,
+    pub receipt: InquelloReceipt,
+}
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[ts(export_to = "v2/")]
-pub struct InquelloTaskRouteReadParams { pub task_id: String }
+pub struct InquelloTaskRouteReadParams {
+    pub task_id: String,
+}
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[ts(export_to = "v2/")]
@@ -1059,7 +1072,9 @@ impl std::fmt::Debug for InquelloRoutePrivateAuthParams {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
-pub struct InquelloRoutePrivateAuthResponse { pub accepted: bool }
+pub struct InquelloRoutePrivateAuthResponse {
+    pub accepted: bool,
+}
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[ts(export_to = "v2/")]
@@ -1098,15 +1113,21 @@ pub struct InquelloPermissionsReviewResponse {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[ts(export_to = "v2/")]
-pub struct InquelloUsageReadParams { pub task_id: String }
+pub struct InquelloUsageReadParams {
+    pub task_id: String,
+}
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[ts(export_to = "v2/")]
 pub struct InquelloUsageSetParams {
-    pub task_id: String, pub operation_id: String,
-    #[ts(type = "number")] pub expected_revision: u64,
-    #[ts(type = "number")] pub route_revision: u64,
-    pub reasoning: String, pub speed: String,
+    pub task_id: String,
+    pub operation_id: String,
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+    #[ts(type = "number")]
+    pub route_revision: u64,
+    pub reasoning: String,
+    pub speed: String,
 }
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
@@ -1162,69 +1183,102 @@ pub struct InquelloTasksStartParams {
 }
 impl std::fmt::Debug for InquelloTasksStartParams {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("InquelloTasksStartParams").field("operation_id", &self.operation_id).finish_non_exhaustive()
+        f.debug_struct("InquelloTasksStartParams")
+            .field("operation_id", &self.operation_id)
+            .finish_non_exhaustive()
     }
 }
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[ts(export_to = "v2/")]
-pub struct InquelloTasksReconcileParams { pub operation_id: String }
+pub struct InquelloTasksReconcileParams {
+    pub operation_id: String,
+}
 #[derive(Serialize, Deserialize, Clone, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
 pub struct InquelloTasksStartResponse {
-    pub operation_id: String, pub task_id: String, pub run_id: String,
-    pub thread_id: Option<String>, pub status: String, pub request: String,
-    pub accepted: bool, pub reason: Option<String>,
+    pub operation_id: String,
+    pub task_id: String,
+    pub run_id: String,
+    pub thread_id: Option<String>,
+    pub status: String,
+    pub request: String,
+    pub accepted: bool,
+    pub reason: Option<String>,
 }
 impl std::fmt::Debug for InquelloTasksStartResponse {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("InquelloTasksStartResponse").field("operation_id", &self.operation_id).field("status", &self.status).finish_non_exhaustive()
+        f.debug_struct("InquelloTasksStartResponse")
+            .field("operation_id", &self.operation_id)
+            .field("status", &self.status)
+            .finish_non_exhaustive()
     }
 }
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[ts(export_to = "v2/")]
-pub struct InquelloTasksForThreadParams { pub thread_id: String }
+pub struct InquelloTasksForThreadParams {
+    pub thread_id: String,
+}
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
-pub struct InquelloTasksForThreadResponse { pub data_tier:String, pub task_id: String, pub run_id: String, pub workspace_id:String, pub thread_id: String, pub turn_id:Option<String>, pub runtime_id:String, pub status: String }
+pub struct InquelloTasksForThreadResponse {
+    pub data_tier: String,
+    pub task_id: String,
+    pub run_id: String,
+    pub workspace_id: String,
+    pub thread_id: String,
+    pub turn_id: Option<String>,
+    pub runtime_id: String,
+    pub status: String,
+}
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[ts(export_to = "v2/")]
-pub struct InquelloTasksBootstrapParams { pub workspace_id: String, pub isolated_root: String,
+pub struct InquelloTasksBootstrapParams {
+    pub workspace_id: String,
+    pub isolated_root: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub real_session: Option<serde_json::Value>,
 }
 
 /// Native-to-main authority refresh, never a renderer-controlled verdict.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all="camelCase", deny_unknown_fields)]
-#[ts(export_to="v2/")]
-pub struct InquelloTaskAuthorityParams {pub workspace_id:String,
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct InquelloTaskAuthorityParams {
+    pub workspace_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub route_discovery: Option<serde_json::Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub route_check: Option<serde_json::Value>,
 }
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
-#[serde(rename_all="camelCase", deny_unknown_fields)]
-#[ts(export_to="v2/")]
-pub struct InquelloTaskAuthorityResponse {pub workspace_policy:Option<InquelloWorkspaceExecutionPolicy>,
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct InquelloTaskAuthorityResponse {
+    pub workspace_policy: Option<InquelloWorkspaceExecutionPolicy>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub route_approval: Option<serde_json::Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub route_authority: Option<serde_json::Value>,
 }
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, TS)]
-#[serde(rename_all="camelCase", deny_unknown_fields)]
-#[ts(export_to="v2/")]
-pub struct InquelloTasksConsumePermissionParams {pub task_id:String,pub request_id:String,pub command:Vec<String>,pub workspace_policy:InquelloWorkspaceExecutionPolicy}
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct InquelloTasksConsumePermissionParams {
+    pub task_id: String,
+    pub request_id: String,
+    pub command: Vec<String>,
+    pub workspace_policy: InquelloWorkspaceExecutionPolicy,
+}
 
 impl std::fmt::Debug for InquelloTasksConsumePermissionParams {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("InquelloTasksConsumePermissionParams").finish_non_exhaustive()
+        f.debug_struct("InquelloTasksConsumePermissionParams")
+            .finish_non_exhaustive()
     }
 }
 #[cfg(test)]
@@ -1232,94 +1286,142 @@ mod task_permission_debug_tests {
     use super::*;
     #[test]
     fn consume_permission_debug_omits_private_command_but_wire_preserves_it() {
-        let sentinel="PRIVATE-COMMAND-SENTINEL";
-        let value=InquelloTasksConsumePermissionParams {
-            task_id:"task".into(), request_id:"request".into(), command:vec!["sh".into(),"-c".into(),sentinel.into()],
-            workspace_policy:InquelloWorkspaceExecutionPolicy {workspace_id:"workspace".into(),policy_revision:1,authorization_epoch:1,execution:None},
+        let sentinel = "PRIVATE-COMMAND-SENTINEL";
+        let value = InquelloTasksConsumePermissionParams {
+            task_id: "task".into(),
+            request_id: "request".into(),
+            command: vec!["sh".into(), "-c".into(), sentinel.into()],
+            workspace_policy: InquelloWorkspaceExecutionPolicy {
+                workspace_id: "workspace".into(),
+                policy_revision: 1,
+                authorization_epoch: 1,
+                execution: None,
+            },
         };
         assert!(!format!("{value:?}").contains(sentinel));
-        let wire=serde_json::to_value(&value).unwrap();
-        assert_eq!(wire["command"][2],sentinel);
-        assert_eq!(serde_json::from_value::<InquelloTasksConsumePermissionParams>(wire).unwrap(),value);
+        let wire = serde_json::to_value(&value).unwrap();
+        assert_eq!(wire["command"][2], sentinel);
+        assert_eq!(
+            serde_json::from_value::<InquelloTasksConsumePermissionParams>(wire).unwrap(),
+            value
+        );
     }
 }
 
 /// Named, bounded private progress read. IDs are derived from durable Task binding.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
-#[serde(rename_all="camelCase", deny_unknown_fields)]
-#[ts(export_to="v2/")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
 pub struct InquelloTasksProgressParams {
-    pub task_id:String,
+    pub task_id: String,
     #[serde(default)]
-    pub activity_only:bool,
+    pub activity_only: bool,
     #[serde(default)]
-    pub result_page:Option<InquelloResultPageRequest>,
-    pub workspace_policy:InquelloWorkspaceExecutionPolicy,
+    pub result_page: Option<InquelloResultPageRequest>,
+    pub workspace_policy: InquelloWorkspaceExecutionPolicy,
 }
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
-#[serde(rename_all="camelCase", deny_unknown_fields)]
-#[ts(export_to="v2/")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
 pub struct InquelloResultPageRequest {
-    pub snapshot_id:Option<String>,
-    #[serde(default)] pub current_offset:u32,
-    #[serde(default)] pub history_offset:u32,
+    pub snapshot_id: Option<String>,
+    #[serde(default)]
+    pub current_offset: u32,
+    #[serde(default)]
+    pub history_offset: u32,
 }
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
-#[serde(rename_all="camelCase")]
-#[ts(export_to="v2/")]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
 pub struct InquelloResultPage {
-    pub snapshot_id:String, pub current_offset:u32, pub history_offset:u32,
-    pub current_total:u32, pub history_total:u32,
-    pub current_next_offset:Option<u32>, pub history_next_offset:Option<u32>,
+    pub snapshot_id: String,
+    pub current_offset: u32,
+    pub history_offset: u32,
+    pub current_total: u32,
+    pub history_total: u32,
+    pub current_next_offset: Option<u32>,
+    pub history_next_offset: Option<u32>,
 }
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, TS)]
-#[serde(rename_all="camelCase")]
-#[ts(export_to="v2/")]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
 pub struct InquelloTasksProgressResponse {
-    pub version:u32, pub task_id:String, pub run_id:String, pub workspace_id:String,
-    pub thread_id:String, pub turn_id:Option<String>, pub runtime_id:String, pub status:String,
-    pub history_incomplete:bool, pub items:Vec<InquelloProgressItem>,
-    pub result_page:Option<InquelloResultPage>,
-    pub plan:Vec<InquelloProgressStep>, pub results:Vec<InquelloProgressResult>, pub result_history:Vec<InquelloProgressResult>, pub artifact:String,
+    pub version: u32,
+    pub task_id: String,
+    pub run_id: String,
+    pub workspace_id: String,
+    pub thread_id: String,
+    pub turn_id: Option<String>,
+    pub runtime_id: String,
+    pub status: String,
+    pub history_incomplete: bool,
+    pub items: Vec<InquelloProgressItem>,
+    pub result_page: Option<InquelloResultPage>,
+    pub plan: Vec<InquelloProgressStep>,
+    pub results: Vec<InquelloProgressResult>,
+    pub result_history: Vec<InquelloProgressResult>,
+    pub artifact: String,
 }
 impl std::fmt::Debug for InquelloTasksProgressResponse {
-    fn fmt(&self,f:&mut std::fmt::Formatter<'_>)->std::fmt::Result {
-        f.debug_struct("InquelloTasksProgressResponse").field("task_id",&self.task_id).field("status",&self.status).field("history_incomplete",&self.history_incomplete).finish_non_exhaustive()
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("InquelloTasksProgressResponse")
+            .field("task_id", &self.task_id)
+            .field("status", &self.status)
+            .field("history_incomplete", &self.history_incomplete)
+            .finish_non_exhaustive()
     }
 }
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, TS)]
-#[serde(rename_all="camelCase")]
-#[ts(export_to="v2/")]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
 pub struct InquelloProgressItem {
-    pub id:String, pub kind:String, pub status:String, pub text:String,
-    #[serde(skip_serializing_if="Option::is_none")]
+    pub id: String,
+    pub kind: String,
+    pub status: String,
+    pub text: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub application:Option<String>,
-    #[serde(skip_serializing_if="Option::is_none")]
+    pub application: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub role:Option<String>,
+    pub role: Option<String>,
 }
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, TS)]
-#[serde(rename_all="camelCase")]
-#[ts(export_to="v2/")]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
 pub struct InquelloProgressStep {
-    pub id:String, pub revision:u32, pub text:String, pub status:String, pub evidence_ids:Vec<String>,
+    pub id: String,
+    pub revision: u32,
+    pub text: String,
+    pub status: String,
+    pub evidence_ids: Vec<String>,
 }
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, TS)]
-#[serde(rename_all="camelCase")]
-#[ts(export_to="v2/")]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
 pub struct InquelloProgressBasis {
-    pub kind:String, pub id:String, pub label:String, pub scope:String,
+    pub kind: String,
+    pub id: String,
+    pub label: String,
+    pub scope: String,
 }
 #[derive(Serialize, Deserialize, Clone, PartialEq, JsonSchema, TS)]
-#[serde(rename_all="camelCase")]
-#[ts(export_to="v2/")]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
 pub struct InquelloProgressResult {
-    pub id:String, pub kind:Option<String>, pub text:String, pub checks:String,
-    pub check_scope:Option<String>, pub evidence_ids:Vec<String>, pub basis:Option<InquelloProgressBasis>,
-    pub revision:u32, pub state:String, pub change_reason:Option<String>, pub superseded_reason:Option<String>, pub source_turn_id:String,
+    pub id: String,
+    pub kind: Option<String>,
+    pub text: String,
+    pub checks: String,
+    pub check_scope: Option<String>,
+    pub evidence_ids: Vec<String>,
+    pub basis: Option<InquelloProgressBasis>,
+    pub revision: u32,
+    pub state: String,
+    pub change_reason: Option<String>,
+    pub superseded_reason: Option<String>,
+    pub source_turn_id: String,
 }
-
 
 /// Named lifecycle commands carry only the main-owned observation to fence.
 /// Thread identity, route, settings and principal are resolved natively.
@@ -1337,73 +1439,119 @@ pub struct InquelloTasksLifecycleParams {
 }
 impl std::fmt::Debug for InquelloTasksLifecycleParams {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("InquelloTasksLifecycleParams").field("operation_id", &self.operation_id).finish_non_exhaustive()
+        f.debug_struct("InquelloTasksLifecycleParams")
+            .field("operation_id", &self.operation_id)
+            .finish_non_exhaustive()
     }
 }
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
 pub struct InquelloTasksLifecycleResponse {
-    pub operation_id: String, pub task_id: String, pub run_id: String,
-    pub runtime_id: String, pub thread_id: String, pub turn_id: Option<String>,
-    pub kind: String, pub status: String,
+    pub operation_id: String,
+    pub task_id: String,
+    pub run_id: String,
+    pub runtime_id: String,
+    pub thread_id: String,
+    pub turn_id: Option<String>,
+    pub kind: String,
+    pub status: String,
 }
 
 // Story 1.30: private navigation, never generic thread search or inference.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all="camelCase", deny_unknown_fields)]
-#[ts(export_to="v2/")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
 pub struct InquelloTaskSetNavigationParams {
-    pub operation_id:String, #[ts(type="number")] pub expected_revision:u64,
-    pub workspace_id:String, pub task_id:String, pub pinned:bool, pub archived:bool,
+    pub operation_id: String,
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+    pub workspace_id: String,
+    pub task_id: String,
+    pub pinned: bool,
+    pub archived: bool,
 }
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all="camelCase", deny_unknown_fields)]
-#[ts(export_to="v2/")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
 pub struct InquelloWorkspaceSearchParams {
-    pub workspace_id:String, pub query:String, pub include_archived:bool, pub cursor:Option<String>,
+    pub workspace_id: String,
+    pub query: String,
+    pub include_archived: bool,
+    pub cursor: Option<String>,
 }
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all="camelCase")]
-#[ts(export_to="v2/")]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
 pub struct InquelloSearchItem {
-    pub kind:String, pub task_id:Option<String>, pub engagement_id:Option<String>, pub title:String,
-    pub snippet:Option<String>, pub turn_id:Option<String>, pub item_id:Option<String>, pub archived:bool,
+    pub kind: String,
+    pub task_id: Option<String>,
+    pub engagement_id: Option<String>,
+    pub title: String,
+    pub snippet: Option<String>,
+    pub turn_id: Option<String>,
+    pub item_id: Option<String>,
+    pub archived: bool,
 }
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all="camelCase")]
-#[ts(export_to="v2/")]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
 pub struct InquelloWorkspaceSearchResponse {
     /// Internal native response fence; never serialized, indexed, or exposed in generated bindings.
-    #[serde(skip)] #[schemars(skip)] #[ts(skip)]
-    pub internal_disclosure_fence:String,
-    pub workspace_id:String,pub query:String,pub items:Vec<InquelloSearchItem>,pub next_cursor:Option<String>,
-    pub unavailable:bool,pub coverage:Vec<String>,
+    #[serde(skip)]
+    #[schemars(skip)]
+    #[ts(skip)]
+    pub internal_disclosure_fence: String,
+    pub workspace_id: String,
+    pub query: String,
+    pub items: Vec<InquelloSearchItem>,
+    pub next_cursor: Option<String>,
+    pub unavailable: bool,
+    pub coverage: Vec<String>,
 }
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all="camelCase", deny_unknown_fields)]
-#[ts(export_to="v2/")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
 pub struct InquelloTaskReopenParams {
-    pub workspace_id:String,pub task_id:String,pub query:Option<String>,pub turn_id:Option<String>,pub item_id:Option<String>,
+    pub workspace_id: String,
+    pub task_id: String,
+    pub query: Option<String>,
+    pub turn_id: Option<String>,
+    pub item_id: Option<String>,
 }
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all="camelCase")]
-#[ts(export_to="v2/")]
-pub struct InquelloSavedHit {pub turn_id:String,pub item_id:String,pub text:String,pub truncated:bool}
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloSavedHit {
+    pub turn_id: String,
+    pub item_id: String,
+    pub text: String,
+    pub truncated: bool,
+}
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all="camelCase")]
-#[ts(export_to="v2/")]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
 pub struct InquelloTaskReopenResponse {
-    pub task:InquelloTask,pub hit:Option<InquelloSavedHit>,
-    #[serde(skip)] #[schemars(skip)] #[ts(skip)]
-    pub internal_disclosure_fence:String,
+    pub task: InquelloTask,
+    pub hit: Option<InquelloSavedHit>,
+    #[serde(skip)]
+    #[schemars(skip)]
+    #[ts(skip)]
+    pub internal_disclosure_fence: String,
 }
 /// Fresh main-owned service observation. No renderer-supplied access verdict.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all="camelCase", deny_unknown_fields)]
-#[ts(export_to="v2/")]
-pub struct InquelloContextAuthorizeParams {pub workspace_id:String,pub expected_snapshot:Option<String>}
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct InquelloContextAuthorizeParams {
+    pub workspace_id: String,
+    pub expected_snapshot: Option<String>,
+}
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all="camelCase", deny_unknown_fields)]
-#[ts(export_to="v2/")]
-pub struct InquelloContextAuthorizeResponse {pub available:bool,pub snapshot:Option<String>,pub service_engagement_ids:Vec<String>}
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct InquelloContextAuthorizeResponse {
+    pub available: bool,
+    pub snapshot: Option<String>,
+    pub service_engagement_ids: Vec<String>,
+}

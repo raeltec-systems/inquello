@@ -72,17 +72,23 @@ async fn authorize_private_command(
     authorization: &dyn crate::inquello_inference::TaskAuthorization,
     command: &[String],
     cwd: &PathUri,
-    native_cwd: &std::path::Path,
     ctx: &ToolCtx,
 ) -> Result<(), ToolError> {
     let result = async {
-        authorization.before_command(command, native_cwd, &ctx.call_id).await.map_err(ToolError::Codex)?;
-        authorization.before_tool_effect().await.map_err(ToolError::Codex)?;
+        authorization
+            .before_command(command, cwd, &ctx.call_id)
+            .await
+            .map_err(ToolError::Codex)?;
+        authorization
+            .before_tool_effect()
+            .await
+            .map_err(ToolError::Codex)?;
         if ctx.cancellation_token.is_cancelled() || authorization.cancellation().is_cancelled() {
             return Err(ToolError::Rejected("Private command cancelled".into()));
         }
         Ok(())
-    }.await;
+    }
+    .await;
     if let Err(error) = &result {
         let reason = match error {
             ToolError::Codex(error) => error.to_string(),
@@ -90,21 +96,31 @@ async fn authorize_private_command(
         };
         let model_context = ctx.step_context.model_context();
         let mut event_ctx = crate::tools::events::ToolEventCtx::new(
-            ctx.session.as_ref(), ctx.step_context.turn.as_ref(),
-            &ctx.step_context.settings.model_info, &ctx.call_id, None,
+            ctx.session.as_ref(),
+            ctx.step_context.turn.as_ref(),
+            &ctx.step_context.settings.model_info,
+            &ctx.call_id,
+            None,
         );
         event_ctx.model_context = Some(&model_context);
         // No Begin or process launch. Reserved accounting is finalized once by
         // the existing registry after_tool path, not by event publication.
         crate::tools::events::ToolEmitter::unified_exec(
-            command, cwd.clone(),
+            command,
+            cwd.clone(),
             codex_protocol::protocol::ExecCommandSource::UnifiedExecStartup,
-            None, None,
-        ).emit(event_ctx, crate::tools::events::ToolEventStage::Failure(
-            crate::tools::events::ToolEventFailure::Message(format!(
-                "Private Task command refused before execution: {reason}"
-            )),
-        )).await;
+            None,
+            None,
+        )
+        .emit(
+            event_ctx,
+            crate::tools::events::ToolEventStage::Failure(
+                crate::tools::events::ToolEventFailure::Message(format!(
+                    "Private Task command refused before execution: {reason}"
+                )),
+            ),
+        )
+        .await;
     }
     result
 }
@@ -307,11 +323,23 @@ impl<'a> ToolRuntime<UnifiedExecRequest, UnifiedExecAttempt> for UnifiedExecRunt
         attempt: &SandboxAttempt<'_>,
         ctx: &ToolCtx,
     ) -> Result<UnifiedExecAttempt, ToolError> {
-        let private_task = crate::inquello_inference::is_task_thread(&ctx.session.thread_id.to_string());
-        if private_task && (req.turn_environment.environment.is_remote() || req.tty || req.shell_snapshot.is_some()
-            || req.shell.use_login_shell || req.sandbox_permissions != SandboxPermissions::UseDefault
-            || req.additional_permissions.is_some() || attempt.is_escalated()) {
-            return Err(ToolError::Rejected("Unsupported private command execution mode".into()));
+        let private_task =
+            crate::inquello_inference::is_task_thread(&ctx.session.thread_id.to_string());
+        if private_task
+            && (!req
+                .turn_environment
+                .environment
+                .permits_private_task_root(&req.cwd, req.turn_environment.cwd())
+                || req.tty
+                || req.shell_snapshot.is_some()
+                || req.shell.use_login_shell
+                || req.sandbox_permissions != SandboxPermissions::UseDefault
+                || req.additional_permissions.is_some()
+                || attempt.is_escalated())
+        {
+            return Err(ToolError::Rejected(
+                "Unsupported private command execution mode".into(),
+            ));
         }
         let base_command = &req.command;
         let requested_shell = &req.shell.shell;
@@ -349,7 +377,8 @@ impl<'a> ToolRuntime<UnifiedExecRequest, UnifiedExecAttempt> for UnifiedExecRunt
         };
         let snapshot_metrics =
             snapshot_metrics::SnapshotMetrics::start(req, &ctx.step_context.turn.config);
-        let shell_snapshot = if private_task || environment_is_remote
+        let shell_snapshot = if private_task
+            || environment_is_remote
             || credential_broker_available
                 && launch_sandbox_permissions.requires_escalated_permissions()
         {
@@ -505,13 +534,16 @@ impl<'a> ToolRuntime<UnifiedExecRequest, UnifiedExecAttempt> for UnifiedExecRunt
                 }
             }
         }
-        let metrics_sidecar = if private_task { None } else { sidecar_for_command(
-            ctx,
-            &req.command,
-            &req.cwd,
-            req.turn_environment.environment.as_ref(),
-        )
-        .await
+        let metrics_sidecar = if private_task {
+            None
+        } else {
+            sidecar_for_command(
+                ctx,
+                &req.command,
+                &req.cwd,
+                req.turn_environment.environment.as_ref(),
+            )
+            .await
         };
         if let Some(sidecar) = metrics_sidecar.as_ref() {
             sidecar.install_output_env(&mut env);
@@ -675,13 +707,17 @@ impl<'a> ToolRuntime<UnifiedExecRequest, UnifiedExecAttempt> for UnifiedExecRunt
         };
 
         if private_task {
-            let authorization = ctx.step_context.turn.extension_data
+            let authorization = ctx
+                .step_context
+                .turn
+                .extension_data
                 .get::<crate::inquello_inference::TaskAuthorizationContext>()
-                .ok_or_else(|| ToolError::Rejected("Private command authority unavailable".into()))?;
-            let cwd = req.cwd.to_abs_path().map_err(|_| ToolError::Rejected("Native Task root required".into()))?;
+                .ok_or_else(|| {
+                    ToolError::Rejected("Private command authority unavailable".into())
+                })?;
             // All native shell/snapshot/PowerShell rewrites are now complete. This
             // exact argv enters the sandbox; no guessed parsing or grant cache.
-            authorize_private_command(authorization.0.as_ref(), &command, &req.cwd, cwd.as_path(), ctx).await?;
+            authorize_private_command(authorization.0.as_ref(), &command, &req.cwd, ctx).await?;
         }
         let command = build_unified_exec_sandbox_command(
             &command,
@@ -805,66 +841,165 @@ mod tests {
         turn_cancellation: CancellationToken,
         calls: std::sync::Mutex<Vec<String>>,
     }
-    type Fence<'a,T> = std::pin::Pin<Box<dyn std::future::Future<Output=T>+Send+'a>>;
+    type Fence<'a, T> = std::pin::Pin<Box<dyn std::future::Future<Output = T> + Send + 'a>>;
     impl crate::inquello_inference::TaskAuthorization for LateFenceAuthority {
-        fn cancellation(&self)->CancellationToken {self.cancellation.clone()}
-        fn turn_terminal<'a>(&'a self,_:&'a str,_:crate::inquello_inference::TaskTurnOutcome)->Fence<'a,()> {Box::pin(async {})}
-        fn before_attempt<'a>(&'a self,_:&'a str)->Fence<'a,codex_protocol::error::Result<crate::inquello_inference::AttemptContext>> {panic!("must not sample")}
-        fn before_tool<'a>(&'a self,_:&'a str,_:&'a str,_:&'a str)->Fence<'a,codex_protocol::error::Result<()>> {panic!("final fence seam only")}
-        fn before_command<'a>(&'a self,_:&'a [String],_:&'a std::path::Path,call:&'a str)->Fence<'a,codex_protocol::error::Result<()>> {Box::pin(async move {
-            self.calls.lock().unwrap().push(format!("reserved:{call}"));
-            Ok(())
-        })}
-        fn before_tool_effect<'a>(&'a self)->Fence<'a,codex_protocol::error::Result<()>> {Box::pin(async move {
-            self.calls.lock().unwrap().push("late-fence".into());
-            match self.mode {
-                "failure"=>Err(CodexErr::Fatal("late authority fence failed".into())),
-                "authority-cancel"=>{self.cancellation.cancel();Ok(())},
-                "turn-cancel"=>{self.turn_cancellation.cancel();Ok(())},
-                _=>panic!("unknown test mode"),
-            }
-        })}
-        fn after_tool<'a>(&'a self,call:&'a str,success:bool)->Fence<'a,()> {Box::pin(async move {
-            self.calls.lock().unwrap().push(format!("finalized:{call}:{success}"));
-        })}
+        fn cancellation(&self) -> CancellationToken {
+            self.cancellation.clone()
+        }
+        fn turn_terminal<'a>(
+            &'a self,
+            _: &'a str,
+            _: crate::inquello_inference::TaskTurnOutcome,
+        ) -> Fence<'a, ()> {
+            Box::pin(async {})
+        }
+        fn before_attempt<'a>(
+            &'a self,
+            _: &'a str,
+        ) -> Fence<'a, codex_protocol::error::Result<crate::inquello_inference::AttemptContext>>
+        {
+            panic!("must not sample")
+        }
+        fn before_tool<'a>(
+            &'a self,
+            _: &'a str,
+            _: &'a str,
+            _: &'a str,
+        ) -> Fence<'a, codex_protocol::error::Result<()>> {
+            panic!("final fence seam only")
+        }
+        fn before_command<'a>(
+            &'a self,
+            _: &'a [String],
+            _: &'a codex_utils_path_uri::PathUri,
+            call: &'a str,
+        ) -> Fence<'a, codex_protocol::error::Result<()>> {
+            Box::pin(async move {
+                self.calls.lock().unwrap().push(format!("reserved:{call}"));
+                Ok(())
+            })
+        }
+        fn before_tool_effect<'a>(&'a self) -> Fence<'a, codex_protocol::error::Result<()>> {
+            Box::pin(async move {
+                self.calls.lock().unwrap().push("late-fence".into());
+                match self.mode {
+                    "failure" => Err(CodexErr::Fatal("late authority fence failed".into())),
+                    "authority-cancel" => {
+                        self.cancellation.cancel();
+                        Ok(())
+                    }
+                    "turn-cancel" => {
+                        self.turn_cancellation.cancel();
+                        Ok(())
+                    }
+                    _ => panic!("unknown test mode"),
+                }
+            })
+        }
+        fn after_tool<'a>(&'a self, call: &'a str, success: bool) -> Fence<'a, ()> {
+            Box::pin(async move {
+                self.calls
+                    .lock()
+                    .unwrap()
+                    .push(format!("finalized:{call}:{success}"));
+            })
+        }
     }
 
     #[tokio::test]
     async fn private_pre_execution_late_fence_and_cancellation_complete_once_without_begin() {
         use crate::inquello_inference::TaskAuthorization;
         use codex_protocol::items::TurnItem;
-        for mode in ["failure","authority-cancel","turn-cancel"] {
-            tokio::time::timeout(Duration::from_secs(5),async {
-                let (session,turn,rx)=crate::session::tests::make_session_and_context_with_dynamic_tools_and_rx(Vec::new()).await;
-                let cancellation=CancellationToken::new();
-                let authority=LateFenceAuthority {mode,cancellation:CancellationToken::new(),turn_cancellation:cancellation.clone(),calls:Default::default()};
-                let ctx=ToolCtx {session,step_context:crate::session::step_context::StepContext::for_test(turn),cancellation_token:cancellation,
-                    call_id:"late-fence-call".into(),tool_name:codex_tools::ToolName::plain("exec_command")};
-                let root=tempdir().unwrap();let cwd=PathUri::from_host_native_path(root.path()).unwrap();
-                let command=vec!["/bin/sh".into(),"-c".into(),"printf must-not-run > effect".into()];
-                let result=authorize_private_command(&authority,&command,&cwd,root.path(),&ctx).await;
-                let reason=match result {
-                    Err(ToolError::Codex(error)) if mode=="failure"=>{assert_eq!(error.to_string(),"Fatal error: late authority fence failed");error.to_string()},
-                    Err(ToolError::Rejected(reason)) if mode!="failure"=>{assert_eq!(reason,"Private command cancelled");reason},
-                    other=>panic!("original error semantics changed: {other:?}"),
+        for mode in ["failure", "authority-cancel", "turn-cancel"] {
+            tokio::time::timeout(Duration::from_secs(5), async {
+                let (session, turn, rx) =
+                    crate::session::tests::make_session_and_context_with_dynamic_tools_and_rx(
+                        Vec::new(),
+                    )
+                    .await;
+                let cancellation = CancellationToken::new();
+                let authority = LateFenceAuthority {
+                    mode,
+                    cancellation: CancellationToken::new(),
+                    turn_cancellation: cancellation.clone(),
+                    calls: Default::default(),
                 };
-                assert_eq!(*authority.calls.lock().unwrap(),vec!["reserved:late-fence-call","late-fence"]);
+                let ctx = ToolCtx {
+                    session,
+                    step_context: crate::session::step_context::StepContext::for_test(turn),
+                    cancellation_token: cancellation,
+                    call_id: "late-fence-call".into(),
+                    tool_name: codex_tools::ToolName::plain("exec_command"),
+                };
+                let root = tempdir().unwrap();
+                let cwd = PathUri::from_host_native_path(root.path()).unwrap();
+                let command = vec![
+                    "/bin/sh".into(),
+                    "-c".into(),
+                    "printf must-not-run > effect".into(),
+                ];
+                let result = authorize_private_command(&authority, &command, &cwd, &ctx).await;
+                let reason = match result {
+                    Err(ToolError::Codex(error)) if mode == "failure" => {
+                        assert_eq!(
+                            error.to_string(),
+                            "Fatal error: late authority fence failed"
+                        );
+                        error.to_string()
+                    }
+                    Err(ToolError::Rejected(reason)) if mode != "failure" => {
+                        assert_eq!(reason, "Private command cancelled");
+                        reason
+                    }
+                    other => panic!("original error semantics changed: {other:?}"),
+                };
+                assert_eq!(
+                    *authority.calls.lock().unwrap(),
+                    vec!["reserved:late-fence-call", "late-fence"]
+                );
                 // The helper must not finalize or consume accounting itself.
                 // Exercise the unchanged caller contract used by registry.rs.
-                authority.after_tool(&ctx.call_id,false).await;
-                assert_eq!(*authority.calls.lock().unwrap(),vec!["reserved:late-fence-call","late-fence","finalized:late-fence-call:false"]);
-                let first=rx.recv().await.expect("native completion");
-                let EventMsg::ItemCompleted(completed)=first.msg else {panic!("expected completion without Begin")};
-                let TurnItem::CommandExecution(item)=completed.item else {panic!("command completion")};
-                assert_eq!(item.id,ctx.call_id);assert_eq!(item.command,command);
-                assert_eq!(item.status,codex_protocol::items::CommandExecutionStatus::Failed);
-                assert_eq!(item.cwd,cwd);assert!(item.sandbox_type.is_none());
-                assert!(item.process_id.is_none());assert_eq!(item.exit_code,Some(-1));
-                assert_eq!(item.duration,Some(Duration::ZERO));
-                assert_eq!(item.aggregated_output,Some(format!("Private Task command refused before execution: {reason}")));
-                assert!(rx.try_recv().is_err(),"exactly one event, no Begin or duplicate completion");
+                authority.after_tool(&ctx.call_id, false).await;
+                assert_eq!(
+                    *authority.calls.lock().unwrap(),
+                    vec![
+                        "reserved:late-fence-call",
+                        "late-fence",
+                        "finalized:late-fence-call:false"
+                    ]
+                );
+                let first = rx.recv().await.expect("native completion");
+                let EventMsg::ItemCompleted(completed) = first.msg else {
+                    panic!("expected completion without Begin")
+                };
+                let TurnItem::CommandExecution(item) = completed.item else {
+                    panic!("command completion")
+                };
+                assert_eq!(item.id, ctx.call_id);
+                assert_eq!(item.command, command);
+                assert_eq!(
+                    item.status,
+                    codex_protocol::items::CommandExecutionStatus::Failed
+                );
+                assert_eq!(item.cwd, cwd);
+                assert!(item.sandbox_type.is_none());
+                assert!(item.process_id.is_none());
+                assert_eq!(item.exit_code, Some(-1));
+                assert_eq!(item.duration, Some(Duration::ZERO));
+                assert_eq!(
+                    item.aggregated_output,
+                    Some(format!(
+                        "Private Task command refused before execution: {reason}"
+                    ))
+                );
+                assert!(
+                    rx.try_recv().is_err(),
+                    "exactly one event, no Begin or duplicate completion"
+                );
                 assert!(!root.path().join("effect").exists());
-            }).await.expect("bounded native fence lifecycle");
+            })
+            .await
+            .expect("bounded native fence lifecycle");
         }
     }
 

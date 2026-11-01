@@ -49,6 +49,8 @@ impl ChatWidget {
                 self.on_request_user_input(params);
             }
             ServerRequest::DynamicToolCall { .. }
+            | ServerRequest::InquelloContextAuthorize { .. }
+            | ServerRequest::InquelloTaskAuthority { .. }
             | ServerRequest::AttestationGenerate { .. }
             | ServerRequest::CurrentTimeRead { .. }
             | ServerRequest::ChatgptAuthTokensRefresh { .. }

@@ -329,6 +329,33 @@ impl ExecServerReconnectStrategy {
 }
 
 impl ExecServerClient {
+    /// Start a non-reconnecting trusted stdio executor with a complete,
+    /// explicitly supplied environment. Inherited host secrets are cleared.
+    pub async fn connect_isolated_stdio(
+        program: String,
+        args: Vec<String>,
+        env: std::collections::HashMap<String, String>,
+        cwd: std::path::PathBuf,
+        initialize_timeout: Duration,
+    ) -> Result<Self, ExecServerError> {
+        let client = Self::connect_stdio_command_inner(
+            StdioExecServerConnectArgs {
+                command: StdioExecServerCommand {
+                    program,
+                    args,
+                    env,
+                    cwd: Some(cwd),
+                },
+                client_name: "inquello-wsl".to_string(),
+                initialize_timeout,
+                resume_session_id: None,
+            },
+            true,
+        )
+        .await?;
+        client.mark_isolated_stdio();
+        Ok(client)
+    }
     /// Open the selected transport and run the common JSON-RPC initialization.
     /// Noise connection details are fetched here so reconnects get a fresh URL
     /// and authorization without replacing the harness identity.
@@ -811,7 +838,19 @@ impl ExecServerClient {
     pub(crate) async fn connect_stdio_command(
         args: StdioExecServerConnectArgs,
     ) -> Result<Self, ExecServerError> {
-        let mut child = stdio_command_process(&args.command)
+        Self::connect_stdio_command_inner(args, false).await
+    }
+
+    async fn connect_stdio_command_inner(
+        args: StdioExecServerConnectArgs,
+        isolate_environment: bool,
+    ) -> Result<Self, ExecServerError> {
+        let mut command = stdio_command_process(&args.command);
+        if isolate_environment {
+            command.env_clear().envs(&args.command.env);
+            scrub_non_inheritable_env_vars(command.as_std_mut());
+        }
+        let mut child = command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())

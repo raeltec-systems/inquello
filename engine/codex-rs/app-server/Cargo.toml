@@ -49,6 +49,7 @@ codex-core-plugins = { workspace = true }
 codex-diagnostics = { workspace = true }
 codex-home = { workspace = true }
 codex-exec-server = { workspace = true }
+codex-exec-server-protocol = { workspace = true }
 codex-extension-api = { workspace = true }
 codex-external-agent-migration = { workspace = true }
 codex-features = { workspace = true }
@@ -173,7 +174,7 @@ wiremock = { workspace = true }
 
 # Test-only loopback TLS seam. Never enable in release/package builds.
 [features]
-inference-fixtures = ["codex-core/inference-fixtures"]
+inference-fixtures = ["codex-core/inference-fixtures", "codex-app-server-protocol/inference-fixtures"]
 
 [build-dependencies]
 sha2 = { workspace = true }

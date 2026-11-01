@@ -61,13 +61,22 @@ pub fn log_writer(base_dir: &Path) -> Option<RollingFileAppender> {
         return None;
     }
 
-    RollingFileAppender::builder()
+    let builder = RollingFileAppender::builder()
         .rotation(Rotation::DAILY)
         .filename_prefix(LOG_FILE_PREFIX)
-        .filename_suffix(LOG_FILE_SUFFIX)
-        .max_log_files(MAX_LOG_FILES)
-        .build(base_dir)
+        .filename_suffix(LOG_FILE_SUFFIX);
+    // Inquello's data register retains logs until explicit owner deletion.
+    // Other clients retain the upstream bounded rotation policy.
+    let builder = if std::env::var("INQUELLO_SANDBOX_LOG_RETENTION")
         .ok()
+        .as_deref()
+        == Some("until-owner-deletes")
+    {
+        builder
+    } else {
+        builder.max_log_files(MAX_LOG_FILES)
+    };
+    builder.build(base_dir).ok()
 }
 
 /// Opens one fresh log for service provisioning and retains its parent directory.

@@ -141,4 +141,6 @@ pub use user_rules::user_rules;
 pub use user_rules::validate_user_rules;
 
 mod automated_review;
-pub use automated_review::{AutomatedReviewChange, AutomatedReviewStore, ReviewAttribution, apply_automated_review};
+pub use automated_review::{
+    AutomatedReviewChange, AutomatedReviewStore, ReviewAttribution, apply_automated_review,
+};

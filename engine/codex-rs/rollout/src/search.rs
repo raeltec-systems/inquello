@@ -410,7 +410,9 @@ mod tests;
 
 /// Native literal matcher for already-authorized conversation text. No index or path scan.
 pub fn retained_conversation_snippet(text: &str, search_term: &str) -> io::Result<Option<String>> {
-    if search_term.trim().is_empty() { return Ok(None); }
+    if search_term.trim().is_empty() {
+        return Ok(None);
+    }
     let pattern = case_insensitive_literal_regex(search_term)?;
     Ok(excerpt_around_match(text, &pattern))
 }

@@ -2425,109 +2425,224 @@ mod tests {
     }
 }
 
-
 /// Local storage coordination held only during final retained-history validation
 /// and queueing, never across service callbacks. Shares the normal lifecycle and
 /// writer locks, including cross-process ownership for non-live records.
 pub struct SavedHistoryLease {
-    _lifecycle:Vec<tokio::sync::OwnedRwLockReadGuard<()>>,
-    _writers:Vec<tokio::sync::OwnedMutexGuard<()>>,
-    _process:Vec<WriterLockGuard>,
+    _lifecycle: Vec<tokio::sync::OwnedRwLockReadGuard<()>>,
+    _writers: Vec<tokio::sync::OwnedMutexGuard<()>>,
+    _process: Vec<WriterLockGuard>,
 }
 impl LocalThreadStore {
-    pub async fn saved_history_lease(&self, mut ids:Vec<ThreadId>) -> ThreadStoreResult<SavedHistoryLease> {
-        ids.sort_by_key(ToString::to_string);ids.dedup();
-        if ids.len()>2000{return Err(ThreadStoreError::InvalidRequest{message:"Saved history scope exceeds its bound".into()});}
-        let mut lifecycle=Vec::new();let mut writers=Vec::new();
-        for id in &ids {lifecycle.push(self.live_writer_locks.reserve_lifecycle(*id).await);}
-        for id in &ids {writers.push(self.live_writer_locks.lock(*id).await);}
-        let process=self.acquire_writer_locks(&ids).await?;
-        Ok(SavedHistoryLease{_lifecycle:lifecycle,_writers:writers,_process:process})
+    pub async fn saved_history_lease(
+        &self,
+        mut ids: Vec<ThreadId>,
+    ) -> ThreadStoreResult<SavedHistoryLease> {
+        ids.sort_by_key(ToString::to_string);
+        ids.dedup();
+        if ids.len() > 2000 {
+            return Err(ThreadStoreError::InvalidRequest {
+                message: "Saved history scope exceeds its bound".into(),
+            });
+        }
+        let mut lifecycle = Vec::new();
+        let mut writers = Vec::new();
+        for id in &ids {
+            lifecycle.push(self.live_writer_locks.reserve_lifecycle(*id).await);
+        }
+        for id in &ids {
+            writers.push(self.live_writer_locks.lock(*id).await);
+        }
+        let process = self.acquire_writer_locks(&ids).await?;
+        Ok(SavedHistoryLease {
+            _lifecycle: lifecycle,
+            _writers: writers,
+            _process: process,
+        })
     }
 }
 
 impl LocalThreadStore {
     /// Callers retain the normal per-thread writer lease across bounds and fetch.
-    pub async fn check_saved_history_bounds(&self,id:ThreadId)->ThreadStoreResult<()> {
-        check_saved_history_pool_bounds(self.thread_history_db().await?,id).await
+    pub async fn check_saved_history_bounds(&self, id: ThreadId) -> ThreadStoreResult<()> {
+        check_saved_history_pool_bounds(self.thread_history_db().await?, id).await
     }
-    pub async fn saved_history_revision(&self,id:ThreadId)->ThreadStoreResult<String>{
-        saved_history_pool_revision(self.thread_history_db().await?,id).await
+    pub async fn saved_history_revision(&self, id: ThreadId) -> ThreadStoreResult<String> {
+        saved_history_pool_revision(self.thread_history_db().await?, id).await
     }
 }
 
 /// Bound both item rows and empty turns before streaming/allocating their values.
-async fn check_saved_history_pool_bounds(pool:&sqlx::SqlitePool,id:ThreadId)->ThreadStoreResult<()> {
+async fn check_saved_history_pool_bounds(
+    pool: &sqlx::SqlitePool,
+    id: ThreadId,
+) -> ThreadStoreResult<()> {
     let (count,bytes,largest):(i64,i64,i64)=sqlx::query_as("SELECT count(*),coalesce(sum(length(CAST(item_json AS BLOB))+length(CAST(item_id AS BLOB))+length(CAST(turn_id AS BLOB))+length(CAST(item_type AS BLOB))),0),coalesce(max(length(CAST(item_json AS BLOB))+length(CAST(item_id AS BLOB))+length(CAST(turn_id AS BLOB))+length(CAST(item_type AS BLOB))),0) FROM thread_items WHERE thread_id=?")
         .bind(id.to_string()).fetch_one(pool).await.map_err(|e|ThreadStoreError::Internal{message:e.to_string()})?;
     let (turns,turn_bytes,largest_turn):(i64,i64,i64)=sqlx::query_as("SELECT count(*),coalesce(sum(length(CAST(turn_id AS BLOB))+length(CAST(coalesce(root_turn_id,'') AS BLOB))+length(CAST(status AS BLOB))+length(CAST(coalesce(final_agent_item_id,'') AS BLOB))+16),0),coalesce(max(length(CAST(turn_id AS BLOB))+length(CAST(coalesce(root_turn_id,'') AS BLOB))+length(CAST(status AS BLOB))+length(CAST(coalesce(final_agent_item_id,'') AS BLOB))+16),0) FROM thread_turns WHERE thread_id=?")
         .bind(id.to_string()).fetch_one(pool).await.map_err(|e|ThreadStoreError::Internal{message:e.to_string()})?;
-    if count>100_000 || turns>100_000 || bytes.saturating_add(turn_bytes)>16*1024*1024 || largest>1024*1024 || largest_turn>1024*1024 {
-        return Err(ThreadStoreError::InvalidRequest{message:"Retained history exceeds bounded inspection".into()});
+    if count > 100_000
+        || turns > 100_000
+        || bytes.saturating_add(turn_bytes) > 16 * 1024 * 1024
+        || largest > 1024 * 1024
+        || largest_turn > 1024 * 1024
+    {
+        return Err(ThreadStoreError::InvalidRequest {
+            message: "Retained history exceeds bounded inspection".into(),
+        });
     }
     Ok(())
 }
 
 /// Include every field used by the occurrence query's visibility predicates,
 /// including item_type and final-agent selection, not merely displayed JSON.
-async fn saved_history_pool_revision(pool:&sqlx::SqlitePool,id:ThreadId)->ThreadStoreResult<String>{
-    use sha2::{Digest,Sha256};use futures::TryStreamExt;use sqlx::Row;
-    check_saved_history_pool_bounds(pool,id).await?;
-    let mut digest=Sha256::new();
+async fn saved_history_pool_revision(
+    pool: &sqlx::SqlitePool,
+    id: ThreadId,
+) -> ThreadStoreResult<String> {
+    use futures::TryStreamExt;
+    use sha2::{Digest, Sha256};
+    use sqlx::Row;
+    check_saved_history_pool_bounds(pool, id).await?;
+    let mut digest = Sha256::new();
     let mut rows=sqlx::query("SELECT item_id,turn_id,item_type,item_json,rollout_ordinal,updated_at_ordinal FROM thread_items WHERE thread_id=? ORDER BY item_id")
         .bind(id.to_string()).fetch(pool);
-    while let Some(row)=rows.try_next().await.map_err(|e|ThreadStoreError::Internal{message:e.to_string()})? {
-        for name in ["item_id","turn_id","item_type","item_json"] {let value:String=row.try_get(name).map_err(|e:sqlx::Error|ThreadStoreError::Internal{message:e.to_string()})?;digest.update((value.len() as u64).to_le_bytes());digest.update(value.as_bytes());}
-        for name in ["rollout_ordinal","updated_at_ordinal"] {let value:i64=row.try_get(name).map_err(|e:sqlx::Error|ThreadStoreError::Internal{message:e.to_string()})?;digest.update(value.to_le_bytes());}
+    while let Some(row) = rows
+        .try_next()
+        .await
+        .map_err(|e| ThreadStoreError::Internal {
+            message: e.to_string(),
+        })?
+    {
+        for name in ["item_id", "turn_id", "item_type", "item_json"] {
+            let value: String =
+                row.try_get(name)
+                    .map_err(|e: sqlx::Error| ThreadStoreError::Internal {
+                        message: e.to_string(),
+                    })?;
+            digest.update((value.len() as u64).to_le_bytes());
+            digest.update(value.as_bytes());
+        }
+        for name in ["rollout_ordinal", "updated_at_ordinal"] {
+            let value: i64 =
+                row.try_get(name)
+                    .map_err(|e: sqlx::Error| ThreadStoreError::Internal {
+                        message: e.to_string(),
+                    })?;
+            digest.update(value.to_le_bytes());
+        }
     }
     drop(rows);
     let mut rows=sqlx::query("SELECT turn_id,root_turn_id,status,final_agent_item_id,rollout_ordinal,rollout_end_ordinal FROM thread_turns WHERE thread_id=? ORDER BY turn_id")
         .bind(id.to_string()).fetch(pool);
-    while let Some(row)=rows.try_next().await.map_err(|e|ThreadStoreError::Internal{message:e.to_string()})? {
-        for name in ["turn_id","root_turn_id","status","final_agent_item_id"] {let value:Option<String>=row.try_get(name).map_err(|e:sqlx::Error|ThreadStoreError::Internal{message:e.to_string()})?;digest.update(format!("{value:?}"));}
-        for name in ["rollout_ordinal","rollout_end_ordinal"] {let value:Option<i64>=row.try_get(name).map_err(|e:sqlx::Error|ThreadStoreError::Internal{message:e.to_string()})?;digest.update(format!("{value:?}"));}
+    while let Some(row) = rows
+        .try_next()
+        .await
+        .map_err(|e| ThreadStoreError::Internal {
+            message: e.to_string(),
+        })?
+    {
+        for name in ["turn_id", "root_turn_id", "status", "final_agent_item_id"] {
+            let value: Option<String> =
+                row.try_get(name)
+                    .map_err(|e: sqlx::Error| ThreadStoreError::Internal {
+                        message: e.to_string(),
+                    })?;
+            digest.update(format!("{value:?}"));
+        }
+        for name in ["rollout_ordinal", "rollout_end_ordinal"] {
+            let value: Option<i64> =
+                row.try_get(name)
+                    .map_err(|e: sqlx::Error| ThreadStoreError::Internal {
+                        message: e.to_string(),
+                    })?;
+            digest.update(format!("{value:?}"));
+        }
     }
-    Ok(format!("{:x}",digest.finalize()))
+    Ok(format!("{:x}", digest.finalize()))
 }
 
 #[cfg(test)]
 mod saved_revision_visibility_tests {
     use super::*;
-    async fn fixture()->(sqlx::SqlitePool,ThreadId){
-        let pool=sqlx::sqlite::SqlitePoolOptions::new().max_connections(1).connect("sqlite::memory:").await.unwrap();
+    async fn fixture() -> (sqlx::SqlitePool, ThreadId) {
+        let pool = sqlx::sqlite::SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
         sqlx::query("CREATE TABLE thread_items(thread_id TEXT,item_id TEXT,turn_id TEXT,item_type TEXT,item_json TEXT,rollout_ordinal INTEGER,updated_at_ordinal INTEGER)").execute(&pool).await.unwrap();
         sqlx::query("CREATE TABLE thread_turns(thread_id TEXT,turn_id TEXT,root_turn_id TEXT,status TEXT,final_agent_item_id TEXT,rollout_ordinal INTEGER,rollout_end_ordinal INTEGER)").execute(&pool).await.unwrap();
-        (pool,ThreadId::from_string("11111111-1111-4111-8111-111111111111").unwrap())
+        (
+            pool,
+            ThreadId::from_string("11111111-1111-4111-8111-111111111111").unwrap(),
+        )
     }
     #[tokio::test]
-    async fn saved_revision_changes_when_only_visibility_selectors_change(){
-        let (pool,id)=fixture().await;
-        sqlx::query("INSERT INTO thread_items VALUES(?,'item','turn','agentMessage','{}',1,1)").bind(id.to_string()).execute(&pool).await.unwrap();
-        sqlx::query("INSERT INTO thread_turns VALUES(?,'turn',NULL,'completed','item',0,2)").bind(id.to_string()).execute(&pool).await.unwrap();
-        let initial=saved_history_pool_revision(&pool,id).await.unwrap();
-        sqlx::query("UPDATE thread_items SET item_type='reasoning'").execute(&pool).await.unwrap();
-        assert_ne!(saved_history_pool_revision(&pool,id).await.unwrap(),initial);
-        sqlx::query("UPDATE thread_items SET item_type='agentMessage'").execute(&pool).await.unwrap();
-        assert_eq!(saved_history_pool_revision(&pool,id).await.unwrap(),initial);
-        sqlx::query("UPDATE thread_turns SET final_agent_item_id=NULL").execute(&pool).await.unwrap();
-        assert_ne!(saved_history_pool_revision(&pool,id).await.unwrap(),initial);
+    async fn saved_revision_changes_when_only_visibility_selectors_change() {
+        let (pool, id) = fixture().await;
+        sqlx::query("INSERT INTO thread_items VALUES(?,'item','turn','agentMessage','{}',1,1)")
+            .bind(id.to_string())
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO thread_turns VALUES(?,'turn',NULL,'completed','item',0,2)")
+            .bind(id.to_string())
+            .execute(&pool)
+            .await
+            .unwrap();
+        let initial = saved_history_pool_revision(&pool, id).await.unwrap();
+        sqlx::query("UPDATE thread_items SET item_type='reasoning'")
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert_ne!(
+            saved_history_pool_revision(&pool, id).await.unwrap(),
+            initial
+        );
+        sqlx::query("UPDATE thread_items SET item_type='agentMessage'")
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert_eq!(
+            saved_history_pool_revision(&pool, id).await.unwrap(),
+            initial
+        );
+        sqlx::query("UPDATE thread_turns SET final_agent_item_id=NULL")
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert_ne!(
+            saved_history_pool_revision(&pool, id).await.unwrap(),
+            initial
+        );
     }
     #[tokio::test]
-    async fn saved_empty_turn_count_and_bytes_are_bounded_before_revision_stream(){
-        let (pool,id)=fixture().await;
+    async fn saved_empty_turn_count_and_bytes_are_bounded_before_revision_stream() {
+        let (pool, id) = fixture().await;
         sqlx::query("WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<100001) INSERT INTO thread_turns SELECT ?,CAST(x AS TEXT),NULL,'completed',NULL,x,x FROM n").bind(id.to_string()).execute(&pool).await.unwrap();
-        assert!(check_saved_history_pool_bounds(&pool,id).await.is_err());
-        assert!(saved_history_pool_revision(&pool,id).await.is_err());
-        sqlx::query("DELETE FROM thread_turns").execute(&pool).await.unwrap();
-        sqlx::query("INSERT INTO thread_turns VALUES(?,'turn',NULL,'completed',?,0,1)").bind(id.to_string()).bind("x".repeat(1024*1024+1)).execute(&pool).await.unwrap();
-        assert!(check_saved_history_pool_bounds(&pool,id).await.is_err());
+        assert!(check_saved_history_pool_bounds(&pool, id).await.is_err());
+        assert!(saved_history_pool_revision(&pool, id).await.is_err());
+        sqlx::query("DELETE FROM thread_turns")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("INSERT INTO thread_turns VALUES(?,'turn',NULL,'completed',?,0,1)")
+            .bind(id.to_string())
+            .bind("x".repeat(1024 * 1024 + 1))
+            .execute(&pool)
+            .await
+            .unwrap();
+        assert!(check_saved_history_pool_bounds(&pool, id).await.is_err());
     }
 }
 
 impl LocalThreadStore {
     /// Resolve only an exact thread; saved navigation never uses global search.
-    pub async fn saved_rollout_path(&self,id:ThreadId)->ThreadStoreResult<PathBuf>{
-        thread_rollout_resolver::resolve_current_including_archived(self,id).await?
-            .map(|resolved|resolved.path).ok_or(ThreadStoreError::ThreadNotFound{thread_id:id})
+    pub async fn saved_rollout_path(&self, id: ThreadId) -> ThreadStoreResult<PathBuf> {
+        thread_rollout_resolver::resolve_current_including_archived(self, id)
+            .await?
+            .map(|resolved| resolved.path)
+            .ok_or(ThreadStoreError::ThreadNotFound { thread_id: id })
     }
 }

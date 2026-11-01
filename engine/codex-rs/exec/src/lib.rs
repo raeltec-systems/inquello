@@ -2092,6 +2092,16 @@ async fn handle_server_request(
 ) {
     let method = server_request_method_name(&request);
     let handle_result = match request {
+        ServerRequest::InquelloContextAuthorize { request_id, .. }
+        | ServerRequest::InquelloTaskAuthority { request_id, .. } => {
+            reject_server_request(
+                client,
+                request_id,
+                &method,
+                "Inquello authority is not available in exec mode".to_string(),
+            )
+            .await
+        }
         ServerRequest::McpServerElicitationRequest { request_id, params } => {
             // Exec auto-cancels elicitation instead of surfacing it
             // interactively. Preserve that behavior for attached subagent

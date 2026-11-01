@@ -38,10 +38,14 @@ pub(crate) struct AsyncCompactionState {
 }
 
 pub(super) fn enabled(turn_context: &TurnContext) -> bool {
-    turn_context.extension_data.get::<crate::inquello_inference::TaskAuthorizationContext>().is_none() && turn_context
-        .config
-        .features
-        .enabled(Feature::AsyncCompaction)
+    turn_context
+        .extension_data
+        .get::<crate::inquello_inference::TaskAuthorizationContext>()
+        .is_none()
+        && turn_context
+            .config
+            .features
+            .enabled(Feature::AsyncCompaction)
         && !turn_context.config.features.enabled(Feature::TokenBudget)
         && matches!(
             turn_context.provider.capabilities().remote_compaction,
@@ -58,7 +62,9 @@ pub(super) async fn maybe_start(
     token_status: &ContextWindowTokenStatus,
     (turn_state, auth_owner_generation): (Option<String>, Option<u64>),
 ) {
-    if crate::inquello_inference::is_task_thread(&sess.thread_id.to_string()) { return; }
+    if crate::inquello_inference::is_task_thread(&sess.thread_id.to_string()) {
+        return;
+    }
     let turn_context = &step_context.turn;
     // Let the foreground establish the backend's model pin before starting a parallel request.
     if matches!(phase, CompactionPhase::PreTurn) && turn_state.is_none() {

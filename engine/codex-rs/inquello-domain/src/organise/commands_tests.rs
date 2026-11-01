@@ -754,26 +754,66 @@ fn navigation_preserves_private_record_and_reuses_only_identical_receipts() {
         archived: true,
     };
     assert!(matches!(
-        block_on(set_task_navigation(&store, &FixedClock, actor(2), command.clone())),
+        block_on(set_task_navigation(
+            &store,
+            &FixedClock,
+            actor(2),
+            command.clone()
+        )),
         Err(DomainError::NotFound)
     ));
-    let changed = ok(block_on(set_task_navigation(&store, &FixedClock, actor(1), command.clone())));
+    let changed = ok(block_on(set_task_navigation(
+        &store,
+        &FixedClock,
+        actor(1),
+        command.clone(),
+    )));
     let saved = task_of(&changed);
     assert!(saved.pinned && saved.archived);
-    let expected = Task { pinned: true, archived: true, revision: original.revision.next().unwrap(), ..original };
+    let expected = Task {
+        pinned: true,
+        archived: true,
+        revision: original.revision.next().unwrap(),
+        ..original
+    };
     assert_eq!(saved, expected);
-    assert!(ok(block_on(set_task_navigation(&store, &FixedClock, actor(1), command.clone()))).replayed);
+    assert!(
+        ok(block_on(set_task_navigation(
+            &store,
+            &FixedClock,
+            actor(1),
+            command.clone()
+        )))
+        .replayed
+    );
     let mut changed_request = command.clone();
     changed_request.archived = false;
     assert!(matches!(
-        block_on(set_task_navigation(&store, &FixedClock, actor(1), changed_request.clone())),
+        block_on(set_task_navigation(
+            &store,
+            &FixedClock,
+            actor(1),
+            changed_request.clone()
+        )),
         Err(DomainError::OperationConflict { .. })
     ));
     changed_request.operation_id = "navigation-stale-revision".into();
     assert!(matches!(
-        block_on(set_task_navigation(&store, &FixedClock, actor(1), changed_request)),
+        block_on(set_task_navigation(
+            &store,
+            &FixedClock,
+            actor(1),
+            changed_request
+        )),
         Err(DomainError::RevisionConflict { .. })
     ));
-    assert_eq!(ok(block_on(workspace_tree(&store, actor(1), WORKSPACE))).tasks, vec![saved]);
-    assert!(ok(block_on(workspace_tree(&store, actor(2), WORKSPACE))).tasks.is_empty());
+    assert_eq!(
+        ok(block_on(workspace_tree(&store, actor(1), WORKSPACE))).tasks,
+        vec![saved]
+    );
+    assert!(
+        ok(block_on(workspace_tree(&store, actor(2), WORKSPACE)))
+            .tasks
+            .is_empty()
+    );
 }

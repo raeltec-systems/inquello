@@ -260,7 +260,8 @@ pub async fn download_and_install_remote_plugin_bundle(
     codex_home: PathBuf,
     bundle: ValidatedRemotePluginBundle,
 ) -> Result<PluginInstallResult, RemotePluginBundleInstallError> {
-    download_and_install_remote_plugin_bundle_with_mcp_admission(config, codex_home, bundle, None).await
+    download_and_install_remote_plugin_bundle_with_mcp_admission(config, codex_home, bundle, None)
+        .await
 }
 
 pub(crate) async fn download_and_install_remote_plugin_bundle_with_mcp_admission(

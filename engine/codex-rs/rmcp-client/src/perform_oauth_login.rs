@@ -26,6 +26,7 @@ use tokio::time::timeout;
 use url::Url;
 use urlencoding::decode;
 
+use crate::OAuthLoginCancellation;
 use crate::StoredOAuthTokens;
 use crate::WrappedOAuthTokenResponse;
 use crate::enterprise_oauth_login::enterprise_authorization_url;
@@ -46,7 +47,6 @@ use crate::oauth_client_registration::PreparedOAuthLogin;
 use crate::oauth_client_registration::start_authorization as start_client_registration;
 use crate::oauth_http_client::OAuthHttpClientAdapter;
 use crate::save_oauth_tokens;
-use crate::OAuthLoginCancellation;
 use crate::utils::build_default_headers;
 use codex_config::types::AuthKeyringBackendKind;
 use codex_config::types::OAuthCredentialsStoreMode;
@@ -280,7 +280,11 @@ pub async fn perform_oauth_login_return_url(
     let cancellation = OAuthLoginCancellation::default();
     let completion = flow.spawn(cancellation.clone());
 
-    Ok(OauthLoginHandle::new(authorization_url, completion, cancellation))
+    Ok(OauthLoginHandle::new(
+        authorization_url,
+        completion,
+        cancellation,
+    ))
 }
 
 fn spawn_callback_server(
@@ -878,13 +882,16 @@ impl OauthLoginFlow {
                     _ = cancellation.cancelled() => bail!("MCP OAuth sign-in cancelled"),
                     result = self.complete(/*emit_browser_url*/ false) => result?,
                 };
-                cancellation.persist(save_oauth_tokens(
-                    &stored.server_name,
-                    &stored,
-                    store_mode,
-                    keyring_backend_kind,
-                )).await
-            }.await;
+                cancellation
+                    .persist(save_oauth_tokens(
+                        &stored.server_name,
+                        &stored,
+                        store_mode,
+                        keyring_backend_kind,
+                    ))
+                    .await
+            }
+            .await;
             if result.is_err() {
                 cancellation.fail().await;
             }
@@ -1250,15 +1257,21 @@ mod tests {
         let closed = flow.callback_closed();
         let cancellation = crate::OAuthLoginCancellation::default();
         let completion = flow.spawn(cancellation.clone());
-        assert_eq!(cancellation.cancel().await, crate::OAuthLoginState::Cancelled);
+        assert_eq!(
+            cancellation.cancel().await,
+            crate::OAuthLoginState::Cancelled
+        );
         assert!(completion.await?.is_err());
         tokio::time::timeout(std::time::Duration::from_secs(2), closed).await?;
-        assert!(stored_oauth_credentials(
-            "cancelled-login-test",
-            &server_url,
-            OAuthCredentialsStoreMode::File,
-            AuthKeyringBackendKind::Direct,
-        )?.is_none());
+        assert!(
+            stored_oauth_credentials(
+                "cancelled-login-test",
+                &server_url,
+                OAuthCredentialsStoreMode::File,
+                AuthKeyringBackendKind::Direct,
+            )?
+            .is_none()
+        );
         Ok(())
     }
 

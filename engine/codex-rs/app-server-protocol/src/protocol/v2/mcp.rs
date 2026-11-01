@@ -1,5 +1,5 @@
-use super::shared::v2_enum_from_core;
 use super::PluginMcpAdmissionPolicy;
+use super::shared::v2_enum_from_core;
 use crate::JsonSchema;
 use crate::TS;
 use codex_experimental_api_macros::ExperimentalApi;
@@ -984,14 +984,21 @@ mod cancellation_tests {
     fn cancellation_targets_exact_attempt_and_has_truthful_terminal_results() {
         let params: McpServerOauthCancelParams = serde_json::from_value(json!({
             "name": "isolated-fixture", "loginId": "attempt-1",
-        })).unwrap_or_else(|error| panic!("{error}"));
+        }))
+        .unwrap_or_else(|error| panic!("{error}"));
         assert_eq!(params.login_id, "attempt-1");
-        assert!(serde_json::from_value::<McpServerOauthCancelParams>(json!({
-            "name": "isolated-fixture",
-        })).is_err());
-        assert!(serde_json::from_value::<McpServerOauthCancelParams>(json!({
-            "name": "isolated-fixture", "loginId": "attempt-1", "token": "not-accepted",
-        })).is_err());
+        assert!(
+            serde_json::from_value::<McpServerOauthCancelParams>(json!({
+                "name": "isolated-fixture",
+            }))
+            .is_err()
+        );
+        assert!(
+            serde_json::from_value::<McpServerOauthCancelParams>(json!({
+                "name": "isolated-fixture", "loginId": "attempt-1", "token": "not-accepted",
+            }))
+            .is_err()
+        );
         for (status, expected) in [
             (McpServerOauthCancelStatus::Cancelled, "cancelled"),
             (McpServerOauthCancelStatus::Completed, "completed"),

@@ -1220,7 +1220,9 @@ impl Session {
         let mcp_disabled_plugin_ids = session_configuration.disabled_plugin_ids.clone();
         let auth_and_mcp_fut = async move {
             let auth = mcp_auth.await;
-            if !crate::inquello_inference::is_task_thread(&thread_id.to_string()) && config_for_mcp.features.plugin_recommendations_enabled() {
+            if !crate::inquello_inference::is_task_thread(&thread_id.to_string())
+                && config_for_mcp.features.plugin_recommendations_enabled()
+            {
                 let plugins_config = config_for_mcp.plugins_config_input();
                 let auth_for_prewarm = auth.clone();
                 // Fetch the catalog while MCP and plugin/skill initialization continue.
@@ -1310,19 +1312,20 @@ impl Session {
                     session_configuration.sandbox_policy(environment_selections)
                 ),
             };
-            let rollout_thread_trace = if crate::inquello_inference::is_task_thread(&thread_id.to_string()) {
-                ThreadTraceContext::disabled()
-            } else if matches!(
-                session_configuration.session_source,
-                SessionSource::SubAgent(SubAgentSource::ThreadSpawn { .. })
-            ) {
-                // Spawned child threads are part of their root rollout tree. If the
-                // parent had no trace bundle, do not create an orphan child bundle
-                // that looks like an independent rollout.
-                parent_rollout_thread_trace.start_child_thread_trace_or_disabled(trace_metadata)
-            } else {
-                ThreadTraceContext::start_root_or_disabled(trace_metadata)
-            };
+            let rollout_thread_trace =
+                if crate::inquello_inference::is_task_thread(&thread_id.to_string()) {
+                    ThreadTraceContext::disabled()
+                } else if matches!(
+                    session_configuration.session_source,
+                    SessionSource::SubAgent(SubAgentSource::ThreadSpawn { .. })
+                ) {
+                    // Spawned child threads are part of their root rollout tree. If the
+                    // parent had no trace bundle, do not create an orphan child bundle
+                    // that looks like an independent rollout.
+                    parent_rollout_thread_trace.start_child_thread_trace_or_disabled(trace_metadata)
+                } else {
+                    ThreadTraceContext::start_root_or_disabled(trace_metadata)
+                };
 
             let mut post_session_configured_events = Vec::<Event>::new();
 
@@ -2004,7 +2007,8 @@ impl Session {
                 &session_configuration.environments,
             );
             if !crate::inquello_inference::is_task_thread(&thread_id.to_string()) {
-                sess.schedule_startup_prewarm(super::startup_prewarm::PrewarmInput::Base).await;
+                sess.schedule_startup_prewarm(super::startup_prewarm::PrewarmInput::Base)
+                    .await;
             }
             let session_start_source = match &initial_history {
                 InitialHistory::Forked(_) if forked_from_id.is_some() => {

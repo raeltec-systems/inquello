@@ -1111,13 +1111,13 @@ mod install_authentication_tests {
         let value = json!({
             "remoteMarketplaceName": "fixture", "pluginName": "fixture-plugin",
         });
-        let legacy: PluginInstallParams = serde_json::from_value(value.clone())
-            .unwrap_or_else(|error| panic!("{error}"));
+        let legacy: PluginInstallParams =
+            serde_json::from_value(value.clone()).unwrap_or_else(|error| panic!("{error}"));
         assert!(!legacy.skip_authentication);
         let mut isolated = value.clone();
         isolated["skipAuthentication"] = json!(true);
-        let isolated: PluginInstallParams = serde_json::from_value(isolated)
-            .unwrap_or_else(|error| panic!("{error}"));
+        let isolated: PluginInstallParams =
+            serde_json::from_value(isolated).unwrap_or_else(|error| panic!("{error}"));
         assert!(isolated.skip_authentication);
         let mut invalid = value;
         invalid["skipAuthentication"] = json!("true");
@@ -1130,15 +1130,17 @@ mod install_authentication_tests {
             "allowTools": true, "allowLocalServers": false,
             "localConfirmed": false, "allowedDomains": ["api.example.com"],
         });
-        let parsed: PluginMcpAdmissionPolicy = serde_json::from_value(policy.clone())
-            .unwrap_or_else(|error| panic!("{error}"));
+        let parsed: PluginMcpAdmissionPolicy =
+            serde_json::from_value(policy.clone()).unwrap_or_else(|error| panic!("{error}"));
         assert!(parsed.allow_tools);
         let mut missing = policy.clone();
-        missing.as_object_mut().unwrap_or_else(|| panic!("object")).remove("localConfirmed");
+        missing
+            .as_object_mut()
+            .unwrap_or_else(|| panic!("object"))
+            .remove("localConfirmed");
         assert!(serde_json::from_value::<PluginMcpAdmissionPolicy>(missing).is_err());
         let mut extra = policy;
         extra["command"] = json!("not accepted");
         assert!(serde_json::from_value::<PluginMcpAdmissionPolicy>(extra).is_err());
     }
-
 }

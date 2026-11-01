@@ -159,75 +159,189 @@ pub(crate) mod publication_test_support {
 #[cfg(all(test, unix))]
 mod publication_tests {
     use super::*;
-    use crate::inquello_inference::{AttemptContext, TaskAuthorization, TaskAuthorizationContext, TaskTurnOutcome, mark_task_thread};
     use crate::environment_selection::TurnEnvironmentState;
+    use crate::inquello_inference::{
+        AttemptContext, TaskAuthorization, TaskAuthorizationContext, TaskTurnOutcome,
+        mark_task_thread,
+    };
+    use crate::sandboxing::SandboxPermissions;
     use crate::session::step_context::StepContext;
     use crate::shell::{Shell, ShellInvocation, ShellType};
-    use crate::sandboxing::SandboxPermissions;
     use codex_protocol::error::Result as CoreResult;
-    use tokio_util::sync::CancellationToken;
     use publication_test_support::PublicationBarrier;
-    type Fence<'a,T> = std::pin::Pin<Box<dyn std::future::Future<Output=T>+Send+'a>>;
+    use tokio_util::sync::CancellationToken;
+    type Fence<'a, T> = std::pin::Pin<Box<dyn std::future::Future<Output = T> + Send + 'a>>;
     struct CommandAuthority(CancellationToken);
     impl TaskAuthorization for CommandAuthority {
-        fn cancellation(&self)->CancellationToken {self.0.clone()}
-        fn turn_terminal<'a>(&'a self,_:&'a str,_:TaskTurnOutcome)->Fence<'a,()> {Box::pin(async {})}
-        fn before_attempt<'a>(&'a self,_:&'a str)->Fence<'a,CoreResult<AttemptContext>> {panic!("this test must never sample")}
-        fn before_tool<'a>(&'a self,_:&'a str,_:&'a str,_:&'a str)->Fence<'a,CoreResult<()>> {self.before_tool_effect()}
-        fn before_command<'a>(&'a self,_:&'a [String],_:&'a std::path::Path,_:&'a str)->Fence<'a,CoreResult<()>> {self.before_tool_effect()}
-        fn before_tool_effect<'a>(&'a self)->Fence<'a,CoreResult<()>> {Box::pin(async move {
-            if self.0.is_cancelled() {Err(codex_protocol::error::CodexErr::Fatal("test cancelled".into()))} else {Ok(())}
-        })}
-        fn after_tool<'a>(&'a self,_:&'a str,_:bool)->Fence<'a,()> {Box::pin(async {})}
+        fn cancellation(&self) -> CancellationToken {
+            self.0.clone()
+        }
+        fn turn_terminal<'a>(&'a self, _: &'a str, _: TaskTurnOutcome) -> Fence<'a, ()> {
+            Box::pin(async {})
+        }
+        fn before_attempt<'a>(&'a self, _: &'a str) -> Fence<'a, CoreResult<AttemptContext>> {
+            panic!("this test must never sample")
+        }
+        fn before_tool<'a>(
+            &'a self,
+            _: &'a str,
+            _: &'a str,
+            _: &'a str,
+        ) -> Fence<'a, CoreResult<()>> {
+            self.before_tool_effect()
+        }
+        fn before_command<'a>(
+            &'a self,
+            _: &'a [String],
+            _: &'a codex_utils_path_uri::PathUri,
+            _: &'a str,
+        ) -> Fence<'a, CoreResult<()>> {
+            self.before_tool_effect()
+        }
+        fn before_tool_effect<'a>(&'a self) -> Fence<'a, CoreResult<()>> {
+            Box::pin(async move {
+                if self.0.is_cancelled() {
+                    Err(codex_protocol::error::CodexErr::Fatal(
+                        "test cancelled".into(),
+                    ))
+                } else {
+                    Ok(())
+                }
+            })
+        }
+        fn after_tool<'a>(&'a self, _: &'a str, _: bool) -> Fence<'a, ()> {
+            Box::pin(async {})
+        }
     }
 
     #[tokio::test]
     async fn cancellation_after_spawn_before_publication_owns_startup_and_reaps_child() {
-        let root=tempfile::tempdir().expect("isolated effect root");
-        let (session,mut turn)=crate::session::tests::make_session_and_context().await;
-        let cwd=codex_utils_path_uri::PathUri::from_host_native_path(root.path()).unwrap();
-        let TurnEnvironmentState::Ready(environment)=turn.initial_environments.environments.first_mut().unwrap() else {panic!("local environment")};
-        environment.selection.cwd=cwd.clone();
-        environment.selection.workspace_roots=vec![cwd.clone()];
-        environment.config_mut().workspace_roots=vec![cwd.clone()];
-        environment.config_mut().permission_profile=crate::config::PermissionProfileSnapshot::legacy(codex_protocol::models::PermissionProfile::workspace_write());
-        let environment=environment.clone();
-        let cancellation=CancellationToken::new();
-        let barrier=PublicationBarrier::default();
-        struct ReleaseOnDrop(Arc<tokio::sync::Notify>);
-        impl Drop for ReleaseOnDrop { fn drop(&mut self) { self.0.notify_one(); } }
-        let _release_on_drop=ReleaseOnDrop(Arc::clone(&barrier.release));
-        let _cancel_on_drop=cancellation.clone().drop_guard();
-        turn.extension_data.insert(barrier.clone());
-        turn.extension_data.insert(TaskAuthorizationContext(Arc::new(CommandAuthority(cancellation.clone()))));
-        mark_task_thread(&session.thread_id.to_string()).unwrap();
-        let session=Arc::new(session);
-        let context=UnifiedExecContext::new(Arc::clone(&session),StepContext::for_test(Arc::new(turn)),cancellation.clone(),"publication-race".into());
-        let process_id=session.services.unified_exec_manager.allocate_process_id().await;
-        let script="while [ ! -f allow-late ]; do sleep 0.01; done; printf unauthorized > late.txt";
-        let request=ExecCommandRequest {
-            command:vec!["/bin/sh".into(),"-c".into(),script.into()],
-            shell:ShellInvocation {shell:Shell {shell_type:ShellType::Sh,shell_path:"/bin/sh".into()},use_login_shell:false},
-            hook_command:script.into(),process_id,yield_time_ms:10000,max_output_tokens:None,
-            cwd:cwd.clone(),sandbox_cwd:cwd,turn_environment:environment,network:None,tty:false,
-            sandbox_permissions:SandboxPermissions::UseDefault,additional_permissions:None,
-            additional_permissions_preapproved:false,justification:None,prefix_rule:None,
+        let root = tempfile::tempdir().expect("isolated effect root");
+        let (session, mut turn) = crate::session::tests::make_session_and_context().await;
+        let cwd = codex_utils_path_uri::PathUri::from_host_native_path(root.path()).unwrap();
+        let TurnEnvironmentState::Ready(environment) =
+            turn.initial_environments.environments.first_mut().unwrap()
+        else {
+            panic!("local environment")
         };
-        let work=tokio::spawn(async move {UnifiedExecProcessManager::exec_command_to_completion(request,&context,Duration::from_secs(10)).await});
-        tokio::time::timeout(Duration::from_secs(5),barrier.reached.notified()).await.expect("real spawn reached exact pre-publication boundary");
-        let process=barrier.process.lock().await.clone().expect("actual child owned by startup");
+        environment.selection.cwd = cwd.clone();
+        environment.selection.workspace_roots = vec![cwd.clone()];
+        environment.config_mut().workspace_roots = vec![cwd.clone()];
+        environment.config_mut().permission_profile =
+            crate::config::PermissionProfileSnapshot::legacy(
+                codex_protocol::models::PermissionProfile::workspace_write(),
+            );
+        let environment = environment.clone();
+        let cancellation = CancellationToken::new();
+        let barrier = PublicationBarrier::default();
+        struct ReleaseOnDrop(Arc<tokio::sync::Notify>);
+        impl Drop for ReleaseOnDrop {
+            fn drop(&mut self) {
+                self.0.notify_one();
+            }
+        }
+        let _release_on_drop = ReleaseOnDrop(Arc::clone(&barrier.release));
+        let _cancel_on_drop = cancellation.clone().drop_guard();
+        turn.extension_data.insert(barrier.clone());
+        turn.extension_data
+            .insert(TaskAuthorizationContext(Arc::new(CommandAuthority(
+                cancellation.clone(),
+            ))));
+        mark_task_thread(&session.thread_id.to_string()).unwrap();
+        let session = Arc::new(session);
+        let context = UnifiedExecContext::new(
+            Arc::clone(&session),
+            StepContext::for_test(Arc::new(turn)),
+            cancellation.clone(),
+            "publication-race".into(),
+        );
+        let process_id = session
+            .services
+            .unified_exec_manager
+            .allocate_process_id()
+            .await;
+        let script =
+            "while [ ! -f allow-late ]; do sleep 0.01; done; printf unauthorized > late.txt";
+        let request = ExecCommandRequest {
+            command: vec!["/bin/sh".into(), "-c".into(), script.into()],
+            shell: ShellInvocation {
+                shell: Shell {
+                    shell_type: ShellType::Sh,
+                    shell_path: "/bin/sh".into(),
+                },
+                use_login_shell: false,
+            },
+            hook_command: script.into(),
+            process_id,
+            yield_time_ms: 10000,
+            max_output_tokens: None,
+            cwd: cwd.clone(),
+            sandbox_cwd: cwd,
+            turn_environment: environment,
+            network: None,
+            tty: false,
+            sandbox_permissions: SandboxPermissions::UseDefault,
+            additional_permissions: None,
+            additional_permissions_preapproved: false,
+            justification: None,
+            prefix_rule: None,
+        };
+        let work = tokio::spawn(async move {
+            UnifiedExecProcessManager::exec_command_to_completion(
+                request,
+                &context,
+                Duration::from_secs(10),
+            )
+            .await
+        });
+        tokio::time::timeout(Duration::from_secs(5), barrier.reached.notified())
+            .await
+            .expect("real spawn reached exact pre-publication boundary");
+        let process = barrier
+            .process
+            .lock()
+            .await
+            .clone()
+            .expect("actual child owned by startup");
         assert!(!process.has_exited());
         cancellation.cancel();
-        tokio::time::timeout(Duration::from_secs(5),barrier.startup_owned.notified()).await.expect("cancellation selected the unpublished-handle path");
-        assert!(!work.is_finished(),"cancellation must await, not abandon blocked startup");
+        tokio::time::timeout(Duration::from_secs(5), barrier.startup_owned.notified())
+            .await
+            .expect("cancellation selected the unpublished-handle path");
+        assert!(
+            !work.is_finished(),
+            "cancellation must await, not abandon blocked startup"
+        );
         barrier.release.notify_one();
-        let result=tokio::time::timeout(Duration::from_secs(5),work).await.expect("cleanup finishes").unwrap();
+        let result = tokio::time::timeout(Duration::from_secs(5), work)
+            .await
+            .expect("cleanup finishes")
+            .unwrap();
         assert!(result.is_err());
-        assert!(process.has_exited(),"actual child reaped before one-shot returns");
-        assert!(process.exit_code().is_some(),"terminal process status observed");
-        std::fs::write(root.path().join("allow-late"),b"release delayed effect").unwrap();
+        assert!(
+            process.has_exited(),
+            "actual child reaped before one-shot returns"
+        );
+        assert!(
+            process.exit_code().is_some(),
+            "terminal process status observed"
+        );
+        std::fs::write(root.path().join("allow-late"), b"release delayed effect").unwrap();
         tokio::time::sleep(Duration::from_millis(200)).await;
-        assert!(!root.path().join("late.txt").exists(),"reaped child cannot perform delayed effects");
-        assert!(session.services.unified_exec_manager.process_store.lock().await.processes.is_empty(),"no resumable process remains");
+        assert!(
+            !root.path().join("late.txt").exists(),
+            "reaped child cannot perform delayed effects"
+        );
+        assert!(
+            session
+                .services
+                .unified_exec_manager
+                .process_store
+                .lock()
+                .await
+                .processes
+                .is_empty(),
+            "no resumable process remains"
+        );
     }
 }

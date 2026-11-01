@@ -987,8 +987,8 @@ fn broad(task: &Task, id: &str, expected: u64, mode: &str, reach: &str) -> SetBr
     }
 }
 
-const NO_PROMPT: &str = "No prompt: commands on this Task run inside the sandbox on this device, and you will not be asked before actions.";
-const FULL_ACCESS: &str = "Full access: commands on this Task run without sandbox limits on this device, and you will not be asked before actions.";
+const NO_PROMPT: &str = inquello_domain::execution_policy::BroadMode::NoPrompt.reach();
+const FULL_ACCESS: &str = inquello_domain::execution_policy::BroadMode::FullAccess.reach();
 
 async fn broad_revision(store: &SqliteWorkingStore, task: &Task) -> Revision {
     store

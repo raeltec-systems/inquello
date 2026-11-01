@@ -120,10 +120,24 @@ fn every_fixture_file_is_covered() {
     let (top, dirs) = entries(&fixtures_dir(), "");
     let covered: BTreeSet<String> = FIXTURES.iter().map(ToString::to_string).collect();
     assert_eq!(top, covered);
-    assert_eq!(dirs, BTreeSet::from(["workspace".to_string()]));
+    assert_eq!(
+        dirs,
+        BTreeSet::from(["workspace".to_string(), "inference".to_string()])
+    );
     let (workspace, nested) = entries(&fixtures_dir().join("workspace"), "workspace/");
     let covered: BTreeSet<String> = WORKSPACE_FIXTURES.iter().map(ToString::to_string).collect();
     assert_eq!(workspace, covered);
+    assert!(nested.is_empty());
+    // These are exercised by tests/inference.rs; keep the inventory exhaustive.
+    let (inference, nested) = entries(&fixtures_dir().join("inference"), "");
+    assert_eq!(
+        inference,
+        BTreeSet::from([
+            "claude-api-key-events.json".to_string(),
+            "codex-responses-events.json".to_string(),
+            "messages-request.json".to_string(),
+        ])
+    );
     assert!(nested.is_empty());
 }
 
@@ -318,13 +332,20 @@ fn credential_debug_output_is_redacted() {
 fn local_mcp_switch_round_trips_without_coercion() {
     for enabled in [false, true] {
         let value = json!({ "allow_local_mcp_servers": enabled });
-        let parsed: ExecutionSection = serde_json::from_value(value.clone()).expect("boolean switch");
+        let parsed: ExecutionSection =
+            serde_json::from_value(value.clone()).expect("boolean switch");
         assert_eq!(parsed.allow_local_mcp_servers, Some(enabled));
-        assert_eq!(serde_json::to_value(parsed).expect("serialize switch"), value);
+        assert_eq!(
+            serde_json::to_value(parsed).expect("serialize switch"),
+            value
+        );
     }
     for invalid in [json!("true"), json!(1), json!([]), json!({})] {
-        assert!(serde_json::from_value::<ExecutionSection>(json!({
-            "allow_local_mcp_servers": invalid,
-        })).is_err());
+        assert!(
+            serde_json::from_value::<ExecutionSection>(json!({
+                "allow_local_mcp_servers": invalid,
+            }))
+            .is_err()
+        );
     }
 }

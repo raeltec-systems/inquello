@@ -183,10 +183,10 @@ fn configured_store_path() -> Option<PathBuf> {
     }
 }
 
-#[path = "inquello_routes.rs"]
-mod route_bridge;
 #[path = "inquello_reviewer.rs"]
 mod reviewer;
+#[path = "inquello_routes.rs"]
+mod route_bridge;
 #[path = "inquello_search.rs"]
 mod search_bridge;
 #[path = "inquello_tasks.rs"]
@@ -208,10 +208,19 @@ struct BootstrapTransition<'a> {
 }
 impl Drop for BootstrapTransition<'_> {
     fn drop(&mut self) {
-        let mut states = self.states.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut states = self
+            .states
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let state = states.entry(self.connection).or_default();
-        state.transitions = state.transitions.checked_sub(1).expect("balanced identity transition");
-        state.generation = state.generation.checked_add(1).expect("bootstrap generation exhausted");
+        state.transitions = state
+            .transitions
+            .checked_sub(1)
+            .expect("balanced identity transition");
+        state.generation = state
+            .generation
+            .checked_add(1)
+            .expect("bootstrap generation exhausted");
     }
 }
 
@@ -219,19 +228,22 @@ pub(crate) struct InquelloRequestProcessor {
     task_config: Option<super::ConfigRequestProcessor>,
     // Unit fixtures replace local policy I/O only, never route evidence/approval.
     #[cfg(test)]
-    task_layer_fixture: Option<(DeviceRequirements,UserConfig)>,
-    authority_generations: Mutex<HashMap<ConnectionId,u64>>,
-    #[cfg(all(feature="inference-fixtures",debug_assertions))]
-    task_fixtures: tokio::sync::Mutex<HashMap<ConnectionId,tasks_bridge::TaskFixture>>,
+    task_layer_fixture: Option<(DeviceRequirements, UserConfig)>,
+    authority_generations: Mutex<HashMap<ConnectionId, u64>>,
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    task_fixtures: tokio::sync::Mutex<HashMap<ConnectionId, tasks_bridge::TaskFixture>>,
     task_outgoing: Option<std::sync::Arc<crate::outgoing_message::OutgoingMessageSender>>,
     task_start_lock: tokio::sync::Mutex<()>,
-    task_runtime_lease: Mutex<Option<(std::fs::File,String)>>,
-    task_bootstrap_generations: Mutex<HashMap<ConnectionId,BootstrapAdmission>>,
+    task_runtime_lease: Mutex<Option<(std::fs::File, String)>>,
+    task_bootstrap_generations: Mutex<HashMap<ConnectionId, BootstrapAdmission>>,
     task_sessions: tokio::sync::Mutex<HashMap<ConnectionId, tasks_bridge::SessionBinding>>,
     task_progress_cache: tokio::sync::Mutex<Vec<tasks_bridge::ProgressCache>>,
     routes: reviewer::RouteRuntime,
     runtime_id: String,
-    usage_sources: Option<(std::sync::Arc<super::AccountRequestProcessor>, super::CatalogRequestProcessor)>,
+    usage_sources: Option<(
+        std::sync::Arc<super::AccountRequestProcessor>,
+        super::CatalogRequestProcessor,
+    )>,
     store_path: Option<PathBuf>,
     /// Roots the agent can write; the store may not live inside one.
     agent_writable_roots: Vec<PathBuf>,
@@ -253,7 +265,7 @@ impl InquelloRequestProcessor {
             #[cfg(test)]
             task_layer_fixture: None,
             authority_generations: Mutex::new(HashMap::new()),
-            #[cfg(all(feature="inference-fixtures",debug_assertions))]
+            #[cfg(all(feature = "inference-fixtures", debug_assertions))]
             task_fixtures: tokio::sync::Mutex::new(HashMap::new()),
             task_outgoing: None,
             task_start_lock: tokio::sync::Mutex::new(()),
@@ -273,30 +285,60 @@ impl InquelloRequestProcessor {
 
     // Closed entries are retained: delayed requests cannot reopen a connection.
     fn begin_task_bootstrap(&self, connection: ConnectionId) -> Result<u64, JSONRPCErrorError> {
-        let mut states = self.task_bootstrap_generations.lock().map_err(|_|refusal("authority_unknown","Session fence unavailable"))?;
+        let mut states = self
+            .task_bootstrap_generations
+            .lock()
+            .map_err(|_| refusal("authority_unknown", "Session fence unavailable"))?;
         let state = states.entry(connection).or_default();
         if state.closed || state.transitions != 0 {
-            return Err(refusal("stale","Identity transition or closed connection prevents session setup"));
+            return Err(refusal(
+                "stale",
+                "Identity transition or closed connection prevents session setup",
+            ));
         }
-        state.generation = state.generation.checked_add(1).expect("bootstrap generation exhausted");
+        state.generation = state
+            .generation
+            .checked_add(1)
+            .expect("bootstrap generation exhausted");
         Ok(state.generation)
     }
 
-    fn begin_bootstrap_transition(&self, connection: ConnectionId, close: bool) -> BootstrapTransition<'_> {
-        let mut states = self.task_bootstrap_generations.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    fn begin_bootstrap_transition(
+        &self,
+        connection: ConnectionId,
+        close: bool,
+    ) -> BootstrapTransition<'_> {
+        let mut states = self
+            .task_bootstrap_generations
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let state = states.entry(connection).or_default();
-        state.generation = state.generation.checked_add(1).expect("bootstrap generation exhausted");
-        state.transitions = state.transitions.checked_add(1).expect("identity transition count exhausted");
+        state.generation = state
+            .generation
+            .checked_add(1)
+            .expect("bootstrap generation exhausted");
+        state.transitions = state
+            .transitions
+            .checked_add(1)
+            .expect("identity transition count exhausted");
         state.closed |= close;
-        BootstrapTransition { states: &self.task_bootstrap_generations, connection }
+        BootstrapTransition {
+            states: &self.task_bootstrap_generations,
+            connection,
+        }
     }
 
     pub(crate) async fn connection_closed(&self, connection_id: ConnectionId) {
         let _transition = self.begin_bootstrap_transition(connection_id, true);
-        if let Ok(mut generations)=self.authority_generations.lock() {let generation=generations.entry(connection_id).or_insert(1);*generation=generation.saturating_add(1);}
-        #[cfg(all(feature="inference-fixtures",debug_assertions))]
+        if let Ok(mut generations) = self.authority_generations.lock() {
+            let generation = generations.entry(connection_id).or_insert(1);
+            *generation = generation.saturating_add(1);
+        }
+        #[cfg(all(feature = "inference-fixtures", debug_assertions))]
         self.task_fixtures.lock().await.remove(&connection_id);
-        if let Some(session)=self.task_sessions.lock().await.remove(&connection_id) {session.cancellation.cancel();}
+        if let Some(session) = self.task_sessions.lock().await.remove(&connection_id) {
+            session.cancellation.cancel();
+        }
         let mut state = self.routes.state.lock().await;
         if let Some(principal) = self.principals_guard().remove(&connection_id) {
             self.routes.invalidate_principal(&mut state, principal);
@@ -317,10 +359,15 @@ impl InquelloRequestProcessor {
         params: InquelloSetPrincipalParams,
     ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
         let _transition = self.begin_bootstrap_transition(connection_id, false);
-        if let Ok(mut generations)=self.authority_generations.lock() {let generation=generations.entry(connection_id).or_insert(1);*generation=generation.saturating_add(1);}
-        #[cfg(all(feature="inference-fixtures",debug_assertions))]
+        if let Ok(mut generations) = self.authority_generations.lock() {
+            let generation = generations.entry(connection_id).or_insert(1);
+            *generation = generation.saturating_add(1);
+        }
+        #[cfg(all(feature = "inference-fixtures", debug_assertions))]
         self.task_fixtures.lock().await.remove(&connection_id);
-        if let Some(session) = self.task_sessions.lock().await.remove(&connection_id) { session.cancellation.cancel(); }
+        if let Some(session) = self.task_sessions.lock().await.remove(&connection_id) {
+            session.cancellation.cancel();
+        }
         let mut state = self.routes.state.lock().await;
         let mut principals = self.principals_guard();
         if let Some(principal) = principals.get(&connection_id).copied() {
@@ -387,9 +434,21 @@ impl InquelloRequestProcessor {
             .map_err(domain_error)?;
         let mut current = Vec::new();
         for workspace in known {
-            if self.current_workspace_metadata(connection_id, actor, &workspace.workspace_id.to_string()).await.is_ok() { current.push(workspace); }
+            if self
+                .current_workspace_metadata(
+                    connection_id,
+                    actor,
+                    &workspace.workspace_id.to_string(),
+                )
+                .await
+                .is_ok()
+            {
+                current.push(workspace);
+            }
         }
-        if self.actor(connection_id)? != actor { return Err(refusal("not_found", "Private work unavailable")); }
+        if self.actor(connection_id)? != actor {
+            return Err(refusal("not_found", "Private work unavailable"));
+        }
         let known = current;
         Ok(Some(
             InquelloWorkspaceListResponse {
@@ -412,31 +471,69 @@ impl InquelloRequestProcessor {
         params: InquelloWorkspaceTreeParams,
     ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
         let (store, actor) = self.context(connection_id).await?;
-        self.current_workspace_metadata(connection_id,actor,&params.workspace_id).await?;
-        let inventory=self.saved_inventory(connection_id,actor,&params.workspace_id,None).await?;
-        let tree=organise::workspace_tree(&store,actor,&params.workspace_id).await.map_err(domain_error)?;
-        if tree.tasks.len()+tree.engagements.len()>2000{return Err(refusal("search_unavailable","Workspace navigation exceeds its bounded scope"));}
-        let mut tasks=Vec::new();let mut unavailable_tasks=Vec::new();let mut disclosed=Vec::new();
+        self.current_workspace_metadata(connection_id, actor, &params.workspace_id)
+            .await?;
+        let inventory = self
+            .saved_inventory(connection_id, actor, &params.workspace_id, None)
+            .await?;
+        let tree = organise::workspace_tree(&store, actor, &params.workspace_id)
+            .await
+            .map_err(domain_error)?;
+        if tree.tasks.len() + tree.engagements.len() > 2000 {
+            return Err(refusal(
+                "search_unavailable",
+                "Workspace navigation exceeds its bounded scope",
+            ));
+        }
+        let mut tasks = Vec::new();
+        let mut unavailable_tasks = Vec::new();
+        let mut disclosed = Vec::new();
         for task in &tree.tasks {
-            let available=self.authorize_saved_task(connection_id,actor,task,&inventory).await.is_ok();
-            match private_task_tree_item(task,actor,&params.workspace_id,available){
-                Some(Ok(view))=>{tasks.push(view);disclosed.push(task.clone());},Some(Err(task))=>unavailable_tasks.push(task),None=>{},
+            let available = self
+                .authorize_saved_task(connection_id, actor, task, &inventory)
+                .await
+                .is_ok();
+            match private_task_tree_item(task, actor, &params.workspace_id, available) {
+                Some(Ok(view)) => {
+                    tasks.push(view);
+                    disclosed.push(task.clone());
+                }
+                Some(Err(task)) => unavailable_tasks.push(task),
+                None => {}
             }
         }
-        let mut engagements=Vec::new();let mut accessible=std::collections::HashSet::new();let mut disclosed_engagements=Vec::new();
+        let mut engagements = Vec::new();
+        let mut accessible = std::collections::HashSet::new();
+        let mut disclosed_engagements = Vec::new();
         for engagement in &tree.engagements {
-            if self.authorize_saved_context(&inventory,&params.workspace_id,Some(&engagement.service_engagement_id.to_string())).is_ok(){
-                accessible.insert(engagement.engagement_id);engagements.push(engagement_view(engagement));disclosed_engagements.push(engagement.clone());
+            if self
+                .authorize_saved_context(
+                    &inventory,
+                    &params.workspace_id,
+                    Some(&engagement.service_engagement_id.to_string()),
+                )
+                .is_ok()
+            {
+                accessible.insert(engagement.engagement_id);
+                engagements.push(engagement_view(engagement));
+                disclosed_engagements.push(engagement.clone());
             }
         }
-        let internal_disclosure_fence=self.saved_tree_fence(actor,inventory,&disclosed,&disclosed_engagements)?;
+        let internal_disclosure_fence =
+            self.saved_tree_fence(actor, inventory, &disclosed, &disclosed_engagements)?;
         Ok(Some(
             InquelloWorkspaceTreeResponse {
                 internal_disclosure_fence,
                 workspace_id: params.workspace_id,
                 engagements,
-                folders: tree.folders.iter().filter(|folder|accessible.contains(&folder.engagement_id)).map(folder_view).collect(),
-                tasks, unavailable_tasks,
+                folders: tree
+                    .folders
+                    .iter()
+                    .filter(|folder| accessible.contains(&folder.engagement_id))
+                    .map(folder_view)
+                    .collect(),
+                tasks,
+                unavailable_tasks,
             }
             .into(),
         ))
@@ -648,23 +745,14 @@ impl InquelloRequestProcessor {
         connection_id: ConnectionId,
         params: InquelloTaskAttachThreadParams,
     ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
-        let (store, actor) = self.context(connection_id).await?;
-        let outcome = organise::attach_thread(
-            &store,
-            &SystemClock,
-            actor,
-            organise::AttachThread {
-                operation_id: params.operation_id,
-                expected_revision: Revision::new(params.expected_revision),
-                workspace_id: params.workspace_id,
-                task_id: params.task_id,
-                runtime_thread_id: params.runtime_thread_id,
-            },
-        )
-        .await
-        .map_err(domain_error)?;
-        task_response(&outcome)
-            .map(|response| Some(ClientResponsePayload::InquelloTaskAttachThread(response)))
+        // A caller-supplied thread ID is not proof of retained Task ownership
+        // or provenance. Native Task startup binds its own reserved thread via
+        // the run journal; reject this legacy path before any mutation.
+        let _ = (connection_id, params);
+        Err(refusal(
+            "unsupported",
+            "Task threads can only be bound by the native Task start workflow",
+        ))
     }
 
     // ---- Task states (Story 1.15) ------------------------------------------------
@@ -745,16 +833,32 @@ impl InquelloRequestProcessor {
         device: DeviceRequirements,
         user: UserConfig,
     ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
-        self.observe_review_authority(connection_id, &params.workspace_policy, &device, &user).await?;
+        self.observe_review_authority(connection_id, &params.workspace_policy, &device, &user)
+            .await?;
         let actor = self.actor(connection_id)?;
         let layer = workspace_layer(&params.workspace_policy)?;
         let policy = execution_policy::effective_policy(&layer, &device, &user);
         let route_available = if let Some(task_id) = &params.task_id {
             let state = self.routes.state.lock().await;
-            let selected = inquello_domain::routes::task_route(&self.store().await?, actor, task_id).await.map_err(domain_error)?;
-            let credential = selected.current.as_ref().is_some_and(|record| state.credential(actor.principal_id, &record.configuration).is_some());
-            selected.eligibility(credential, true, inquello_domain::routes::DataTier::Synthetic).enabled
-        } else { false };
+            let selected =
+                inquello_domain::routes::task_route(&self.store().await?, actor, task_id)
+                    .await
+                    .map_err(domain_error)?;
+            let credential = selected.current.as_ref().is_some_and(|record| {
+                state
+                    .credential(actor.principal_id, &record.configuration)
+                    .is_some()
+            });
+            selected
+                .eligibility(
+                    credential,
+                    true,
+                    inquello_domain::routes::DataTier::Synthetic,
+                )
+                .enabled
+        } else {
+            false
+        };
         let task = match params.task_id {
             Some(task_id) => {
                 let store = self.store().await?;
@@ -829,7 +933,8 @@ impl InquelloRequestProcessor {
     ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
         let mut review_state = self.routes.state.lock().await;
         let (store, actor) = self.context(connection_id).await?;
-        self.routes.cancel_principal_reviews(&mut review_state, actor.principal_id);
+        self.routes
+            .cancel_principal_reviews(&mut review_state, actor.principal_id);
 
         let writer = state_writer(&params.actor_kind, params.actor_ref)?;
         let layer = workspace_layer(&params.workspace_policy)?;
@@ -874,6 +979,7 @@ impl InquelloRequestProcessor {
 /// write into the runtime's user configuration, when bounded, and the
 /// runtime's own `command/exec` params.
 pub(crate) struct ToolsExecPlan {
+    pub(crate) wsl: Option<crate::inquello_wsl::WslExecPlan>,
     /// `(key path, value)` pairs: the network proxy feature (without it a
     /// profile's network would not go through the proxy), the runtime's
     /// default permissions (the built-in `:read-only`, which the runtime
@@ -981,14 +1087,49 @@ impl InquelloRequestProcessor {
             ));
         }
         let profile = execution_policy::tool_profile(policy, evaluated.status, folder);
+        if cfg!(windows) && !profile.reach.bounded {
+            crate::inquello_wsl::require_windows_binding(
+                profile.folder.root(),
+                &actor.principal_id.to_string(),
+            )
+            .map_err(|_| {
+                failure(
+                    "execution_unavailable",
+                    "Verified Windows Task file transition required",
+                )
+            })?;
+        }
         let runtime = runtime_profile(&profile);
+        let wsl = if cfg!(windows) && profile.reach.bounded {
+            if !matches!(params.timeout_ms, None | Some(1..=120_000)) {
+                return Err(refusal(
+                    "invalid",
+                    "timeout must be between 1 and 120000 milliseconds",
+                ));
+            }
+            Some(crate::inquello_wsl::WslExecPlan {
+                scope: crate::inquello_wsl::scope_key(
+                    profile
+                        .folder
+                        .root()
+                        .parent()
+                        .ok_or_else(|| refusal("invalid", "Task parent missing"))?,
+                    &actor.principal_id.to_string(),
+                )
+                .map_err(|_| failure("execution_unavailable", "Task scope unavailable"))?,
+                task_id: params.task_id.clone(),
+                command: command.clone(),
+                writable: !profile.writable_roots().is_empty(),
+                domains: profile.network_allowlist().unwrap_or_default().to_vec(),
+                timeout_ms: params.timeout_ms,
+            })
+        } else {
+            None
+        };
         let cwd = profile.folder.root().to_path_buf();
         let reviewer = (
             "approvals_reviewer".to_string(),
-            json!(
-                execution_policy::permission_reviewer(policy, false)
-                    .runtime_setting()
-            ),
+            json!(execution_policy::permission_reviewer(policy, false).runtime_setting()),
         );
         let (config_edits, sandbox_policy, permission_profile) =
             match (runtime.permission_profile_id, runtime.permission_profile) {
@@ -1009,6 +1150,7 @@ impl InquelloRequestProcessor {
                 ),
             };
         Ok(ToolsExecPlan {
+            wsl,
             config_edits,
             exec: CommandExecParams {
                 command,
@@ -1161,7 +1303,8 @@ impl InquelloRequestProcessor {
     ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
         let mut review_state = self.routes.state.lock().await;
         let (store, actor) = self.context(connection_id).await?;
-        self.routes.cancel_principal_reviews(&mut review_state, actor.principal_id);
+        self.routes
+            .cancel_principal_reviews(&mut review_state, actor.principal_id);
 
         let outcome = execution_policy::set_user_rules(
             &store,
@@ -1294,8 +1437,10 @@ impl InquelloRequestProcessor {
             }
             ("system", Some(reference)) => execution_policy::Decider::System { reference },
             ("automated_reviewer", _) => {
-                return Err(refusal("reviewer_not_available",
-                    "Only a trusted runtime-created invocation can record automated permission review"));
+                return Err(refusal(
+                    "reviewer_not_available",
+                    "Only a trusted runtime-created invocation can record automated permission review",
+                ));
             }
             ("system", None) => return Err(invalid("this actor needs an actor reference")),
             _ => {
@@ -1361,7 +1506,9 @@ fn reviewer_view(policy: &EffectivePolicy, route_available: bool) -> InquelloPer
         state: state.kind().to_string(),
         label: if state == execution_policy::ReviewerState::NotAvailable {
             "Automated permission review: not available (no verified eligible Task route)".into()
-        } else { state.label().to_string() },
+        } else {
+            state.label().to_string()
+        },
         runtime_setting: state.runtime_setting().to_string(),
     }
 }
@@ -1888,14 +2035,29 @@ fn folder_view(folder: &organise::Folder) -> InquelloFolder {
 }
 
 /// Only current creator/Workspace ownership permits even an unavailable item ID.
-fn private_task_tree_item(task:&organise::Task,actor:Actor,workspace:&str,available:bool)
-    ->Option<Result<InquelloTask,codex_app_server_protocol::InquelloUnavailableTask>> {
-    if task.creator_principal_id!=actor.principal_id || task.workspace_id.to_string()!=workspace {return None;}
-    Some(if available {Ok(task_view(task))}else{Err(codex_app_server_protocol::InquelloUnavailableTask{task_id:task.task_id.to_string(),reason:"current_authority_unavailable".into()})})
+fn private_task_tree_item(
+    task: &organise::Task,
+    actor: Actor,
+    workspace: &str,
+    available: bool,
+) -> Option<Result<InquelloTask, codex_app_server_protocol::InquelloUnavailableTask>> {
+    if task.creator_principal_id != actor.principal_id || task.workspace_id.to_string() != workspace
+    {
+        return None;
+    }
+    Some(if available {
+        Ok(task_view(task))
+    } else {
+        Err(codex_app_server_protocol::InquelloUnavailableTask {
+            task_id: task.task_id.to_string(),
+            reason: "current_authority_unavailable".into(),
+        })
+    })
 }
 fn task_view(task: &organise::Task) -> InquelloTask {
     InquelloTask {
-        pinned: task.pinned, archived: task.archived,
+        pinned: task.pinned,
+        archived: task.archived,
         task_id: task.task_id.to_string(),
         workspace_id: task.workspace_id.to_string(),
         creator_principal_id: task.creator_principal_id.to_string(),
@@ -2040,10 +2202,19 @@ mod tests;
 
 #[cfg(all(feature = "inference-fixtures", debug_assertions))]
 impl InquelloRequestProcessor {
-    pub(crate) fn fixture_principal(&self, connection: ConnectionId) -> Result<String, JSONRPCErrorError> {
-        self.actor(connection).map(|actor| actor.principal_id.to_string())
+    pub(crate) fn fixture_principal(
+        &self,
+        connection: ConnectionId,
+    ) -> Result<String, JSONRPCErrorError> {
+        self.actor(connection)
+            .map(|actor| actor.principal_id.to_string())
     }
 }
 
 /// Bounded saved navigation returns a truthful retryable failure, never an indefinite spinner.
-pub(crate) fn saved_timeout_error()->JSONRPCErrorError {refusal("search_unavailable","Saved inspection timed out or was cancelled; try again")}
+pub(crate) fn saved_timeout_error() -> JSONRPCErrorError {
+    refusal(
+        "search_unavailable",
+        "Saved inspection timed out or was cancelled; try again",
+    )
+}

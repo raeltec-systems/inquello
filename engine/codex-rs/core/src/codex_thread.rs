@@ -268,7 +268,9 @@ impl CodexThread {
     /// The next turn consumes the warmup through the existing startup handoff.
     /// Call after installing host services such as the thread's attestation routing.
     pub async fn prewarm(&self) {
-        if crate::inquello_inference::is_task_thread(&self.session.thread_id.to_string()) { return; }
+        if crate::inquello_inference::is_task_thread(&self.session.thread_id.to_string()) {
+            return;
+        }
         self.session
             .schedule_startup_prewarm(PrewarmInput::Base)
             .await;
@@ -278,7 +280,9 @@ impl CodexThread {
     /// Sends `generate: false`; the next turn reuses the prepared response only if its prompt
     /// still extends this history and its request settings match. Uses the same handoff as `prewarm`.
     pub async fn prewarm_with_history(&self) {
-        if crate::inquello_inference::is_task_thread(&self.session.thread_id.to_string()) { return; }
+        if crate::inquello_inference::is_task_thread(&self.session.thread_id.to_string()) {
+            return;
+        }
         self.session
             .schedule_startup_prewarm(PrewarmInput::History)
             .await;
@@ -1289,12 +1293,13 @@ impl CodexThread {
     }
 }
 
-
 /// Shared by the direct metadata and rollout append APIs, before either obtains
 /// its live-thread writer. Ordinary non-Inquello threads retain their behavior.
-async fn require_current_private_write(thread_id:&str)->ThreadStoreResult<()> {
+async fn require_current_private_write(thread_id: &str) -> ThreadStoreResult<()> {
     if !crate::inquello_inference::authorize_thread_disclosure(thread_id).await {
-        return Err(ThreadStoreError::Internal{message:"Current private Task authority unavailable".into()});
+        return Err(ThreadStoreError::Internal {
+            message: "Current private Task authority unavailable".into(),
+        });
     }
     Ok(())
 }
@@ -1302,19 +1307,21 @@ async fn require_current_private_write(thread_id:&str)->ThreadStoreResult<()> {
 #[cfg(test)]
 mod private_direct_writer_tests {
     use super::*;
-    use std::sync::{Arc,atomic::Ordering};
+    use std::sync::{Arc, atomic::Ordering};
     #[tokio::test]
-    async fn direct_write_boundary_allows_current_owner_and_denies_unknown_revoked_and_late_allow() {
-        let id=uuid::Uuid::new_v4().to_string();
-        let authority=Arc::new(crate::inquello_inference::effect_test_support::Authority::new());
-        let guard:Arc<dyn crate::inquello_inference::TaskAuthorization>=authority.clone();
-        crate::inquello_inference::bind_task_authorization(&id,&guard).expect("bind");
+    async fn direct_write_boundary_allows_current_owner_and_denies_unknown_revoked_and_late_allow()
+    {
+        let id = uuid::Uuid::new_v4().to_string();
+        let authority = Arc::new(crate::inquello_inference::effect_test_support::Authority::new());
+        let guard: Arc<dyn crate::inquello_inference::TaskAuthorization> = authority.clone();
+        crate::inquello_inference::bind_task_authorization(&id, &guard).expect("bind");
         assert!(require_current_private_write(&id).await.is_ok());
-        authority.current.store(false,Ordering::SeqCst);
+        authority.current.store(false, Ordering::SeqCst);
         assert!(require_current_private_write(&id).await.is_err());
-        authority.current.store(true,Ordering::SeqCst);
+        authority.current.store(true, Ordering::SeqCst);
         assert!(require_current_private_write(&id).await.is_err());
-        let missing=uuid::Uuid::new_v4().to_string();crate::inquello_inference::mark_task_thread(&missing).expect("mark");
+        let missing = uuid::Uuid::new_v4().to_string();
+        crate::inquello_inference::mark_task_thread(&missing).expect("mark");
         assert!(require_current_private_write(&missing).await.is_err());
     }
 }

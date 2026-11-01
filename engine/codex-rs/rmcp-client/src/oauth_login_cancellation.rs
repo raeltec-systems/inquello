@@ -96,10 +96,15 @@ mod tests {
         let writes = AtomicUsize::new(0);
         assert_eq!(login.cancel().await, OAuthLoginState::Cancelled);
         // A late provider result tries to persist after cancellation succeeded.
-        assert!(login.persist(async {
-            writes.fetch_add(1, Ordering::SeqCst);
-            Ok(())
-        }).await.is_err());
+        assert!(
+            login
+                .persist(async {
+                    writes.fetch_add(1, Ordering::SeqCst);
+                    Ok(())
+                })
+                .await
+                .is_err()
+        );
         assert_eq!(writes.load(Ordering::SeqCst), 0);
         login.fail().await;
         assert_eq!(login.state().await, OAuthLoginState::Cancelled);
@@ -114,12 +119,14 @@ mod tests {
         let (entered_tx, entered_rx) = oneshot::channel();
         let (release_tx, release_rx) = oneshot::channel();
         let writing = tokio::spawn(async move {
-            writer.persist(async move {
-                let _ = entered_tx.send(());
-                let _ = release_rx.await;
-                stored.fetch_add(1, Ordering::SeqCst);
-                Ok(())
-            }).await
+            writer
+                .persist(async move {
+                    let _ = entered_tx.send(());
+                    let _ = release_rx.await;
+                    stored.fetch_add(1, Ordering::SeqCst);
+                    Ok(())
+                })
+                .await
         });
         assert!(entered_rx.await.is_ok());
         let cancelling = tokio::spawn(async move { login.cancel().await });
@@ -134,7 +141,12 @@ mod tests {
     #[tokio::test]
     async fn failed_write_and_completed_write_are_not_claimed_as_cancelled() {
         let failed = OAuthLoginCancellation::default();
-        assert!(failed.persist(async { bail!("isolated store unavailable") }).await.is_err());
+        assert!(
+            failed
+                .persist(async { bail!("isolated store unavailable") })
+                .await
+                .is_err()
+        );
         assert_eq!(failed.cancel().await, OAuthLoginState::Failed);
         let completed = OAuthLoginCancellation::default();
         assert!(completed.persist(async { Ok(()) }).await.is_ok());

@@ -2081,7 +2081,8 @@ impl PluginsManager {
         config_layer_stack: &ConfigLayerStack,
         request: PluginInstallRequest,
     ) -> Result<PluginInstallOutcome, PluginInstallError> {
-        self.install_plugin_with_mcp_admission(config_layer_stack, request, None).await
+        self.install_plugin_with_mcp_admission(config_layer_stack, request, None)
+            .await
     }
 
     pub async fn install_plugin_with_mcp_admission(
@@ -2807,7 +2808,8 @@ impl PluginsManager {
                 app_category_by_id.insert(app.connector_id.0.clone(), category.clone());
             }
         }
-        let mcp_server_admissions = crate::mcp_admission::inspect_plugin_mcp_admissions(source_path.as_path()).ok();
+        let mcp_server_admissions =
+            crate::mcp_admission::inspect_plugin_mcp_admissions(source_path.as_path()).ok();
         let mut mcp_server_names = mcp_servers.into_keys().collect::<Vec<_>>();
         mcp_server_names.sort_unstable();
         mcp_server_names.dedup();

@@ -103,7 +103,11 @@ impl ExecCommandHandler {
     }
 
     pub(crate) fn private_one_shot(options: ExecCommandHandlerOptions) -> Self {
-        Self { options, lifetime: ExecCommandLifetime::OneShot, private_task: true }
+        Self {
+            options,
+            lifetime: ExecCommandLifetime::OneShot,
+            private_task: true,
+        }
     }
 
     pub(crate) fn one_shot(options: ExecCommandHandlerOptions) -> Self {
@@ -132,10 +136,19 @@ impl ToolExecutor<ToolInvocation> for ExecCommandHandler {
             ExecCommandLifetime::Interactive => spec,
             ExecCommandLifetime::OneShot => one_shot_exec_command_spec(spec),
         };
-        if self.private_task && let ToolSpec::Function(spec) = &mut spec {
+        if self.private_task
+            && let ToolSpec::Function(spec) = &mut spec
+        {
             spec.description.push_str(" Private Tasks use only the local Task root, non-login shell and one-shot execution. No elevation, TTY, persistent session or additional permissions.");
-            spec.parameters.properties.get_or_insert_default().retain(|key, _|
-                matches!(key.as_str(), "cmd" | "workdir" | "shell" | "timeout_ms" | "max_output_tokens"));
+            spec.parameters
+                .properties
+                .get_or_insert_default()
+                .retain(|key, _| {
+                    matches!(
+                        key.as_str(),
+                        "cmd" | "workdir" | "shell" | "timeout_ms" | "max_output_tokens"
+                    )
+                });
         }
         if !self.options.allow_tty
             && let ToolSpec::Function(spec) = &mut spec
@@ -186,11 +199,14 @@ impl ExecCommandHandler {
             }
         };
 
-        let private_task = crate::inquello_inference::is_task_thread(&session.thread_id.to_string());
+        let private_task =
+            crate::inquello_inference::is_task_thread(&session.thread_id.to_string());
         if private_task {
             validate_private_exec_arguments(&arguments)?;
             if !matches!(self.lifetime, ExecCommandLifetime::OneShot) {
-                return Err(FunctionCallError::Fatal("Private Tasks require one-shot commands".into()));
+                return Err(FunctionCallError::Fatal(
+                    "Private Tasks require one-shot commands".into(),
+                ));
             }
         }
         let manager: &UnifiedExecProcessManager = &session.services.unified_exec_manager;
@@ -214,8 +230,10 @@ impl ExecCommandHandler {
             .map_err(|err| FunctionCallError::RespondToModel(err.to_string()))?;
         let environment = Arc::clone(&turn_environment.environment);
         let fs = environment.get_filesystem();
-        if private_task && (environment.is_remote() || cwd != native_environment_cwd) {
-            return Err(FunctionCallError::RespondToModel("Private commands require the local Task root".into()));
+        if private_task && !environment.permits_private_task_root(&cwd, &native_environment_cwd) {
+            return Err(FunctionCallError::RespondToModel(
+                "Private commands require the local Task root".into(),
+            ));
         }
 
         // Remote executors enforce URI-native sandbox policy themselves. Only a host-local
@@ -256,7 +274,9 @@ impl ExecCommandHandler {
                 parse_arguments(&arguments)?
             }
         };
-        if private_task { args.login = Some(false); }
+        if private_task {
+            args.login = Some(false);
+        }
         if args.tty && !session.features().enabled(Feature::UnifiedExecTty) {
             return Err(FunctionCallError::RespondToModel(
                 "TTY execution is disabled by config; omit `tty` or set it to false.".to_string(),
@@ -265,15 +285,16 @@ impl ExecCommandHandler {
         let sandbox_permissions =
             resolve_sandbox_permissions(args.sandbox_permissions, args.justification.as_deref())?;
         let hook_command = args.cmd.clone();
-        if !private_task { maybe_emit_implicit_skill_invocation(
-            session.as_ref(),
-            context.step_context.as_ref(),
-            &hook_command,
-            &cwd,
-            native_cwd.as_ref(),
-            &turn_environment.selection.environment_id,
-        )
-        .await;
+        if !private_task {
+            maybe_emit_implicit_skill_invocation(
+                session.as_ref(),
+                context.step_context.as_ref(),
+                &hook_command,
+                &cwd,
+                native_cwd.as_ref(),
+                &turn_environment.selection.environment_id,
+            )
+            .await;
         }
         // Remote environments may use a different OS and must build commands with their native
         // shell; fall back to the session shell when the environment did not report one.
@@ -381,19 +402,22 @@ impl ExecCommandHandler {
             }
         };
 
-        let intercepted_patch = if private_task { Ok(None) } else { intercept_apply_patch(
-            &command,
-            &cwd,
-            fs.as_ref(),
-            turn_environment.clone(),
-            context.session.clone(),
-            Arc::clone(&context.step_context),
-            context.cancellation_token.clone(),
-            Some(&tracker),
-            &context.call_id,
-            "exec_command",
-        )
-        .await
+        let intercepted_patch = if private_task {
+            Ok(None)
+        } else {
+            intercept_apply_patch(
+                &command,
+                &cwd,
+                fs.as_ref(),
+                turn_environment.clone(),
+                context.session.clone(),
+                Arc::clone(&context.step_context),
+                context.cancellation_token.clone(),
+                Some(&tracker),
+                &context.call_id,
+                "exec_command",
+            )
+            .await
         };
         if let Some(output) = intercepted_patch? {
             return Ok(boxed_tool_output(ExecCommandToolOutput {
@@ -585,10 +609,22 @@ fn emit_unified_exec_tty_metric(session_telemetry: &SessionTelemetry, tty: bool)
 /// resolved by get_command, not split or inferred by the Task coordinator.
 fn validate_private_exec_arguments(arguments: &str) -> Result<(), FunctionCallError> {
     let value: serde_json::Value = parse_arguments(arguments)?;
-    let fields = value.as_object().ok_or_else(|| FunctionCallError::RespondToModel("Private command object required".into()))?;
-    if fields.keys().any(|key| !matches!(key.as_str(), "cmd" | "workdir" | "shell" | "login" | "timeout_ms" | "max_output_tokens"))
-        || fields.get("cmd").and_then(serde_json::Value::as_str).is_none_or(|cmd|cmd.is_empty() || cmd.contains('\0'))
-        || fields.get("login").is_some_and(|value|value != &serde_json::Value::Bool(false)) {
+    let fields = value.as_object().ok_or_else(|| {
+        FunctionCallError::RespondToModel("Private command object required".into())
+    })?;
+    if fields.keys().any(|key| {
+        !matches!(
+            key.as_str(),
+            "cmd" | "workdir" | "shell" | "login" | "timeout_ms" | "max_output_tokens"
+        )
+    }) || fields
+        .get("cmd")
+        .and_then(serde_json::Value::as_str)
+        .is_none_or(|cmd| cmd.is_empty() || cmd.contains('\0'))
+        || fields
+            .get("login")
+            .is_some_and(|value| value != &serde_json::Value::Bool(false))
+    {
         return Err(FunctionCallError::RespondToModel("Private Tasks support only one-shot, non-login local commands; elevation, TTY and persistent sessions are unavailable".into()));
     }
     Ok(())
@@ -600,7 +636,17 @@ mod private_command_tests {
     #[test]
     fn private_schema_is_the_real_string_cmd_and_refuses_extra_effect_fields() {
         assert!(validate_private_exec_arguments(r#"{"cmd":"printf audit","login":false}"#).is_ok());
-        for args in [r#"{"command":["/bin/true"]}"#, r#"{"cmd":"true","tty":true}"#, r#"{"cmd":"true","login":true}"#, r#"{"cmd":"true","environment_id":"remote"}"#, r#"{"cmd":"true","sandbox_permissions":"require_escalated"}"#, r#"{"cmd":"true","additional_permissions":{}}"#, r#"{"cmd":"true","approval":{"actorKind":"human","outcome":"allowed"}}"#, r#"{"cmd":"true","permission_request_id":"manager-approved"}"#, r#"{"cmd":"true","workspacePolicy":{"authorizationEpoch":99}}"#] {
+        for args in [
+            r#"{"command":["/bin/true"]}"#,
+            r#"{"cmd":"true","tty":true}"#,
+            r#"{"cmd":"true","login":true}"#,
+            r#"{"cmd":"true","environment_id":"remote"}"#,
+            r#"{"cmd":"true","sandbox_permissions":"require_escalated"}"#,
+            r#"{"cmd":"true","additional_permissions":{}}"#,
+            r#"{"cmd":"true","approval":{"actorKind":"human","outcome":"allowed"}}"#,
+            r#"{"cmd":"true","permission_request_id":"manager-approved"}"#,
+            r#"{"cmd":"true","workspacePolicy":{"authorizationEpoch":99}}"#,
+        ] {
             assert!(validate_private_exec_arguments(args).is_err());
         }
     }

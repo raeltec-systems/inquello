@@ -3296,8 +3296,8 @@ async fn send_remote_plugin_install_request(
     remote_plugin_id: &str,
 ) -> Result<i64> {
     mcp.send_plugin_install_request(PluginInstallParams {
-            skip_authentication: false,
-            mcp_admission: None,
+        skip_authentication: false,
+        mcp_admission: None,
         marketplace_path: None,
         remote_marketplace_name: Some("caller-marketplace-is-ignored".to_string()),
         install_attempt_id: None,
@@ -3312,8 +3312,8 @@ async fn send_remote_plugin_install_request_with_attempt_id(
     install_attempt_id: &str,
 ) -> Result<i64> {
     mcp.send_plugin_install_request(PluginInstallParams {
-            skip_authentication: false,
-            mcp_admission: None,
+        skip_authentication: false,
+        mcp_admission: None,
         marketplace_path: None,
         remote_marketplace_name: Some("caller-marketplace-is-ignored".to_string()),
         install_attempt_id: Some(install_attempt_id.to_string()),
@@ -3566,45 +3566,96 @@ async fn plugin_install_rpc_skip_authentication_never_contacts_oauth(remote: boo
     let oauth = MockServer::start().await;
     let marketplace = if remote {
         configure_remote_plugin_test(home.path(), &catalog)?;
-        let bundle = mount_remote_plugin_bundle(&catalog, 200,
-            remote_plugin_bundle_tar_gz_bytes_with_mcp_config("linear", &oauth.uri())?).await;
+        let bundle = mount_remote_plugin_bundle(
+            &catalog,
+            200,
+            remote_plugin_bundle_tar_gz_bytes_with_mcp_config("linear", &oauth.uri())?,
+        )
+        .await;
         mount_remote_plugin_detail(&catalog, REMOTE_PLUGIN_ID, "1.2.3", Some(&bundle)).await;
         mount_empty_remote_installed_plugins(&catalog).await;
         mount_remote_plugin_install(&catalog, REMOTE_PLUGIN_ID).await;
         None
     } else {
-        std::fs::write(home.path().join("config.toml"), "[features]\nplugins = true\n")?;
-        write_plugin_marketplace(repo.path(), "debug", "sample-plugin", "./sample-plugin", None, None)?;
+        std::fs::write(
+            home.path().join("config.toml"),
+            "[features]\nplugins = true\n",
+        )?;
+        write_plugin_marketplace(
+            repo.path(),
+            "debug",
+            "sample-plugin",
+            "./sample-plugin",
+            None,
+            None,
+        )?;
         write_plugin_source(repo.path(), "sample-plugin", &[])?;
         write_plugin_mcp_config(repo.path(), "sample-plugin", &oauth.uri())?;
-        Some(AbsolutePathBuf::try_from(repo.path().join(".agents/plugins/marketplace.json"))?)
+        Some(AbsolutePathBuf::try_from(
+            repo.path().join(".agents/plugins/marketplace.json"),
+        )?)
     };
     // Force the disposable fixture store; no test may consult a real keyring.
     let config_path = home.path().join("config.toml");
     let config_text = std::fs::read_to_string(&config_path)?;
-    std::fs::write(&config_path, format!("mcp_oauth_credentials_store = \"file\"\n{config_text}"))?;
-    let mut app = TestAppServer::builder().with_codex_home(home.path())
+    std::fs::write(
+        &config_path,
+        format!("mcp_oauth_credentials_store = \"file\"\n{config_text}"),
+    )?;
+    let mut app = TestAppServer::builder()
+        .with_codex_home(home.path())
         .with_env_overrides(&[(TEST_ALLOW_HTTP_REMOTE_PLUGIN_BUNDLE_DOWNLOADS, Some("1"))])
-        .build_initialized_with_timeout(DEFAULT_TIMEOUT).await?;
-    let id = app.send_plugin_install_request(PluginInstallParams {
-        marketplace_path: marketplace,
-        remote_marketplace_name: remote.then(|| "openai-curated-remote".to_string()),
-        install_attempt_id: None,
-        plugin_name: if remote { REMOTE_PLUGIN_ID } else { "sample-plugin" }.to_string(),
-        skip_authentication: true,
-        mcp_admission: None,
-    }).await?;
+        .build_initialized_with_timeout(DEFAULT_TIMEOUT)
+        .await?;
+    let id = app
+        .send_plugin_install_request(PluginInstallParams {
+            marketplace_path: marketplace,
+            remote_marketplace_name: remote.then(|| "openai-curated-remote".to_string()),
+            install_attempt_id: None,
+            plugin_name: if remote {
+                REMOTE_PLUGIN_ID
+            } else {
+                "sample-plugin"
+            }
+            .to_string(),
+            skip_authentication: true,
+            mcp_admission: None,
+        })
+        .await?;
     let response: PluginInstallResponse = timeout(DEFAULT_TIMEOUT, app.read_response(id)).await??;
-    assert_eq!(response.auth_policy, if remote { PluginAuthPolicy::OnUse } else { PluginAuthPolicy::OnInstall });
+    assert_eq!(
+        response.auth_policy,
+        if remote {
+            PluginAuthPolicy::OnUse
+        } else {
+            PluginAuthPolicy::OnInstall
+        }
+    );
     let store = codex_core_plugins::store::PluginStore::new(home.path().to_path_buf());
     let plugin_id = codex_plugin::PluginId::new(
         if remote { "linear" } else { "sample-plugin" }.to_string(),
-        if remote { "openai-curated-remote" } else { "debug" }.to_string(),
-    ).expect("valid isolated fixture plugin identity");
+        if remote {
+            "openai-curated-remote"
+        } else {
+            "debug"
+        }
+        .to_string(),
+    )
+    .expect("valid isolated fixture plugin identity");
     assert!(store.plugin_base_root(&plugin_id).as_path().exists());
     let config = std::fs::read_to_string(home.path().join("config.toml"))?;
-    assert!(config.contains(if remote { "linear@openai-curated-remote" } else { "sample-plugin@debug" }));
-    assert!(oauth.received_requests().await.unwrap_or_default().is_empty());
+    assert!(config.contains(if remote {
+        "linear@openai-curated-remote"
+    } else {
+        "sample-plugin@debug"
+    }));
+    assert!(
+        oauth
+            .received_requests()
+            .await
+            .unwrap_or_default()
+            .is_empty()
+    );
     assert!(!home.path().join(".credentials.json").exists());
     Ok(())
 }
@@ -3614,7 +3665,10 @@ async fn plugin_install_rpc_skip_authentication_never_contacts_oauth(remote: boo
 #[test_case(false, true; "local forbidden program")]
 #[test_case(true, true; "remote forbidden program")]
 #[tokio::test]
-async fn plugin_install_rpc_admission_checks_actual_staged_contents(remote: bool, stdio: bool) -> Result<()> {
+async fn plugin_install_rpc_admission_checks_actual_staged_contents(
+    remote: bool,
+    stdio: bool,
+) -> Result<()> {
     let home = TempDir::new()?;
     let repo = TempDir::new()?;
     let catalog = MockServer::start().await;
@@ -3622,11 +3676,20 @@ async fn plugin_install_rpc_admission_checks_actual_staged_contents(remote: bool
         json!({"command": "must-never-execute-inquello-admission-fixture"})
     } else {
         json!({"type": "http", "url": "https://blocked.invalid/mcp"})
-    }}}).to_string();
+    }}})
+    .to_string();
     let marketplace = if remote {
         configure_remote_plugin_test(home.path(), &catalog)?;
-        let bundle = mount_remote_plugin_bundle(&catalog, 200,
-            remote_plugin_bundle_tar_gz_bytes_with_entries(r#"{"name":"linear"}"#, None, Some(&config))?).await;
+        let bundle = mount_remote_plugin_bundle(
+            &catalog,
+            200,
+            remote_plugin_bundle_tar_gz_bytes_with_entries(
+                r#"{"name":"linear"}"#,
+                None,
+                Some(&config),
+            )?,
+        )
+        .await;
         // The catalog has no transport declaration; admission must examine the
         // downloaded bytes, not trust the earlier harmless catalog response.
         mount_remote_plugin_detail(&catalog, REMOTE_PLUGIN_ID, "1.2.3", Some(&bundle)).await;
@@ -3634,40 +3697,88 @@ async fn plugin_install_rpc_admission_checks_actual_staged_contents(remote: bool
         mount_remote_plugin_install(&catalog, REMOTE_PLUGIN_ID).await;
         None
     } else {
-        std::fs::write(home.path().join("config.toml"), "[features]\nplugins = true\n")?;
-        write_plugin_marketplace(repo.path(), "debug", "sample-plugin", "./sample-plugin", None, None)?;
+        std::fs::write(
+            home.path().join("config.toml"),
+            "[features]\nplugins = true\n",
+        )?;
+        write_plugin_marketplace(
+            repo.path(),
+            "debug",
+            "sample-plugin",
+            "./sample-plugin",
+            None,
+            None,
+        )?;
         write_plugin_source(repo.path(), "sample-plugin", &[])?;
         std::fs::write(repo.path().join("sample-plugin/.mcp.json"), config)?;
-        Some(AbsolutePathBuf::try_from(repo.path().join(".agents/plugins/marketplace.json"))?)
+        Some(AbsolutePathBuf::try_from(
+            repo.path().join(".agents/plugins/marketplace.json"),
+        )?)
     };
     // Force the disposable fixture store; no test may consult a real keyring.
     let config_path = home.path().join("config.toml");
     let config_text = std::fs::read_to_string(&config_path)?;
-    std::fs::write(&config_path, format!("mcp_oauth_credentials_store = \"file\"\n{config_text}"))?;
+    std::fs::write(
+        &config_path,
+        format!("mcp_oauth_credentials_store = \"file\"\n{config_text}"),
+    )?;
     let before = std::fs::read(&config_path)?;
-    let mut app = TestAppServer::builder().with_codex_home(home.path())
+    let mut app = TestAppServer::builder()
+        .with_codex_home(home.path())
         .with_env_overrides(&[(TEST_ALLOW_HTTP_REMOTE_PLUGIN_BUNDLE_DOWNLOADS, Some("1"))])
-        .build_initialized_with_timeout(DEFAULT_TIMEOUT).await?;
-    let id = app.send_raw_request("plugin/install", Some(json!({
-        "marketplacePath": marketplace,
-        "remoteMarketplaceName": if remote { Some("openai-curated-remote") } else { None },
-        "pluginName": if remote { REMOTE_PLUGIN_ID } else { "sample-plugin" },
-        "skipAuthentication": true,
-        "mcpAdmission": {"allowTools": true, "allowLocalServers": false,
-            "localConfirmed": false, "allowedDomains": []},
-    }))).await?;
-    let error = timeout(DEFAULT_TIMEOUT, app.read_stream_until_error_message(RequestId::Integer(id))).await??;
-    assert_eq!(error.error.data.as_ref().expect("structured admission error")
-        ["inquelloCapabilityAdmission"]["code"], if stdio { "local_servers_denied" } else { "host_not_allowed" });
+        .build_initialized_with_timeout(DEFAULT_TIMEOUT)
+        .await?;
+    let id = app
+        .send_raw_request(
+            "plugin/install",
+            Some(json!({
+                "marketplacePath": marketplace,
+                "remoteMarketplaceName": if remote { Some("openai-curated-remote") } else { None },
+                "pluginName": if remote { REMOTE_PLUGIN_ID } else { "sample-plugin" },
+                "skipAuthentication": true,
+                "mcpAdmission": {"allowTools": true, "allowLocalServers": false,
+                    "localConfirmed": false, "allowedDomains": []},
+            })),
+        )
+        .await?;
+    let error = timeout(
+        DEFAULT_TIMEOUT,
+        app.read_stream_until_error_message(RequestId::Integer(id)),
+    )
+    .await??;
+    assert_eq!(
+        error
+            .error
+            .data
+            .as_ref()
+            .expect("structured admission error")["inquelloCapabilityAdmission"]["code"],
+        if stdio {
+            "local_servers_denied"
+        } else {
+            "host_not_allowed"
+        }
+    );
     assert_eq!(std::fs::read(home.path().join("config.toml"))?, before);
     let store = codex_core_plugins::store::PluginStore::new(home.path().to_path_buf());
     let plugin_id = codex_plugin::PluginId::new(
         if remote { "linear" } else { "sample-plugin" }.to_string(),
-        if remote { "openai-curated-remote" } else { "debug" }.to_string(),
-    ).expect("valid isolated fixture plugin identity");
+        if remote {
+            "openai-curated-remote"
+        } else {
+            "debug"
+        }
+        .to_string(),
+    )
+    .expect("valid isolated fixture plugin identity");
     assert!(!store.plugin_base_root(&plugin_id).as_path().exists());
     assert!(!home.path().join(".credentials.json").exists());
-    assert!(!catalog.received_requests().await.unwrap_or_default().iter().any(|request|
-        request.method == "POST" && request.url.path().ends_with("/install")));
+    assert!(
+        !catalog
+            .received_requests()
+            .await
+            .unwrap_or_default()
+            .iter()
+            .any(|request| request.method == "POST" && request.url.path().ends_with("/install"))
+    );
     Ok(())
 }

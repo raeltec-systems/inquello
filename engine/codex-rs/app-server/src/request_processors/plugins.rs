@@ -2066,7 +2066,10 @@ impl PluginRequestProcessor {
     }
 
     fn plugin_install_error(err: CorePluginInstallError) -> JSONRPCErrorError {
-        if let CorePluginInstallError::Store(codex_core_plugins::store::PluginStoreError::Admission(admission)) = &err {
+        if let CorePluginInstallError::Store(
+            codex_core_plugins::store::PluginStoreError::Admission(admission),
+        ) = &err
+        {
             return plugin_admission_error_to_jsonrpc(admission);
         }
         if err.is_invalid_request() {
@@ -2501,13 +2504,18 @@ fn remote_plugin_catalog_error_to_jsonrpc(
 fn remote_plugin_bundle_install_error_to_jsonrpc(
     err: codex_core_plugins::remote_bundle::RemotePluginBundleInstallError,
 ) -> JSONRPCErrorError {
-    if let RemotePluginBundleInstallError::Store(codex_core_plugins::store::PluginStoreError::Admission(admission)) = &err {
+    if let RemotePluginBundleInstallError::Store(
+        codex_core_plugins::store::PluginStoreError::Admission(admission),
+    ) = &err
+    {
         return plugin_admission_error_to_jsonrpc(admission);
     }
     internal_error(format!("install remote plugin bundle: {err}"))
 }
 
-fn plugin_admission_error_to_jsonrpc(admission: &codex_core_plugins::PluginMcpAdmissionError) -> JSONRPCErrorError {
+fn plugin_admission_error_to_jsonrpc(
+    admission: &codex_core_plugins::PluginMcpAdmissionError,
+) -> JSONRPCErrorError {
     let mut error = invalid_request("Plugin refused by Workspace capability admission");
     let mut detail = serde_json::json!({ "code": admission.code });
     if let Some(host) = &admission.host {
@@ -2548,7 +2556,8 @@ mod install_authentication_tests {
             grants.fetch_add(1, Ordering::SeqCst);
             // Would represent waiting for a real user grant if it were polled.
             std::future::pending::<()>().await;
-        }).await;
+        })
+        .await;
         assert_eq!(grants.load(Ordering::SeqCst), 0);
     }
 
@@ -2557,7 +2566,8 @@ mod install_authentication_tests {
         let grants = AtomicUsize::new(0);
         authenticate_plugin_install(false, async {
             grants.fetch_add(1, Ordering::SeqCst);
-        }).await;
+        })
+        .await;
         assert_eq!(grants.load(Ordering::SeqCst), 1);
     }
 
@@ -2572,22 +2582,26 @@ mod install_authentication_tests {
                 codex_core_plugins::store::PluginStoreError::Admission(admission.clone()),
             ),
         );
-        let remote = super::remote_plugin_operation_error_to_jsonrpc(
-            super::RemotePluginOperationError {
+        let remote =
+            super::remote_plugin_operation_error_to_jsonrpc(super::RemotePluginOperationError {
                 plugin_id: None,
                 kind: Box::new(super::RemotePluginOperationErrorKind::Bundle(
                     super::RemotePluginBundleInstallError::Store(
                         codex_core_plugins::store::PluginStoreError::Admission(admission),
                     ),
                 )),
-            },
-        );
+            });
         for error in [local, remote] {
-            assert_eq!(error.message, "Plugin refused by Workspace capability admission");
-            assert_eq!(error.data, Some(serde_json::json!({
-                "inquelloCapabilityAdmission": { "code": "host_not_allowed", "host": "api.example.com" },
-            })));
+            assert_eq!(
+                error.message,
+                "Plugin refused by Workspace capability admission"
+            );
+            assert_eq!(
+                error.data,
+                Some(serde_json::json!({
+                    "inquelloCapabilityAdmission": { "code": "host_not_allowed", "host": "api.example.com" },
+                }))
+            );
         }
     }
-
 }

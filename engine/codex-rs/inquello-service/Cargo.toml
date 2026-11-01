@@ -15,13 +15,17 @@ license.workspace = true
 
 [features]
 # Only selects cfg(test) retained-child coupling; never exposes a runtime route.
-retained-fixtures = ["test-issuer"]
+retained-fixtures = ["test-issuer", "dep:app_test_support", "dep:codex-app-server-protocol"]
 # The synthetic OIDC test issuer and the synthetic-test deployment. Without this
 # feature no test issuer can be configured at all; with it, a production
 # deployment still refuses one.
 test-issuer = ["dep:rcgen", "dep:ring", "dep:time", "dep:tracing-subscriber"]
 
 [dependencies]
+# Only the explicit retained-child fixture feature needs the desktop engine's
+# test harness; ordinary service checks must remain a separate build.
+app_test_support = { workspace = true, optional = true }
+codex-app-server-protocol = { workspace = true, optional = true }
 axum = { workspace = true, default-features = false, features = [
     "http1",
     "json",
@@ -41,6 +45,10 @@ serde_json = { workspace = true }
 sha2 = { workspace = true }
 sqlx = { workspace = true, features = ["postgres"] }
 sqlx-macros = { workspace = true }
+# All target drivers must implement the same SQLx Executor trait when retained
+# test support enables query descriptions. No host-side query macros are needed.
+sqlx-postgres = { workspace = true }
+sqlx-sqlite = { workspace = true }
 thiserror = { workspace = true }
 time = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
@@ -51,8 +59,6 @@ url = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
 
 [dev-dependencies]
-app_test_support = { workspace = true }
-codex-app-server-protocol = { workspace = true }
 pretty_assertions = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
 tempfile = { workspace = true }

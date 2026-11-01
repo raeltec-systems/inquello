@@ -5,27 +5,34 @@ use crate::manifest::PluginManifestMcpServers;
 use crate::manifest::load_plugin_manifest_with_format;
 use codex_app_server_protocol::PluginMcpAdmissionPolicy;
 use codex_app_server_protocol::PluginMcpAdmissionTransport;
-use codex_config::HooksFile;
-use codex_mcp::parse_agent_plugin_mcp_config;
-use codex_mcp::parse_plugin_mcp_config;
-use std::fs;
-use std::path::Path;
 use codex_app_server_protocol::PluginMcpServerAdmission;
+use codex_config::HooksFile;
 use codex_config::types::McpServerConfig;
 use codex_config::types::McpServerTransportConfig;
+use codex_mcp::parse_agent_plugin_mcp_config;
+use codex_mcp::parse_plugin_mcp_config;
 use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
 use url::Url;
 
 fn project_transport(name: &str, transport: &McpServerTransportConfig) -> PluginMcpServerAdmission {
     let (transport, http_origin) = match transport {
         McpServerTransportConfig::Stdio { .. } => (PluginMcpAdmissionTransport::Stdio, None),
-        McpServerTransportConfig::StreamableHttp { url, http_headers_helper, .. } => {
+        McpServerTransportConfig::StreamableHttp {
+            url,
+            http_headers_helper,
+            ..
+        } => {
             // Header helpers execute local programs. An HTTP-only admission must
             // never hide or authorize that separate outside-sandbox execution.
             let origin = if http_headers_helper.is_none() {
-                Url::parse(url).ok().filter(|url| {
-                    matches!(url.scheme(), "http" | "https") && url.host_str().is_some()
-                }).map(|url| url.origin().ascii_serialization())
+                Url::parse(url)
+                    .ok()
+                    .filter(|url| {
+                        matches!(url.scheme(), "http" | "https") && url.host_str().is_some()
+                    })
+                    .map(|url| url.origin().ascii_serialization())
             } else {
                 None
             };
@@ -36,11 +43,20 @@ fn project_transport(name: &str, transport: &McpServerTransportConfig) -> Plugin
             }
         }
     };
-    PluginMcpServerAdmission { name: name.to_string(), transport, http_origin }
+    PluginMcpServerAdmission {
+        name: name.to_string(),
+        transport,
+        http_origin,
+    }
 }
 
-pub(crate) fn project_mcp_servers(servers: &HashMap<String, McpServerConfig>) -> Vec<PluginMcpServerAdmission> {
-    let mut entries = servers.iter().map(|(name, server)| project_transport(name, &server.transport)).collect::<Vec<_>>();
+pub(crate) fn project_mcp_servers(
+    servers: &HashMap<String, McpServerConfig>,
+) -> Vec<PluginMcpServerAdmission> {
+    let mut entries = servers
+        .iter()
+        .map(|(name, server)| project_transport(name, &server.transport))
+        .collect::<Vec<_>>();
     entries.sort_by(|left, right| left.name.cmp(&right.name));
     entries
 }
@@ -71,7 +87,8 @@ fn inspect(plugin_root: &Path) -> Result<Inspection, &'static str> {
     let paths = &loaded.manifest.paths;
     let root = fs::canonicalize(plugin_root).map_err(|_| "Cannot inspect plugin root")?;
     let read = |path: &Path| -> Result<String, &'static str> {
-        let metadata = fs::symlink_metadata(path).map_err(|_| "Cannot read declared plugin configuration")?;
+        let metadata =
+            fs::symlink_metadata(path).map_err(|_| "Cannot read declared plugin configuration")?;
         if !metadata.is_file() || metadata.file_type().is_symlink() {
             return Err("Plugin configuration must be a regular file");
         }
@@ -110,8 +127,11 @@ fn inspect(plugin_root: &Path) -> Result<Inspection, &'static str> {
     let servers = if let Some(contents) = contents {
         let parsed = match loaded.format {
             PluginManifestFormat::Legacy => parse_plugin_mcp_config(&root, &contents),
-            PluginManifestFormat::AgentPlugin => parse_agent_plugin_mcp_config(&root, &root.join(".plugin-data"), &contents),
-        }.map_err(|_| "Cannot parse plugin MCP configuration")?;
+            PluginManifestFormat::AgentPlugin => {
+                parse_agent_plugin_mcp_config(&root, &root.join(".plugin-data"), &contents)
+            }
+        }
+        .map_err(|_| "Cannot parse plugin MCP configuration")?;
         if !parsed.errors.is_empty() {
             return Err("Cannot parse every declared plugin MCP server");
         }
@@ -123,7 +143,9 @@ fn inspect(plugin_root: &Path) -> Result<Inspection, &'static str> {
     // HTTP destinations; no program or environment helper is evaluated here.
     let has_hooks = if loaded.format == PluginManifestFormat::Legacy {
         match &paths.hooks {
-            Some(PluginManifestHooks::Inline(files)) => files.iter().any(|file| !file.hooks.is_empty()),
+            Some(PluginManifestHooks::Inline(files)) => {
+                files.iter().any(|file| !file.hooks.is_empty())
+            }
             Some(PluginManifestHooks::Paths(paths)) => {
                 let mut found = false;
                 for path in paths {
@@ -152,7 +174,9 @@ fn inspect(plugin_root: &Path) -> Result<Inspection, &'static str> {
     Ok(Inspection { servers, has_hooks })
 }
 
-pub(crate) fn inspect_plugin_mcp_admissions(plugin_root: &Path) -> Result<Vec<PluginMcpServerAdmission>, &'static str> {
+pub(crate) fn inspect_plugin_mcp_admissions(
+    plugin_root: &Path,
+) -> Result<Vec<PluginMcpServerAdmission>, &'static str> {
     Ok(project_mcp_servers(&inspect(plugin_root)?.servers))
 }
 
@@ -168,8 +192,12 @@ fn host_allowed(host: &str, patterns: &[String]) -> bool {
     })
 }
 
-pub(crate) fn validate_staged_plugin(plugin_root: &Path, policy: &PluginMcpAdmissionPolicy) -> Result<(), PluginMcpAdmissionError> {
-    let inspection = inspect(plugin_root).map_err(|_| PluginMcpAdmissionError::new("inspection_unavailable"))?;
+pub(crate) fn validate_staged_plugin(
+    plugin_root: &Path,
+    policy: &PluginMcpAdmissionPolicy,
+) -> Result<(), PluginMcpAdmissionError> {
+    let inspection =
+        inspect(plugin_root).map_err(|_| PluginMcpAdmissionError::new("inspection_unavailable"))?;
     if inspection.has_hooks {
         return Err(PluginMcpAdmissionError::new("hooks_not_allowed"));
     }
@@ -180,7 +208,11 @@ pub(crate) fn validate_staged_plugin(plugin_root: &Path, policy: &PluginMcpAdmis
 }
 
 /// Validate a captured effective registration immediately before discovery/sign-in.
-pub fn validate_mcp_server_admission(name: &str, server: &McpServerConfig, policy: &PluginMcpAdmissionPolicy) -> Result<(), PluginMcpAdmissionError> {
+pub fn validate_mcp_server_admission(
+    name: &str,
+    server: &McpServerConfig,
+    policy: &PluginMcpAdmissionPolicy,
+) -> Result<(), PluginMcpAdmissionError> {
     let entry = project_transport(name, &server.transport);
     if !policy.allow_tools {
         return Err(PluginMcpAdmissionError::new("tools_denied"));
@@ -195,11 +227,17 @@ pub fn validate_mcp_server_admission(name: &str, server: &McpServerConfig, polic
             }
         }
         PluginMcpAdmissionTransport::Http => {
-            let host = entry.http_origin.as_deref().and_then(|origin| Url::parse(origin).ok())
+            let host = entry
+                .http_origin
+                .as_deref()
+                .and_then(|origin| Url::parse(origin).ok())
                 .and_then(|url| url.host_str().map(str::to_string))
                 .ok_or(PluginMcpAdmissionError::new("inspection_unavailable"))?;
             if !host_allowed(&host, &policy.allowed_domains) {
-                return Err(PluginMcpAdmissionError { code: "host_not_allowed", host: Some(host) });
+                return Err(PluginMcpAdmissionError {
+                    code: "host_not_allowed",
+                    host: Some(host),
+                });
             }
         }
         PluginMcpAdmissionTransport::Unknown => {
@@ -220,19 +258,29 @@ mod tests {
 
     #[test]
     fn projection_never_exports_programs_headers_credentials_or_paths() {
-        let stdio = project_transport("local", &transport(json!({
-            "command": "/private/secret-program", "args": ["sentinel-argument"],
-            "env": { "TOKEN": "sentinel-token" }, "cwd": "/private/working-folder",
-        })));
-        let http = project_transport("remote", &transport(json!({
-            "url": "https://sentinel-user:sentinel-password@api.example.com:8443/private?token=sentinel-query#sentinel-fragment",
-            "http_headers": { "Authorization": "sentinel-header" },
-            "bearer_token_env_var": "sentinel-environment-name",
-        })));
+        let stdio = project_transport(
+            "local",
+            &transport(json!({
+                "command": "/private/secret-program", "args": ["sentinel-argument"],
+                "env": { "TOKEN": "sentinel-token" }, "cwd": "/private/working-folder",
+            })),
+        );
+        let http = project_transport(
+            "remote",
+            &transport(json!({
+                "url": "https://sentinel-user:sentinel-password@api.example.com:8443/private?token=sentinel-query#sentinel-fragment",
+                "http_headers": { "Authorization": "sentinel-header" },
+                "bearer_token_env_var": "sentinel-environment-name",
+            })),
+        );
         assert_eq!(stdio.transport, PluginMcpAdmissionTransport::Stdio);
         assert_eq!(stdio.http_origin, None);
-        assert_eq!(http.http_origin.as_deref(), Some("https://api.example.com:8443"));
-        let serialized = serde_json::to_string(&vec![stdio, http]).unwrap_or_else(|error| panic!("{error}"));
+        assert_eq!(
+            http.http_origin.as_deref(),
+            Some("https://api.example.com:8443")
+        );
+        let serialized =
+            serde_json::to_string(&vec![stdio, http]).unwrap_or_else(|error| panic!("{error}"));
         assert!(!serialized.contains("sentinel"));
         assert!(!serialized.contains("private"));
         assert!(!serialized.contains("command"));
@@ -255,8 +303,11 @@ mod tests {
     fn fixture(contents: serde_json::Value) -> tempfile::TempDir {
         let root = tempfile::tempdir().unwrap_or_else(|error| panic!("{error}"));
         fs::create_dir(root.path().join(".codex-plugin")).unwrap_or_else(|error| panic!("{error}"));
-        fs::write(root.path().join(".codex-plugin/plugin.json"), r#"{"name":"fixture","version":"1.0.0"}"#)
-            .unwrap_or_else(|error| panic!("{error}"));
+        fs::write(
+            root.path().join(".codex-plugin/plugin.json"),
+            r#"{"name":"fixture","version":"1.0.0"}"#,
+        )
+        .unwrap_or_else(|error| panic!("{error}"));
         fs::write(root.path().join(".mcp.json"), contents.to_string())
             .unwrap_or_else(|error| panic!("{error}"));
         root
@@ -273,7 +324,9 @@ mod tests {
 
     #[test]
     fn strict_inspection_and_policy_cover_tools_hosts_local_confirmation_and_parse_failure() {
-        let remote = fixture(json!({ "mcpServers": { "remote": { "url": "https://api.example.com/mcp" } } }));
+        let remote = fixture(
+            json!({ "mcpServers": { "remote": { "url": "https://api.example.com/mcp" } } }),
+        );
         assert!(validate_staged_plugin(remote.path(), &policy()).is_ok());
         let mut denied = policy();
         denied.allow_tools = false;
@@ -281,7 +334,8 @@ mod tests {
         denied = policy();
         denied.allowed_domains.clear();
         assert!(validate_staged_plugin(remote.path(), &denied).is_err());
-        let local = fixture(json!({ "mcpServers": { "local": { "command": "never-run-fixture" } } }));
+        let local =
+            fixture(json!({ "mcpServers": { "local": { "command": "never-run-fixture" } } }));
         assert!(validate_staged_plugin(local.path(), &policy()).is_err());
         let mut confirmed = policy();
         confirmed.allow_local_servers = true;
@@ -295,16 +349,28 @@ mod tests {
 
     #[test]
     fn malformed_manifest_mcp_declarations_are_not_treated_as_absent() {
-        for declaration in [json!(17), json!(true), json!(null), json!([]),
-            json!(["./mcp.json"]), json!("../outside.json"), json!("relative.json")] {
+        for declaration in [
+            json!(17),
+            json!(true),
+            json!(null),
+            json!([]),
+            json!(["./mcp.json"]),
+            json!("../outside.json"),
+            json!("relative.json"),
+        ] {
             for default_present in [false, true] {
                 let root = fixture(json!({ "mcpServers": {} }));
                 if !default_present {
                     fs::remove_file(root.path().join(".mcp.json")).unwrap();
                 }
-                fs::write(root.path().join(".codex-plugin/plugin.json"), json!({
-                    "name": "fixture", "mcpServers": declaration,
-                }).to_string()).unwrap();
+                fs::write(
+                    root.path().join(".codex-plugin/plugin.json"),
+                    json!({
+                        "name": "fixture", "mcpServers": declaration,
+                    })
+                    .to_string(),
+                )
+                .unwrap();
                 assert!(inspect_plugin_mcp_admissions(root.path()).is_err());
                 let refusal = validate_staged_plugin(root.path(), &policy()).unwrap_err();
                 assert_eq!(refusal.code, "inspection_unavailable");
@@ -333,25 +399,39 @@ mod tests {
         use crate::store::PluginStore;
         use codex_plugin::PluginId;
         use codex_utils_absolute_path::AbsolutePathBuf;
-        let source = fixture(json!({ "mcpServers": { "remote": { "url": "https://api.example.com/mcp" } } }));
+        let source = fixture(
+            json!({ "mcpServers": { "remote": { "url": "https://api.example.com/mcp" } } }),
+        );
         let home = tempfile::tempdir().unwrap_or_else(|error| panic!("{error}"));
         let store = PluginStore::new(home.path().to_path_buf()).with_mcp_admission(Some(policy()));
         let id = PluginId::new("fixture".to_string(), "test-marketplace".to_string())
             .unwrap_or_else(|error| panic!("{error}"));
-        let root = AbsolutePathBuf::try_from(source.path().to_path_buf()).unwrap_or_else(|error| panic!("{error}"));
-        let first = store.install(root.clone(), id.clone()).unwrap_or_else(|error| panic!("{error}"));
+        let root = AbsolutePathBuf::try_from(source.path().to_path_buf())
+            .unwrap_or_else(|error| panic!("{error}"));
+        let first = store
+            .install(root.clone(), id.clone())
+            .unwrap_or_else(|error| panic!("{error}"));
         let original = fs::read(first.installed_path.as_path().join(".mcp.json"))
             .unwrap_or_else(|error| panic!("{error}"));
         // A prior catalog inspection allowed HTTP. Change the source before the
         // actual install; its same-version staged bytes must be checked again.
-        assert_eq!(inspect_plugin_mcp_admissions(source.path()).unwrap_or_else(|error| panic!("{error}"))[0].transport, PluginMcpAdmissionTransport::Http);
-        fs::write(source.path().join(".mcp.json"), json!({
-            "mcpServers": { "local": { "command": "never-execute", "args": ["sentinel"] } },
-        }).to_string()).unwrap_or_else(|error| panic!("{error}"));
+        assert_eq!(
+            inspect_plugin_mcp_admissions(source.path()).unwrap_or_else(|error| panic!("{error}"))
+                [0]
+            .transport,
+            PluginMcpAdmissionTransport::Http
+        );
+        fs::write(
+            source.path().join(".mcp.json"),
+            json!({
+                "mcpServers": { "local": { "command": "never-execute", "args": ["sentinel"] } },
+            })
+            .to_string(),
+        )
+        .unwrap_or_else(|error| panic!("{error}"));
         assert!(store.install(root, id).is_err());
         let current = fs::read(first.installed_path.as_path().join(".mcp.json"))
             .unwrap_or_else(|error| panic!("{error}"));
         assert_eq!(current, original);
     }
-
 }

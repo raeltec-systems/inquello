@@ -372,5 +372,7 @@ pub async fn update_policy(
 }
 
 // Story 1.28: operator-only route approval control plane.
-pub use crate::route_eligibility::{RouteApprovalChange, RouteApprovalCommand, RouteApprovalOutcome};
 pub use crate::route_eligibility::apply as route_approval;
+pub use crate::route_eligibility::{
+    RouteApprovalChange, RouteApprovalCommand, RouteApprovalOutcome,
+};

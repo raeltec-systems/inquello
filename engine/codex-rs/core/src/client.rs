@@ -314,7 +314,7 @@ pub struct ModelClientSession {
 /// Executes HTTP Responses requests without owning a turn's WebSocket state.
 pub(crate) struct ResponsesHttpExecutor<'a> {
     client: &'a ModelClient,
-    #[cfg(all(feature="inference-fixtures",debug_assertions))]
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
     fixture: Option<crate::inquello_inference::fixtures::ResponsesTransport>,
 }
 
@@ -1148,7 +1148,9 @@ impl ModelClient {
     ///
     /// WebSocket use is controlled by provider capability and session-scoped fallback state.
     pub fn responses_websocket_enabled(&self) -> bool {
-        if self.state.provider.info().wire_api == WireApi::Messages { return false; }
+        if self.state.provider.info().wire_api == WireApi::Messages {
+            return false;
+        }
         if !self.state.provider.info().supports_websockets
             || self.state.disable_websockets.load(Ordering::Relaxed)
         {
@@ -1326,7 +1328,9 @@ impl ModelClient {
 
     pub(crate) async fn prewarm_auth(&self) -> Result<()> {
         crate::inquello_inference::refuse_unbound_background(&self.state.thread_id.to_string())?;
-        if self.state.provider.info().wire_api == WireApi::Messages { return Ok(()); }
+        if self.state.provider.info().wire_api == WireApi::Messages {
+            return Ok(());
+        }
         self.current_client_setup(ClientRouting::Workspace)
             .await
             .map(|_| ())
@@ -1484,8 +1488,9 @@ impl ModelClientSession {
 
 impl<'a> ResponsesHttpExecutor<'a> {
     pub(crate) fn new(client: &'a ModelClient) -> Self {
-        Self { client,
-            #[cfg(all(feature="inference-fixtures",debug_assertions))]
+        Self {
+            client,
+            #[cfg(all(feature = "inference-fixtures", debug_assertions))]
             fixture: None,
         }
     }
@@ -1825,19 +1830,42 @@ impl ResponsesHttpExecutor<'_> {
         let mut provider_auth_recovery_attempted = false;
         let mut pending_retry = PendingUnauthorizedRetry::default();
         loop {
-            #[cfg(all(feature="inference-fixtures",debug_assertions))]
-            let fixture_setup = if let Some(fixture)=&self.fixture {
-                let mut info=codex_model_provider_info::ModelProviderInfo::create_openai_provider(Some(fixture.endpoint.trim_end_matches("/responses").to_string()));
-                info.requires_openai_auth=false;info.supports_websockets=false;info.request_max_retries=Some(0);info.stream_max_retries=Some(0);
-                info.env_key=None;info.experimental_bearer_token=None;info.http_headers=None;info.env_http_headers=None;
-                let provider=codex_model_provider::create_model_provider(info,None);
-                Some(CurrentClientSetup {auth:None,auth_owner_generation:None,auth_revision:None,
-                    api_provider:provider.api_provider().await?,api_auth:codex_model_provider::unauthenticated_auth_provider(),
-                    redirect_policy:ClientRedirectPolicy::Reject,agent_identity_telemetry:None})
-            } else {None};
-            #[cfg(all(feature="inference-fixtures",debug_assertions))]
-            let client_setup=match fixture_setup {Some(setup)=>setup,None=>self.client.current_client_setup(ClientRouting::Workspace).await?};
-            #[cfg(not(all(feature="inference-fixtures",debug_assertions)))]
+            #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+            let fixture_setup = if let Some(fixture) = &self.fixture {
+                let mut info = codex_model_provider_info::ModelProviderInfo::create_openai_provider(
+                    Some(fixture.endpoint.trim_end_matches("/responses").to_string()),
+                );
+                info.requires_openai_auth = false;
+                info.supports_websockets = false;
+                info.request_max_retries = Some(0);
+                info.stream_max_retries = Some(0);
+                info.env_key = None;
+                info.experimental_bearer_token = None;
+                info.http_headers = None;
+                info.env_http_headers = None;
+                let provider = codex_model_provider::create_model_provider(info, None);
+                Some(CurrentClientSetup {
+                    auth: None,
+                    auth_owner_generation: None,
+                    auth_revision: None,
+                    api_provider: provider.api_provider().await?,
+                    api_auth: codex_model_provider::unauthenticated_auth_provider(),
+                    redirect_policy: ClientRedirectPolicy::Reject,
+                    agent_identity_telemetry: None,
+                })
+            } else {
+                None
+            };
+            #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+            let client_setup = match fixture_setup {
+                Some(setup) => setup,
+                None => {
+                    self.client
+                        .current_client_setup(ClientRouting::Workspace)
+                        .await?
+                }
+            };
+            #[cfg(not(all(feature = "inference-fixtures", debug_assertions)))]
             let client_setup = self
                 .client
                 .current_client_setup(ClientRouting::Workspace)
@@ -1857,12 +1885,16 @@ impl ResponsesHttpExecutor<'_> {
                 .client
                 .responses_headers(client_setup.auth.as_ref(), &model_info.slug);
             tracing::Span::current().record("api.path", "/responses");
-            #[cfg(all(feature="inference-fixtures",debug_assertions))]
-            let transport=match &self.fixture {
-                Some(fixture)=>ReqwestTransport::from_http_client(fixture.client.clone()),
-                None=>self.client.build_api_transport(&client_setup.api_provider,"/responses",client_setup.redirect_policy)?,
+            #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+            let transport = match &self.fixture {
+                Some(fixture) => ReqwestTransport::from_http_client(fixture.client.clone()),
+                None => self.client.build_api_transport(
+                    &client_setup.api_provider,
+                    "/responses",
+                    client_setup.redirect_policy,
+                )?,
             };
-            #[cfg(not(all(feature="inference-fixtures",debug_assertions)))]
+            #[cfg(not(all(feature = "inference-fixtures", debug_assertions)))]
             let transport = self.client.build_api_transport(
                 &client_setup.api_provider,
                 "/responses",
@@ -1953,10 +1985,12 @@ impl ResponsesHttpExecutor<'_> {
             .with_telemetry(Some(request_telemetry), Some(sse_telemetry));
             let stream_result = client.stream_request(request, options).await;
 
-            #[cfg(all(feature="inference-fixtures",debug_assertions))]
-            let stream_result=if self.fixture.is_some() {
+            #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+            let stream_result = if self.fixture.is_some() {
                 match stream_result {Ok(stream)=>Ok(stream),Err(_)=>return Err(CodexErr::Fatal("Synthetic Responses transport failed; no retry, auth recovery or production fallback".into()))}
-            } else {stream_result};
+            } else {
+                stream_result
+            };
             match stream_result {
                 Ok(stream) => {
                     let (stream, _) = map_response_stream(
@@ -1982,8 +2016,12 @@ impl ResponsesHttpExecutor<'_> {
                         response_debug_context.request_id.as_deref(),
                         /*output_items*/ &[],
                     );
-                    if crate::inquello_inference::is_task_thread(&self.client.state.thread_id.to_string()) {
-                        return Err(CodexErr::Fatal("Private Task credential changed; automatic retry is disabled".into()));
+                    if crate::inquello_inference::is_task_thread(
+                        &self.client.state.thread_id.to_string(),
+                    ) {
+                        return Err(CodexErr::Fatal(
+                            "Private Task credential changed; automatic retry is disabled".into(),
+                        ));
                     }
                     pending_retry = PendingUnauthorizedRetry::from_recovery(
                         handle_unauthorized(
@@ -2127,8 +2165,12 @@ impl ModelClientSession {
                 Err(ApiError::Transport(unauthorized_transport))
                     if provider.is_recoverable_auth_error(&unauthorized_transport) =>
                 {
-                    if crate::inquello_inference::is_task_thread(&self.client.state.thread_id.to_string()) {
-                        return Err(CodexErr::Fatal("Private Task credential changed; automatic retry is disabled".into()));
+                    if crate::inquello_inference::is_task_thread(
+                        &self.client.state.thread_id.to_string(),
+                    ) {
+                        return Err(CodexErr::Fatal(
+                            "Private Task credential changed; automatic retry is disabled".into(),
+                        ));
                     }
                     pending_retry = PendingUnauthorizedRetry::from_recovery(
                         handle_unauthorized(
@@ -2376,7 +2418,9 @@ impl ModelClientSession {
         service_tier: Option<String>,
         responses_metadata: &CodexResponsesMetadata,
     ) -> Result<()> {
-        crate::inquello_inference::refuse_unbound_background(&self.client.state.thread_id.to_string())?;
+        crate::inquello_inference::refuse_unbound_background(
+            &self.client.state.thread_id.to_string(),
+        )?;
         if !self.client.responses_websocket_enabled() {
             return Ok(());
         }
@@ -2442,53 +2486,95 @@ impl ModelClientSession {
         let wire_api = self.client.state.provider.info().wire_api;
         match wire_api {
             WireApi::Messages => {
-                let context = crate::inquello_inference::take_attempt(&self.client.state.thread_id.to_string())?
-                    .ok_or_else(|| CodexErr::Fatal("Messages requires a trusted current Task-route binding; no fallback".into()))?;
+                let context = crate::inquello_inference::take_attempt(
+                    &self.client.state.thread_id.to_string(),
+                )?
+                .ok_or_else(|| {
+                    CodexErr::Fatal(
+                        "Messages requires a trusted current Task-route binding; no fallback"
+                            .into(),
+                    )
+                })?;
                 let provider = self.client.state.provider.info();
-                if context.binding.route_id != "claude-api-key" || context.binding.model != model_info.slug
-                    || effort.is_some() || !matches!(summary, ReasoningSummaryConfig::None)
-                    || service_tier.is_some() || self.client.state.model_verbosity.is_some()
-                    || provider.base_url.as_deref().is_some_and(|url| url != "https://api.anthropic.com/v1")
-                    || provider.env_key.is_some() || provider.experimental_bearer_token.is_some()
-                    || provider.auth.is_some() || provider.gateway_oauth.is_some() || provider.aws.is_some()
-                    || provider.http_headers.is_some() || provider.env_http_headers.is_some()
-                    || provider.query_params.is_some() || provider.requires_openai_auth
+                if context.binding.route_id != "claude-api-key"
+                    || context.binding.model != model_info.slug
+                    || effort.is_some()
+                    || !matches!(summary, ReasoningSummaryConfig::None)
+                    || service_tier.is_some()
+                    || self.client.state.model_verbosity.is_some()
+                    || provider
+                        .base_url
+                        .as_deref()
+                        .is_some_and(|url| url != "https://api.anthropic.com/v1")
+                    || provider.env_key.is_some()
+                    || provider.experimental_bearer_token.is_some()
+                    || provider.auth.is_some()
+                    || provider.gateway_oauth.is_some()
+                    || provider.aws.is_some()
+                    || provider.http_headers.is_some()
+                    || provider.env_http_headers.is_some()
+                    || provider.query_params.is_some()
+                    || provider.requires_openai_auth
                 {
-                    return Err(CodexErr::Fatal("Unsupported selected Messages settings, endpoint or model; no fallback".into()));
+                    return Err(CodexErr::Fatal(
+                        "Unsupported selected Messages settings, endpoint or model; no fallback"
+                            .into(),
+                    ));
                 }
                 crate::inquello_inference::messages(prompt, context).await
             }
             WireApi::Responses => {
-                let context = crate::inquello_inference::take_attempt(&self.client.state.thread_id.to_string())?;
-                if context.is_none() && crate::inquello_inference::is_task_thread(&self.client.state.thread_id.to_string()) {
+                let context = crate::inquello_inference::take_attempt(
+                    &self.client.state.thread_id.to_string(),
+                )?;
+                if context.is_none()
+                    && crate::inquello_inference::is_task_thread(
+                        &self.client.state.thread_id.to_string(),
+                    )
+                {
                     return Err(CodexErr::Fatal("Private Task Responses attempt requires current authorization; no fallback".into()));
                 }
-                let request = context.as_ref().map(|context| {
-                    if context.binding.route_id != "codex-responses" || context.binding.model != model_info.slug
-                        || context.binding.api_version != "responses-v1" {
-                        return Err(CodexErr::Fatal("Selected Responses route/model changed; no fallback".into()));
-                    }
-                    let mut request = crate::inquello_inference::request(prompt, context)?;
-                    request.settings = serde_json::json!({
-                        "reasoning_effort": effort,
-                        "reasoning_summary": summary,
-                        "service_tier": service_tier,
-                        "verbosity": self.client.state.model_verbosity,
-                    });
-                    Ok(request)
-                }).transpose()?;
-                let native_prompt = context.as_ref().map(|context| crate::inquello_inference::responses_prompt(prompt, context)).transpose()?;
+                let request = context
+                    .as_ref()
+                    .map(|context| {
+                        if context.binding.route_id != "codex-responses"
+                            || context.binding.model != model_info.slug
+                            || context.binding.api_version != "responses-v1"
+                        {
+                            return Err(CodexErr::Fatal(
+                                "Selected Responses route/model changed; no fallback".into(),
+                            ));
+                        }
+                        let mut request = crate::inquello_inference::request(prompt, context)?;
+                        request.settings = serde_json::json!({
+                            "reasoning_effort": effort,
+                            "reasoning_summary": summary,
+                            "service_tier": service_tier,
+                            "verbosity": self.client.state.model_verbosity,
+                        });
+                        Ok(request)
+                    })
+                    .transpose()?;
+                let native_prompt = context
+                    .as_ref()
+                    .map(|context| crate::inquello_inference::responses_prompt(prompt, context))
+                    .transpose()?;
                 let prompt = native_prompt.as_ref().unwrap_or(prompt);
-                #[cfg(all(feature="inference-fixtures",debug_assertions))]
-                let fixture=match context.as_ref() {Some(context)=>crate::inquello_inference::fixtures::take_responses_transport(&context.binding)?,None=>None};
-                #[cfg(not(all(feature="inference-fixtures",debug_assertions)))]
-                let fixture_http=false;
-                #[cfg(all(feature="inference-fixtures",debug_assertions))]
-                let fixture_http=fixture.is_some();
+                #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+                let fixture = match context.as_ref() {
+                    Some(context) => crate::inquello_inference::fixtures::take_responses_transport(
+                        &context.binding,
+                    )?,
+                    None => None,
+                };
+                #[cfg(not(all(feature = "inference-fixtures", debug_assertions)))]
+                let fixture_http = false;
+                #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+                let fixture_http = fixture.is_some();
                 if !fixture_http && self.client.responses_websocket_enabled() {
                     let request_trace = current_span_w3c_trace_context();
-                    match crate::inquello_inference::await_dispatch(self
-                        .stream_responses_websocket(
+                    match crate::inquello_inference::await_dispatch(
+                        self.stream_responses_websocket(
                             prompt,
                             model_info,
                             session_telemetry,
@@ -2499,13 +2585,19 @@ impl ModelClientSession {
                             /*warmup*/ false,
                             request_trace,
                             inference_trace,
-                        ), context.as_ref())
-                        .await?
+                        ),
+                        context.as_ref(),
+                    )
+                    .await?
                     {
-                        WebsocketStreamOutcome::Stream(stream) => return Ok(match (context, request) {
-                            (Some(context), Some(request)) => crate::inquello_inference::responses(stream, context, request),
-                            _ => stream,
-                        }),
+                        WebsocketStreamOutcome::Stream(stream) => {
+                            return Ok(match (context, request) {
+                                (Some(context), Some(request)) => {
+                                    crate::inquello_inference::responses(stream, context, request)
+                                }
+                                _ => stream,
+                            });
+                        }
                         WebsocketStreamOutcome::FallbackToHttp => {
                             if context.is_some() {
                                 return Err(CodexErr::Fatal("Private Task transport outcome is uncertain; automatic retry is disabled".into()));
@@ -2515,11 +2607,14 @@ impl ModelClientSession {
                     }
                 }
 
-                let executor=ResponsesHttpExecutor::new(&self.client);
-                #[cfg(all(feature="inference-fixtures",debug_assertions))]
-                let executor=ResponsesHttpExecutor {fixture,..executor};
-                let stream = crate::inquello_inference::await_dispatch(executor
-                    .stream_responses_http(
+                let executor = ResponsesHttpExecutor::new(&self.client);
+                #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+                let executor = ResponsesHttpExecutor {
+                    fixture,
+                    ..executor
+                };
+                let stream = crate::inquello_inference::await_dispatch(
+                    executor.stream_responses_http(
                         &self.turn_state,
                         /*expected_auth_owner*/ None,
                         self.client.event_sender.as_ref(),
@@ -2531,10 +2626,14 @@ impl ModelClientSession {
                         service_tier,
                         responses_metadata,
                         inference_trace,
-                    ), context.as_ref())
-                    .await?;
+                    ),
+                    context.as_ref(),
+                )
+                .await?;
                 Ok(match (context, request) {
-                    (Some(context), Some(request)) => crate::inquello_inference::responses(stream, context, request),
+                    (Some(context), Some(request)) => {
+                        crate::inquello_inference::responses(stream, context, request)
+                    }
                     _ => stream,
                 })
             }
@@ -3230,4 +3329,3 @@ impl WebsocketTelemetry for ApiTelemetry {
 #[cfg(test)]
 #[path = "client_tests.rs"]
 mod tests;
-

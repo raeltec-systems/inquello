@@ -481,7 +481,11 @@ fn broad_mode_wording_is_never_review_or_approval() {
     }
     assert_eq!(
         BroadMode::FullAccess.reach(),
-        "Full access: commands on this Task run without sandbox limits on this device, and you will not be asked before actions."
+        if cfg!(windows) {
+            "Full access: this Task switches from Linux to Windows after its files are transferred. Commands run without sandbox limits on this device, and you will not be asked before actions."
+        } else {
+            "Full access: commands on this Task run without sandbox limits on this device, and you will not be asked before actions."
+        }
     );
 }
 
@@ -772,13 +776,7 @@ fn a_broad_mode_without_its_confirmation_or_a_human_is_refused() {
     ));
     command.confirmation = Some(BroadMode::NoPrompt.reach().to_string());
     assert!(matches!(
-        block_on(set_broad_mode(
-            &store,
-            &FixedClock,
-            me,
-            &policy,
-            command
-        )),
+        block_on(set_broad_mode(&store, &FixedClock, me, &policy, command)),
         Err(DomainError::InvalidCommand(_))
     ));
     let mut by_runtime = set(task, 0, BroadMode::FullAccess, "op-1");

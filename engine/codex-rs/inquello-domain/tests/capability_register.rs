@@ -64,7 +64,11 @@ fn register_json(eligibility: &str, evidence: &[(&str, &str)]) -> String {
             "limitations": ["Not execution evidence; unit fixture only"]
         });
     }
-    if eligibility == "real-data-eligible" { value.to_string() } else { json }
+    if eligibility == "real-data-eligible" {
+        value.to_string()
+    } else {
+        json
+    }
 }
 
 fn load(
@@ -498,8 +502,20 @@ fn remote_cloud_execution_remains_disabled() {
 
 #[test]
 fn unbound_negative_reference_no_longer_enables_real_data() {
-    let mut value: Value = serde_json::from_str(&register_json("real-data-eligible",
-        &[("synthetic", "passed"), ("negative-authorization", "passed")])).unwrap();
-    value["entries"][0].as_object_mut().unwrap().remove("negative_authorization");
-    assert_invalid_entry(CapabilityRegister::from_json(&value.to_string()), "exact-build");
+    let mut value: Value = serde_json::from_str(&register_json(
+        "real-data-eligible",
+        &[
+            ("synthetic", "passed"),
+            ("negative-authorization", "passed"),
+        ],
+    ))
+    .unwrap();
+    value["entries"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("negative_authorization");
+    assert_invalid_entry(
+        CapabilityRegister::from_json(&value.to_string()),
+        "exact-build",
+    );
 }

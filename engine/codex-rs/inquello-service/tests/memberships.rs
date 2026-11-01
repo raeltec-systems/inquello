@@ -1826,7 +1826,8 @@ async fn members_read_whether_local_mcp_servers_are_allowed() {
         &h,
         ws.id,
         policy_with(|policy| {
-            policy["execution"] = json!({ "mcp_tools": "allowed", "allow_local_mcp_servers": true });
+            policy["execution"] =
+                json!({ "mcp_tools": "allowed", "allow_local_mcp_servers": true });
         }),
     )
     .await

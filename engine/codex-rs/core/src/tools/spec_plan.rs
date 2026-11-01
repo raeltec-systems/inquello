@@ -1268,7 +1268,11 @@ fn add_shell_tools(context: &CoreToolPlanContext<'_>, registry: &mut ToolRegistr
         // Managed requirements are the only configuration path that can keep
         // unified exec disabled. Preserve command execution without exposing a
         // resumable process or write_stdin authority prohibited by policy.
-        if turn_context.extension_data.get::<crate::inquello_inference::TaskAuthorizationContext>().is_some() {
+        if turn_context
+            .extension_data
+            .get::<crate::inquello_inference::TaskAuthorizationContext>()
+            .is_some()
+        {
             registry.add(ExecCommandHandler::private_one_shot(options));
         } else {
             registry.add(ExecCommandHandler::one_shot(options));
@@ -1300,8 +1304,13 @@ fn add_core_utility_tools(context: &CoreToolPlanContext<'_>, registry: &mut Tool
     let features = turn_context.config.features.get();
     let environment_mode = tool_environment_mode(context.environments);
 
-    let private_task = turn_context.extension_data.get::<crate::inquello_inference::TaskAuthorizationContext>().is_some();
-    if private_task { registry.add(crate::tools::handlers::InquelloProgressHandler); }
+    let private_task = turn_context
+        .extension_data
+        .get::<crate::inquello_inference::TaskAuthorizationContext>()
+        .is_some();
+    if private_task {
+        registry.add(crate::tools::handlers::InquelloProgressHandler);
+    }
     if turn_context.config.update_plan_enabled && !private_task {
         registry.add(PlanHandler);
     }
@@ -1321,7 +1330,11 @@ fn add_core_utility_tools(context: &CoreToolPlanContext<'_>, registry: &mut Tool
     if turn_context.config.experimental_request_user_input_enabled || private_task {
         registry.add_with_exposure(
             RequestUserInputHandler {
-                available_modes: if private_task { vec![codex_protocol::config_types::ModeKind::Default] } else { request_user_input_available_modes(features) },
+                available_modes: if private_task {
+                    vec![codex_protocol::config_types::ModeKind::Default]
+                } else {
+                    request_user_input_available_modes(features)
+                },
             },
             ToolExposure::DirectModelOnly,
         );

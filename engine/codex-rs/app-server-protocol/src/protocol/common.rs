@@ -337,6 +337,8 @@ macro_rules! client_request_definitions {
         pub enum ClientResponsePayload {
             $( $variant($response), )*
             InterruptConversation(v1::InterruptConversationResponse),
+            #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+            InquelloFixture(serde_json::Value),
         }
 
         impl ClientResponsePayload {
@@ -351,6 +353,8 @@ macro_rules! client_request_definitions {
                         }
                     )*
                     Self::InterruptConversation(_) => None,
+                    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+                    Self::InquelloFixture(_) => None,
                 }
             }
 
@@ -1528,14 +1532,18 @@ client_request_definitions! {
     },
     InquelloWorkspaceSearch => "inquello/workspace/search" {
         params: v2::InquelloWorkspaceSearchParams,
+        serialization: global("inquello"),
         response: v2::InquelloWorkspaceSearchResponse,
     },
     InquelloTaskReopen => "inquello/task/reopen" {
         params: v2::InquelloTaskReopenParams,
+        serialization: global("inquello"),
         response: v2::InquelloTaskReopenResponse,
     },
     InquelloTaskSetNavigation => "inquello/task/setNavigation" {
         params: v2::InquelloTaskSetNavigationParams,
+        serialization: global("inquello"),
+        manual_payload_conversion: manual,
         response: v2::InquelloTaskResponse,
     },
     InquelloWorkspaceTree => "inquello/workspace/tree" {
@@ -1642,7 +1650,7 @@ client_request_definitions! {
     InquelloTasksSteer => "inquello/tasks/steer" {
         params: v2::InquelloTasksLifecycleParams,
         serialization: None,
-        
+
         response: v2::InquelloTasksLifecycleResponse,
     },
     InquelloTasksStop => "inquello/tasks/stop" {

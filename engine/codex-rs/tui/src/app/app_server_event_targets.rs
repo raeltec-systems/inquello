@@ -28,6 +28,8 @@ pub(super) fn server_request_thread_id(request: &ServerRequest) -> Option<Thread
             ThreadId::from_string(&params.thread_id).ok()
         }
         ServerRequest::ChatgptAuthTokensRefresh { .. }
+        | ServerRequest::InquelloContextAuthorize { .. }
+        | ServerRequest::InquelloTaskAuthority { .. }
         | ServerRequest::AttestationGenerate { .. }
         | ServerRequest::ApplyPatchApproval { .. }
         | ServerRequest::ExecCommandApproval { .. } => None,

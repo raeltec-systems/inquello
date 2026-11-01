@@ -45,6 +45,7 @@ impl OutgoingMessageSender {
             Some(connection_id) => OutgoingEnvelope::ToConnection {
                 connection_id,
                 message,
+                private_fence: None,
                 write_complete_tx: None,
             },
             None => OutgoingEnvelope::Broadcast { message },

@@ -159,39 +159,134 @@ impl CommandExecManager {
             output_bytes_cap,
             size,
         } = params;
-        let mut usage=usage;
-        let result=async {
-        if process_id.is_none() && (tty || stream_stdin || stream_stdout_stderr) {
-            return Err(invalid_request(
-                "command/exec tty or streaming requires a client-supplied processId",
-            ));
-        }
-        let process_id = process_id.map_or_else(
-            || {
-                InternalProcessId::Generated(
-                    self.next_generated_process_id
-                        .fetch_add(1, Ordering::Relaxed),
-                )
-            },
-            InternalProcessId::Client,
-        );
-        let process_key = ConnectionProcessId {
-            connection_id: request_id.connection_id,
-            process_id: process_id.clone(),
-        };
+        let mut usage = usage;
+        let result = async {
+            if process_id.is_none() && (tty || stream_stdin || stream_stdout_stderr) {
+                return Err(invalid_request(
+                    "command/exec tty or streaming requires a client-supplied processId",
+                ));
+            }
+            let process_id = process_id.map_or_else(
+                || {
+                    InternalProcessId::Generated(
+                        self.next_generated_process_id
+                            .fetch_add(1, Ordering::Relaxed),
+                    )
+                },
+                InternalProcessId::Client,
+            );
+            let process_key = ConnectionProcessId {
+                connection_id: request_id.connection_id,
+                process_id: process_id.clone(),
+            };
 
-        if matches!(exec_request.sandbox, SandboxType::WindowsRestrictedToken) {
-            if tty || stream_stdin || stream_stdout_stderr {
-                return Err(invalid_request(
-                    "streaming command/exec is not supported with windows sandbox",
-                ));
+            if matches!(exec_request.sandbox, SandboxType::WindowsRestrictedToken) {
+                if tty || stream_stdin || stream_stdout_stderr {
+                    return Err(invalid_request(
+                        "streaming command/exec is not supported with windows sandbox",
+                    ));
+                }
+                if output_bytes_cap != Some(DEFAULT_OUTPUT_BYTES_CAP) {
+                    return Err(invalid_request(
+                        "custom outputBytesCap is not supported with windows sandbox",
+                    ));
+                }
+                if let InternalProcessId::Client(_) = &process_id {
+                    let mut sessions = self.sessions.lock().await;
+                    if sessions.contains_key(&process_key) {
+                        return Err(invalid_request(format!(
+                            "duplicate active command/exec process id: {}",
+                            process_key.process_id.error_repr(),
+                        )));
+                    }
+                    sessions.insert(
+                        process_key.clone(),
+                        CommandExecSession::UnsupportedWindowsSandbox,
+                    );
+                }
+                if let Some(observer) = &usage {
+                    if let Err(error) = observer.recheck().await {
+                        self.sessions.lock().await.remove(&process_key);
+                        return Err(error);
+                    }
+                }
+                let sessions = Arc::clone(&self.sessions);
+                let usage = usage.take();
+                tokio::spawn(async move {
+                    let _started_network_proxy = started_network_proxy;
+                    match codex_core::sandboxing::execute_env(
+                        exec_request,
+                        /*stdout_stream*/ None,
+                    )
+                    .await
+                    {
+                        Ok(output) => {
+                            if let Some(observer) = usage {
+                                observer
+                                    .finish(if output.exit_code == 0 {
+                                        inquello_domain::usage::AttemptStatus::Completed
+                                    } else {
+                                        inquello_domain::usage::AttemptStatus::Failed
+                                    })
+                                    .await;
+                            }
+                            outgoing
+                                .send_response(
+                                    request_id,
+                                    CommandExecResponse {
+                                        exit_code: output.exit_code,
+                                        stdout: output.stdout.text,
+                                        stderr: output.stderr.text,
+                                    },
+                                )
+                                .await;
+                        }
+                        Err(err) => {
+                            if let Some(observer) = usage {
+                                observer
+                                    .finish(inquello_domain::usage::AttemptStatus::Uncertain)
+                                    .await;
+                            }
+                            outgoing
+                                .send_error(
+                                    request_id,
+                                    internal_error(format!("exec failed: {err}")),
+                                )
+                                .await;
+                        }
+                    }
+                    sessions.lock().await.remove(&process_key);
+                });
+                return Ok(());
             }
-            if output_bytes_cap != Some(DEFAULT_OUTPUT_BYTES_CAP) {
-                return Err(invalid_request(
-                    "custom outputBytesCap is not supported with windows sandbox",
-                ));
-            }
-            if let InternalProcessId::Client(_) = &process_id {
+
+            let ExecRequest {
+                command,
+                cwd,
+                env,
+                expiration,
+                sandbox: _sandbox,
+                arg0,
+                ..
+            } = exec_request;
+            // TODO(anp): Keep PathUri through the local command launch boundary.
+            let cwd = cwd
+                .to_abs_path()
+                .map_err(|err| invalid_request(format!("invalid command cwd: {err}")))?;
+
+            let stream_stdin = tty || stream_stdin;
+            let stream_stdout_stderr = tty || stream_stdout_stderr;
+            let (control_tx, control_rx) = mpsc::channel(32);
+            let notification_process_id = match &process_id {
+                InternalProcessId::Generated(_) => None,
+                InternalProcessId::Client(process_id) => Some(process_id.clone()),
+            };
+
+            let sessions = Arc::clone(&self.sessions);
+            let (program, args) = command
+                .split_first()
+                .ok_or_else(|| invalid_request("command must not be empty"))?;
+            {
                 let mut sessions = self.sessions.lock().await;
                 if sessions.contains_key(&process_key) {
                     return Err(invalid_request(format!(
@@ -201,139 +296,75 @@ impl CommandExecManager {
                 }
                 sessions.insert(
                     process_key.clone(),
-                    CommandExecSession::UnsupportedWindowsSandbox,
+                    CommandExecSession::Active { control_tx },
                 );
             }
-            if let Some(observer)=&usage {
-                if let Err(error)=observer.recheck().await {self.sessions.lock().await.remove(&process_key);return Err(error);}
+            if let Some(observer) = &usage {
+                if let Err(error) = observer.recheck().await {
+                    self.sessions.lock().await.remove(&process_key);
+                    return Err(error);
+                }
             }
-            let sessions = Arc::clone(&self.sessions);
-            let usage=usage.take();
+            let spawned = if tty {
+                codex_utils_pty::spawn_pty_process(
+                    program,
+                    args,
+                    cwd.as_path(),
+                    &env,
+                    &arg0,
+                    size.unwrap_or_default(),
+                    codex_utils_pty::ChildFds::Inherited(&[]),
+                )
+                .await
+            } else if stream_stdin {
+                codex_utils_pty::spawn_pipe_process(program, args, cwd.as_path(), &env, &arg0, &[])
+                    .await
+            } else {
+                codex_utils_pty::spawn_pipe_process_no_stdin(
+                    program,
+                    args,
+                    cwd.as_path(),
+                    &env,
+                    &arg0,
+                    &[],
+                )
+                .await
+            };
+            let spawned = match spawned {
+                Ok(spawned) => spawned,
+                Err(err) => {
+                    self.sessions.lock().await.remove(&process_key);
+                    return Err(internal_error(format!("failed to spawn command: {err}")));
+                }
+            };
+            let usage = usage.take();
             tokio::spawn(async move {
                 let _started_network_proxy = started_network_proxy;
-                match codex_core::sandboxing::execute_env(exec_request, /*stdout_stream*/ None)
-                    .await
-                {
-                    Ok(output) => {
-                        if let Some(observer)=usage { observer.finish(if output.exit_code==0 {inquello_domain::usage::AttemptStatus::Completed} else {inquello_domain::usage::AttemptStatus::Failed}).await; }
-                        outgoing
-                            .send_response(
-                                request_id,
-                                CommandExecResponse {
-                                    exit_code: output.exit_code,
-                                    stdout: output.stdout.text,
-                                    stderr: output.stderr.text,
-                                },
-                            )
-                            .await;
-                    }
-                    Err(err) => {
-                        if let Some(observer)=usage { observer.finish(inquello_domain::usage::AttemptStatus::Uncertain).await; }
-                        outgoing
-                            .send_error(request_id, internal_error(format!("exec failed: {err}")))
-                            .await;
-                    }
-                }
+                run_command(RunCommandParams {
+                    usage,
+                    outgoing,
+                    request_id: request_id.clone(),
+                    process_id: notification_process_id,
+                    spawned,
+                    control_rx,
+                    stream_stdin,
+                    stream_stdout_stderr,
+                    expiration,
+                    output_bytes_cap,
+                })
+                .await;
                 sessions.lock().await.remove(&process_key);
             });
-            return Ok(());
+            Ok(())
         }
-
-        let ExecRequest {
-            command,
-            cwd,
-            env,
-            expiration,
-            sandbox: _sandbox,
-            arg0,
-            ..
-        } = exec_request;
-        // TODO(anp): Keep PathUri through the local command launch boundary.
-        let cwd = cwd
-            .to_abs_path()
-            .map_err(|err| invalid_request(format!("invalid command cwd: {err}")))?;
-
-        let stream_stdin = tty || stream_stdin;
-        let stream_stdout_stderr = tty || stream_stdout_stderr;
-        let (control_tx, control_rx) = mpsc::channel(32);
-        let notification_process_id = match &process_id {
-            InternalProcessId::Generated(_) => None,
-            InternalProcessId::Client(process_id) => Some(process_id.clone()),
-        };
-
-        let sessions = Arc::clone(&self.sessions);
-        let (program, args) = command
-            .split_first()
-            .ok_or_else(|| invalid_request("command must not be empty"))?;
-        {
-            let mut sessions = self.sessions.lock().await;
-            if sessions.contains_key(&process_key) {
-                return Err(invalid_request(format!(
-                    "duplicate active command/exec process id: {}",
-                    process_key.process_id.error_repr(),
-                )));
+        .await;
+        if result.is_err() {
+            if let Some(observer) = usage.take() {
+                observer
+                    .finish(inquello_domain::usage::AttemptStatus::Uncertain)
+                    .await;
             }
-            sessions.insert(
-                process_key.clone(),
-                CommandExecSession::Active { control_tx },
-            );
         }
-        if let Some(observer)=&usage {
-            if let Err(error)=observer.recheck().await {self.sessions.lock().await.remove(&process_key);return Err(error);}
-        }
-        let spawned = if tty {
-            codex_utils_pty::spawn_pty_process(
-                program,
-                args,
-                cwd.as_path(),
-                &env,
-                &arg0,
-                size.unwrap_or_default(),
-                codex_utils_pty::ChildFds::Inherited(&[]),
-            )
-            .await
-        } else if stream_stdin {
-            codex_utils_pty::spawn_pipe_process(program, args, cwd.as_path(), &env, &arg0, &[])
-                .await
-        } else {
-            codex_utils_pty::spawn_pipe_process_no_stdin(
-                program,
-                args,
-                cwd.as_path(),
-                &env,
-                &arg0,
-                &[],
-            )
-            .await
-        };
-        let spawned = match spawned {
-            Ok(spawned) => spawned,
-            Err(err) => {
-                self.sessions.lock().await.remove(&process_key);
-                return Err(internal_error(format!("failed to spawn command: {err}")));
-            }
-        };
-        let usage=usage.take();
-        tokio::spawn(async move {
-            let _started_network_proxy = started_network_proxy;
-            run_command(RunCommandParams {
-                usage,
-                outgoing,
-                request_id: request_id.clone(),
-                process_id: notification_process_id,
-                spawned,
-                control_rx,
-                stream_stdin,
-                stream_stdout_stderr,
-                expiration,
-                output_bytes_cap,
-            })
-            .await;
-            sessions.lock().await.remove(&process_key);
-        });
-        Ok(())
-        }.await;
-        if result.is_err() {if let Some(observer)=usage.take() {observer.finish(inquello_domain::usage::AttemptStatus::Uncertain).await;}}
         result
     }
 
@@ -497,7 +528,7 @@ async fn run_command(params: RunCommandParams) {
     tokio::pin!(exit_rx);
     let mut expiration_outcome = None;
     let mut cancelled = false;
-    let mut exit_known = true;
+    let exit_known;
     let (stdio_timeout_tx, stdio_timeout_rx) = watch::channel(false);
 
     let stdout_handle = spawn_process_output(SpawnProcessOutputParams {
@@ -579,7 +610,19 @@ async fn run_command(params: RunCommandParams) {
     let stderr = stderr_handle.await.unwrap_or_default();
     timeout_handle.abort();
 
-    if let Some(observer)=usage { observer.finish(if !exit_known {inquello_domain::usage::AttemptStatus::Uncertain} else if cancelled {inquello_domain::usage::AttemptStatus::Cancelled} else if exit_code==0 {inquello_domain::usage::AttemptStatus::Completed} else {inquello_domain::usage::AttemptStatus::Failed}).await; }
+    if let Some(observer) = usage {
+        observer
+            .finish(if !exit_known {
+                inquello_domain::usage::AttemptStatus::Uncertain
+            } else if cancelled {
+                inquello_domain::usage::AttemptStatus::Cancelled
+            } else if exit_code == 0 {
+                inquello_domain::usage::AttemptStatus::Completed
+            } else {
+                inquello_domain::usage::AttemptStatus::Failed
+            })
+            .await;
+    }
     outgoing
         .send_response(
             request_id,

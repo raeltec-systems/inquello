@@ -3,118 +3,446 @@ use crate::SqliteWorkingStore;
 use inquello_domain::organise::PrincipalId;
 use inquello_domain::tasks::*;
 use inquello_domain::usage::TaskUsageSettings;
-use inquello_domain::{DomainError,OperationId,StoreError};
-use sqlx::{Sqlite,Transaction};
+use inquello_domain::{DomainError, OperationId, StoreError};
+use sqlx::{Sqlite, Transaction};
 use uuid::Uuid;
-type Tx<'a> = Transaction<'a,Sqlite>;
-fn backend(_:sqlx::Error)->DomainError {DomainError::Store(StoreError::Backend("private Task journal storage failure".into()))}
-fn invalid(s:&str)->DomainError {DomainError::InvalidCommand(s.into())}
-fn encode_binding(v:&TaskRunBinding)->Result<String,DomainError>{serde_json::to_string(v).map_err(|_|invalid("invalid Task record"))}
-fn encode_intent(v:&StartTaskIntent)->Result<String,DomainError>{serde_json::to_string(v).map_err(|_|invalid("invalid Task record"))}
-fn encode_settings(v:&TaskUsageSettings)->Result<String,DomainError>{serde_json::to_string(v).map_err(|_|invalid("invalid Task settings"))}
-fn decode_binding(v:&str)->Result<TaskRunBinding,DomainError>{serde_json::from_str(v).map_err(|_|DomainError::Store(StoreError::Corrupt("invalid Task record".into())))}
-fn decode_intent(v:&str)->Result<StartTaskIntent,DomainError>{serde_json::from_str(v).map_err(|_|DomainError::Store(StoreError::Corrupt("invalid Task record".into())))}
-fn reference(v:&str)->Result<(),DomainError>{if v.is_empty()||v.len()>128||v.chars().any(|c|c.is_control()||c.is_whitespace()){Err(invalid("invalid runtime reference"))}else{Ok(())}}
-async fn load(tx:&mut Tx<'_>,p:PrincipalId,op:&str)->Result<Option<TaskRunBinding>,DomainError>{
- let raw:Option<String>=sqlx::query_scalar("SELECT r.record FROM task_runs r JOIN tasks t ON t.task_id=r.task_id WHERE r.principal_id=? AND r.operation_id=? AND t.creator_principal_id=r.principal_id AND t.workspace_id=json_extract(r.record,'$.workspace_id') AND (r.thread_id IS NULL OR t.runtime_thread_id=r.thread_id)").bind(p.to_string()).bind(op).fetch_optional(&mut **tx).await.map_err(backend)?;
- raw.as_deref().map(decode_binding).transpose()
+type Tx<'a> = Transaction<'a, Sqlite>;
+fn backend(_: sqlx::Error) -> DomainError {
+    DomainError::Store(StoreError::Backend(
+        "private Task journal storage failure".into(),
+    ))
 }
-async fn write(tx:&mut Tx<'_>,b:&TaskRunBinding)->Result<(),DomainError>{
- sqlx::query("UPDATE task_runs SET thread_id=?,record=? WHERE principal_id=? AND operation_id=?").bind(&b.thread_id).bind(encode_binding(b)?).bind(&b.principal_id).bind(&b.operation_id).execute(&mut **tx).await.map_err(backend)?;Ok(())
+fn invalid(s: &str) -> DomainError {
+    DomainError::InvalidCommand(s.into())
+}
+fn encode_binding(v: &TaskRunBinding) -> Result<String, DomainError> {
+    serde_json::to_string(v).map_err(|_| invalid("invalid Task record"))
+}
+fn encode_intent(v: &StartTaskIntent) -> Result<String, DomainError> {
+    serde_json::to_string(v).map_err(|_| invalid("invalid Task record"))
+}
+fn encode_settings(v: &TaskUsageSettings) -> Result<String, DomainError> {
+    serde_json::to_string(v).map_err(|_| invalid("invalid Task settings"))
+}
+fn decode_binding(v: &str) -> Result<TaskRunBinding, DomainError> {
+    serde_json::from_str(v)
+        .map_err(|_| DomainError::Store(StoreError::Corrupt("invalid Task record".into())))
+}
+fn decode_intent(v: &str) -> Result<StartTaskIntent, DomainError> {
+    serde_json::from_str(v)
+        .map_err(|_| DomainError::Store(StoreError::Corrupt("invalid Task record".into())))
+}
+fn reference(v: &str) -> Result<(), DomainError> {
+    if v.is_empty() || v.len() > 128 || v.chars().any(|c| c.is_control() || c.is_whitespace()) {
+        Err(invalid("invalid runtime reference"))
+    } else {
+        Ok(())
+    }
+}
+async fn load(
+    tx: &mut Tx<'_>,
+    p: PrincipalId,
+    op: &str,
+) -> Result<Option<TaskRunBinding>, DomainError> {
+    let raw:Option<String>=sqlx::query_scalar("SELECT r.record FROM task_runs r JOIN tasks t ON t.task_id=r.task_id WHERE r.principal_id=? AND r.operation_id=? AND t.creator_principal_id=r.principal_id AND t.workspace_id=json_extract(r.record,'$.workspace_id') AND (r.thread_id IS NULL OR t.runtime_thread_id=r.thread_id)").bind(p.to_string()).bind(op).fetch_optional(&mut **tx).await.map_err(backend)?;
+    raw.as_deref().map(decode_binding).transpose()
+}
+async fn write(tx: &mut Tx<'_>, b: &TaskRunBinding) -> Result<(), DomainError> {
+    sqlx::query(
+        "UPDATE task_runs SET thread_id=?,record=? WHERE principal_id=? AND operation_id=?",
+    )
+    .bind(&b.thread_id)
+    .bind(encode_binding(b)?)
+    .bind(&b.principal_id)
+    .bind(&b.operation_id)
+    .execute(&mut **tx)
+    .await
+    .map_err(backend)?;
+    Ok(())
 }
 impl TaskRunStore for SqliteWorkingStore {
- async fn reserve_task_run(&self,p:PrincipalId,intent:StartTaskIntent,runtime:&str,now:i64,tier:NativeTaskDataTier)->Result<TaskRunBinding,DomainError>{
-  self.reserve_task_run_fenced(p,intent,runtime,now,tier,|_|async {Ok(())}).await.map_err(TaskReservationError::into_domain)
- }
- async fn reserve_task_run_fenced<F,Fut>(&self,p:PrincipalId,intent:StartTaskIntent,runtime:&str,now:i64,tier:NativeTaskDataTier,validate:F)->Result<TaskRunBinding,TaskReservationError>
- where F:Fn(String)->Fut+Send+Sync,Fut:std::future::Future<Output=Result<(),DomainError>>+Send {
-  intent.validate().map_err(TaskReservationError::PreEffect)?;reference(runtime).map_err(TaskReservationError::PreEffect)?;
-  let proposed_task_id=Uuid::new_v4().to_string();
-  let mut tx=self.pool().begin_with("BEGIN IMMEDIATE").await.map_err(backend)?;
-  if let Err(error)=validate(proposed_task_id.clone()).await {tx.rollback().await.map_err(backend)?;return Err(TaskReservationError::PreEffect(error));}
-  if let Some(old)=load(&mut tx,p,&intent.operation_id).await?{
-   let raw:String=sqlx::query_scalar("SELECT intent FROM task_start_history WHERE task_id=?").bind(&old.task_id).fetch_one(&mut *tx).await.map_err(backend)?;
-   let original_tier:Option<String>=sqlx::query_scalar("SELECT data_tier FROM task_data_provenance WHERE task_id=? AND principal_id=?").bind(&old.task_id).bind(p.to_string()).fetch_optional(&mut *tx).await.map_err(backend)?;
-   if original_tier.as_deref()!=Some(tier.as_str()) || decode_intent(&raw)?!=intent{return Err(TaskReservationError::PreEffect(DomainError::OperationConflict{operation_id:OperationId::parse(&intent.operation_id)?}))}return Ok(old)
-  }
-  let latest:Option<i64>=sqlx::query_scalar("SELECT MAX(revision) FROM processing_route_candidates WHERE principal_id=? AND route_id=?").bind(p.to_string()).bind(&intent.route_id).fetch_one(&mut *tx).await.map_err(backend)?;
-  if latest!=Some(intent.configuration_revision as i64){return Err(TaskReservationError::PreEffect(invalid("route configuration changed; explicitly reconfirm route and settings")))}
-  if let Some(id)=&intent.engagement_id {
-   let workspace:Option<String>=sqlx::query_scalar("SELECT workspace_id FROM engagements WHERE engagement_id=?").bind(id).fetch_optional(&mut *tx).await.map_err(backend)?;
-   if workspace.as_deref()!=Some(intent.workspace_id.as_str()){return Err(TaskReservationError::PreEffect(DomainError::NotFound))}
-  }
-  if let Some(id)=&intent.folder_id {
-   let engagement:Option<String>=sqlx::query_scalar("SELECT engagement_id FROM folders WHERE folder_id=? AND workspace_id=?").bind(id).bind(&intent.workspace_id).fetch_optional(&mut *tx).await.map_err(backend)?;
-   if engagement!=intent.engagement_id{return Err(TaskReservationError::PreEffect(DomainError::NotFound))}
-  }
-  let b=TaskRunBinding{operation_id:intent.operation_id.clone(),task_id:proposed_task_id.clone(),run_id:Uuid::new_v4().to_string(),principal_id:p.to_string(),workspace_id:intent.workspace_id.clone(),runtime_id:runtime.into(),thread_id:None,turn_id:None,status:TaskRunStatus::Reserved,route_id:intent.route_id.clone(),configuration_revision:intent.configuration_revision,choices:intent.choices.clone(),setup_failure:None};
-  sqlx::query("INSERT INTO tasks(task_id,workspace_id,creator_principal_id,engagement_id,folder_id,title,source_refs,artifact_refs,visibility,revision,created_at_ms,updated_at_ms) VALUES(?,?,?,?,?,'Private task','[]','[]','private',1,?,?)").bind(&b.task_id).bind(&b.workspace_id).bind(&b.principal_id).bind(&intent.engagement_id).bind(&intent.folder_id).bind(now).bind(now).execute(&mut *tx).await.map_err(backend)?;
-  sqlx::query("INSERT INTO task_start_history(task_id,intent) VALUES(?,?)").bind(&b.task_id).bind(encode_intent(&intent)?).execute(&mut *tx).await.map_err(backend)?;
-  sqlx::query("INSERT INTO task_runs(principal_id,operation_id,task_id,runtime_id,record) VALUES(?,?,?,?,?)").bind(&b.principal_id).bind(&b.operation_id).bind(&b.task_id).bind(runtime).bind(encode_binding(&b)?).execute(&mut *tx).await.map_err(backend)?;
-  sqlx::query("INSERT INTO task_processing_routes(task_id,revision,principal_id,route_id,configuration_revision,recorded_at_ms) VALUES(?,1,?,?,?,?)").bind(&b.task_id).bind(&b.principal_id).bind(&b.route_id).bind(b.configuration_revision as i64).bind(now).execute(&mut *tx).await.map_err(backend)?;
-  sqlx::query("INSERT INTO task_data_provenance(task_id,principal_id,workspace_id,data_tier,recorded_at_ms) VALUES(?,?,?,?,?)").bind(&b.task_id).bind(&b.principal_id).bind(&b.workspace_id).bind(tier.as_str()).bind(now).execute(&mut *tx).await.map_err(backend)?;
-  let settings=TaskUsageSettings{revision:1,route_revision:1,choices:b.choices.clone()};
-  sqlx::query("INSERT INTO task_usage_settings(task_id,revision,record) VALUES(?,1,?)").bind(&b.task_id).bind(encode_settings(&settings)?).execute(&mut *tx).await.map_err(backend)?;
-  if let Err(error)=validate(proposed_task_id.clone()).await {tx.rollback().await.map_err(backend)?;return Err(TaskReservationError::PreEffect(error));}
-  tx.commit().await.map_err(backend)?;Ok(b)
- }
- async fn find_task_run(&self,p:PrincipalId,op:&str)->Result<Option<TaskRunBinding>,DomainError>{OperationId::parse(op)?;let mut tx=self.pool().begin().await.map_err(backend)?;load(&mut tx,p,op).await}
- async fn task_run_request(&self,p:PrincipalId,op:&str)->Result<String,DomainError>{
-  let mut tx=self.pool().begin().await.map_err(backend)?;let b=load(&mut tx,p,op).await?.ok_or(DomainError::NotFound)?;
-  let raw:String=sqlx::query_scalar("SELECT intent FROM task_start_history WHERE task_id=?").bind(&b.task_id).fetch_one(&mut *tx).await.map_err(backend)?;Ok(decode_intent(&raw)?.request)
- }
- async fn find_thread_run(&self,p:PrincipalId,runtime:&str,thread:&str)->Result<Option<TaskRunBinding>,DomainError>{
-  let mut tx=self.pool().begin().await.map_err(backend)?;let op:Option<String>=sqlx::query_scalar("SELECT operation_id FROM task_runs WHERE principal_id=? AND runtime_id=? AND thread_id=?").bind(p.to_string()).bind(runtime).bind(thread).fetch_optional(&mut *tx).await.map_err(backend)?;
-  match op{Some(op)=>load(&mut tx,p,&op).await,None=>Ok(None)}
- }
- async fn bind_task_thread(&self,p:PrincipalId,op:&str,runtime:&str,thread:&str)->Result<TaskRunBinding,DomainError>{
-  reference(thread)?;let mut tx=self.pool().begin_with("BEGIN IMMEDIATE").await.map_err(backend)?;let mut b=load(&mut tx,p,op).await?.ok_or(DomainError::NotFound)?;
-  if b.runtime_id!=runtime{return Err(invalid("runtime binding changed"))}if b.thread_id.as_deref()==Some(thread){return Ok(b)}
-  if b.status!=TaskRunStatus::Reserved||b.thread_id.is_some(){return Err(invalid("Task thread association is immutable"))}
-  b.thread_id=Some(thread.into());b.status=TaskRunStatus::Bound;
-  let n=sqlx::query("UPDATE tasks SET runtime_thread_id=?,revision=revision+1 WHERE task_id=? AND creator_principal_id=? AND runtime_thread_id IS NULL").bind(thread).bind(&b.task_id).bind(p.to_string()).execute(&mut *tx).await.map_err(backend)?;
-  if n.rows_affected()!=1{return Err(invalid("Task thread ownership changed"))}write(&mut tx,&b).await?;tx.commit().await.map_err(backend)?;Ok(b)
- }
- async fn claim_task_dispatch(&self,p:PrincipalId,op:&str,runtime:&str)->Result<TaskRunBinding,DomainError>{
-  let mut tx=self.pool().begin_with("BEGIN IMMEDIATE").await.map_err(backend)?;let mut b=load(&mut tx,p,op).await?.ok_or(DomainError::NotFound)?;
-  if b.runtime_id!=runtime||b.status!=TaskRunStatus::Bound||b.thread_id.is_none(){return Err(invalid("dispatch already claimed or binding unavailable; reconcile without retry"))}
-  b.status=TaskRunStatus::Dispatching;write(&mut tx,&b).await?;tx.commit().await.map_err(backend)?;Ok(b)
- }
- async fn mark_task_run(&self,p:PrincipalId,op:&str,status:TaskRunStatus,turn:Option<&str>)->Result<TaskRunBinding,DomainError>{
-  if status==TaskRunStatus::SetupFailed {return Err(invalid("Use explicit proven setup failure operation"))}
-  if let Some(t)=turn{reference(t)?}let mut tx=self.pool().begin_with("BEGIN IMMEDIATE").await.map_err(backend)?;let mut b=load(&mut tx,p,op).await?.ok_or(DomainError::NotFound)?;
-  if b.turn_id.is_some()&&turn.is_some()&&b.turn_id.as_deref()!=turn{return Err(invalid("Task turn association is immutable"))}
-  let allowed=b.status==status||match b.status{
-   TaskRunStatus::Reserved|TaskRunStatus::Bound=>matches!(status,TaskRunStatus::Failed|TaskRunStatus::Cancelled|TaskRunStatus::Uncertain),
-   TaskRunStatus::Dispatching|TaskRunStatus::Running=>matches!(status,TaskRunStatus::Running|TaskRunStatus::Completed|TaskRunStatus::Failed|TaskRunStatus::Cancelled|TaskRunStatus::Uncertain),_=>false};
-  if !allowed{return Err(invalid("Task state cannot be redispatched or inferred from uncertainty"))}
-  if matches!(status,TaskRunStatus::Running|TaskRunStatus::Completed)&&turn.is_none()&&b.turn_id.is_none(){return Err(invalid("accepted runtime turn identity required"))}
-  b.status=status;if let Some(t)=turn{b.turn_id=Some(t.into())}write(&mut tx,&b).await?;tx.commit().await.map_err(backend)?;Ok(b)
- }
- async fn fail_task_setup(&self,p:PrincipalId,op:&str,failure:TaskSetupFailure)->Result<TaskRunBinding,DomainError>{
-  let mut tx=self.pool().begin_with("BEGIN IMMEDIATE").await.map_err(backend)?;
-  let mut b=load(&mut tx,p,op).await?.ok_or(DomainError::NotFound)?;
-  if b.turn_id.is_some() || !matches!(b.status,TaskRunStatus::Reserved|TaskRunStatus::Bound|TaskRunStatus::Dispatching){return Err(invalid("First-turn non-submission is not proven"))}
-  b.status=TaskRunStatus::SetupFailed;b.setup_failure=Some(failure);write(&mut tx,&b).await?;tx.commit().await.map_err(backend)?;Ok(b)
- }
- async fn observe_task_terminal(&self,p:PrincipalId,op:&str,runtime:&str,thread:&str,turn:&str,status:TaskRunStatus)->Result<TaskRunBinding,DomainError>{
-  reference(turn)?;let mut tx=self.pool().begin_with("BEGIN IMMEDIATE").await.map_err(backend)?;
-  let mut b=load(&mut tx,p,op).await?.ok_or(DomainError::NotFound)?;
-  if b.runtime_id!=runtime || b.thread_id.as_deref()!=Some(thread) || b.turn_id.as_deref().is_some_and(|id|id!=turn)
-   || !matches!(status,TaskRunStatus::Completed|TaskRunStatus::Failed|TaskRunStatus::Cancelled)
-   || !(matches!(b.status,TaskRunStatus::Dispatching|TaskRunStatus::Running|TaskRunStatus::Uncertain) || b.status==status){return Err(invalid("Terminal observation does not match the immutable retained turn"))}
-  b.turn_id=Some(turn.into());b.status=status;write(&mut tx,&b).await?;tx.commit().await.map_err(backend)?;Ok(b)
- }
- async fn recover_task_runtime(&self,runtime:&str)->Result<u64,DomainError>{
-  let mut tx=self.pool().begin_with("BEGIN IMMEDIATE").await.map_err(backend)?;let rows:Vec<String>=sqlx::query_scalar("SELECT record FROM task_runs WHERE runtime_id=?").bind(runtime).fetch_all(&mut *tx).await.map_err(backend)?;
-  let mut count=0;for raw in rows{let mut b:TaskRunBinding=decode_binding(&raw)?;if matches!(b.status,TaskRunStatus::Reserved|TaskRunStatus::Bound|TaskRunStatus::Dispatching|TaskRunStatus::Running){b.status=TaskRunStatus::Uncertain;write(&mut tx,&b).await?;count+=1}}
-  sqlx::query("UPDATE task_lifecycle SET receipt=json_set(receipt,'$.status','uncertain') WHERE json_extract(receipt,'$.binding.runtime_id')=? AND json_extract(receipt,'$.status') IN ('reserved','dispatching')").bind(runtime).execute(&mut *tx).await.map_err(backend)?;
-  tx.commit().await.map_err(backend)?;Ok(count)
- }
+    async fn reserve_task_run(
+        &self,
+        p: PrincipalId,
+        intent: StartTaskIntent,
+        runtime: &str,
+        now: i64,
+        tier: NativeTaskDataTier,
+    ) -> Result<TaskRunBinding, DomainError> {
+        self.reserve_task_run_fenced(p, intent, runtime, now, tier, |_| async { Ok(()) })
+            .await
+            .map_err(TaskReservationError::into_domain)
+    }
+    async fn reserve_task_run_fenced<F, Fut>(
+        &self,
+        p: PrincipalId,
+        intent: StartTaskIntent,
+        runtime: &str,
+        now: i64,
+        tier: NativeTaskDataTier,
+        validate: F,
+    ) -> Result<TaskRunBinding, TaskReservationError>
+    where
+        F: Fn(String) -> Fut + Send + Sync,
+        Fut: std::future::Future<Output = Result<(), DomainError>> + Send,
+    {
+        intent.validate().map_err(TaskReservationError::PreEffect)?;
+        reference(runtime).map_err(TaskReservationError::PreEffect)?;
+        let proposed_task_id = Uuid::new_v4().to_string();
+        let mut tx = self
+            .pool()
+            .begin_with("BEGIN IMMEDIATE")
+            .await
+            .map_err(backend)?;
+        if let Err(error) = validate(proposed_task_id.clone()).await {
+            tx.rollback().await.map_err(backend)?;
+            return Err(TaskReservationError::PreEffect(error));
+        }
+        if let Some(old) = load(&mut tx, p, &intent.operation_id).await? {
+            let raw: String =
+                sqlx::query_scalar("SELECT intent FROM task_start_history WHERE task_id=?")
+                    .bind(&old.task_id)
+                    .fetch_one(&mut *tx)
+                    .await
+                    .map_err(backend)?;
+            let original_tier: Option<String> = sqlx::query_scalar(
+                "SELECT data_tier FROM task_data_provenance WHERE task_id=? AND principal_id=?",
+            )
+            .bind(&old.task_id)
+            .bind(p.to_string())
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(backend)?;
+            if original_tier.as_deref() != Some(tier.as_str()) || decode_intent(&raw)? != intent {
+                return Err(TaskReservationError::PreEffect(
+                    DomainError::OperationConflict {
+                        operation_id: OperationId::parse(&intent.operation_id)?,
+                    },
+                ));
+            }
+            return Ok(old);
+        }
+        let latest:Option<i64>=sqlx::query_scalar("SELECT MAX(revision) FROM processing_route_candidates WHERE principal_id=? AND route_id=?").bind(p.to_string()).bind(&intent.route_id).fetch_one(&mut *tx).await.map_err(backend)?;
+        if latest != Some(intent.configuration_revision as i64) {
+            return Err(TaskReservationError::PreEffect(invalid(
+                "route configuration changed; explicitly reconfirm route and settings",
+            )));
+        }
+        if let Some(id) = &intent.engagement_id {
+            let workspace: Option<String> =
+                sqlx::query_scalar("SELECT workspace_id FROM engagements WHERE engagement_id=?")
+                    .bind(id)
+                    .fetch_optional(&mut *tx)
+                    .await
+                    .map_err(backend)?;
+            if workspace.as_deref() != Some(intent.workspace_id.as_str()) {
+                return Err(TaskReservationError::PreEffect(DomainError::NotFound));
+            }
+        }
+        if let Some(id) = &intent.folder_id {
+            let engagement: Option<String> = sqlx::query_scalar(
+                "SELECT engagement_id FROM folders WHERE folder_id=? AND workspace_id=?",
+            )
+            .bind(id)
+            .bind(&intent.workspace_id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(backend)?;
+            if engagement != intent.engagement_id {
+                return Err(TaskReservationError::PreEffect(DomainError::NotFound));
+            }
+        }
+        let b = TaskRunBinding {
+            operation_id: intent.operation_id.clone(),
+            task_id: proposed_task_id.clone(),
+            run_id: Uuid::new_v4().to_string(),
+            principal_id: p.to_string(),
+            workspace_id: intent.workspace_id.clone(),
+            runtime_id: runtime.into(),
+            thread_id: None,
+            turn_id: None,
+            status: TaskRunStatus::Reserved,
+            route_id: intent.route_id.clone(),
+            configuration_revision: intent.configuration_revision,
+            choices: intent.choices.clone(),
+            setup_failure: None,
+        };
+        sqlx::query("INSERT INTO tasks(task_id,workspace_id,creator_principal_id,engagement_id,folder_id,title,source_refs,artifact_refs,visibility,revision,created_at_ms,updated_at_ms) VALUES(?,?,?,?,?,'Private task','[]','[]','private',1,?,?)").bind(&b.task_id).bind(&b.workspace_id).bind(&b.principal_id).bind(&intent.engagement_id).bind(&intent.folder_id).bind(now).bind(now).execute(&mut *tx).await.map_err(backend)?;
+        sqlx::query("INSERT INTO task_start_history(task_id,intent) VALUES(?,?)")
+            .bind(&b.task_id)
+            .bind(encode_intent(&intent)?)
+            .execute(&mut *tx)
+            .await
+            .map_err(backend)?;
+        sqlx::query("INSERT INTO task_runs(principal_id,operation_id,task_id,runtime_id,record) VALUES(?,?,?,?,?)").bind(&b.principal_id).bind(&b.operation_id).bind(&b.task_id).bind(runtime).bind(encode_binding(&b)?).execute(&mut *tx).await.map_err(backend)?;
+        sqlx::query("INSERT INTO task_processing_routes(task_id,revision,principal_id,route_id,configuration_revision,recorded_at_ms) VALUES(?,1,?,?,?,?)").bind(&b.task_id).bind(&b.principal_id).bind(&b.route_id).bind(b.configuration_revision as i64).bind(now).execute(&mut *tx).await.map_err(backend)?;
+        sqlx::query("INSERT INTO task_data_provenance(task_id,principal_id,workspace_id,data_tier,recorded_at_ms) VALUES(?,?,?,?,?)").bind(&b.task_id).bind(&b.principal_id).bind(&b.workspace_id).bind(tier.as_str()).bind(now).execute(&mut *tx).await.map_err(backend)?;
+        let settings = TaskUsageSettings {
+            revision: 1,
+            route_revision: 1,
+            choices: b.choices.clone(),
+        };
+        sqlx::query("INSERT INTO task_usage_settings(task_id,revision,record) VALUES(?,1,?)")
+            .bind(&b.task_id)
+            .bind(encode_settings(&settings)?)
+            .execute(&mut *tx)
+            .await
+            .map_err(backend)?;
+        if let Err(error) = validate(proposed_task_id.clone()).await {
+            tx.rollback().await.map_err(backend)?;
+            return Err(TaskReservationError::PreEffect(error));
+        }
+        tx.commit().await.map_err(backend)?;
+        Ok(b)
+    }
+    async fn find_task_run(
+        &self,
+        p: PrincipalId,
+        op: &str,
+    ) -> Result<Option<TaskRunBinding>, DomainError> {
+        OperationId::parse(op)?;
+        let mut tx = self.pool().begin().await.map_err(backend)?;
+        load(&mut tx, p, op).await
+    }
+    async fn task_run_request(&self, p: PrincipalId, op: &str) -> Result<String, DomainError> {
+        let mut tx = self.pool().begin().await.map_err(backend)?;
+        let b = load(&mut tx, p, op).await?.ok_or(DomainError::NotFound)?;
+        let raw: String =
+            sqlx::query_scalar("SELECT intent FROM task_start_history WHERE task_id=?")
+                .bind(&b.task_id)
+                .fetch_one(&mut *tx)
+                .await
+                .map_err(backend)?;
+        Ok(decode_intent(&raw)?.request)
+    }
+    async fn find_thread_run(
+        &self,
+        p: PrincipalId,
+        runtime: &str,
+        thread: &str,
+    ) -> Result<Option<TaskRunBinding>, DomainError> {
+        let mut tx = self.pool().begin().await.map_err(backend)?;
+        let op:Option<String>=sqlx::query_scalar("SELECT operation_id FROM task_runs WHERE principal_id=? AND runtime_id=? AND thread_id=?").bind(p.to_string()).bind(runtime).bind(thread).fetch_optional(&mut *tx).await.map_err(backend)?;
+        match op {
+            Some(op) => load(&mut tx, p, &op).await,
+            None => Ok(None),
+        }
+    }
+    async fn bind_task_thread(
+        &self,
+        p: PrincipalId,
+        op: &str,
+        runtime: &str,
+        thread: &str,
+    ) -> Result<TaskRunBinding, DomainError> {
+        reference(thread)?;
+        let mut tx = self
+            .pool()
+            .begin_with("BEGIN IMMEDIATE")
+            .await
+            .map_err(backend)?;
+        let mut b = load(&mut tx, p, op).await?.ok_or(DomainError::NotFound)?;
+        if b.runtime_id != runtime {
+            return Err(invalid("runtime binding changed"));
+        }
+        if b.thread_id.as_deref() == Some(thread) {
+            return Ok(b);
+        }
+        if b.status != TaskRunStatus::Reserved || b.thread_id.is_some() {
+            return Err(invalid("Task thread association is immutable"));
+        }
+        b.thread_id = Some(thread.into());
+        b.status = TaskRunStatus::Bound;
+        let n=sqlx::query("UPDATE tasks SET runtime_thread_id=?,revision=revision+1 WHERE task_id=? AND creator_principal_id=? AND runtime_thread_id IS NULL").bind(thread).bind(&b.task_id).bind(p.to_string()).execute(&mut *tx).await.map_err(backend)?;
+        if n.rows_affected() != 1 {
+            return Err(invalid("Task thread ownership changed"));
+        }
+        write(&mut tx, &b).await?;
+        tx.commit().await.map_err(backend)?;
+        Ok(b)
+    }
+    async fn claim_task_dispatch(
+        &self,
+        p: PrincipalId,
+        op: &str,
+        runtime: &str,
+    ) -> Result<TaskRunBinding, DomainError> {
+        let mut tx = self
+            .pool()
+            .begin_with("BEGIN IMMEDIATE")
+            .await
+            .map_err(backend)?;
+        let mut b = load(&mut tx, p, op).await?.ok_or(DomainError::NotFound)?;
+        if b.runtime_id != runtime || b.status != TaskRunStatus::Bound || b.thread_id.is_none() {
+            return Err(invalid(
+                "dispatch already claimed or binding unavailable; reconcile without retry",
+            ));
+        }
+        b.status = TaskRunStatus::Dispatching;
+        write(&mut tx, &b).await?;
+        tx.commit().await.map_err(backend)?;
+        Ok(b)
+    }
+    async fn mark_task_run(
+        &self,
+        p: PrincipalId,
+        op: &str,
+        status: TaskRunStatus,
+        turn: Option<&str>,
+    ) -> Result<TaskRunBinding, DomainError> {
+        if status == TaskRunStatus::SetupFailed {
+            return Err(invalid("Use explicit proven setup failure operation"));
+        }
+        if let Some(t) = turn {
+            reference(t)?
+        }
+        let mut tx = self
+            .pool()
+            .begin_with("BEGIN IMMEDIATE")
+            .await
+            .map_err(backend)?;
+        let mut b = load(&mut tx, p, op).await?.ok_or(DomainError::NotFound)?;
+        if b.turn_id.is_some() && turn.is_some() && b.turn_id.as_deref() != turn {
+            return Err(invalid("Task turn association is immutable"));
+        }
+        let allowed = b.status == status
+            || match b.status {
+                TaskRunStatus::Reserved | TaskRunStatus::Bound => matches!(
+                    status,
+                    TaskRunStatus::Failed | TaskRunStatus::Cancelled | TaskRunStatus::Uncertain
+                ),
+                TaskRunStatus::Dispatching | TaskRunStatus::Running => matches!(
+                    status,
+                    TaskRunStatus::Running
+                        | TaskRunStatus::Completed
+                        | TaskRunStatus::Failed
+                        | TaskRunStatus::Cancelled
+                        | TaskRunStatus::Uncertain
+                ),
+                _ => false,
+            };
+        if !allowed {
+            return Err(invalid(
+                "Task state cannot be redispatched or inferred from uncertainty",
+            ));
+        }
+        if matches!(status, TaskRunStatus::Running | TaskRunStatus::Completed)
+            && turn.is_none()
+            && b.turn_id.is_none()
+        {
+            return Err(invalid("accepted runtime turn identity required"));
+        }
+        b.status = status;
+        if let Some(t) = turn {
+            b.turn_id = Some(t.into())
+        }
+        write(&mut tx, &b).await?;
+        tx.commit().await.map_err(backend)?;
+        Ok(b)
+    }
+    async fn fail_task_setup(
+        &self,
+        p: PrincipalId,
+        op: &str,
+        failure: TaskSetupFailure,
+    ) -> Result<TaskRunBinding, DomainError> {
+        let mut tx = self
+            .pool()
+            .begin_with("BEGIN IMMEDIATE")
+            .await
+            .map_err(backend)?;
+        let mut b = load(&mut tx, p, op).await?.ok_or(DomainError::NotFound)?;
+        if b.turn_id.is_some()
+            || !matches!(
+                b.status,
+                TaskRunStatus::Reserved | TaskRunStatus::Bound | TaskRunStatus::Dispatching
+            )
+        {
+            return Err(invalid("First-turn non-submission is not proven"));
+        }
+        b.status = TaskRunStatus::SetupFailed;
+        b.setup_failure = Some(failure);
+        write(&mut tx, &b).await?;
+        tx.commit().await.map_err(backend)?;
+        Ok(b)
+    }
+    async fn observe_task_terminal(
+        &self,
+        p: PrincipalId,
+        op: &str,
+        runtime: &str,
+        thread: &str,
+        turn: &str,
+        status: TaskRunStatus,
+    ) -> Result<TaskRunBinding, DomainError> {
+        reference(turn)?;
+        let mut tx = self
+            .pool()
+            .begin_with("BEGIN IMMEDIATE")
+            .await
+            .map_err(backend)?;
+        let mut b = load(&mut tx, p, op).await?.ok_or(DomainError::NotFound)?;
+        if b.runtime_id != runtime
+            || b.thread_id.as_deref() != Some(thread)
+            || b.turn_id.as_deref().is_some_and(|id| id != turn)
+            || !matches!(
+                status,
+                TaskRunStatus::Completed | TaskRunStatus::Failed | TaskRunStatus::Cancelled
+            )
+            || !(matches!(
+                b.status,
+                TaskRunStatus::Dispatching | TaskRunStatus::Running | TaskRunStatus::Uncertain
+            ) || b.status == status)
+        {
+            return Err(invalid(
+                "Terminal observation does not match the immutable retained turn",
+            ));
+        }
+        b.turn_id = Some(turn.into());
+        b.status = status;
+        write(&mut tx, &b).await?;
+        tx.commit().await.map_err(backend)?;
+        Ok(b)
+    }
+    async fn recover_task_runtime(&self, runtime: &str) -> Result<u64, DomainError> {
+        let mut tx = self
+            .pool()
+            .begin_with("BEGIN IMMEDIATE")
+            .await
+            .map_err(backend)?;
+        let rows: Vec<String> =
+            sqlx::query_scalar("SELECT record FROM task_runs WHERE runtime_id=?")
+                .bind(runtime)
+                .fetch_all(&mut *tx)
+                .await
+                .map_err(backend)?;
+        let mut count = 0;
+        for raw in rows {
+            let mut b: TaskRunBinding = decode_binding(&raw)?;
+            if matches!(
+                b.status,
+                TaskRunStatus::Reserved
+                    | TaskRunStatus::Bound
+                    | TaskRunStatus::Dispatching
+                    | TaskRunStatus::Running
+            ) {
+                b.status = TaskRunStatus::Uncertain;
+                write(&mut tx, &b).await?;
+                count += 1
+            }
+        }
+        sqlx::query("UPDATE task_lifecycle SET receipt=json_set(receipt,'$.status','uncertain') WHERE json_extract(receipt,'$.binding.runtime_id')=? AND json_extract(receipt,'$.status') IN ('reserved','dispatching')").bind(runtime).execute(&mut *tx).await.map_err(backend)?;
+        tx.commit().await.map_err(backend)?;
+        Ok(count)
+    }
 }
 
 impl SqliteWorkingStore {
-    pub async fn task_data_tier(&self,principal:PrincipalId,task:&str)->Result<Option<String>,DomainError> {
+    pub async fn task_data_tier(
+        &self,
+        principal: PrincipalId,
+        task: &str,
+    ) -> Result<Option<String>, DomainError> {
         sqlx::query_scalar("SELECT p.data_tier FROM task_data_provenance p JOIN tasks t ON t.task_id=p.task_id AND t.creator_principal_id=p.principal_id AND t.workspace_id=p.workspace_id WHERE p.task_id=? AND p.principal_id=?")
             .bind(task).bind(principal.to_string()).fetch_optional(self.pool()).await.map_err(backend)
     }
@@ -122,7 +450,11 @@ impl SqliteWorkingStore {
 
 impl SqliteWorkingStore {
     /// Current native metadata provenance, never a data tier or inference grant.
-    pub async fn task_is_native_draft(&self,principal:PrincipalId,task:&str)->Result<bool,DomainError> {
+    pub async fn task_is_native_draft(
+        &self,
+        principal: PrincipalId,
+        task: &str,
+    ) -> Result<bool, DomainError> {
         let exists:Option<i64>=sqlx::query_scalar("SELECT 1 FROM task_metadata_provenance p JOIN tasks t ON t.task_id=p.task_id AND t.creator_principal_id=p.principal_id AND t.workspace_id=p.workspace_id WHERE p.task_id=? AND p.principal_id=? AND p.provenance_kind='draft_metadata' AND t.runtime_thread_id IS NULL AND t.source_refs='[]' AND t.artifact_refs='[]' AND NOT EXISTS(SELECT 1 FROM task_runs r WHERE r.task_id=t.task_id) AND NOT EXISTS(SELECT 1 FROM task_start_history h WHERE h.task_id=t.task_id) AND NOT EXISTS(SELECT 1 FROM task_data_provenance d WHERE d.task_id=t.task_id) AND NOT EXISTS(SELECT 1 FROM task_usage_attempts u WHERE u.task_id=t.task_id)")
             .bind(task).bind(principal.to_string()).fetch_optional(self.pool()).await.map_err(backend)?;
         Ok(exists.is_some())
@@ -130,189 +462,474 @@ impl SqliteWorkingStore {
 }
 
 fn lifecycle_decode<T: serde::de::DeserializeOwned>(s: &str) -> Result<T, DomainError> {
-    serde_json::from_str(s).map_err(|_| DomainError::Store(StoreError::Corrupt("invalid lifecycle record".into())))
+    serde_json::from_str(s)
+        .map_err(|_| DomainError::Store(StoreError::Corrupt("invalid lifecycle record".into())))
 }
 fn lifecycle_encode<T: serde::Serialize>(v: &T) -> Result<String, DomainError> {
     serde_json::to_string(v).map_err(|_| invalid("invalid lifecycle record"))
 }
-async fn lifecycle_load(tx: &mut Tx<'_>, p: PrincipalId, op: &str) -> Result<Option<(TaskLifecycleIntent, TaskLifecycleReceipt)>, DomainError> {
+async fn lifecycle_load(
+    tx: &mut Tx<'_>,
+    p: PrincipalId,
+    op: &str,
+) -> Result<Option<(TaskLifecycleIntent, TaskLifecycleReceipt)>, DomainError> {
     let row: Option<(String, String)> = sqlx::query_as("SELECT l.intent,l.receipt FROM task_lifecycle l JOIN tasks t ON t.task_id=l.task_id WHERE l.principal_id=? AND l.operation_id=? AND t.creator_principal_id=l.principal_id AND t.workspace_id=json_extract(l.intent,'$.expected.workspace_id') AND t.runtime_thread_id=json_extract(l.intent,'$.expected.thread_id')")
         .bind(p.to_string()).bind(op).fetch_optional(&mut **tx).await.map_err(backend)?;
-    row.map(|(i,r)| Ok((lifecycle_decode(&i)?, lifecycle_decode(&r)?))).transpose()
+    row.map(|(i, r)| Ok((lifecycle_decode(&i)?, lifecycle_decode(&r)?)))
+        .transpose()
 }
-async fn lifecycle_write(tx: &mut Tx<'_>, p: PrincipalId, r: &TaskLifecycleReceipt) -> Result<(), DomainError> {
+async fn lifecycle_write(
+    tx: &mut Tx<'_>,
+    p: PrincipalId,
+    r: &TaskLifecycleReceipt,
+) -> Result<(), DomainError> {
     sqlx::query("UPDATE task_lifecycle SET receipt=? WHERE principal_id=? AND operation_id=?")
-        .bind(lifecycle_encode(r)?).bind(p.to_string()).bind(&r.operation_id).execute(&mut **tx).await.map_err(backend)?;
+        .bind(lifecycle_encode(r)?)
+        .bind(p.to_string())
+        .bind(&r.operation_id)
+        .execute(&mut **tx)
+        .await
+        .map_err(backend)?;
     Ok(())
 }
 fn lifecycle_current(i: &TaskLifecycleIntent, b: &TaskRunBinding) -> Result<(), DomainError> {
-    if &i.expected != b { return Err(invalid("Task changed; reconcile the same operation without dispatch")); }
+    if &i.expected != b {
+        return Err(invalid(
+            "Task changed; reconcile the same operation without dispatch",
+        ));
+    }
     let allowed = match i.kind {
-        TaskLifecycleKind::Steer => b.status == TaskRunStatus::Running && b.turn_id.is_some() && i.runtime_id == b.runtime_id,
-        TaskLifecycleKind::Stop => matches!(b.status,TaskRunStatus::Running|TaskRunStatus::Completed|TaskRunStatus::Cancelled|TaskRunStatus::Failed) && b.turn_id.is_some() && i.runtime_id == b.runtime_id,
-        TaskLifecycleKind::Resume => matches!(b.status, TaskRunStatus::Cancelled | TaskRunStatus::Failed | TaskRunStatus::Uncertain),
+        TaskLifecycleKind::Steer => {
+            b.status == TaskRunStatus::Running
+                && b.turn_id.is_some()
+                && i.runtime_id == b.runtime_id
+        }
+        TaskLifecycleKind::Stop => {
+            matches!(
+                b.status,
+                TaskRunStatus::Running
+                    | TaskRunStatus::Completed
+                    | TaskRunStatus::Cancelled
+                    | TaskRunStatus::Failed
+            ) && b.turn_id.is_some()
+                && i.runtime_id == b.runtime_id
+        }
+        TaskLifecycleKind::Resume => matches!(
+            b.status,
+            TaskRunStatus::Cancelled | TaskRunStatus::Failed | TaskRunStatus::Uncertain
+        ),
     };
-    if !allowed { return Err(invalid("Task lifecycle does not match retained execution state")); }
+    if !allowed {
+        return Err(invalid(
+            "Task lifecycle does not match retained execution state",
+        ));
+    }
     Ok(())
 }
 impl TaskLifecycleStore for SqliteWorkingStore {
-    async fn reserve_task_lifecycle_fenced<F, Fut>(&self, p: PrincipalId, intent: TaskLifecycleIntent, validate: F) -> Result<TaskLifecycleReceipt, DomainError>
-    where F: Fn(TaskRunBinding) -> Fut + Send + Sync, Fut: std::future::Future<Output=Result<(),DomainError>> + Send {
+    async fn reserve_task_lifecycle_fenced<F, Fut>(
+        &self,
+        p: PrincipalId,
+        intent: TaskLifecycleIntent,
+        validate: F,
+    ) -> Result<TaskLifecycleReceipt, DomainError>
+    where
+        F: Fn(TaskRunBinding) -> Fut + Send + Sync,
+        Fut: std::future::Future<Output = Result<(), DomainError>> + Send,
+    {
         intent.validate()?;
-        if intent.expected.principal_id != p.to_string() { return Err(DomainError::NotFound); }
-        let mut tx = self.pool().begin_with("BEGIN IMMEDIATE").await.map_err(backend)?;
+        if intent.expected.principal_id != p.to_string() {
+            return Err(DomainError::NotFound);
+        }
+        let mut tx = self
+            .pool()
+            .begin_with("BEGIN IMMEDIATE")
+            .await
+            .map_err(backend)?;
         let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(2);
-        let b = load(&mut tx, p, &intent.expected.operation_id).await?.ok_or(DomainError::NotFound)?;
-        tokio::time::timeout_at(deadline,validate(b.clone())).await.map_err(|_|invalid("Lifecycle authority timed out before commit; no effect dispatched"))??;
-        if let Some((old, receipt)) = lifecycle_load(&mut tx,p,&intent.operation_id).await? {
-            if old != intent { return Err(DomainError::OperationConflict { operation_id: OperationId::parse(&intent.operation_id)? }); }
+        let b = load(&mut tx, p, &intent.expected.operation_id)
+            .await?
+            .ok_or(DomainError::NotFound)?;
+        tokio::time::timeout_at(deadline, validate(b.clone()))
+            .await
+            .map_err(|_| {
+                invalid("Lifecycle authority timed out before commit; no effect dispatched")
+            })??;
+        if let Some((old, receipt)) = lifecycle_load(&mut tx, p, &intent.operation_id).await? {
+            if old != intent {
+                return Err(DomainError::OperationConflict {
+                    operation_id: OperationId::parse(&intent.operation_id)?,
+                });
+            }
             return Ok(receipt);
         }
-        lifecycle_current(&intent,&b)?;
+        lifecycle_current(&intent, &b)?;
         let pending: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM task_lifecycle WHERE principal_id=? AND task_id=? AND json_extract(intent,'$.expected.run_id')=? AND NOT (? = 'stop' AND json_extract(intent,'$.kind')='steer') AND (json_extract(receipt,'$.status') IN ('reserved','dispatching') OR (json_extract(receipt,'$.status')='uncertain' AND ? != 'resume'))")
             .bind(p.to_string()).bind(&b.task_id).bind(&b.run_id).bind(if intent.kind==TaskLifecycleKind::Stop {"stop"} else {"other"}).bind(if intent.kind==TaskLifecycleKind::Resume {"resume"} else {"active"}).fetch_one(&mut *tx).await.map_err(backend)?;
-        if pending != 0 { return Err(invalid("A lifecycle operation is pending; reconcile before another effect")); }
-        let status=match (intent.kind,b.status) {
-            (TaskLifecycleKind::Stop,TaskRunStatus::Completed)=>TaskLifecycleStatus::Completed,
-            (TaskLifecycleKind::Stop,TaskRunStatus::Cancelled)=>TaskLifecycleStatus::Interrupted,
-            (TaskLifecycleKind::Stop,TaskRunStatus::Failed)=>TaskLifecycleStatus::Rejected,
-            _=>TaskLifecycleStatus::Reserved,
+        if pending != 0 {
+            return Err(invalid(
+                "A lifecycle operation is pending; reconcile before another effect",
+            ));
+        }
+        let status = match (intent.kind, b.status) {
+            (TaskLifecycleKind::Stop, TaskRunStatus::Completed) => TaskLifecycleStatus::Completed,
+            (TaskLifecycleKind::Stop, TaskRunStatus::Cancelled) => TaskLifecycleStatus::Interrupted,
+            (TaskLifecycleKind::Stop, TaskRunStatus::Failed) => TaskLifecycleStatus::Rejected,
+            _ => TaskLifecycleStatus::Reserved,
         };
-        let receipt = TaskLifecycleReceipt { operation_id:intent.operation_id.clone(),kind:intent.kind,binding:b.clone(),status };
+        let receipt = TaskLifecycleReceipt {
+            operation_id: intent.operation_id.clone(),
+            kind: intent.kind,
+            binding: b.clone(),
+            status,
+        };
         sqlx::query("INSERT INTO task_lifecycle(principal_id,operation_id,task_id,intent,receipt) VALUES(?,?,?,?,?)")
             .bind(p.to_string()).bind(&intent.operation_id).bind(&b.task_id).bind(lifecycle_encode(&intent)?).bind(lifecycle_encode(&receipt)?).execute(&mut *tx).await.map_err(backend)?;
-        tokio::time::timeout_at(deadline,validate(b)).await.map_err(|_|invalid("Lifecycle authority timed out before commit; no effect dispatched"))??;
+        tokio::time::timeout_at(deadline, validate(b))
+            .await
+            .map_err(|_| {
+                invalid("Lifecycle authority timed out before commit; no effect dispatched")
+            })??;
         tx.commit().await.map_err(backend)?;
         Ok(receipt)
     }
-    async fn claim_task_lifecycle_fenced<F, Fut>(&self,p:PrincipalId,op:&str,validate:F)->Result<TaskLifecycleReceipt,DomainError>
-    where F:Fn(TaskRunBinding)->Fut+Send+Sync,Fut:std::future::Future<Output=Result<(),DomainError>>+Send {
+    async fn claim_task_lifecycle_fenced<F, Fut>(
+        &self,
+        p: PrincipalId,
+        op: &str,
+        validate: F,
+    ) -> Result<TaskLifecycleReceipt, DomainError>
+    where
+        F: Fn(TaskRunBinding) -> Fut + Send + Sync,
+        Fut: std::future::Future<Output = Result<(), DomainError>> + Send,
+    {
         OperationId::parse(op)?;
-        let mut tx=self.pool().begin_with("BEGIN IMMEDIATE").await.map_err(backend)?;
-        let deadline=tokio::time::Instant::now()+std::time::Duration::from_secs(2);
-        let (intent,mut receipt)=lifecycle_load(&mut tx,p,op).await?.ok_or(DomainError::NotFound)?;
-        if receipt.status!=TaskLifecycleStatus::Reserved {return Err(invalid("Lifecycle dispatch already claimed; reconcile without retry"));}
-        let mut b=load(&mut tx,p,&intent.expected.operation_id).await?.ok_or(DomainError::NotFound)?;
-        if intent.kind==TaskLifecycleKind::Stop && matches!(b.status,TaskRunStatus::Completed|TaskRunStatus::Cancelled|TaskRunStatus::Failed) {
-            let mut expected=intent.expected.clone();expected.status=b.status;
-            if expected!=b {return Err(invalid("Stop belongs to another execution"));}
-            tokio::time::timeout_at(deadline,validate(b.clone())).await.map_err(|_|invalid("Lifecycle authority timed out before commit; no effect dispatched"))??;
-            receipt.binding=b.clone();
-            receipt.status=match b.status {TaskRunStatus::Completed=>TaskLifecycleStatus::Completed,TaskRunStatus::Cancelled=>TaskLifecycleStatus::Interrupted,_=>TaskLifecycleStatus::Rejected};
-            lifecycle_write(&mut tx,p,&receipt).await?;tx.commit().await.map_err(backend)?;return Ok(receipt);
+        let mut tx = self
+            .pool()
+            .begin_with("BEGIN IMMEDIATE")
+            .await
+            .map_err(backend)?;
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(2);
+        let (intent, mut receipt) = lifecycle_load(&mut tx, p, op)
+            .await?
+            .ok_or(DomainError::NotFound)?;
+        if receipt.status != TaskLifecycleStatus::Reserved {
+            return Err(invalid(
+                "Lifecycle dispatch already claimed; reconcile without retry",
+            ));
         }
-        lifecycle_current(&intent,&b)?;
-        tokio::time::timeout_at(deadline,validate(b.clone())).await.map_err(|_|invalid("Lifecycle authority timed out before commit; no effect dispatched"))??;
-        receipt.status=TaskLifecycleStatus::Dispatching;
-        if intent.kind==TaskLifecycleKind::Resume {
+        let mut b = load(&mut tx, p, &intent.expected.operation_id)
+            .await?
+            .ok_or(DomainError::NotFound)?;
+        if intent.kind == TaskLifecycleKind::Stop
+            && matches!(
+                b.status,
+                TaskRunStatus::Completed | TaskRunStatus::Cancelled | TaskRunStatus::Failed
+            )
+        {
+            let mut expected = intent.expected.clone();
+            expected.status = b.status;
+            if expected != b {
+                return Err(invalid("Stop belongs to another execution"));
+            }
+            tokio::time::timeout_at(deadline, validate(b.clone()))
+                .await
+                .map_err(|_| {
+                    invalid("Lifecycle authority timed out before commit; no effect dispatched")
+                })??;
+            receipt.binding = b.clone();
+            receipt.status = match b.status {
+                TaskRunStatus::Completed => TaskLifecycleStatus::Completed,
+                TaskRunStatus::Cancelled => TaskLifecycleStatus::Interrupted,
+                _ => TaskLifecycleStatus::Rejected,
+            };
+            lifecycle_write(&mut tx, p, &receipt).await?;
+            tx.commit().await.map_err(backend)?;
+            return Ok(receipt);
+        }
+        lifecycle_current(&intent, &b)?;
+        tokio::time::timeout_at(deadline, validate(b.clone()))
+            .await
+            .map_err(|_| {
+                invalid("Lifecycle authority timed out before commit; no effect dispatched")
+            })??;
+        receipt.status = TaskLifecycleStatus::Dispatching;
+        if intent.kind == TaskLifecycleKind::Resume {
             // Explicit recovery was freshly validated and claimed for a non-live
             // retained run. Close old uncertainty without inventing admission or
             // dispatching it again; retain its original execution identity.
             sqlx::query("UPDATE task_lifecycle SET receipt=json_set(receipt,'$.status','unresolved') WHERE principal_id=? AND task_id=? AND json_extract(receipt,'$.binding.run_id')=? AND json_extract(receipt,'$.status')='uncertain'")
                 .bind(p.to_string()).bind(&b.task_id).bind(&b.run_id).execute(&mut *tx).await.map_err(backend)?;
             sqlx::query("INSERT INTO task_run_history(task_id,run_id,record) VALUES(?,?,?)")
-                .bind(&b.task_id).bind(&b.run_id).bind(encode_binding(&b)?).execute(&mut *tx).await.map_err(backend)?;
-            b.run_id=Uuid::new_v4().to_string();b.runtime_id=intent.runtime_id.clone();b.turn_id=None;b.status=TaskRunStatus::Dispatching;b.setup_failure=None;
-            receipt.binding=b.clone();
+                .bind(&b.task_id)
+                .bind(&b.run_id)
+                .bind(encode_binding(&b)?)
+                .execute(&mut *tx)
+                .await
+                .map_err(backend)?;
+            b.run_id = Uuid::new_v4().to_string();
+            b.runtime_id = intent.runtime_id.clone();
+            b.turn_id = None;
+            b.status = TaskRunStatus::Dispatching;
+            b.setup_failure = None;
+            receipt.binding = b.clone();
         }
-        lifecycle_write(&mut tx,p,&receipt).await?;
-        if intent.kind==TaskLifecycleKind::Resume {
+        lifecycle_write(&mut tx, p, &receipt).await?;
+        if intent.kind == TaskLifecycleKind::Resume {
             sqlx::query("UPDATE task_runs SET runtime_id=?,record=? WHERE principal_id=? AND operation_id=?")
                 .bind(&b.runtime_id).bind(encode_binding(&b)?).bind(p.to_string()).bind(&b.operation_id).execute(&mut *tx).await.map_err(backend)?;
         }
         // Validate the retained context again, not the newly minted dispatch state.
-        tokio::time::timeout_at(deadline,validate(intent.expected)).await.map_err(|_|invalid("Lifecycle authority timed out before commit; no effect dispatched"))??;
-        tx.commit().await.map_err(backend)?;Ok(receipt)
+        tokio::time::timeout_at(deadline, validate(intent.expected))
+            .await
+            .map_err(|_| {
+                invalid("Lifecycle authority timed out before commit; no effect dispatched")
+            })??;
+        tx.commit().await.map_err(backend)?;
+        Ok(receipt)
     }
-    async fn find_task_lifecycle(&self,p:PrincipalId,op:&str)->Result<Option<TaskLifecycleReceipt>,DomainError> {
-        OperationId::parse(op)?;let mut tx=self.pool().begin().await.map_err(backend)?;
-        Ok(lifecycle_load(&mut tx,p,op).await?.map(|(_,r)|r))
+    async fn find_task_lifecycle(
+        &self,
+        p: PrincipalId,
+        op: &str,
+    ) -> Result<Option<TaskLifecycleReceipt>, DomainError> {
+        OperationId::parse(op)?;
+        let mut tx = self.pool().begin().await.map_err(backend)?;
+        Ok(lifecycle_load(&mut tx, p, op).await?.map(|(_, r)| r))
     }
-    async fn finish_task_lifecycle(&self,p:PrincipalId,op:&str,runtime:&str,thread:&str,turn:Option<&str>,status:TaskLifecycleStatus)->Result<TaskLifecycleReceipt,DomainError> {
-        let mut tx=self.pool().begin_with("BEGIN IMMEDIATE").await.map_err(backend)?;
-        let (_,mut receipt)=lifecycle_load(&mut tx,p,op).await?.ok_or(DomainError::NotFound)?;
-        let b=load(&mut tx,p,&receipt.binding.operation_id).await?.ok_or(DomainError::NotFound)?;
-        if receipt.binding.runtime_id!=runtime || receipt.binding.thread_id.as_deref()!=Some(thread)
-            || b.run_id!=receipt.binding.run_id || b.runtime_id!=runtime
-            || receipt.binding.turn_id.as_deref().is_some_and(|t|Some(t)!=turn)
-            || b.turn_id.as_deref().is_some_and(|t|Some(t)!=turn) {
-            return Err(invalid("Lifecycle acknowledgement does not match retained execution"));
+    async fn finish_task_lifecycle(
+        &self,
+        p: PrincipalId,
+        op: &str,
+        runtime: &str,
+        thread: &str,
+        turn: Option<&str>,
+        status: TaskLifecycleStatus,
+    ) -> Result<TaskLifecycleReceipt, DomainError> {
+        let mut tx = self
+            .pool()
+            .begin_with("BEGIN IMMEDIATE")
+            .await
+            .map_err(backend)?;
+        let (_, mut receipt) = lifecycle_load(&mut tx, p, op)
+            .await?
+            .ok_or(DomainError::NotFound)?;
+        let b = load(&mut tx, p, &receipt.binding.operation_id)
+            .await?
+            .ok_or(DomainError::NotFound)?;
+        if receipt.binding.runtime_id != runtime
+            || receipt.binding.thread_id.as_deref() != Some(thread)
+            || b.run_id != receipt.binding.run_id
+            || b.runtime_id != runtime
+            || receipt
+                .binding
+                .turn_id
+                .as_deref()
+                .is_some_and(|t| Some(t) != turn)
+            || b.turn_id.as_deref().is_some_and(|t| Some(t) != turn)
+        {
+            return Err(invalid(
+                "Lifecycle acknowledgement does not match retained execution",
+            ));
         }
-        if receipt.status==status {return Ok(receipt);}
-        let allowed=match receipt.kind {
-            TaskLifecycleKind::Steer=>matches!(status,TaskLifecycleStatus::Admitted|TaskLifecycleStatus::Rejected|TaskLifecycleStatus::Uncertain|TaskLifecycleStatus::Unresolved),
-            TaskLifecycleKind::Stop=>matches!(status,TaskLifecycleStatus::Interrupted|TaskLifecycleStatus::Completed|TaskLifecycleStatus::Rejected|TaskLifecycleStatus::Uncertain|TaskLifecycleStatus::Unresolved),
-            TaskLifecycleKind::Resume=>matches!(status,TaskLifecycleStatus::Admitted|TaskLifecycleStatus::Rejected|TaskLifecycleStatus::Uncertain|TaskLifecycleStatus::Unresolved),
+        if receipt.status == status {
+            return Ok(receipt);
+        }
+        let allowed = match receipt.kind {
+            TaskLifecycleKind::Steer => matches!(
+                status,
+                TaskLifecycleStatus::Admitted
+                    | TaskLifecycleStatus::Rejected
+                    | TaskLifecycleStatus::Uncertain
+                    | TaskLifecycleStatus::Unresolved
+            ),
+            TaskLifecycleKind::Stop => matches!(
+                status,
+                TaskLifecycleStatus::Interrupted
+                    | TaskLifecycleStatus::Completed
+                    | TaskLifecycleStatus::Rejected
+                    | TaskLifecycleStatus::Uncertain
+                    | TaskLifecycleStatus::Unresolved
+            ),
+            TaskLifecycleKind::Resume => matches!(
+                status,
+                TaskLifecycleStatus::Admitted
+                    | TaskLifecycleStatus::Rejected
+                    | TaskLifecycleStatus::Uncertain
+                    | TaskLifecycleStatus::Unresolved
+            ),
         };
-        let reservable=receipt.status==TaskLifecycleStatus::Reserved && (matches!(status,TaskLifecycleStatus::Rejected|TaskLifecycleStatus::Unresolved) || (receipt.kind==TaskLifecycleKind::Stop && matches!(status,TaskLifecycleStatus::Completed|TaskLifecycleStatus::Interrupted)));
-        if !allowed || (!reservable && !matches!(receipt.status,TaskLifecycleStatus::Dispatching|TaskLifecycleStatus::Uncertain)) {return Err(invalid("Lifecycle outcome cannot be rewritten"));}
-        receipt.status=status;receipt.binding=b;
-        lifecycle_write(&mut tx,p,&receipt).await?;tx.commit().await.map_err(backend)?;Ok(receipt)
+        let reservable = receipt.status == TaskLifecycleStatus::Reserved
+            && (matches!(
+                status,
+                TaskLifecycleStatus::Rejected | TaskLifecycleStatus::Unresolved
+            ) || (receipt.kind == TaskLifecycleKind::Stop
+                && matches!(
+                    status,
+                    TaskLifecycleStatus::Completed | TaskLifecycleStatus::Interrupted
+                )));
+        if !allowed
+            || (!reservable
+                && !matches!(
+                    receipt.status,
+                    TaskLifecycleStatus::Dispatching | TaskLifecycleStatus::Uncertain
+                ))
+        {
+            return Err(invalid("Lifecycle outcome cannot be rewritten"));
+        }
+        receipt.status = status;
+        receipt.binding = b;
+        lifecycle_write(&mut tx, p, &receipt).await?;
+        tx.commit().await.map_err(backend)?;
+        Ok(receipt)
     }
 }
 
 impl SqliteWorkingStore {
-    pub async fn find_task_current_run(&self,p:PrincipalId,task:&str)->Result<Option<TaskRunBinding>,DomainError> {
+    pub async fn find_task_current_run(
+        &self,
+        p: PrincipalId,
+        task: &str,
+    ) -> Result<Option<TaskRunBinding>, DomainError> {
         inquello_domain::organise::TaskId::parse(task)?;
-        let mut tx=self.pool().begin().await.map_err(backend)?;
-        let op:Option<String>=sqlx::query_scalar("SELECT operation_id FROM task_runs WHERE principal_id=? AND task_id=?")
-            .bind(p.to_string()).bind(task).fetch_optional(&mut *tx).await.map_err(backend)?;
-        match op {Some(op)=>load(&mut tx,p,&op).await,None=>Ok(None)}
+        let mut tx = self.pool().begin().await.map_err(backend)?;
+        let op: Option<String> = sqlx::query_scalar(
+            "SELECT operation_id FROM task_runs WHERE principal_id=? AND task_id=?",
+        )
+        .bind(p.to_string())
+        .bind(task)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(backend)?;
+        match op {
+            Some(op) => load(&mut tx, p, &op).await,
+            None => Ok(None),
+        }
     }
     /// Historical observations require the same current creator/linkage as current work.
-    pub async fn prior_task_runs(&self,p:PrincipalId,task:&str)->Result<Vec<TaskRunBinding>,DomainError> {
-        let mut tx=self.pool().begin().await.map_err(backend)?;
+    pub async fn prior_task_runs(
+        &self,
+        p: PrincipalId,
+        task: &str,
+    ) -> Result<Vec<TaskRunBinding>, DomainError> {
+        let mut tx = self.pool().begin().await.map_err(backend)?;
         let rows:Vec<String>=sqlx::query_scalar("SELECT h.record FROM task_run_history h JOIN tasks t ON t.task_id=h.task_id WHERE h.task_id=? AND t.creator_principal_id=? AND json_extract(h.record,'$.principal_id')=t.creator_principal_id AND json_extract(h.record,'$.workspace_id')=t.workspace_id AND json_extract(h.record,'$.thread_id')=t.runtime_thread_id ORDER BY h.rowid")
             .bind(task).bind(p.to_string()).fetch_all(&mut *tx).await.map_err(backend)?;
-        rows.iter().map(|r|decode_binding(r)).collect()
+        rows.iter().map(|r| decode_binding(r)).collect()
     }
     /// Trusted runtime callbacks MUST use this incarnation-fenced write, not the
     /// legacy first-turn coordinator method, once continuation is possible.
-    pub async fn mark_task_run_fenced(&self,p:PrincipalId,op:&str,run:&str,runtime:&str,status:TaskRunStatus,turn:Option<&str>)->Result<TaskRunBinding,DomainError> {
-        if let Some(t)=turn {reference(t)?;}
-        let mut tx=self.pool().begin_with("BEGIN IMMEDIATE").await.map_err(backend)?;
-        let mut b=load(&mut tx,p,op).await?.ok_or(DomainError::NotFound)?;
-        if b.run_id!=run || b.runtime_id!=runtime || (b.turn_id.is_some() && b.turn_id.as_deref()!=turn) {
-            return Err(invalid("Runtime callback belongs to another Task execution"));
+    pub async fn mark_task_run_fenced(
+        &self,
+        p: PrincipalId,
+        op: &str,
+        run: &str,
+        runtime: &str,
+        status: TaskRunStatus,
+        turn: Option<&str>,
+    ) -> Result<TaskRunBinding, DomainError> {
+        if let Some(t) = turn {
+            reference(t)?;
         }
-        let allowed=b.status==status || match b.status {
-            TaskRunStatus::Dispatching|TaskRunStatus::Running=>matches!(status,TaskRunStatus::Running|TaskRunStatus::Completed|TaskRunStatus::Failed|TaskRunStatus::Cancelled|TaskRunStatus::Uncertain),
-            TaskRunStatus::Uncertain=>matches!(status,TaskRunStatus::Completed|TaskRunStatus::Failed|TaskRunStatus::Cancelled),
-            _=>false,
-        };
-        if !allowed || (matches!(status,TaskRunStatus::Running|TaskRunStatus::Completed|TaskRunStatus::Cancelled) && turn.is_none()) {
-            return Err(invalid("Runtime observation does not establish this transition"));
+        let mut tx = self
+            .pool()
+            .begin_with("BEGIN IMMEDIATE")
+            .await
+            .map_err(backend)?;
+        let mut b = load(&mut tx, p, op).await?.ok_or(DomainError::NotFound)?;
+        if b.run_id != run
+            || b.runtime_id != runtime
+            || (b.turn_id.is_some() && b.turn_id.as_deref() != turn)
+        {
+            return Err(invalid(
+                "Runtime callback belongs to another Task execution",
+            ));
         }
-        b.status=status;if let Some(t)=turn {b.turn_id=Some(t.into());}
-        write(&mut tx,&b).await?;tx.commit().await.map_err(backend)?;Ok(b)
+        let allowed = b.status == status
+            || match b.status {
+                TaskRunStatus::Dispatching | TaskRunStatus::Running => matches!(
+                    status,
+                    TaskRunStatus::Running
+                        | TaskRunStatus::Completed
+                        | TaskRunStatus::Failed
+                        | TaskRunStatus::Cancelled
+                        | TaskRunStatus::Uncertain
+                ),
+                TaskRunStatus::Uncertain => matches!(
+                    status,
+                    TaskRunStatus::Completed | TaskRunStatus::Failed | TaskRunStatus::Cancelled
+                ),
+                _ => false,
+            };
+        if !allowed
+            || (matches!(
+                status,
+                TaskRunStatus::Running | TaskRunStatus::Completed | TaskRunStatus::Cancelled
+            ) && turn.is_none())
+        {
+            return Err(invalid(
+                "Runtime observation does not establish this transition",
+            ));
+        }
+        b.status = status;
+        if let Some(t) = turn {
+            b.turn_id = Some(t.into());
+        }
+        write(&mut tx, &b).await?;
+        tx.commit().await.map_err(backend)?;
+        Ok(b)
     }
 }
 
 impl SqliteWorkingStore {
     /// Governed private command history; never disclose before live authorization.
-    pub async fn find_task_lifecycle_intent(&self,p:PrincipalId,op:&str)->Result<Option<TaskLifecycleIntent>,DomainError> {
+    pub async fn find_task_lifecycle_intent(
+        &self,
+        p: PrincipalId,
+        op: &str,
+    ) -> Result<Option<TaskLifecycleIntent>, DomainError> {
         OperationId::parse(op)?;
-        let mut tx=self.pool().begin().await.map_err(backend)?;
-        Ok(lifecycle_load(&mut tx,p,op).await?.map(|(i,_)|i))
+        let mut tx = self.pool().begin().await.map_err(backend)?;
+        Ok(lifecycle_load(&mut tx, p, op).await?.map(|(i, _)| i))
     }
 }
 
-
 impl SqliteWorkingStore {
     /// Called only after the native host acquired and retained its OS file lock.
-    pub async fn record_task_runtime_lease(&self,runtime:&str,lease_domain:&str)->Result<(),DomainError> {
-        reference(runtime)?;reference(lease_domain)?;
+    pub async fn record_task_runtime_lease(
+        &self,
+        runtime: &str,
+        lease_domain: &str,
+    ) -> Result<(), DomainError> {
+        reference(runtime)?;
+        reference(lease_domain)?;
         sqlx::query("INSERT INTO task_runtime_leases(runtime_id,lease_domain) VALUES(?,?) ON CONFLICT(runtime_id) DO NOTHING")
             .bind(runtime).bind(lease_domain).execute(self.pool()).await.map_err(backend)?;
-        if !self.task_runtime_lease_covered(runtime,lease_domain).await? {return Err(invalid("Runtime belongs to a different device lease"));}
+        if !self
+            .task_runtime_lease_covered(runtime, lease_domain)
+            .await?
+        {
+            return Err(invalid("Runtime belongs to a different device lease"));
+        }
         Ok(())
     }
     /// Exported records alone cannot pass: the host must hold the original,
     /// non-exported nonce's OS lease for this same local working-store family.
-    pub async fn task_runtime_lease_covered(&self,runtime:&str,lease_domain:&str)->Result<bool,DomainError> {
-        reference(runtime)?;reference(lease_domain)?;
-        let found:Option<i64>=sqlx::query_scalar("SELECT 1 FROM task_runtime_leases WHERE runtime_id=? AND lease_domain=?")
-            .bind(runtime).bind(lease_domain).fetch_optional(self.pool()).await.map_err(backend)?;
+    pub async fn task_runtime_lease_covered(
+        &self,
+        runtime: &str,
+        lease_domain: &str,
+    ) -> Result<bool, DomainError> {
+        reference(runtime)?;
+        reference(lease_domain)?;
+        let found: Option<i64> = sqlx::query_scalar(
+            "SELECT 1 FROM task_runtime_leases WHERE runtime_id=? AND lease_domain=?",
+        )
+        .bind(runtime)
+        .bind(lease_domain)
+        .fetch_optional(self.pool())
+        .await
+        .map_err(backend)?;
         Ok(found.is_some())
     }
 }

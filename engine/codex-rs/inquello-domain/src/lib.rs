@@ -33,8 +33,8 @@ pub mod execution_policy;
 mod model;
 pub mod organise;
 mod ports;
-pub mod state;
 pub mod routes;
+pub mod state;
 
 pub use commands::InitializeStore;
 pub use commands::get_store_info;

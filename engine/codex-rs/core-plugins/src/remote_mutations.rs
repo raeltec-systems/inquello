@@ -90,7 +90,14 @@ impl PluginsManager {
         request: RemotePluginInstallRequest,
         on_effective_plugins_changed: Option<EffectivePluginsChangedCallback>,
     ) -> Result<RemotePluginInstallOutcome, RemotePluginOperationError> {
-        self.install_remote_plugin_with_mcp_admission(config, auth, request, on_effective_plugins_changed, None).await
+        self.install_remote_plugin_with_mcp_admission(
+            config,
+            auth,
+            request,
+            on_effective_plugins_changed,
+            None,
+        )
+        .await
     }
 
     pub async fn install_remote_plugin_with_mcp_admission(
@@ -172,14 +179,15 @@ impl PluginsManager {
             &detail.summary.name,
         );
         // Materialize first: a failed download must never leave a backend installation behind.
-        let installed = remote_bundle::download_and_install_remote_plugin_bundle_with_mcp_admission(
-            &service,
-            self.codex_home.clone(),
-            bundle,
-            admission,
-        )
-        .await
-        .map_err(|err| resolved(Error::Bundle(err)))?;
+        let installed =
+            remote_bundle::download_and_install_remote_plugin_bundle_with_mcp_admission(
+                &service,
+                self.codex_home.clone(),
+                bundle,
+                admission,
+            )
+            .await
+            .map_err(|err| resolved(Error::Bundle(err)))?;
         let install_result = if let Some(install_attempt_id) = install_attempt_id.as_deref() {
             remote::install_remote_plugin_with_install_attempt_id(
                 &service,

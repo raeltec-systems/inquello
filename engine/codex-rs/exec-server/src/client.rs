@@ -300,6 +300,7 @@ struct Inner {
     /// Caches metadata from initialization or the first successful info request for this client's lifetime.
     environment_info: OnceCell<Arc<EnvironmentInfo>>,
     reconnect_strategy: Option<ExecServerReconnectStrategy>,
+    isolated_stdio: AtomicBool,
 }
 
 struct ConnectionState {
@@ -730,6 +731,33 @@ pub enum ExecServerError {
 }
 
 impl ExecServerClient {
+    pub(crate) fn mark_isolated_stdio(&self) {
+        self.inner.isolated_stdio.store(true, Ordering::Release);
+    }
+    pub(crate) fn is_isolated_stdio(&self) -> bool {
+        self.inner.isolated_stdio.load(Ordering::Acquire) && self.inner.reconnect_strategy.is_none()
+    }
+    /// Retire an isolated stdio executor without allowing a reconnect.
+    pub async fn close_isolated_stdio(&self) {
+        if self.inner.reconnect_strategy.is_some() {
+            return;
+        }
+        self.inner.retired.cancel();
+        let rpc = {
+            let state = self
+                .inner
+                .connection
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            match &state.status {
+                ConnectionStatus::Connected(rpc) => Some(rpc.clone()),
+                _ => None,
+            }
+        };
+        if let Some(rpc) = rpc {
+            rpc.close_transport().await;
+        }
+    }
     fn executor_registration_id(&self) -> Option<String> {
         self.inner
             .connection
@@ -1358,6 +1386,7 @@ impl ExecServerClient {
             retired: CancellationToken::new(),
             environment_info: OnceCell::new(),
             reconnect_strategy,
+            isolated_stdio: AtomicBool::new(false),
         });
         let client = Self {
             inner,

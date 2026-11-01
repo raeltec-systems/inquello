@@ -49,12 +49,16 @@ fn kind(result: Result<Option<ClientResponsePayload>, JSONRPCErrorError>) -> Str
 }
 
 async fn sign_in(processor: &InquelloRequestProcessor, connection: ConnectionId, principal: &str) {
-    let bound: InquelloSetPrincipalResponse = decode(processor.set_principal(
-        connection,
-        InquelloSetPrincipalParams {
-            principal_id: Some(principal.to_string()),
-        },
-    ).await);
+    let bound: InquelloSetPrincipalResponse = decode(
+        processor
+            .set_principal(
+                connection,
+                InquelloSetPrincipalParams {
+                    principal_id: Some(principal.to_string()),
+                },
+            )
+            .await,
+    );
     assert_eq!(bound.principal_id.as_deref(), Some(principal));
 }
 
@@ -106,12 +110,16 @@ async fn calls_before_set_principal_are_unauthenticated() {
     // Refused before the store was touched.
     assert!(!dir.path().join("working.sqlite").exists());
     assert_eq!(
-        kind(processor.set_principal(
-            DESKTOP,
-            InquelloSetPrincipalParams {
-                principal_id: Some("not-a-uuid".to_string()),
-            },
-        ).await),
+        kind(
+            processor
+                .set_principal(
+                    DESKTOP,
+                    InquelloSetPrincipalParams {
+                        principal_id: Some("not-a-uuid".to_string()),
+                    },
+                )
+                .await
+        ),
         "invalid"
     );
 }
@@ -188,27 +196,27 @@ async fn organise_engagement_folder_and_task_then_move_it() {
     );
     assert_eq!(task.task.visibility, InquelloTaskVisibility::Private);
     assert_eq!(task.task.creator_principal_id, ALICE);
-    let attached: InquelloTaskResponse = decode(
-        processor
-            .task_attach_thread(
-                DESKTOP,
-                InquelloTaskAttachThreadParams {
-                    operation_id: "op-a".to_string(),
-                    expected_revision: 1,
-                    workspace_id: WORKSPACE.to_string(),
-                    task_id: task.task.task_id.clone(),
-                    runtime_thread_id: "thread-1".to_string(),
-                },
-            )
-            .await,
-    );
+    let refused = processor
+        .task_attach_thread(
+            DESKTOP,
+            InquelloTaskAttachThreadParams {
+                operation_id: "op-a".to_string(),
+                expected_revision: 1,
+                workspace_id: WORKSPACE.to_string(),
+                task_id: task.task.task_id.clone(),
+                runtime_thread_id: "thread-1".to_string(),
+            },
+        )
+        .await
+        .expect_err("caller-supplied thread attachment must be refused");
+    assert_eq!(refused.data.unwrap()["inquello"]["kind"], "unsupported");
     let moved: InquelloTaskResponse = decode(
         processor
             .task_move(
                 DESKTOP,
                 InquelloTaskMoveParams {
                     operation_id: "op-m".to_string(),
-                    expected_revision: 2,
+                    expected_revision: 1,
                     workspace_id: WORKSPACE.to_string(),
                     task_id: task.task.task_id.clone(),
                     engagement_id: None,
@@ -217,10 +225,10 @@ async fn organise_engagement_folder_and_task_then_move_it() {
             )
             .await,
     );
-    assert_eq!(moved.task.task_id, attached.task.task_id);
-    assert_eq!(moved.task.runtime_thread_id.as_deref(), Some("thread-1"));
-    assert_eq!(moved.task.source_refs, attached.task.source_refs);
-    assert_eq!(moved.task.artifact_refs, attached.task.artifact_refs);
+    assert_eq!(moved.task.task_id, task.task.task_id);
+    assert_eq!(moved.task.runtime_thread_id, None);
+    assert_eq!(moved.task.source_refs, task.task.source_refs);
+    assert_eq!(moved.task.artifact_refs, task.task.artifact_refs);
     assert_eq!(
         (moved.task.engagement_id, moved.task.folder_id),
         (None, None)
@@ -363,8 +371,11 @@ async fn tasks_are_listed_only_for_their_creator() {
     );
 
     // Signing out (or closing the connection) unbinds the principal.
-    let _: InquelloSetPrincipalResponse =
-        decode(processor.set_principal(DESKTOP, InquelloSetPrincipalParams { principal_id: None }).await);
+    let _: InquelloSetPrincipalResponse = decode(
+        processor
+            .set_principal(DESKTOP, InquelloSetPrincipalParams { principal_id: None })
+            .await,
+    );
     assert_eq!(kind(tree(DESKTOP).await), "unauthenticated");
     processor.connection_closed(OTHER).await;
     assert_eq!(kind(tree(OTHER).await), "unauthenticated");
@@ -762,7 +773,10 @@ async fn the_effective_policy_names_its_sources_and_the_capability_contract() {
     assert_eq!(setting(&response, "sandbox").value, "workspace_write");
     assert_eq!(setting(&response, "approval").value, "on_request");
     assert_eq!(setting(&response, "full_access").value, "not_permitted");
-    assert_eq!(setting(&response, "allow_local_mcp_servers").value, "denied");
+    assert_eq!(
+        setting(&response, "allow_local_mcp_servers").value,
+        "denied"
+    );
     assert!(!response.device.configured);
     assert_eq!(response.device.sandbox_modes, None);
     assert!(response.task.is_none());
@@ -799,9 +813,13 @@ async fn the_effective_policy_names_its_sources_and_the_capability_contract() {
         effective(
             &processor,
             DESKTOP,
-            workspace_policy(WORKSPACE, 4, Some(json!({
-                "mcp_tools": "allowed", "allow_local_mcp_servers": true,
-            }))),
+            workspace_policy(
+                WORKSPACE,
+                4,
+                Some(json!({
+                    "mcp_tools": "allowed", "allow_local_mcp_servers": true,
+                })),
+            ),
             None,
             DeviceRequirements::default(),
             UserConfig::default(),
@@ -2129,19 +2147,65 @@ async fn an_untrusted_asking_behaviour_asks_before_an_unmatched_command() {
 #[tokio::test]
 async fn actual_native_create_keeps_draft_and_mixed_tree_projection_never_exposes_foreign_ids() {
     use inquello_domain::organise::OrganiseStore;
-    let f=fixture();let processor=&f.processor;sign_in(processor,DESKTOP,ALICE).await;
-    let own:InquelloTaskResponse=decode(processor.task_create(DESKTOP,task_params("owned-draft-projection",None,None)).await);
-    let unavailable:InquelloTaskResponse=decode(processor.task_create(DESKTOP,task_params("unavailable-draft-projection",None,None)).await);
-    sign_in(processor,OTHER,BOB).await;
-    let peer:InquelloTaskResponse=decode(processor.task_create(OTHER,task_params("peer-draft-projection",None,None)).await);
-    let (store,actor)=processor.context(DESKTOP).await.expect("context");
-    assert!(store.task_is_native_draft(actor.principal_id,&own.task.task_id).await.expect("provenance"));
-    assert_eq!(store.task_data_tier(actor.principal_id,&own.task.task_id).await.expect("tier"),None);
-    let load=|id:String| {let store=store.clone();async move {store.load_task(TaskId::parse(&id).expect("id")).await.expect("load").expect("task")}};
-    let own=load(own.task.task_id).await;let unavailable=load(unavailable.task.task_id).await;let peer=load(peer.task.task_id).await;
-    assert!(matches!(private_task_tree_item(&own,actor,WORKSPACE,true),Some(Ok(_))));
-    let denied=private_task_tree_item(&unavailable,actor,WORKSPACE,false).expect("owned unavailable").expect_err("no protected task");
-    let json=serde_json::to_value(denied).expect("safe item");assert_eq!(json.as_object().expect("object").len(),2);assert!(json.get("title").is_none());
-    assert!(private_task_tree_item(&peer,actor,WORKSPACE,false).is_none());
-    assert!(private_task_tree_item(&own,actor,OTHER_WORKSPACE,false).is_none());
+    let f = fixture();
+    let processor = &f.processor;
+    sign_in(processor, DESKTOP, ALICE).await;
+    let own: InquelloTaskResponse = decode(
+        processor
+            .task_create(DESKTOP, task_params("owned-draft-projection", None, None))
+            .await,
+    );
+    let unavailable: InquelloTaskResponse = decode(
+        processor
+            .task_create(
+                DESKTOP,
+                task_params("unavailable-draft-projection", None, None),
+            )
+            .await,
+    );
+    sign_in(processor, OTHER, BOB).await;
+    let peer: InquelloTaskResponse = decode(
+        processor
+            .task_create(OTHER, task_params("peer-draft-projection", None, None))
+            .await,
+    );
+    let (store, actor) = processor.context(DESKTOP).await.expect("context");
+    assert!(
+        store
+            .task_is_native_draft(actor.principal_id, &own.task.task_id)
+            .await
+            .expect("provenance")
+    );
+    assert_eq!(
+        store
+            .task_data_tier(actor.principal_id, &own.task.task_id)
+            .await
+            .expect("tier"),
+        None
+    );
+    let load = |id: String| {
+        let store = store.clone();
+        async move {
+            store
+                .load_task(TaskId::parse(&id).expect("id"))
+                .await
+                .expect("load")
+                .expect("task")
+        }
+    };
+    let own = load(own.task.task_id).await;
+    let unavailable = load(unavailable.task.task_id).await;
+    let peer = load(peer.task.task_id).await;
+    assert!(matches!(
+        private_task_tree_item(&own, actor, WORKSPACE, true),
+        Some(Ok(_))
+    ));
+    let denied = private_task_tree_item(&unavailable, actor, WORKSPACE, false)
+        .expect("owned unavailable")
+        .expect_err("no protected task");
+    let json = serde_json::to_value(denied).expect("safe item");
+    assert_eq!(json.as_object().expect("object").len(), 2);
+    assert!(json.get("title").is_none());
+    assert!(private_task_tree_item(&peer, actor, WORKSPACE, false).is_none());
+    assert!(private_task_tree_item(&own, actor, OTHER_WORKSPACE, false).is_none());
 }

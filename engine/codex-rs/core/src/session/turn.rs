@@ -178,11 +178,13 @@ pub(crate) async fn run_turn(
     prewarmed_client_session: Option<ModelClientSession>,
     cancellation_token: CancellationToken,
 ) -> CodexResult<Option<String>> {
-    let auto_compaction_enabled = !crate::inquello_inference::is_task_thread(&sess.thread_id.to_string()) && sess
-        .services
-        .thread_extension_data
-        .get::<AutoCompactionDisabled>()
-        .is_none();
+    let auto_compaction_enabled =
+        !crate::inquello_inference::is_task_thread(&sess.thread_id.to_string())
+            && sess
+                .services
+                .thread_extension_data
+                .get::<AutoCompactionDisabled>()
+                .is_none();
     let auto_summarization_enabled =
         auto_compaction_enabled && !turn_context.config.features.enabled(Feature::TokenBudget);
     if crate::guardian::is_basic_session_source(&turn_context.session_source) {
@@ -409,7 +411,9 @@ pub(crate) async fn run_turn(
     // Only speculate after hooks accept the turn, using its finalized tools and permissions.
     {
         let mut state = sess.state.lock().await;
-        if !crate::inquello_inference::is_task_thread(&sess.thread_id.to_string()) && state.shell_snapshot_prewarm.is_none() {
+        if !crate::inquello_inference::is_task_thread(&sess.thread_id.to_string())
+            && state.shell_snapshot_prewarm.is_none()
+        {
             state.shell_snapshot_prewarm =
                 sess.prewarm_shell_snapshots(first_step_context.as_ref());
         }
@@ -958,7 +962,15 @@ pub(crate) async fn run_hooks_and_record_inputs(
         // Task input belongs only in governed runtime history, never prompt telemetry
         // or user/project hook processes outside the explicit Task authorization.
         for item in input {
-            record_pending_input(sess, turn_context, model_info, item.clone(), Vec::new(), persist_context).await;
+            record_pending_input(
+                sess,
+                turn_context,
+                model_info,
+                item.clone(),
+                Vec::new(),
+                persist_context,
+            )
+            .await;
         }
         return false;
     }
@@ -2711,7 +2723,11 @@ async fn try_run_sampling_request(
         .await;
     let hooks = hooks_for_model_request(&sess, &step_context);
     let owned_task = crate::inquello_inference::is_task_thread(&sess.thread_id.to_string());
-    let post_mode = if owned_task { None } else { hooks.execution_mode_for_event(HookEventName::PostModelRequest) };
+    let post_mode = if owned_task {
+        None
+    } else {
+        hooks.execution_mode_for_event(HookEventName::PostModelRequest)
+    };
     let defer_tool_dispatch = post_mode == Some(HookExecutionMode::Sync);
     let finish_post_request = post_mode.map(|_| {
         let (post_request, completed) = tokio::sync::oneshot::channel();
@@ -2739,9 +2755,10 @@ async fn try_run_sampling_request(
             }
         }
     });
-    if !owned_task && hooks
-        .execution_mode_for_event(HookEventName::PreModelRequest)
-        .is_some()
+    if !owned_task
+        && hooks
+            .execution_mode_for_event(HookEventName::PreModelRequest)
+            .is_some()
     {
         run_model_request_hooks(&sess, &step_context, &hooks, PreModelRequest).await;
     }
@@ -2752,17 +2769,31 @@ async fn try_run_sampling_request(
         .await;
     // This runs for every sample/tool-result continuation with the actual runtime turn id.
     if crate::inquello_inference::is_task_thread(&sess.thread_id.to_string()) {
-        let authorization = turn_context.extension_data.get::<crate::inquello_inference::TaskAuthorizationContext>()
-            .ok_or_else(|| CodexErr::Fatal("Private Task turn authorization is unavailable; no inference was dispatched".into()))?;
+        let authorization = turn_context
+            .extension_data
+            .get::<crate::inquello_inference::TaskAuthorizationContext>()
+            .ok_or_else(|| {
+                CodexErr::Fatal(
+                    "Private Task turn authorization is unavailable; no inference was dispatched"
+                        .into(),
+                )
+            })?;
         if authorization.0.cancellation().is_cancelled() || cancellation_token.is_cancelled() {
             return Err(CodexErr::TurnAborted);
         }
-        let mut attempt = authorization.0.before_attempt(turn_context.sub_id.as_str()).await?;
+        let mut attempt = authorization
+            .0
+            .before_attempt(turn_context.sub_id.as_str())
+            .await?;
         // Only typed retained tool outputs count, never text that resembles a tool result.
-        attempt.completed_tool_call_ids = prompt.input.iter().filter_map(|item| match item {
-            ResponseItem::FunctionCallOutput { call_id, .. } => Some(call_id.clone()),
-            _ => None,
-        }).collect();
+        attempt.completed_tool_call_ids = prompt
+            .input
+            .iter()
+            .filter_map(|item| match item {
+                ResponseItem::FunctionCallOutput { call_id, .. } => call_id.clone(),
+                _ => None,
+            })
+            .collect();
         attempt.completed_tool_call_ids.sort();
         attempt.completed_tool_call_ids.dedup();
         crate::inquello_inference::bind_attempt(&sess.thread_id.to_string(), attempt)

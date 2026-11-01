@@ -189,30 +189,72 @@ mod tests;
 
 // Production has no caller-supplied evidence or eligibility toggle. The private
 // lookup seam is used only by native composition unit fixtures below.
-async fn inspect_native_data(request: inquello_adapters::data_provenance::InspectRequest)
-    -> inquello_adapters::data_provenance::InspectResponse
-{
-    inspect_native_data_with_evidence(request, inquello_domain::routes::compiled_evidence_for_identity).await
+async fn inspect_native_data(
+    request: inquello_adapters::data_provenance::InspectRequest,
+) -> inquello_adapters::data_provenance::InspectResponse {
+    inspect_native_data_with_evidence(
+        request,
+        inquello_domain::routes::compiled_evidence_for_identity,
+    )
+    .await
 }
 async fn inspect_native_data_with_evidence(
     request: inquello_adapters::data_provenance::InspectRequest,
-    evidence: impl Fn(&inquello_domain::routes::RouteEvidenceIdentity) -> Option<inquello_domain::routes::NegativeAuthorizationEvidence>,
+    evidence: impl Fn(
+        &inquello_domain::routes::RouteEvidenceIdentity,
+    ) -> Option<inquello_domain::routes::NegativeAuthorizationEvidence>,
 ) -> inquello_adapters::data_provenance::InspectResponse {
     let mut response = inquello_adapters::data_provenance::inspect(request).await;
-    for workspace in &mut response.workspaces { for task in &mut workspace.tasks {
-        if task.data_tier != "real" { continue; }
-        let Some(configuration)=task.route_configuration.clone().and_then(|input|inquello_domain::routes::RouteConfiguration::parse(input).ok()) else {response.available=false;continue;};
-        let identity=inquello_domain::routes::RouteEvidenceIdentity {
-            route_id:configuration.route_id().as_str().into(),deployment:configuration.deployment().into(),endpoint:configuration.endpoint().into(),
-            model:configuration.model().into(),api_version:configuration.api_version().into(),configuration_digest:inquello_domain::routes::configuration_digest(&configuration),
-            implementation_digest:env!("INQUELLO_BEHAVIOR_DIGEST").into(),runtime_version:env!("CARGO_PKG_VERSION").into(),
-            contract_version:format!("inquello-v{}-authorization-v1",inquello_protocol::PROTOCOL_MAJOR),platform:env!("INQUELLO_BUILD_PLATFORM").into(),
-        };
-        let Some(proof)=evidence(&identity) else {response.available=false;continue;};
-        if !proof.complete() || proof.identity != identity || proof.data_policy_digest != env!("INQUELLO_DATA_POLICY_DIGEST") {response.available=false;continue;}
-        task.route_identity=Some(identity);task.report_digest=Some(proof.report_digest);task.processing_scope=Some(proof.processing_scope);task.data_policy_digest=Some(proof.data_policy_digest);
-    }}
-    if !response.available {response.files.clear();response.workspaces.clear();response.reason=Some("Native ownership, current build evidence or data policy unavailable; recovery/export remains quarantined".into());}
+    for workspace in &mut response.workspaces {
+        for task in &mut workspace.tasks {
+            if task.data_tier != "real" {
+                continue;
+            }
+            let Some(configuration) = task
+                .route_configuration
+                .clone()
+                .and_then(|input| inquello_domain::routes::RouteConfiguration::parse(input).ok())
+            else {
+                response.available = false;
+                continue;
+            };
+            let identity = inquello_domain::routes::RouteEvidenceIdentity {
+                route_id: configuration.route_id().as_str().into(),
+                deployment: configuration.deployment().into(),
+                endpoint: configuration.endpoint().into(),
+                model: configuration.model().into(),
+                api_version: configuration.api_version().into(),
+                configuration_digest: inquello_domain::routes::configuration_digest(&configuration),
+                implementation_digest: env!("INQUELLO_BEHAVIOR_DIGEST").into(),
+                runtime_version: env!("CARGO_PKG_VERSION").into(),
+                contract_version: format!(
+                    "inquello-v{}-authorization-v1",
+                    inquello_protocol::PROTOCOL_MAJOR
+                ),
+                platform: env!("INQUELLO_BUILD_PLATFORM").into(),
+            };
+            let Some(proof) = evidence(&identity) else {
+                response.available = false;
+                continue;
+            };
+            if !proof.complete()
+                || proof.identity != identity
+                || proof.data_policy_digest != env!("INQUELLO_DATA_POLICY_DIGEST")
+            {
+                response.available = false;
+                continue;
+            }
+            task.route_identity = Some(identity);
+            task.report_digest = Some(proof.report_digest);
+            task.processing_scope = Some(proof.processing_scope);
+            task.data_policy_digest = Some(proof.data_policy_digest);
+        }
+    }
+    if !response.available {
+        response.files.clear();
+        response.workspaces.clear();
+        response.reason=Some("Native ownership, current build evidence or data policy unavailable; recovery/export remains quarantined".into());
+    }
     response
 }
 

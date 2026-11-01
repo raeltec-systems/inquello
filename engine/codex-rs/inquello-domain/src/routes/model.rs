@@ -72,28 +72,36 @@ pub struct RouteConfiguration {
 
 impl RouteConfiguration {
     pub fn parse(input: RouteConfigurationInput) -> Result<Self, DomainError> {
-        let invalid = || DomainError::InvalidCommand("unsupported processing-route configuration".into());
+        let invalid =
+            || DomainError::InvalidCommand("unsupported processing-route configuration".into());
         let route_id = RouteId::parse(&input.route_id).ok_or_else(invalid)?;
         let endpoint = match (route_id, input.deployment.as_str()) {
             (RouteId::ClaudeApiKey, "anthropic-direct")
-                if input.model == CLAUDE_MODEL && input.api_version == CLAUDE_API_VERSION => CLAUDE_ENDPOINT,
+                if input.model == CLAUDE_MODEL && input.api_version == CLAUDE_API_VERSION =>
+            {
+                CLAUDE_ENDPOINT
+            }
             (RouteId::CodexResponses, "openai-api") => "https://api.openai.com/v1/responses",
-            (RouteId::CodexResponses, "chatgpt-codex") => "https://chatgpt.com/backend-api/codex/responses",
+            (RouteId::CodexResponses, "chatgpt-codex") => {
+                "https://chatgpt.com/backend-api/codex/responses"
+            }
             _ => return Err(invalid()),
         };
         // Exact model and API identifiers must be supplied; never infer a model
         // from provider login or accept a floating/default alias.
-        if !identifier(&input.model) || !identifier(&input.api_version)
+        if !identifier(&input.model)
+            || !identifier(&input.api_version)
             || ["default", "latest", "auto"].contains(&input.model.as_str())
             || ["default", "latest", "auto"].contains(&input.api_version.as_str())
         {
             return Err(invalid());
         }
         let account_ref = uuid::Uuid::parse_str(&input.account_ref)
-            .map_err(|_| invalid())?.to_string();
-        if input.region.as_ref().is_some_and(|region| !identifier(region)
-            || ["unknown", "auto", "default"].contains(&region.as_str()))
-        {
+            .map_err(|_| invalid())?
+            .to_string();
+        if input.region.as_ref().is_some_and(|region| {
+            !identifier(region) || ["unknown", "auto", "default"].contains(&region.as_str())
+        }) {
             return Err(invalid());
         }
         Ok(Self {
@@ -107,13 +115,27 @@ impl RouteConfiguration {
         })
     }
 
-    pub const fn route_id(&self) -> RouteId { self.route_id }
-    pub fn deployment(&self) -> &str { &self.deployment }
-    pub fn endpoint(&self) -> &str { &self.endpoint }
-    pub fn model(&self) -> &str { &self.model }
-    pub fn api_version(&self) -> &str { &self.api_version }
-    pub fn account_ref(&self) -> &str { &self.account_ref }
-    pub fn region(&self) -> Option<&str> { self.region.as_deref() }
+    pub const fn route_id(&self) -> RouteId {
+        self.route_id
+    }
+    pub fn deployment(&self) -> &str {
+        &self.deployment
+    }
+    pub fn endpoint(&self) -> &str {
+        &self.endpoint
+    }
+    pub fn model(&self) -> &str {
+        &self.model
+    }
+    pub fn api_version(&self) -> &str {
+        &self.api_version
+    }
+    pub fn account_ref(&self) -> &str {
+        &self.account_ref
+    }
+    pub fn region(&self) -> Option<&str> {
+        self.region.as_deref()
+    }
 
     pub fn input(&self) -> RouteConfigurationInput {
         RouteConfigurationInput {
@@ -128,16 +150,26 @@ impl RouteConfiguration {
 }
 
 fn identifier(value: &str) -> bool {
-    !value.is_empty() && value.len() <= 128
-        && value.bytes().all(|c| c.is_ascii_alphanumeric() || matches!(c, b'.' | b'-' | b'_'))
+    !value.is_empty()
+        && value.len() <= 128
+        && value
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, b'.' | b'-' | b'_'))
         && !value.starts_with("sk-")
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum DataTier { Synthetic, Real }
+pub enum DataTier {
+    Synthetic,
+    Real,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum RouteVerification { NotVerified, VerifiedForSynthetic, VerifiedForRealData }
+pub enum RouteVerification {
+    NotVerified,
+    VerifiedForSynthetic,
+    VerifiedForRealData,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RouteEligibility {
@@ -157,7 +189,13 @@ pub fn route_eligibility(
     tier: DataTier,
 ) -> RouteEligibility {
     let register = CapabilityRegister::load_embedded().ok();
-    eligibility(configuration, credential_present, adapter_supported, tier, register.as_ref())
+    eligibility(
+        configuration,
+        credential_present,
+        adapter_supported,
+        tier,
+        register.as_ref(),
+    )
 }
 
 fn eligibility(
@@ -179,9 +217,14 @@ fn eligibility(
     };
     let entry = register.and_then(|r| r.entry(configuration.route_id.capability_id()));
     let entry = entry.filter(|entry| {
-        [("model", configuration.model()), ("api", configuration.api_version()),
-         ("deployment", configuration.deployment()), ("endpoint", configuration.endpoint())]
-            .into_iter().all(|(key, value)| entry.versions.get(key).map(String::as_str) == Some(value))
+        [
+            ("model", configuration.model()),
+            ("api", configuration.api_version()),
+            ("deployment", configuration.deployment()),
+            ("endpoint", configuration.endpoint()),
+        ]
+        .into_iter()
+        .all(|(key, value)| entry.versions.get(key).map(String::as_str) == Some(value))
     });
     if let Some(entry) = entry {
         result.evidence = entry.evidence.iter().map(|e| e.reference.clone()).collect();
@@ -196,7 +239,9 @@ fn eligibility(
     } else if !credential_present {
         Some("Selected route credential is unavailable")
     } else if result.verification == RouteVerification::NotVerified {
-        Some("Selected route has no passing evidence for this exact deployment, model and API version")
+        Some(
+            "Selected route has no passing evidence for this exact deployment, model and API version",
+        )
     } else if tier == DataTier::Real {
         Some("Real-data use requires complete exact-build evidence and fresh organization approval")
     } else {
@@ -216,21 +261,44 @@ pub struct RouteCandidate {
 
 pub fn route_catalog() -> Vec<RouteCandidate> {
     vec![
-        RouteCandidate { id: "codex-responses", provider: "OpenAI", configurable: true,
-            limit: "Inherited Responses route; exact configuration and route-specific evidence required" },
-        RouteCandidate { id: "claude-api-key", provider: "Anthropic", configurable: true,
-            limit: "Native Messages text and runtime-owned tools only; no images, hosted tools or optional extensions" },
-        RouteCandidate { id: "claude-subscription", provider: "Anthropic", configurable: false,
-            limit: "Later supply/eligibility gate; custom Claude.ai token collection is not permitted" },
-        RouteCandidate { id: "claude-code", provider: "Anthropic", configurable: false,
-            limit: "Later architecture and eligibility gate; retained runtime is not replaced" },
-        RouteCandidate { id: "claude-plan-api-credits", provider: "Anthropic", configurable: false,
-            limit: "Billing eligibility unverified; not another authentication route" },
+        RouteCandidate {
+            id: "codex-responses",
+            provider: "OpenAI",
+            configurable: true,
+            limit: "Inherited Responses route; exact configuration and route-specific evidence required",
+        },
+        RouteCandidate {
+            id: "claude-api-key",
+            provider: "Anthropic",
+            configurable: true,
+            limit: "Native Messages text and runtime-owned tools only; no images, hosted tools or optional extensions",
+        },
+        RouteCandidate {
+            id: "claude-subscription",
+            provider: "Anthropic",
+            configurable: false,
+            limit: "Later supply/eligibility gate; custom Claude.ai token collection is not permitted",
+        },
+        RouteCandidate {
+            id: "claude-code",
+            provider: "Anthropic",
+            configurable: false,
+            limit: "Later architecture and eligibility gate; retained runtime is not replaced",
+        },
+        RouteCandidate {
+            id: "claude-plan-api-credits",
+            provider: "Anthropic",
+            configurable: false,
+            limit: "Billing eligibility unverified; not another authentication route",
+        },
     ]
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct RouteTask { pub creator: PrincipalId, pub workspace_id: WorkspaceId }
+pub struct RouteTask {
+    pub creator: PrincipalId,
+    pub workspace_id: WorkspaceId,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TaskRouteRecord {
@@ -256,11 +324,22 @@ pub struct TaskRoute {
 
 impl TaskRoute {
     /// Use this Task-bound gate rather than checking its historical snapshot alone.
-    pub fn eligibility(&self, credential_present: bool, adapter_supported: bool, tier: DataTier) -> RouteEligibility {
-        let mut result = route_eligibility(self.current.as_ref().map(|record| &record.configuration), credential_present, adapter_supported, tier);
+    pub fn eligibility(
+        &self,
+        credential_present: bool,
+        adapter_supported: bool,
+        tier: DataTier,
+    ) -> RouteEligibility {
+        let mut result = route_eligibility(
+            self.current.as_ref().map(|record| &record.configuration),
+            credential_present,
+            adapter_supported,
+            tier,
+        );
         if self.stale_configuration {
             result.enabled = false;
-            result.gate = Some("Route configuration changed; explicitly select the current candidate again");
+            result.gate =
+                Some("Route configuration changed; explicitly select the current candidate again");
         }
         result
     }
@@ -298,9 +377,12 @@ mod tests {
 
     fn input() -> RouteConfigurationInput {
         RouteConfigurationInput {
-            route_id: "claude-api-key".into(), deployment: "anthropic-direct".into(),
-            model: CLAUDE_MODEL.into(), api_version: CLAUDE_API_VERSION.into(),
-            account_ref: "11111111-1111-4111-8111-111111111111".into(), region: None,
+            route_id: "claude-api-key".into(),
+            deployment: "anthropic-direct".into(),
+            model: CLAUDE_MODEL.into(),
+            api_version: CLAUDE_API_VERSION.into(),
+            account_ref: "11111111-1111-4111-8111-111111111111".into(),
+            region: None,
         }
     }
 
@@ -331,30 +413,74 @@ mod tests {
                 "evidence": [{ "kind": "synthetic", "status": "passed", "reference": "fixture-only" }]
             }]
         });
-        let register = CapabilityRegister::from_json(&value.to_string()).unwrap_or_else(|error| panic!("{error}"));
-        let verified = eligibility(Some(&route), true, true, DataTier::Synthetic, Some(&register));
+        let register = CapabilityRegister::from_json(&value.to_string())
+            .unwrap_or_else(|error| panic!("{error}"));
+        let verified = eligibility(
+            Some(&route),
+            true,
+            true,
+            DataTier::Synthetic,
+            Some(&register),
+        );
         assert!(verified.enabled);
-        assert_eq!(verified.verification, RouteVerification::VerifiedForSynthetic);
+        assert_eq!(
+            verified.verification,
+            RouteVerification::VerifiedForSynthetic
+        );
         assert!(!eligibility(Some(&route), true, true, DataTier::Real, Some(&register)).enabled);
-        assert!(!eligibility(Some(&route), false, true, DataTier::Synthetic, Some(&register)).enabled);
-        assert!(!eligibility(Some(&route), true, false, DataTier::Synthetic, Some(&register)).enabled);
+        assert!(
+            !eligibility(
+                Some(&route),
+                false,
+                true,
+                DataTier::Synthetic,
+                Some(&register)
+            )
+            .enabled
+        );
+        assert!(
+            !eligibility(
+                Some(&route),
+                true,
+                false,
+                DataTier::Synthetic,
+                Some(&register)
+            )
+            .enabled
+        );
         let mut mismatch = value;
         mismatch["entries"][0]["versions"]["api"] = serde_json::json!("different-version");
-        let register = CapabilityRegister::from_json(&mismatch.to_string()).unwrap_or_else(|error| panic!("{error}"));
-        assert_eq!(eligibility(Some(&route), true, true, DataTier::Synthetic, Some(&register)).verification, RouteVerification::NotVerified);
+        let register = CapabilityRegister::from_json(&mismatch.to_string())
+            .unwrap_or_else(|error| panic!("{error}"));
+        assert_eq!(
+            eligibility(
+                Some(&route),
+                true,
+                true,
+                DataTier::Synthetic,
+                Some(&register)
+            )
+            .verification,
+            RouteVerification::NotVerified
+        );
     }
 
     #[test]
     fn rejects_unsupported_models_versions_secrets_and_endpoints() {
-        let mut bad = input(); bad.model = "claude-unknown".into();
+        let mut bad = input();
+        bad.model = "claude-unknown".into();
         assert!(RouteConfiguration::parse(bad).is_err());
-        let mut bad = input(); bad.api_version = "2023-06-01".into();
+        let mut bad = input();
+        bad.api_version = "2023-06-01".into();
         assert!(RouteConfiguration::parse(bad).is_err());
-        let mut bad = input(); bad.account_ref = "sk-ant-SENTINEL".into();
+        let mut bad = input();
+        bad.account_ref = "sk-ant-SENTINEL".into();
         assert!(RouteConfiguration::parse(bad).is_err());
-        let mut bad = input(); bad.deployment = "https://evil.invalid".into();
+        let mut bad = input();
+        bad.deployment = "https://evil.invalid".into();
         assert!(RouteConfiguration::parse(bad).is_err());
-        let mut bad = input(); bad.route_id = "claude-subscription".into();
+        let mut bad = input();
+        bad.route_id = "claude-subscription".into();
         assert!(RouteConfiguration::parse(bad).is_err());
     }
 }

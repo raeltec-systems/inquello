@@ -103,6 +103,7 @@ libc = { workspace = true }
 once_cell = { workspace = true }
 rand = { workspace = true }
 regex-lite = { workspace = true }
+reqwest = { workspace = true, optional = true }
 rmcp = { workspace = true, default-features = false, features = [
     "base64",
     "macros",
@@ -188,4 +189,4 @@ ignored-paths = ["tests/remote_env_windows/*.rs"]
 
 # Test-only loopback TLS seam. Never enable in release/package builds.
 [features]
-inference-fixtures = ["inquello-adapters/inference-fixtures"]
+inference-fixtures = ["inquello-adapters/inference-fixtures", "dep:reqwest"]

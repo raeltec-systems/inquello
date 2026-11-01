@@ -264,89 +264,179 @@ fn from_db(value: i64, column: &str) -> Result<u64, StoreError> {
     u64::try_from(value).map_err(|_| StoreError::Corrupt(format!("{column} is negative")))
 }
 
-
 /// A request-scoped, never-writing SQLite observer. data_version is compared on
 /// the SAME dedicated connection, so every commit on the working pool (including
 /// deletion, routes and prior-run lineage) invalidates the observation. No pool
 /// slot or writer lock is held while service/network checks are pending.
-pub struct SavedQueueGuard { _transaction:sqlx::Transaction<'static,sqlx::Sqlite> }
+pub struct SavedQueueGuard {
+    _transaction: sqlx::Transaction<'static, sqlx::Sqlite>,
+}
 
 pub struct SavedReadFence {
     connection: sqlx::SqliteConnection,
     version: i64,
     path: PathBuf,
-    identity: (u64,u64),
-    _identity_file:std::fs::File,
+    identity: (u64, u64),
+    _identity_file: std::fs::File,
 }
 impl SqliteWorkingStore {
     pub async fn saved_read_fence(&self) -> Result<SavedReadFence, StoreError> {
         use sqlx::ConnectOptions;
-        let identity_file=open_saved_identity(&self.path)?;
-        let identity=saved_file_identity(&identity_file)?;
+        let identity_file = open_saved_identity(&self.path)?;
+        let identity = saved_file_identity(&identity_file)?;
         let mut connection = sqlx::sqlite::SqliteConnectOptions::new()
-            .filename(&self.path).read_only(true).connect().await.map_err(backend)?;
-        let version = sqlx::query_scalar("PRAGMA data_version").fetch_one(&mut connection).await.map_err(backend)?;
-        Ok(SavedReadFence { connection, version, path:self.path.clone(), identity, _identity_file:identity_file })
+            .filename(&self.path)
+            .read_only(true)
+            .connect()
+            .await
+            .map_err(backend)?;
+        let version = sqlx::query_scalar("PRAGMA data_version")
+            .fetch_one(&mut connection)
+            .await
+            .map_err(backend)?;
+        Ok(SavedReadFence {
+            connection,
+            version,
+            path: self.path.clone(),
+            identity,
+            _identity_file: identity_file,
+        })
     }
     /// Short local-only queue lease: acquire after all service awaits, then
     /// compare the observer. The caller retains the transaction through queueing.
-    pub async fn seal_saved_read(&self, fence:&mut SavedReadFence)
-        -> Result<SavedQueueGuard, StoreError> {
-        let tx=self.pool.begin_with("BEGIN IMMEDIATE").await.map_err(backend)?;
-        let current:i64=sqlx::query_scalar("PRAGMA data_version").fetch_one(&mut fence.connection).await.map_err(backend)?;
-        let current_file=open_saved_identity(&fence.path)?;
-        let same_file=saved_file_identity(&current_file)?==fence.identity;
-        if current!=fence.version || !same_file { return Err(StoreError::Backend("Saved work changed during inspection".into())); }
-        Ok(SavedQueueGuard{_transaction:tx})
+    pub async fn seal_saved_read(
+        &self,
+        fence: &mut SavedReadFence,
+    ) -> Result<SavedQueueGuard, StoreError> {
+        let tx = self
+            .pool
+            .begin_with("BEGIN IMMEDIATE")
+            .await
+            .map_err(backend)?;
+        let current: i64 = sqlx::query_scalar("PRAGMA data_version")
+            .fetch_one(&mut fence.connection)
+            .await
+            .map_err(backend)?;
+        let current_file = open_saved_identity(&fence.path)?;
+        let same_file = saved_file_identity(&current_file)? == fence.identity;
+        if current != fence.version || !same_file {
+            return Err(StoreError::Backend(
+                "Saved work changed during inspection".into(),
+            ));
+        }
+        Ok(SavedQueueGuard { _transaction: tx })
     }
 }
-
 
 /// Keep the exact opened object alive for the observation. On Windows omission
 /// of FILE_SHARE_DELETE prevents rename/unlink of that object while SQL awaits.
-fn open_saved_identity(path:&Path)->Result<std::fs::File,StoreError>{
-    let mut options=std::fs::OpenOptions::new();options.read(true);
-    #[cfg(windows)] {use std::os::windows::fs::OpenOptionsExt;options.share_mode(0x00000001|0x00000002);}
-    #[cfg(not(any(unix,windows)))] {return Err(StoreError::Backend("Stable saved-store identity is unsupported on this platform".into()));}
-    let file=options.open(path).map_err(|e|StoreError::Backend(e.to_string()))?;
-    if !file.metadata().map_err(|e|StoreError::Backend(e.to_string()))?.is_file(){return Err(StoreError::Backend("Saved store is not a regular file".into()));}
+fn open_saved_identity(path: &Path) -> Result<std::fs::File, StoreError> {
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        options.share_mode(0x00000001 | 0x00000002);
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        return Err(StoreError::Backend(
+            "Stable saved-store identity is unsupported on this platform".into(),
+        ));
+    }
+    let file = options
+        .open(path)
+        .map_err(|e| StoreError::Backend(e.to_string()))?;
+    if !file
+        .metadata()
+        .map_err(|e| StoreError::Backend(e.to_string()))?
+        .is_file()
+    {
+        return Err(StoreError::Backend(
+            "Saved store is not a regular file".into(),
+        ));
+    }
     Ok(file)
 }
-fn saved_file_identity(file:&std::fs::File)->Result<(u64,u64),StoreError>{
-    #[cfg(unix)] {
+fn saved_file_identity(file: &std::fs::File) -> Result<(u64, u64), StoreError> {
+    #[cfg(unix)]
+    {
         use std::os::unix::fs::MetadataExt;
-        let metadata=file.metadata().map_err(|e|StoreError::Backend(e.to_string()))?;
-        Ok((metadata.dev(),metadata.ino()))
+        let metadata = file
+            .metadata()
+            .map_err(|e| StoreError::Backend(e.to_string()))?;
+        Ok((metadata.dev(), metadata.ino()))
     }
-    #[cfg(windows)] {
+    #[cfg(windows)]
+    {
         use std::os::windows::io::AsRawHandle;
-        use windows_sys::Win32::Storage::FileSystem::{BY_HANDLE_FILE_INFORMATION,GetFileInformationByHandle};
-        let mut info=std::mem::MaybeUninit::<BY_HANDLE_FILE_INFORMATION>::uninit();
+        use windows_sys::Win32::Storage::FileSystem::{
+            BY_HANDLE_FILE_INFORMATION, GetFileInformationByHandle,
+        };
+        let mut info = std::mem::MaybeUninit::<BY_HANDLE_FILE_INFORMATION>::uninit();
         // SAFETY: a live File owns the handle; Windows writes the complete output
         // struct on success, which is the only branch where it is read.
-        if unsafe{GetFileInformationByHandle(file.as_raw_handle() as _,info.as_mut_ptr())}==0{
-            return Err(StoreError::Backend(std::io::Error::last_os_error().to_string()));
+        if unsafe { GetFileInformationByHandle(file.as_raw_handle() as _, info.as_mut_ptr()) } == 0
+        {
+            return Err(StoreError::Backend(
+                std::io::Error::last_os_error().to_string(),
+            ));
         }
-        let info=unsafe{info.assume_init()};
-        Ok((u64::from(info.dwVolumeSerialNumber),(u64::from(info.nFileIndexHigh)<<32)|u64::from(info.nFileIndexLow)))
+        let info = unsafe { info.assume_init() };
+        Ok((
+            u64::from(info.dwVolumeSerialNumber),
+            (u64::from(info.nFileIndexHigh) << 32) | u64::from(info.nFileIndexLow),
+        ))
     }
-    #[cfg(not(any(unix,windows)))] {let _=file;Err(StoreError::Backend("Stable saved-store identity is unsupported on this platform".into()))}
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = file;
+        Err(StoreError::Backend(
+            "Stable saved-store identity is unsupported on this platform".into(),
+        ))
+    }
 }
 
-#[cfg(all(test,windows))]
+#[cfg(all(test, windows))]
 mod saved_windows_identity_tests {
     use super::*;
     #[test]
-    fn saved_observer_denies_replacement_and_compares_file_ids_not_timestamps(){
-        let directory=tempfile::tempdir().unwrap();let path=directory.path().join("working.sqlite");let old=directory.path().join("old.sqlite");let replacement=directory.path().join("replacement.sqlite");
-        std::fs::write(&path,b"same-size").unwrap();std::fs::write(&replacement,b"same-size").unwrap();
-        let held=open_saved_identity(&path).unwrap();let original=saved_file_identity(&held).unwrap();
-        let replacement_handle=std::fs::File::options().write(true).open(&replacement).unwrap();
-        replacement_handle.set_times(std::fs::FileTimes::new().set_modified(held.metadata().unwrap().modified().unwrap())).unwrap();drop(replacement_handle);
-        assert!(std::fs::rename(&path,&old).is_err(),"held observer must deny delete sharing");
+    fn saved_observer_denies_replacement_and_compares_file_ids_not_timestamps() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("working.sqlite");
+        let old = directory.path().join("old.sqlite");
+        let replacement = directory.path().join("replacement.sqlite");
+        std::fs::write(&path, b"same-size").unwrap();
+        std::fs::write(&replacement, b"same-size").unwrap();
+        let held = open_saved_identity(&path).unwrap();
+        let original = saved_file_identity(&held).unwrap();
+        let replacement_handle = std::fs::File::options()
+            .write(true)
+            .open(&replacement)
+            .unwrap();
+        replacement_handle
+            .set_times(
+                std::fs::FileTimes::new()
+                    .set_modified(held.metadata().unwrap().modified().unwrap()),
+            )
+            .unwrap();
+        drop(replacement_handle);
+        assert!(
+            std::fs::rename(&path, &old).is_err(),
+            "held observer must deny delete sharing"
+        );
         assert!(std::fs::remove_file(&path).is_err());
-        assert_eq!(saved_file_identity(&open_saved_identity(&path).unwrap()).unwrap(),original);
-        drop(held);std::fs::rename(&path,&old).unwrap();std::fs::rename(&replacement,&path).unwrap();
-        assert_ne!(saved_file_identity(&open_saved_identity(&path).unwrap()).unwrap(),original,"same length/modified time is not object identity");
+        assert_eq!(
+            saved_file_identity(&open_saved_identity(&path).unwrap()).unwrap(),
+            original
+        );
+        drop(held);
+        std::fs::rename(&path, &old).unwrap();
+        std::fs::rename(&replacement, &path).unwrap();
+        assert_ne!(
+            saved_file_identity(&open_saved_identity(&path).unwrap()).unwrap(),
+            original,
+            "same length/modified time is not object identity"
+        );
     }
 }

@@ -85,13 +85,25 @@ impl BroadMode {
     pub const fn reach(self) -> &'static str {
         match self {
             BroadMode::Standard => {
-                "Standard: commands on this Task run inside the sandbox on this device, and you are asked before actions as the policy requires."
+                if cfg!(windows) {
+                    "Standard: this Task runs in the Linux sandbox on this device. Files are transferred when switching from Windows. You are asked before actions as the policy requires."
+                } else {
+                    "Standard: commands on this Task run inside the sandbox on this device, and you are asked before actions as the policy requires."
+                }
             }
             BroadMode::NoPrompt => {
-                "No prompt: commands on this Task run inside the sandbox on this device, and you will not be asked before actions."
+                if cfg!(windows) {
+                    "No prompt: commands on this Task run in the Linux sandbox on this device, and you will not be asked before actions."
+                } else {
+                    "No prompt: commands on this Task run inside the sandbox on this device, and you will not be asked before actions."
+                }
             }
             BroadMode::FullAccess => {
-                "Full access: commands on this Task run without sandbox limits on this device, and you will not be asked before actions."
+                if cfg!(windows) {
+                    "Full access: this Task switches from Linux to Windows after its files are transferred. Commands run without sandbox limits on this device, and you will not be asked before actions."
+                } else {
+                    "Full access: commands on this Task run without sandbox limits on this device, and you will not be asked before actions."
+                }
             }
         }
     }

@@ -601,5 +601,8 @@ mod tests {
 #[cfg(test)]
 #[test]
 fn local_messages_is_not_misrepresented_as_remote_responses() {
-    assert_eq!(proto_wire_api(WireApi::Messages), proto::WireApi::Unspecified);
+    assert_eq!(
+        proto_wire_api(WireApi::Messages),
+        proto::WireApi::Unspecified
+    );
 }

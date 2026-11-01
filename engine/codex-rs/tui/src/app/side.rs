@@ -104,6 +104,8 @@ impl SideParentStatus {
             | ServerRequest::ApplyPatchApproval { .. }
             | ServerRequest::ExecCommandApproval { .. } => Some(SideParentStatus::NeedsApproval),
             ServerRequest::DynamicToolCall { .. }
+            | ServerRequest::InquelloContextAuthorize { .. }
+            | ServerRequest::InquelloTaskAuthority { .. }
             | ServerRequest::AttestationGenerate { .. }
             | ServerRequest::CurrentTimeRead { .. }
             | ServerRequest::ChatgptAuthTokensRefresh { .. } => None,

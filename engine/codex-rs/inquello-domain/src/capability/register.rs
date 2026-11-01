@@ -113,7 +113,11 @@ impl CapabilityEntry {
         if !passes(EvidenceKind::Synthetic) {
             Enablement::Disabled
         } else if passes(EvidenceKind::NegativeAuthorization)
-            && self.negative_authorization.as_ref().is_some_and(|proof| proof.complete()) {
+            && self
+                .negative_authorization
+                .as_ref()
+                .is_some_and(|proof| proof.complete())
+        {
             Enablement::RealDataEligible
         } else {
             Enablement::SyntheticOnly
@@ -220,7 +224,10 @@ impl CapabilityEntry {
             ));
         }
         if self.eligibility == Enablement::RealDataEligible
-            && self.negative_authorization.as_ref().is_none_or(|proof| !proof.complete())
+            && self
+                .negative_authorization
+                .as_ref()
+                .is_none_or(|proof| !proof.complete())
         {
             return Err(invalid("declares RealDataEligible without complete exact-build negative-authorization evidence".into()));
         }

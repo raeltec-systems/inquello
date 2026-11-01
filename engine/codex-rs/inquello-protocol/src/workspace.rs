@@ -340,11 +340,12 @@ pub struct AccessCheckResponse {
     pub authorization_epoch: Revision,
 }
 
-
 /// Shared strict evidence/approval schemas: domain owns the gate, protocol carries
 /// its inputs. These objects are not credentials or offline authorization leases.
-pub use inquello_domain::routes::{CurrentRouteAuthority, OrganizationRouteApproval,
-    ProtectedRouteAction, ProtectedRouteUse, RouteEvidenceIdentity};
+pub use inquello_domain::routes::{
+    CurrentRouteAuthority, OrganizationRouteApproval, ProtectedRouteAction, ProtectedRouteUse,
+    RouteEvidenceIdentity,
+};
 
 /// POST /v1/workspaces/{workspace_id}/route-eligibility-checks.
 /// The service resolves principal/session independently and matches the binding;
@@ -386,7 +387,9 @@ pub struct CreateExportReceiptRequest {
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct ValidateExportReceiptRequest { pub manifest_digest: String }
+pub struct ValidateExportReceiptRequest {
+    pub manifest_digest: String,
+}
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ExportReceiptView {

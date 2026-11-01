@@ -179,52 +179,110 @@ pub fn rollout_contains_prefix(
 #[path = "seekable_reader_tests.rs"]
 mod tests;
 
-
 /// Saved inspection must reject FIFOs/devices without blocking in open(). This
 /// private opener deliberately does not change the ordinary resume readers.
-fn open_saved_rollout(path:&Path)->io::Result<RolloutReader>{
-    fn regular(path:&Path)->io::Result<File>{
-        let mut options=std::fs::OpenOptions::new();options.read(true);
-        #[cfg(unix)] {use std::os::unix::fs::OpenOptionsExt;options.custom_flags(libc::O_NONBLOCK);}
-        let file=options.open(path)?;
-        if !file.metadata()?.is_file(){return Err(io::Error::other("retained rollout is not a regular file"));}
+fn open_saved_rollout(path: &Path) -> io::Result<RolloutReader> {
+    fn regular(path: &Path) -> io::Result<File> {
+        let mut options = std::fs::OpenOptions::new();
+        options.read(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.custom_flags(libc::O_NONBLOCK);
+        }
+        let file = options.open(path)?;
+        if !file.metadata()?.is_file() {
+            return Err(io::Error::other("retained rollout is not a regular file"));
+        }
         Ok(file)
     }
-    let plain=plain_rollout_path(path);let compressed=plain.with_extension("jsonl.zst");
+    let plain = plain_rollout_path(path);
+    let compressed = plain.with_extension("jsonl.zst");
     for attempt in 0..4 {
-        match regular(&plain){Ok(file)=>return Ok(RolloutReader::Plain(file)),Err(e) if e.kind()==io::ErrorKind::NotFound=>{},Err(e)=>return Err(e)}
-        match regular(&compressed){Ok(file)=>return Ok(RolloutReader::Compressed(file)),Err(e) if e.kind()==io::ErrorKind::NotFound&&attempt<3=>std::thread::sleep(Duration::from_millis(50)),Err(e)=>return Err(e)}
+        match regular(&plain) {
+            Ok(file) => return Ok(RolloutReader::Plain(file)),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e),
+        }
+        match regular(&compressed) {
+            Ok(file) => return Ok(RolloutReader::Compressed(file)),
+            Err(e) if e.kind() == io::ErrorKind::NotFound && attempt < 3 => {
+                std::thread::sleep(Duration::from_millis(50))
+            }
+            Err(e) => return Err(e),
+        }
     }
     unreachable!("last bounded-open attempt returns")
 }
 
 /// Exact retained-rollout inspection: cap decoded bytes before allocation and
 /// check cancellation while reading compressed input and decoded output alike.
-pub fn read_rollout_bounded(path:&Path,max_bytes:usize,is_cancelled:impl Fn()->bool)->io::Result<Vec<u8>> {
-    let source=open_saved_rollout(path)?;
-    let file=match &source {RolloutReader::Plain(f)|RolloutReader::Compressed(f)=>f};
-    if !file.metadata()?.is_file(){return Err(io::Error::other("retained rollout is not a regular file"));}
-    let reader:Box<dyn Read+'_>=match source {
-        RolloutReader::Plain(file)=>Box::new(file),
-        RolloutReader::Compressed(file)=>Box::new(zstd::stream::read::Decoder::new(CancellableReader{inner:file,is_cancelled:&is_cancelled})?),
+pub fn read_rollout_bounded(
+    path: &Path,
+    max_bytes: usize,
+    is_cancelled: impl Fn() -> bool,
+) -> io::Result<Vec<u8>> {
+    let source = open_saved_rollout(path)?;
+    let file = match &source {
+        RolloutReader::Plain(f) | RolloutReader::Compressed(f) => f,
     };
-    let mut reader=CancellableReader{inner:reader,is_cancelled:&is_cancelled}.take(max_bytes as u64+1);
-    let mut bytes=Vec::new();reader.read_to_end(&mut bytes)?;
-    if bytes.len()>max_bytes{return Err(io::Error::other("retained rollout exceeds inspection byte bound"));}
+    if !file.metadata()?.is_file() {
+        return Err(io::Error::other("retained rollout is not a regular file"));
+    }
+    let reader: Box<dyn Read + '_> = match source {
+        RolloutReader::Plain(file) => Box::new(file),
+        RolloutReader::Compressed(file) => {
+            Box::new(zstd::stream::read::Decoder::new(CancellableReader {
+                inner: file,
+                is_cancelled: &is_cancelled,
+            })?)
+        }
+    };
+    let mut reader = CancellableReader {
+        inner: reader,
+        is_cancelled: &is_cancelled,
+    }
+    .take(max_bytes as u64 + 1);
+    let mut bytes = Vec::new();
+    reader.read_to_end(&mut bytes)?;
+    if bytes.len() > max_bytes {
+        return Err(io::Error::other(
+            "retained rollout exceeds inspection byte bound",
+        ));
+    }
     Ok(bytes)
 }
 
 /// Reads only the bounded first JSONL record, including for compressed history.
-pub fn read_rollout_header_bounded(path:&Path,is_cancelled:impl Fn()->bool)->io::Result<Vec<u8>> {
+pub fn read_rollout_header_bounded(
+    path: &Path,
+    is_cancelled: impl Fn() -> bool,
+) -> io::Result<Vec<u8>> {
     use std::io::BufRead;
-    let source=open_saved_rollout(path)?;
-    let reader:Box<dyn Read+'_>=match source {
-        RolloutReader::Plain(file)=>Box::new(file),
-        RolloutReader::Compressed(file)=>Box::new(zstd::stream::read::Decoder::new(CancellableReader{inner:file,is_cancelled:&is_cancelled})?),
+    let source = open_saved_rollout(path)?;
+    let reader: Box<dyn Read + '_> = match source {
+        RolloutReader::Plain(file) => Box::new(file),
+        RolloutReader::Compressed(file) => {
+            Box::new(zstd::stream::read::Decoder::new(CancellableReader {
+                inner: file,
+                is_cancelled: &is_cancelled,
+            })?)
+        }
     };
-    let mut reader=std::io::BufReader::new(CancellableReader{inner:reader,is_cancelled:&is_cancelled}.take(1024*1024+1));
-    let mut bytes=Vec::new();reader.read_until(b'\n',&mut bytes)?;
-    if bytes.len()>1024*1024 || bytes.last()!=Some(&b'\n'){return Err(io::Error::other("retained header exceeds bound or is incomplete"));}
+    let mut reader = std::io::BufReader::new(
+        CancellableReader {
+            inner: reader,
+            is_cancelled: &is_cancelled,
+        }
+        .take(1024 * 1024 + 1),
+    );
+    let mut bytes = Vec::new();
+    reader.read_until(b'\n', &mut bytes)?;
+    if bytes.len() > 1024 * 1024 || bytes.last() != Some(&b'\n') {
+        return Err(io::Error::other(
+            "retained header exceeds bound or is incomplete",
+        ));
+    }
     Ok(bytes)
 }
 
@@ -232,35 +290,68 @@ pub fn read_rollout_header_bounded(path:&Path,is_cancelled:impl Fn()->bool)->io:
 mod saved_bounds_tests {
     use super::*;
     #[test]
-    fn saved_reads_bound_plain_and_compressed_before_parsing(){
-        let directory=tempfile::tempdir().unwrap();let plain=directory.path().join("saved.jsonl");
-        let data=b"{\"header\":true}\nretained conversation\n";
-        for compressed in [false,true]{
-            let path=if compressed{plain.with_extension("jsonl.zst")}else{plain.clone()};
-            let bytes=if compressed{zstd::stream::encode_all(&data[..],0).unwrap()}else{data.to_vec()};
-            std::fs::write(&path,bytes).unwrap();
-            assert_eq!(read_rollout_bounded(&plain,data.len(),||false).unwrap(),data);
-            assert!(read_rollout_bounded(&plain,data.len()-1,||false).is_err());
-            assert!(read_rollout_bounded(&plain,data.len(),||true).is_err());
-            assert_eq!(read_rollout_header_bounded(&plain,||false).unwrap(),b"{\"header\":true}\n");
+    fn saved_reads_bound_plain_and_compressed_before_parsing() {
+        let directory = tempfile::tempdir().unwrap();
+        let plain = directory.path().join("saved.jsonl");
+        let data = b"{\"header\":true}\nretained conversation\n";
+        for compressed in [false, true] {
+            let path = if compressed {
+                plain.with_extension("jsonl.zst")
+            } else {
+                plain.clone()
+            };
+            let bytes = if compressed {
+                zstd::stream::encode_all(&data[..], 0).unwrap()
+            } else {
+                data.to_vec()
+            };
+            std::fs::write(&path, bytes).unwrap();
+            assert_eq!(
+                read_rollout_bounded(&plain, data.len(), || false).unwrap(),
+                data
+            );
+            assert!(read_rollout_bounded(&plain, data.len() - 1, || false).is_err());
+            assert!(read_rollout_bounded(&plain, data.len(), || true).is_err());
+            assert_eq!(
+                read_rollout_header_bounded(&plain, || false).unwrap(),
+                b"{\"header\":true}\n"
+            );
             std::fs::remove_file(path).unwrap();
         }
     }
     #[cfg(unix)]
     #[test]
-    fn saved_plain_and_compressed_fifo_paths_fail_without_waiting_for_a_writer(){
+    fn saved_plain_and_compressed_fifo_paths_fail_without_waiting_for_a_writer() {
         use std::os::unix::ffi::OsStrExt;
-        let directory=tempfile::tempdir().unwrap();
-        for compressed in [false,true]{
-            let plain=directory.path().join(if compressed{"compressed.jsonl"}else{"plain.jsonl"});
-            let fifo=if compressed{plain.with_extension("jsonl.zst")}else{plain.clone()};
-            let name=std::ffi::CString::new(fifo.as_os_str().as_bytes()).unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        for compressed in [false, true] {
+            let plain = directory.path().join(if compressed {
+                "compressed.jsonl"
+            } else {
+                "plain.jsonl"
+            });
+            let fifo = if compressed {
+                plain.with_extension("jsonl.zst")
+            } else {
+                plain.clone()
+            };
+            let name = std::ffi::CString::new(fifo.as_os_str().as_bytes()).unwrap();
             // SAFETY: CString supplies a valid NUL-terminated path; mode is owner-only.
-            assert_eq!(unsafe{libc::mkfifo(name.as_ptr(),0o600)},0);
-            let (send,receive)=std::sync::mpsc::channel();
-            std::thread::spawn(move||{send.send((read_rollout_bounded(&plain,1024,||false).is_err(),read_rollout_header_bounded(&plain,||false).is_err())).unwrap();});
-            assert_eq!(receive.recv_timeout(Duration::from_secs(1)).expect("nonblocking special-file refusal"),(true,true));
+            assert_eq!(unsafe { libc::mkfifo(name.as_ptr(), 0o600) }, 0);
+            let (send, receive) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                send.send((
+                    read_rollout_bounded(&plain, 1024, || false).is_err(),
+                    read_rollout_header_bounded(&plain, || false).is_err(),
+                ))
+                .unwrap();
+            });
+            assert_eq!(
+                receive
+                    .recv_timeout(Duration::from_secs(1))
+                    .expect("nonblocking special-file refusal"),
+                (true, true)
+            );
         }
     }
-
 }

@@ -113,20 +113,37 @@ const CONNECTION_RPC_DRAIN_TIMEOUT: Duration = Duration::from_secs(/*secs*/ 30);
 
 fn deserialize_client_request(request: JSONRPCRequest) -> Result<ClientRequest, JSONRPCErrorError> {
     let private_auth = request.method == "inquello/routes/privateAuth";
-    if private_auth && request.params.as_ref().is_some_and(|p| p.to_string().len() > 8192) {
+    if private_auth
+        && request
+            .params
+            .as_ref()
+            .is_some_and(|p| p.to_string().len() > 8192)
+    {
         return Err(invalid_request("Invalid private provider handoff"));
     }
     reject_obsolete_request_fields(&request)?;
 
-    ClientRequest::try_from(request)
-        .map_err(|err| if private_auth { invalid_request("Invalid private provider handoff") } else { invalid_request(format!("Invalid request: {err}")) })
+    ClientRequest::try_from(request).map_err(|err| {
+        if private_auth {
+            invalid_request("Invalid private provider handoff")
+        } else {
+            invalid_request(format!("Invalid request: {err}"))
+        }
+    })
 }
 
 // Authority installation and credential handoff are desktop-main-only operations.
 // A remote connection on a server that also exposes stdio is not a stdio origin.
-fn reject_private_handoff_transport(method: &str, transport: Option<&AppServerTransport>, origin: crate::transport::ConnectionOrigin) -> bool {
-    matches!(method, "inquello/routes/privateAuth" | "inquello/tasks/bootstrap")
-        && (!matches!(transport, Some(AppServerTransport::Stdio)) || origin != crate::transport::ConnectionOrigin::Stdio)
+fn reject_private_handoff_transport(
+    method: &str,
+    transport: Option<&AppServerTransport>,
+    origin: crate::transport::ConnectionOrigin,
+) -> bool {
+    matches!(
+        method,
+        "inquello/routes/privateAuth" | "inquello/tasks/bootstrap"
+    ) && (!matches!(transport, Some(AppServerTransport::Stdio))
+        || origin != crate::transport::ConnectionOrigin::Stdio)
 }
 
 fn reject_obsolete_request_fields(request: &JSONRPCRequest) -> Result<(), JSONRPCErrorError> {
@@ -488,9 +505,17 @@ impl MessageProcessor {
         let git_processor = GitRequestProcessor::new();
         // Inquello (Story 1.14): the runtime home is agent-writable, so the
         // working store may never live inside it.
-        let inquello_processor = Arc::new(InquelloRequestProcessor::new(vec![
-            config.codex_home.to_path_buf(),
-        ]).with_route_provider(config.model_provider.clone(), auth_manager.clone(), config.http_client_factory()).with_usage_sources(account_processor.clone(), catalog_processor.clone()).with_task_outgoing(outgoing.clone()).with_task_config(config_processor.clone()));
+        let inquello_processor = Arc::new(
+            InquelloRequestProcessor::new(vec![config.codex_home.to_path_buf()])
+                .with_route_provider(
+                    config.model_provider.clone(),
+                    auth_manager.clone(),
+                    config.http_client_factory(),
+                )
+                .with_usage_sources(account_processor.clone(), catalog_processor.clone())
+                .with_task_outgoing(outgoing.clone())
+                .with_task_config(config_processor.clone()),
+        );
         outgoing.bind_private_authority(&inquello_processor);
         let initialize_processor = InitializeRequestProcessor::new(
             gateway_login_control,
@@ -672,29 +697,67 @@ impl MessageProcessor {
         // loopback harness dispatches inference AND tools in this app-server process.
         #[cfg(all(feature = "inference-fixtures", debug_assertions))]
         if request.method == "inquello/fixture/messagesTurn" {
-            let id = ConnectionRequestId { connection_id, request_id: request.id };
-            let result = if session.initialized() && matches!(transport, AppServerTransport::Stdio)
-                && session.origin == crate::transport::ConnectionOrigin::Stdio {
-                self.inquello_fixture_turn(connection_id, &id, request.params).await
-            } else { Err(invalid_request("Fixture requires private stdio")) };
+            let id = ConnectionRequestId {
+                connection_id,
+                request_id: request.id,
+            };
+            let result = if session.initialized()
+                && matches!(transport, AppServerTransport::Stdio)
+                && session.origin == crate::transport::ConnectionOrigin::Stdio
+            {
+                self.inquello_fixture_turn(connection_id, &id, request.params)
+                    .await
+            } else {
+                Err(invalid_request("Fixture requires private stdio"))
+            };
             match result {
-                Ok(response) => self.outgoing.send_response(id, response).await,
+                Ok(response) => {
+                    self.outgoing
+                        .send_response_as(id, ClientResponsePayload::InquelloFixture(response))
+                        .await
+                }
                 Err(error) => self.outgoing.send_error(id, error).await,
             }
             return;
         }
         #[cfg(all(feature = "inference-fixtures", debug_assertions))]
         if request.method == "inquello/fixture/taskTransport" {
-            let id=ConnectionRequestId {connection_id,request_id:request.id};
-            let result=if session.initialized() && matches!(transport,AppServerTransport::Stdio) && session.origin==crate::transport::ConnectionOrigin::Stdio {
-                self.inquello_processor.prepare_task_fixture(connection_id,request.params).await
-            }else{Err(invalid_request("Retained Task fixture requires private stdio"))};
-            match result {Ok(value)=>self.outgoing.send_response(id,value).await,Err(error)=>self.outgoing.send_error(id,error).await,}
+            let id = ConnectionRequestId {
+                connection_id,
+                request_id: request.id,
+            };
+            let result = if session.initialized()
+                && matches!(transport, AppServerTransport::Stdio)
+                && session.origin == crate::transport::ConnectionOrigin::Stdio
+            {
+                self.inquello_processor
+                    .prepare_task_fixture(connection_id, request.params)
+                    .await
+            } else {
+                Err(invalid_request(
+                    "Retained Task fixture requires private stdio",
+                ))
+            };
+            match result {
+                Ok(value) => {
+                    self.outgoing
+                        .send_response_as(id, ClientResponsePayload::InquelloFixture(value))
+                        .await
+                }
+                Err(error) => self.outgoing.send_error(id, error).await,
+            }
             return;
         }
         if reject_private_handoff_transport(&request.method, Some(transport), session.origin) {
-            self.outgoing.send_error(ConnectionRequestId { connection_id, request_id: request.id },
-                invalid_request("Private authority/provider handoff requires stdio")).await;
+            self.outgoing
+                .send_error(
+                    ConnectionRequestId {
+                        connection_id,
+                        request_id: request.id,
+                    },
+                    invalid_request("Private authority/provider handoff requires stdio"),
+                )
+                .await;
             return;
         }
         let request_method = request.method.as_str();
@@ -762,8 +825,15 @@ impl MessageProcessor {
         cancellation: tokio_util::sync::CancellationToken,
     ) {
         if reject_private_handoff_transport(request.method_name(), None, session.origin) {
-            self.outgoing.send_error(ConnectionRequestId { connection_id, request_id: request.id().clone() },
-                invalid_request("Private authority/provider handoff requires stdio")).await;
+            self.outgoing
+                .send_error(
+                    ConnectionRequestId {
+                        connection_id,
+                        request_id: request.id().clone(),
+                    },
+                    invalid_request("Private authority/provider handoff requires stdio"),
+                )
+                .await;
             return;
         }
         let request_id = ConnectionRequestId {
@@ -969,7 +1039,9 @@ impl MessageProcessor {
             .connection_closed(connection_id)
             .await;
         self.thread_processor.connection_closed(connection_id).await;
-        self.inquello_processor.connection_closed(connection_id).await;
+        self.inquello_processor
+            .connection_closed(connection_id)
+            .await;
     }
 
     pub(crate) fn subscribe_running_assistant_turn_count(&self) -> watch::Receiver<usize> {
@@ -1022,6 +1094,24 @@ impl MessageProcessor {
             .inquello_processor
             .tools_exec_plan(connection_id, params, device, user)
             .await?;
+        if let Some(wsl) = plan.wsl {
+            let usage = self
+                .inquello_processor
+                .tool_usage_begin(connection_id, usage_actor, &usage_task)
+                .await?;
+            self.command_exec_processor
+                .wsl_exec_manager
+                .start(
+                    request_id.clone(),
+                    wsl,
+                    self.outgoing.clone(),
+                    CancellationToken::new(),
+                    usage,
+                )
+                .await
+                .map_err(|error| internal_error(format!("Linux execution unavailable: {error}")))?;
+            return Ok(None);
+        }
         if !plan.config_edits.is_empty() {
             self.config_processor
                 .batch_write(codex_app_server_protocol::ConfigBatchWriteParams {
@@ -1040,7 +1130,10 @@ impl MessageProcessor {
                 })
                 .await?;
         }
-        let usage = self.inquello_processor.tool_usage_begin(connection_id, usage_actor, &usage_task).await?;
+        let usage = self
+            .inquello_processor
+            .tool_usage_begin(connection_id, usage_actor, &usage_task)
+            .await?;
         self.command_exec_processor
             .inquello_command_exec(request_id, plan.exec, usage)
             .await
@@ -1122,7 +1215,10 @@ impl MessageProcessor {
         let connection_id = connection_request_id.connection_id;
         // Private provider credentials never enter general request analytics,
         // even when an analytics implementation serializes typed params.
-        if !matches!(&codex_request, ClientRequest::InquelloRoutePrivateAuth { .. }) {
+        if !matches!(
+            &codex_request,
+            ClientRequest::InquelloRoutePrivateAuth { .. }
+        ) {
             self.initialize_processor.track_initialized_request(
                 connection_id,
                 connection_request_id.request_id.clone(),
@@ -1222,16 +1318,27 @@ impl MessageProcessor {
         session: Arc<ConnectionSessionState>,
         event_stream_ready: Option<McpEventStreamReady>,
     ) -> Result<(), JSONRPCErrorError> {
-        let saved=matches!(codex_request.method_name(),"inquello/workspace/search"|"inquello/task/reopen"|"inquello/workspace/tree");
-        let cancellation=request_context.cancellation.clone();
-        let request=self.handle_initialized_client_request_inner(connection_request_id,codex_request,request_context,session,event_stream_ready);
+        let saved = matches!(
+            codex_request.method_name(),
+            "inquello/workspace/search" | "inquello/task/reopen" | "inquello/workspace/tree"
+        );
+        let cancellation = request_context.cancellation.clone();
+        let request = self.handle_initialized_client_request_inner(
+            connection_request_id,
+            codex_request,
+            request_context,
+            session,
+            event_stream_ready,
+        );
         if saved {
             tokio::select! {
                 biased;
                 _=cancellation.cancelled()=>Err(crate::request_processors::saved_timeout_error()),
                 result=tokio::time::timeout(std::time::Duration::from_secs(30),request)=>result.map_err(|_|crate::request_processors::saved_timeout_error())?,
             }
-        } else { request.await }
+        } else {
+            request.await
+        }
     }
 
     async fn handle_initialized_client_request_inner(
@@ -1250,1049 +1357,1238 @@ impl MessageProcessor {
             connection_id,
             request_id: codex_request.id().clone(),
         };
-        let saved_operation=matches!(codex_request.method_name(),"inquello/workspace/search"|"inquello/task/reopen"|"inquello/workspace/tree");
-        let saved_deadline=tokio::time::Instant::now()+std::time::Duration::from_secs(30);
-        let saved_cancellation=request_context.cancellation.clone();
-        let mut saved_read_fence=if saved_operation{Some(self.inquello_processor.saved_read_fence(connection_id).await?)}else{None};
+        let saved_operation = matches!(
+            codex_request.method_name(),
+            "inquello/workspace/search" | "inquello/task/reopen" | "inquello/workspace/tree"
+        );
+        let saved_deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(30);
+        let saved_cancellation = request_context.cancellation.clone();
+        let mut saved_read_fence = if saved_operation {
+            Some(
+                self.inquello_processor
+                    .saved_read_fence(connection_id)
+                    .await?,
+            )
+        } else {
+            None
+        };
         let private_fence = self.outgoing.capture_private_fence(connection_id);
-        let private_thread = self.inquello_processor.guard_retained_request(connection_id,&codex_request).await?;
-        let private_scope = self.inquello_processor.guard_private_scope(connection_id,&codex_request).await?;
-        if private_thread.is_some() || private_scope.is_some() || matches!(codex_request.method_name(), "inquello/workspace/list" | "inquello/tasks/reconcile" | "inquello/tasks/lifecycleReconcile" | "inquello/tasks/forThread" | "inquello/tasks/progress") {
-            self.outgoing.fence_request(&request_id, private_fence).await;
-        }
-        let dispatch=async { match codex_request {
-            ClientRequest::Initialize { .. } => {
-                panic!("Initialize should be handled before initialized request dispatch");
-            }
-            ClientRequest::UserVerificationCancel { params, .. } => {
-                self.outgoing
-                    .cancel_user_verification_request(&ConnectionRequestId {
-                        connection_id,
-                        request_id: params.request_id,
-                    })
-                    .await;
-                Ok(Some(UserVerificationCancelResponse {}.into()))
-            }
-            request @ (ClientRequest::UserVerificationStatus { .. }
-            | ClientRequest::UserVerificationEnroll { .. }
-            | ClientRequest::UserVerificationDelete { .. }
-            | ClientRequest::UserVerificationVerify { .. }) => {
-                return Box::pin(async {
-                    // Keep verification temporaries out of unrelated RPCs' stack frames.
-                    let operation = match request {
-                        ClientRequest::UserVerificationStatus { .. } => {
-                            crate::user_verification::Operation::Status
-                        }
-                        ClientRequest::UserVerificationEnroll { .. } => {
-                            crate::user_verification::Operation::Enroll
-                        }
-                        ClientRequest::UserVerificationDelete { .. } => {
-                            crate::user_verification::Operation::Delete
-                        }
-                        ClientRequest::UserVerificationVerify { params, .. } => {
-                            crate::user_verification::Operation::Verify(params)
-                        }
-                        _ => unreachable!("matched a user-verification request"),
-                    };
-                    let response = self
-                        .user_verification
-                        .handle(
-                            operation,
-                            Arc::clone(&session.rpc_gate),
-                            request_context.cancellation.clone(),
-                            session.origin,
-                        )
-                        .await?;
-                    let (payload, check) = response.into_parts();
-                    self.outgoing
-                        .send_response_as_checked(request_id.clone(), payload, check)
-                        .await;
-                    Ok(())
-                })
+        let private_thread = self
+            .inquello_processor
+            .guard_retained_request(connection_id, &codex_request)
+            .await?;
+        let private_scope = self
+            .inquello_processor
+            .guard_private_scope(connection_id, &codex_request)
+            .await?;
+        if private_thread.is_some()
+            || private_scope.is_some()
+            || matches!(
+                codex_request.method_name(),
+                "inquello/workspace/list"
+                    | "inquello/tasks/reconcile"
+                    | "inquello/tasks/lifecycleReconcile"
+                    | "inquello/tasks/forThread"
+                    | "inquello/tasks/progress"
+            )
+        {
+            self.outgoing
+                .fence_request(&request_id, private_fence)
                 .await;
-            }
-            ClientRequest::ServerDiagnostics { .. } => Ok(Some(read_server_diagnostics().into())),
-            ClientRequest::ConfigRead { params, .. } => self
-                .config_processor
-                .read(params)
-                .await
-                .map(|response| Some(response.into())),
-            ClientRequest::WindowsSandboxReadiness { .. } => {
-                self.windows_sandbox_processor
-                    .windows_sandbox_readiness(&request_id)
-                    .await
-            }
-            ClientRequest::ExternalAgentConfigDetect { params, .. } => self
-                .external_agent_config_processor
-                .detect(params)
-                .await
-                .map(|response| Some(response.into())),
-            ClientRequest::ExternalAgentConfigImport { params, .. } => self
-                .external_agent_config_processor
-                .import(request_id.clone(), params)
-                .await
-                .map(|()| None),
-            ClientRequest::ExternalAgentConfigImportHistoryRecord { params, .. } => self
-                .external_agent_config_processor
-                .record_import_history(params)
-                .await
-                .map(|response| Some(response.into())),
-            ClientRequest::ExternalAgentConfigImportHistoriesRead { .. } => self
-                .external_agent_config_processor
-                .read_import_histories()
-                .await
-                .map(|response| Some(response.into())),
-            ClientRequest::ConfigValueWrite { params, .. } => {
-                self.config_processor.value_write(params).await.map(Some)
-            }
-            ClientRequest::ConfigBatchWrite { params, .. } => {
-                self.config_processor.batch_write(params).await.map(Some)
-            }
-            ClientRequest::ExperimentalFeatureEnablementSet { params, .. } => {
-                self.config_processor
-                    .experimental_feature_enablement_set(request_id.clone(), params)
-                    .await
-            }
-            ClientRequest::RemoteControlEnable { params, .. } => self
-                .remote_control_processor
-                .enable(
-                    params.is_some_and(|params| params.ephemeral),
-                    app_server_client_name.as_deref(),
-                )
-                .await
-                .map(|response| Some(response.into())),
-            ClientRequest::RemoteControlDisable { params, .. } => self
-                .remote_control_processor
-                .disable(
-                    params.is_some_and(|params| params.ephemeral),
-                    app_server_client_name.as_deref(),
-                )
-                .await
-                .map(|response| Some(response.into())),
-            ClientRequest::RemoteControlStatusRead { .. } => self
-                .remote_control_processor
-                .status_read()
-                .map(|response| Some(response.into())),
-            ClientRequest::RemoteControlPairingStart { params, .. } => self
-                .remote_control_processor
-                .pairing_start(params, app_server_client_name.as_deref())
-                .await
-                .map(|response| Some(response.into())),
-            ClientRequest::RemoteControlPairingStatus { params, .. } => self
-                .remote_control_processor
-                .pairing_status(params)
-                .await
-                .map(|response| Some(response.into())),
-            ClientRequest::RemoteControlClientsList { params, .. } => self
-                .remote_control_processor
-                .clients_list(params)
-                .await
-                .map(|response| Some(response.into())),
-            ClientRequest::RemoteControlClientsRevoke { params, .. } => self
-                .remote_control_processor
-                .clients_revoke(params)
-                .await
-                .map(|response| Some(response.into())),
-            ClientRequest::ConfigRequirementsRead { .. } => self
-                .config_processor
-                .config_requirements_read()
-                .await
-                .map(|response| Some(response.into())),
-            ClientRequest::EnvironmentAdd { params, .. } => {
-                self.environment_processor.environment_add(params).await
-            }
-            ClientRequest::EnvironmentInfo { params, .. } => {
-                self.environment_processor.environment_info(params).await
-            }
-            ClientRequest::EnvironmentStatus { params, .. } => {
-                self.environment_processor.environment_status(params).await
-            }
-            ClientRequest::FsReadFile { params, .. } => self
-                .fs_processor
-                .read_file(params)
-                .await
-                .map(|response| Some(response.into())),
-            ClientRequest::FsWriteFile { params, .. } => self
-                .fs_processor
-                .write_file(params)
-                .await
-                .map(|response| Some(response.into())),
-            ClientRequest::FsCreateDirectory { params, .. } => self
-                .fs_processor
-                .create_directory(params)
-                .await
-                .map(|response| Some(response.into())),
-            ClientRequest::FsGetMetadata { params, .. } => self
-                .fs_processor
-                .get_metadata(params)
-                .await
-                .map(|response| Some(response.into())),
-            ClientRequest::FsReadDirectory { params, .. } => self
-                .fs_processor
-                .read_directory(params)
-                .await
-                .map(|response| Some(response.into())),
-            ClientRequest::FsRemove { params, .. } => self
-                .fs_processor
-                .remove(params)
-                .await
-                .map(|response| Some(response.into())),
-            ClientRequest::FsCopy { params, .. } => self
-                .fs_processor
-                .copy(params)
-                .await
-                .map(|response| Some(response.into())),
-            ClientRequest::FsWatch { params, .. } => self
-                .fs_processor
-                .watch(connection_id, params)
-                .await
-                .map(|response| Some(response.into())),
-            ClientRequest::FsUnwatch { params, .. } => self
-                .fs_processor
-                .unwatch(connection_id, params)
-                .await
-                .map(|response| Some(response.into())),
-            ClientRequest::ModelProviderCapabilitiesRead { .. } => self
-                .config_processor
-                .model_provider_capabilities_read()
-                .await
-                .map(|response| Some(response.into())),
-            ClientRequest::ThreadStart { params, .. } => {
-                self.thread_processor
-                    .thread_start(
-                        request_id.clone(),
-                        params,
-                        app_server_client_name.clone(),
-                        client_version.clone(),
-                        client_mcp_extensions.clone(),
-                        request_context,
-                    )
-                    .await
-            }
-            ClientRequest::ThreadUnsubscribe { params, .. } => {
-                let thread_id = params.thread_id.clone();
-                let response = self
-                    .thread_processor
-                    .thread_unsubscribe(&request_id, params)
-                    .await?;
-                if let Ok(thread_id) = ThreadId::from_string(&thread_id) {
-                    session.mcp_event_streams.stop_thread(thread_id).await;
+        }
+        let dispatch = async {
+            match codex_request {
+                ClientRequest::Initialize { .. } => {
+                    panic!("Initialize should be handled before initialized request dispatch");
                 }
-                Ok(response)
-            }
-            ClientRequest::ThreadResume { params, .. } => {
-                self.thread_processor
-                    .thread_resume(
-                        ThreadResumeTarget::Client(request_id.clone()),
-                        params,
-                        app_server_client_name.clone(),
-                        client_version.clone(),
-                        client_mcp_extensions.clone(),
-                    )
-                    .await
-            }
-            ClientRequest::ThreadFork { params, .. } => {
-                self.thread_processor
-                    .thread_fork(
-                        request_id.clone(),
-                        params,
-                        app_server_client_name.clone(),
-                        client_version.clone(),
-                        client_mcp_extensions.clone(),
-                    )
-                    .await
-            }
-            ClientRequest::ThreadSample { params, .. } => self
-                .thread_processor
-                .thread_sample(params, Arc::clone(&session.rpc_gate), request_context)
-                .await
-                .map(|response| Some(response.into())),
-            ClientRequest::ThreadSampleCancel { params, .. } => {
-                self.outgoing
-                    .cancel_thread_sample_request(&ConnectionRequestId {
-                        connection_id,
-                        request_id: params.request_id,
+                ClientRequest::UserVerificationCancel { params, .. } => {
+                    self.outgoing
+                        .cancel_user_verification_request(&ConnectionRequestId {
+                            connection_id,
+                            request_id: params.request_id,
+                        })
+                        .await;
+                    Ok(Some(UserVerificationCancelResponse {}.into()))
+                }
+                request @ (ClientRequest::UserVerificationStatus { .. }
+                | ClientRequest::UserVerificationEnroll { .. }
+                | ClientRequest::UserVerificationDelete { .. }
+                | ClientRequest::UserVerificationVerify { .. }) => {
+                    Box::pin(async {
+                        // Keep verification temporaries out of unrelated RPCs' stack frames.
+                        let operation = match request {
+                            ClientRequest::UserVerificationStatus { .. } => {
+                                crate::user_verification::Operation::Status
+                            }
+                            ClientRequest::UserVerificationEnroll { .. } => {
+                                crate::user_verification::Operation::Enroll
+                            }
+                            ClientRequest::UserVerificationDelete { .. } => {
+                                crate::user_verification::Operation::Delete
+                            }
+                            ClientRequest::UserVerificationVerify { params, .. } => {
+                                crate::user_verification::Operation::Verify(params)
+                            }
+                            _ => unreachable!("matched a user-verification request"),
+                        };
+                        let response = self
+                            .user_verification
+                            .handle(
+                                operation,
+                                Arc::clone(&session.rpc_gate),
+                                request_context.cancellation.clone(),
+                                session.origin,
+                            )
+                            .await?;
+                        let (payload, check) = response.into_parts();
+                        self.outgoing
+                            .send_response_as_checked(request_id.clone(), payload, check)
+                            .await;
+                        Ok(None)
                     })
-                    .await;
-                Ok(Some(ThreadSampleCancelResponse {}.into()))
-            }
-            ClientRequest::ThreadArchive { params, .. } => {
-                self.thread_processor
-                    .thread_archive(request_id.clone(), params)
                     .await
-            }
-            ClientRequest::ThreadDelete { params, .. } => {
-                self.thread_processor
-                    .thread_delete(request_id.clone(), params)
+                }
+                ClientRequest::ServerDiagnostics { .. } => {
+                    Ok(Some(read_server_diagnostics().into()))
+                }
+                ClientRequest::ConfigRead { params, .. } => self
+                    .config_processor
+                    .read(params)
                     .await
-            }
-            ClientRequest::ThreadIncrementElicitation { params, .. } => {
-                self.thread_processor
-                    .thread_increment_elicitation(params)
+                    .map(|response| Some(response.into())),
+                ClientRequest::WindowsSandboxReadiness { .. } => {
+                    self.windows_sandbox_processor
+                        .windows_sandbox_readiness(&request_id)
+                        .await
+                }
+                ClientRequest::ExternalAgentConfigDetect { params, .. } => self
+                    .external_agent_config_processor
+                    .detect(params)
                     .await
-            }
-            ClientRequest::ThreadDecrementElicitation { params, .. } => {
-                self.thread_processor
-                    .thread_decrement_elicitation(params)
+                    .map(|response| Some(response.into())),
+                ClientRequest::ExternalAgentConfigImport { params, .. } => self
+                    .external_agent_config_processor
+                    .import(request_id.clone(), params)
                     .await
-            }
-            ClientRequest::ThreadSetName { params, .. } => {
-                self.thread_processor
-                    .thread_set_name(request_id.clone(), params)
+                    .map(|()| None),
+                ClientRequest::ExternalAgentConfigImportHistoryRecord { params, .. } => self
+                    .external_agent_config_processor
+                    .record_import_history(params)
                     .await
-            }
-            ClientRequest::ThreadGoalSet { params, .. } => {
-                self.thread_goal_processor
-                    .thread_goal_set(request_id.clone(), params)
+                    .map(|response| Some(response.into())),
+                ClientRequest::ExternalAgentConfigImportHistoriesRead { .. } => self
+                    .external_agent_config_processor
+                    .read_import_histories()
                     .await
-            }
-            ClientRequest::ThreadGoalGet { params, .. } => {
-                self.thread_goal_processor.thread_goal_get(params).await
-            }
-            ClientRequest::ThreadGoalClear { params, .. } => {
-                self.thread_goal_processor
-                    .thread_goal_clear(request_id.clone(), params)
-                    .await
-            }
-            ClientRequest::ThreadQueueAdd { params, .. } => self
-                .thread_queue_processor
-                .add(params)
-                .await
-                .map(|response| Some(response.into())),
-            ClientRequest::ThreadQueueList { params, .. } => self
-                .thread_queue_processor
-                .list(params)
-                .await
-                .map(|response| Some(response.into())),
-            ClientRequest::ThreadQueueUpdate { params, .. } => self
-                .thread_queue_processor
-                .update(params)
-                .await
-                .map(|response| Some(response.into())),
-            ClientRequest::ThreadQueueDelete { params, .. } => self
-                .thread_queue_processor
-                .delete(params)
-                .await
-                .map(|response| Some(response.into())),
-            ClientRequest::ThreadQueueReorder { params, .. } => self
-                .thread_queue_processor
-                .reorder(params)
-                .await
-                .map(|response| Some(response.into())),
-            ClientRequest::ThreadQueueStart { params, .. } => self
-                .thread_queue_processor
-                .start(&request_id, params)
-                .await
-                .map(|response| Some(response.into())),
-            ClientRequest::ThreadMetadataUpdate { params, .. } => {
-                self.thread_processor.thread_metadata_update(params).await
-            }
-            ClientRequest::ThreadAttachmentAdd { params, .. } => {
-                self.thread_processor
-                    .thread_attachment_add(request_id.clone(), params)
-                    .await
-            }
-            ClientRequest::ThreadAttachmentList { params, .. } => {
-                self.thread_processor.thread_attachment_list(params).await
-            }
-            ClientRequest::ThreadAttachmentOwnerList { params, .. } => {
-                self.thread_processor
-                    .thread_attachment_owner_list(params)
-                    .await
-            }
-            ClientRequest::ThreadAttachmentRemove { params, .. } => {
-                self.thread_processor
-                    .thread_attachment_remove(request_id.clone(), params)
-                    .await
-            }
-            ClientRequest::ThreadSectionMove { params, .. } => {
-                self.thread_processor.thread_section_move(params).await
-            }
-            ClientRequest::ThreadSectionList { params, .. } => {
-                self.thread_processor.thread_section_list(params).await
-            }
-            ClientRequest::ThreadSectionCreate { params, .. } => {
-                self.thread_processor.thread_section_create(params).await
-            }
-            ClientRequest::ThreadSectionUpdate { params, .. } => {
-                self.thread_processor.thread_section_update(params).await
-            }
-            ClientRequest::ThreadSectionDelete { params, .. } => {
-                self.thread_processor.thread_section_delete(params).await
-            }
-            ClientRequest::ThreadSettingsUpdate { params, .. } => {
-                self.turn_processor
-                    .thread_settings_update(&request_id, params)
-                    .await
-            }
-            ClientRequest::ThreadMemoryModeSet { params, .. } => {
-                self.thread_processor.thread_memory_mode_set(params).await
-            }
-            ClientRequest::MemoryStatus { params, .. } => {
-                self.thread_processor.memory_status(params).await
-            }
-            ClientRequest::ThreadMemoryRead { params, .. } => {
-                self.thread_processor.thread_memory_read(params).await
-            }
-            ClientRequest::MemoryReset { .. } => self.thread_processor.memory_reset().await,
-            ClientRequest::RolloutCompress { .. } => self.thread_processor.rollout_compress(),
-            ClientRequest::ThreadUnarchive { params, .. } => {
-                self.thread_processor
-                    .thread_unarchive(request_id.clone(), params)
-                    .await
-            }
-            ClientRequest::ThreadPredictionRequest { .. } => Err(method_not_found(
-                "thread/prediction/request is not implemented yet",
-            )),
-            ClientRequest::ThreadCompactStart { params, .. } => {
-                self.thread_processor
-                    .thread_compact_start(&request_id, params)
-                    .await
-            }
-            ClientRequest::ThreadBackgroundTerminalsClean { params, .. } => {
-                self.thread_processor
-                    .thread_background_terminals_clean(&request_id, params)
-                    .await
-            }
-            ClientRequest::ThreadBackgroundTerminalsList { params, .. } => {
-                self.thread_processor
-                    .thread_background_terminals_list(params)
-                    .await
-            }
-            ClientRequest::ThreadBackgroundTerminalsTerminate { params, .. } => {
-                self.thread_processor
-                    .thread_background_terminals_terminate(params)
-                    .await
-            }
-            ClientRequest::ThreadRevert { params, .. } => {
-                self.thread_processor
-                    .thread_revert(
-                        request_id.clone(),
-                        params,
-                        app_server_client_name.clone(),
-                        client_version.clone(),
+                    .map(|response| Some(response.into())),
+                ClientRequest::ConfigValueWrite { params, .. } => {
+                    self.config_processor.value_write(params).await.map(Some)
+                }
+                ClientRequest::ConfigBatchWrite { params, .. } => {
+                    self.config_processor.batch_write(params).await.map(Some)
+                }
+                ClientRequest::ExperimentalFeatureEnablementSet { params, .. } => {
+                    self.config_processor
+                        .experimental_feature_enablement_set(request_id.clone(), params)
+                        .await
+                }
+                ClientRequest::RemoteControlEnable { params, .. } => self
+                    .remote_control_processor
+                    .enable(
+                        params.is_some_and(|params| params.ephemeral),
+                        app_server_client_name.as_deref(),
                     )
                     .await
-            }
-            ClientRequest::ThreadList { params, .. } => {
-                self.thread_processor.thread_list(params).await
-            }
-            ClientRequest::ProjectList { params, .. } => {
-                self.project_processor.project_list(params).await
-            }
-            ClientRequest::ProjectRead { params, .. } => {
-                self.project_processor.project_read(params).await
-            }
-            ClientRequest::ProjectCreate { params, .. } => {
-                self.project_processor.project_create(params).await
-            }
-            ClientRequest::ProjectImport { params, .. } => {
-                self.project_processor.project_import(params).await
-            }
-            ClientRequest::ProjectUpdate { params, .. } => {
-                self.project_processor.project_update(params).await
-            }
-            ClientRequest::ProjectMove { params, .. } => {
-                self.project_processor.project_move(params).await
-            }
-            ClientRequest::ProjectDelete { params, .. } => {
-                self.project_processor.project_delete(params).await
-            }
-            ClientRequest::ThreadSearch { params, .. } => {
-                self.thread_processor.thread_search(params).await
-            }
-            ClientRequest::ThreadSearchOccurrences { params, .. } => {
-                self.thread_processor
-                    .thread_search_occurrences(params)
-                    .await
-            }
-            ClientRequest::ThreadLoadedList { params, .. } => {
-                self.thread_processor.thread_loaded_list(params).await
-            }
-            ClientRequest::ThreadRead { params, .. } => {
-                self.thread_processor.thread_read(&request_id, params).await
-            }
-            ClientRequest::ThreadReadStateUpdate { params, .. } => {
-                self.thread_processor.thread_read_state_update(params).await
-            }
-            ClientRequest::ThreadTurnsList { params, .. } => {
-                self.thread_processor.thread_turns_list(params).await
-            }
-            ClientRequest::ThreadItemsList { params, .. } => {
-                self.thread_processor.thread_items_list(params).await
-            }
-            ClientRequest::ThreadItemsRead { params, .. } => {
-                self.thread_processor.thread_items_read(params).await
-            }
-            ClientRequest::ThreadShellCommand { params, .. } => {
-                self.thread_processor
-                    .thread_shell_command(&request_id, params)
-                    .await
-            }
-            ClientRequest::ThreadApproveGuardianDeniedAction { params, .. } => {
-                self.thread_processor
-                    .thread_approve_guardian_denied_action(&request_id, params)
-                    .await
-            }
-            ClientRequest::GetConversationSummary { params, .. } => {
-                self.thread_processor.conversation_summary(params).await
-            }
-            ClientRequest::SkillsList { params, .. } => {
-                self.catalog_processor.skills_list(params).await
-            }
-            ClientRequest::SkillsExtraRootsSet { params, .. } => {
-                self.catalog_processor.skills_extra_roots_set(params).await
-            }
-            ClientRequest::HooksList { params, .. } => {
-                self.catalog_processor.hooks_list(params).await
-            }
-            ClientRequest::MarketplaceAdd { params, .. } => {
-                self.marketplace_processor.marketplace_add(params).await
-            }
-            ClientRequest::MarketplaceRemove { params, .. } => {
-                self.marketplace_processor.marketplace_remove(params).await
-            }
-            ClientRequest::MarketplaceUpgrade { params, .. } => {
-                self.marketplace_processor.marketplace_upgrade(params).await
-            }
-            ClientRequest::PluginList { params, .. } => {
-                self.plugin_processor.plugin_list(params).await
-            }
-            ClientRequest::PluginSearch { params, .. } => {
-                self.plugin_processor.plugin_search(params).await
-            }
-            ClientRequest::PluginInstalled { params, .. } => {
-                self.plugin_processor.plugin_installed(params).await
-            }
-            ClientRequest::PluginReconcile { params, .. } => {
-                self.plugin_processor
-                    .plugin_reconcile(
-                        params,
-                        self.config_processor.clone(),
-                        &self.request_serialization_queues,
+                    .map(|response| Some(response.into())),
+                ClientRequest::RemoteControlDisable { params, .. } => self
+                    .remote_control_processor
+                    .disable(
+                        params.is_some_and(|params| params.ephemeral),
+                        app_server_client_name.as_deref(),
                     )
                     .await
-            }
-            ClientRequest::PluginRead { params, .. } => {
-                self.plugin_processor.plugin_read(params).await
-            }
-            ClientRequest::PluginSkillRead { params, .. } => {
-                self.plugin_processor.plugin_skill_read(params).await
-            }
-            ClientRequest::PluginShareSave { params, .. } => {
-                self.plugin_processor.plugin_share_save(params).await
-            }
-            ClientRequest::PluginShareUpdateTargets { params, .. } => {
-                self.plugin_processor
-                    .plugin_share_update_targets(params)
+                    .map(|response| Some(response.into())),
+                ClientRequest::RemoteControlStatusRead { .. } => self
+                    .remote_control_processor
+                    .status_read()
+                    .map(|response| Some(response.into())),
+                ClientRequest::RemoteControlPairingStart { params, .. } => self
+                    .remote_control_processor
+                    .pairing_start(params, app_server_client_name.as_deref())
                     .await
-            }
-            ClientRequest::PluginShareList { params, .. } => {
-                self.plugin_processor.plugin_share_list(params).await
-            }
-            ClientRequest::PluginShareCheckout { params, .. } => {
-                self.plugin_processor.plugin_share_checkout(params).await
-            }
-            ClientRequest::PluginShareDelete { params, .. } => {
-                self.plugin_processor.plugin_share_delete(params).await
-            }
-            ClientRequest::AppsRead { params, .. } => self.apps_processor.apps_read(params).await,
-            ClientRequest::AppsList { params, .. } => {
-                self.apps_processor.apps_list(&request_id, params).await
-            }
-            ClientRequest::AppsInstalled { params, .. } => self
-                .apps_processor
-                .apps_installed(params)
-                .await
-                .map(|response| Some(response.into())),
-            ClientRequest::SkillsConfigWrite { params, .. } => {
-                self.catalog_processor.skills_config_write(params).await
-            }
-            ClientRequest::PluginInstall { params, .. } => {
-                // Keep installation and auth setup state off the shared request dispatcher stack.
-                Box::pin(self.plugin_processor.plugin_install(params)).await
-            }
-            ClientRequest::PluginUninstall { params, .. } => {
-                self.plugin_processor.plugin_uninstall(params).await
-            }
-            ClientRequest::ModelList { params, .. } => {
-                self.catalog_processor.model_list(params).await
-            }
-            ClientRequest::ExperimentalFeatureList { params, .. } => {
-                self.catalog_processor
-                    .experimental_feature_list(params)
+                    .map(|response| Some(response.into())),
+                ClientRequest::RemoteControlPairingStatus { params, .. } => self
+                    .remote_control_processor
+                    .pairing_status(params)
                     .await
-            }
-            ClientRequest::PermissionProfileList { params, .. } => {
-                self.catalog_processor.permission_profile_list(params).await
-            }
-            ClientRequest::CollaborationModeList { params, .. } => {
-                self.catalog_processor.collaboration_mode_list(params).await
-            }
-            ClientRequest::MockExperimentalMethod { params, .. } => {
-                self.catalog_processor
-                    .mock_experimental_method(params)
+                    .map(|response| Some(response.into())),
+                ClientRequest::RemoteControlClientsList { params, .. } => self
+                    .remote_control_processor
+                    .clients_list(params)
                     .await
-            }
-            ClientRequest::TurnStart { params, .. } => {
-                self.turn_processor
-                    .turn_start(
-                        request_id.clone(),
-                        params,
-                        app_server_client_name.clone(),
-                        client_version.clone(),
-                    )
+                    .map(|response| Some(response.into())),
+                ClientRequest::RemoteControlClientsRevoke { params, .. } => self
+                    .remote_control_processor
+                    .clients_revoke(params)
                     .await
-            }
-            ClientRequest::ThreadInjectItems { params, .. } => {
-                self.turn_processor
-                    .thread_inject_items(&request_id, params)
+                    .map(|response| Some(response.into())),
+                ClientRequest::ConfigRequirementsRead { .. } => self
+                    .config_processor
+                    .config_requirements_read()
                     .await
-            }
-            ClientRequest::TurnSteer { params, .. } => {
-                self.turn_processor.turn_steer(&request_id, params).await
-            }
-            ClientRequest::TurnSettingsUpdate { params, .. } => {
-                self.turn_processor
-                    .turn_settings_update(&request_id, params)
+                    .map(|response| Some(response.into())),
+                ClientRequest::EnvironmentAdd { params, .. } => {
+                    self.environment_processor.environment_add(params).await
+                }
+                ClientRequest::EnvironmentInfo { params, .. } => {
+                    self.environment_processor.environment_info(params).await
+                }
+                ClientRequest::EnvironmentStatus { params, .. } => {
+                    self.environment_processor.environment_status(params).await
+                }
+                ClientRequest::FsReadFile { params, .. } => self
+                    .fs_processor
+                    .read_file(params)
                     .await
-            }
-            ClientRequest::TurnInterrupt { params, .. } => {
-                self.turn_processor
-                    .turn_interrupt(&request_id, params)
+                    .map(|response| Some(response.into())),
+                ClientRequest::FsWriteFile { params, .. } => self
+                    .fs_processor
+                    .write_file(params)
                     .await
-            }
-            ClientRequest::ThreadRealtimeStart { params, .. } => {
-                self.turn_processor
-                    .thread_realtime_start(&request_id, params)
+                    .map(|response| Some(response.into())),
+                ClientRequest::FsCreateDirectory { params, .. } => self
+                    .fs_processor
+                    .create_directory(params)
                     .await
-            }
-            ClientRequest::ThreadRealtimeAppendAudio { params, .. } => {
-                self.turn_processor
-                    .thread_realtime_append_audio(&request_id, params)
+                    .map(|response| Some(response.into())),
+                ClientRequest::FsGetMetadata { params, .. } => self
+                    .fs_processor
+                    .get_metadata(params)
                     .await
-            }
-            ClientRequest::ThreadRealtimeAppendText { params, .. } => {
-                self.turn_processor
-                    .thread_realtime_append_text(&request_id, params)
+                    .map(|response| Some(response.into())),
+                ClientRequest::FsReadDirectory { params, .. } => self
+                    .fs_processor
+                    .read_directory(params)
                     .await
-            }
-            ClientRequest::ThreadRealtimeAppendSpeech { params, .. } => {
-                self.turn_processor
-                    .thread_realtime_append_speech(&request_id, params)
+                    .map(|response| Some(response.into())),
+                ClientRequest::FsRemove { params, .. } => self
+                    .fs_processor
+                    .remove(params)
                     .await
-            }
-            ClientRequest::ThreadRealtimeStop { params, .. } => {
-                self.turn_processor
-                    .thread_realtime_stop(&request_id, params)
+                    .map(|response| Some(response.into())),
+                ClientRequest::FsCopy { params, .. } => self
+                    .fs_processor
+                    .copy(params)
                     .await
-            }
-            ClientRequest::ThreadTimelineList { params, .. } => {
-                self.thread_processor.thread_timeline_list(params).await
-            }
-            ClientRequest::ThreadRealtimeListVoices { .. } => {
-                self.turn_processor.thread_realtime_list_voices().await
-            }
-            ClientRequest::ReviewStart { params, .. } => {
-                self.turn_processor.review_start(&request_id, params).await
-            }
-            ClientRequest::McpServerOauthLogin { params, .. } => {
-                // Keep MCP discovery's large future from inflating every request.
-                Box::pin(self.mcp_processor.mcp_server_oauth_login(params)).await
-            }
-            ClientRequest::McpServerOauthCancel { params, .. } => {
-                self.mcp_processor.mcp_server_oauth_cancel(params).await
-            }
-            ClientRequest::McpServerRefresh { params, .. } => {
-                self.mcp_processor.mcp_server_refresh(params).await
-            }
-            ClientRequest::McpServerStatusList { params, .. } => {
-                self.mcp_processor
-                    .mcp_server_status_list(&request_id, params)
+                    .map(|response| Some(response.into())),
+                ClientRequest::FsWatch { params, .. } => self
+                    .fs_processor
+                    .watch(connection_id, params)
                     .await
-            }
-            ClientRequest::McpResourceRead { params, .. } => {
-                self.mcp_processor
-                    .mcp_resource_read(&request_id, params)
+                    .map(|response| Some(response.into())),
+                ClientRequest::FsUnwatch { params, .. } => self
+                    .fs_processor
+                    .unwatch(connection_id, params)
                     .await
-            }
-            ClientRequest::McpServerEventStreamStart { params, .. } => {
-                let ready = event_stream_ready.ok_or_else(|| {
-                    internal_error("MCP event subscription was not reserved before startup")
-                })?;
-                session
-                    .mcp_event_streams
-                    .wait_for_activation(&params.subscription_id, ready)
-                    .await?;
-                Ok(Some(
-                    codex_app_server_protocol::McpServerEventStreamStartResponse {}.into(),
-                ))
-            }
-            ClientRequest::McpServerEventStreamStop { params, .. } => {
-                session
-                    .mcp_event_streams
-                    .stop(&params.subscription_id)
-                    .await;
-                Ok(Some(
-                    codex_app_server_protocol::McpServerEventStreamStopResponse {}.into(),
-                ))
-            }
-            ClientRequest::McpServerToolCall { params, .. } => {
-                self.mcp_processor
-                    .mcp_server_tool_call(&request_id, params)
+                    .map(|response| Some(response.into())),
+                ClientRequest::ModelProviderCapabilitiesRead { .. } => self
+                    .config_processor
+                    .model_provider_capabilities_read()
                     .await
-            }
-            ClientRequest::WindowsSandboxSetupStart { params, .. } => {
-                self.windows_sandbox_processor
-                    .windows_sandbox_setup_start(&request_id, params)
+                    .map(|response| Some(response.into())),
+                ClientRequest::ThreadStart { params, .. } => {
+                    self.thread_processor
+                        .thread_start(
+                            request_id.clone(),
+                            params,
+                            app_server_client_name.clone(),
+                            client_version.clone(),
+                            client_mcp_extensions.clone(),
+                            request_context,
+                        )
+                        .await
+                }
+                ClientRequest::ThreadUnsubscribe { params, .. } => {
+                    let thread_id = params.thread_id.clone();
+                    let response = self
+                        .thread_processor
+                        .thread_unsubscribe(&request_id, params)
+                        .await?;
+                    if let Ok(thread_id) = ThreadId::from_string(&thread_id) {
+                        session.mcp_event_streams.stop_thread(thread_id).await;
+                    }
+                    Ok(response)
+                }
+                ClientRequest::ThreadResume { params, .. } => {
+                    self.thread_processor
+                        .thread_resume(
+                            ThreadResumeTarget::Client(request_id.clone()),
+                            params,
+                            app_server_client_name.clone(),
+                            client_version.clone(),
+                            client_mcp_extensions.clone(),
+                        )
+                        .await
+                }
+                ClientRequest::ThreadFork { params, .. } => {
+                    self.thread_processor
+                        .thread_fork(
+                            request_id.clone(),
+                            params,
+                            app_server_client_name.clone(),
+                            client_version.clone(),
+                            client_mcp_extensions.clone(),
+                        )
+                        .await
+                }
+                ClientRequest::ThreadSample { params, .. } => self
+                    .thread_processor
+                    .thread_sample(params, Arc::clone(&session.rpc_gate), request_context)
                     .await
-            }
-            ClientRequest::LoginAccount { params, .. } => {
-                self.inquello_processor.provider_auth_changing().await;
-                self.account_processor
-                    .login_account(request_id.clone(), params)
+                    .map(|response| Some(response.into())),
+                ClientRequest::ThreadSampleCancel { params, .. } => {
+                    self.outgoing
+                        .cancel_thread_sample_request(&ConnectionRequestId {
+                            connection_id,
+                            request_id: params.request_id,
+                        })
+                        .await;
+                    Ok(Some(ThreadSampleCancelResponse {}.into()))
+                }
+                ClientRequest::ThreadArchive { params, .. } => {
+                    self.thread_processor
+                        .thread_archive(request_id.clone(), params)
+                        .await
+                }
+                ClientRequest::ThreadDelete { params, .. } => {
+                    self.thread_processor
+                        .thread_delete(request_id.clone(), params)
+                        .await
+                }
+                ClientRequest::ThreadIncrementElicitation { params, .. } => {
+                    self.thread_processor
+                        .thread_increment_elicitation(params)
+                        .await
+                }
+                ClientRequest::ThreadDecrementElicitation { params, .. } => {
+                    self.thread_processor
+                        .thread_decrement_elicitation(params)
+                        .await
+                }
+                ClientRequest::ThreadSetName { params, .. } => {
+                    self.thread_processor
+                        .thread_set_name(request_id.clone(), params)
+                        .await
+                }
+                ClientRequest::ThreadGoalSet { params, .. } => {
+                    self.thread_goal_processor
+                        .thread_goal_set(request_id.clone(), params)
+                        .await
+                }
+                ClientRequest::ThreadGoalGet { params, .. } => {
+                    self.thread_goal_processor.thread_goal_get(params).await
+                }
+                ClientRequest::ThreadGoalClear { params, .. } => {
+                    self.thread_goal_processor
+                        .thread_goal_clear(request_id.clone(), params)
+                        .await
+                }
+                ClientRequest::ThreadQueueAdd { params, .. } => self
+                    .thread_queue_processor
+                    .add(params)
                     .await
-            }
-            ClientRequest::BedrockDiscover { params, .. } => {
-                self.account_processor.bedrock_discover(params).await
-            }
-            ClientRequest::BedrockSetup { params, .. } => {
-                self.account_processor.bedrock_setup(params).await
-            }
-            ClientRequest::BedrockCheckGovCloudRequirements { .. } => {
-                self.account_processor
-                    .bedrock_check_gov_cloud_requirements()
+                    .map(|response| Some(response.into())),
+                ClientRequest::ThreadQueueList { params, .. } => self
+                    .thread_queue_processor
+                    .list(params)
                     .await
-            }
-            ClientRequest::GatewayOAuthRead { .. } => {
-                Box::pin(self.account_processor.gateway_oauth_read())
+                    .map(|response| Some(response.into())),
+                ClientRequest::ThreadQueueUpdate { params, .. } => self
+                    .thread_queue_processor
+                    .update(params)
                     .await
-                    .map(|response| Some(response.into()))
-            }
-            ClientRequest::GatewayOAuthLogin { .. } => {
-                if session
-                    .opted_out_notification_methods()
-                    .contains("account/gatewayOAuth/changed")
-                {
-                    Err(invalid_request(
-                        "Gateway login requires account/gatewayOAuth/changed notifications",
+                    .map(|response| Some(response.into())),
+                ClientRequest::ThreadQueueDelete { params, .. } => self
+                    .thread_queue_processor
+                    .delete(params)
+                    .await
+                    .map(|response| Some(response.into())),
+                ClientRequest::ThreadQueueReorder { params, .. } => self
+                    .thread_queue_processor
+                    .reorder(params)
+                    .await
+                    .map(|response| Some(response.into())),
+                ClientRequest::ThreadQueueStart { params, .. } => self
+                    .thread_queue_processor
+                    .start(&request_id, params)
+                    .await
+                    .map(|response| Some(response.into())),
+                ClientRequest::ThreadMetadataUpdate { params, .. } => {
+                    self.thread_processor.thread_metadata_update(params).await
+                }
+                ClientRequest::ThreadAttachmentAdd { params, .. } => {
+                    self.thread_processor
+                        .thread_attachment_add(request_id.clone(), params)
+                        .await
+                }
+                ClientRequest::ThreadAttachmentList { params, .. } => {
+                    self.thread_processor.thread_attachment_list(params).await
+                }
+                ClientRequest::ThreadAttachmentOwnerList { params, .. } => {
+                    self.thread_processor
+                        .thread_attachment_owner_list(params)
+                        .await
+                }
+                ClientRequest::ThreadAttachmentRemove { params, .. } => {
+                    self.thread_processor
+                        .thread_attachment_remove(request_id.clone(), params)
+                        .await
+                }
+                ClientRequest::ThreadSectionMove { params, .. } => {
+                    self.thread_processor.thread_section_move(params).await
+                }
+                ClientRequest::ThreadSectionList { params, .. } => {
+                    self.thread_processor.thread_section_list(params).await
+                }
+                ClientRequest::ThreadSectionCreate { params, .. } => {
+                    self.thread_processor.thread_section_create(params).await
+                }
+                ClientRequest::ThreadSectionUpdate { params, .. } => {
+                    self.thread_processor.thread_section_update(params).await
+                }
+                ClientRequest::ThreadSectionDelete { params, .. } => {
+                    self.thread_processor.thread_section_delete(params).await
+                }
+                ClientRequest::ThreadSettingsUpdate { params, .. } => {
+                    self.turn_processor
+                        .thread_settings_update(&request_id, params)
+                        .await
+                }
+                ClientRequest::ThreadMemoryModeSet { params, .. } => {
+                    self.thread_processor.thread_memory_mode_set(params).await
+                }
+                ClientRequest::MemoryStatus { params, .. } => {
+                    self.thread_processor.memory_status(params).await
+                }
+                ClientRequest::ThreadMemoryRead { params, .. } => {
+                    self.thread_processor.thread_memory_read(params).await
+                }
+                ClientRequest::MemoryReset { .. } => self.thread_processor.memory_reset().await,
+                ClientRequest::RolloutCompress { .. } => self.thread_processor.rollout_compress(),
+                ClientRequest::ThreadUnarchive { params, .. } => {
+                    self.thread_processor
+                        .thread_unarchive(request_id.clone(), params)
+                        .await
+                }
+                ClientRequest::ThreadPredictionRequest { .. } => Err(method_not_found(
+                    "thread/prediction/request is not implemented yet",
+                )),
+                ClientRequest::ThreadCompactStart { params, .. } => {
+                    self.thread_processor
+                        .thread_compact_start(&request_id, params)
+                        .await
+                }
+                ClientRequest::ThreadBackgroundTerminalsClean { params, .. } => {
+                    self.thread_processor
+                        .thread_background_terminals_clean(&request_id, params)
+                        .await
+                }
+                ClientRequest::ThreadBackgroundTerminalsList { params, .. } => {
+                    self.thread_processor
+                        .thread_background_terminals_list(params)
+                        .await
+                }
+                ClientRequest::ThreadBackgroundTerminalsTerminate { params, .. } => {
+                    self.thread_processor
+                        .thread_background_terminals_terminate(params)
+                        .await
+                }
+                ClientRequest::ThreadRevert { params, .. } => {
+                    self.thread_processor
+                        .thread_revert(
+                            request_id.clone(),
+                            params,
+                            app_server_client_name.clone(),
+                            client_version.clone(),
+                        )
+                        .await
+                }
+                ClientRequest::ThreadList { params, .. } => {
+                    self.thread_processor.thread_list(params).await
+                }
+                ClientRequest::ProjectList { params, .. } => {
+                    self.project_processor.project_list(params).await
+                }
+                ClientRequest::ProjectRead { params, .. } => {
+                    self.project_processor.project_read(params).await
+                }
+                ClientRequest::ProjectCreate { params, .. } => {
+                    self.project_processor.project_create(params).await
+                }
+                ClientRequest::ProjectImport { params, .. } => {
+                    self.project_processor.project_import(params).await
+                }
+                ClientRequest::ProjectUpdate { params, .. } => {
+                    self.project_processor.project_update(params).await
+                }
+                ClientRequest::ProjectMove { params, .. } => {
+                    self.project_processor.project_move(params).await
+                }
+                ClientRequest::ProjectDelete { params, .. } => {
+                    self.project_processor.project_delete(params).await
+                }
+                ClientRequest::ThreadSearch { params, .. } => {
+                    self.thread_processor.thread_search(params).await
+                }
+                ClientRequest::ThreadSearchOccurrences { params, .. } => {
+                    self.thread_processor
+                        .thread_search_occurrences(params)
+                        .await
+                }
+                ClientRequest::ThreadLoadedList { params, .. } => {
+                    self.thread_processor.thread_loaded_list(params).await
+                }
+                ClientRequest::ThreadRead { params, .. } => {
+                    self.thread_processor.thread_read(&request_id, params).await
+                }
+                ClientRequest::ThreadReadStateUpdate { params, .. } => {
+                    self.thread_processor.thread_read_state_update(params).await
+                }
+                ClientRequest::ThreadTurnsList { params, .. } => {
+                    self.thread_processor.thread_turns_list(params).await
+                }
+                ClientRequest::ThreadItemsList { params, .. } => {
+                    self.thread_processor.thread_items_list(params).await
+                }
+                ClientRequest::ThreadItemsRead { params, .. } => {
+                    self.thread_processor.thread_items_read(params).await
+                }
+                ClientRequest::ThreadShellCommand { params, .. } => {
+                    self.thread_processor
+                        .thread_shell_command(&request_id, params)
+                        .await
+                }
+                ClientRequest::ThreadApproveGuardianDeniedAction { params, .. } => {
+                    self.thread_processor
+                        .thread_approve_guardian_denied_action(&request_id, params)
+                        .await
+                }
+                ClientRequest::GetConversationSummary { params, .. } => {
+                    self.thread_processor.conversation_summary(params).await
+                }
+                ClientRequest::SkillsList { params, .. } => {
+                    self.catalog_processor.skills_list(params).await
+                }
+                ClientRequest::SkillsExtraRootsSet { params, .. } => {
+                    self.catalog_processor.skills_extra_roots_set(params).await
+                }
+                ClientRequest::HooksList { params, .. } => {
+                    self.catalog_processor.hooks_list(params).await
+                }
+                ClientRequest::MarketplaceAdd { params, .. } => {
+                    self.marketplace_processor.marketplace_add(params).await
+                }
+                ClientRequest::MarketplaceRemove { params, .. } => {
+                    self.marketplace_processor.marketplace_remove(params).await
+                }
+                ClientRequest::MarketplaceUpgrade { params, .. } => {
+                    self.marketplace_processor.marketplace_upgrade(params).await
+                }
+                ClientRequest::PluginList { params, .. } => {
+                    self.plugin_processor.plugin_list(params).await
+                }
+                ClientRequest::PluginSearch { params, .. } => {
+                    self.plugin_processor.plugin_search(params).await
+                }
+                ClientRequest::PluginInstalled { params, .. } => {
+                    self.plugin_processor.plugin_installed(params).await
+                }
+                ClientRequest::PluginReconcile { params, .. } => {
+                    self.plugin_processor
+                        .plugin_reconcile(
+                            params,
+                            self.config_processor.clone(),
+                            &self.request_serialization_queues,
+                        )
+                        .await
+                }
+                ClientRequest::PluginRead { params, .. } => {
+                    self.plugin_processor.plugin_read(params).await
+                }
+                ClientRequest::PluginSkillRead { params, .. } => {
+                    self.plugin_processor.plugin_skill_read(params).await
+                }
+                ClientRequest::PluginShareSave { params, .. } => {
+                    self.plugin_processor.plugin_share_save(params).await
+                }
+                ClientRequest::PluginShareUpdateTargets { params, .. } => {
+                    self.plugin_processor
+                        .plugin_share_update_targets(params)
+                        .await
+                }
+                ClientRequest::PluginShareList { params, .. } => {
+                    self.plugin_processor.plugin_share_list(params).await
+                }
+                ClientRequest::PluginShareCheckout { params, .. } => {
+                    self.plugin_processor.plugin_share_checkout(params).await
+                }
+                ClientRequest::PluginShareDelete { params, .. } => {
+                    self.plugin_processor.plugin_share_delete(params).await
+                }
+                ClientRequest::AppsRead { params, .. } => {
+                    self.apps_processor.apps_read(params).await
+                }
+                ClientRequest::AppsList { params, .. } => {
+                    self.apps_processor.apps_list(&request_id, params).await
+                }
+                ClientRequest::AppsInstalled { params, .. } => self
+                    .apps_processor
+                    .apps_installed(params)
+                    .await
+                    .map(|response| Some(response.into())),
+                ClientRequest::SkillsConfigWrite { params, .. } => {
+                    self.catalog_processor.skills_config_write(params).await
+                }
+                ClientRequest::PluginInstall { params, .. } => {
+                    // Keep installation and auth setup state off the shared request dispatcher stack.
+                    Box::pin(self.plugin_processor.plugin_install(params)).await
+                }
+                ClientRequest::PluginUninstall { params, .. } => {
+                    self.plugin_processor.plugin_uninstall(params).await
+                }
+                ClientRequest::ModelList { params, .. } => {
+                    self.catalog_processor.model_list(params).await
+                }
+                ClientRequest::ExperimentalFeatureList { params, .. } => {
+                    self.catalog_processor
+                        .experimental_feature_list(params)
+                        .await
+                }
+                ClientRequest::PermissionProfileList { params, .. } => {
+                    self.catalog_processor.permission_profile_list(params).await
+                }
+                ClientRequest::CollaborationModeList { params, .. } => {
+                    self.catalog_processor.collaboration_mode_list(params).await
+                }
+                ClientRequest::MockExperimentalMethod { params, .. } => {
+                    self.catalog_processor
+                        .mock_experimental_method(params)
+                        .await
+                }
+                ClientRequest::TurnStart { params, .. } => {
+                    self.turn_processor
+                        .turn_start(
+                            request_id.clone(),
+                            params,
+                            app_server_client_name.clone(),
+                            client_version.clone(),
+                        )
+                        .await
+                }
+                ClientRequest::ThreadInjectItems { params, .. } => {
+                    self.turn_processor
+                        .thread_inject_items(&request_id, params)
+                        .await
+                }
+                ClientRequest::TurnSteer { params, .. } => {
+                    self.turn_processor.turn_steer(&request_id, params).await
+                }
+                ClientRequest::TurnSettingsUpdate { params, .. } => {
+                    self.turn_processor
+                        .turn_settings_update(&request_id, params)
+                        .await
+                }
+                ClientRequest::TurnInterrupt { params, .. } => {
+                    self.turn_processor
+                        .turn_interrupt(&request_id, params)
+                        .await
+                }
+                ClientRequest::ThreadRealtimeStart { params, .. } => {
+                    self.turn_processor
+                        .thread_realtime_start(&request_id, params)
+                        .await
+                }
+                ClientRequest::ThreadRealtimeAppendAudio { params, .. } => {
+                    self.turn_processor
+                        .thread_realtime_append_audio(&request_id, params)
+                        .await
+                }
+                ClientRequest::ThreadRealtimeAppendText { params, .. } => {
+                    self.turn_processor
+                        .thread_realtime_append_text(&request_id, params)
+                        .await
+                }
+                ClientRequest::ThreadRealtimeAppendSpeech { params, .. } => {
+                    self.turn_processor
+                        .thread_realtime_append_speech(&request_id, params)
+                        .await
+                }
+                ClientRequest::ThreadRealtimeStop { params, .. } => {
+                    self.turn_processor
+                        .thread_realtime_stop(&request_id, params)
+                        .await
+                }
+                ClientRequest::ThreadTimelineList { params, .. } => {
+                    self.thread_processor.thread_timeline_list(params).await
+                }
+                ClientRequest::ThreadRealtimeListVoices { .. } => {
+                    self.turn_processor.thread_realtime_list_voices().await
+                }
+                ClientRequest::ReviewStart { params, .. } => {
+                    self.turn_processor.review_start(&request_id, params).await
+                }
+                ClientRequest::McpServerOauthLogin { params, .. } => {
+                    // Keep MCP discovery's large future from inflating every request.
+                    Box::pin(self.mcp_processor.mcp_server_oauth_login(params)).await
+                }
+                ClientRequest::McpServerOauthCancel { params, .. } => {
+                    self.mcp_processor.mcp_server_oauth_cancel(params).await
+                }
+                ClientRequest::McpServerRefresh { params, .. } => {
+                    self.mcp_processor.mcp_server_refresh(params).await
+                }
+                ClientRequest::McpServerStatusList { params, .. } => {
+                    self.mcp_processor
+                        .mcp_server_status_list(&request_id, params)
+                        .await
+                }
+                ClientRequest::McpResourceRead { params, .. } => {
+                    self.mcp_processor
+                        .mcp_resource_read(&request_id, params)
+                        .await
+                }
+                ClientRequest::McpServerEventStreamStart { params, .. } => {
+                    let ready = event_stream_ready.ok_or_else(|| {
+                        internal_error("MCP event subscription was not reserved before startup")
+                    })?;
+                    session
+                        .mcp_event_streams
+                        .wait_for_activation(&params.subscription_id, ready)
+                        .await?;
+                    Ok(Some(
+                        codex_app_server_protocol::McpServerEventStreamStartResponse {}.into(),
                     ))
-                } else {
-                    Box::pin(
-                        self.account_processor
-                            .gateway_oauth_login(connection_id, &session.rpc_gate),
-                    )
-                    .await
-                    .map(|response| Some(response.into()))
                 }
-            }
-            ClientRequest::GatewayOAuthCancel { .. } => {
-                Box::pin(self.account_processor.gateway_oauth_cancel(connection_id))
-                    .await
-                    .map(|response| Some(response.into()))
-            }
-            ClientRequest::LogoutAccount { .. } => {
-                self.inquello_processor.provider_auth_changing().await;
-                self.account_processor
-                    .logout_account(request_id.clone())
-                    .await
-            }
-            ClientRequest::CancelLoginAccount { params, .. } => {
-                self.account_processor.cancel_login_account(params).await
-            }
-            ClientRequest::GetAccount { params, .. } => {
-                self.account_processor.get_account(params).await
-            }
-            ClientRequest::GetAuthStatus { params, .. } => {
-                self.account_processor.get_auth_status(params).await
-            }
-            ClientRequest::GetAccountRateLimits { params, .. } => {
-                self.account_processor.get_account_rate_limits(params).await
-            }
-            ClientRequest::ConsumeAccountRateLimitResetCredit { params, .. } => {
-                self.account_processor
-                    .consume_account_rate_limit_reset_credit(params)
-                    .await
-            }
-            ClientRequest::GetAccountTokenUsage { params, .. } => {
-                self.account_processor.get_account_token_usage(params).await
-            }
-            ClientRequest::GetWorkspaceMessages { .. } => {
-                self.account_processor.get_workspace_messages().await
-            }
-            ClientRequest::SendAddCreditsNudgeEmail { params, .. } => {
-                self.account_processor
-                    .send_add_credits_nudge_email(params)
-                    .await
-            }
-            ClientRequest::GitDiffToRemote { params, .. } => {
-                self.git_processor.git_diff_to_remote(params).await
-            }
-            ClientRequest::InquelloSessionSetPrincipal { params, .. } => {
-                self.inquello_processor.set_principal(connection_id, params).await
-            }
-            ClientRequest::InquelloWorkspaceList { .. } => {
-                self.inquello_processor.workspace_list(connection_id).await
-            }
-            ClientRequest::InquelloWorkspaceRemember { params, .. } => {
-                self.inquello_processor
-                    .workspace_remember(connection_id, params)
-                    .await
-            }
-            ClientRequest::InquelloWorkspaceSearch { params, .. } => self.inquello_processor.workspace_search(connection_id,params,&self.thread_processor).await,
-            ClientRequest::InquelloTaskReopen { params, .. } => self.inquello_processor.task_reopen(connection_id,params,&self.thread_processor).await,
-            ClientRequest::InquelloTaskSetNavigation { params, .. } => self.inquello_processor.task_set_navigation(connection_id,params).await,
-            ClientRequest::InquelloWorkspaceTree { params, .. } => {
-                self.inquello_processor
-                    .workspace_tree(connection_id, params)
-                    .await
-            }
-            ClientRequest::InquelloEngagementCreate { params, .. } => {
-                self.inquello_processor
-                    .engagement_create(connection_id, params)
-                    .await
-            }
-            ClientRequest::InquelloEngagementUpdate { params, .. } => {
-                self.inquello_processor
-                    .engagement_update(connection_id, params)
-                    .await
-            }
-            ClientRequest::InquelloFolderCreate { params, .. } => {
-                self.inquello_processor
-                    .folder_create(connection_id, params)
-                    .await
-            }
-            ClientRequest::InquelloTaskCreate { params, .. } => {
-                self.inquello_processor
-                    .task_create(connection_id, params)
-                    .await
-            }
-            ClientRequest::InquelloTaskRename { params, .. } => {
-                self.inquello_processor
-                    .task_rename(connection_id, params)
-                    .await
-            }
-            ClientRequest::InquelloTaskMove { params, .. } => {
-                self.inquello_processor
-                    .task_move(connection_id, params)
-                    .await
-            }
-            ClientRequest::InquelloTaskAttachThread { params, .. } => {
-                self.inquello_processor
-                    .task_attach_thread(connection_id, params)
-                    .await
-            }
-            ClientRequest::InquelloStateList { params, .. } => {
-                self.inquello_processor
-                    .state_list(connection_id, params)
-                    .await
-            }
-            ClientRequest::InquelloStateRecord { params, .. } => {
-                self.inquello_processor
-                    .state_record(connection_id, params)
-                    .await
-            }
-            ClientRequest::InquelloPolicyEffective { params, .. } => {
-                match self.inquello_policy_layers().await {
-                    Ok((device, user)) => {
-                        self.inquello_processor
-                            .policy_effective(connection_id, params, device, user)
-                            .await
+                ClientRequest::McpServerEventStreamStop { params, .. } => {
+                    session
+                        .mcp_event_streams
+                        .stop(&params.subscription_id)
+                        .await;
+                    Ok(Some(
+                        codex_app_server_protocol::McpServerEventStreamStopResponse {}.into(),
+                    ))
+                }
+                ClientRequest::McpServerToolCall { params, .. } => {
+                    self.mcp_processor
+                        .mcp_server_tool_call(&request_id, params)
+                        .await
+                }
+                ClientRequest::WindowsSandboxSetupStart { params, .. } => {
+                    self.windows_sandbox_processor
+                        .windows_sandbox_setup_start(&request_id, params)
+                        .await
+                }
+                ClientRequest::LoginAccount { params, .. } => {
+                    self.inquello_processor.provider_auth_changing().await;
+                    self.account_processor
+                        .login_account(request_id.clone(), params)
+                        .await
+                }
+                ClientRequest::BedrockDiscover { params, .. } => {
+                    self.account_processor.bedrock_discover(params).await
+                }
+                ClientRequest::BedrockSetup { params, .. } => {
+                    self.account_processor.bedrock_setup(params).await
+                }
+                ClientRequest::BedrockCheckGovCloudRequirements { .. } => {
+                    self.account_processor
+                        .bedrock_check_gov_cloud_requirements()
+                        .await
+                }
+                ClientRequest::GatewayOAuthRead { .. } => {
+                    Box::pin(self.account_processor.gateway_oauth_read())
+                        .await
+                        .map(|response| Some(response.into()))
+                }
+                ClientRequest::GatewayOAuthLogin { .. } => {
+                    if session
+                        .opted_out_notification_methods()
+                        .contains("account/gatewayOAuth/changed")
+                    {
+                        Err(invalid_request(
+                            "Gateway login requires account/gatewayOAuth/changed notifications",
+                        ))
+                    } else {
+                        Box::pin(
+                            self.account_processor
+                                .gateway_oauth_login(connection_id, &session.rpc_gate),
+                        )
+                        .await
+                        .map(|response| Some(response.into()))
                     }
-                    Err(error) => Err(error),
                 }
-            }
-            ClientRequest::InquelloBroadModeRead { params, .. } => {
-                self.inquello_processor
-                    .broad_mode_read(connection_id, params)
-                    .await
-            }
-            ClientRequest::InquelloBroadModeSet { params, .. } => {
-                match self.inquello_policy_layers().await {
-                    Ok((device, user)) => {
-                        self.inquello_processor
-                            .broad_mode_set(connection_id, params, device, user)
-                            .await
+                ClientRequest::GatewayOAuthCancel { .. } => {
+                    Box::pin(self.account_processor.gateway_oauth_cancel(connection_id))
+                        .await
+                        .map(|response| Some(response.into()))
+                }
+                ClientRequest::LogoutAccount { .. } => {
+                    self.inquello_processor.provider_auth_changing().await;
+                    self.account_processor
+                        .logout_account(request_id.clone())
+                        .await
+                }
+                ClientRequest::CancelLoginAccount { params, .. } => {
+                    self.account_processor.cancel_login_account(params).await
+                }
+                ClientRequest::GetAccount { params, .. } => {
+                    self.account_processor.get_account(params).await
+                }
+                ClientRequest::GetAuthStatus { params, .. } => {
+                    self.account_processor.get_auth_status(params).await
+                }
+                ClientRequest::GetAccountRateLimits { params, .. } => {
+                    self.account_processor.get_account_rate_limits(params).await
+                }
+                ClientRequest::ConsumeAccountRateLimitResetCredit { params, .. } => {
+                    self.account_processor
+                        .consume_account_rate_limit_reset_credit(params)
+                        .await
+                }
+                ClientRequest::GetAccountTokenUsage { params, .. } => {
+                    self.account_processor.get_account_token_usage(params).await
+                }
+                ClientRequest::GetWorkspaceMessages { .. } => {
+                    self.account_processor.get_workspace_messages().await
+                }
+                ClientRequest::SendAddCreditsNudgeEmail { params, .. } => {
+                    self.account_processor
+                        .send_add_credits_nudge_email(params)
+                        .await
+                }
+                ClientRequest::GitDiffToRemote { params, .. } => {
+                    self.git_processor.git_diff_to_remote(params).await
+                }
+                ClientRequest::InquelloSessionSetPrincipal { params, .. } => {
+                    self.inquello_processor
+                        .set_principal(connection_id, params)
+                        .await
+                }
+                ClientRequest::InquelloWorkspaceList { .. } => {
+                    self.inquello_processor.workspace_list(connection_id).await
+                }
+                ClientRequest::InquelloWorkspaceRemember { params, .. } => {
+                    self.inquello_processor
+                        .workspace_remember(connection_id, params)
+                        .await
+                }
+                ClientRequest::InquelloWorkspaceSearch { params, .. } => {
+                    self.inquello_processor
+                        .workspace_search(connection_id, params, &self.thread_processor)
+                        .await
+                }
+                ClientRequest::InquelloTaskReopen { params, .. } => {
+                    self.inquello_processor
+                        .task_reopen(connection_id, params, &self.thread_processor)
+                        .await
+                }
+                ClientRequest::InquelloTaskSetNavigation { params, .. } => {
+                    self.inquello_processor
+                        .task_set_navigation(connection_id, params)
+                        .await
+                }
+                ClientRequest::InquelloWorkspaceTree { params, .. } => {
+                    self.inquello_processor
+                        .workspace_tree(connection_id, params)
+                        .await
+                }
+                ClientRequest::InquelloEngagementCreate { params, .. } => {
+                    self.inquello_processor
+                        .engagement_create(connection_id, params)
+                        .await
+                }
+                ClientRequest::InquelloEngagementUpdate { params, .. } => {
+                    self.inquello_processor
+                        .engagement_update(connection_id, params)
+                        .await
+                }
+                ClientRequest::InquelloFolderCreate { params, .. } => {
+                    self.inquello_processor
+                        .folder_create(connection_id, params)
+                        .await
+                }
+                ClientRequest::InquelloTaskCreate { params, .. } => {
+                    self.inquello_processor
+                        .task_create(connection_id, params)
+                        .await
+                }
+                ClientRequest::InquelloTaskRename { params, .. } => {
+                    self.inquello_processor
+                        .task_rename(connection_id, params)
+                        .await
+                }
+                ClientRequest::InquelloTaskMove { params, .. } => {
+                    self.inquello_processor
+                        .task_move(connection_id, params)
+                        .await
+                }
+                ClientRequest::InquelloTaskAttachThread { params, .. } => {
+                    self.inquello_processor
+                        .task_attach_thread(connection_id, params)
+                        .await
+                }
+                ClientRequest::InquelloStateList { params, .. } => {
+                    self.inquello_processor
+                        .state_list(connection_id, params)
+                        .await
+                }
+                ClientRequest::InquelloStateRecord { params, .. } => {
+                    self.inquello_processor
+                        .state_record(connection_id, params)
+                        .await
+                }
+                ClientRequest::InquelloPolicyEffective { params, .. } => {
+                    match self.inquello_policy_layers().await {
+                        Ok((device, user)) => {
+                            self.inquello_processor
+                                .policy_effective(connection_id, params, device, user)
+                                .await
+                        }
+                        Err(error) => Err(error),
                     }
-                    Err(error) => Err(error),
                 }
-            }
-            ClientRequest::InquelloTasksConsumePermission { params, .. } => {
-                let (device,user)=self.inquello_policy_layers().await?;
-                self.inquello_processor.tasks_consume_permission(connection_id,params,device,user).await
-            }
-            ClientRequest::InquelloTasksPreflight { params, .. } => {
-                let (device,user)=self.inquello_policy_layers().await?;
-                self.inquello_processor.tasks_preflight(connection_id,params,device,user).await
-            }
-            ClientRequest::InquelloTasksStart { params, .. } => {
-                let (device,user)=self.inquello_policy_layers().await?;
-                self.inquello_processor.tasks_start(connection_id,params,device,user,&self.thread_processor).await
-            }
-            ClientRequest::InquelloTasksSteer { params, .. } => {
-                self.inquello_processor.tasks_lifecycle(connection_id,params,inquello_domain::tasks::TaskLifecycleKind::Steer,&self.thread_processor).await
-            }
-            ClientRequest::InquelloTasksStop { params, .. } => {
-                self.inquello_processor.tasks_lifecycle(connection_id,params,inquello_domain::tasks::TaskLifecycleKind::Stop,&self.thread_processor).await
-            }
-            ClientRequest::InquelloTasksResume { params, .. } => {
-                self.inquello_processor.tasks_lifecycle(connection_id,params,inquello_domain::tasks::TaskLifecycleKind::Resume,&self.thread_processor).await
-            }
-            ClientRequest::InquelloTasksLifecycleReconcile { params, .. } => self.inquello_processor.tasks_lifecycle_reconcile(connection_id,params,&self.thread_processor).await,
-            ClientRequest::InquelloTasksReconcile { params, .. } => self.inquello_processor.tasks_reconcile(connection_id,params).await,
-            ClientRequest::InquelloTasksProgress { params, .. } => self.inquello_processor.tasks_progress(connection_id,params,&self.thread_processor).await,
-            ClientRequest::InquelloTasksForThread { params, .. } => self.inquello_processor.tasks_for_thread(connection_id,params).await,
-            ClientRequest::InquelloTasksBootstrap { params, .. } => self.inquello_processor.tasks_bootstrap(connection_id,params).await,
-            ClientRequest::InquelloRoutesList { params, .. } => self.inquello_processor.routes_list(connection_id, params).await,
-            ClientRequest::InquelloRouteConfigure { params, .. } => self.inquello_processor.route_configure(connection_id, params).await,
-            ClientRequest::InquelloUsageRead { params, .. } => self.inquello_processor.usage_read(connection_id, params).await,
-            ClientRequest::InquelloUsageSet { params, .. } => self.inquello_processor.usage_set(connection_id, params).await,
-            ClientRequest::InquelloTaskRouteRead { params, .. } => self.inquello_processor.task_route_read(connection_id, params).await,
-            ClientRequest::InquelloTaskRouteSet { params, .. } => self.inquello_processor.task_route_set(connection_id, params).await,
-            ClientRequest::InquelloRoutePrivateAuth { params, .. } => self.inquello_processor.route_private_auth(connection_id, params).await,
-            ClientRequest::InquelloRoutesInvalidate { params, .. } => self.inquello_processor.routes_invalidate(connection_id, params).await,
-            ClientRequest::InquelloPermissionsReviewApply { params, .. } => {
-                match self.inquello_policy_layers().await {
-                    Ok((device, user)) => self.inquello_processor.permissions_review_apply(connection_id, params, device, user).await,
-                    Err(error) => Err(error),
+                ClientRequest::InquelloBroadModeRead { params, .. } => {
+                    self.inquello_processor
+                        .broad_mode_read(connection_id, params)
+                        .await
                 }
-            }
-            ClientRequest::InquelloPermissionsReview { params, .. } => {
-                match self.inquello_policy_layers().await {
-                    Ok((device, user)) => self.inquello_processor.permissions_review(connection_id, params, device, user).await,
-                    Err(error) => Err(error),
-                }
-            }
-            ClientRequest::InquelloToolsExec { params, .. } => {
-                self.inquello_tools_exec(connection_id, &request_id, params)
-                    .await
-            }
-            ClientRequest::InquelloUserRulesRead { .. } => {
-                self.inquello_processor.user_rules_read(connection_id).await
-            }
-            ClientRequest::InquelloUserRulesSet { params, .. } => {
-                self.inquello_processor
-                    .user_rules_set(connection_id, params)
-                    .await
-            }
-            ClientRequest::InquelloPermissionsRequest { params, .. } => {
-                match self.inquello_policy_layers().await {
-                    Ok((device, user)) => {
-                        self.inquello_processor
-                            .permissions_request(connection_id, params, device, user)
-                            .await
+                ClientRequest::InquelloBroadModeSet { params, .. } => {
+                    match self.inquello_policy_layers().await {
+                        Ok((device, user)) => {
+                            self.inquello_processor
+                                .broad_mode_set(connection_id, params, device, user)
+                                .await
+                        }
+                        Err(error) => Err(error),
                     }
-                    Err(error) => Err(error),
+                }
+                ClientRequest::InquelloTasksConsumePermission { params, .. } => {
+                    let (device, user) = self.inquello_policy_layers().await?;
+                    self.inquello_processor
+                        .tasks_consume_permission(connection_id, params, device, user)
+                        .await
+                }
+                ClientRequest::InquelloTasksPreflight { params, .. } => {
+                    let (device, user) = self.inquello_policy_layers().await?;
+                    self.inquello_processor
+                        .tasks_preflight(connection_id, params, device, user)
+                        .await
+                }
+                ClientRequest::InquelloTasksStart { params, .. } => {
+                    let (device, user) = self.inquello_policy_layers().await?;
+                    self.inquello_processor
+                        .tasks_start(connection_id, params, device, user, &self.thread_processor)
+                        .await
+                }
+                ClientRequest::InquelloTasksSteer { params, .. } => {
+                    self.inquello_processor
+                        .tasks_lifecycle(
+                            connection_id,
+                            params,
+                            inquello_domain::tasks::TaskLifecycleKind::Steer,
+                            &self.thread_processor,
+                        )
+                        .await
+                }
+                ClientRequest::InquelloTasksStop { params, .. } => {
+                    self.inquello_processor
+                        .tasks_lifecycle(
+                            connection_id,
+                            params,
+                            inquello_domain::tasks::TaskLifecycleKind::Stop,
+                            &self.thread_processor,
+                        )
+                        .await
+                }
+                ClientRequest::InquelloTasksResume { params, .. } => {
+                    self.inquello_processor
+                        .tasks_lifecycle(
+                            connection_id,
+                            params,
+                            inquello_domain::tasks::TaskLifecycleKind::Resume,
+                            &self.thread_processor,
+                        )
+                        .await
+                }
+                ClientRequest::InquelloTasksLifecycleReconcile { params, .. } => {
+                    self.inquello_processor
+                        .tasks_lifecycle_reconcile(connection_id, params, &self.thread_processor)
+                        .await
+                }
+                ClientRequest::InquelloTasksReconcile { params, .. } => {
+                    self.inquello_processor
+                        .tasks_reconcile(connection_id, params)
+                        .await
+                }
+                ClientRequest::InquelloTasksProgress { params, .. } => {
+                    self.inquello_processor
+                        .tasks_progress(connection_id, params, &self.thread_processor)
+                        .await
+                }
+                ClientRequest::InquelloTasksForThread { params, .. } => {
+                    self.inquello_processor
+                        .tasks_for_thread(connection_id, params)
+                        .await
+                }
+                ClientRequest::InquelloTasksBootstrap { params, .. } => {
+                    self.inquello_processor
+                        .tasks_bootstrap(connection_id, params)
+                        .await
+                }
+                ClientRequest::InquelloRoutesList { params, .. } => {
+                    self.inquello_processor
+                        .routes_list(connection_id, params)
+                        .await
+                }
+                ClientRequest::InquelloRouteConfigure { params, .. } => {
+                    self.inquello_processor
+                        .route_configure(connection_id, params)
+                        .await
+                }
+                ClientRequest::InquelloUsageRead { params, .. } => {
+                    self.inquello_processor
+                        .usage_read(connection_id, params)
+                        .await
+                }
+                ClientRequest::InquelloUsageSet { params, .. } => {
+                    self.inquello_processor
+                        .usage_set(connection_id, params)
+                        .await
+                }
+                ClientRequest::InquelloTaskRouteRead { params, .. } => {
+                    self.inquello_processor
+                        .task_route_read(connection_id, params)
+                        .await
+                }
+                ClientRequest::InquelloTaskRouteSet { params, .. } => {
+                    self.inquello_processor
+                        .task_route_set(connection_id, params)
+                        .await
+                }
+                ClientRequest::InquelloRoutePrivateAuth { params, .. } => {
+                    self.inquello_processor
+                        .route_private_auth(connection_id, params)
+                        .await
+                }
+                ClientRequest::InquelloRoutesInvalidate { params, .. } => {
+                    self.inquello_processor
+                        .routes_invalidate(connection_id, params)
+                        .await
+                }
+                ClientRequest::InquelloPermissionsReviewApply { params, .. } => {
+                    match self.inquello_policy_layers().await {
+                        Ok((device, user)) => {
+                            self.inquello_processor
+                                .permissions_review_apply(connection_id, params, device, user)
+                                .await
+                        }
+                        Err(error) => Err(error),
+                    }
+                }
+                ClientRequest::InquelloPermissionsReview { params, .. } => {
+                    match self.inquello_policy_layers().await {
+                        Ok((device, user)) => {
+                            self.inquello_processor
+                                .permissions_review(connection_id, params, device, user)
+                                .await
+                        }
+                        Err(error) => Err(error),
+                    }
+                }
+                ClientRequest::InquelloToolsExec { params, .. } => {
+                    self.inquello_tools_exec(connection_id, &request_id, params)
+                        .await
+                }
+                ClientRequest::InquelloUserRulesRead { .. } => {
+                    self.inquello_processor.user_rules_read(connection_id).await
+                }
+                ClientRequest::InquelloUserRulesSet { params, .. } => {
+                    self.inquello_processor
+                        .user_rules_set(connection_id, params)
+                        .await
+                }
+                ClientRequest::InquelloPermissionsRequest { params, .. } => {
+                    match self.inquello_policy_layers().await {
+                        Ok((device, user)) => {
+                            self.inquello_processor
+                                .permissions_request(connection_id, params, device, user)
+                                .await
+                        }
+                        Err(error) => Err(error),
+                    }
+                }
+                ClientRequest::InquelloPermissionsPending { params, .. } => {
+                    self.inquello_processor
+                        .permissions_pending(connection_id, params)
+                        .await
+                }
+                ClientRequest::InquelloPermissionsDecide { params, .. } => {
+                    self.inquello_processor
+                        .permissions_decide(connection_id, params)
+                        .await
+                }
+                ClientRequest::FuzzyFileSearch { params, .. } => self
+                    .search_processor
+                    .fuzzy_file_search(params)
+                    .await
+                    .map(|response| Some(response.into())),
+                ClientRequest::FuzzyFileSearchSessionStart { params, .. } => self
+                    .search_processor
+                    .fuzzy_file_search_session_start_response(params)
+                    .await
+                    .map(|response| Some(response.into())),
+                ClientRequest::FuzzyFileSearchSessionUpdate { params, .. } => self
+                    .search_processor
+                    .fuzzy_file_search_session_update_response(params)
+                    .await
+                    .map(|response| Some(response.into())),
+                ClientRequest::FuzzyFileSearchSessionStop { params, .. } => self
+                    .search_processor
+                    .fuzzy_file_search_session_stop(params)
+                    .await
+                    .map(|response| Some(response.into())),
+                ClientRequest::OneOffCommandExec { params, .. } => {
+                    self.command_exec_processor
+                        .one_off_command_exec(&request_id, params)
+                        .await
+                }
+                ClientRequest::CommandExecWrite { params, .. } => {
+                    self.command_exec_processor
+                        .command_exec_write(request_id.clone(), params)
+                        .await
+                }
+                ClientRequest::CommandExecResize { params, .. } => {
+                    self.command_exec_processor
+                        .command_exec_resize(request_id.clone(), params)
+                        .await
+                }
+                ClientRequest::CommandExecTerminate { params, .. } => {
+                    self.command_exec_processor
+                        .command_exec_terminate(request_id.clone(), params)
+                        .await
+                }
+                ClientRequest::ProcessSpawn { params, .. } => self
+                    .process_exec_processor
+                    .process_spawn(request_id.clone(), params)
+                    .await
+                    .map(|()| None),
+                ClientRequest::ProcessWriteStdin { params, .. } => {
+                    self.process_exec_processor
+                        .process_write_stdin(request_id.clone(), params)
+                        .await
+                }
+                ClientRequest::ProcessKill { params, .. } => {
+                    self.process_exec_processor
+                        .process_kill(request_id.clone(), params)
+                        .await
+                }
+                ClientRequest::ProcessResizePty { params, .. } => {
+                    self.process_exec_processor
+                        .process_resize_pty(request_id.clone(), params)
+                        .await
+                }
+                ClientRequest::FeedbackUpload { params, .. } => {
+                    self.feedback_processor.feedback_upload(params).await
+                }
+                ClientRequest::FeedbackSave { params, .. } => {
+                    self.feedback_processor.feedback_save(params).await
                 }
             }
-            ClientRequest::InquelloPermissionsPending { params, .. } => {
-                self.inquello_processor
-                    .permissions_pending(connection_id, params)
-                    .await
-            }
-            ClientRequest::InquelloPermissionsDecide { params, .. } => {
-                self.inquello_processor
-                    .permissions_decide(connection_id, params)
-                    .await
-            }
-            ClientRequest::FuzzyFileSearch { params, .. } => self
-                .search_processor
-                .fuzzy_file_search(params)
-                .await
-                .map(|response| Some(response.into())),
-            ClientRequest::FuzzyFileSearchSessionStart { params, .. } => self
-                .search_processor
-                .fuzzy_file_search_session_start_response(params)
-                .await
-                .map(|response| Some(response.into())),
-            ClientRequest::FuzzyFileSearchSessionUpdate { params, .. } => self
-                .search_processor
-                .fuzzy_file_search_session_update_response(params)
-                .await
-                .map(|response| Some(response.into())),
-            ClientRequest::FuzzyFileSearchSessionStop { params, .. } => self
-                .search_processor
-                .fuzzy_file_search_session_stop(params)
-                .await
-                .map(|response| Some(response.into())),
-            ClientRequest::OneOffCommandExec { params, .. } => {
-                self.command_exec_processor
-                    .one_off_command_exec(&request_id, params)
-                    .await
-            }
-            ClientRequest::CommandExecWrite { params, .. } => {
-                self.command_exec_processor
-                    .command_exec_write(request_id.clone(), params)
-                    .await
-            }
-            ClientRequest::CommandExecResize { params, .. } => {
-                self.command_exec_processor
-                    .command_exec_resize(request_id.clone(), params)
-                    .await
-            }
-            ClientRequest::CommandExecTerminate { params, .. } => {
-                self.command_exec_processor
-                    .command_exec_terminate(request_id.clone(), params)
-                    .await
-            }
-            ClientRequest::ProcessSpawn { params, .. } => self
-                .process_exec_processor
-                .process_spawn(request_id.clone(), params)
-                .await
-                .map(|()| None),
-            ClientRequest::ProcessWriteStdin { params, .. } => {
-                self.process_exec_processor
-                    .process_write_stdin(request_id.clone(), params)
-                    .await
-            }
-            ClientRequest::ProcessKill { params, .. } => {
-                self.process_exec_processor
-                    .process_kill(request_id.clone(), params)
-                    .await
-            }
-            ClientRequest::ProcessResizePty { params, .. } => {
-                self.process_exec_processor
-                    .process_resize_pty(request_id.clone(), params)
-                    .await
-            }
-            ClientRequest::FeedbackUpload { params, .. } => {
-                self.feedback_processor.feedback_upload(params).await
-            }
-            ClientRequest::FeedbackSave { params, .. } => {
-                self.feedback_processor.feedback_save(params).await
-            }
-        }};
-        let result:Result<Option<ClientResponsePayload>,JSONRPCErrorError>=if saved_operation {
+        };
+        let result: Result<Option<ClientResponsePayload>, JSONRPCErrorError> = if saved_operation {
             tokio::select! {biased;
                 _=saved_cancellation.cancelled()=>return Err(crate::request_processors::saved_timeout_error()),
                 result=tokio::time::timeout_at(saved_deadline,dispatch)=>result.map_err(|_|crate::request_processors::saved_timeout_error())?,
             }
-        }else{dispatch.await};
+        } else {
+            dispatch.await
+        };
 
         // Capture before the final fresh authority check, while the response is
         // still local. Never renew this fence once it enters either output queue.
         if private_thread.is_some() || private_scope.is_some() {
-            self.outgoing.fence_request(&request_id, self.outgoing.capture_private_fence(connection_id)).await;
+            self.outgoing
+                .fence_request(
+                    &request_id,
+                    self.outgoing.capture_private_fence(connection_id),
+                )
+                .await;
         }
-        if let Some(thread) = private_thread { self.inquello_processor.require_task_thread(connection_id,&thread).await?; }
-        if result.is_ok() { if let Some(scope) = private_scope {
-            let check=self.inquello_processor.guard_private_scope_after(connection_id,&scope);
-            if saved_operation{tokio::time::timeout_at(saved_deadline,check).await.map_err(|_|crate::request_processors::saved_timeout_error())??;}else{check.await?;}
-        } }
-        let _saved_queue_lease=if let (Ok(Some(response)),Some(fence))=(&result,saved_read_fence.as_mut()) {
-            Some(tokio::time::timeout_at(saved_deadline,self.inquello_processor.guard_saved_disclosure(connection_id,response,&self.thread_processor,fence)).await
-                .map_err(|_|crate::request_processors::saved_timeout_error())??)
-        }else{None};
+        if let Some(thread) = private_thread {
+            self.inquello_processor
+                .require_task_thread(connection_id, &thread)
+                .await?;
+        }
+        if result.is_ok() {
+            if let Some(scope) = private_scope {
+                let check = self
+                    .inquello_processor
+                    .guard_private_scope_after(connection_id, &scope);
+                if saved_operation {
+                    tokio::time::timeout_at(saved_deadline, check)
+                        .await
+                        .map_err(|_| crate::request_processors::saved_timeout_error())??;
+                } else {
+                    check.await?;
+                }
+            }
+        }
+        let _saved_queue_lease =
+            if let (Ok(Some(response)), Some(fence)) = (&result, saved_read_fence.as_mut()) {
+                Some(
+                    tokio::time::timeout_at(
+                        saved_deadline,
+                        self.inquello_processor.guard_saved_disclosure(
+                            connection_id,
+                            response,
+                            &self.thread_processor,
+                            fence,
+                        ),
+                    )
+                    .await
+                    .map_err(|_| crate::request_processors::saved_timeout_error())??,
+                )
+            } else {
+                None
+            };
         match result {
             Ok(Some(response)) => {
                 if saved_operation {
                     // Local leases remain live through reservation + synchronous queue
                     // check; transport still carries the captured session/route fence.
-                    let send=self.outgoing.send_response_as_checked(request_id.clone(),response,||{
-                        if saved_cancellation.is_cancelled(){Err(crate::request_processors::saved_timeout_error())}else{Ok(())}
-                    });
-                    tokio::time::timeout_at(saved_deadline.min(tokio::time::Instant::now()+std::time::Duration::from_secs(2)),send).await.map_err(|_|crate::request_processors::saved_timeout_error())?;
-                }else{self.outgoing.send_response_as(request_id.clone(), response).await;}
+                    let send = self.outgoing.send_response_as_checked(
+                        request_id.clone(),
+                        response,
+                        || {
+                            if saved_cancellation.is_cancelled() {
+                                Err(crate::request_processors::saved_timeout_error())
+                            } else {
+                                Ok(())
+                            }
+                        },
+                    );
+                    tokio::time::timeout_at(
+                        saved_deadline
+                            .min(tokio::time::Instant::now() + std::time::Duration::from_secs(2)),
+                        send,
+                    )
+                    .await
+                    .map_err(|_| crate::request_processors::saved_timeout_error())?;
+                } else {
+                    self.outgoing
+                        .send_response_as(request_id.clone(), response)
+                        .await;
+                }
             }
             Ok(None) => {}
             Err(error) => {
@@ -2329,16 +2625,38 @@ mod private_handoff_transport_tests {
     use crate::transport::ConnectionOrigin;
     #[test]
     fn bootstrap_and_credentials_require_both_private_stdio_transport_and_origin() {
-        let websocket=AppServerTransport::WebSocket {bind_address:"127.0.0.1:0".parse().unwrap()};
-        for method in ["inquello/tasks/bootstrap","inquello/routes/privateAuth"] {
-            assert!(!reject_private_handoff_transport(method,Some(&AppServerTransport::Stdio),ConnectionOrigin::Stdio));
-            for origin in [ConnectionOrigin::InProcess,ConnectionOrigin::WebSocket,ConnectionOrigin::RemoteControl] {
-                assert!(reject_private_handoff_transport(method,Some(&AppServerTransport::Stdio),origin));
+        let websocket = AppServerTransport::WebSocket {
+            bind_address: "127.0.0.1:0".parse().unwrap(),
+        };
+        for method in ["inquello/tasks/bootstrap", "inquello/routes/privateAuth"] {
+            assert!(!reject_private_handoff_transport(
+                method,
+                Some(&AppServerTransport::Stdio),
+                ConnectionOrigin::Stdio
+            ));
+            for origin in [
+                ConnectionOrigin::InProcess,
+                ConnectionOrigin::WebSocket,
+                ConnectionOrigin::RemoteControl,
+            ] {
+                assert!(reject_private_handoff_transport(
+                    method,
+                    Some(&AppServerTransport::Stdio),
+                    origin
+                ));
             }
-            for transport in [Some(&websocket),Some(&AppServerTransport::Off),None] {
-                assert!(reject_private_handoff_transport(method,transport,ConnectionOrigin::Stdio));
+            for transport in [Some(&websocket), Some(&AppServerTransport::Off), None] {
+                assert!(reject_private_handoff_transport(
+                    method,
+                    transport,
+                    ConnectionOrigin::Stdio
+                ));
             }
         }
-        assert!(!reject_private_handoff_transport("inquello/tasks/preflight",Some(&websocket),ConnectionOrigin::WebSocket));
+        assert!(!reject_private_handoff_transport(
+            "inquello/tasks/preflight",
+            Some(&websocket),
+            ConnectionOrigin::WebSocket
+        ));
     }
 }

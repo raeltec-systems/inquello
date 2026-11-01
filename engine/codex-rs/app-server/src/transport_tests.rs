@@ -220,7 +220,7 @@ async fn experimental_notifications_are_dropped_without_capability() {
                 connection_id,
                 message: app_server_notification(notification),
                 private_fence: None,
-            write_complete_tx: None,
+                write_complete_tx: None,
             },
         )
         .await;
@@ -604,7 +604,7 @@ async fn to_connection_stdio_waits_instead_of_disconnecting_when_writer_queue_is
                     },
                 )),
                 private_fence: None,
-            write_complete_tx: None,
+                write_complete_tx: None,
             },
         )
         .await

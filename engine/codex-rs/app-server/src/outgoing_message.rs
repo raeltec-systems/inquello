@@ -132,8 +132,17 @@ pub(crate) enum OutgoingEnvelope {
 
 /// Sends messages to the client and manages request callbacks.
 pub(crate) trait PrivateThreadAuthority: Send + Sync {
-    fn capture_fence(&self, _connection: ConnectionId) -> Option<codex_app_server_transport::PrivateOutputFence> { None }
-    fn authorize_recipient<'a>(&'a self,connection:ConnectionId,thread:ThreadId)->std::pin::Pin<Box<dyn std::future::Future<Output=bool>+Send+'a>>;
+    fn capture_fence(
+        &self,
+        _connection: ConnectionId,
+    ) -> Option<codex_app_server_transport::PrivateOutputFence> {
+        None
+    }
+    fn authorize_recipient<'a>(
+        &'a self,
+        connection: ConnectionId,
+        thread: ThreadId,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = bool> + Send + 'a>>;
 }
 pub(crate) struct OutgoingMessageSender {
     private_authority: OnceLock<std::sync::Weak<dyn PrivateThreadAuthority>>,
@@ -183,19 +192,24 @@ impl ThreadScopedOutgoingMessageSender {
         &self,
         payload: ServerRequestPayload,
     ) -> (RequestId, oneshot::Receiver<ClientRequestResult>) {
-        let mut authorized=Vec::new();
+        let mut authorized = Vec::new();
         for connection in self.connection_ids.iter().copied() {
-            if self.outgoing.authorize_thread_recipient(connection,self.thread_id).await {authorized.push(connection);}
+            if self
+                .outgoing
+                .authorize_thread_recipient(connection, self.thread_id)
+                .await
+            {
+                authorized.push(connection);
+            }
         }
-        let empty=authorized.is_empty();
-        let result=self.outgoing
-            .send_request_to_connections(
-                Some(authorized.as_slice()),
-                payload,
-                Some(self.thread_id),
-            )
+        let empty = authorized.is_empty();
+        let result = self
+            .outgoing
+            .send_request_to_connections(Some(authorized.as_slice()), payload, Some(self.thread_id))
             .await;
-        if empty {self.outgoing.cancel_request(&result.0).await;}
+        if empty {
+            self.outgoing.cancel_request(&result.0).await;
+        }
         result
     }
 
@@ -223,16 +237,31 @@ impl ThreadScopedOutgoingMessageSender {
         // Each recipient is checked independently after event-listener queue waits.
         // The original Task owner is never a broadcast authorization.
         for connection in self.connection_ids.iter().copied() {
-            if let Some(private_fence) = self.outgoing.authorize_thread_delivery(connection,self.thread_id).await {
-                let _ = self.outgoing.sender.send(OutgoingEnvelope::ToConnection { connection_id: connection,
-                    message: timestamped_server_notification(notification.clone()), private_fence, write_complete_tx: None }).await;
+            if let Some(private_fence) = self
+                .outgoing
+                .authorize_thread_delivery(connection, self.thread_id)
+                .await
+            {
+                let _ = self
+                    .outgoing
+                    .sender
+                    .send(OutgoingEnvelope::ToConnection {
+                        connection_id: connection,
+                        message: timestamped_server_notification(notification.clone()),
+                        private_fence,
+                        write_complete_tx: None,
+                    })
+                    .await;
             }
         }
     }
 
     pub(crate) async fn send_global_server_notification(&self, notification: ServerNotification) {
-        if codex_core::inquello_inference::is_task_thread(&self.thread_id.to_string()) {self.send_server_notification(notification).await;}
-        else {self.outgoing.send_server_notification(notification).await;}
+        if codex_core::inquello_inference::is_task_thread(&self.thread_id.to_string()) {
+            self.send_server_notification(notification).await;
+        } else {
+            self.outgoing.send_server_notification(notification).await;
+        }
     }
 
     pub(crate) async fn abort_pending_server_requests(&self) {
@@ -277,25 +306,55 @@ impl OutgoingMessageSender {
         }
     }
 
-    pub(crate) fn bind_private_authority(&self,processor:&Arc<crate::request_processors::InquelloRequestProcessor>) {
-        let authority:Arc<dyn PrivateThreadAuthority>=processor.clone();
-        let _=self.private_authority.set(Arc::downgrade(&authority));
+    pub(crate) fn bind_private_authority(
+        &self,
+        processor: &Arc<crate::request_processors::InquelloRequestProcessor>,
+    ) {
+        let authority: Arc<dyn PrivateThreadAuthority> = processor.clone();
+        let _ = self.private_authority.set(Arc::downgrade(&authority));
     }
-    pub(crate) fn capture_private_fence(&self, connection: ConnectionId) -> Option<codex_app_server_transport::PrivateOutputFence> {
-        self.private_authority.get()?.upgrade()?.capture_fence(connection)
+    pub(crate) fn capture_private_fence(
+        &self,
+        connection: ConnectionId,
+    ) -> Option<codex_app_server_transport::PrivateOutputFence> {
+        self.private_authority
+            .get()?
+            .upgrade()?
+            .capture_fence(connection)
     }
-    pub(crate) async fn fence_request(&self, id: &ConnectionRequestId, fence: Option<codex_app_server_transport::PrivateOutputFence>) {
-        if let Some(context) = self.request_contexts.lock().await.get_mut(id) { context.private_fence = fence; }
+    pub(crate) async fn fence_request(
+        &self,
+        id: &ConnectionRequestId,
+        fence: Option<codex_app_server_transport::PrivateOutputFence>,
+    ) {
+        if let Some(context) = self.request_contexts.lock().await.get_mut(id) {
+            context.private_fence = fence;
+        }
     }
-    async fn authorize_thread_delivery(&self, connection: ConnectionId, thread: ThreadId) -> Option<Option<codex_app_server_transport::PrivateOutputFence>> {
+    async fn authorize_thread_delivery(
+        &self,
+        connection: ConnectionId,
+        thread: ThreadId,
+    ) -> Option<Option<codex_app_server_transport::PrivateOutputFence>> {
         let fence = self.capture_private_fence(connection);
-        if !self.authorize_thread_recipient(connection, thread).await || fence.as_ref().is_some_and(|f| !f.is_current()) { return None; }
+        if !self.authorize_thread_recipient(connection, thread).await
+            || fence.as_ref().is_some_and(|f| !f.is_current())
+        {
+            return None;
+        }
         Some(fence)
     }
-    pub(crate) async fn authorize_thread_recipient(&self,connection:ConnectionId,thread:ThreadId)->bool {
+    pub(crate) async fn authorize_thread_recipient(
+        &self,
+        connection: ConnectionId,
+        thread: ThreadId,
+    ) -> bool {
         match self.private_authority.get() {
-            Some(weak)=>match weak.upgrade() {Some(processor)=>processor.authorize_recipient(connection,thread).await,None=>false},
-            None=>!codex_core::inquello_inference::is_task_thread(&thread.to_string()),
+            Some(weak) => match weak.upgrade() {
+                Some(processor) => processor.authorize_recipient(connection, thread).await,
+                None => false,
+            },
+            None => !codex_core::inquello_inference::is_task_thread(&thread.to_string()),
         }
     }
     pub(crate) async fn register_request_context(&self, request_context: RequestContext) {
@@ -468,15 +527,22 @@ impl OutgoingMessageSender {
                 let mut admitted = 0usize;
                 for connection_id in connection_ids {
                     let private_fence = if let Some(thread) = thread_id {
-                        let Some(fence) = self.authorize_thread_delivery(*connection_id,thread).await else { continue; }; fence
-                    } else { None };
+                        let Some(fence) =
+                            self.authorize_thread_delivery(*connection_id, thread).await
+                        else {
+                            continue;
+                        };
+                        fence
+                    } else {
+                        None
+                    };
                     if let Err(err) = self
                         .sender
                         .send(OutgoingEnvelope::ToConnection {
                             connection_id: *connection_id,
                             message: outgoing_message.clone(),
                             private_fence,
-            write_complete_tx: None,
+                            write_complete_tx: None,
                         })
                         .await
                     {
@@ -486,8 +552,11 @@ impl OutgoingMessageSender {
                         admitted += 1;
                         // Private model-originated permission commands may contain
                         // governed request data; never copy them into analytics.
-                        if !thread_id.is_some_and(|id|codex_core::inquello_inference::is_task_thread(&id.to_string())) {
-                            self.analytics_events_client.track_server_request(connection_id.0, request.clone());
+                        if !thread_id.is_some_and(|id| {
+                            codex_core::inquello_inference::is_task_thread(&id.to_string())
+                        }) {
+                            self.analytics_events_client
+                                .track_server_request(connection_id.0, request.clone());
                         }
                     }
                 }
@@ -519,14 +588,19 @@ impl OutgoingMessageSender {
     ) {
         let requests = self.pending_requests_for_thread(thread_id).await;
         for request in requests {
-            let Some(private_fence) = self.authorize_thread_delivery(connection_id,thread_id).await else { continue; };
+            let Some(private_fence) = self
+                .authorize_thread_delivery(connection_id, thread_id)
+                .await
+            else {
+                continue;
+            };
             if let Err(err) = self
                 .sender
                 .send(OutgoingEnvelope::ToConnection {
                     connection_id,
                     message: OutgoingMessage::Request(request),
                     private_fence,
-            write_complete_tx: None,
+                    write_complete_tx: None,
                 })
                 .await
             {
@@ -862,7 +936,7 @@ impl OutgoingMessageSender {
                     connection_id: *connection_id,
                     message,
                     private_fence: None,
-                            write_complete_tx: None,
+                    write_complete_tx: None,
                 })
                 .await
             {
@@ -946,7 +1020,9 @@ impl OutgoingMessageSender {
         message: OutgoingMessage,
         message_kind: &'static str,
     ) {
-        let private_fence = request_context.as_ref().and_then(|c| c.private_fence.clone());
+        let private_fence = request_context
+            .as_ref()
+            .and_then(|c| c.private_fence.clone());
         let send_fut = self.sender.send(OutgoingEnvelope::ToConnection {
             connection_id,
             message,
@@ -1741,35 +1817,69 @@ mod tests {
 #[cfg(test)]
 mod private_queued_notification_tests {
     use super::*;
-    use std::sync::atomic::{AtomicBool,Ordering};
-    struct CurrentAuthority {allowed:AtomicBool,checked:std::sync::Mutex<Vec<ConnectionId>>}
+    use std::sync::atomic::{AtomicBool, Ordering};
+    struct CurrentAuthority {
+        allowed: AtomicBool,
+        checked: std::sync::Mutex<Vec<ConnectionId>>,
+    }
     impl PrivateThreadAuthority for CurrentAuthority {
-        fn authorize_recipient<'a>(&'a self,connection:ConnectionId,_:ThreadId)->std::pin::Pin<Box<dyn std::future::Future<Output=bool>+Send+'a>> {
+        fn authorize_recipient<'a>(
+            &'a self,
+            connection: ConnectionId,
+            _: ThreadId,
+        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = bool> + Send + 'a>> {
             Box::pin(async move {
                 self.checked.lock().expect("checks").push(connection);
-                self.allowed.load(Ordering::SeqCst)&&connection==ConnectionId(1)
+                self.allowed.load(Ordering::SeqCst) && connection == ConnectionId(1)
             })
         }
     }
     #[tokio::test]
     async fn queued_final_notification_checks_each_recipient_and_rechecks_after_revocation() {
-        let (tx,mut rx)=mpsc::channel(8);
-        let sender=Arc::new(OutgoingMessageSender::new(tx,AnalyticsEventsClient::disabled()));
-        let current=Arc::new(CurrentAuthority{allowed:AtomicBool::new(true),checked:std::sync::Mutex::new(vec![])});
-        let port:Arc<dyn PrivateThreadAuthority>=current.clone();
+        let (tx, mut rx) = mpsc::channel(8);
+        let sender = Arc::new(OutgoingMessageSender::new(
+            tx,
+            AnalyticsEventsClient::disabled(),
+        ));
+        let current = Arc::new(CurrentAuthority {
+            allowed: AtomicBool::new(true),
+            checked: std::sync::Mutex::new(vec![]),
+        });
+        let port: Arc<dyn PrivateThreadAuthority> = current.clone();
         assert!(sender.private_authority.set(Arc::downgrade(&port)).is_ok());
-        let scope=ThreadScopedOutgoingMessageSender::new(sender,vec![ConnectionId(1),ConnectionId(2)],ThreadId::from_string(&uuid::Uuid::new_v4().to_string()).expect("thread"));
+        let scope = ThreadScopedOutgoingMessageSender::new(
+            sender,
+            vec![ConnectionId(1), ConnectionId(2)],
+            ThreadId::from_string(&uuid::Uuid::new_v4().to_string()).expect("thread"),
+        );
         // The retained turn may already be terminal/dropped. The app-server read
         // boundary does not require a live active-turn authorization object.
-        let final_payload=ServerNotification::GuardianWarning(codex_app_server_protocol::GuardianWarningNotification{thread_id:scope.thread_id.to_string(),message:"retained final payload fixture".into()});
+        let final_payload = ServerNotification::GuardianWarning(
+            codex_app_server_protocol::GuardianWarningNotification {
+                thread_id: scope.thread_id.to_string(),
+                message: "retained final payload fixture".into(),
+            },
+        );
         scope.send_server_notification(final_payload.clone()).await;
-        assert!(matches!(rx.try_recv(),Ok(OutgoingEnvelope::ToConnection{connection_id:ConnectionId(1),..})));
-        assert!(rx.try_recv().is_err(),"peer must not receive a broadcast");
-        assert_eq!(*current.checked.lock().expect("checks"),vec![ConnectionId(1),ConnectionId(2)]);
-        current.allowed.store(false,Ordering::SeqCst);
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(OutgoingEnvelope::ToConnection {
+                connection_id: ConnectionId(1),
+                ..
+            })
+        ));
+        assert!(rx.try_recv().is_err(), "peer must not receive a broadcast");
+        assert_eq!(
+            *current.checked.lock().expect("checks"),
+            vec![ConnectionId(1), ConnectionId(2)]
+        );
+        current.allowed.store(false, Ordering::SeqCst);
         scope.send_server_notification(final_payload).await;
-        assert!(rx.try_recv().is_err(),"previous allowed result never authorizes later queued output");
-        assert_eq!(current.checked.lock().expect("checks").len(),4);
+        assert!(
+            rx.try_recv().is_err(),
+            "previous allowed result never authorizes later queued output"
+        );
+        assert_eq!(current.checked.lock().expect("checks").len(), 4);
     }
 }
 
@@ -1781,31 +1891,73 @@ mod private_fence_capture_tests {
         revoke_during_check: bool,
     }
     impl PrivateThreadAuthority for Authority {
-        fn capture_fence(&self, _: ConnectionId) -> Option<codex_app_server_transport::PrivateOutputFence> {
-            Some(codex_app_server_transport::PrivateOutputFence::new(self.token.clone()))
+        fn capture_fence(
+            &self,
+            _: ConnectionId,
+        ) -> Option<codex_app_server_transport::PrivateOutputFence> {
+            Some(codex_app_server_transport::PrivateOutputFence::new(
+                self.token.clone(),
+            ))
         }
-        fn authorize_recipient<'a>(&'a self, _: ConnectionId, _: ThreadId) -> std::pin::Pin<Box<dyn std::future::Future<Output=bool> + Send + 'a>> {
-            Box::pin(async move { if self.revoke_during_check { self.token.cancel(); } true })
+        fn authorize_recipient<'a>(
+            &'a self,
+            _: ConnectionId,
+            _: ThreadId,
+        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = bool> + Send + 'a>> {
+            Box::pin(async move {
+                if self.revoke_during_check {
+                    self.token.cancel();
+                }
+                true
+            })
         }
     }
     #[tokio::test]
     async fn capture_precedes_authority_wait_and_old_queued_payload_is_not_renewed() {
         for revoke_during_check in [false, true] {
             let (tx, mut rx) = mpsc::channel(1);
-            let sender = Arc::new(OutgoingMessageSender::new(tx, AnalyticsEventsClient::disabled()));
-            let authority = Arc::new(Authority { token: tokio_util::sync::CancellationToken::new(), revoke_during_check });
+            let sender = Arc::new(OutgoingMessageSender::new(
+                tx,
+                AnalyticsEventsClient::disabled(),
+            ));
+            let authority = Arc::new(Authority {
+                token: tokio_util::sync::CancellationToken::new(),
+                revoke_during_check,
+            });
             let port: Arc<dyn PrivateThreadAuthority> = authority.clone();
             assert!(sender.private_authority.set(Arc::downgrade(&port)).is_ok());
-            let scope = ThreadScopedOutgoingMessageSender::new(sender,vec![ConnectionId(1)],ThreadId::from_string(&uuid::Uuid::new_v4().to_string()).unwrap());
-            scope.send_server_notification(ServerNotification::GuardianWarning(codex_app_server_protocol::GuardianWarningNotification {
-                thread_id: scope.thread_id.to_string(), message: "terminal fixture".into(),
-            })).await;
-            if revoke_during_check { assert!(rx.try_recv().is_err()); }
-            else {
-                let OutgoingEnvelope::ToConnection { private_fence: Some(fence), .. } = rx.recv().await.unwrap() else { panic!("private fence required"); };
-                assert!(fence.is_current(), "terminal payload needs no active-turn guard");
+            let scope = ThreadScopedOutgoingMessageSender::new(
+                sender,
+                vec![ConnectionId(1)],
+                ThreadId::from_string(&uuid::Uuid::new_v4().to_string()).unwrap(),
+            );
+            scope
+                .send_server_notification(ServerNotification::GuardianWarning(
+                    codex_app_server_protocol::GuardianWarningNotification {
+                        thread_id: scope.thread_id.to_string(),
+                        message: "terminal fixture".into(),
+                    },
+                ))
+                .await;
+            if revoke_during_check {
+                assert!(rx.try_recv().is_err());
+            } else {
+                let OutgoingEnvelope::ToConnection {
+                    private_fence: Some(fence),
+                    ..
+                } = rx.recv().await.unwrap()
+                else {
+                    panic!("private fence required");
+                };
+                assert!(
+                    fence.is_current(),
+                    "terminal payload needs no active-turn guard"
+                );
                 authority.token.cancel();
-                assert!(!fence.is_current(), "already queued payload observes invalidation");
+                assert!(
+                    !fence.is_current(),
+                    "already queued payload observes invalidation"
+                );
             }
         }
     }
@@ -1816,27 +1968,57 @@ mod private_request_admission_tests {
     use super::*;
     struct WithdrawBetweenChecks(std::sync::atomic::AtomicUsize);
     impl PrivateThreadAuthority for WithdrawBetweenChecks {
-        fn authorize_recipient<'a>(&'a self,_:ConnectionId,_:ThreadId)->std::pin::Pin<Box<dyn std::future::Future<Output=bool>+Send+'a>> {
-            Box::pin(async move {self.0.fetch_add(1,Ordering::SeqCst)==0})
+        fn authorize_recipient<'a>(
+            &'a self,
+            _: ConnectionId,
+            _: ThreadId,
+        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = bool> + Send + 'a>> {
+            Box::pin(async move { self.0.fetch_add(1, Ordering::SeqCst) == 0 })
         }
     }
     #[tokio::test]
     async fn no_recipient_admitted_after_registration_settles_and_removes_callback() {
-        let (tx,mut rx)=mpsc::channel(8);
-        let sender=Arc::new(OutgoingMessageSender::new(tx,AnalyticsEventsClient::disabled()));
-        let current=Arc::new(WithdrawBetweenChecks(std::sync::atomic::AtomicUsize::new(0)));
-        let port:Arc<dyn PrivateThreadAuthority>=current.clone();
+        let (tx, mut rx) = mpsc::channel(8);
+        let sender = Arc::new(OutgoingMessageSender::new(
+            tx,
+            AnalyticsEventsClient::disabled(),
+        ));
+        let current = Arc::new(WithdrawBetweenChecks(std::sync::atomic::AtomicUsize::new(
+            0,
+        )));
+        let port: Arc<dyn PrivateThreadAuthority> = current.clone();
         assert!(sender.private_authority.set(Arc::downgrade(&port)).is_ok());
-        let thread=ThreadId::new();
-        let scope=ThreadScopedOutgoingMessageSender::new(sender.clone(),vec![ConnectionId(1)],thread);
-        let (id,waiter)=scope.send_request(ServerRequestPayload::DynamicToolCall(codex_app_server_protocol::DynamicToolCallParams {
-            thread_id:thread.to_string(),turn_id:"turn".into(),call_id:"call".into(),namespace:None,
-            tool:"fixture".into(),arguments:serde_json::json!({"private":"must not be replayed"}),
-        })).await;
-        assert_eq!(current.0.load(Ordering::SeqCst),2,"first filter allows, actual admission denies");
-        assert!(tokio::time::timeout(std::time::Duration::from_secs(1),waiter).await.expect("undelivered request must settle").is_err());
+        let thread = ThreadId::new();
+        let scope =
+            ThreadScopedOutgoingMessageSender::new(sender.clone(), vec![ConnectionId(1)], thread);
+        let (id, waiter) = scope
+            .send_request(ServerRequestPayload::DynamicToolCall(
+                codex_app_server_protocol::DynamicToolCallParams {
+                    thread_id: thread.to_string(),
+                    turn_id: "turn".into(),
+                    call_id: "call".into(),
+                    namespace: None,
+                    tool: "fixture".into(),
+                    arguments: serde_json::json!({"private":"must not be replayed"}),
+                },
+            ))
+            .await;
+        assert_eq!(
+            current.0.load(Ordering::SeqCst),
+            2,
+            "first filter allows, actual admission denies"
+        );
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_secs(1), waiter)
+                .await
+                .expect("undelivered request must settle")
+                .is_err()
+        );
         assert!(!sender.request_id_to_callback.lock().await.contains_key(&id));
         assert!(sender.pending_requests_for_thread(thread).await.is_empty());
-        assert!(rx.try_recv().is_err(),"no unauthorized delivery was queued");
+        assert!(
+            rx.try_recv().is_err(),
+            "no unauthorized delivery was queued"
+        );
     }
 }

@@ -546,7 +546,10 @@ impl ToolRegistry {
             return false;
         }
         if tool_name.is_default_namespace()
-            && matches!(tool_name.name.as_str(), "exec_command" | "shell_command" | "inquello_progress" | "request_user_input")
+            && matches!(
+                tool_name.name.as_str(),
+                "exec_command" | "shell_command" | "inquello_progress" | "request_user_input"
+            )
         {
             tracing::warn!(tool_name = %tool_name, "skipping external tool with reserved name");
             if self.tools.contains_key(&tool_name) {
@@ -693,7 +696,8 @@ impl ToolRegistry {
         mut invocation: ToolInvocation,
         call_state: Option<Arc<ToolCallState>>,
     ) -> Result<AnyToolResult, FunctionCallError> {
-        let owned_task = crate::inquello_inference::is_task_thread(&invocation.session.thread_id.to_string());
+        let owned_task =
+            crate::inquello_inference::is_task_thread(&invocation.session.thread_id.to_string());
         let cancellation_token = invocation.cancellation_token.clone();
         let tool_name = invocation.tool_name.clone();
         let call_id_owned = invocation.call_id.clone();
@@ -728,7 +732,11 @@ impl ToolRegistry {
             Some(tool) => tool,
             None => {
                 let message = unsupported_tool_call_message(&invocation.payload, &tool_name);
-                let log_payload = if owned_task { std::borrow::Cow::Borrowed("[private Task tool content omitted]") } else { tool_log_payload(&invocation.payload, &invocation.source) };
+                let log_payload = if owned_task {
+                    std::borrow::Cow::Borrowed("[private Task tool content omitted]")
+                } else {
+                    tool_log_payload(&invocation.payload, &invocation.source)
+                };
                 let mut tool_result_tags = Vec::with_capacity(2);
                 sandbox_tags.append_metric_tags(&mut tool_result_tags);
                 otel.tool_result_with_tags(
@@ -759,7 +767,11 @@ impl ToolRegistry {
         }
         if !tool.matches_kind(&invocation.payload) {
             let message = format!("tool {tool_name} invoked with incompatible payload");
-            let log_payload = if owned_task { std::borrow::Cow::Borrowed("[private Task tool content omitted]") } else { tool_log_payload(&invocation.payload, &invocation.source) };
+            let log_payload = if owned_task {
+                std::borrow::Cow::Borrowed("[private Task tool content omitted]")
+            } else {
+                tool_log_payload(&invocation.payload, &invocation.source)
+            };
             otel.tool_result_with_tags(
                 &tool_name,
                 &call_id_owned,
@@ -843,24 +855,50 @@ impl ToolRegistry {
         // Admit only a bound command tool here. The one-shot handler validates fields;
         // final native-resolved argv/cwd are authorized in its runtime before launch.
         if crate::inquello_inference::is_task_thread(&invocation.session.thread_id.to_string()) {
-            let authorization = invocation.turn.extension_data.get::<crate::inquello_inference::TaskAuthorizationContext>()
-                .ok_or_else(|| FunctionCallError::Fatal("Private Task tool authorization unavailable".into()))?;
+            let authorization = invocation
+                .turn
+                .extension_data
+                .get::<crate::inquello_inference::TaskAuthorizationContext>()
+                .ok_or_else(|| {
+                    FunctionCallError::Fatal("Private Task tool authorization unavailable".into())
+                })?;
             let ToolPayload::Function { arguments } = &invocation.payload else {
-                return Err(FunctionCallError::RespondToModel("This tool is unavailable for private Tasks".into()));
+                return Err(FunctionCallError::RespondToModel(
+                    "This tool is unavailable for private Tasks".into(),
+                ));
             };
             if authorization.0.cancellation().is_cancelled() || cancellation_token.is_cancelled() {
-                return Err(FunctionCallError::Fatal("Private Task cancelled before tool execution".into()));
+                return Err(FunctionCallError::Fatal(
+                    "Private Task cancelled before tool execution".into(),
+                ));
             }
-            authorization.0.before_tool(&flat_tool_name(&invocation.tool_name), arguments, &invocation.call_id).await
-                .map_err(|_| FunctionCallError::RespondToModel("Private Task policy refused this tool; nothing ran".into()))?;
+            authorization
+                .0
+                .before_tool(
+                    &flat_tool_name(&invocation.tool_name),
+                    arguments,
+                    &invocation.call_id,
+                )
+                .await
+                .map_err(|_| {
+                    FunctionCallError::RespondToModel(
+                        "Private Task policy refused this tool; nothing ran".into(),
+                    )
+                })?;
         }
 
         if tool.mcp_server_name().is_none() {
-            if let Err(error)=notify_tool_start(&invocation, /*mcp_tool*/ None)
-                .or_cancel_tool(&cancellation_token).await {
+            if let Err(error) = notify_tool_start(&invocation, /*mcp_tool*/ None)
+                .or_cancel_tool(&cancellation_token)
+                .await
+            {
                 if owned_task {
-                    if let Some(authorization)=invocation.turn.extension_data.get::<crate::inquello_inference::TaskAuthorizationContext>() {
-                        authorization.0.after_tool(&invocation.call_id,false).await;
+                    if let Some(authorization) = invocation
+                        .turn
+                        .extension_data
+                        .get::<crate::inquello_inference::TaskAuthorizationContext>(
+                    ) {
+                        authorization.0.after_tool(&invocation.call_id, false).await;
                     }
                 }
                 return Err(error);
@@ -886,25 +924,36 @@ impl ToolRegistry {
             tool_result_tags.push(("command_category", category));
         }
 
-        let log_payload = if owned_task { std::borrow::Cow::Borrowed("[private Task tool content omitted]") } else { tool_log_payload(&invocation.payload, &invocation.source) };
+        let log_payload = if owned_task {
+            std::borrow::Cow::Borrowed("[private Task tool content omitted]")
+        } else {
+            tool_log_payload(&invocation.payload, &invocation.source)
+        };
 
         let result = if owned_task {
-            let authorization=invocation.turn.extension_data.get::<crate::inquello_inference::TaskAuthorizationContext>()
+            let authorization = invocation
+                .turn
+                .extension_data
+                .get::<crate::inquello_inference::TaskAuthorizationContext>()
                 .expect("private tool authorization checked before accounting");
             if cancellation_token.is_cancelled() || authorization.0.cancellation().is_cancelled() {
-                authorization.0.after_tool(&invocation.call_id,false).await;
-                return Err(FunctionCallError::Fatal("Private Task cancelled before handler entry".into()));
+                authorization.0.after_tool(&invocation.call_id, false).await;
+                return Err(FunctionCallError::Fatal(
+                    "Private Task cancelled before handler entry".into(),
+                ));
             }
             let authority_cancellation = authorization.0.cancellation();
             let handler_cancellation = cancellation_token.child_token();
-            invocation.cancellation_token = handler_cancellation.clone();
+            let mut handler_invocation = invocation.clone();
+            handler_invocation.cancellation_token = handler_cancellation.clone();
             crate::inquello_inference::run_task_handler(
-                handle_any_tool(tool.as_ref(), invocation.clone(), call_state.as_deref()),
+                handle_any_tool(tool.as_ref(), handler_invocation, call_state.as_deref()),
                 handler_cancellation,
                 authority_cancellation,
-            ).await
-        } else { otel
-            .log_tool_result_with_tags(
+            )
+            .await
+        } else {
+            otel.log_tool_result_with_tags(
                 &tool_name,
                 &call_id_owned,
                 log_payload.as_ref(),
@@ -913,16 +962,31 @@ impl ToolRegistry {
                 || handle_any_tool(tool.as_ref(), invocation.clone(), call_state.as_deref()),
                 |result| {
                     (
-                        if owned_task { String::from("[private Task tool output omitted]") } else { result.result.log_output() },
+                        if owned_task {
+                            String::from("[private Task tool output omitted]")
+                        } else {
+                            result.result.log_output()
+                        },
                         result.result.success_for_logging(),
                     )
                 },
             )
-            .await };
+            .await
+        };
         if owned_task {
-            if let Some(authorization) = invocation.turn.extension_data.get::<crate::inquello_inference::TaskAuthorizationContext>() {
-                let succeeded = result.as_ref().map(|r| r.result.success_for_logging()).unwrap_or(false);
-                authorization.0.after_tool(&invocation.call_id, succeeded).await;
+            if let Some(authorization) = invocation
+                .turn
+                .extension_data
+                .get::<crate::inquello_inference::TaskAuthorizationContext>(
+            ) {
+                let succeeded = result
+                    .as_ref()
+                    .map(|r| r.result.success_for_logging())
+                    .unwrap_or(false);
+                authorization
+                    .0
+                    .after_tool(&invocation.call_id, succeeded)
+                    .await;
             }
         }
         let success = match &result {

@@ -1523,7 +1523,8 @@ fn mock_responses_config(server_uri: &str) -> MockResponsesConfig {
 /// endpoint. File storage is intentional here: it is a disposable persistence
 /// oracle, never the user's keyring or a real provider grant.
 #[tokio::test]
-async fn oauth_cancel_rpc_selects_exact_attempt_and_prevents_late_token_persistence() -> Result<()> {
+async fn oauth_cancel_rpc_selects_exact_attempt_and_prevents_late_token_persistence() -> Result<()>
+{
     let oauth = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path("/.well-known/oauth-authorization-server/mcp"))
@@ -1533,32 +1534,59 @@ async fn oauth_cancel_rpc_selects_exact_attempt_and_prevents_late_token_persiste
             "token_endpoint": format!("{}/token", oauth.uri()),
             "token_endpoint_auth_methods_supported": ["none"],
         })))
-        .mount(&oauth).await;
+        .mount(&oauth)
+        .await;
     Mock::given(method("POST"))
         .and(path("/token"))
-        .respond_with(ResponseTemplate::new(200)
-            .set_delay(Duration::from_secs(2))
-            .set_body_json(json!({"access_token": "isolated-late-token", "token_type": "Bearer"})))
-        .mount(&oauth).await;
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_delay(Duration::from_secs(2))
+                .set_body_json(
+                    json!({"access_token": "isolated-late-token", "token_type": "Bearer"}),
+                ),
+        )
+        .mount(&oauth)
+        .await;
     let home = TempDir::new()?;
-    std::fs::write(home.path().join("config.toml"), format!(
-        "mcp_oauth_credentials_store = \"file\"\n[mcp_servers.cancel_fixture]\nurl = \"{}/mcp\"\n[mcp_servers.cancel_fixture.oauth]\nclient_id = \"isolated-client\"\n", oauth.uri()))?;
-    let mut app = TestAppServer::builder().with_codex_home(home.path())
-        .build_initialized_with_timeout(DEFAULT_READ_TIMEOUT).await?;
-    let id = app.send_raw_request("mcpServer/oauth/login", Some(json!({
-        "name": "cancel_fixture", "timeoutSecs": 20,
-    }))).await?;
-    let login: McpServerOauthLoginResponse = timeout(DEFAULT_READ_TIMEOUT, app.read_response(id)).await??;
+    std::fs::write(
+        home.path().join("config.toml"),
+        format!(
+            "mcp_oauth_credentials_store = \"file\"\n[mcp_servers.cancel_fixture]\nurl = \"{}/mcp\"\n[mcp_servers.cancel_fixture.oauth]\nclient_id = \"isolated-client\"\n",
+            oauth.uri()
+        ),
+    )?;
+    let mut app = TestAppServer::builder()
+        .with_codex_home(home.path())
+        .build_initialized_with_timeout(DEFAULT_READ_TIMEOUT)
+        .await?;
+    let id = app
+        .send_raw_request(
+            "mcpServer/oauth/login",
+            Some(json!({
+                "name": "cancel_fixture", "timeoutSecs": 20,
+            })),
+        )
+        .await?;
+    let login: McpServerOauthLoginResponse =
+        timeout(DEFAULT_READ_TIMEOUT, app.read_response(id)).await??;
     let login_id = login.login_id.as_deref().expect("real login ID");
-    let id = app.send_raw_request("mcpServer/oauth/cancel", Some(json!({
-        "name": "cancel_fixture", "loginId": "stale-attempt",
-    }))).await?;
+    let id = app
+        .send_raw_request(
+            "mcpServer/oauth/cancel",
+            Some(json!({
+                "name": "cancel_fixture", "loginId": "stale-attempt",
+            })),
+        )
+        .await?;
     let stale: serde_json::Value = timeout(DEFAULT_READ_TIMEOUT, app.read_response(id)).await??;
     assert_eq!(stale["status"], "notFound");
     let url = Url::parse(&login.authorization_url)?;
     let query: BTreeMap<_, _> = url.query_pairs().into_owned().collect();
     let mut callback = Url::parse(&query["redirect_uri"])?;
-    callback.query_pairs_mut().append_pair("code", "isolated-code").append_pair("state", &query["state"]);
+    callback
+        .query_pairs_mut()
+        .append_pair("code", "isolated-code")
+        .append_pair("state", &query["state"]);
     let client = HttpClientBuilder::new().build_direct()?;
     let callback_request = tokio::spawn({
         let client = client.clone();
@@ -1568,18 +1596,35 @@ async fn oauth_cancel_rpc_selects_exact_attempt_and_prevents_late_token_persiste
     // A stale ID must leave the real flow alive, proven by its token exchange.
     timeout(DEFAULT_READ_TIMEOUT, async {
         loop {
-            if oauth.received_requests().await.unwrap_or_default().iter()
-                .any(|request| request.url.path() == "/token") { break; }
+            if oauth
+                .received_requests()
+                .await
+                .unwrap_or_default()
+                .iter()
+                .any(|request| request.url.path() == "/token")
+            {
+                break;
+            }
             tokio::time::sleep(Duration::from_millis(10)).await;
         }
-    }).await?;
-    let id = app.send_raw_request("mcpServer/oauth/cancel", Some(json!({
-        "name": "cancel_fixture", "loginId": login_id,
-    }))).await?;
-    let cancelled: serde_json::Value = timeout(DEFAULT_READ_TIMEOUT, app.read_response(id)).await??;
+    })
+    .await?;
+    let id = app
+        .send_raw_request(
+            "mcpServer/oauth/cancel",
+            Some(json!({
+                "name": "cancel_fixture", "loginId": login_id,
+            })),
+        )
+        .await?;
+    let cancelled: serde_json::Value =
+        timeout(DEFAULT_READ_TIMEOUT, app.read_response(id)).await??;
     assert_eq!(cancelled["status"], "cancelled");
-    let completed: McpServerOauthLoginCompletedNotification = timeout(DEFAULT_READ_TIMEOUT,
-        app.read_notification("mcpServer/oauthLogin/completed")).await??;
+    let completed: McpServerOauthLoginCompletedNotification = timeout(
+        DEFAULT_READ_TIMEOUT,
+        app.read_notification("mcpServer/oauthLogin/completed"),
+    )
+    .await??;
     assert_eq!(completed.login_id.as_deref(), Some(login_id));
     assert!(!completed.success);
     // Retry the callback after cancellation as well as completing the already
@@ -1591,33 +1636,57 @@ async fn oauth_cancel_rpc_selects_exact_attempt_and_prevents_late_token_persiste
 
     // Positive control: the same isolated endpoint and configured file store
     // must persist a successful second flow, proving the no-write oracle above.
-    let id = app.send_raw_request("mcpServer/oauth/login", Some(json!({
-        "name": "cancel_fixture", "timeoutSecs": 20,
-    }))).await?;
-    let next: McpServerOauthLoginResponse = timeout(DEFAULT_READ_TIMEOUT, app.read_response(id)).await??;
+    let id = app
+        .send_raw_request(
+            "mcpServer/oauth/login",
+            Some(json!({
+                "name": "cancel_fixture", "timeoutSecs": 20,
+            })),
+        )
+        .await?;
+    let next: McpServerOauthLoginResponse =
+        timeout(DEFAULT_READ_TIMEOUT, app.read_response(id)).await??;
     let next_id = next.login_id.as_deref().expect("second real login ID");
     assert_ne!(next_id, login_id);
-    let id = app.send_raw_request("mcpServer/oauth/cancel", Some(json!({
-        "name": "cancel_fixture", "loginId": login_id,
-    }))).await?;
+    let id = app
+        .send_raw_request(
+            "mcpServer/oauth/cancel",
+            Some(json!({
+                "name": "cancel_fixture", "loginId": login_id,
+            })),
+        )
+        .await?;
     let old: serde_json::Value = timeout(DEFAULT_READ_TIMEOUT, app.read_response(id)).await??;
     assert_eq!(old["status"], "notFound");
     let next_url = Url::parse(&next.authorization_url)?;
     let next_query: BTreeMap<_, _> = next_url.query_pairs().into_owned().collect();
     let mut callback = Url::parse(&next_query["redirect_uri"])?;
-    callback.query_pairs_mut().append_pair("code", "isolated-second-code")
+    callback
+        .query_pairs_mut()
+        .append_pair("code", "isolated-second-code")
         .append_pair("state", &next_query["state"]);
-    timeout(DEFAULT_READ_TIMEOUT, client.get(callback).send()).await??.error_for_status()?;
-    let completed: McpServerOauthLoginCompletedNotification = timeout(DEFAULT_READ_TIMEOUT,
-        app.read_notification("mcpServer/oauthLogin/completed")).await??;
+    timeout(DEFAULT_READ_TIMEOUT, client.get(callback).send())
+        .await??
+        .error_for_status()?;
+    let completed: McpServerOauthLoginCompletedNotification = timeout(
+        DEFAULT_READ_TIMEOUT,
+        app.read_notification("mcpServer/oauthLogin/completed"),
+    )
+    .await??;
     assert_eq!(completed.login_id.as_deref(), Some(next_id));
     assert!(completed.success);
     let credentials = std::fs::read_to_string(home.path().join(".credentials.json"))?;
     assert!(credentials.contains("isolated-late-token"));
-    let id = app.send_raw_request("mcpServer/oauth/cancel", Some(json!({
-        "name": "cancel_fixture", "loginId": next_id,
-    }))).await?;
-    let complete: serde_json::Value = timeout(DEFAULT_READ_TIMEOUT, app.read_response(id)).await??;
+    let id = app
+        .send_raw_request(
+            "mcpServer/oauth/cancel",
+            Some(json!({
+                "name": "cancel_fixture", "loginId": next_id,
+            })),
+        )
+        .await?;
+    let complete: serde_json::Value =
+        timeout(DEFAULT_READ_TIMEOUT, app.read_response(id)).await??;
     assert_eq!(complete["status"], "completed");
     Ok(())
 }
@@ -1641,40 +1710,68 @@ async fn guarded_mcp_rpcs_refuse_colliding_source_and_blocked_host_before_contac
             };
             ResponseTemplate::new(200).set_body_json(json!({"jsonrpc": "2.0", "id": request["id"], "result": result}))
         }).mount(&endpoint).await;
-    Mock::given(method("GET")).and(path("/.well-known/oauth-authorization-server/mcp"))
+    Mock::given(method("GET"))
+        .and(path("/.well-known/oauth-authorization-server/mcp"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "issuer": format!("{}/mcp", endpoint.uri()),
             "authorization_endpoint": format!("{}/authorize", endpoint.uri()),
             "token_endpoint": format!("{}/token", endpoint.uri()),
             "token_endpoint_auth_methods_supported": ["none"],
-        }))).mount(&endpoint).await;
+        })))
+        .mount(&endpoint)
+        .await;
     let home = TempDir::new()?;
-    std::fs::write(home.path().join("config.toml"), format!(
-        "mcp_oauth_credentials_store = \"file\"\n[features]\nplugins = true\n[mcp_servers.fixture]\nurl = \"{}/mcp\"\n[mcp_servers.fixture.oauth]\nclient_id = \"isolated-client\"\n", endpoint.uri()))?;
+    std::fs::write(
+        home.path().join("config.toml"),
+        format!(
+            "mcp_oauth_credentials_store = \"file\"\n[features]\nplugins = true\n[mcp_servers.fixture]\nurl = \"{}/mcp\"\n[mcp_servers.fixture.oauth]\nclient_id = \"isolated-client\"\n",
+            endpoint.uri()
+        ),
+    )?;
     let repo = TempDir::new()?;
     for path in [".git", ".agents/plugins", "sample/.codex-plugin"] {
         std::fs::create_dir_all(repo.path().join(path))?;
     }
-    std::fs::write(repo.path().join("sample/.codex-plugin/plugin.json"), r#"{"name":"sample"}"#)?;
-    std::fs::write(repo.path().join("sample/.mcp.json"), serde_json::to_vec(&json!({
-        "mcpServers": {"fixture": {"type": "http", "url": format!("{}/mcp", shadowed.uri())}},
-    }))?)?;
+    std::fs::write(
+        repo.path().join("sample/.codex-plugin/plugin.json"),
+        r#"{"name":"sample"}"#,
+    )?;
+    std::fs::write(
+        repo.path().join("sample/.mcp.json"),
+        serde_json::to_vec(&json!({
+            "mcpServers": {"fixture": {"type": "http", "url": format!("{}/mcp", shadowed.uri())}},
+        }))?,
+    )?;
     let marketplace = repo.path().join(".agents/plugins/marketplace.json");
-    std::fs::write(&marketplace, serde_json::to_vec(&json!({
-        "name": "debug", "plugins": [{"name": "sample", "source": {"source": "local", "path": "./sample"}}],
-    }))?)?;
-    let mut app = TestAppServer::builder().with_codex_home(home.path())
-        .build_initialized_with_timeout(DEFAULT_READ_TIMEOUT).await?;
-    let id = app.send_plugin_install_request(PluginInstallParams {
-        marketplace_path: Some(AbsolutePathBuf::try_from(marketplace)?),
-        remote_marketplace_name: None, install_attempt_id: None,
-        plugin_name: "sample".to_string(), skip_authentication: true, mcp_admission: None,
-    }).await?;
+    std::fs::write(
+        &marketplace,
+        serde_json::to_vec(&json!({
+            "name": "debug", "plugins": [{"name": "sample", "source": {"source": "local", "path": "./sample"}}],
+        }))?,
+    )?;
+    let mut app = TestAppServer::builder()
+        .with_codex_home(home.path())
+        .build_initialized_with_timeout(DEFAULT_READ_TIMEOUT)
+        .await?;
+    let id = app
+        .send_plugin_install_request(PluginInstallParams {
+            marketplace_path: Some(AbsolutePathBuf::try_from(marketplace)?),
+            remote_marketplace_name: None,
+            install_attempt_id: None,
+            plugin_name: "sample".to_string(),
+            skip_authentication: true,
+            mcp_admission: None,
+        })
+        .await?;
     let _: PluginInstallResponse = timeout(DEFAULT_READ_TIMEOUT, app.read_response(id)).await??;
     let allowed_host = Url::parse(&endpoint.uri())?.host_str().unwrap().to_string();
     for method in ["mcpServerStatus/list", "mcpServer/oauth/login"] {
         for (expected_plugin, domains, code) in [
-            (Some("sample@debug"), vec![allowed_host.clone()], "source_mismatch"),
+            (
+                Some("sample@debug"),
+                vec![allowed_host.clone()],
+                "source_mismatch",
+            ),
             (None, Vec::new(), "host_not_allowed"),
         ] {
             let mut params = json!({
@@ -1682,14 +1779,36 @@ async fn guarded_mcp_rpcs_refuse_colliding_source_and_blocked_host_before_contac
                 "mcpAdmission": {"allowTools": true, "allowLocalServers": false,
                     "localConfirmed": false, "allowedDomains": domains},
             });
-            params[if method == "mcpServerStatus/list" { "serverName" } else { "name" }] = json!("fixture");
+            params[if method == "mcpServerStatus/list" {
+                "serverName"
+            } else {
+                "name"
+            }] = json!("fixture");
             let id = app.send_raw_request(method, Some(params)).await?;
-            let error = timeout(DEFAULT_READ_TIMEOUT,
-                app.read_stream_until_error_message(RequestId::Integer(id))).await??;
-            assert_eq!(error.error.data.as_ref().expect("structured refusal")
-                ["inquelloCapabilityAdmission"]["code"], code);
-            assert!(endpoint.received_requests().await.expect("request recording enabled").is_empty());
-            assert!(shadowed.received_requests().await.expect("request recording enabled").is_empty());
+            let error = timeout(
+                DEFAULT_READ_TIMEOUT,
+                app.read_stream_until_error_message(RequestId::Integer(id)),
+            )
+            .await??;
+            assert_eq!(
+                error.error.data.as_ref().expect("structured refusal")["inquelloCapabilityAdmission"]
+                    ["code"],
+                code
+            );
+            assert!(
+                endpoint
+                    .received_requests()
+                    .await
+                    .expect("request recording enabled")
+                    .is_empty()
+            );
+            assert!(
+                shadowed
+                    .received_requests()
+                    .await
+                    .expect("request recording enabled")
+                    .is_empty()
+            );
             assert!(!home.path().join(".credentials.json").exists());
         }
     }
@@ -1697,24 +1816,54 @@ async fn guarded_mcp_rpcs_refuse_colliding_source_and_blocked_host_before_contac
         "localConfirmed": false, "allowedDomains": [allowed_host]});
     // Positive controls traverse the same guarded RPCs and prove both the
     // winning config source and the endpoint-effect oracle.
-    let id = app.send_raw_request("mcpServerStatus/list", Some(json!({
-        "serverName": "fixture", "mcpAdmission": admission,
-    }))).await?;
-    let status: ListMcpServerStatusResponse = timeout(DEFAULT_READ_TIMEOUT, app.read_response(id)).await??;
+    let id = app
+        .send_raw_request(
+            "mcpServerStatus/list",
+            Some(json!({
+                "serverName": "fixture", "mcpAdmission": admission,
+            })),
+        )
+        .await?;
+    let status: ListMcpServerStatusResponse =
+        timeout(DEFAULT_READ_TIMEOUT, app.read_response(id)).await??;
     assert_eq!(status.data.len(), 1);
     assert_eq!(status.data[0].plugin_id, None);
     assert!(status.data[0].tools.contains_key("fixture_tool"));
-    let id = app.send_raw_request("mcpServer/oauth/login", Some(json!({
-        "name": "fixture", "scopes": [], "timeoutSecs": 10, "mcpAdmission": admission,
-    }))).await?;
-    let login: McpServerOauthLoginResponse = timeout(DEFAULT_READ_TIMEOUT, app.read_response(id)).await??;
-    assert!(endpoint.received_requests().await.expect("request recording enabled").iter()
-        .any(|request| request.url.path() == "/.well-known/oauth-authorization-server/mcp"));
-    assert!(shadowed.received_requests().await.expect("request recording enabled").is_empty());
-    let id = app.send_raw_request("mcpServer/oauth/cancel", Some(json!({
-        "name": "fixture", "loginId": login.login_id.expect("runtime-owned attempt"),
-    }))).await?;
-    let cancelled: serde_json::Value = timeout(DEFAULT_READ_TIMEOUT, app.read_response(id)).await??;
+    let id = app
+        .send_raw_request(
+            "mcpServer/oauth/login",
+            Some(json!({
+                "name": "fixture", "scopes": [], "timeoutSecs": 10, "mcpAdmission": admission,
+            })),
+        )
+        .await?;
+    let login: McpServerOauthLoginResponse =
+        timeout(DEFAULT_READ_TIMEOUT, app.read_response(id)).await??;
+    assert!(
+        endpoint
+            .received_requests()
+            .await
+            .expect("request recording enabled")
+            .iter()
+            .any(|request| request.url.path() == "/.well-known/oauth-authorization-server/mcp")
+    );
+    assert!(
+        shadowed
+            .received_requests()
+            .await
+            .expect("request recording enabled")
+            .is_empty()
+    );
+    let id = app
+        .send_raw_request(
+            "mcpServer/oauth/cancel",
+            Some(json!({
+                "name": "fixture", "loginId": login.login_id.expect("runtime-owned attempt"),
+            })),
+        )
+        .await?;
+    let cancelled: serde_json::Value =
+        timeout(DEFAULT_READ_TIMEOUT, app.read_response(id)).await??;
     assert_eq!(cancelled["status"], "cancelled");
     assert!(!home.path().join(".credentials.json").exists());
     Ok(())
@@ -1724,30 +1873,51 @@ async fn guarded_mcp_rpcs_refuse_colliding_source_and_blocked_host_before_contac
 async fn guarded_mcp_rpcs_refuse_actual_stdio_transport_without_starting_process() -> Result<()> {
     let home = TempDir::new()?;
     let pid = home.path().join("guarded-mcp.pid");
-    std::fs::write(home.path().join("config.toml"), format!(
-        "mcp_oauth_credentials_store = \"file\"\n[mcp_servers.fixture]\ncommand = {}\nstartup_timeout_sec = 5\n[mcp_servers.fixture.env]\nMCP_TEST_PID_FILE = {}\n",
-        toml::Value::String(stdio_server_bin()?),
-        toml::Value::String(pid.to_string_lossy().into_owned()),
-    ))?;
-    let mut app = TestAppServer::builder().with_codex_home(home.path())
-        .without_auto_env().build_initialized_with_timeout(DEFAULT_READ_TIMEOUT).await?;
+    std::fs::write(
+        home.path().join("config.toml"),
+        format!(
+            "mcp_oauth_credentials_store = \"file\"\n[mcp_servers.fixture]\ncommand = {}\nstartup_timeout_sec = 5\n[mcp_servers.fixture.env]\nMCP_TEST_PID_FILE = {}\n",
+            toml::Value::String(stdio_server_bin()?),
+            toml::Value::String(pid.to_string_lossy().into_owned()),
+        ),
+    )?;
+    let mut app = TestAppServer::builder()
+        .with_codex_home(home.path())
+        .without_auto_env()
+        .build_initialized_with_timeout(DEFAULT_READ_TIMEOUT)
+        .await?;
     for method in ["mcpServerStatus/list", "mcpServer/oauth/login"] {
         let mut params = json!({"mcpAdmission": {"allowTools": true,
             "allowLocalServers": false, "localConfirmed": false, "allowedDomains": []}});
-        params[if method == "mcpServerStatus/list" { "serverName" } else { "name" }] = json!("fixture");
+        params[if method == "mcpServerStatus/list" {
+            "serverName"
+        } else {
+            "name"
+        }] = json!("fixture");
         let id = app.send_raw_request(method, Some(params)).await?;
-        let error = timeout(DEFAULT_READ_TIMEOUT,
-            app.read_stream_until_error_message(RequestId::Integer(id))).await??;
-        assert_eq!(error.error.data.as_ref().expect("structured refusal")
-            ["inquelloCapabilityAdmission"]["code"], "local_servers_denied");
+        let error = timeout(
+            DEFAULT_READ_TIMEOUT,
+            app.read_stream_until_error_message(RequestId::Integer(id)),
+        )
+        .await??;
+        assert_eq!(
+            error.error.data.as_ref().expect("structured refusal")["inquelloCapabilityAdmission"]["code"],
+            "local_servers_denied"
+        );
         assert!(!pid.exists());
         assert!(!home.path().join(".credentials.json").exists());
     }
-    let id = app.send_raw_request("mcpServerStatus/list", Some(json!({
-        "serverName": "fixture", "mcpAdmission": {"allowTools": true,
-            "allowLocalServers": true, "localConfirmed": true, "allowedDomains": []},
-    }))).await?;
-    let status: ListMcpServerStatusResponse = timeout(DEFAULT_READ_TIMEOUT, app.read_response(id)).await??;
+    let id = app
+        .send_raw_request(
+            "mcpServerStatus/list",
+            Some(json!({
+                "serverName": "fixture", "mcpAdmission": {"allowTools": true,
+                    "allowLocalServers": true, "localConfirmed": true, "allowedDomains": []},
+            })),
+        )
+        .await?;
+    let status: ListMcpServerStatusResponse =
+        timeout(DEFAULT_READ_TIMEOUT, app.read_response(id)).await??;
     assert_eq!(status.data.len(), 1);
     assert_eq!(status.data[0].tools_error, None);
     // Same binary writes the PID only after allowed discovery actually starts it.

@@ -220,11 +220,21 @@ async fn forward_incoming_message(
     match serde_json::from_str::<JSONRPCMessage>(payload) {
         Ok(message) => {
             if let JSONRPCMessage::Request(request) = &message
-                && request.method == "inquello/routes/privateAuth" && payload.len() > 8192 {
-                let _ = writer.send(QueuedOutgoingMessage::new(OutgoingMessage::Error(OutgoingError {
-                    id: request.id.clone(), error: JSONRPCErrorError { code: -32600,
-                        message: "Private provider handoff exceeds its bound".into(), data: None },
-                }))).await;
+                && request.method == "inquello/routes/privateAuth"
+                && payload.len() > 8192
+            {
+                let _ = writer
+                    .send(QueuedOutgoingMessage::new(OutgoingMessage::Error(
+                        OutgoingError {
+                            id: request.id.clone(),
+                            error: JSONRPCErrorError {
+                                code: -32600,
+                                message: "Private provider handoff exceeds its bound".into(),
+                                data: None,
+                            },
+                        },
+                    )))
+                    .await;
                 return true;
             }
             enqueue_incoming_message(transport_event_tx, writer, connection_id, message).await

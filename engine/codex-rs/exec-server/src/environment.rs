@@ -147,6 +147,29 @@ pub enum EnvironmentObservedStatus {
 }
 
 impl EnvironmentManager {
+    /// Registers a host-owned, already initialized executor without recovery,
+    /// default-selection changes, or any local-environment fallback.
+    pub fn register_isolated_client(
+        &self,
+        environment_id: String,
+        client: crate::ExecServerClient,
+        task_root: codex_utils_path_uri::PathUri,
+    ) -> Result<(), ExecServerError> {
+        validate_environment_id(&environment_id)?;
+        if !client.is_isolated_stdio() {
+            return Err(ExecServerError::Protocol(
+                "private Task registration requires isolated stdio transport".into(),
+            ));
+        }
+        let client =
+            LazyRemoteExecServerClient::from_connected(client, self.http_client_factory.clone());
+        let mut environment =
+            Environment::remote_with_client(client, None, ScopedSkillsConfig::default());
+        // This trust marker exists only in controller memory. It is never
+        // populated from remote metadata, config, or a model-selected URI.
+        environment.private_task_root = Some(task_root);
+        self.insert_environment(environment_id, Arc::new(environment))
+    }
     /// Builds a test-only manager without configured sandbox helper paths.
     pub fn default_for_tests() -> Self {
         Self {
@@ -691,6 +714,7 @@ fn optional_environment_value(name: &str) -> Option<String> {
 /// paths used by filesystem helpers.
 #[derive(Clone)]
 pub struct Environment {
+    private_task_root: Option<codex_utils_path_uri::PathUri>,
     skills: ScopedSkillsConfig,
     remote_client: Option<LazyRemoteExecServerClient>,
     ready_info: Arc<ArcSwapOption<EnvironmentReadyInfo>>,
@@ -709,6 +733,7 @@ impl Environment {
     /// Builds a test-only local environment without configured sandbox helper paths.
     pub fn default_for_tests() -> Self {
         Self {
+            private_task_root: None,
             remote_client: None,
             skills: ScopedSkillsConfig::default(),
             ready_info: Arc::new(ArcSwapOption::empty()),
@@ -790,6 +815,7 @@ impl Environment {
         http_client_factory: HttpClientFactory,
     ) -> Self {
         Self {
+            private_task_root: None,
             remote_client: None,
             skills: ScopedSkillsConfig::default(),
             ready_info: Arc::new(ArcSwapOption::empty()),
@@ -826,6 +852,7 @@ impl Environment {
             Arc::new(RemoteFileSystem::new(client.clone()));
 
         Self {
+            private_task_root: None,
             remote_client: Some(client.clone()),
             skills,
             ready_info: Arc::new(ArcSwapOption::empty()),
@@ -845,6 +872,21 @@ impl Environment {
 
     pub fn is_remote(&self) -> bool {
         self.remote_client.is_some()
+    }
+
+    /// Private Tasks may use a local backend or the controller-registered,
+    /// isolated guest for this exact root. Generic remote registrations cannot
+    /// opt in, and the caller cannot substitute another cwd or Task root.
+    pub fn permits_private_task_root(
+        &self,
+        cwd: &codex_utils_path_uri::PathUri,
+        expected: &codex_utils_path_uri::PathUri,
+    ) -> bool {
+        cwd == expected
+            && match &self.private_task_root {
+                Some(root) => self.is_remote() && root == cwd,
+                None => !self.is_remote() && !cfg!(windows),
+            }
     }
 
     fn apply_error_report(
@@ -1203,6 +1245,27 @@ impl Environment {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn private_task_roots_reject_generic_remote_and_cross_task_selection() {
+        let root: codex_utils_path_uri::PathUri =
+            "file:///var/lib/inquello/tasks/scope/task".parse().unwrap();
+        let other: codex_utils_path_uri::PathUri = "file:///var/lib/inquello/tasks/scope/other"
+            .parse()
+            .unwrap();
+        let local = super::Environment::default_for_tests();
+        assert_eq!(
+            local.permits_private_task_root(&root, &root),
+            !cfg!(windows)
+        );
+        assert!(!local.permits_private_task_root(&other, &root));
+        let mut remote =
+            super::Environment::create_for_tests(Some("ws://127.0.0.1:1".into())).unwrap();
+        assert!(!remote.permits_private_task_root(&root, &root));
+        remote.private_task_root = Some(root.clone());
+        assert!(remote.permits_private_task_root(&root, &root));
+        assert!(!remote.permits_private_task_root(&other, &root));
+        assert!(!remote.permits_private_task_root(&other, &other));
+    }
     use std::collections::HashMap;
     use std::sync::Arc;
     use std::time::Duration;

@@ -8,7 +8,9 @@ use serde_json::json;
 
 pub struct InquelloProgressHandler;
 impl ToolExecutor<ToolInvocation> for InquelloProgressHandler {
-    fn tool_name(&self) -> ToolName { ToolName::plain("inquello_progress") }
+    fn tool_name(&self) -> ToolName {
+        ToolName::plain("inquello_progress")
+    }
     fn spec(&self) -> ToolSpec {
         let reference = json!({"type":"array","items":{"type":"string"}});
         let parameters = json!({"type":"object","additionalProperties":false,"required":["version","plan","results"],"properties":{
@@ -25,45 +27,82 @@ impl ToolExecutor<ToolInvocation> for InquelloProgressHandler {
             parameters:serde_json::from_value(parameters).expect("fixed progress tool schema"), output_schema:None,
         })
     }
-    fn handle<'a>(&'a self, invocation: ToolInvocation) -> codex_tools::ToolExecutorFuture<'a> where ToolInvocation:'a {
+    fn handle<'a>(&'a self, invocation: ToolInvocation) -> codex_tools::ToolExecutorFuture<'a>
+    where
+        ToolInvocation: 'a,
+    {
         Box::pin(async move {
-            let authorization = invocation.turn.extension_data.get::<crate::inquello_inference::TaskAuthorizationContext>()
-                .ok_or_else(|| FunctionCallError::RespondToModel("Private Task publication unavailable".into()))?;
-            let ToolPayload::Function { arguments } = &invocation.payload else { return Err(FunctionCallError::RespondToModel("Publication requires structured arguments".into())); };
-            let publication = Publication::parse(arguments).map_err(|message| FunctionCallError::RespondToModel(message.into()))?;
-            authorization.0.before_tool("inquello_progress", arguments, &invocation.call_id).await
-                .map_err(|_| FunctionCallError::RespondToModel("Current publication authority unavailable".into()))?;
-            let retained = serde_json::to_string(&publication).map_err(|_| FunctionCallError::Fatal("Publication unavailable".into()))?;
-            Ok(boxed_tool_output(FunctionToolOutput::from_text(retained, Some(true))))
+            let authorization = invocation
+                .turn
+                .extension_data
+                .get::<crate::inquello_inference::TaskAuthorizationContext>()
+                .ok_or_else(|| {
+                    FunctionCallError::RespondToModel("Private Task publication unavailable".into())
+                })?;
+            let ToolPayload::Function { arguments } = &invocation.payload else {
+                return Err(FunctionCallError::RespondToModel(
+                    "Publication requires structured arguments".into(),
+                ));
+            };
+            let publication = Publication::parse(arguments)
+                .map_err(|message| FunctionCallError::RespondToModel(message.into()))?;
+            authorization
+                .0
+                .before_tool("inquello_progress", arguments, &invocation.call_id)
+                .await
+                .map_err(|_| {
+                    FunctionCallError::RespondToModel(
+                        "Current publication authority unavailable".into(),
+                    )
+                })?;
+            let retained = serde_json::to_string(&publication)
+                .map_err(|_| FunctionCallError::Fatal("Publication unavailable".into()))?;
+            Ok(boxed_tool_output(FunctionToolOutput::from_text(
+                retained,
+                Some(true),
+            )))
         })
     }
 }
 impl CoreToolRuntime for InquelloProgressHandler {
-    fn is_builtin_control_tool(&self) -> bool { true }
+    fn is_builtin_control_tool(&self) -> bool {
+        true
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use inquello_protocol::inference::{validate_arguments,validate_schema};
+    use inquello_protocol::inference::{validate_arguments, validate_schema};
     #[test]
     fn exact_publisher_schema_and_arguments_fit_current_route() {
-        let ToolSpec::Function(tool)=InquelloProgressHandler.spec() else {panic!("function schema");};
-        let schema=serde_json::to_value(tool.parameters).expect("actual advertised schema");
-        validate_schema(&schema,0).expect("current Messages route accepts exact publisher schema");
-        let arguments=json!({"version":1,"plan":[{"id":"inspect","revision":1,"text":"Inspect fictional R02 approval","status":"pending","evidenceIds":[]}],"results":[{"id":"gap","kind":"gap","text":"Approval evidence not provided","evidenceIds":[]}]});
-        validate_arguments(&schema,&arguments,0).expect("model arguments accepted");
+        let ToolSpec::Function(tool) = InquelloProgressHandler.spec() else {
+            panic!("function schema");
+        };
+        let schema = serde_json::to_value(tool.parameters).expect("actual advertised schema");
+        validate_schema(&schema, 0).expect("current Messages route accepts exact publisher schema");
+        let arguments = json!({"version":1,"plan":[{"id":"inspect","revision":1,"text":"Inspect fictional R02 approval","status":"pending","evidenceIds":[]}],"results":[{"id":"gap","kind":"gap","text":"Approval evidence not provided","evidenceIds":[]}]});
+        validate_arguments(&schema, &arguments, 0).expect("model arguments accepted");
         Publication::parse(&arguments.to_string()).expect("native bounded publication accepted");
-        let mut malformed=arguments;malformed["results"][0]["basisId"]=json!(null);
-        assert!(validate_arguments(&schema,&malformed,0).is_err(),"omit optional basis; no unsupported nullable union");
+        let mut malformed = arguments;
+        malformed["results"][0]["basisId"] = json!(null);
+        assert!(
+            validate_arguments(&schema, &malformed, 0).is_err(),
+            "omit optional basis; no unsupported nullable union"
+        );
     }
     #[test]
     fn exact_existing_question_schema_fits_current_route() {
-        let ToolSpec::Function(tool)=crate::tools::handlers::RequestUserInputHandler {
-            available_modes:vec![codex_protocol::config_types::ModeKind::Default],
-        }.spec() else {panic!("function schema");};
-        let schema=serde_json::to_value(tool.parameters).expect("actual advertised question schema");
-        validate_schema(&schema,0).expect("current Messages route accepts exact existing question schema");
+        let ToolSpec::Function(tool) = crate::tools::handlers::RequestUserInputHandler {
+            available_modes: vec![codex_protocol::config_types::ModeKind::Default],
+        }
+        .spec() else {
+            panic!("function schema");
+        };
+        let schema =
+            serde_json::to_value(tool.parameters).expect("actual advertised question schema");
+        validate_schema(&schema, 0)
+            .expect("current Messages route accepts exact existing question schema");
         validate_arguments(&schema,&json!({"questions":[{"id":"audit_scope","header":"Scope","question":"Report findings without edits?","options":[{"label":"Review only","description":"Report observations"},{"label":"Clarify","description":"Wait for instructions"}]}]}),0).expect("exact native question arguments");
     }
 }

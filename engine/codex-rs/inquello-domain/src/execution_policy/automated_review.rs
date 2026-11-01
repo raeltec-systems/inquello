@@ -39,32 +39,75 @@ pub struct AutomatedReviewChange {
     pub attribution: ReviewAttribution,
 }
 pub trait AutomatedReviewStore: PermissionStore {
-    fn commit_automated_review(&self, change: AutomatedReviewChange)
-        -> impl Future<Output = Result<(), StoreError>> + Send;
+    fn commit_automated_review(
+        &self,
+        change: AutomatedReviewChange,
+    ) -> impl Future<Output = Result<(), StoreError>> + Send;
 }
 /// Runtime-only command: caller owns unforgeable invocation and holds its
 /// authority/cancellation guard through this atomic store commit. No RPC maps
 /// actor_ref or a supplied verdict to this entry point.
-pub async fn apply_automated_review<S: AutomatedReviewStore, C: Clock>(store: &S, clock: &C,
-    actor: Actor, request_id: PermissionRequestId, current: &CommandEvaluation,
-    verdict: ReviewerVerdict, attribution: ReviewAttribution) -> Result<PermissionRequestOutcome, DomainError> {
+pub async fn apply_automated_review<S: AutomatedReviewStore, C: Clock>(
+    store: &S,
+    clock: &C,
+    actor: Actor,
+    request_id: PermissionRequestId,
+    current: &CommandEvaluation,
+    verdict: ReviewerVerdict,
+    attribution: ReviewAttribution,
+) -> Result<PermissionRequestOutcome, DomainError> {
     let request = permission_request(store, actor, &request_id.to_string()).await?;
     let now = clock.now();
-    if request.status(now) != RequestStatus::Pending || request.evaluation.command != current.command
-        || request.evaluation.destination != current.destination { return Err(DomainError::RequestNotPending); }
-    if uuid::Uuid::parse_str(&attribution.invocation_id).is_err() || uuid::Uuid::parse_str(&attribution.attempt_id).is_err()
-        || attribution.action_digest.len() != 64 { return Err(DomainError::InvalidCommand("invalid review attribution".into())); }
-    let outcome = match bounded_reviewer_verdict(current, verdict) { ReviewerVerdict::Allow => PermissionOutcome::Allowed, ReviewerVerdict::Deny => PermissionOutcome::Denied };
-    let decision = PermissionDecision { outcome, actor_kind: DeciderKind::AutomatedReviewer,
-        actor_ref: attribution.invocation_id.clone(), decided_at: now };
+    if request.status(now) != RequestStatus::Pending
+        || request.evaluation.command != current.command
+        || request.evaluation.destination != current.destination
+    {
+        return Err(DomainError::RequestNotPending);
+    }
+    if uuid::Uuid::parse_str(&attribution.invocation_id).is_err()
+        || uuid::Uuid::parse_str(&attribution.attempt_id).is_err()
+        || attribution.action_digest.len() != 64
+    {
+        return Err(DomainError::InvalidCommand(
+            "invalid review attribution".into(),
+        ));
+    }
+    let outcome = match bounded_reviewer_verdict(current, verdict) {
+        ReviewerVerdict::Allow => PermissionOutcome::Allowed,
+        ReviewerVerdict::Deny => PermissionOutcome::Denied,
+    };
+    let decision = PermissionDecision {
+        outcome,
+        actor_kind: DeciderKind::AutomatedReviewer,
+        actor_ref: attribution.invocation_id.clone(),
+        decided_at: now,
+    };
     let receipt = PermissionReceipt { operation_id: OperationId::parse(&format!("review-{}", attribution.invocation_id))?,
         principal_id: actor.principal_id, command: DECIDE_PERMISSION_COMMAND.into(), request_id,
         expected_revision: Revision::new(1), resulting_revision: Revision::new(2),
         request: serde_json::json!({"request_id":request_id.to_string(),"outcome":outcome.as_str(),
             "actor_kind":"automated_reviewer","actor_ref":attribution.invocation_id,"review":attribution.to_value()}).to_string(),
         status: ReceiptStatus::Applied, recorded_at: now };
-    store.commit_automated_review(AutomatedReviewChange { request: request.clone(), decision: decision.clone(), receipt: receipt.clone(), attribution }).await
-        .map_err(|error| match error { StoreError::RevisionConflict { .. } | StoreError::DuplicateOperation { .. } => DomainError::RequestNotPending,
-            error => DomainError::Store(error) })?;
-    Ok(PermissionRequestOutcome { receipt, request: PermissionRequest { decision: Some(decision), ..request }, replayed: false })
+    store
+        .commit_automated_review(AutomatedReviewChange {
+            request: request.clone(),
+            decision: decision.clone(),
+            receipt: receipt.clone(),
+            attribution,
+        })
+        .await
+        .map_err(|error| match error {
+            StoreError::RevisionConflict { .. } | StoreError::DuplicateOperation { .. } => {
+                DomainError::RequestNotPending
+            }
+            error => DomainError::Store(error),
+        })?;
+    Ok(PermissionRequestOutcome {
+        receipt,
+        request: PermissionRequest {
+            decision: Some(decision),
+            ..request
+        },
+        replayed: false,
+    })
 }

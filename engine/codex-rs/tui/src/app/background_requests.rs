@@ -59,6 +59,8 @@ impl App {
                         client_registration: None,
                         scopes: None,
                         timeout_secs: None,
+                        expected_plugin_id: None,
+                        mcp_admission: None,
                     },
                 })
                 .await
@@ -797,6 +799,8 @@ pub(super) async fn fetch_all_mcp_server_statuses(
                     detail: Some(detail),
                     thread_id: thread_id.clone(),
                     server_name: None,
+                    expected_plugin_id: None,
+                    mcp_admission: None,
                 },
             })
             .await
@@ -1217,6 +1221,8 @@ pub(super) async fn fetch_plugin_install(
                 remote_marketplace_name,
                 install_attempt_id: None,
                 plugin_name,
+                skip_authentication: false,
+                mcp_admission: None,
             },
         })
         .await

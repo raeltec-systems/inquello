@@ -50,8 +50,15 @@ fn task_id() -> TaskId {
 }
 
 fn folder() -> TaskFolder {
-    TaskFolder::new(PathBuf::from(format!("/data/tasks/{TASK}")), task_id())
-        .unwrap_or_else(|error| panic!("{error}"))
+    TaskFolder::new(task_path(), task_id()).unwrap_or_else(|error| panic!("{error}"))
+}
+
+fn task_path() -> PathBuf {
+    if cfg!(windows) {
+        PathBuf::from(format!("D:/data/tasks/{TASK}"))
+    } else {
+        PathBuf::from(format!("/data/tasks/{TASK}"))
+    }
 }
 
 fn rule() -> SettingSource {
@@ -195,10 +202,7 @@ fn a_standard_task_reaches_its_folder_output_and_read_only_system() {
     );
     assert_eq!(
         profile.writable_roots(),
-        vec![
-            PathBuf::from(format!("/data/tasks/{TASK}")),
-            PathBuf::from(format!("/data/tasks/{TASK}/output")),
-        ]
+        vec![task_path(), task_path().join("output"),]
     );
     assert_eq!(
         profile.network_allowlist(),
@@ -302,12 +306,13 @@ fn a_device_limited_to_read_only_bounds_the_profile_too() {
 
 #[test]
 fn the_task_folder_must_be_absolute_normalised_and_named_after_the_task() {
+    let root = if cfg!(windows) { "D:/data" } else { "/data" };
     for path in [
         format!("data/tasks/{TASK}"),
-        format!("/data/../tasks/{TASK}"),
-        format!("/data/./tasks/{TASK}"),
-        "/data/tasks/another".to_string(),
-        format!("/data/tasks/{TASK}/output"),
+        format!("{root}/../tasks/{TASK}"),
+        format!("{root}/./tasks/{TASK}"),
+        format!("{root}/tasks/another"),
+        format!("{root}/tasks/{TASK}/output"),
     ] {
         assert!(
             TaskFolder::new(PathBuf::from(&path), task_id()).is_err(),
@@ -316,8 +321,5 @@ fn the_task_folder_must_be_absolute_normalised_and_named_after_the_task() {
     }
     let folder = folder();
     assert_eq!(folder.task_id(), task_id());
-    assert_eq!(
-        folder.output(),
-        PathBuf::from(format!("/data/tasks/{TASK}/{TASK_OUTPUT_DIR}"))
-    );
+    assert_eq!(folder.output(), task_path().join(TASK_OUTPUT_DIR));
 }

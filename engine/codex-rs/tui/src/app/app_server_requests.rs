@@ -197,6 +197,13 @@ impl PendingAppServerRequests {
             }
             ServerRequest::DynamicToolCall { .. } => None,
             ServerRequest::ChatgptAuthTokensRefresh { .. } => None,
+            ServerRequest::InquelloContextAuthorize { request_id, .. }
+            | ServerRequest::InquelloTaskAuthority { request_id, .. } => {
+                Some(UnsupportedAppServerRequest {
+                    request_id: request_id.clone(),
+                    message: "Inquello authority is not available in TUI.".to_string(),
+                })
+            }
             ServerRequest::AttestationGenerate { request_id, .. } => {
                 Some(UnsupportedAppServerRequest {
                     request_id: request_id.clone(),
@@ -529,6 +536,8 @@ impl PendingAppServerRequests {
             }
             ServerRequest::ChatgptAuthTokensRefresh { .. } => None,
             ServerRequest::DynamicToolCall { .. }
+            | ServerRequest::InquelloContextAuthorize { .. }
+            | ServerRequest::InquelloTaskAuthority { .. }
             | ServerRequest::AttestationGenerate { .. }
             | ServerRequest::CurrentTimeRead { .. }
             | ServerRequest::ApplyPatchApproval { .. }

@@ -1,6 +1,6 @@
 use super::*;
-use codex_app_server_protocol::Model;
 use crate::model_catalog::ModelCatalog;
+use codex_app_server_protocol::Model;
 use codex_config::ConfigPathContext;
 use codex_core::config::permission_profile_catalog;
 use codex_hooks::HookListEntryHandler;
@@ -176,24 +176,72 @@ impl CatalogRequestProcessor {
     }
 
     /// Native selected-model capabilities; never accept renderer-provided alternatives.
-    pub(crate) async fn inquello_usage_model(&self, model: &str) -> Result<Model, JSONRPCErrorError> {
-        let (config, manager) = self.model_catalog.current().await.map_err(|err| config_load_error(&err))?;
+    pub(crate) async fn inquello_usage_model(
+        &self,
+        model: &str,
+    ) -> Result<Model, JSONRPCErrorError> {
+        let (config, manager) = self
+            .model_catalog
+            .current()
+            .await
+            .map_err(|err| config_load_error(&err))?;
         // Inquello's selected route retains the startup provider. Do not derive
         // its choices from a newly configured, different provider's catalog.
         if config.model_provider != self.config.model_provider {
-            return Err(invalid_request("Provider configuration changed; restart and explicitly correct the Task route/settings"));
+            return Err(invalid_request(
+                "Provider configuration changed; restart and explicitly correct the Task route/settings",
+            ));
         }
-        let response = self.list_models(ModelListParams { cursor: None, limit: None, include_hidden: Some(true) }, config, manager).await?;
-        response.data.into_iter().find(|m| m.model == model)
-            .ok_or_else(|| invalid_request("Selected model capabilities unavailable; refresh configuration"))
+        let response = self
+            .list_models(
+                ModelListParams {
+                    cursor: None,
+                    limit: None,
+                    include_hidden: Some(true),
+                },
+                config,
+                manager,
+            )
+            .await?;
+        response
+            .data
+            .into_iter()
+            .find(|m| m.model == model)
+            .ok_or_else(|| {
+                invalid_request("Selected model capabilities unavailable; refresh configuration")
+            })
     }
 
     /// Candidate preflight is read-only: never refresh a model catalog online.
-    pub(crate) async fn inquello_cached_usage_model(&self,model:&str)->Result<Model,JSONRPCErrorError> {
-        let (config,manager)=self.model_catalog.current().await.map_err(|err|config_load_error(&err))?;
-        if config.model_provider!=self.config.model_provider {return Err(invalid_request("Selected provider catalog changed"));}
-        let presets=self.model_catalog.list_models_from_snapshot(config,manager,codex_models_manager::manager::RefreshStrategy::Offline).await.map_err(|err|config_load_error(&err))?;
-        supported_models(presets,true).into_iter().find(|m|m.model==model).ok_or_else(||invalid_request("Cached selected-model capabilities unavailable; no provider request made"))
+    pub(crate) async fn inquello_cached_usage_model(
+        &self,
+        model: &str,
+    ) -> Result<Model, JSONRPCErrorError> {
+        let (config, manager) = self
+            .model_catalog
+            .current()
+            .await
+            .map_err(|err| config_load_error(&err))?;
+        if config.model_provider != self.config.model_provider {
+            return Err(invalid_request("Selected provider catalog changed"));
+        }
+        let presets = self
+            .model_catalog
+            .list_models_from_snapshot(
+                config,
+                manager,
+                codex_models_manager::manager::RefreshStrategy::Offline,
+            )
+            .await
+            .map_err(|err| config_load_error(&err))?;
+        supported_models(presets, true)
+            .into_iter()
+            .find(|m| m.model == model)
+            .ok_or_else(|| {
+                invalid_request(
+                    "Cached selected-model capabilities unavailable; no provider request made",
+                )
+            })
     }
 
     pub(crate) async fn model_list(
