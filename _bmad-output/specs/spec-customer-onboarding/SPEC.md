@@ -41,7 +41,9 @@ A customer cannot currently reach the private desktop workflow without operator-
 - Reuse current PKCE and membership services plus selected T3 presentation patterns with exact provenance/MIT notices, not T3's backend or Clerk authority wholesale.
 - Use plausible fictional names while retaining test classification in metadata. No accounts, invitations, trust-store changes or paid requests are authorized merely by spec/build work.
 - Owner-approved policy: verified users may create a new workspace and own only that workspace; owners invite by email, requiring the correct verified identity without automatic email-based account linking.
-- Select the hosted identity provider and approve the build spec before implementing provider-dependent semantics.
+- Auth0 hosted OIDC is selected, subject to native callback compatibility validation. Existing Inquello workspace authority remains independent of vendor Organizations. No vendor account or paid plan is authorized.
+- Grant transactions require fresh server-validated verified-email proof; local display claims or stale sessions are insufficient. Validate discovery/JWKS rotation and exact issuer/subject without email auto-linking.
+- Approve the build spec before implementation.
 
 ## Non-goals
 
@@ -51,7 +53,3 @@ A customer cannot currently reach the private desktop workflow without operator-
 ## Success signal
 
 From a fresh desktop profile, two fictional people use the actual onboarding controls to establish and join a workspace, see correct roles, and reach private work. Duplicate/revoked/interrupted cases and cross-user Task reads remain safe. Production signup and delivery are separately verified against the selected deployed services.
-
-## Open Questions
-
-1. **Identity provider:** Which hosted OIDC service owns real signup, recovery and verified-email claims? The owner requested provider evaluation; no vendor is selected. Signup remains separate from inference authentication.

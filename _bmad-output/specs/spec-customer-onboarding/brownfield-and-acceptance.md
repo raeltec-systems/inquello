@@ -13,11 +13,11 @@
 
 ## Proposed implementation boundaries
 
-One cohesive customer-onboarding goal, proposed Story 1.31. The owner approved verified-user self-service creation and email invitations with verified-recipient acceptance and no automatic account linking. Provider choice and the build checkpoint remain pending.
+One cohesive customer-onboarding goal, proposed Story 1.31. The owner approved verified-user self-service creation and email invitations with verified-recipient acceptance and no automatic account linking. Auth0 hosted OIDC is selected; the build checkpoint remains pending. The compatibility pilot must establish the exact permitted loopback callback registration without relaxing state, PKCE, issuer or origin checks. No vendor setup is authorized.
 
 A workspace-create transaction must authenticate its caller, apply the approved creation eligibility and server-owned initial policy, create exactly one initial owner membership, and retain an operation receipt. It cannot accept caller-defined grants or elevate an existing workspace. No auto-joining by email domain.
 
-Invite discovery must reveal only invitations already bound to the authenticated recipient. For approved email invitations, specify verified claim provenance, normalization, expiry, token hashing/one-time redemption, wrong-account behavior, delivery retry and no cross-issuer linking before implementation. Delivery success is distinct from membership acceptance. Do not expose a global account search.
+Invite discovery must reveal only invitations already bound to the authenticated recipient. For approved email invitations, specify verified claim provenance, normalization, expiry, token hashing/one-time redemption, wrong-account behavior, delivery retry and no cross-issuer linking before implementation. Verified-email eligibility must be fresh at grant time, with bounded proof age and safe reauthentication; local refresh must not perpetuate old issuer proof indefinitely. Auth0 discovery/JWKS must use exact issuer trust, bounded caching/unknown-key refresh and rotation/revocation tests. Delivery success is distinct from membership acceptance. Do not expose a global account search.
 
 Reuse policy-defined roles; membership management is distinct from content authority. New workspace defaults must not enable broader tools, sharing/export, automatic permission review or real-data model processing. Preserve the last eligible administrator and revoke cached/in-flight authority on removal.
 

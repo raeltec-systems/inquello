@@ -18,7 +18,7 @@ context:
 
 **Approach:** Provide one complete signup/sign-in, create-or-join, invitation, membership and private-work entry journey using existing identity and authorization services. This is new scope beyond Story 1.11's deliberate operator-only bootstrap, not a correction to its historical acceptance.
 
-**Owner decisions (2026-11-01):** Verified users may create and own a new workspace only. Hosted identity owns signup/login/recovery. Owners invite colleagues by email; acceptance requires the correct verified identity, never automatic linking by matching email text. Provider selection remains pending evaluation.
+**Owner decisions (2026-11-01):** Verified users may create and own a new workspace only. Hosted identity owns signup/login/recovery. Owners invite colleagues by email; acceptance requires the correct verified identity, never automatic linking by matching email text. Auth0 hosted OIDC is selected, with a native callback compatibility pilot before production readiness; vendor setup is separately authorized.
 
 ## Boundaries & Constraints
 
@@ -38,10 +38,6 @@ context:
 
 </frozen-after-approval>
 
-## Open Questions
-
-1. **Signup provider:** Which hosted OIDC provider supplies signup, recovery and verified-email claims? Owner requested evaluation; no vendor is selected. The repository's issuer is synthetic only.
-
 ## Code Map
 
 - `engine/codex-rs/inquello-service/src/{oidc,login,sessions,admin,workspaces,workspace_commands,routes}.rs`: reuse identity validation, transactional bootstrap, receipts and revocation; no HTTP create/discovery currently.
@@ -52,7 +48,7 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `inquello-service/src/{oidc,login}.rs`: implement only the approved identity/recipient proof; preserve signature, nonce and issuer checks.
+- [ ] `inquello-service/src/{oidc,login}.rs`: Auth0-compatible verified-email proof with bounded freshness and JWKS rotation; preserve signature, nonce and exact issuer checks.
 - [ ] `inquello-service/{src,migrations}/` and `inquello-protocol/src/`: guarded creation, recipient discovery and membership contracts; atomic receipts, safe retries and negative races.
 - [ ] `desktop/src/main/identity/`, `main/security/operations.ts`, `preload/`: expose authorized onboarding operations without tokens or general RPC.
 - [ ] `desktop/src/renderer/`: accessible account/workspace/invitation/team flow and recovery states using current branded primitives.
@@ -67,6 +63,10 @@ context:
 - Given missing production issuer/delivery configuration, when the journey cannot continue, then the UI explains the dependency without claiming signup or delivery succeeded.
 
 ## Implementation Notes
+
+- No unresolved product choices. Validate ephemeral loopback registration; never weaken callback/PKCE checks to fit a provider.
+- Migrations add invitation/proof/receipt state; use disposable databases first. Vendor accounts, delivery, trust and production mutations require separate approval.
+- Changes span service/protocol, named desktop IPC and onboarding/team UI; no password backend or provider Organizations dependency.
 
 ## Spec Change Log
 
