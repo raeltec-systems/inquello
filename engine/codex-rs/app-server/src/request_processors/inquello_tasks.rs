@@ -42,6 +42,67 @@ fn recovery_binding_matches(
     })
 }
 
+// A changed observation is not a revoked session. Neither case may publish the
+// old payload, but only genuine authority/binding loss invalidates private scope.
+#[derive(Clone, Copy, Debug)]
+enum ProgressReadGateSite {
+    BeforeCache,
+    BeforeSnapshot,
+    FinalDisclosure,
+}
+
+fn progress_read_gate_diagnostic(site: ProgressReadGateSite, snapshot_changed: bool) {
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    eprintln!(
+        "[inquello] progress-read gate: {site:?}/{}",
+        if snapshot_changed {
+            "snapshot"
+        } else {
+            "authority"
+        }
+    );
+    #[cfg(not(all(feature = "inference-fixtures", debug_assertions)))]
+    let _ = (site, snapshot_changed);
+}
+
+fn check_progress_read_binding(
+    site: ProgressReadGateSite,
+    session_current: bool,
+    actor_current: bool,
+    policy_current: bool,
+    expected: &TaskRunBinding,
+    current: Option<&TaskRunBinding>,
+) -> Result<(), JSONRPCErrorError> {
+    let current = current.filter(|current| {
+        session_current
+            && actor_current
+            && policy_current
+            && current.runtime_id == expected.runtime_id
+            && current.task_id == expected.task_id
+            && current.principal_id == expected.principal_id
+            && current.workspace_id == expected.workspace_id
+            && current.thread_id == expected.thread_id
+            && current.route_id == expected.route_id
+            && current.configuration_revision == expected.configuration_revision
+            && current.choices == expected.choices
+    });
+    let Some(current) = current else {
+        progress_read_gate_diagnostic(site, false);
+        return Err(refusal(
+            "stale",
+            "Private progress authority or binding changed",
+        ));
+    };
+    if current != expected {
+        progress_read_gate_diagnostic(site, true);
+        return Err(refusal(
+            "stale_snapshot",
+            "Task observation changed before progress disclosure; read current progress",
+        ));
+    }
+    Ok(())
+}
+
 impl InquelloRequestProcessor {
     pub(crate) fn with_task_config(mut self, config: super::super::ConfigRequestProcessor) -> Self {
         self.task_config = Some(config);
@@ -2220,6 +2281,136 @@ mod tests {
     const PRINCIPAL: &str = "11111111-1111-4111-8111-111111111111";
     const WORKSPACE: &str = "5d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e";
     const CONNECTION: ConnectionId = ConnectionId(81);
+    fn progress_binding_fixture() -> TaskRunBinding {
+        TaskRunBinding {
+            operation_id: "operation-1".into(),
+            task_id: "task-1".into(),
+            run_id: "run-1".into(),
+            principal_id: PRINCIPAL.into(),
+            workspace_id: WORKSPACE.into(),
+            runtime_id: "runtime-1".into(),
+            thread_id: Some("thread-1".into()),
+            turn_id: Some("turn-1".into()),
+            status: TaskRunStatus::Running,
+            route_id: "claude-api-key".into(),
+            configuration_revision: 1,
+            choices: usage::Choices {
+                reasoning: "default".into(),
+                speed: "default".into(),
+            },
+            setup_failure: None,
+        }
+    }
+
+    #[test]
+    fn progress_read_status_and_run_evolution_refuse_only_the_snapshot() {
+        let expected = progress_binding_fixture();
+        assert!(
+            check_progress_read_binding(
+                ProgressReadGateSite::BeforeSnapshot,
+                true,
+                true,
+                true,
+                &expected,
+                Some(&expected)
+            )
+            .is_ok()
+        );
+        let mut completed = expected.clone();
+        completed.status = TaskRunStatus::Completed;
+        let mut resumed = expected.clone();
+        resumed.operation_id = "operation-2".into();
+        resumed.run_id = "run-2".into();
+        resumed.turn_id = Some("turn-2".into());
+        for current in [completed, resumed] {
+            let error = check_progress_read_binding(
+                ProgressReadGateSite::BeforeSnapshot,
+                true,
+                true,
+                true,
+                &expected,
+                Some(&current),
+            )
+            .unwrap_err();
+            assert_eq!(error.data.unwrap()["inquello"]["kind"], "stale_snapshot");
+        }
+    }
+
+    #[test]
+    fn progress_read_authority_loss_is_strict_even_when_the_snapshot_changed() {
+        let expected = progress_binding_fixture();
+        let mut current = expected.clone();
+        current.status = TaskRunStatus::Completed;
+        for (session, actor, policy) in [
+            (false, true, true),
+            (true, false, true),
+            (true, true, false),
+        ] {
+            let error = check_progress_read_binding(
+                ProgressReadGateSite::BeforeSnapshot,
+                session,
+                actor,
+                policy,
+                &expected,
+                Some(&current),
+            )
+            .unwrap_err();
+            assert_eq!(error.data.unwrap()["inquello"]["kind"], "stale");
+        }
+        let error = check_progress_read_binding(
+            ProgressReadGateSite::BeforeSnapshot,
+            true,
+            true,
+            true,
+            &expected,
+            None,
+        )
+        .unwrap_err();
+        assert_eq!(error.data.unwrap()["inquello"]["kind"], "stale");
+    }
+
+    #[test]
+    fn progress_read_foreign_or_changed_authorization_binding_is_not_snapshot_churn() {
+        let expected = progress_binding_fixture();
+        let mut cases = Vec::new();
+        let mut value = expected.clone();
+        value.runtime_id = "other-runtime".into();
+        cases.push(value);
+        let mut value = expected.clone();
+        value.task_id = "other-task".into();
+        cases.push(value);
+        let mut value = expected.clone();
+        value.principal_id = "other-principal".into();
+        cases.push(value);
+        let mut value = expected.clone();
+        value.workspace_id = "other-workspace".into();
+        cases.push(value);
+        let mut value = expected.clone();
+        value.thread_id = Some("other-thread".into());
+        cases.push(value);
+        let mut value = expected.clone();
+        value.route_id = "codex-responses".into();
+        cases.push(value);
+        let mut value = expected.clone();
+        value.configuration_revision = 2;
+        cases.push(value);
+        let mut value = expected.clone();
+        value.choices.reasoning = "high".into();
+        cases.push(value);
+        for current in cases {
+            let error = check_progress_read_binding(
+                ProgressReadGateSite::BeforeSnapshot,
+                true,
+                true,
+                true,
+                &expected,
+                Some(&current),
+            )
+            .unwrap_err();
+            assert_eq!(error.data.unwrap()["inquello"]["kind"], "stale");
+        }
+    }
+
     fn policy() -> InquelloWorkspaceExecutionPolicy {
         InquelloWorkspaceExecutionPolicy {
             workspace_id: WORKSPACE.into(),
@@ -3801,18 +3992,14 @@ impl InquelloRequestProcessor {
             .await
             .map_err(domain_error)?
             .ok_or_else(|| refusal("not_found", "Private binding disappeared"))?;
-        if session.cancellation.is_cancelled()
-            || self.actor(connection)? != actor
-            || latest.run_id != run.run_id
-            || latest.turn_id != run.turn_id
-            || latest.thread_id != run.thread_id
-            || !policy_current
-        {
-            return Err(refusal(
-                "stale",
-                "Private binding changed before progress disclosure",
-            ));
-        }
+        check_progress_read_binding(
+            ProgressReadGateSite::BeforeCache,
+            !session.cancellation.is_cancelled(),
+            self.actor(connection)? == actor,
+            policy_current,
+            &run,
+            Some(&latest),
+        )?;
         if !params.activity_only {
             let mut cache = self.task_progress_cache.lock().await;
             cache.retain(|entry| entry.key != key && !entry.cancellation.is_cancelled());
@@ -3841,15 +4028,14 @@ impl InquelloRequestProcessor {
             .find_task_current_run(actor.principal_id, &params.task_id)
             .await
             .map_err(domain_error)?;
-        if session.cancellation.is_cancelled()
-            || self.actor(connection)? != actor
-            || final_run.as_ref() != Some(&latest)
-        {
-            return Err(refusal(
-                "stale",
-                "Task incarnation changed before snapshot publication",
-            ));
-        }
+        check_progress_read_binding(
+            ProgressReadGateSite::BeforeSnapshot,
+            !session.cancellation.is_cancelled(),
+            self.actor(connection)? == actor,
+            policy_current,
+            &latest,
+            final_run.as_ref(),
+        )?;
         // No cached live activity survives listener replacement, completion or
         // a changed loaded runtime while the authority checks above awaited.
         let final_live = self.live_progress_commands(threads, &latest).await?;
@@ -3934,15 +4120,21 @@ impl InquelloRequestProcessor {
             .find_task_current_run(actor.principal_id, &params.task_id)
             .await
             .map_err(domain_error)?;
-        if session.cancellation.is_cancelled()
-            || self.actor(connection)? != actor
-            || final_binding.as_ref() != Some(&latest)
-        {
+        if session.cancellation.is_cancelled() || self.actor(connection)? != actor {
+            progress_read_gate_diagnostic(ProgressReadGateSite::FinalDisclosure, false);
             return Err(refusal(
                 "session_changed",
                 "Private authority changed before progress disclosure",
             ));
         }
+        check_progress_read_binding(
+            ProgressReadGateSite::FinalDisclosure,
+            true,
+            true,
+            final_policy_current,
+            &latest,
+            final_binding.as_ref(),
+        )?;
         Ok(Some(snapshot.into()))
     }
 }

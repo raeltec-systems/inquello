@@ -2466,6 +2466,41 @@ fn controlled_paid_body_refuses_unbounded_or_nontext_requests() {
     changed = request.clone();
     changed.service_tier = Some("priority".into());
     assert!(super::validate_paid_request(&changed).is_err());
+
+    changed = request.clone();
+    changed.access_programs = Some(codex_protocol::turn_input::CyberAccessProgram::Standard.into());
+    assert!(super::validate_paid_request(&changed).is_err());
+
+    changed = request.clone();
+    changed.tools = Some(codex_api::ResponsesApiTools::from(std::sync::Arc::<
+        serde_json::value::RawValue,
+    >::from(
+        serde_json::value::RawValue::from_string("[]".into()).expect("empty tools"),
+    )));
+    assert!(super::validate_paid_request(&changed).is_ok());
+    changed.tools = Some(codex_api::ResponsesApiTools::from(std::sync::Arc::<
+        serde_json::value::RawValue,
+    >::from(
+        serde_json::value::RawValue::from_string(
+            serde_json::json!([{
+                "type": "function", "name": "fictional_forbidden_tool",
+                "description": "Offline fixture only",
+                "parameters": {"type": "object", "properties": {}}
+            }])
+            .to_string(),
+        )
+        .expect("nonempty tools"),
+    )));
+    assert!(super::validate_paid_request(&changed).is_err());
+
+    changed = request.clone();
+    changed.input = vec![request.input[0].clone(); 64];
+    assert!(serde_json::to_vec(&changed).unwrap().len() < 32768);
+    assert!(super::validate_paid_request(&changed).is_ok());
+    changed.input.push(request.input[0].clone());
+    // Isolate the item-count guard: this invalid 65-item body is still below the byte cap.
+    assert!(serde_json::to_vec(&changed).unwrap().len() < 32768);
+    assert!(super::validate_paid_request(&changed).is_err());
 }
 
 #[tokio::test]
