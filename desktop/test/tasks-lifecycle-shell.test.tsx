@@ -95,3 +95,13 @@ it('retains the focused Stop while interruption is pending even if completion ar
  await waitFor(()=>expect(screen.queryByRole('button',{name:'Stop'})).toBeNull());
  expect(screen.queryByText('Work is not running.')).toBeNull();
 });
+
+it('offers deliberate resend after a running-to-completed race without replaying the preserved draft',async()=>{
+ const x=fixture();x.api.steer.mockResolvedValue({ok:false,code:'refused',reason:'That turn has ended. Your instruction is preserved; no new turn was started.'} as never);
+ render(<x.Controls/>);await screen.findByRole('button',{name:'Stop'});fireEvent.click(screen.getByRole('button',{name:'Send'}));
+ await screen.findByText(/That turn has ended/);expect(x.api.resume).not.toHaveBeenCalled();
+ await x.update({...base,status:'completed'});await screen.findByText(/Press Send again to start a follow-up/);
+ expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('Exclude cancelled invoices');expect(x.api.resume).not.toHaveBeenCalled();
+ expect(document.querySelector('[data-task-controls="task-1"]')?.getAttribute('data-task-controls-status')).toBe('completed');
+ fireEvent.click(screen.getByRole('button',{name:'Send'}));await waitFor(()=>expect(x.api.resume).toHaveBeenCalledTimes(1));expect(x.api.steer).toHaveBeenCalledTimes(1);
+});

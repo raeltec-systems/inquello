@@ -61,10 +61,10 @@ export function TaskLifecycle({taskId,workspaceId,draft,operationIds=()=>crypto.
  };
  const stopPending=busy==='stop'||pending.current?.kind==='stop'||view?.lifecycleOperations?.some(op=>op.kind==='stop'&&['reserved','dispatching','uncertain'].includes(op.status));
  const unavailable=busy?'Waiting for the current operation.':pending.current?'Reconciling the current operation.':!view?'Current Task access is unavailable.':!running&&!completed?'Use Resume to continue interrupted work.':undefined;
- return <section aria-label="Task controls">
+ return <section aria-label="Task controls" data-task-controls={taskId} data-task-controls-status={view?.status ?? 'unavailable'}>
   {view?.status==='cancelled'&&<p role="status">{interruptionSummary(view)}</p>}
   {view?.status==='uncertain'&&<p role="status">Work was interrupted or its outcome is uncertain. Resume is explicit; work does not restart automatically.</p>}
-  {notice&&<p role="status">{notice}</p>}
+  {notice&&<p role="status">{notice}{completed&&draft.value.trim()&&notice==='That turn has ended. Your instruction is preserved; no new turn was started.'?' Press Send again to start a follow-up.':''}</p>}
   {resumable&&<Button onPress={()=>void execute('resume')} disabledReason={busy?'Reconciling the current operation.':undefined}>Resume</Button>}
   <Composer draft={draft} routeLabel={<TaskRouteLabel taskId={taskId} workspaceId={workspaceId}/>} onSend={()=>void execute(completed?'resume':'steer')} disabledReason={unavailable} onStop={view&&(!completed||stopPending)?()=>void execute('stop'):undefined} stopDisabledReason={stopPending?'Waiting for interruption confirmation.':!running?'Work is not running.':undefined}/>
  </section>;

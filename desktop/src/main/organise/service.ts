@@ -426,13 +426,39 @@ export class OrganiseService {
       if (!this.options.identity.principalId()) return fail('signed-out', ORGANISE_REASONS.signedOut);
       if (!this.workspaceAllowed(workspaceId)) return fail('not-found', ORGANISE_REASONS.unknownWorkspace);
     }
-    return this.call<InquelloWorkspaceTreeResponse, WorkspaceTreeView>('inquello/workspace/tree', { workspaceId }, (response) => ({
-      workspaceId: String(response.workspaceId),
-      engagements: response.engagements.map(engagementView),
-      folders: response.folders.map(folderView),
-      tasks: response.tasks.map(taskView),
-      unavailableTasks: unavailableTaskViews((response as InquelloWorkspaceTreeResponse & {unavailableTasks?:unknown}).unavailableTasks),
-    }));
+    // Retry only an explicitly rejected read snapshot, under identical fresh
+    // membership. Never retry mutations, revive a session or reuse cached authority.
+    const request=Object.freeze({workspaceId}),principal=this.options.identity.principalId(),instance=this.options.runtime.instance(),generation=this.authorityGeneration;
+    const current=()=>principal!==null&&principal===this.options.identity.principalId()&&instance===this.options.runtime.instance()&&generation===this.authorityGeneration&&this.options.runtime.ready();
+    try{
+      const prepared=await this.prepare();if(!prepared.ok)return prepared;
+      if(!current()||prepared.value!==principal)throw new Error('Authority changed');
+      let initial:string|undefined;
+      for(let attempt=0;attempt<2;attempt++){
+        if(!current())throw new Error('Authority changed');
+        const before=await this.freshWorkspaces(principal!);
+        if(!current()||!before.workspaces.some(workspace=>workspace.workspace_id===request.workspaceId))throw new Error('Authority changed');
+        const snapshot=JSON.stringify(before);
+        if(initial===undefined)initial=snapshot;else if(initial!==snapshot)throw new Error('Authority changed');
+        let response:InquelloWorkspaceTreeResponse;
+        try{response=await this.options.runtime.request<InquelloWorkspaceTreeResponse>('inquello/workspace/tree',request);}
+        catch(error){
+          if(attempt===0&&current()&&error instanceof RpcResponseError&&error.method==='inquello/workspace/tree'&&error.rpcCode===-32600&&refusalOf(error)?.kind==='stale_snapshot')continue;
+          throw error;
+        }
+        if(!current())throw new Error('Authority changed');
+        const after=await this.freshWorkspaces(principal!);
+        if(!current()||JSON.stringify(after)!==initial||response.workspaceId!==request.workspaceId)throw new Error('Authority changed');
+        return{ok:true,value:{
+          workspaceId:String(response.workspaceId),
+          engagements:response.engagements.map(engagementView),
+          folders:response.folders.map(folderView),
+          tasks:response.tasks.map(taskView),
+          unavailableTasks:unavailableTaskViews((response as InquelloWorkspaceTreeResponse & {unavailableTasks?:unknown}).unavailableTasks),
+        }};
+      }
+      throw new Error('Saved snapshot unavailable');
+    }catch(error){return this.runtimeFailure(error);}
   }
 
   // ---- commands --------------------------------------------------------------

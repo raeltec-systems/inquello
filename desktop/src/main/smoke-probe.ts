@@ -3901,7 +3901,7 @@ export async function probeVisualConversation(contents: WebContents, options: Or
     fs.mkdirSync(captureDir,{recursive:false});
     const boundedCaptureStep = <T,>(pending: Promise<T>, reason: string): Promise<T> => new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new SmokeProbeFailure(reason)), 8_000);
-      pending.then(value => { clearTimeout(timer); resolve(value); }, () => { clearTimeout(timer); reject(new SmokeProbeFailure(reason)); });
+      pending.then(value => { clearTimeout(timer); resolve(value); }, () => { clearTimeout(timer); reject(new SmokeProbeFailure(reason + ' (operation rejected, not deadline)')); });
     });
     const capture=async(name:string)=>{
       // Wait for actual layout/font completion, never a fixed screenshot delay.
@@ -3945,10 +3945,20 @@ export async function probeVisualConversation(contents: WebContents, options: Or
       }while(Date.now()<deadline);
       throw new SmokeProbeFailure('Synthetic UI dispatch/context observation timed out');
     };
-    const taskSnapshot=async(taskId:string)=>{
-      const result=await boundedCaptureStep(contents.executeJavaScript(`(async()=>{const response=await globalThis.inquello.tasks.activity({taskId:${JSON.stringify(taskId)},workspaceId:${JSON.stringify(seed.workspace_id)}});if(!response?.ok)throw new Error('Current synthetic Task unavailable');const value=response.value;return {taskId:value.taskId,threadId:value.threadId,runId:value.runId,status:value.status};})()`),'Synthetic current Task read timed out') as {taskId:string;threadId:string|null;runId:string;status:string};
-      if(result.taskId!==taskId||!result.threadId||!result.runId)throw new SmokeProbeFailure('Synthetic native Task binding unavailable');
-      return result;
+    const taskSnapshot=async(taskId:string,expectedStatus:'completed'|'cancelled')=>{
+      // An item can complete before the retained turn transaction settles. Observe
+      // the actual lifecycle condition rather than treating item completion as it.
+      const deadline=Date.now()+POLICY_SETTLE_MS;
+      do {
+        const result=await boundedCaptureStep(contents.executeJavaScript(`(async()=>{const response=await globalThis.inquello.tasks.activity({taskId:${JSON.stringify(taskId)},workspaceId:${JSON.stringify(seed.workspace_id)}});if(!response?.ok)return {refused:true,superseded:response?.code==='refused'&&['A newer Task run is being observed.','The result snapshot changed. Read the current authorized result pages.'].includes(response?.reason),code:['refused','unavailable','invalid','uncertain','not_found','permission_required'].includes(response?.code)?response.code:'other'};const value=response.value;return {taskId:value.taskId,threadId:value.threadId,runId:value.runId,status:value.status};})()`),'Synthetic current Task read timed out') as {taskId:string;threadId:string|null;runId:string;status:string;refused?:boolean;superseded?:boolean;code?:string};
+        if(result.superseded){await new Promise(resolve=>setTimeout(resolve,50));continue;}
+        if(result.refused)throw new SmokeProbeFailure('Synthetic current Task read refused: '+result.code);
+        if(result.taskId!==taskId||!result.threadId||!result.runId)throw new SmokeProbeFailure('Synthetic native Task binding unavailable');
+        if(result.status===expectedStatus)return result;
+        if(['failed','setup-failed','uncertain','cancelled','completed'].includes(result.status))throw new SmokeProbeFailure('Synthetic Task reached an unexpected terminal state');
+        await new Promise(resolve=>setTimeout(resolve,50));
+      }while(Date.now()<deadline);
+      throw new SmokeProbeFailure('Synthetic native lifecycle did not settle');
     };
     const waitAnswer=async(taskId:string,answer:string,completed=true)=>contents.executeJavaScript(`(async()=>{
       ${SHELL_HELPERS}
@@ -3970,32 +3980,33 @@ export async function probeVisualConversation(contents: WebContents, options: Or
     })()`) as string|null;
     if(!taskId)throw new SmokeProbeFailure('Actual UI Send did not accept a synthetic Task');
     if(!(await waitAnswer(taskId,fixture.answers[0]!)))throw new SmokeProbeFailure('First synthetic assistant answer did not render');
-    const first=await taskSnapshot(taskId);if(first.status!=='completed')throw new SmokeProbeFailure('First synthetic native turn did not complete');
+    const first=await taskSnapshot(taskId,'completed');if(first.status!=='completed')throw new SmokeProbeFailure('First synthetic native turn did not complete');
     await checkFixture(1);
     const collapsed=await contents.executeJavaScript(`(()=>{const details=document.querySelector('[data-task-view="'+${JSON.stringify(taskId)}+'"] [data-task-inspector]');return !!details&&!details.open;})()`);
     if(!collapsed)throw new SmokeProbeFailure('Conversation inspector was not collapsed by default');
     await capture('02-completed-conversation-synthetic');
     const sendFollowup=async(request:string)=>contents.executeJavaScript(`(async()=>{
       ${SHELL_HELPERS}
-      const task=qVisible('[data-task-view="'+${JSON.stringify(taskId)}+'"]');if(!task)return false;
-      type(q('[data-composer-input]',task),${JSON.stringify(request)});
+      const task=await wait(()=>{const controls=qVisible('[data-task-controls="'+${JSON.stringify(taskId)}+'"]');return controls?.getAttribute('data-task-controls-status')==='completed'?controls:null;},${POLICY_SETTLE_MS});if(!task)return false;
+      const input=q('[data-composer-input]',task);if(!input)return false;
+      type(input,${JSON.stringify(request)});
       const send=await wait(()=>{const button=q('[data-composer-send]',task);return button&&!button.disabled&&button.getAttribute('aria-disabled')!=='true'?button:null;},${SHELL_SETTLE_MS});if(!send)return false;send.click();return true;
     })()`);
     stage='visual-ui-completed-followup';
     if(!(await sendFollowup(fixture.requests[1]!))||!(await waitAnswer(taskId,fixture.answers[1]!)))throw new SmokeProbeFailure('Completed conversation follow-up did not render');
-    const second=await taskSnapshot(taskId);
+    const second=await taskSnapshot(taskId,'completed');
     if(second.status!=='completed'||second.threadId!==first.threadId||second.runId===first.runId)throw new SmokeProbeFailure('Follow-up did not retain Task/thread with a new run');
     await checkFixture(2);await capture('03-followup-conversation-synthetic');
     stage='visual-ui-stop';
     if(!(await sendFollowup(fixture.requests[2]!))||!(await waitAnswer(taskId,fixture.answers[2]!,false)))throw new SmokeProbeFailure('Held synthetic turn did not render before Stop');
     const stopped=await contents.executeJavaScript(`(async()=>{
       ${SHELL_HELPERS}
-      const task=qVisible('[data-task-view="'+${JSON.stringify(taskId)}+'"]');if(!task)return false;
+      const task=qVisible('[data-task-controls="'+${JSON.stringify(taskId)}+'"]');if(!task)return false;
       const stop=await wait(()=>{const button=q('[data-composer-stop]',task);return button&&!button.disabled&&button.getAttribute('aria-disabled')!=='true'?button:null;},${SHELL_SETTLE_MS});if(!stop)return false;stop.click();
-      return !!(await wait(()=>[...task.querySelectorAll('button')].find(button=>button.textContent.trim()==='Resume'&&button.getClientRects().length&&!button.disabled),${POLICY_SETTLE_MS}));
+      return !!(await wait(()=>{const controls=qVisible('[data-task-controls="'+${JSON.stringify(taskId)}+'"]');return controls&&[...controls.querySelectorAll('button')].find(button=>button.textContent.trim()==='Resume'&&button.getClientRects().length&&!button.disabled);},${POLICY_SETTLE_MS}));
     })()`);
     if(!stopped)throw new SmokeProbeFailure('Actual Stop did not expose explicit Resume');
-    const interrupted=await taskSnapshot(taskId);
+    const interrupted=await taskSnapshot(taskId,'cancelled');
     if(interrupted.status!=='cancelled'||interrupted.threadId!==first.threadId||interrupted.runId===second.runId)throw new SmokeProbeFailure('Native interruption binding was not confirmed');
     await checkFixture(3,true);await capture('04-interrupted-conversation-synthetic');
     stage='visual-ui-reopen';
@@ -4004,14 +4015,14 @@ export async function probeVisualConversation(contents: WebContents, options: Or
       if(!press('[data-action="new-thread"]')||!await wait(()=>qVisible('[data-start-view]'),${SHELL_SETTLE_MS}))return false;
       const row=await wait(()=>qVisible('[data-task-id="'+${JSON.stringify(taskId)}+'"] a'),${SHELL_SETTLE_MS});if(!row)return false;row.click();
       const task=await wait(()=>qVisible('[data-task-view="'+${JSON.stringify(taskId)}+'"]'),${SHELL_SETTLE_MS});if(!task)return false;
-      return !!(await wait(()=>[...task.querySelectorAll('button')].find(button=>button.textContent.trim()==='Resume'&&button.getClientRects().length&&!button.disabled),${POLICY_SETTLE_MS}));
+      return !!(await wait(()=>{const controls=qVisible('[data-task-controls="'+${JSON.stringify(taskId)}+'"]');return controls&&[...controls.querySelectorAll('button')].find(button=>button.textContent.trim()==='Resume'&&button.getClientRects().length&&!button.disabled);},${POLICY_SETTLE_MS}));
     })()`);
     if(!reopened||!(await waitAnswer(taskId,fixture.answers[0]!))||!(await waitAnswer(taskId,fixture.answers[1]!)))throw new SmokeProbeFailure('Reopened interrupted Task did not retain conversation and Resume');
     await checkFixture(3,true);await capture('05-reopened-conversation-synthetic');
     stage='visual-ui-explicit-resume';
-    const resumed=await contents.executeJavaScript(`(()=>{const task=document.querySelector('[data-task-view="'+${JSON.stringify(taskId)}+'"]');const button=task&&[...task.querySelectorAll('button')].find(button=>button.textContent.trim()==='Resume'&&button.getClientRects().length&&!button.disabled&&button.getAttribute('aria-disabled')!=='true');if(!button)return false;button.click();return true;})()`);
+    const resumed=await contents.executeJavaScript(`(()=>{const task=document.querySelector('[data-task-controls="'+${JSON.stringify(taskId)}+'"]');const button=task&&[...task.querySelectorAll('button')].find(button=>button.textContent.trim()==='Resume'&&button.getClientRects().length&&!button.disabled&&button.getAttribute('aria-disabled')!=='true');if(!button)return false;button.click();return true;})()`);
     if(!resumed||!(await waitAnswer(taskId,fixture.answers[3]!)))throw new SmokeProbeFailure('Explicit Resume did not complete the retained synthetic Task');
-    const last=await taskSnapshot(taskId);
+    const last=await taskSnapshot(taskId,'completed');
     if(last.status!=='completed'||last.threadId!==first.threadId||last.runId===interrupted.runId)throw new SmokeProbeFailure('Resume did not retain Task/thread with a new run');
     await checkFixture(4,true);await capture('06-resumed-conversation-synthetic');
     const details=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}return await openTaskInspector();})()`);
