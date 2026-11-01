@@ -408,3 +408,123 @@ pub(crate) async fn workspace_receipt(
     tx.commit().await?;
     Ok(saved.map(|Json(response)| response))
 }
+
+/// Strict bounded keyset paging. No free-form filters, SQL or cross-workspace
+/// cursor lookup. Missing/foreign cursors receive the same safe refusal.
+pub(crate) struct InvitationPage {
+    limit: u32,
+    after: Option<Uuid>,
+}
+impl InvitationPage {
+    pub(crate) fn parse(query: Option<&str>) -> Result<Self, ApiError> {
+        let invalid = || ApiError::unsupported_contract("invalid invitation page");
+        let query = query.unwrap_or_default();
+        if query.len() > 256 {
+            return Err(invalid());
+        }
+        let mut limit = None;
+        let mut after = None;
+        for (name, value) in url::form_urlencoded::parse(query.as_bytes()) {
+            match name.as_ref() {
+                "limit" if limit.is_none() => {
+                    if value.is_empty() || !value.bytes().all(|b| b.is_ascii_digit()) {
+                        return Err(invalid());
+                    }
+                    let n = value.parse::<u32>().map_err(|_| invalid())?;
+                    if !(1..=100).contains(&n) {
+                        return Err(invalid());
+                    }
+                    limit = Some(n);
+                }
+                "after" if after.is_none() => {
+                    after = Some(Uuid::parse_str(&value).map_err(|_| invalid())?);
+                }
+                _ => return Err(invalid()),
+            }
+        }
+        Ok(Self {
+            limit: limit.unwrap_or(25),
+            after,
+        })
+    }
+}
+
+pub(crate) async fn managed_invitations(
+    state: &AppState,
+    access: &str,
+    workspace_id: Uuid,
+    page: InvitationPage,
+) -> Result<ManagedInvitationsView, ApiError> {
+    let mut tx = state.pool.begin().await?;
+    let auth = sessions::authenticate(
+        &mut tx,
+        access,
+        state.clock.as_ref(),
+        LockMode::Share,
+        LockMode::Share,
+    )
+    .await?;
+    // Keep principal/session/workspace authority locks until projection commits.
+    // Removal/change_roles committing before this lock is observed; a later
+    // change waits for the read. No network I/O occurs under these DB locks.
+    workspaces::resolve(&mut tx, &auth, workspace_id, LockMode::Share)
+        .await?
+        .require(Action::ManageMembership)?;
+    if let Some(after) = page.after {
+        let exists:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM invites WHERE workspace_id=$1 AND invite_id=$2 AND recipient_email IS NOT NULL)")
+            .bind(workspace_id).bind(after).fetch_one(&mut *tx).await?;
+        if !exists {
+            return Err(ApiError::denied("invitation unavailable"));
+        }
+    }
+    let rows=sqlx::query("SELECT invite_id,revision,state,expires_at,roles,recipient_email FROM invites WHERE workspace_id=$1 AND recipient_email IS NOT NULL AND ($2::uuid IS NULL OR invite_id>$2) ORDER BY invite_id LIMIT $3")
+        .bind(workspace_id).bind(page.after).bind(i64::from(page.limit)+1).fetch_all(&mut *tx).await?;
+    let has_more = rows.len() > page.limit as usize;
+    let now = state.clock.now();
+    let mut invitations = Vec::new();
+    for row in rows.into_iter().take(page.limit as usize) {
+        let expires: DateTime<Utc> = row.try_get("expires_at")?;
+        let status = match row.try_get::<String, _>("state")?.as_str() {
+            "pending" if expires <= now => ManagedInvitationState::Expired,
+            "pending" => ManagedInvitationState::Pending,
+            "accepted" => ManagedInvitationState::Accepted,
+            "revoked" => ManagedInvitationState::Revoked,
+            _ => {
+                return Err(ApiError::unsupported_contract(
+                    "unsupported invitation state",
+                ));
+            }
+        };
+        invitations.push(ManagedInvitationView {
+            invite_id: row.try_get("invite_id")?,
+            revision: workspaces::revision(row.try_get("revision")?)?,
+            state: status,
+            expires_at: expires.to_rfc3339(),
+            roles: row.try_get("roles")?,
+            recipient_email: row.try_get("recipient_email")?,
+        });
+    }
+    // A lock wait cannot prolong an expired session or disclose stale authority.
+    let current = sessions::authenticate(
+        &mut tx,
+        access,
+        state.clock.as_ref(),
+        LockMode::Share,
+        LockMode::Share,
+    )
+    .await?;
+    workspaces::resolve(&mut tx, &current, workspace_id, LockMode::Share)
+        .await?
+        .require(Action::ManageMembership)?;
+    let next_cursor = if has_more {
+        invitations.last().map(|i| i.invite_id)
+    } else {
+        None
+    };
+    tx.commit().await?;
+    Ok(ManagedInvitationsView {
+        workspace_id,
+        invitations,
+        next_cursor,
+    })
+}

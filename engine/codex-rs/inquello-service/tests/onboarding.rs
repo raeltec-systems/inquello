@@ -1145,3 +1145,276 @@ async fn queued_delivery_rechecks_current_grantor_and_policy_without_sending() {
         h.finish().await;
     }
 }
+
+#[tokio::test]
+async fn managed_invitation_metadata_restarts_relists_and_revokes_observed_revisions() {
+    use inquello_protocol::onboarding::{ManagedInvitationState, ManagedInvitationsView};
+    let h = Harness::start().await;
+    let owner = verified(&h, "Maya").await;
+    let recipient = verified(&h, "Theo").await;
+    let workspace = create(&h, &owner, "create").await.resource_id;
+    let accepted = invite_for_delivery(&h, &owner, workspace).await;
+    let pending = invite_for_delivery(&h, &owner, workspace).await;
+    let expired = invite_for_delivery(&h, &owner, workspace).await;
+    let accept = envelope(
+        &h,
+        "accept",
+        "1",
+        json!({"command":"accept_invitation","invite_id":accepted.resource_id}),
+    )
+    .await;
+    h.post(
+        "/v1/onboarding/commands",
+        &accept,
+        Some(recipient.access_credential.expose()),
+    )
+    .await
+    .ok::<CommandResponse>();
+    sqlx::query("UPDATE invites SET expires_at=$2 WHERE invite_id=$1")
+        .bind(expired.resource_id)
+        .bind(h.now())
+        .execute(&h.pool)
+        .await
+        .expect("expire fixture");
+    // Fresh service state/connection pool reads durable metadata; no remembered
+    // invitation receipt, UI state or helper membership grant is supplied.
+    let fresh = inquello_service::start(
+        support::synthetic_config(&h.issuer, h.db.options()),
+        h.clock.clone(),
+    )
+    .await
+    .expect("fresh service instance");
+    let path = format!("/v1/workspaces/{workspace}/invitations");
+    let response = h
+        .client
+        .get(format!("{}{path}", fresh.base_url()))
+        .bearer_auth(owner.access_credential.expose())
+        .send()
+        .await
+        .expect("metadata");
+    assert_eq!(
+        response.headers().get("cache-control").expect("no-store"),
+        "no-store"
+    );
+    let page: ManagedInvitationsView = response.json().await.expect("typed metadata");
+    fresh.shutdown().await;
+    assert_eq!(page.invitations.len(), 3);
+    assert!(page.next_cursor.is_none());
+    let observed = page
+        .invitations
+        .iter()
+        .find(|i| i.invite_id == pending.resource_id)
+        .expect("observed");
+    assert_eq!(observed.revision.get(), 1);
+    assert_eq!(observed.state, ManagedInvitationState::Pending);
+    assert_eq!(observed.recipient_email, "Theo@synthetic.invalid");
+    assert_eq!(observed.roles, vec!["member"]);
+    assert_eq!(
+        page.invitations
+            .iter()
+            .find(|i| i.invite_id == accepted.resource_id)
+            .expect("accepted")
+            .state,
+        ManagedInvitationState::Accepted
+    );
+    let expired_observed = page
+        .invitations
+        .iter()
+        .find(|i| i.invite_id == expired.resource_id)
+        .expect("expired");
+    assert_eq!(expired_observed.state, ManagedInvitationState::Expired);
+    assert_eq!(expired_observed.revision.get(), 1);
+    workspace_command(
+        &h,
+        &owner,
+        workspace,
+        &observed.revision.get().to_string(),
+        json!({"command":"revoke_invite","invite_id":observed.invite_id}),
+    )
+    .await
+    .ok::<CommandResponse>();
+    workspace_command(
+        &h,
+        &owner,
+        workspace,
+        &observed.revision.get().to_string(),
+        json!({"command":"revoke_invite","invite_id":observed.invite_id}),
+    )
+    .await
+    .assert_error(ErrorKind::VersionConflict);
+    // Expired is a truthful read projection, not a hidden mutation. Explicit
+    // revocation still uses the actual stored revision.
+    workspace_command(
+        &h,
+        &owner,
+        workspace,
+        &expired_observed.revision.get().to_string(),
+        json!({"command":"revoke_invite","invite_id":expired_observed.invite_id}),
+    )
+    .await
+    .ok::<CommandResponse>();
+    let reauthenticated = verified(&h, "Maya").await;
+    let relisted: ManagedInvitationsView = h
+        .get(&path, Some(reauthenticated.access_credential.expose()))
+        .await
+        .ok();
+    for id in [pending.resource_id, expired.resource_id] {
+        let current = relisted
+            .invitations
+            .iter()
+            .find(|i| i.invite_id == id)
+            .expect("relisted");
+        assert_eq!(current.state, ManagedInvitationState::Revoked);
+        assert_eq!(current.revision.get(), 2);
+    }
+    h.finish().await;
+}
+
+#[tokio::test]
+async fn managed_invitation_pages_are_bounded_scoped_and_uniformly_private() {
+    use inquello_protocol::onboarding::ManagedInvitationsView;
+    let h = Harness::start().await;
+    let owner = verified(&h, "Maya").await;
+    let stranger = verified(&h, "Theo").await;
+    let workspace = create(&h, &owner, "create").await.resource_id;
+    let other = create(&h, &owner, "other").await.resource_id;
+    let one = invite_for_delivery(&h, &owner, workspace).await;
+    let two = invite_for_delivery(&h, &owner, workspace).await;
+    let foreign = invite_for_delivery(&h, &owner, other).await;
+    let path = format!("/v1/workspaces/{workspace}/invitations");
+    let first: ManagedInvitationsView = h
+        .get(
+            &format!("{path}?limit=1"),
+            Some(owner.access_credential.expose()),
+        )
+        .await
+        .ok();
+    assert_eq!(first.invitations.len(), 1);
+    let next = first.next_cursor.expect("bounded next");
+    assert_eq!(next, first.invitations[0].invite_id);
+    let second: ManagedInvitationsView = h
+        .get(
+            &format!("{path}?limit=1&after={next}"),
+            Some(owner.access_credential.expose()),
+        )
+        .await
+        .ok();
+    assert_eq!(second.invitations.len(), 1);
+    assert!(second.next_cursor.is_none());
+    let mut ids = vec![
+        first.invitations[0].invite_id,
+        second.invitations[0].invite_id,
+    ];
+    ids.sort();
+    let mut expected = vec![one.resource_id, two.resource_id];
+    expected.sort();
+    assert_eq!(ids, expected);
+    let absent_cursor = h
+        .get(
+            &format!("{path}?after={}", Uuid::new_v4()),
+            Some(owner.access_credential.expose()),
+        )
+        .await;
+    let foreign_cursor = h
+        .get(
+            &format!("{path}?after={}", foreign.resource_id),
+            Some(owner.access_credential.expose()),
+        )
+        .await;
+    assert_eq!(absent_cursor.body, foreign_cursor.body);
+    absent_cursor.assert_error(ErrorKind::Denied);
+    for query in [
+        "limit=0",
+        "limit=101",
+        "limit=1&limit=2",
+        "after=not-an-id",
+        "limit=-1",
+        "recipient_email=Theo%40synthetic.invalid",
+    ] {
+        h.get(
+            &format!("{path}?{query}"),
+            Some(owner.access_credential.expose()),
+        )
+        .await
+        .assert_error(ErrorKind::UnsupportedContract);
+    }
+    let denied = h
+        .get(&path, Some(stranger.access_credential.expose()))
+        .await;
+    let absent = h
+        .get(
+            &format!("/v1/workspaces/{}/invitations", Uuid::new_v4()),
+            Some(stranger.access_credential.expose()),
+        )
+        .await;
+    let cross_workspace = h
+        .get(
+            &format!("/v1/workspaces/{other}/invitations"),
+            Some(stranger.access_credential.expose()),
+        )
+        .await;
+    assert_eq!(denied.status.as_u16(), 403);
+    assert_eq!(denied.body, absent.body);
+    assert_eq!(denied.body, cross_workspace.body);
+    assert!(!denied.body.to_string().contains("Theo@"));
+    let body = h
+        .get(&path, Some(owner.access_credential.expose()))
+        .await
+        .body;
+    let keys: std::collections::BTreeSet<_> = body["invitations"][0]
+        .as_object()
+        .expect("projection")
+        .keys()
+        .map(String::as_str)
+        .collect();
+    assert_eq!(
+        keys,
+        std::collections::BTreeSet::from([
+            "invite_id",
+            "revision",
+            "state",
+            "expires_at",
+            "roles",
+            "recipient_email"
+        ])
+    );
+    h.finish().await;
+}
+
+#[tokio::test]
+async fn managed_invitation_read_waits_and_rechecks_withdrawn_authority() {
+    let h = Harness::start().await;
+    let owner = verified(&h, "Maya").await;
+    let workspace = create(&h, &owner, "create").await.resource_id;
+    invite_for_delivery(&h, &owner, workspace).await;
+    let path = format!("/v1/workspaces/{workspace}/invitations");
+    let mut blocker = h.pool.begin().await.expect("blocker");
+    sqlx::query("SELECT 1 FROM workspaces WHERE workspace_id=$1 FOR UPDATE")
+        .bind(workspace)
+        .execute(&mut *blocker)
+        .await
+        .expect("authority lock");
+    sqlx::query("UPDATE memberships SET roles=ARRAY['member'] WHERE workspace_id=$1")
+        .bind(workspace)
+        .execute(&mut *blocker)
+        .await
+        .expect("withdraw fixture authority");
+    let (response, ()) = tokio::join!(
+        h.get(&path, Some(owner.access_credential.expose())),
+        async {
+            tokio::time::timeout(std::time::Duration::from_secs(5),async {
+                loop {
+                    let waiting:bool=sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%workspaces%')")
+                        .fetch_one(&h.pool).await.expect("observe authority wait");
+                    if waiting {break;}
+                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                }
+            }).await.expect("metadata waits on current authority");
+            blocker.commit().await.expect("commit authority loss");
+        }
+    );
+    assert_eq!(response.status.as_u16(), 403);
+    assert_eq!(response.body["error"]["kind"], "denied");
+    assert!(!response.body.to_string().contains("Theo@"));
+    h.finish().await;
+}

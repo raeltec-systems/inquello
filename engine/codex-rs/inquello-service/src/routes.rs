@@ -62,6 +62,10 @@ pub(crate) fn router(state: Arc<AppState>) -> Router {
         )
         .route("/v1/invitations", get(onboarding_invitations))
         .route(
+            "/v1/workspaces/{workspace_id}/invitations",
+            get(managed_invitations),
+        )
+        .route(
             "/v1/workspaces/{workspace_id}/invitation-deliveries",
             get(invitation_deliveries),
         )
@@ -442,4 +446,26 @@ async fn invitation_deliveries(
     }
     .await;
     respond(result)
+}
+
+async fn managed_invitations(
+    State(state): SharedState,
+    Path(workspace_id): Path<String>,
+    axum::extract::RawQuery(query): axum::extract::RawQuery,
+    headers: HeaderMap,
+) -> Response {
+    respond(
+        async {
+            let access = required_bearer(&headers).map_err(ApiError::on_workspace_route)?;
+            let page = crate::onboarding::InvitationPage::parse(query.as_deref())?;
+            crate::onboarding::managed_invitations(
+                &state,
+                access,
+                workspaces::path_id(&workspace_id)?,
+                page,
+            )
+            .await
+        }
+        .await,
+    )
 }

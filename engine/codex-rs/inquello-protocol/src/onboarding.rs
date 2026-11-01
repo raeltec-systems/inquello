@@ -81,3 +81,32 @@ pub struct InvitationDeliveriesView {
     pub workspace_id: Uuid,
     pub deliveries: Vec<InvitationDeliveryView>,
 }
+
+/// Manager-only metadata for email invitations. Recipient discovery remains a
+/// separate fresh-proof route; no issuer/subject or bearer secret is exposed.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ManagedInvitationView {
+    pub invite_id: Uuid,
+    pub revision: Revision,
+    pub state: ManagedInvitationState,
+    pub expires_at: String,
+    pub roles: Vec<String>,
+    pub recipient_email: String,
+}
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ManagedInvitationState {
+    Pending,
+    Accepted,
+    Revoked,
+    /// A still-pending stored invitation whose expiry has passed; read-only.
+    Expired,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ManagedInvitationsView {
+    pub workspace_id: Uuid,
+    pub invitations: Vec<ManagedInvitationView>,
+    pub next_cursor: Option<Uuid>,
+}
