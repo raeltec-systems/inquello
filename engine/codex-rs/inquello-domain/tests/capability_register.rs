@@ -42,7 +42,8 @@ fn register_json(eligibility: &str, evidence: &[(&str, &str)]) -> String {
 }}"#,
         evidence.join(", ")
     );
-    let mut value: Value = serde_json::from_str(&json).unwrap();
+    let mut value: Value =
+        serde_json::from_str(&json).unwrap_or_else(|error| panic!("fixture register: {error}"));
     if eligibility == "real-data-eligible" {
         // Strict domain fixture only: never shipped evidence or executed suite evidence.
         value["entries"][0]["negative_authorization"] = serde_json::json!({

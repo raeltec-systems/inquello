@@ -116,7 +116,7 @@ impl CapabilityEntry {
             && self
                 .negative_authorization
                 .as_ref()
-                .is_some_and(|proof| proof.complete())
+                .is_some_and(crate::routes::NegativeAuthorizationEvidence::complete)
         {
             Enablement::RealDataEligible
         } else {

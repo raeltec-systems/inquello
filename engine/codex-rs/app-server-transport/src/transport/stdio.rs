@@ -16,7 +16,6 @@ use codex_app_server_protocol::JSONRPCRequest;
 use std::io::BufRead;
 use std::io::ErrorKind;
 use std::io::Result as IoResult;
-use std::io::Write;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio::task::JoinHandle;

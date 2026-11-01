@@ -16,6 +16,9 @@ fn fixture_events(tool: bool) -> Vec<(String, String)> {
     } else {
         include_str!("../../../inquello-protocol/fixtures/inference/messages-text.sse")
     };
+    parse_fixture_events(text)
+}
+fn parse_fixture_events(text: &str) -> Vec<(String, String)> {
     let text = text.replace("\r\n", "\n");
     text.trim()
         .split("\n\n")
@@ -80,6 +83,47 @@ fn fixture_text_usage_and_tools_are_attributed_and_terminal() {
         assert!(decoder.push("ping", "{\"type\":\"ping\"}").is_err());
     }
 }
+#[test]
+fn opaque_stream_fixture_preserves_signed_blocks_and_exact_route_binding() {
+    let request = request();
+    let binding = request.binding.clone();
+    let mut guard = EventGuard::new(binding.clone());
+    let mut decoder = MessagesDecoder::new(request, None);
+    let wire = parse_fixture_events(include_str!(
+        "../../../inquello-protocol/fixtures/inference/messages-opaque.sse"
+    ));
+    let mut blocks = vec![];
+    for (name, data) in wire {
+        for event in decoder.push(&name, &data).expect("opaque fixture decodes") {
+            guard.accept(&event).expect("ordered attributed event");
+            if let EventKind::OpaqueBlock { block, .. } = event.event {
+                match block {
+                    ContentBlock::Opaque {
+                        route_id,
+                        model,
+                        api_version,
+                        block,
+                    } => {
+                        assert_eq!(route_id, binding.route_id);
+                        assert_eq!(model, binding.model);
+                        assert_eq!(api_version, binding.api_version);
+                        blocks.push(block);
+                    }
+                    _ => panic!("opaque event must retain an opaque block"),
+                }
+            }
+        }
+    }
+    assert!(decoder.terminal());
+    assert_eq!(
+        blocks,
+        vec![
+            json!({"type":"thinking","thinking":"opaque synthetic thought","signature":"synthetic-signed-value=="}),
+            json!({"type":"redacted_thinking","data":"synthetic-redacted-value=="}),
+        ]
+    );
+}
+
 #[test]
 fn truncation_duplicate_ids_bad_schema_and_unknown_semantics_never_ready() {
     let wire = fixture_events(true);

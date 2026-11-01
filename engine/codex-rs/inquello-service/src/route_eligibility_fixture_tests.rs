@@ -1,5 +1,6 @@
 //! Unit-test-only proof substitution. Never compiled into service binaries and
 //! never evidence of actual model behavior or a reviewed production route.
+#![allow(clippy::expect_used, reason = "isolated test assertions")]
 use super::*;
 use crate::route_test_support::Harness;
 use inquello_domain::routes::{
@@ -13,12 +14,12 @@ fn derivation_fixture_policy() -> String {
     let mut policy: serde_json::Value = serde_json::from_str(include_str!(
         "../../inquello-protocol/fixtures/workspace/policy.json"
     ))
-    .unwrap();
+    .expect("fictional policy fixture is valid JSON");
     // The default membership administrator cannot derive. This positive route
     // witness explicitly grants its fictional administrator that action.
     policy["roles"][0]["actions"]
         .as_array_mut()
-        .unwrap()
+        .expect("fictional administrator actions are an array")
         .push(json!("derive"));
     policy.to_string()
 }
@@ -126,8 +127,8 @@ async fn passing_fixture_approval_is_current_scoped_and_revocable() {
         expected_revision: 0,
         operator: "fixture-only".into(),
         payload: RouteApprovalChange::Approve {
-            identity: identity(),
-            approval,
+            identity: Box::new(identity()),
+            approval: Box::new(approval),
         },
     };
     assert!(
@@ -265,7 +266,7 @@ async fn wait_workspace_waiters(pool: &PgPool, minimum: i64) {
     tokio::time::timeout(Duration::from_secs(10),async {
         loop {
             let count:i64=sqlx::query_scalar("SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%FROM workspaces WHERE workspace_id = $1 FOR %'")
-                .fetch_one(pool).await.unwrap();
+                .fetch_one(pool).await.expect("query PostgreSQL lock waiters");
             if count>=minimum {break;}
             tokio::task::yield_now().await;
         }
@@ -337,6 +338,7 @@ async fn additive_migrations_upgrade_existing_identity_store_without_seeding_aut
 #[path = "../../app-server/tests/common/inquello_authorization_driver.rs"]
 mod retained_driver;
 
+#[cfg(all(feature = "retained-fixtures", debug_assertions, target_os = "linux"))]
 fn retained_proof(
     id: &RouteEvidenceIdentity,
     digest: &str,
@@ -456,8 +458,8 @@ async fn coupled_retained(route: &'static str, scenario: &'static str) {
         expected_revision: 0,
         operator: "fixture-only".into(),
         payload: RouteApprovalChange::Approve {
-            identity: id.clone(),
-            approval,
+            identity: Box::new(id.clone()),
+            approval: Box::new(approval),
         },
     };
     assert!(

@@ -132,6 +132,15 @@ pub(super) async fn private_response(
                     server.send_response(request.id,json!({"available":available,"snapshot":if available{Some(snapshot)}else{None},"serviceEngagementIds":[]})).await.expect("fresh fictional context authority");
                 }
                 "inquello/tasks/authority" => {
+                    if request.params.as_ref().expect("authority params")["workspaceId"]
+                        != host.workspace_id
+                    {
+                        server
+                            .send_response(request.id, json!({"workspacePolicy":null}))
+                            .await
+                            .expect("foreign Workspace authority refused");
+                        continue;
+                    }
                     host.authority_context["policyCalls"] =
                         json!(host.authority_context["policyCalls"].as_u64().unwrap_or(0) + 1);
                     if host.authority_context["holdNextAdmission"] == true {
@@ -140,10 +149,6 @@ pub(super) async fn private_response(
                             serde_json::to_value(&request.id).unwrap();
                         continue; // Actual initial authority callback remains unanswered.
                     }
-                    assert_eq!(
-                        request.params.as_ref().expect("authority params")["workspaceId"],
-                        host.workspace_id
-                    );
                     if host.lifecycle == Some("lifecycle-stop-inflight-steer")
                         && host.authority_context["holdSteerAuthority"] == true
                     {

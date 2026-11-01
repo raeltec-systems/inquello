@@ -93,6 +93,26 @@ else:
     else: raise ValueError('unknown fixture observation')
 print(json.dumps(result))
 "#;
+    let result = running_guest_command()?
+        .args([
+            "/usr/bin/python3",
+            "-I",
+            "-c",
+            SCRIPT,
+            operation,
+            argument,
+            value,
+        ])
+        .output()
+        .map_err(|error| error.to_string())?;
+    if !result.status.success() {
+        return Err(String::from_utf8_lossy(&result.stderr).into_owned());
+    }
+    serde_json::from_slice(&result.stdout).map_err(|error| error.to_string())
+}
+
+#[cfg(windows)]
+fn running_guest_command() -> Result<std::process::Command, String> {
     let system = std::env::var("SystemRoot").expect("Windows SystemRoot");
     // Observation/cleanup must never boot a stopped guest and bypass native
     // storage preflight. Listing running distros is a host-only operation.
@@ -127,40 +147,39 @@ print(json.dumps(result))
     {
         return Err("guest fixture observer cannot launch an inactive guest".into());
     }
-    let result =
-        codex_utils_process::background_command(Path::new(&system).join("System32/wsl.exe"))
-            .env_clear()
-            .env("SystemRoot", &system)
-            .env("WINDIR", &system)
-            .env("TEMP", "D:\\Inquello\\tmp")
-            .env("TMP", "D:\\Inquello\\tmp")
-            .current_dir("D:\\Inquello\\tmp")
-            .args([
-                "-d",
-                "Inquello-Engine",
-                "--user",
-                "inquello",
-                "--cd",
-                "/",
-                "--exec",
-                "/usr/bin/env",
-                "-i",
-                "PATH=/usr/bin:/bin",
-                "LANG=C.UTF-8",
-                "/usr/bin/python3",
-                "-I",
-                "-c",
-                SCRIPT,
-                operation,
-                argument,
-                value,
-            ])
-            .output()
-            .expect("fixed guest fixture observer");
-    if !result.status.success() {
-        return Err(String::from_utf8_lossy(&result.stderr).into_owned());
+    let mut command =
+        codex_utils_process::background_command(Path::new(&system).join("System32/wsl.exe"));
+    command
+        .env_clear()
+        .env("SystemRoot", &system)
+        .env("WINDIR", &system)
+        .env("TEMP", "D:\\Inquello\\tmp")
+        .env("TMP", "D:\\Inquello\\tmp")
+        .current_dir("D:\\Inquello\\tmp")
+        .args([
+            "-d",
+            "Inquello-Engine",
+            "--user",
+            "inquello",
+            "--cd",
+            "/",
+            "--exec",
+            "/usr/bin/env",
+            "-i",
+            "PATH=/usr/bin:/bin",
+            "LANG=C.UTF-8",
+        ]);
+    Ok(command)
+}
+
+#[cfg(windows)]
+struct GuestKeepalive(std::process::Child);
+#[cfg(windows)]
+impl Drop for GuestKeepalive {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
     }
-    serde_json::from_slice(&result.stdout).map_err(|error| error.to_string())
 }
 
 /// Declared before the native server so it drops after server shutdown, but
@@ -168,12 +187,34 @@ print(json.dumps(result))
 pub struct FixtureScope {
     root: PathBuf,
     principal: String,
+    #[cfg(windows)]
+    keepalive: Option<GuestKeepalive>,
 }
 impl FixtureScope {
     pub fn new(root: &Path, principal: &str) -> Self {
         Self {
             root: root.to_owned(),
             principal: principal.to_owned(),
+            #[cfg(windows)]
+            keepalive: None,
+        }
+    }
+
+    /// The admission-timeout witness deliberately outlasts WSL idle shutdown.
+    /// Hold only an already validated, running guest until scoped cleanup ends.
+    /// This cannot boot a stopped guest and grants no Task execution authority.
+    pub fn keep_running(&mut self) {
+        #[cfg(windows)]
+        {
+            let child = running_guest_command()
+                .expect("native execution already started the validated guest")
+                .args(["/usr/bin/sleep", "300"])
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+                .expect("bounded fixture guest keepalive");
+            self.keepalive = Some(GuestKeepalive(child));
         }
     }
 }

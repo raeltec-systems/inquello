@@ -450,12 +450,14 @@ impl SqliteWorkingStore {
 
 impl SqliteWorkingStore {
     /// Current native metadata provenance, never a data tier or inference grant.
+    /// Local tool accounting contains no model content and does not revoke the
+    /// native draft's metadata provenance. Export still inspects content separately.
     pub async fn task_is_native_draft(
         &self,
         principal: PrincipalId,
         task: &str,
     ) -> Result<bool, DomainError> {
-        let exists:Option<i64>=sqlx::query_scalar("SELECT 1 FROM task_metadata_provenance p JOIN tasks t ON t.task_id=p.task_id AND t.creator_principal_id=p.principal_id AND t.workspace_id=p.workspace_id WHERE p.task_id=? AND p.principal_id=? AND p.provenance_kind='draft_metadata' AND t.runtime_thread_id IS NULL AND t.source_refs='[]' AND t.artifact_refs='[]' AND NOT EXISTS(SELECT 1 FROM task_runs r WHERE r.task_id=t.task_id) AND NOT EXISTS(SELECT 1 FROM task_start_history h WHERE h.task_id=t.task_id) AND NOT EXISTS(SELECT 1 FROM task_data_provenance d WHERE d.task_id=t.task_id) AND NOT EXISTS(SELECT 1 FROM task_usage_attempts u WHERE u.task_id=t.task_id)")
+        let exists:Option<i64>=sqlx::query_scalar("SELECT 1 FROM task_metadata_provenance p JOIN tasks t ON t.task_id=p.task_id AND t.creator_principal_id=p.principal_id AND t.workspace_id=p.workspace_id WHERE p.task_id=? AND p.principal_id=? AND p.provenance_kind='draft_metadata' AND t.runtime_thread_id IS NULL AND t.source_refs='[]' AND t.artifact_refs='[]' AND NOT EXISTS(SELECT 1 FROM task_runs r WHERE r.task_id=t.task_id) AND NOT EXISTS(SELECT 1 FROM task_start_history h WHERE h.task_id=t.task_id) AND NOT EXISTS(SELECT 1 FROM task_data_provenance d WHERE d.task_id=t.task_id) AND NOT EXISTS(SELECT 1 FROM task_usage_attempts u WHERE u.task_id=t.task_id AND json_extract(u.record,'$.snapshot.operation_kind') IS NOT 'local-tool')")
             .bind(task).bind(principal.to_string()).fetch_optional(self.pool()).await.map_err(backend)?;
         Ok(exists.is_some())
     }

@@ -1261,22 +1261,23 @@ fn add_shell_tools(context: &CoreToolPlanContext<'_>, registry: &mut ToolRegistr
         include_environment_id,
         include_windows_shell_guidance: should_include_windows_shell_guidance(context.environments),
     };
-    if features.enabled(Feature::UnifiedExec) {
+    if turn_context
+        .extension_data
+        .get::<crate::inquello_inference::TaskAuthorizationContext>()
+        .is_some()
+    {
+        // Private Task authority selects the one-shot contract independently
+        // of the ordinary UnifiedExec feature default. Its advertised schema
+        // and registered handler must agree, and it never exposes write_stdin.
+        registry.add(ExecCommandHandler::private_one_shot(options));
+    } else if features.enabled(Feature::UnifiedExec) {
         registry.add(ExecCommandHandler::new(options));
         registry.add(WriteStdinHandler);
     } else {
         // Managed requirements are the only configuration path that can keep
         // unified exec disabled. Preserve command execution without exposing a
         // resumable process or write_stdin authority prohibited by policy.
-        if turn_context
-            .extension_data
-            .get::<crate::inquello_inference::TaskAuthorizationContext>()
-            .is_some()
-        {
-            registry.add(ExecCommandHandler::private_one_shot(options));
-        } else {
-            registry.add(ExecCommandHandler::one_shot(options));
-        }
+        registry.add(ExecCommandHandler::one_shot(options));
     }
 }
 

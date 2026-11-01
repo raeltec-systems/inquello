@@ -128,7 +128,8 @@ fn every_fixture_file_is_covered() {
     let covered: BTreeSet<String> = WORKSPACE_FIXTURES.iter().map(ToString::to_string).collect();
     assert_eq!(workspace, covered);
     assert!(nested.is_empty());
-    // These are exercised by tests/inference.rs; keep the inventory exhaustive.
+    // JSON contracts are exercised by tests/inference.rs; streaming fixtures
+    // are exercised by inquello-adapters::anthropic::tests.
     let (inference, nested) = entries(&fixtures_dir().join("inference"), "");
     assert_eq!(
         inference,
@@ -136,6 +137,9 @@ fn every_fixture_file_is_covered() {
             "claude-api-key-events.json".to_string(),
             "codex-responses-events.json".to_string(),
             "messages-request.json".to_string(),
+            "messages-text.sse".to_string(),
+            "messages-tool.sse".to_string(),
+            "messages-opaque.sse".to_string(),
         ])
     );
     assert!(nested.is_empty());

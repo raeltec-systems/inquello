@@ -88,6 +88,73 @@ async fn configure(s: &SqliteWorkingStore, a: Actor, t: &Task) {
     .await);
 }
 #[tokio::test]
+async fn local_tool_accounting_preserves_owned_draft_metadata_without_classifying_content() {
+    let dir = ok(tempfile::tempdir());
+    let path = dir.path().join("work.db");
+    let s = ok(SqliteWorkingStore::open(&path, &[]).await);
+    let a = actor(1);
+    let t = task(&s, a).await;
+    ok(s.begin_usage_attempt(snapshot(a, &t)).await);
+    assert!(ok(s
+        .task_is_native_draft(a.principal_id, &t.task_id.to_string())
+        .await));
+    assert!(!ok(s
+        .task_is_native_draft(actor(2).principal_id, &t.task_id.to_string())
+        .await));
+    assert_eq!(
+        ok(s.task_data_tier(a.principal_id, &t.task_id.to_string())
+            .await),
+        None
+    );
+    s.close().await;
+    // A local tool may have written files. Metadata access must not turn those
+    // unclassified files into exportable synthetic content.
+    let inspected = inquello_adapters::data_provenance::inspect(
+        inquello_adapters::data_provenance::InspectRequest {
+            version: 1,
+            store_path: path.clone(),
+            principal_id: a.principal_id.to_string(),
+            task_root: None,
+            runtime_home: None,
+        },
+    )
+    .await;
+    assert!(!inspected.available);
+    let s = ok(SqliteWorkingStore::open(&path, &[]).await);
+    assert!(ok(s
+        .task_is_native_draft(a.principal_id, &t.task_id.to_string())
+        .await));
+    configure(&s, a, &t).await;
+    let allowed = vec!["default".into()];
+    ok(set_task_usage_settings(
+        &s,
+        a,
+        SetUsageSettings {
+            operation_id: "model-defaults".into(),
+            task_id: t.task_id.to_string(),
+            expected_revision: 0,
+            route_revision: 1,
+            choices: Choices::default(),
+        },
+        &allowed,
+        &allowed,
+    )
+    .await);
+    let mut model_attempt = snapshot(a, &t);
+    model_attempt.operation_kind = OperationKind::HumanRequestedModel;
+    model_attempt.route_id = Some("claude-api-key".into());
+    model_attempt.model = Some(CLAUDE_MODEL.into());
+    model_attempt.api_version = Some(CLAUDE_API_VERSION.into());
+    model_attempt.route_revision = 1;
+    model_attempt.configuration_revision = 1;
+    model_attempt.settings_revision = 1;
+    ok(s.begin_usage_attempt(model_attempt).await);
+    assert!(!ok(s
+        .task_is_native_draft(a.principal_id, &t.task_id.to_string())
+        .await));
+}
+
+#[tokio::test]
 async fn defaults_replay_privacy_and_revision_conflict() {
     let dir = ok(tempfile::tempdir());
     let s = ok(SqliteWorkingStore::open(&dir.path().join("work.db"), &[]).await);

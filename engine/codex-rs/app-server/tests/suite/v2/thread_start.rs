@@ -1657,6 +1657,8 @@ required = true
         .request(|request_id| ClientRequest::McpServerStatusList {
             request_id,
             params: ListMcpServerStatusParams {
+                expected_plugin_id: None,
+                mcp_admission: None,
                 server_name: None,
                 cursor: None,
                 limit: None,

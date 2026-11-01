@@ -553,6 +553,16 @@ pub(crate) async fn await_dispatch<T>(
     }
 }
 
+fn messages_item_start(item: &ResponseItem) -> Option<ResponseEvent> {
+    let mut item = item.clone();
+    if let ResponseItem::Message { content, .. } = &mut item {
+        content.clear();
+        Some(ResponseEvent::OutputItemAdded(item))
+    } else {
+        None
+    }
+}
+
 pub(crate) async fn messages(prompt: &Prompt, context: AttemptContext) -> Result<ResponseStream> {
     let request = request(prompt, &context)?;
     let auth = context
@@ -562,15 +572,23 @@ pub(crate) async fn messages(prompt: &Prompt, context: AttemptContext) -> Result
     let lease = auth.lease(&request.binding).map_err(failure)?;
     let revoked = lease.cancellation();
     let client = messages_client(&request.binding)?;
-    let mut incoming = client
+    let incoming = client
         .stream_with_cancellation(request.clone(), lease, context.cancellation.clone())
         .await
         .map_err(failure)?;
+    Ok(map_messages_stream(incoming, context, revoked))
+}
+
+fn map_messages_stream(
+    mut incoming: mpsc::Receiver<Event>,
+    context: AttemptContext,
+    revoked: CancellationToken,
+) -> ResponseStream {
     let (sender, receiver) = mpsc::channel(32);
     let dropped = context.cancellation.child_token();
     let consumer = dropped.clone();
     tokio::spawn(async move {
-        let mut guard = EventGuard::new(request.binding.clone());
+        let mut guard = EventGuard::new(context.binding.clone());
         let mut blocks: BTreeMap<u32, Value> = BTreeMap::new();
         let mut terminal = false;
         loop {
@@ -609,10 +627,34 @@ pub(crate) async fn messages(prompt: &Prompt, context: AttemptContext) -> Result
                     response_id: event.provider_message_id.clone(),
                 }),
                 EventKind::TextDelta { block_index, text } => {
+                    let first = !blocks.contains_key(&block_index);
                     let block = blocks.entry(block_index).or_insert_with(|| json!({"type":"message","role":"assistant", "content":[{"type":"output_text","text":""}]}));
                     let previous = block["content"][0]["text"].as_str().unwrap_or("");
                     block["content"][0]["text"] = json!(format!("{previous}{text}"));
-                    Some(ResponseEvent::OutputTextDelta(text))
+                    // The retained stream has one active item. Only a leading
+                    // text block can stream before preceding opaque/tool blocks
+                    // are delivered by Messages at message_stop. Buffer later
+                    // blocks to preserve provider order and their item lifetimes.
+                    if block_index == 0 {
+                        if first {
+                            let item = serde_json::from_value(block.clone())
+                                .map_err(|_| failure("invalid normalized text item"));
+                            let added = item.and_then(|item| {
+                                messages_item_start(&item)
+                                    .ok_or_else(|| failure("normalized text item missing"))
+                            });
+                            let failed = added.is_err();
+                            if !deliver(&sender, added, &context.cancellation, &consumer, &revoked)
+                                .await
+                                || failed
+                            {
+                                return;
+                            }
+                        }
+                        Some(ResponseEvent::OutputTextDelta(text))
+                    } else {
+                        None
+                    }
                 }
                 EventKind::ToolRequestReady {
                     block_index,
@@ -651,7 +693,7 @@ pub(crate) async fn messages(prompt: &Prompt, context: AttemptContext) -> Result
                     None
                 }
                 EventKind::Completed { reason, .. } => {
-                    for (_, block) in std::mem::take(&mut blocks) {
+                    for (block_index, block) in std::mem::take(&mut blocks) {
                         let item: ResponseItem = match serde_json::from_value(block) {
                             Ok(item) => item,
                             Err(_) => {
@@ -667,6 +709,19 @@ pub(crate) async fn messages(prompt: &Prompt, context: AttemptContext) -> Result
                             }
                         };
                         if context.cancellation.is_cancelled() || revoked.is_cancelled() {
+                            return;
+                        }
+                        if block_index != 0
+                            && let Some(added) = messages_item_start(&item)
+                            && !deliver(
+                                &sender,
+                                Ok(added),
+                                &context.cancellation,
+                                &consumer,
+                                &revoked,
+                            )
+                            .await
+                        {
                             return;
                         }
                         if !deliver(
@@ -749,11 +804,11 @@ pub(crate) async fn messages(prompt: &Prompt, context: AttemptContext) -> Result
         )
         .await;
     });
-    Ok(ResponseStream {
+    ResponseStream {
         rx_event: receiver,
         interrupt: None,
         consumer_dropped: dropped,
-    })
+    }
 }
 
 fn responses_opaque(item: &ResponseItem) -> bool {
@@ -1120,6 +1175,113 @@ mod tests {
             completed_tool_call_ids: vec![],
             events,
             cancellation: CancellationToken::new(),
+        }
+    }
+    #[tokio::test]
+    async fn messages_retained_text_has_ordered_item_lifetimes_and_preserves_blocks() {
+        for leading_text in [true, false] {
+            let mut context = context();
+            let (attribution, mut attributed) = mpsc::channel(32);
+            context.events = attribution;
+            let opaque = ContentBlock::Opaque {
+                route_id: context.binding.route_id.clone(),
+                model: context.binding.model.clone(),
+                api_version: context.binding.api_version.clone(),
+                block: json!({"type":"thinking","thinking":"opaque","signature":"signature"}),
+            };
+            let first_index = u32::from(!leading_text);
+            let mut events = vec![EventKind::Started];
+            events.push(EventKind::TextDelta {
+                block_index: first_index,
+                text: "first".into(),
+            });
+            events.push(EventKind::TextDelta {
+                block_index: first_index,
+                text: " part".into(),
+            });
+            events.push(EventKind::TextDelta {
+                block_index: 2,
+                text: "second".into(),
+            });
+            events.push(EventKind::OpaqueBlock {
+                block_index: if leading_text { 1 } else { 0 },
+                block: opaque,
+            });
+            events.push(EventKind::ToolRequestReady {
+                block_index: 3,
+                tool_call_id: "call".into(),
+                tool_name: "exec_command".into(),
+                arguments: json!({"cmd":"true"}),
+            });
+            events.push(EventKind::Completed {
+                reason: StopReason::ToolRequests,
+                provider_reason: Some("tool_use".into()),
+            });
+            let (sender, receiver) = mpsc::channel(32);
+            for (sequence, event) in events.into_iter().enumerate() {
+                sender
+                    .send(Event {
+                        binding: context.binding.clone(),
+                        sequence: sequence as u64,
+                        provider_request_id: None,
+                        provider_message_id: Some("message".into()),
+                        event,
+                    })
+                    .await
+                    .expect("normalized fixture");
+            }
+            drop(sender);
+            let output = map_messages_stream(receiver, context, CancellationToken::new())
+                .collect::<Vec<_>>()
+                .await;
+            let mut active = false;
+            let mut retained = Vec::new();
+            let mut streamed = String::new();
+            for event in output {
+                match event.expect("valid Messages mapping") {
+                    ResponseEvent::OutputItemAdded(ResponseItem::Message { content, .. }) => {
+                        assert!(
+                            !active,
+                            "previous item must complete before the next starts"
+                        );
+                        assert!(content.is_empty(), "deltas must not duplicate seeded text");
+                        active = true;
+                    }
+                    ResponseEvent::OutputTextDelta(text) => {
+                        assert!(
+                            active,
+                            "native core requires an active item for text deltas"
+                        );
+                        streamed.push_str(&text);
+                    }
+                    ResponseEvent::OutputItemDone(item) => {
+                        if matches!(item, ResponseItem::Message { .. }) {
+                            assert!(active);
+                        } else {
+                            assert!(!active, "opaque/tool output must not consume a text item");
+                        }
+                        active = false;
+                        retained.push(serde_json::to_value(item).expect("retained item"));
+                    }
+                    ResponseEvent::Completed { .. } => assert!(!active),
+                    _ => {}
+                }
+            }
+            assert_eq!(streamed, if leading_text { "first part" } else { "" });
+            assert_eq!(retained.len(), 4);
+            assert_eq!(
+                retained[first_index as usize]["content"][0]["text"],
+                "first part"
+            );
+            assert_eq!(retained[2]["content"][0]["text"], "second");
+            assert_eq!(retained[3]["call_id"], "call");
+            let mut deltas = 0;
+            while let Some(event) = attributed.recv().await {
+                if matches!(event.event, EventKind::TextDelta { .. }) {
+                    deltas += 1;
+                }
+            }
+            assert_eq!(deltas, 3, "normalized partial attribution remains complete");
         }
     }
     #[test]

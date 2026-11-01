@@ -3,6 +3,7 @@
 //! credential-leak checks every test ends with.
 
 #![allow(dead_code)]
+#![allow(clippy::expect_used, reason = "isolated test harness assertions")]
 
 use chrono::DateTime;
 use chrono::TimeDelta;

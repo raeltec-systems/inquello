@@ -766,8 +766,19 @@ fn the_dev_topology_prints_one_line_writes_only_the_ca_and_cleans_up() {
 /// Starts the topology with `args`, waits for its config line, and returns the
 /// child (stdin held open) and the parsed config.
 fn spawn_topology(args: &[&str]) -> (std::process::Child, Value) {
+    spawn_topology_named(args, None)
+}
+
+fn spawn_topology_named(
+    args: &[&str],
+    application_name: Option<&str>,
+) -> (std::process::Child, Value) {
     let binary = env!("CARGO_BIN_EXE_inquello-dev-topology");
-    let mut child = Command::new(binary)
+    let mut command = Command::new(binary);
+    if let Some(name) = application_name {
+        command.env("PGAPPNAME", name);
+    }
+    let mut child = command
         .arg("--exit-on-stdin-eof")
         .args(args)
         .stdin(Stdio::piped())
@@ -797,7 +808,7 @@ fn stop_topology(mut child: std::process::Child) {
     assert!(status.success(), "{status}");
 }
 
-async fn run_database_names() -> Vec<String> {
+async fn run_database_names(application_name: Option<&str>) -> Vec<String> {
     let url = std::env::var(support::DATABASE_ENV).expect("test database URL");
     let pool = inquello_service::postgres::connect(&inquello_service::DatabaseConfig {
         connect: url.parse().expect("database URL"),
@@ -807,7 +818,8 @@ async fn run_database_names() -> Vec<String> {
     .await
     .expect("admin connection");
     let names =
-        sqlx::query_scalar("SELECT datname FROM pg_database WHERE datname LIKE 'inquello_dev_%'")
+        sqlx::query_scalar("SELECT d.datname FROM pg_database d WHERE d.datname LIKE 'inquello_dev_%' AND ($1::text IS NULL OR EXISTS (SELECT 1 FROM pg_stat_activity a WHERE a.datname=d.datname AND a.application_name=$1))")
+            .bind(application_name)
             .fetch_all(&pool)
             .await
             .expect("list databases");
@@ -840,11 +852,8 @@ fn config_out_writes_the_line_as_utf8_and_removes_it_on_stop() {
 fn drop_stale_removes_abandoned_run_databases_but_never_a_live_run() {
     let _serial = topology_lock();
     let runtime = tokio::runtime::Runtime::new().expect("runtime");
-    // A live run holds its lease connection.
-    let (live, _) = spawn_topology(&[]);
-    let after_live = runtime.block_on(run_database_names());
-
-    // An abandoned run database, as left by a killed topology.
+    // An abandoned database already exists when the live run starts, as after
+    // an interrupted test. It must not be mistaken for that run's live lease.
     let orphan = format!("inquello_dev_{}", Uuid::new_v4().simple());
     runtime.block_on(async {
         let url = std::env::var(support::DATABASE_ENV).expect("test database URL");
@@ -862,8 +871,16 @@ fn drop_stale_removes_abandoned_run_databases_but_never_a_live_run() {
         pool.close().await;
     });
 
+    let lease_name = format!("inquello-live-test-{}", Uuid::new_v4().simple());
+    let (live, _) = spawn_topology_named(&[], Some(&lease_name));
+    let after_live = runtime.block_on(run_database_names(Some(&lease_name)));
+    assert_eq!(
+        after_live.len(),
+        1,
+        "exactly the owned live lease must be observed"
+    );
     let (second, _) = spawn_topology(&["--drop-stale"]);
-    let names = runtime.block_on(run_database_names());
+    let names = runtime.block_on(run_database_names(None));
     assert!(
         !names.contains(&orphan),
         "the abandoned database was not dropped"

@@ -128,7 +128,7 @@ async fn revoke_fixture_is_revisioned_idempotent_and_cannot_replay_changed_body(
         operator: "fixture-operator".into(),
         payload: RouteApprovalChange::Approve {
             identity: serde_json::from_value(identity.clone()).expect("identity fixture"),
-            approval: approval.clone(),
+            approval: Box::new(approval.clone()),
         },
     };
     assert!(
@@ -190,12 +190,22 @@ async fn revoke_fixture_is_revisioned_idempotent_and_cannot_replay_changed_body(
 async fn export_receipt_survives_local_journal_loss_but_never_owner_change_or_revocation() {
     use inquello_protocol::workspace::ExportReceiptView;
     let h = Harness::start().await;
+    let mut policy: serde_json::Value = serde_json::from_str(include_str!(
+        "../../inquello-protocol/fixtures/workspace/policy.json"
+    ))
+    .expect("fixture policy");
+    // Membership administration alone does not permit export. Give this
+    // fictional positive-control owner the action the receipt route requires.
+    policy["roles"][0]["actions"]
+        .as_array_mut()
+        .expect("actions")
+        .push(json!("export"));
     let created = admin::create_workspace(
         &h.pool,
         CreateWorkspace {
             name: "Fictional receipt company".into(),
             kind: "internal_company".into(),
-            policy: include_str!("../../inquello-protocol/fixtures/workspace/policy.json").into(),
+            policy: policy.to_string(),
             first_admin_issuer: h.issuer.issuer().to_string(),
             first_admin_subject: "receipt-owner".into(),
             invite_lifetime: Duration::from_secs(3600),

@@ -748,3 +748,27 @@ calls or real-data promotion. See Story 1.30 support and its loop1 validation lo
 ### Story 1.30 final reviewed candidate
 
 Round 2 narrow native/desktop corrections are applied. Final Inbox typing correction preserves the existing full-identity publication guard. Typechecks/build and 411 selected tests pass. Full-suite environmental failures and all native/protocol/browser/Windows/latency/owner gates remain explicit in the updated Story 1.30 support ledger. Fourteen native selectors remain unrun; story in-progress, no eligibility promotion.
+
+### Windows continuation and strict WSL execution (2026-11-01)
+
+The owner authorized repairing the native and Windows blockers and implementing
+the approved WSL design. Bounded Windows Tasks use a dedicated guest with an
+isolated stdio executor, exact Task-root attachment, namespaces, seccomp and the
+managed network proxy. Host credentials and authority stay in the desktop;
+missing isolation or storage proof refuses execution without a host fallback.
+Full access retains its explicit Windows OS transition and recoverable file
+transfer. Guest disks, swap, staging and build caches live on D:.
+
+Native compatibility corrections include current SQLx executor features, provider
+configuration APIs and protocol fixture inventory. Migration 0015 preserves an
+existing owned draft's metadata receipt during local-tool accounting; it does
+not classify content, reconstruct removed receipts or authorize export of
+unclassified tool output. Model operations still invalidate draft provenance.
+The test-issuer topology accepts an explicit fictional seed policy for export
+verification; shipped/default Workspace grants are unchanged.
+
+The continuation's measured checks and pending gates are recorded in
+`_bmad-output/implementation-artifacts/handoff/STORY130-FIX-CONTINUATION-20261101.md`.
+These corrections do not promote route eligibility or accept Epic 1. Final
+source-matched build/protocol, native fixture and Electron results supersede
+earlier snapshot limitations only when recorded as executed.

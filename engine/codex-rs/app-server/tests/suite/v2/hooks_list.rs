@@ -363,6 +363,8 @@ async fn plugin_upgrade_refreshes_hook_runtime_for_loaded_session() -> Result<()
         AbsolutePathBuf::try_from(marketplace.path().join(".agents/plugins/marketplace.json"))?;
     let install_id = mcp
         .send_plugin_install_request(PluginInstallParams {
+            skip_authentication: false,
+            mcp_admission: None,
             marketplace_path: Some(marketplace_path.clone()),
             remote_marketplace_name: None,
             install_attempt_id: None,
@@ -466,6 +468,8 @@ async fn plugin_upgrade_refreshes_hook_runtime_for_loaded_session() -> Result<()
     )?;
     let install_id = mcp
         .send_plugin_install_request(PluginInstallParams {
+            skip_authentication: false,
+            mcp_admission: None,
             marketplace_path: Some(marketplace_path.clone()),
             remote_marketplace_name: None,
             install_attempt_id: None,
@@ -528,6 +532,8 @@ async fn plugin_upgrade_refreshes_hook_runtime_for_loaded_session() -> Result<()
     )?;
     let install_id = mcp
         .send_plugin_install_request(PluginInstallParams {
+            skip_authentication: false,
+            mcp_admission: None,
             marketplace_path: Some(marketplace_path),
             remote_marketplace_name: None,
             install_attempt_id: None,

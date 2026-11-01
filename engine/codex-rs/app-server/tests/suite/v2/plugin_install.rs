@@ -3208,7 +3208,7 @@ async fn mount_remote_plugin_detail_with_options(
 async fn mount_empty_remote_installed_plugins(server: &MockServer) {
     Mock::given(method("GET"))
         .and(path("/backend-api/ps/plugins/installed"))
-        .and(query_param("scope", "GLOBAL"))
+        .and(query_param("limit", "200"))
         .and(header("authorization", "Bearer chatgpt-token"))
         .and(header("chatgpt-account-id", "account-123"))
         .respond_with(ResponseTemplate::new(200).set_body_string(
@@ -3643,12 +3643,20 @@ async fn plugin_install_rpc_skip_authentication_never_contacts_oauth(remote: boo
     )
     .expect("valid isolated fixture plugin identity");
     assert!(store.plugin_base_root(&plugin_id).as_path().exists());
-    let config = std::fs::read_to_string(home.path().join("config.toml"))?;
-    assert!(config.contains(if remote {
-        "linear@openai-curated-remote"
+    if remote {
+        // Remote installation is acknowledged by the catalog; it does not
+        // synthesize a local config.toml enablement entry.
+        wait_for_remote_plugin_request_count(
+            &catalog,
+            "POST",
+            &format!("/ps/plugins/{REMOTE_PLUGIN_ID}/install"),
+            1,
+        )
+        .await?;
     } else {
-        "sample-plugin@debug"
-    }));
+        let config = std::fs::read_to_string(home.path().join("config.toml"))?;
+        assert!(config.contains("sample-plugin@debug"));
+    }
     assert!(
         oauth
             .received_requests()

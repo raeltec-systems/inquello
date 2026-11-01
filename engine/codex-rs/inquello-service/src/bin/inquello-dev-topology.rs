@@ -74,7 +74,7 @@ const SUBJECT_EMAIL: &str = "developer@synthetic.invalid";
 
 const USAGE: &str = "usage: inquello-dev-topology [--service-bind ADDR] [--issuer-bind ADDR] \
 [--ca-dir DIR] [--config-out FILE] [--drop-stale] [--access-lifetime-secs N] [--exit-on-stdin-eof] \
-[--seed-workspace NAME --seed-out FILE [--seed-execution FILE]]";
+[--seed-workspace NAME --seed-out FILE [--seed-policy FILE] [--seed-execution FILE]]";
 
 /// The sample Workspace policy the seed uses: one role holds `manage_membership`.
 const SEED_POLICY: &str = include_str!("../../../inquello-protocol/fixtures/workspace/policy.json");
@@ -93,6 +93,7 @@ struct Options {
     seed_workspace: Option<String>,
     seed_out: Option<PathBuf>,
     seed_execution: Option<PathBuf>,
+    seed_policy: Option<PathBuf>,
 }
 
 fn parse_options() -> Result<Options, String> {
@@ -108,6 +109,7 @@ fn parse_options() -> Result<Options, String> {
         seed_workspace: None,
         seed_out: None,
         seed_execution: None,
+        seed_policy: None,
     };
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -138,6 +140,7 @@ fn parse_options() -> Result<Options, String> {
             "--seed-execution" => {
                 options.seed_execution = Some(PathBuf::from(value("--seed-execution")?));
             }
+            "--seed-policy" => options.seed_policy = Some(PathBuf::from(value("--seed-policy")?)),
             "-h" | "--help" => return Err(USAGE.to_string()),
             other => return Err(format!("unknown argument {other}\n{USAGE}")),
         }
@@ -150,21 +153,34 @@ fn parse_options() -> Result<Options, String> {
     if options.seed_execution.is_some() && options.seed_workspace.is_none() {
         return Err(format!("--seed-execution needs --seed-workspace\n{USAGE}"));
     }
+    if options.seed_policy.is_some() && options.seed_workspace.is_none() {
+        return Err(format!("--seed-policy needs --seed-workspace\n{USAGE}"));
+    }
     Ok(options)
 }
 
 /// The seeded policy: the sample policy, plus the `execution` section from
 /// `--seed-execution` when given.
-fn seed_policy(execution: Option<&std::path::Path>) -> Result<String, String> {
+fn seed_policy(
+    policy_path: Option<&std::path::Path>,
+    execution: Option<&std::path::Path>,
+) -> Result<String, String> {
+    // Explicit fictional fixture policy; normal sample and production policy stay unchanged.
+    // The operator creation path below validates it before creating the Workspace.
+    let base = match policy_path {
+        Some(path) => std::fs::read_to_string(path)
+            .map_err(|error| format!("could not read --seed-policy: {error}"))?,
+        None => SEED_POLICY.to_string(),
+    };
     let Some(path) = execution else {
-        return Ok(SEED_POLICY.to_string());
+        return Ok(base);
     };
     let text = std::fs::read_to_string(path)
         .map_err(|error| format!("could not read --seed-execution: {error}"))?;
     let section: serde_json::Value = serde_json::from_str(&text)
         .map_err(|_| "--seed-execution is not valid JSON".to_string())?;
     let mut policy: serde_json::Value =
-        serde_json::from_str(SEED_POLICY).map_err(|error| format!("seed policy: {error}"))?;
+        serde_json::from_str(&base).map_err(|error| format!("seed policy: {error}"))?;
     policy
         .as_object_mut()
         .ok_or_else(|| "the seed policy is not an object".to_string())?
@@ -455,7 +471,10 @@ async fn run(options: Options) -> Result<(), String> {
 
     let seeded = match (&options.seed_workspace, &options.seed_out) {
         (Some(name), Some(path)) => {
-            let seeded = match seed_policy(options.seed_execution.as_deref()) {
+            let seeded = match seed_policy(
+                options.seed_policy.as_deref(),
+                options.seed_execution.as_deref(),
+            ) {
                 Ok(policy) => {
                     seed_workspace(&database, name, &policy, provider.issuer_url(), path).await
                 }

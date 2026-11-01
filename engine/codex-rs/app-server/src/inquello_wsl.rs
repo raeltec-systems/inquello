@@ -214,7 +214,10 @@ async fn verified_boot_id(scope: &str) -> anyhow::Result<String> {
         .current_dir(HOST_TEMP)
         .args(["-NoProfile", "-NonInteractive", "-EncodedCommand", &encoded])
         .kill_on_drop(true);
-    let result = tokio::time::timeout(Duration::from_secs(15), process.output()).await??;
+    let result = tokio::time::timeout(Duration::from_secs(15), process.output())
+        .await
+        .context("Windows D-only storage preflight timed out")?
+        .context("Windows D-only storage preflight could not run")?;
     if !result.status.success() {
         bail!("D-only WSL host preflight failed");
     }
@@ -225,7 +228,9 @@ async fn verified_boot_id(scope: &str) -> anyhow::Result<String> {
 
 impl WslExecPlan {
     pub(crate) async fn close_and_wait(&self, client: &ExecServerClient) -> anyhow::Result<()> {
-        tokio::time::timeout(Duration::from_secs(5), client.close_isolated_stdio()).await?;
+        tokio::time::timeout(Duration::from_secs(5), client.close_isolated_stdio())
+            .await
+            .context("Linux executor stdio close timed out")?;
         let boot = verified_boot_id(&self.scope).await?;
         let system = std::env::var("SystemRoot")?;
         for _ in 0..20 {
@@ -271,8 +276,10 @@ impl WslExecPlan {
                 .context("Broker input missing")?
                 .write_all(b"{\"action\":\"idle\"}")
                 .await?;
-            let result =
-                tokio::time::timeout(Duration::from_secs(10), child.wait_with_output()).await??;
+            let result = tokio::time::timeout(Duration::from_secs(10), child.wait_with_output())
+                .await
+                .context("Linux Task lock-release probe timed out")?
+                .context("Linux Task lock-release probe could not complete")?;
             if result.status.success() {
                 return Ok(());
             }
@@ -399,8 +406,10 @@ impl WslExecPlan {
                 .context("Broker input missing")?
                 .write_all(b"{\"action\":\"initialize\"}")
                 .await?;
-            let result =
-                tokio::time::timeout(Duration::from_secs(30), child.wait_with_output()).await??;
+            let result = tokio::time::timeout(Duration::from_secs(30), child.wait_with_output())
+                .await
+                .context("Linux empty Task initialization timed out")?
+                .context("Linux empty Task initialization could not complete")?;
             if !result.status.success() {
                 bail!(
                     "Empty Task guest initialization failed: {}",
@@ -592,7 +601,8 @@ impl WslExecPlan {
             HOST_TEMP.into(),
             Duration::from_secs(30),
         )
-        .await?;
+        .await
+        .context("Linux isolated executor connection failed")?;
         Ok(client)
     }
 

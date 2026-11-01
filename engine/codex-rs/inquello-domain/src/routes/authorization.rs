@@ -665,6 +665,10 @@ mod tests {
 
 mod revision_wire {
     use serde::{Deserialize, Deserializer, Serializer};
+    #[expect(
+        clippy::trivially_copy_pass_by_ref,
+        reason = "Serde's with serializer requires a borrowed field"
+    )]
     pub fn serialize<S: Serializer>(value: &u64, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_str(&value.to_string())
     }

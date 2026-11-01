@@ -634,6 +634,40 @@ fn validate_private_exec_arguments(arguments: &str) -> Result<(), FunctionCallEr
 mod private_command_tests {
     use super::*;
     #[test]
+    fn private_advertised_schema_accepts_only_the_one_shot_fixture_contract() {
+        let handler = ExecCommandHandler::private_one_shot(ExecCommandHandlerOptions {
+            allow_tty: true,
+            exec_permission_approvals_enabled: false,
+            include_environment_id: false,
+            include_windows_shell_guidance: false,
+        });
+        let ToolSpec::Function(spec) = handler.spec() else {
+            panic!("private command must advertise a function schema");
+        };
+        let schema = match serde_json::to_value(spec.parameters) {
+            Ok(schema) => schema,
+            Err(error) => panic!("private command schema must serialize: {error}"),
+        };
+        let arguments = serde_json::json!({
+            "cmd": "printf permitted > output/authorized.txt",
+            "shell": "/bin/bash",
+            "timeout_ms": 120000,
+        });
+        assert!(inquello_protocol::inference::validate_arguments(&schema, &arguments, 0).is_ok());
+        for field in [
+            "yield_time_ms",
+            "login",
+            "tty",
+            "environment_id",
+            "sandbox_permissions",
+        ] {
+            assert!(
+                schema["properties"].get(field).is_none(),
+                "unexpected private field: {field}"
+            );
+        }
+    }
+    #[test]
     fn private_schema_is_the_real_string_cmd_and_refuses_extra_effect_fields() {
         assert!(validate_private_exec_arguments(r#"{"cmd":"printf audit","login":false}"#).is_ok());
         for args in [

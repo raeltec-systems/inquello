@@ -1,8 +1,10 @@
 $ErrorActionPreference = 'Stop'
 $owner = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
 $allowed = @($owner.Value, 'S-1-5-18', 'S-1-5-32-544')
-function Assert-PrivateDirectory([string]$target) {
-    $acl = [IO.Directory]::GetAccessControl($target, [System.Security.AccessControl.AccessControlSections]::Access)
+function Assert-PrivateDirectory([string]$target, [bool]$protected = $false) {
+    $acl = [IO.Directory]::GetAccessControl($target, [System.Security.AccessControl.AccessControlSections]'Access, Owner')
+    if ($allowed -notcontains $acl.GetOwner([System.Security.Principal.SecurityIdentifier]).Value) { throw 'Private D storage owner is unexpected' }
+    if ($protected -and !$acl.AreAccessRulesProtected) { throw 'Private profile DACL must be protected' }
     $ownerAccess = $false
     foreach ($rule in $acl.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier])) {
         if ($rule.AccessControlType -eq 'Allow') {
@@ -22,18 +24,21 @@ foreach ($target in @('D:\Inquello\profiles', ('D:\Inquello\profiles\' + $env:IN
     if (Test-Path -LiteralPath $target) {
         $item = Get-Item -LiteralPath $target -Force
         if (!$item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Private profile storage redirected' }
-        Assert-PrivateDirectory $target
-    } else { [void][IO.Directory]::CreateDirectory($target) }
-    $acl = [IO.Directory]::GetAccessControl($target, [System.Security.AccessControl.AccessControlSections]::Access)
-    $acl.SetAccessRuleProtection($true, $false)
-    foreach ($rule in @($acl.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]))) { $acl.RemoveAccessRuleSpecific($rule) }
-    foreach ($id in $allowed) {
-        $sid = New-Object System.Security.Principal.SecurityIdentifier($id)
-        $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($sid, 'FullControl', 'ContainerInherit, ObjectInherit', 'None', 'Allow')
-        $acl.AddAccessRule($rule)
+        Assert-PrivateDirectory $target $true
+    } else {
+        # Apply a protected DACL atomically at creation. Never rewrite an
+        # existing shared parent: Windows may propagate that change to children.
+        $acl = New-Object System.Security.AccessControl.DirectorySecurity
+        $acl.SetOwner($owner)
+        $acl.SetAccessRuleProtection($true, $false)
+        foreach ($id in $allowed) {
+            $sid = New-Object System.Security.Principal.SecurityIdentifier($id)
+            $rule = New-Object System.Security.AccessControl.FileSystemAccessRule($sid, 'FullControl', 'ContainerInherit, ObjectInherit', 'None', 'Allow')
+            $acl.AddAccessRule($rule)
+        }
+        [void][IO.Directory]::CreateDirectory($target, $acl)
+        Assert-PrivateDirectory $target $true
     }
-    [IO.Directory]::SetAccessControl($target, $acl)
-    Assert-PrivateDirectory $target
 }
 if ([IO.DriveInfo]::new('D:\').AvailableFreeSpace -lt 34359738368) { throw 'D storage requires 32 GiB free' }
 $proof=Get-Content -LiteralPath 'D:\Inquello\runtime\storage-proof.json' -Raw | ConvertFrom-Json

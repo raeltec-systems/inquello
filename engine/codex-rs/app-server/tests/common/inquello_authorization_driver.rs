@@ -28,7 +28,7 @@ fn streams(route: &str, scenario: &str) -> Vec<String> {
     } else {
         "printf permitted > output/authorized.txt"
     };
-    let arguments=json!({"cmd":command,"shell":fixture_shell(),"login":false,"yield_time_ms":if scenario=="lifecycle-progress-cache" {1000}else{10000}}).to_string();
+    let arguments = json!({"cmd":command,"shell":fixture_shell(),"timeout_ms":120000}).to_string();
     if matches!(
         scenario,
         "lifecycle-progress-continuity" | "lifecycle-progress-cache"
@@ -53,7 +53,7 @@ fn streams(route: &str, scenario: &str) -> Vec<String> {
                 stream
                     + &event(
                         "response.completed",
-                        json!({"type":"response.completed","response":{"id":id,"status":"completed","output":[],"usage":{"input_tokens":12,"output_tokens":8,"total_tokens":20}}}),
+                        json!({"type":"response.completed","response":{"id":id,"status":"completed","end_turn":id == "resp_final","output":[],"usage":{"input_tokens":12,"output_tokens":8,"total_tokens":20}}}),
                     )
             };
             let call = |id: &str, name: &str, args: String| json!({"type":"function_call","id":format!("fc_{id}"),"call_id":id,"name":name,"arguments":args});
@@ -196,7 +196,7 @@ fn streams(route: &str, scenario: &str) -> Vec<String> {
         let done = |id: &str| {
             event(
                 "response.completed",
-                json!({"type":"response.completed","response":{"id":id,"status":"completed","output":[],"usage":{"input_tokens":12,"output_tokens":8,"total_tokens":20}}}),
+                json!({"type":"response.completed","response":{"id":id,"status":"completed","end_turn":id == "resp_final","output":[],"usage":{"input_tokens":12,"output_tokens":8,"total_tokens":20}}}),
             )
         };
         vec![
@@ -552,7 +552,7 @@ pub(super) async fn run(
         .map_or(COMPANY_A, |s| s.workspace.as_str())
         .to_owned();
     let directory = tempfile::tempdir().unwrap();
-    let _guest_scope = guest_observer::FixtureScope::new(directory.path(), &principal);
+    let mut _guest_scope = guest_observer::FixtureScope::new(directory.path(), &principal);
     let home = directory.path().join("runtime");
     std::fs::create_dir(&home).unwrap();
     std::fs::write(
@@ -1046,16 +1046,53 @@ pub(super) async fn run(
                     .unwrap()
             };
             let second = server
-                .send_request("inquello/tasks/stop", Some(stop))
+                .send_request("inquello/tasks/stop", Some(stop.clone()))
                 .await
                 .unwrap();
             let stopped = private_response(&mut server, &mut host, first).await;
             let duplicate = private_response(&mut server, &mut host, second).await;
+            // Concurrent handlers may acquire the operation in either order:
+            // either caller can observe the intermediate dispatching receipt.
+            // At least one must contain native interruption confirmation.
+            let confirmed = if stopped["status"] == "interrupted" {
+                &stopped
+            } else {
+                assert_eq!(
+                    duplicate["status"], "interrupted",
+                    "submission alone is not the stop receipt: {stopped}; {duplicate}"
+                );
+                &duplicate
+            };
+            assert!(matches!(
+                stopped["status"].as_str(),
+                Some("dispatching" | "interrupted")
+            ));
+            // A replay may precede the other caller's confirmation.
+            // Its exact operation binding is stable; a subsequent replay must
+            // expose the same settled receipt without dispatching Stop again.
+            for field in [
+                "kind",
+                "operationId",
+                "runId",
+                "runtimeId",
+                "taskId",
+                "threadId",
+                "turnId",
+            ] {
+                assert_eq!(
+                    duplicate[field], stopped[field],
+                    "stable Stop binding: {field}"
+                );
+            }
+            assert!(matches!(
+                duplicate["status"].as_str(),
+                Some("dispatching" | "interrupted")
+            ));
+            let settled = private_rpc(&mut server, &mut host, "inquello/tasks/stop", stop).await;
             assert_eq!(
-                stopped["status"], "interrupted",
-                "submission alone is not the stop receipt: {stopped}"
+                &settled, confirmed,
+                "replay preserves the confirmed Stop receipt"
             );
-            assert_eq!(duplicate, stopped);
             let deadline = tokio::time::Instant::now() + Duration::from_secs(15);
             loop {
                 if shell_process(pid).is_none_or(|(state, current)| {
@@ -1515,7 +1552,7 @@ pub(super) async fn run(
                         changed, 1,
                         "explicit isolated legacy-format fixture, never production metadata"
                     );
-                    convert_saved_fixture_header_to_legacy(&home, &thread);
+                    convert_saved_fixture_to_legacy(&home, &thread);
                     server = TestAppServer::builder()
                         .with_program(std::path::Path::new(&binary))
                         .with_codex_home(&home)
@@ -1681,7 +1718,10 @@ pub(super) async fn run(
     };
     let task = final_status["taskId"].as_str().unwrap();
     let thread = final_status["threadId"].as_str().unwrap();
-    if matches!(scenario, "allowed" | "revoke-model") {
+    if matches!(
+        scenario,
+        "allowed" | "revoke-model" | "search-stalled-admission"
+    ) {
         assert_eq!(
             guest_observer::read(
                 guest_observer::task_output(directory.path(), task, &principal)
@@ -1874,6 +1914,9 @@ pub(super) async fn run(
                 .is_some()
         );
         if service.is_none() {
+            if scenario == "search-stalled-admission" {
+                _guest_scope.keep_running();
+            }
             saved_navigation_matrix(
                 &mut server,
                 &mut host,
@@ -2305,7 +2348,7 @@ async fn saved_navigation_matrix(
     db.close().await.unwrap();
 }
 
-fn convert_saved_fixture_header_to_legacy(home: &std::path::Path, thread: &str) {
+fn convert_saved_fixture_to_legacy(home: &std::path::Path, thread: &str) {
     fn visit(path: &std::path::Path, thread: &str, changed: &mut usize) {
         for entry in std::fs::read_dir(path).unwrap() {
             let path = entry.unwrap().path();
@@ -2323,7 +2366,62 @@ fn convert_saved_fixture_header_to_legacy(home: &std::path::Path, thread: &str) 
             let mut header: Value = serde_json::from_str(first).unwrap();
             if header["type"] == "session_meta" && header["payload"]["id"] == thread {
                 header["payload"]["history_mode"] = json!("legacy");
-                std::fs::write(path, format!("{}\n{}", header, rest)).unwrap();
+                // Renaming only the header leaves paginated ItemCompleted
+                // messages, which the legacy reader intentionally ignores.
+                // Translate the actual retained text to its legacy event form;
+                // preserve turn boundaries and never invent conversation text.
+                let mut converted = format!("{header}\n");
+                let mut messages = 0;
+                for source in rest.lines().filter(|line| !line.is_empty()) {
+                    let parsed =
+                        codex_rollout::parse_rollout_line_bytes(source.as_bytes()).unwrap();
+                    let replacement = match parsed.item {
+                        codex_rollout::RolloutItem::EventMsg(
+                            codex_protocol::protocol::EventMsg::ItemCompleted(event),
+                        ) => match event.item {
+                            codex_protocol::items::TurnItem::UserMessage(user) => {
+                                assert!(user.content.iter().all(|input| matches!(input, codex_protocol::user_input::UserInput::Text { .. })));
+                                Some(codex_protocol::protocol::EventMsg::UserMessage(
+                                    codex_protocol::protocol::UserMessageEvent {
+                                        message: user.message(),
+                                        text_elements: user.text_elements(),
+                                        client_id: user.client_id,
+                                        ..Default::default()
+                                    },
+                                ))
+                            }
+                            codex_protocol::items::TurnItem::AgentMessage(agent) => {
+                                Some(codex_protocol::protocol::EventMsg::AgentMessage(
+                                    codex_protocol::protocol::AgentMessageEvent {
+                                        message: agent.content.iter().map(|content| match content {
+                                            codex_protocol::items::AgentMessageContent::Text { text } => text.as_str(),
+                                        }).collect::<Vec<_>>().join(""),
+                                        phase: agent.phase,
+                                        memory_citation: agent.memory_citation,
+                                        delivery: agent.delivery,
+                                        questions: agent.questions,
+                                    },
+                                ))
+                            }
+                            _ => None,
+                        },
+                        _ => None,
+                    };
+                    if let Some(event) = replacement {
+                        let mut line: Value = serde_json::from_str(source).unwrap();
+                        line["payload"] = serde_json::to_value(event).unwrap();
+                        converted.push_str(&line.to_string());
+                        messages += 1;
+                    } else {
+                        converted.push_str(source);
+                    }
+                    converted.push('\n');
+                }
+                assert!(
+                    messages > 0,
+                    "legacy fixture contains actual retained messages"
+                );
+                std::fs::write(path, converted).unwrap();
                 *changed += 1;
             }
         }

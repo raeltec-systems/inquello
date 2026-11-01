@@ -786,7 +786,7 @@ fn navigation_preserves_private_record_and_reuses_only_identical_receipts() {
         )))
         .replayed
     );
-    let mut changed_request = command.clone();
+    let mut changed_request = command;
     changed_request.archived = false;
     assert!(matches!(
         block_on(set_task_navigation(

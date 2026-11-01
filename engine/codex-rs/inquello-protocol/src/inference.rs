@@ -231,15 +231,13 @@ impl InferenceRequest {
                         {
                             return Err("incompatible provider continuation kind");
                         }
-                        if let ContentBlock::ResponsesContinuation { item, .. } = block {
-                            if item.get("type").and_then(Value::as_str) != Some("reasoning")
-                                && !(item.get("type").and_then(Value::as_str) == Some("message")
-                                    && item.get("role").and_then(Value::as_str)
-                                        == Some("assistant")
-                                    && item.get("encrypted_content").is_some_and(Value::is_string))
-                            {
-                                return Err("unsupported native Responses continuation");
-                            }
+                        if let ContentBlock::ResponsesContinuation { item, .. } = block
+                            && item.get("type").and_then(Value::as_str) != Some("reasoning")
+                            && !(item.get("type").and_then(Value::as_str) == Some("message")
+                                && item.get("role").and_then(Value::as_str) == Some("assistant")
+                                && item.get("encrypted_content").is_some_and(Value::is_string))
+                        {
+                            return Err("unsupported native Responses continuation");
                         }
                         if message.role != Role::Assistant
                             || message.origin != Origin::AssistantOutput
@@ -304,10 +302,10 @@ pub fn validate_schema(schema: &Value, depth: usize) -> Result<(), &'static str>
     ) {
         return Err("unsupported tool schema type");
     }
-    if let Some(values) = schema.get("enum") {
-        if values.as_array().is_none_or(Vec::is_empty) {
-            return Err("invalid tool enum");
-        }
+    if let Some(values) = schema.get("enum")
+        && values.as_array().is_none_or(Vec::is_empty)
+    {
+        return Err("invalid tool enum");
     }
     if let Some(properties) = schema.get("properties") {
         if ty != "object" {
@@ -333,10 +331,10 @@ pub fn validate_schema(schema: &Value, depth: usize) -> Result<(), &'static str>
             }
         }
     }
-    if let Some(additional) = schema.get("additionalProperties") {
-        if ty != "object" || !additional.is_boolean() {
-            return Err("unsupported additional properties");
-        }
+    if let Some(additional) = schema.get("additionalProperties")
+        && (ty != "object" || !additional.is_boolean())
+    {
+        return Err("unsupported additional properties");
     }
     if ty == "array" {
         validate_schema(
@@ -366,19 +364,18 @@ pub fn validate_arguments(schema: &Value, value: &Value, depth: usize) -> Result
     if !valid {
         return Err("tool arguments do not match schema");
     }
-    if let Some(values) = schema.get("enum").and_then(Value::as_array) {
-        if !values.contains(value) {
-            return Err("tool argument outside enum");
-        }
+    if let Some(values) = schema.get("enum").and_then(Value::as_array)
+        && !values.contains(value)
+    {
+        return Err("tool argument outside enum");
     }
     if let Some(object) = value.as_object() {
-        if let Some(required) = schema.get("required").and_then(Value::as_array) {
-            if required
+        if let Some(required) = schema.get("required").and_then(Value::as_array)
+            && required
                 .iter()
                 .any(|key| key.as_str().is_none_or(|key| !object.contains_key(key)))
-            {
-                return Err("required tool argument missing");
-            }
+        {
+            return Err("required tool argument missing");
         }
         for (key, child) in object {
             if let Some(child_schema) = schema.get("properties").and_then(|v| v.get(key)) {

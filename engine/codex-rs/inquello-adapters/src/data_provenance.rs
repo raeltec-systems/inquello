@@ -73,6 +73,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0012_task_lifecycle.sql"),
     include_str!("../migrations/0013_task_runtime_leases.sql"),
     include_str!("../migrations/0014_task_navigation.sql"),
+    include_str!("../migrations/0015_local_tool_metadata_provenance.sql"),
 ];
 fn failure() -> String {
     "Native ownership/category provenance unavailable, mixed, changed or incomplete; data remains quarantined".into()

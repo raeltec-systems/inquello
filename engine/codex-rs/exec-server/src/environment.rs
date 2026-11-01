@@ -1247,19 +1247,20 @@ impl Environment {
 mod tests {
     #[test]
     fn private_task_roots_reject_generic_remote_and_cross_task_selection() {
-        let root: codex_utils_path_uri::PathUri =
-            "file:///var/lib/inquello/tasks/scope/task".parse().unwrap();
+        let root: codex_utils_path_uri::PathUri = "file:///var/lib/inquello/tasks/scope/task"
+            .parse()
+            .expect("Task URI");
         let other: codex_utils_path_uri::PathUri = "file:///var/lib/inquello/tasks/scope/other"
             .parse()
-            .unwrap();
+            .expect("other Task URI");
         let local = super::Environment::default_for_tests();
         assert_eq!(
             local.permits_private_task_root(&root, &root),
             !cfg!(windows)
         );
         assert!(!local.permits_private_task_root(&other, &root));
-        let mut remote =
-            super::Environment::create_for_tests(Some("ws://127.0.0.1:1".into())).unwrap();
+        let mut remote = super::Environment::create_for_tests(Some("ws://127.0.0.1:1".into()))
+            .expect("generic remote environment");
         assert!(!remote.permits_private_task_root(&root, &root));
         remote.private_task_root = Some(root.clone());
         assert!(remote.permits_private_task_root(&root, &root));

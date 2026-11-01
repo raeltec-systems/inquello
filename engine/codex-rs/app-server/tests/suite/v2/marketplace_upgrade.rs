@@ -335,6 +335,8 @@ async fn automatic_upgrade_isolates_git_while_explicit_install_preserves_configu
         .request(|request_id| ClientRequest::PluginInstall {
             request_id,
             params: PluginInstallParams {
+                skip_authentication: false,
+                mcp_admission: None,
                 marketplace_path: Some(marketplace_path),
                 remote_marketplace_name: None,
                 install_attempt_id: None,

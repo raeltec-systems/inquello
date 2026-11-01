@@ -3768,7 +3768,10 @@ impl ThreadRequestProcessor {
                 page_size: 1,
                 sort_direction: StoreSortDirection::Desc,
                 sort_key: StoreItemSortKey::UpdatedAtOrdinal,
-                after_updated_at_ordinal: None,
+                // The store requires an explicit lower watermark for update
+                // order. Start at zero to observe the newest retained mutation,
+                // including edits to older items, rather than creation order.
+                after_updated_at_ordinal: Some(0),
             })
             .await
             .map_err(paginated_history_list_error)?;
@@ -7281,14 +7284,6 @@ impl ThreadRequestProcessor {
         } else {
             self.config.model_provider_id.clone()
         };
-        overrides.insert(
-            format!("model_providers.{provider}.request_max_retries"),
-            serde_json::json!(0),
-        );
-        overrides.insert(
-            format!("model_providers.{provider}.stream_max_retries"),
-            serde_json::json!(0),
-        );
         let mut config = self
             .config_manager
             .load_with_overrides(
@@ -7311,6 +7306,11 @@ impl ThreadRequestProcessor {
             .map_err(|_| {
                 invalid_request("Selected private runtime configuration could not be applied")
             })?;
+        // Built-in provider IDs cannot be redefined by configuration overlays.
+        // Disable retries on the selected runtime instance without replacing its
+        // endpoint, authentication, or other exact-route properties.
+        config.model_provider.request_max_retries = Some(0);
+        config.model_provider.stream_max_retries = Some(0);
         // Provider defaults explicitly clear inherited user/project values.
         config.model_reasoning_effort = if choices.reasoning == "default" {
             None
@@ -7322,6 +7322,10 @@ impl ThreadRequestProcessor {
         };
         config.model_reasoning_summary = Some(codex_protocol::config_types::ReasoningSummary::None);
         config.model_verbosity = None;
+        // Retained CLI null overrides become the Responses string "default".
+        // A private provider-default choice means no optional wire setting;
+        // in particular Messages does not support the Responses service tier.
+        config.service_tier = (choices.speed != "default").then(|| choices.speed.clone());
         config.memories.generate_memories = false;
         config.memories.use_memories = false;
         if route.route_id() == inquello_domain::routes::RouteId::CodexResponses {

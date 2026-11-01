@@ -37,8 +37,8 @@ pub struct RouteApprovalCommand {
 #[serde(tag = "command", rename_all = "snake_case", deny_unknown_fields)]
 pub enum RouteApprovalChange {
     Approve {
-        identity: RouteEvidenceIdentity,
-        approval: OrganizationRouteApproval,
+        identity: Box<RouteEvidenceIdentity>,
+        approval: Box<OrganizationRouteApproval>,
     },
     Revoke {
         route_id: String,
@@ -136,7 +136,10 @@ async fn apply_with_evidence(
     let workspace = workspaces::lock_workspace(&mut tx, request.workspace_id, LockMode::Update)
         .await?
         .ok_or(AdminError::WorkspaceNotFound)?;
-    if !workspace.kind.is_some_and(|kind| kind.is_enabled()) {
+    if !workspace
+        .kind
+        .is_some_and(inquello_domain::authorization::WorkspaceKind::is_enabled)
+    {
         return Err(AdminError::RouteNotAvailable(
             "unsupported Workspace".into(),
         ));
@@ -179,7 +182,7 @@ async fn apply_with_evidence(
                         .into(),
                 ));
             }
-            (identity.clone(), approval.clone())
+            (identity.as_ref().clone(), approval.as_ref().clone())
         }
         RouteApprovalChange::Revoke { .. } => {
             let (_, identity, mut approval) =
@@ -421,6 +424,10 @@ mod tests {
 
 mod decimal_revision {
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    #[expect(
+        clippy::trivially_copy_pass_by_ref,
+        reason = "Serde's with serializer requires a borrowed field"
+    )]
     pub fn serialize<S: Serializer>(value: &u64, serializer: S) -> Result<S::Ok, S::Error> {
         inquello_protocol::Revision::new(*value).serialize(serializer)
     }

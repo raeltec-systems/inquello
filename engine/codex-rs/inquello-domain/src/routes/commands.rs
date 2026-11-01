@@ -137,19 +137,17 @@ pub async fn configure_route<S: RouteStore, C: Clock>(
             if matches!(
                 error,
                 StoreError::RevisionConflict { .. } | StoreError::DuplicateOperation { .. }
-            ) {
-                if let Some(outcome) = replay_candidate(
-                    store,
-                    actor,
-                    &operation_id,
-                    route_id,
-                    command.expected_revision,
-                    &request,
-                )
-                .await?
-                {
-                    return Ok(outcome);
-                }
+            ) && let Some(outcome) = replay_candidate(
+                store,
+                actor,
+                &operation_id,
+                route_id,
+                command.expected_revision,
+                &request,
+            )
+            .await?
+            {
+                return Ok(outcome);
             }
             Err(domain_store(error))
         }
@@ -285,19 +283,17 @@ pub async fn set_task_route<S: RouteStore, C: Clock>(
             if matches!(
                 error,
                 StoreError::RevisionConflict { .. } | StoreError::DuplicateOperation { .. }
-            ) {
-                if let Some(outcome) = replay_selection(
-                    store,
-                    actor,
-                    &operation_id,
-                    task_id,
-                    command.expected_revision,
-                    &request,
-                )
-                .await?
-                {
-                    return Ok(outcome);
-                }
+            ) && let Some(outcome) = replay_selection(
+                store,
+                actor,
+                &operation_id,
+                task_id,
+                command.expected_revision,
+                &request,
+            )
+            .await?
+            {
+                return Ok(outcome);
             }
             Err(domain_store(error))
         }
