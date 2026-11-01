@@ -65,7 +65,7 @@ export function Providers(): ReactElement {
     if (!bridge) return;
     try {
       const next = parseProviderStatus(await bridge.getStatus());
-      if (next) setStatus(next);
+      if (next) { setStatus(next); setNotice(current => current === 'The provider status could not be read.' ? null : current); }
     } catch {
       setNotice('The provider status could not be read.');
     }
@@ -144,7 +144,10 @@ export function Providers(): ReactElement {
       data-codex-state={codex ?? 'unknown'}
       data-codex-account={status?.codex.account?.type ?? 'none'}
     >
-      <p className="specimen-account-note">Provider credentials only authorize inference. They never change your Inquello identity, and signing out of Inquello keeps them.</p>
+      <h3>Connect your AI providers</h3>
+      <p className="specimen-account-note">Connect an account, then choose its model in Processing routes. Provider credentials never change your Inquello identity, and signing out of Inquello keeps them.</p>
+      <p className="specimen-account-note">A stored key or connected account is not a successful model test. Processing routes shows which exact models are qualified and available.</p>
+      <Button variant="quiet" disabledReason={anyBusy} onPress={() => void load()}>Refresh provider status</Button>
       <dl className="specimen-account-states">
         <div className="specimen-account-state">
           <dt>Claude API key</dt>
@@ -167,6 +170,8 @@ export function Providers(): ReactElement {
         </div>
       </dl>
       <div className="specimen-provider-form" data-provider-claude="">
+        <h4>Anthropic API</h4>
+        <p className="specimen-account-note">Use your Anthropic API credits. Store your key, then optionally check account access. Check key does not send a prompt or test the selected model.</p>
         <TextField
           id="provider-claude-key"
           type="password"
@@ -189,6 +194,8 @@ export function Providers(): ReactElement {
         </div>
       </div>
       <div className="specimen-provider-form" data-provider-codex="">
+        <h4>OpenAI</h4>
+        <p className="specimen-account-note">Use an API key for your OpenAI API credits, or sign in with ChatGPT. These are separate account and billing options.</p>
         <TextField
           id="provider-codex-key"
           type="password"
@@ -206,10 +213,11 @@ export function Providers(): ReactElement {
             Sign in with ChatGPT
           </Button>
           <Button variant="quiet" data-provider-action="codex-logout" pending={busy === 'codex-logout'} disabledReason={busy === 'codex-logout' ? undefined : logoutReason} onPress={() => void act('codex-logout')}>
-            Disconnect
+            {connecting ? 'Cancel sign-in and disconnect' : 'Disconnect'}
           </Button>
         </div>
       </div>
+      {connecting ? <p className="specimen-account-note">Finish in your browser. Cancel sign-in and disconnect also removes any connected Codex login; it does not sign you out of Inquello.</p> : null}
       {notice ? (
         <p className="specimen-account-note" role="status">
           {notice}

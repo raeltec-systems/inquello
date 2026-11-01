@@ -85,3 +85,14 @@ it.each([
  await userEvent.click(await screen.findByRole('button',{name:'Reconnect selected provider'}));
  expect(reconnect).toHaveBeenCalledWith(destination);expect(h.select).not.toHaveBeenCalled();expect(h.configure).not.toHaveBeenCalled();
 });
+
+it('summarizes unavailable models without inventing qualification and keeps technical facts inspectable',async()=>{
+ const h=setup(); render(<ProcessingRoutes/>);
+ await screen.findByText(/Model qualification pending/);
+ const disclosure=document.querySelector<HTMLDetailsElement>('[data-route-details]')!;
+ expect(disclosure.open).toBe(false);
+ await userEvent.click(screen.getByText('Connection details and qualification'));
+ expect(disclosure.open).toBe(true);
+ expect(screen.getByText('Evidence: No passing evidence recorded')).toBeTruthy();
+ expect(h.configure).not.toHaveBeenCalled(); expect(h.select).not.toHaveBeenCalled();
+});

@@ -307,6 +307,7 @@ describe('organise payloads', () => {
     expect(OPERATION_NAMES.filter((name) => name.startsWith('organise.'))).toEqual([
       'organise.getWorkspaces',
       'organise.getTree',
+      'organise.recoverNavigation',
       'organise.search',
       'organise.reopen',
       'organise.setNavigation',

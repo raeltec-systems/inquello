@@ -142,6 +142,36 @@ describe('Providers block', () => {
   });
 });
 
+describe('provider onboarding clarity', () => {
+  it('keeps connection status separate from model qualification and performs no automatic check', async () => {
+    const bridge = installBridge(); render(<Providers />);
+    await screen.findByText('Connect your AI providers');
+    expect(screen.getByText(/not a successful model test/)).toBeTruthy();
+    expect(screen.getByText(/Check key does not send a prompt/)).toBeTruthy();
+    expect(bridge.verifyClaudeKey).not.toHaveBeenCalled();
+    expect(bridge.codexLogin).not.toHaveBeenCalled();
+  });
+  it('offers status refresh after a read failure without submitting credentials', async () => {
+    const getStatus=vi.fn().mockRejectedValueOnce(new Error('private transport detail')).mockResolvedValue(status('not-configured','not-connected'));
+    const bridge=installBridge({getStatus}); render(<Providers />);
+    await screen.findByText('The provider status could not be read.');
+    await userEvent.click(button('Refresh provider status'));
+    await screen.findByText('No key set');
+    expect(bridge.setClaudeKey).not.toHaveBeenCalled(); expect(bridge.codexLogin).not.toHaveBeenCalled();
+    expect(document.body.textContent).not.toContain('private transport detail');
+    expect(screen.queryByText('The provider status could not be read.')).toBeNull();
+  });
+  it('truthfully labels cancellation as disconnect and uses only existing logout', async () => {
+    const bridge=installBridge(); render(<Providers />); await screen.findByText('Not connected');
+    await userEvent.click(button('Sign in with ChatGPT'));
+    await screen.findByText('Waiting for the browser');
+    await userEvent.click(button('Cancel sign-in and disconnect'));
+    await screen.findByText('Not connected');
+    expect(bridge.codexLogout).toHaveBeenCalledTimes(1);
+    expect(bridge.codexLogin).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('provider status parser', () => {
   it('accepts the published shape and drops anything else', () => {
     const raw = { ...status('verified', 'connected'), key: KEY, identity: { state: 'signed-in' } };
