@@ -41,6 +41,11 @@
 //! that allows the broad modes. Without it the seeded policy has no `execution`
 //! section and the conservative Inquello default applies. The policy is
 //! validated as the operator CLI would.
+//!
+//! `--onboarding` is a separate debug-only test mode, incompatible with every
+//! seed option. It starts with no workspace or membership and requires a fixed
+//! `login_hint` of `chanda` or `elias`. Only this mode emits signed verified-email
+//! claims for those two fictional .invalid identities. It never sends email.
 
 use chrono::TimeDelta;
 use inquello_service::DatabaseConfig;
@@ -50,6 +55,7 @@ use inquello_service::ServiceConfig;
 use inquello_service::SystemClock;
 use inquello_service::postgres;
 use inquello_service::test_provider::ProviderSettings;
+use inquello_service::test_provider::start_onboarding_provider;
 use inquello_service::test_provider::start_provider;
 use inquello_service::test_tls::TestCertificateAuthority;
 use serde_json::json;
@@ -75,7 +81,7 @@ const SUBJECT_EMAIL: &str = "chanda.mwansa@mupeta.invalid";
 
 const USAGE: &str = "usage: inquello-dev-topology [--service-bind ADDR] [--issuer-bind ADDR] \
 [--ca-dir DIR] [--config-out FILE] [--drop-stale] [--access-lifetime-secs N] [--exit-on-stdin-eof] \
-[--seed-workspace NAME --seed-out FILE [--seed-policy FILE] [--seed-execution FILE]]";
+[--seed-workspace NAME --seed-out FILE [--seed-policy FILE] [--seed-execution FILE]] [--onboarding]";
 
 /// The sample Workspace policy the seed uses: one role holds `manage_membership`.
 const SEED_POLICY: &str = include_str!("../../../inquello-protocol/fixtures/workspace/policy.json");
@@ -84,6 +90,7 @@ const SEED_POLICY: &str = include_str!("../../../inquello-protocol/fixtures/work
 const RUN_DATABASE_PREFIX: &str = "inquello_dev_";
 
 struct Options {
+    onboarding: bool,
     service_bind: SocketAddr,
     issuer_bind: SocketAddr,
     ca_dir: Option<PathBuf>,
@@ -100,6 +107,7 @@ struct Options {
 fn parse_options() -> Result<Options, String> {
     let loopback: SocketAddr = SocketAddr::from(([127, 0, 0, 1], 0));
     let mut options = Options {
+        onboarding: false,
         service_bind: loopback,
         issuer_bind: loopback,
         ca_dir: None,
@@ -116,6 +124,7 @@ fn parse_options() -> Result<Options, String> {
     while let Some(arg) = args.next() {
         let mut value = |name: &str| args.next().ok_or_else(|| format!("{name} needs a value"));
         match arg.as_str() {
+            "--onboarding" => options.onboarding = true,
             "--service-bind" => {
                 options.service_bind = value("--service-bind")?
                     .parse()
@@ -145,6 +154,19 @@ fn parse_options() -> Result<Options, String> {
             "-h" | "--help" => return Err(USAGE.to_string()),
             other => return Err(format!("unknown argument {other}\n{USAGE}")),
         }
+    }
+    if options.onboarding
+        && (!cfg!(debug_assertions)
+            || options.seed_workspace.is_some()
+            || options.seed_out.is_some()
+            || options.seed_execution.is_some()
+            || options.seed_policy.is_some()
+            || options.service_bind.ip() != std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST)
+            || options.issuer_bind.ip() != std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST))
+    {
+        return Err(
+            "--onboarding requires debug loopback and forbids every seed option".to_string(),
+        );
     }
     if options.seed_workspace.is_some() != options.seed_out.is_some() {
         return Err(format!(
@@ -421,21 +443,21 @@ async fn run(options: Options) -> Result<(), String> {
     };
 
     let started = async {
-        let provider = start_provider(
-            options.issuer_bind,
-            &tls,
-            ProviderSettings {
-                client_id: CLIENT_ID.to_string(),
-                redirect_uris: vec![REDIRECT_URI.to_string()],
-                subject: SUBJECT.to_string(),
-                email: Some(SUBJECT_EMAIL.to_string()),
-                name: Some(SUBJECT_NAME.to_string()),
-                code_lifetime: TimeDelta::minutes(1),
-                id_token_lifetime: TimeDelta::minutes(5),
-            },
-            Arc::new(SystemClock),
-        )
-        .await
+        let settings = ProviderSettings {
+            client_id: CLIENT_ID.to_string(),
+            redirect_uris: vec![REDIRECT_URI.to_string()],
+            subject: SUBJECT.to_string(),
+            email: Some(SUBJECT_EMAIL.to_string()),
+            name: Some(SUBJECT_NAME.to_string()),
+            code_lifetime: TimeDelta::minutes(1),
+            id_token_lifetime: TimeDelta::minutes(5),
+        };
+        let provider = if options.onboarding {
+            start_onboarding_provider(options.issuer_bind, &tls, settings, Arc::new(SystemClock))
+                .await
+        } else {
+            start_provider(options.issuer_bind, &tls, settings, Arc::new(SystemClock)).await
+        }
         .map_err(|error| format!("the synthetic provider did not start: {error}"))?;
         let config = ServiceConfig {
             deployment: Deployment::SyntheticTest,
