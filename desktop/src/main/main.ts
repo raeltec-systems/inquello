@@ -1,3 +1,5 @@
+import {ownedOnboardingFixture,ONBOARDING_FIXTURE_ENV,ONBOARDING_RUN_ENV} from './onboarding-smoke';
+import {probeOnboarding} from './onboarding-smoke-probe';
 import { configureDesktopStorage } from './runtime/desktop-storage';
 import { smokeCatalogArgs } from './runtime/smoke-catalog';
 import { wslDataStorage } from './runtime/wsl-data';
@@ -153,10 +155,13 @@ import { createProviders, loadProviderDevConfig, PROVIDER_DEV_CONFIG_ENV, provid
 import { probeStartSurface, probeRoutes, probeCapabilities, probeComposer, probeData, probeIdentity, probeOrganise, probePermissions, probePolicy, probeProviders, probeRenderer, probeShellLayout, probeStates, probeToolBounds, SHELL_LAYOUT } from './smoke-probe';
 
 const paidQualificationRequested = controlledPaidLaunchRequested(Object.keys(process.env), process.argv);
+const onboardingFixture=ownedOnboardingFixture({packaged:app.isPackaged,argv:process.argv,env:process.env});
+const onboardingSmoke=onboardingFixture!==null;
+let onboardingOk=false;
 const navigationSmoke = !app.isPackaged && process.argv.includes('--smoke-navigation');
 const quotaSmoke = !app.isPackaged && process.argv.includes('--smoke-quota');
 const visualSmoke = !app.isPackaged && process.argv.includes('--smoke-visual');
-const smoke = process.argv.includes('--smoke') || navigationSmoke || quotaSmoke || visualSmoke;
+const smoke = process.argv.includes('--smoke') || navigationSmoke || quotaSmoke || visualSmoke || onboardingSmoke;
 let visualOk = false;
 let quotaOk = false;
 let navigationOk = false;
@@ -243,7 +248,7 @@ if (smoke) {
   // Keep the smoke run's Electron profile, and with it the runtime home, out of
   // the user's real ones. Each run gets a fresh directory because Chromium
   // and runtime descendants may still hold a prior disposable profile open.
-  app.setPath('userData', path.join(process.platform === 'win32' ? 'D:\\Inquello\\tmp' : os.tmpdir(), `inquello-smoke-${randomUUID()}`));
+  app.setPath('userData', onboardingFixture?.profile ?? path.join(process.platform === 'win32' ? 'D:\\Inquello\\tmp' : os.tmpdir(), `inquello-smoke-${randomUUID()}`));
 }
 
 if (process.platform === 'win32') configureDesktopStorage(app, app.getPath('userData'));
@@ -270,19 +275,19 @@ function createWindow(): BrowserWindow {
     useContentSize: true,
     minWidth: SHELL_LAYOUT.windowMinWidth,
     minHeight: WINDOW_MIN_HEIGHT,
-    show: !smoke,
+    show: !smoke || onboardingSmoke,
     title: 'Inquello',
     webPreferences: {
       ...secureWebPreferences(path.join(__dirname, '..', 'preload', 'preload.js')),
       // Only the unpackaged synthetic capture run needs hidden-window animation frames.
-      ...(visualSmoke ? { backgroundThrottling: false } : {}),
+      ...((visualSmoke || onboardingSmoke) ? { backgroundThrottling: false } : {}),
     },
   });
   const id = window.webContents.id;
   trustedWebContentsIds.add(id);
   window.webContents.once('destroyed', () => trustedWebContentsIds.delete(id));
   // The smoke run's earlier probes read the design specimen; the app opens on the Shell.
-  void window.loadURL(smoke ? `${APP_ENTRY_URL}#specimen` : APP_ENTRY_URL);
+  void window.loadURL(onboardingSmoke ? `${APP_ENTRY_URL}#onboarding` : smoke ? `${APP_ENTRY_URL}#specimen` : APP_ENTRY_URL);
   return window;
 }
 
@@ -292,7 +297,7 @@ function workingStorePath(userData: string): string {
 }
 
 function runtimeEnv(runtimeHome: string, workingStore: string): NodeJS.ProcessEnv {
-  return runtimeChildEnv(process.env, { serviceConfigEnv: SERVICE_CONFIG_ENV, codexHome: runtimeHome, workingStore, blocked: [PROVIDER_DEV_CONFIG_ENV, 'INQUELLO_SMOKE_SEED', 'INQUELLO_QUOTA_FIXTURE', 'INQUELLO_VISUAL_FIXTURE'] });
+  return runtimeChildEnv(process.env, { serviceConfigEnv: SERVICE_CONFIG_ENV, codexHome: runtimeHome, workingStore, blocked: [ONBOARDING_FIXTURE_ENV, ONBOARDING_RUN_ENV, PROVIDER_DEV_CONFIG_ENV, 'INQUELLO_SMOKE_SEED', 'INQUELLO_QUOTA_FIXTURE', 'INQUELLO_VISUAL_FIXTURE'] });
 }
 
 const runtimeLifecycle = new RuntimeLifecycle();
@@ -421,6 +426,11 @@ async function chooseImportSource(): Promise<string | null> {
 }
 
 async function runSmokeProbe(contents: WebContents): Promise<void> {
+  if(onboardingFixture){
+    if(!identity)throw new Error('Onboarding identity unavailable');
+    const report=await probeOnboarding(contents,{fixture:onboardingFixture,identity});
+    onboardingOk=report.ok;process.stdout.write(`${JSON.stringify({event:'onboarding',...report})}\n`);return;
+  }
   if (visualSmoke) {
     if (!identity || !organise || !policy || !runtime) throw new Error('Visual smoke services unavailable');
     const report=await probeVisualConversation(contents,{identity,organise,policy,seedFile:process.env.INQUELLO_SMOKE_SEED??null,
@@ -566,6 +576,7 @@ async function runSmokeProbe(contents: WebContents): Promise<void> {
 
 function exitCodeFor(exit: ExitInfo | undefined): number {
   if (!smoke) return 0;
+  if (onboardingSmoke) return handshakeOk && onboardingOk && exit?.exitCode === 0 && !exit.killed ? 0 : 1;
   if (visualSmoke) return handshakeOk && visualOk && exit?.exitCode === 0 && !exit.killed ? 0 : 1;
   if (quotaSmoke) return handshakeOk && quotaOk && exit?.exitCode === 0 && !exit.killed ? 0 : 1;
   if (navigationSmoke) return handshakeOk && navigationOk && shellLayoutOk && exit?.exitCode === 0 && !exit.killed ? 0 : 1;
@@ -617,7 +628,7 @@ void app.whenReady().then(async () => {
     // No Task folders from an earlier run.
     fs.rmSync(taskFoldersRoot(userData), { recursive: true, force: true });
     // The providers probe checks that an inherited provider key never reaches the runtime.
-    if (!Object.keys(process.env).some((name) => isProviderCredentialVar(name))) {
+    if (!onboardingSmoke && !Object.keys(process.env).some((name) => isProviderCredentialVar(name))) {
       process.env.OPENAI_API_KEY = `sk-inherited-smoke-${randomUUID()}`;
     }
   }
@@ -628,7 +639,7 @@ void app.whenReady().then(async () => {
     userDataDir: app.getPath('userData'),
     logger,
     // The smoke run plays the browser's part headlessly; the app always uses the system browser.
-    opener: (transport) => (smoke && transport ? headlessOpener(transport) : openSystemBrowser),
+    opener: (transport) => (onboardingFixture && transport ? onboardingFixture.opener(transport) : smoke && transport ? headlessOpener(transport) : openSystemBrowser),
     recordSecrets: smoke,
   });
   const identitySession = identity.session;
