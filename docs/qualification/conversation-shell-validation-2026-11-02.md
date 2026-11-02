@@ -38,6 +38,8 @@ Real-provider onboarding and the simplified model-name picker remain separate wo
 
 ## Follow-up reproduction contract
 
+This UI-only evidence is pinned to commit `a38f13aa42d023d492fa44a760dfa4e5f5aaa74a` and its four-dispatch Messages fixture. Run the reproduction commands against that checkpoint. Later model-binding work has a separate five-dispatch Responses A/B journey and separate qualification evidence; it does not retroactively change the observations below.
+
 The approved follow-up starts from `34706d5bf65da344b010ad11d4bd625cf2cfd3d7` and integrates the 20 files in the handoff manifest after rechecking each candidate SHA-256 and each normalized baseline Git blob. It changes the default navigation to 320px (64px rail plus 256px history), permits bounded resizing, removes duplicate branding, and adds the organization/team menu, confirmed signout and committed provider-control focus. The synthetic probe retains the full conversation journey and real-overflow/one-composer/menu bounds assertions.
 
 The startup observation uses `performance.now()` immediately before the actual Send click. Every observed Task is checked against that same origin **after** reading it. An observation at 20,001ms fails the performance expectation; one at 60,001ms also fails the functional gate and cannot return an accepted Task. The functional gate remains 60 seconds and the performance expectation remains 20 seconds. Earlier failure observations above remain failures.
@@ -63,7 +65,8 @@ $env:CARGO_INCREMENTAL = '0'
 ```powershell
 $ErrorActionPreference = 'Stop'
 if (Test-Path .\.tmp\story121-env.ps1) { . .\.tmp\story121-env.ps1 }
-if (-not ($env:INQUELLO_TEST_DATABASE_URL -or $env:INQUELLO_DEV_DATABASE_URL)) { throw 'Supply the existing synthetic PostgreSQL admin connection first.' }
+if ($env:INQUELLO_TEST_DATABASE_URL -and $env:INQUELLO_DEV_DATABASE_URL) { throw 'Ambiguous database configuration: explicitly clear the unused database variable before running synthetic checks.' }
+if (-not ($env:INQUELLO_TEST_DATABASE_URL -or $env:INQUELLO_DEV_DATABASE_URL)) { throw 'Supply exactly one existing synthetic PostgreSQL admin connection first.' }
 if (-not ($env:RUSTUP_HOME -and $env:CARGO_HOME -and $env:RUSTUP_TOOLCHAIN)) { throw 'Supply the already-installed Rust toolchain environment first.' }
 if (-not (Test-Path (Join-Path $env:RUSTUP_HOME "toolchains/$env:RUSTUP_TOOLCHAIN/bin/rustc.exe"))) { throw 'The required installed toolchain is missing; stop without installing it.' }
 $env:RUSTUP_AUTO_INSTALL = '0'

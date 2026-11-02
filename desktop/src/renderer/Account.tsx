@@ -9,7 +9,7 @@
  * Private work is always labelled local; a shared-service outage blocks shared
  * work only. Data attributes expose the rendered state to the smoke probe.
  *
- * `onIdentityChanged` runs after a sign-in or sign-out attempt; the App uses
+ * `onIdentityChanged` runs after a confirmed identity transition; the App uses
  * it to drop the Composer's in-memory drafts (Story 1.17).
  */
 import { useCallback, useEffect, useState, type ReactElement } from 'react';
@@ -45,7 +45,7 @@ function initials(name: string): string {
 }
 
 export interface AccountProps {
-  /** Called after a sign-in or sign-out attempt completes, whatever its outcome. */
+  /** Called only when an action confirms a change in signed-in identity. */
   onIdentityChanged?: () => void;
   signOutOnly?: boolean;
 }
@@ -81,12 +81,12 @@ export function Account({ onIdentityChanged, signOutOnly=false }: AccountProps =
     try {
       const result = parseIdentityAction(await (action === 'sign-in' ? bridge.signIn() : bridge.signOut()));
       if (result?.status) setStatus(result.status);
+      if (result?.status && ((action==='sign-out'&&result.status.identity.state==='signed-out'&&status?.identity.state!=='signed-out')||(action==='sign-in'&&result.status.identity.state==='signed-in'&&status?.identity.state!=='signed-in'))) onIdentityChanged?.();
       if (result && !result.ok) setNotice(result.reason ?? 'The request did not complete.');
     } catch {
       setNotice('The request did not complete.');
     } finally {
       setBusy(null);
-      onIdentityChanged?.();
     }
   };
 

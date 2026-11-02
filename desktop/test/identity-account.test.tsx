@@ -42,6 +42,16 @@ const block = () => document.querySelector<HTMLElement>('[data-account]')!;
 const button = (name: string) => screen.getByRole('button', { name });
 
 describe('Account block', () => {
+  it.each(['refused','throws'])('preserves owner drafts when sign-out %s', async outcome => {
+    const changed=vi.fn();
+    installBridge(signedIn,{signOut:async()=>{if(outcome==='throws')throw new Error('unavailable');return{ok:false,status:signedIn,reason:'Sign-out was refused.'};}});
+    render(<Account onIdentityChanged={changed}/>);
+    await screen.findByText('Chanda Mwansa');
+    await userEvent.click(button('Sign out'));
+    await screen.findByRole('status');
+    expect(block().dataset.identityState).toBe('signed-in');
+    expect(changed).not.toHaveBeenCalled();
+  });
   it('shows identity, shared service and private work as separate states', async () => {
     installBridge(signedIn);
     render(<Account />);

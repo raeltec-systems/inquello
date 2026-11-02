@@ -264,11 +264,12 @@ function FolderForm({
 
 
 /** The sole account/organization entry, anchored to the bottom of the rail. */
-function SidebarFooter({ person, workspaceName, onShowSpecimen, onSignOut }: { person: PersonView | null; workspaceName: string | null; onShowSpecimen: () => void; onSignOut?:()=>void }): ReactElement {
+function SidebarFooter({ person, workspaceName, workspaces, workspaceId, onSelectWorkspace, onShowSpecimen, onSignOut }: { person: PersonView | null; workspaceName: string | null; workspaces:WorkspacesState['workspaces']; workspaceId:string|null; onSelectWorkspace:SidebarProps['onSelectWorkspace']; onShowSpecimen: () => void; onSignOut?:()=>void }): ReactElement {
  return <div className="iq-sidebar-footer iq-account-footer" data-sidebar-footer data-sidebar-person>
   <Menu label="Organization and team" heading={person?.name ?? 'Not signed in'} className="iq-account-menu" triggerVariant="ghost"
    triggerContent={<Avatar name={person?.name ?? 'Account'} initials={person ? initialsOf(person.name) : '?'} />}
    items={[
+    ...(workspaces.length>1?workspaces.map(workspace=>({label:`Switch to ${workspace.name}`,description:workspace.workspaceId===workspaceId?'Current workspace':undefined,onSelect:()=>onSelectWorkspace(workspace.workspaceId)})):[]),
     {label:workspaceName ?? 'Organization setup',description:workspaceName ? 'Organization and team' : 'Create or join a workspace',onSelect:()=>{globalThis.location.hash='#onboarding';}},
     {label:'Settings',onSelect:onShowSpecimen},
     ...(person?[{label:'Sign out…',onSelect:onSignOut??(()=>{globalThis.location.hash='#settings-signout';})}]:[]),
@@ -485,7 +486,7 @@ function Rail(props: SidebarProps): ReactElement {
           ) : null}
         </>
       ) : null}
-      <div className="iq-rail-footer"><SidebarFooter person={person} workspaceName={workspace?.name ?? null} onShowSpecimen={props.onShowSpecimen} onSignOut={props.onSignOut}/></div>
+      <div className="iq-rail-footer"><SidebarFooter person={person} workspaceName={workspace?.name ?? null} workspaces={props.state?.signedIn?props.state.workspaces:[]} workspaceId={props.workspaceId} onSelectWorkspace={props.onSelectWorkspace} onShowSpecimen={props.onShowSpecimen} onSignOut={props.onSignOut}/></div>
     </div>
   );
 }
