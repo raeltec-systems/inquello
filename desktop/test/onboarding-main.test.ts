@@ -308,3 +308,12 @@ describe('conversation-preserving authority notifications',()=>{
   expect((await s.reconcile()).ok).toBe(true);expect(notify).toHaveBeenCalledOnce();
  });
 });
+
+it('does not diagnose an unverified email from a generic discovery denial',async()=>{
+ const w=world();w.discoveryFailure=true;const result=await w.make().getState();
+ expect(result).toMatchObject({ok:true,value:{discoveryReason:ONBOARDING_REASONS.verification}});
+ expect(ONBOARDING_REASONS.verification).toContain('A recent sign-in with a verified email is required. Sign in again.');
+ expect(ONBOARDING_REASONS.verification).toContain('If this persists');
+ expect(ONBOARDING_REASONS.invitation).toContain('intended account');
+ expect(ONBOARDING_REASONS.denied).toContain('check your current role');
+});

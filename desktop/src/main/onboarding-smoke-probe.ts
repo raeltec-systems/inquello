@@ -30,7 +30,7 @@ export async function probeOnboarding(contents:WebContents,options:{fixture:Fixt
  };
  const reauthenticate=async(account:FixtureAccount,name:string)=>{
   options.fixture.select(account);
-  await run(`await click('Verify email / Sign in again');await confirm('Sign out and sign in again');await wait(()=>root().textContent.includes(${JSON.stringify(name+' · Synthetic test issuer')})&&button('Verify email / Sign in again')&&!button('Verify email / Sign in again').disabled);`);
+  await run(`await click('Sign in again');await confirm('Sign out and sign in again');await wait(()=>root().textContent.includes(${JSON.stringify(name+' · Synthetic test issuer')})&&button('Sign in again')&&!button('Sign in again').disabled);`);
  };
  try {
   await run("await wait(()=>root()&&button('Sign in / Sign up / Recover account'));if(location.hash!=='#onboarding'||document.querySelector('.specimen'))throw Error('Wrong first-run surface');");

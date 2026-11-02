@@ -61,7 +61,7 @@ describe('ordinary onboarding controls',()=>{
   expect(screen.getByText(/Inbox delivery is not confirmed/)).toBeTruthy();
  });
  it('keeps an ambiguous pending request visible and never permits discard',async()=>{
-  const w=world({...initial,pending:{kind:'createWorkspace',input:{name:'Alder'},operationId:I,state:'retryable',canDiscard:false},discoveryReason:'Verify your email with your identity provider, then sign in again.'});
+  const w=world({...initial,pending:{kind:'createWorkspace',input:{name:'Alder'},operationId:I,state:'retryable',canDiscard:false},discoveryReason:'A recent sign-in with a verified email is required. Sign in again. If this persists, check email verification with your identity provider.'});
   render(<Onboarding onBack={()=>{}}/>);await ready();
   expect(screen.getByRole('button',{name:'Discard rejected request'}).getAttribute('aria-disabled')).toBe('true');
   await userEvent.click(screen.getByRole('button',{name:'Discard rejected request'}));expect(w.api.discardPending).not.toHaveBeenCalled();
@@ -70,7 +70,7 @@ describe('ordinary onboarding controls',()=>{
  });
  it('requires confirmation for explicit reauthentication, without exposing passwords',async()=>{
   const w=world();render(<Onboarding onBack={()=>{}}/>);await ready();
-  await userEvent.click(screen.getByRole('button',{name:'Verify email / Sign in again'}));expect(w.identity.reauthenticate).not.toHaveBeenCalled();
+  await userEvent.click(screen.getByRole('button',{name:'Sign in again'}));expect(w.identity.reauthenticate).not.toHaveBeenCalled();
   await userEvent.click(within(screen.getByRole('dialog')).getByRole('button',{name:'Sign out and sign in again'}));
   await waitFor(()=>expect(w.identity.reauthenticate).toHaveBeenCalledOnce());expect(document.querySelector('input[type=password]')).toBeNull();
  });
@@ -102,7 +102,7 @@ describe('draft/identity transition fences',()=>{
   w.api.saveDraft.mockImplementation(()=>new Promise(resolve=>{saved=resolve;}) as never);
   render(<Onboarding onBack={()=>{}}/>);await ready();
   fireEvent.change(screen.getByLabelText('Workspace name'),{target:{value:'Immediate draft'}});
-  await userEvent.click(screen.getByRole('button',{name:'Verify email / Sign in again'}));
+  await userEvent.click(screen.getByRole('button',{name:'Sign in again'}));
   await userEvent.click(within(screen.getByRole('dialog')).getByRole('button',{name:'Sign out and sign in again'}));
   await waitFor(()=>expect(w.api.saveDraft).toHaveBeenCalled());expect(w.identity.reauthenticate).not.toHaveBeenCalled();
   await act(async()=>saved({ok:true,value:{name:'Immediate draft',email:'',workspaceId:W}}));
@@ -112,7 +112,7 @@ describe('draft/identity transition fences',()=>{
   const w=world();w.api.saveDraft.mockResolvedValue({ok:false,reason:'Secure storage unavailable.'} as never);
   render(<Onboarding onBack={()=>{}}/>);await ready();
   fireEvent.change(screen.getByLabelText('Workspace name'),{target:{value:'Keep unsaved draft'}});
-  await userEvent.click(screen.getByRole('button',{name:'Verify email / Sign in again'}));
+  await userEvent.click(screen.getByRole('button',{name:'Sign in again'}));
   await userEvent.click(within(screen.getByRole('dialog')).getByRole('button',{name:'Sign out and sign in again'}));
   await screen.findByText(/Keep this window open and retry before changing accounts/);
   expect(w.identity.reauthenticate).not.toHaveBeenCalled();expect((screen.getByLabelText('Workspace name') as HTMLInputElement).value).toBe('Keep unsaved draft');
@@ -148,7 +148,7 @@ describe('current-generation refresh notices',()=>{
  for(const denied of [false,true])it(denied?'retains a genuine current authority denial after an intentional account switch':'clears a stale transition read warning only after fresh signed-in state succeeds',async()=>{
   const w=world();render(<Onboarding onBack={()=>{}}/>);await ready();
   let finish!:(v:unknown)=>void;w.identity.reauthenticate.mockImplementation(()=>new Promise(resolve=>{finish=resolve;}) as never);
-  await userEvent.click(screen.getByRole('button',{name:'Verify email / Sign in again'}));
+  await userEvent.click(screen.getByRole('button',{name:'Sign in again'}));
   await userEvent.click(within(screen.getByRole('dialog')).getByRole('button',{name:'Sign out and sign in again'}));
   await waitFor(()=>expect(w.identity.reauthenticate).toHaveBeenCalled());
   w.api.getState.mockResolvedValue({ok:false,reason:changed} as never);
@@ -171,4 +171,25 @@ describe('current-generation refresh notices',()=>{
   await screen.findByText('This creation is denied.');await ready();
   expect(screen.getByText('This creation is denied.')).toBeTruthy();
  });
+});
+
+it('offers recent-sign-in recovery without asserting the signed-in email is unverified or dispatching a mutation',async()=>{
+ const reason='A recent sign-in with a verified email is required. Sign in again. If this persists, check email verification with your identity provider.';
+ const pending={kind:'createWorkspace',input:{name:'Preserved workspace'},operationId:I,state:'retryable',canDiscard:false};
+ const w=world({...initial,pending,discoveryReason:reason});render(<Onboarding onBack={()=>{}}/>);await ready();
+ expect(screen.getByText(reason)).toBeTruthy();expect(screen.queryByText('Verify your email with your identity provider, then sign in again.')).toBeNull();
+ await userEvent.click(screen.getByRole('button',{name:'Sign in again'}));
+ expect(screen.getByText(/Your browser may reuse its current account/)).toBeTruthy();expect(w.identity.reauthenticate).not.toHaveBeenCalled();
+ await userEvent.click(within(screen.getByRole('dialog')).getByRole('button',{name:'Sign out and sign in again'}));
+ await waitFor(()=>expect(w.identity.reauthenticate).toHaveBeenCalledOnce());await screen.findByText(/Pending action: createWorkspace/);
+ expect(w.api.createWorkspace).not.toHaveBeenCalled();expect(w.api.retry).not.toHaveBeenCalled();expect(w.api.discardPending).not.toHaveBeenCalled();
+});
+
+for(const denied of [false,true])it(denied?'keeps a discovery denial distinct from a successful empty invitation list':'shows plain empty invitations after successful discovery without verification instructions',async()=>{
+ const reason='A recent sign-in with a verified email is required. Sign in again. If this persists, check email verification with your identity provider.';
+ world({...initial,discoveryReason:denied?reason:null});render(<Onboarding onBack={()=>{}}/>);await ready();
+ const section=screen.getByRole('heading',{name:'Invitations for you'}).closest('section')!;
+ expect(section.textContent).not.toMatch(/Verify your email|sign in again/i);
+ if(denied){expect(screen.queryByText('No invitations are waiting for this account.')).toBeNull();expect(screen.getByText(reason)).toBeTruthy();}
+ else expect(within(section).getByText('No invitations are waiting for this account.')).toBeTruthy();
 });
