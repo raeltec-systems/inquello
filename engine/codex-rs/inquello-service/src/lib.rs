@@ -50,6 +50,7 @@ mod onboarding;
 pub mod postgres;
 pub mod route_eligibility;
 mod routes;
+pub mod serve;
 mod server;
 mod sessions;
 #[cfg(feature = "test-issuer")]

@@ -25,6 +25,8 @@ use std::time::Duration;
 use uuid::Uuid;
 
 const USAGE: &str = "usage:
+  inquello-service serve --config PRIVATE_JSON [--exit-on-stdin-eof]
+
   inquello-service delivery dispatch --config PRIVATE_JSON [--database-url URL]
 
   inquello-service admin create-workspace --name NAME --policy FILE \\
@@ -234,6 +236,19 @@ async fn run(args: &[String]) -> Result<String, CliError> {
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().is_some_and(|arg| arg == "serve") {
+        let result = match inquello_service::serve::ServeOptions::parse(&args[1..]) {
+            Ok(options) => inquello_service::serve::run(options).await,
+            Err(error) => Err(error),
+        };
+        return match result {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => {
+                eprintln!("error: {error}");
+                ExitCode::FAILURE
+            }
+        };
+    }
     match run(&args).await {
         Ok(line) => {
             println!("{line}");

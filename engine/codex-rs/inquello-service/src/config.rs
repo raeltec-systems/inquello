@@ -315,7 +315,7 @@ impl ServiceConfig {
 }
 
 impl Lifetimes {
-    fn validate(&self) -> Result<(), ConfigError> {
+    pub(crate) fn validate(&self) -> Result<(), ConfigError> {
         let invalid = |name, reason| ConfigError::InvalidLifetime { name, reason };
         for (name, value) in [
             ("login_transaction", self.login_transaction),
