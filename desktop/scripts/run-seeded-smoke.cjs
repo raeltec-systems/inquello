@@ -100,7 +100,7 @@ fs.writeFileSync(policyFile,JSON.stringify(policy));
   const result=await settleSmokePhase(async()=>{
     if(quota||visual)tls=await localTls(folder,visual);
     stage='topology-readiness';
-    topology=spawn(process.env.INQUELLO_DEV_TOPOLOGY_BIN??path.join(root,`engine/codex-rs/target/debug/inquello-dev-topology${suffix}`),(onboarding?['--exit-on-stdin-eof','--onboarding']:['--exit-on-stdin-eof','--seed-workspace',quota?'Synthetic quota audit':visual?'Synthetic visual QA audit':'Synthetic recovery audit','--seed-out',seed,'--seed-policy',policyFile]),{env:process.env,stdio:['pipe','pipe','inherit'],windowsHide:true});
+    topology=spawn(process.env.INQUELLO_DEV_TOPOLOGY_BIN??path.join(root,`engine/codex-rs/target/debug/inquello-dev-topology${suffix}`),(onboarding?['--exit-on-stdin-eof','--onboarding']:['--exit-on-stdin-eof','--seed-workspace',quota?'Synthetic quota audit':visual?'Mupeta & Partners':'Synthetic recovery audit','--seed-out',seed,'--seed-policy',policyFile]),{env:process.env,stdio:['pipe','pipe','inherit'],windowsHide:true});
     const lines=readline.createInterface({input:topology.stdout});
     const line=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Synthetic topology readiness timed out')),60000);lines.once('line',text=>{clearTimeout(timer);resolve(text);});topology.once('error',()=>{clearTimeout(timer);reject(new Error('Synthetic topology unavailable'));});topology.once('exit',()=>{clearTimeout(timer);reject(new Error('Synthetic topology exited before readiness'));});});
     fs.writeFileSync(config,line);
