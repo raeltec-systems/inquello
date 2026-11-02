@@ -64,3 +64,13 @@ describe('activity ordering and native quiescence',()=>{
   service.runtimeStopped(2);expect(service.activeTasks()).toBe(1);service.runtimeStopped(1);expect(service.activeTasks()).toBe(0);
  });
 });
+
+
+it.each([false,true])('keeps start diagnostics payload-free and non-authoritative even when callback throws (%s)',async throws=>{
+ const phases:string[]=[],request=vi.fn(async()=>({operationId:op,taskId:id,runId:op,threadId:id,status:'running',request:command.request,accepted:true}));
+ const service=new TaskService({runtime:{ready:()=>true,instance:()=>1,request:request as never},identity:{principalId:()=>id},syncPrincipal:async()=>{},prepareRoutes:async()=>({ok:true}),bootstrap:async()=>{},freshPolicy:async()=>({workspaceId:id,authorizationEpoch:3} as never),authorityDiagnostic:(stage,scope)=>{phases.push(stage+'/'+scope);if(throws)throw new Error('diagnostic failure');}});
+ expect((await service.start(command)).ok).toBe(true);
+ expect(phases).toEqual(['start-input/current','start-sync/current','start-routes/current','start-bootstrap/current','start-policy/current','start-native/current','start-result/current']);
+ expect(request).toHaveBeenCalledOnce();expect(request).toHaveBeenCalledWith('inquello/tasks/start',{...command,workspacePolicy:{workspaceId:id,authorizationEpoch:3}});
+ expect(phases.join(' ')).not.toContain(id);expect(phases.join(' ')).not.toContain(command.request);
+});
