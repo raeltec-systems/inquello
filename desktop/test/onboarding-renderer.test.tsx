@@ -141,3 +141,34 @@ describe('member edit scope',()=>{
   expect((within(document.querySelector('[data-member-id="'+A+'"]') as HTMLElement).getByRole('checkbox',{name:'Owner'}) as HTMLInputElement).checked).toBe(false);
  });
 });
+
+
+describe('current-generation refresh notices',()=>{
+ const changed='The signed-in identity changed. Return to onboarding with the intended account.';
+ for(const denied of [false,true])it(denied?'retains a genuine current authority denial after an intentional account switch':'clears a stale transition read warning only after fresh signed-in state succeeds',async()=>{
+  const w=world();render(<Onboarding onBack={()=>{}}/>);await ready();
+  let finish!:(v:unknown)=>void;w.identity.reauthenticate.mockImplementation(()=>new Promise(resolve=>{finish=resolve;}) as never);
+  await userEvent.click(screen.getByRole('button',{name:'Verify email / Sign in again'}));
+  await userEvent.click(within(screen.getByRole('dialog')).getByRole('button',{name:'Sign out and sign in again'}));
+  await waitFor(()=>expect(w.identity.reauthenticate).toHaveBeenCalled());
+  w.api.getState.mockResolvedValue({ok:false,reason:changed} as never);
+  act(()=>w.change());await screen.findByText(changed);
+  const recipient={...account,identity:{...account.identity,displayName:'Elias Ndlovu'}};
+  w.identity.getStatus.mockResolvedValue(recipient);
+  w.api.getState.mockResolvedValue(denied?{ok:false,reason:'Current authority denied.'} as never:{ok:true,value:initial});
+  await act(async()=>finish({ok:true,status:recipient}));
+  await screen.findByText(/Elias Ndlovu/);
+  if(denied)await screen.findByText('Current authority denied.');
+  else await ready();
+  await waitFor(()=>expect(screen.queryByText(changed)).toBeNull());
+ });
+ it('does not erase a current mutation rejection when its subsequent read succeeds',async()=>{
+  const w=world();w.api.createWorkspace.mockResolvedValue({ok:false,reason:'This creation is denied.'} as never);
+  render(<Onboarding onBack={()=>{}}/>);await ready();
+  fireEvent.change(screen.getByLabelText('Workspace name'),{target:{value:'Denied workspace'}});
+  await userEvent.click(screen.getByRole('button',{name:'Review Workspace creation'}));
+  await userEvent.click(within(screen.getByRole('dialog')).getByRole('button',{name:'Create Workspace'}));
+  await screen.findByText('This creation is denied.');await ready();
+  expect(screen.getByText('This creation is denied.')).toBeTruthy();
+ });
+});

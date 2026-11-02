@@ -48,6 +48,7 @@ export async function probeOnboarding(contents:WebContents,options:{fixture:Fixt
   await run("await click('Review invitation details');await confirm('Create invitation');await wait(()=>root().querySelector('[data-managed-invitation]')?.textContent.includes('elias.ndlovu@mupeta.invalid')&&root().textContent.includes('Email delivery is not configured.'));if(root().querySelectorAll('[data-managed-invitation]').length!==1)throw Error('Duplicate invitation');");
   checks.push('visible-invite-member','truthful-unconfigured-delivery');await run("root().querySelector('[data-managed-invitation]').scrollIntoView({block:'center'});");await capture('04-owner-invitation-unconfigured');
   stage='recipient-sign-in';await reauthenticate('elias','Elias Ndlovu');
+  await run("await wait(()=>!root().textContent.includes('The signed-in identity changed. Return to onboarding with the intended account.'));");
   const recipient=options.identity.session.principalId();if(!recipient||recipient===owner)throw Error('Recipient identity not distinct');
   await run("await wait(()=>button('Review invitation'));if(document.querySelector('#onboarding-workspace').options.length!==1)throw Error('Recipient granted before acceptance');");
   checks.push('distinct-recipient-no-membership-before-accept');await run("button('Review invitation').scrollIntoView({block:'center'});");await capture('05-recipient-invitation');

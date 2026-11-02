@@ -32,6 +32,9 @@ export function Onboarding({onBack,onIdentityChanged}:OnboardingProps):ReactElem
  const [status,setStatus]=useState<IdentityStatusView|null>(null),[data,setData]=useState<OnboardingState|null>(null),[draft,setDraft]=useState<Draft>(EMPTY);
  const [workspaces,setWorkspaces]=useState<WorkspaceEntry[]>([]),[workspace,setWorkspace]=useState(''),[team,setTeam]=useState<Team|null>(null),[teamNotice,setTeamNotice]=useState<string|null>(null);
  const [inviteRoles,setInviteRoles]=useState<string[]>([]),[busy,setBusy]=useState<string|null>(null),[notice,setNotice]=useState<string|null>(null),[confirm,setConfirm]=useState<Confirmation|null>(null);
+ // Read failures belong to a completed refresh, not to a mutation. A later
+ // successful current-generation read resolves only this notice.
+ const [readNotice,setReadNotice]=useState<string|null>(null);
  const flight=useRef<object|null>(null);
  const mounted=useRef(true),epoch=useRef(0),read=useRef(0),teamRead=useRef(0),workspaceRef=useRef(''),dirty=useRef(false),latestDraft=useRef(draft),refreshRef=useRef<()=>Promise<void>>(async()=>{});
  latestDraft.current=draft;
@@ -46,15 +49,15 @@ export function Onboarding({onBack,onIdentityChanged}:OnboardingProps):ReactElem
   }catch{if(current(token)&&sequence===teamRead.current){setTeam(null);setTeamNotice(UNAVAILABLE);}}
  };
  const refresh=async()=>{
-  if(!api||!identity){setNotice('Workspace onboarding is available in the desktop app only.');return;}
+  if(!api||!identity){setReadNotice('Workspace onboarding is available in the desktop app only.');return;}
   const token=epoch.current,sequence=++read.current;
   try{
    const account=parseIdentityStatus(await identity.getStatus());if(!current(token)||sequence!==read.current)return;
    if(!account)throw Error();setStatus(account);
    if(account.identity.state!=='signed-in'){clear();return;}
    const next=readState(await api.getState());if(!current(token)||sequence!==read.current)return;
-   if(!next?.ok){setData(null);setTeam(null);setNotice(next&&!next.ok?next.reason:UNAVAILABLE);return;}
-   setData(next.value);if(!dirty.current)setDraft(next.value.draft);
+   if(!next?.ok){setData(null);setTeam(null);setReadNotice(next&&!next.ok?next.reason:UNAVAILABLE);return;}
+   setReadNotice(null);setData(next.value);if(!dirty.current)setDraft(next.value.draft);
    const ws=organise?parseWorkspaces(await organise.getWorkspaces()):null;if(!current(token)||sequence!==read.current)return;
    const allowed=ws?.signedIn&&ws.sharedService==='available'?ws.workspaces.filter(w=>w.source==='service'):[];
    setWorkspaces(allowed);
@@ -62,7 +65,7 @@ export function Onboarding({onBack,onIdentityChanged}:OnboardingProps):ReactElem
    if(selected!==workspaceRef.current){workspaceRef.current=selected;setWorkspace(selected);setTeam(null);setInviteRoles([]);}
    if(selected)await loadTeam(selected);
    else setTeam(null);
-  }catch{if(current(token)&&sequence===read.current){setData(null);setTeam(null);setWorkspaces([]);setNotice(UNAVAILABLE);}}
+  }catch{if(current(token)&&sequence===read.current){setData(null);setTeam(null);setWorkspaces([]);setReadNotice(UNAVAILABLE);}}
  };
  refreshRef.current=refresh;
  useEffect(()=>{mounted.current=true;void refreshRef.current();const events=(globalThis as {inquello?:{tasks?:{onSessionChanged?:(fn:(changed:boolean)=>void)=>()=>void}}}).inquello?.tasks;
@@ -104,6 +107,7 @@ export function Onboarding({onBack,onIdentityChanged}:OnboardingProps):ReactElem
  return <main className="iq-onboarding" data-onboarding>
   <header className="iq-onboarding-header"><div><p className="iq-onboarding-eyebrow">Inquello / Account & workspace</p><h1>Make room for private work.</h1><p>Establish your identity, choose a Workspace, and invite your team. Your Tasks and provider credentials stay private.</p></div><Button variant="quiet" disabledReason={busy?'Wait for the current request.':undefined} onPress={()=>void persist().then(saved=>{if(saved)onBack();})}>Back to private work</Button></header>
   {notice&&<p className="iq-onboarding-notice" role="status">{notice}</p>}
+  {readNotice&&<p className="iq-onboarding-notice" role="status">{readNotice}</p>}
   <section className="iq-onboarding-card" aria-labelledby="identity-heading"><h2 id="identity-heading">Your account</h2>
    <p>{status?.identity.state==='signed-in'?status.identity.displayName+' · '+status.identity.issuerLabel:'Sign in, create an account, or recover access using your identity provider’s hosted page.'}</p>
    <p>Inquello never stores your password. This account is separate from OpenAI or Anthropic credentials.</p>

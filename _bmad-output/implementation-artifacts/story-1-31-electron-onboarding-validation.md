@@ -31,3 +31,11 @@ No seed membership/helper acceptance, real email, live inference, or hosted Auth
 ## Honest remaining findings
 Recipient screenshot05 retains a stale identity-changed warning after successful intentional account switch; narrow generation-scoped notice repair and recapture required before clean preview. Recipient screenshot06 correctly denies manager metadata but uses generic membership-change-unavailable copy; clearer read-only capability messaging remains desirable.
 Windows symlink negative not executed. Narrow/mobile layouts, keyboard/modal capture matrix, interruption/restart/private-task journey and scoped pending journal still pending. Hosted Auth0 browser switching/signup/recovery and maintained real-issuer HTTP launcher remain separate unfinished work. Story remains in-progress. No builder remote publication.
+
+## Corrected refresh notice checkpoint — 2026-11-02 05:30 UTC
+Separated refresh-read notices from mutation notices. Only a successful current epoch/sequence signed-in state read clears the refresh notice; current read denial, discovery/team denial and mutation rejection are not swallowed.
+Three focused renderer regressions pass. .tmp/story131-onboarding-notice-validation.ps1 PID18000 exit0: protocol/build0, **559 tests PASS +1 explicit Windows symlink skip, 21 files**.
+Full actual journey rerun .tmp/story131-onboarding-notice-electron.ps1 PID20416 exit0 in34.03s, all11checks PASS, cleanupErrors empty.
+New seven captures/manifest: D:\Inquello\tmp\inquello-seeded-smoke-2MyPay\onboarding\captures.
+Inspected corrected recipient05 and owner07: no stale identity-changed warning; correct Elias identity/pending invitation and Chanda Owner/Elias Reviewer remain readable. Original seven captures preserved separately. Generic nonmanager read-denial wording remains a known copy refinement, not authority leakage.
+Post-run only unknown pre-existing topology28340 remained; no owned Electron/app-server. Existing native engine fd5063db unchanged. No full-story, live Auth0, external delivery or scoped-journal completion claim.
