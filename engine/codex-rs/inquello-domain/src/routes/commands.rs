@@ -46,11 +46,15 @@ pub async fn task_route<S: RouteStore>(
         .await
         .map_err(DomainError::Store)?;
     let stale_configuration = if let Some(record) = &current {
-        let (candidate_revision, _) = store
-            .load_candidate_route(actor.principal_id, record.configuration.route_id())
+        let binding = store
+            .load_configuration_binding(
+                actor.principal_id,
+                record.configuration.route_id(),
+                record.configuration_revision,
+            )
             .await
             .map_err(DomainError::Store)?;
-        candidate_revision != record.configuration_revision
+        binding.is_none_or(|binding| binding.state != ModelBindingState::Active)
     } else {
         false
     };
@@ -81,22 +85,76 @@ pub async fn candidate_routes<S: RouteStore>(
     Ok(records)
 }
 
+pub async fn active_candidate<S: RouteStore>(
+    store: &S,
+    actor: Actor,
+    route_id: RouteId,
+    revision: Revision,
+) -> Result<CandidateRouteRecord, DomainError> {
+    store
+        .load_configuration_binding(actor.principal_id, route_id, revision)
+        .await
+        .map_err(domain_store)?
+        .filter(|binding| binding.state == ModelBindingState::Active)
+        .map(|binding| binding.candidate)
+        .ok_or_else(|| DomainError::InvalidCommand("selected model binding is unavailable".into()))
+}
+
 pub async fn configure_route<S: RouteStore, C: Clock>(
     store: &S,
     clock: &C,
     actor: Actor,
     command: ConfigureRoute,
 ) -> Result<CandidateRouteOutcome, DomainError> {
+    configure_binding(store, clock, actor, command, None).await
+}
+
+pub async fn resolve_model_binding<S: RouteStore, C: Clock>(
+    store: &S,
+    clock: &C,
+    actor: Actor,
+    command: ConfigureRoute,
+    catalog_version: &str,
+    choice_id: &str,
+) -> Result<CandidateRouteOutcome, DomainError> {
+    configure_binding(
+        store,
+        clock,
+        actor,
+        command,
+        Some((catalog_version, choice_id)),
+    )
+    .await
+}
+
+async fn configure_binding<S: RouteStore, C: Clock>(
+    store: &S,
+    clock: &C,
+    actor: Actor,
+    command: ConfigureRoute,
+    catalog: Option<(&str, &str)>,
+) -> Result<CandidateRouteOutcome, DomainError> {
     let operation_id = OperationId::parse(&command.operation_id)?;
     let configuration = RouteConfiguration::parse(command.configuration)?;
-    let request = serde_json::to_string(&configuration.input())
-        .map_err(|_| DomainError::InvalidCommand("invalid route configuration".into()))?;
+    let command_kind = if catalog.is_some() {
+        RESOLVE_MODEL_BINDING_COMMAND
+    } else {
+        CONFIGURE_ROUTE_COMMAND
+    };
+    let request = if let Some((version, choice)) = catalog {
+        json!({"catalog_version":version,"choice_id":choice,"configuration":configuration.input()})
+            .to_string()
+    } else {
+        serde_json::to_string(&configuration.input())
+            .map_err(|_| DomainError::InvalidCommand("invalid route configuration".into()))?
+    };
     let route_id = configuration.route_id();
     if let Some(outcome) = replay_candidate(
         store,
         actor,
         &operation_id,
         route_id,
+        command_kind,
         command.expected_revision,
         &request,
     )
@@ -112,6 +170,7 @@ pub async fn configure_route<S: RouteStore, C: Clock>(
     };
     let receipt = CandidateRouteReceipt {
         operation_id: operation_id.clone(),
+        command: command_kind.into(),
         principal_id: actor.principal_id,
         route_id,
         expected_revision: command.expected_revision,
@@ -142,6 +201,7 @@ pub async fn configure_route<S: RouteStore, C: Clock>(
                 actor,
                 &operation_id,
                 route_id,
+                command_kind,
                 command.expected_revision,
                 &request,
             )
@@ -159,6 +219,7 @@ async fn replay_candidate<S: RouteStore>(
     actor: Actor,
     operation_id: &OperationId,
     route_id: RouteId,
+    command_kind: &str,
     expected: Revision,
     request: &str,
 ) -> Result<Option<CandidateRouteOutcome>, DomainError> {
@@ -170,6 +231,7 @@ async fn replay_candidate<S: RouteStore>(
         return Ok(None);
     };
     if receipt.principal_id != actor.principal_id
+        || receipt.command != command_kind
         || receipt.route_id != route_id
         || receipt.expected_revision != expected
         || receipt.request != request
@@ -222,11 +284,14 @@ pub async fn set_task_route<S: RouteStore, C: Clock>(
     {
         return Ok(outcome);
     }
-    let (candidate_revision, candidate) = store
-        .load_candidate_route(actor.principal_id, route_id)
+    let binding = store
+        .load_configuration_binding(actor.principal_id, route_id, command.configuration_revision)
         .await
         .map_err(DomainError::Store)?;
-    if candidate_revision != command.configuration_revision {
+    if binding
+        .as_ref()
+        .is_none_or(|binding| binding.state != ModelBindingState::Active)
+    {
         // A concurrent identical operation may have committed before the
         // candidate was replaced. Re-read its receipt before returning stale.
         if let Some(outcome) = replay_selection(
@@ -241,13 +306,14 @@ pub async fn set_task_route<S: RouteStore, C: Clock>(
         {
             return Ok(outcome);
         }
-        return Err(DomainError::RevisionConflict {
-            expected: command.configuration_revision,
-            actual: candidate_revision,
-        });
+        return Err(DomainError::InvalidCommand(
+            "selected model binding is unavailable".into(),
+        ));
     }
-    let candidate = candidate
-        .ok_or_else(|| DomainError::InvalidCommand("configure the selected route first".into()))?;
+    let binding =
+        binding.ok_or_else(|| DomainError::InvalidCommand("choose a model first".into()))?;
+    let binding_revision = binding.revision;
+    let candidate = binding.candidate;
     let record = TaskRouteRecord {
         task_id,
         configuration_revision: candidate.revision,
@@ -269,6 +335,7 @@ pub async fn set_task_route<S: RouteStore, C: Clock>(
     match store
         .commit_task_route(RouteChange {
             expected_revision: command.expected_revision,
+            expected_binding_revision: binding_revision,
             record: record.clone(),
             receipt: receipt.clone(),
         })
@@ -350,4 +417,112 @@ fn domain_store(error: StoreError) -> DomainError {
         }
         error => DomainError::Store(error),
     }
+}
+
+/// Trusted callers must establish exact credential and qualification authority
+/// before revalidating legacy configuration. Revoked identities are permanent.
+pub async fn change_model_binding_state<S: RouteStore, C: Clock>(
+    store: &S,
+    clock: &C,
+    actor: Actor,
+    operation: &str,
+    binding_id: &str,
+    expected_revision: Revision,
+    target: ModelBindingState,
+) -> Result<ModelBindingOutcome, DomainError> {
+    let operation_id = OperationId::parse(operation)?;
+    let binding_id = uuid::Uuid::parse_str(binding_id)
+        .map_err(|_| DomainError::InvalidCommand("invalid model binding".into()))?
+        .to_string();
+    let binding = store
+        .load_model_binding(actor.principal_id, &binding_id)
+        .await
+        .map_err(domain_store)?
+        .ok_or(DomainError::NotFound)?;
+    let command = match target {
+        ModelBindingState::Revoked => REVOKE_MODEL_BINDING_COMMAND,
+        ModelBindingState::Active => REVALIDATE_MODEL_BINDING_COMMAND,
+        ModelBindingState::LegacySuperseded => {
+            return Err(DomainError::InvalidCommand(
+                "invalid model binding transition".into(),
+            ));
+        }
+    };
+    let request = json!({"binding_id": binding_id, "state": target.as_str()}).to_string();
+    let replay = |receipt: ModelBindingReceipt| -> Result<ModelBindingOutcome, DomainError> {
+        if receipt.principal_id != actor.principal_id
+            || receipt.binding_id != binding_id
+            || receipt.expected_revision != expected_revision
+            || receipt.request != request
+        {
+            return Err(DomainError::OperationConflict {
+                operation_id: operation_id.clone(),
+            });
+        }
+        Ok(ModelBindingOutcome {
+            binding: ModelBinding {
+                state: target,
+                revision: receipt.resulting_revision,
+                ..binding.clone()
+            },
+            receipt,
+            replayed: true,
+        })
+    };
+    if let Some(receipt) = store
+        .find_model_binding_receipt(&operation_id, command)
+        .await
+        .map_err(domain_store)?
+    {
+        return replay(receipt);
+    }
+    if binding.revision != expected_revision {
+        return Err(DomainError::RevisionConflict {
+            expected: expected_revision,
+            actual: binding.revision,
+        });
+    }
+    if binding.state == ModelBindingState::Revoked
+        || (target == ModelBindingState::Active
+            && binding.state != ModelBindingState::LegacySuperseded)
+    {
+        return Err(DomainError::InvalidCommand(
+            "model binding cannot be reactivated".into(),
+        ));
+    }
+    let receipt = ModelBindingReceipt {
+        operation_id: operation_id.clone(),
+        principal_id: actor.principal_id,
+        binding_id: binding_id.clone(),
+        command: command.into(),
+        expected_revision,
+        resulting_revision: expected_revision.next()?,
+        request: request.clone(),
+        recorded_at: clock.now(),
+    };
+    if let Err(error) = store
+        .commit_model_binding_state(receipt.clone(), target)
+        .await
+    {
+        if matches!(
+            error,
+            StoreError::RevisionConflict { .. } | StoreError::DuplicateOperation { .. }
+        ) && let Some(receipt) = store
+            .find_model_binding_receipt(&operation_id, command)
+            .await
+            .map_err(domain_store)?
+        {
+            return replay(receipt);
+        }
+        return Err(domain_store(error));
+    }
+    Ok(ModelBindingOutcome {
+        binding: ModelBinding {
+            state: target,
+            revision: receipt.resulting_revision,
+            ..binding
+        },
+        receipt,
+        replayed: false,
+    })
 }

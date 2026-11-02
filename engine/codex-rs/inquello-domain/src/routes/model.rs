@@ -338,8 +338,9 @@ impl TaskRoute {
         );
         if self.stale_configuration {
             result.enabled = false;
-            result.gate =
-                Some("Route configuration changed; explicitly select the current candidate again");
+            result.gate = Some(
+                "Selected model binding is unavailable; explicitly revalidate or choose a model",
+            );
         }
         result
     }
@@ -367,6 +368,7 @@ pub struct RouteOutcome {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RouteChange {
     pub expected_revision: Revision,
+    pub expected_binding_revision: Revision,
     pub record: TaskRouteRecord,
     pub receipt: RouteReceipt,
 }
@@ -486,6 +488,7 @@ mod tests {
 }
 
 pub const CONFIGURE_ROUTE_COMMAND: &str = "configure_route";
+pub const RESOLVE_MODEL_BINDING_COMMAND: &str = "resolve_model_binding";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CandidateRouteRecord {
@@ -498,6 +501,7 @@ pub struct CandidateRouteRecord {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CandidateRouteReceipt {
     pub operation_id: OperationId,
+    pub command: String,
     pub principal_id: PrincipalId,
     pub route_id: RouteId,
     pub expected_revision: Revision,
@@ -518,5 +522,53 @@ pub struct CandidateRouteChange {
 pub struct CandidateRouteOutcome {
     pub receipt: CandidateRouteReceipt,
     pub record: CandidateRouteRecord,
+    pub replayed: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ModelBindingState {
+    Active,
+    Revoked,
+    LegacySuperseded,
+}
+
+impl ModelBindingState {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Active => "active",
+            Self::Revoked => "revoked",
+            Self::LegacySuperseded => "legacy-superseded",
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ModelBinding {
+    pub binding_id: String,
+    pub candidate: CandidateRouteRecord,
+    pub state: ModelBindingState,
+    /// Revocation/revalidation CAS, independent of configuration and Task selection.
+    pub revision: Revision,
+}
+
+pub const REVOKE_MODEL_BINDING_COMMAND: &str = "revoke_model_binding";
+pub const REVALIDATE_MODEL_BINDING_COMMAND: &str = "revalidate_model_binding";
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ModelBindingReceipt {
+    pub operation_id: OperationId,
+    pub principal_id: PrincipalId,
+    pub binding_id: String,
+    pub command: String,
+    pub expected_revision: Revision,
+    pub resulting_revision: Revision,
+    pub request: String,
+    pub recorded_at: Timestamp,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ModelBindingOutcome {
+    pub binding: ModelBinding,
+    pub receipt: ModelBindingReceipt,
     pub replayed: bool,
 }

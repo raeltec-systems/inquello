@@ -4,6 +4,37 @@ use crate::{OperationId, Revision, StoreError};
 use std::future::Future;
 
 pub trait RouteStore: Send + Sync {
+    fn tasks_for_model_binding(
+        &self,
+        principal_id: PrincipalId,
+        route_id: RouteId,
+        revision: Revision,
+    ) -> impl Future<Output = Result<Vec<TaskId>, StoreError>> + Send;
+    fn list_model_bindings(
+        &self,
+        principal_id: PrincipalId,
+    ) -> impl Future<Output = Result<Vec<ModelBinding>, StoreError>> + Send;
+    fn load_model_binding(
+        &self,
+        principal_id: PrincipalId,
+        binding_id: &str,
+    ) -> impl Future<Output = Result<Option<ModelBinding>, StoreError>> + Send;
+    fn load_configuration_binding(
+        &self,
+        principal_id: PrincipalId,
+        route_id: RouteId,
+        revision: Revision,
+    ) -> impl Future<Output = Result<Option<ModelBinding>, StoreError>> + Send;
+    fn find_model_binding_receipt(
+        &self,
+        operation_id: &OperationId,
+        command: &str,
+    ) -> impl Future<Output = Result<Option<ModelBindingReceipt>, StoreError>> + Send;
+    fn commit_model_binding_state(
+        &self,
+        receipt: ModelBindingReceipt,
+        state: ModelBindingState,
+    ) -> impl Future<Output = Result<(), StoreError>> + Send;
     fn load_route_task(
         &self,
         task_id: TaskId,

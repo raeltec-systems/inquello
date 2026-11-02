@@ -49,7 +49,7 @@ async fn route(
     task: TaskId,
     expected: u64,
 ) -> Result<(), DomainError> {
-    let r=sqlx::query("SELECT t.revision, t.configuration_revision, (SELECT MAX(c.revision) FROM processing_route_candidates c WHERE c.principal_id = t.principal_id AND c.route_id = t.route_id) AS candidate_revision FROM task_processing_routes t WHERE t.task_id = ? AND t.principal_id = ? ORDER BY t.revision DESC LIMIT 1")
+    let r=sqlx::query("SELECT t.revision, t.configuration_revision, (SELECT b.configuration_revision FROM processing_model_bindings b WHERE b.principal_id=t.principal_id AND b.route_id=t.route_id AND b.configuration_revision=t.configuration_revision AND b.state='active') AS candidate_revision FROM task_processing_routes t WHERE t.task_id = ? AND t.principal_id = ? ORDER BY t.revision DESC LIMIT 1")
         .bind(task.to_string()).bind(principal.to_string()).fetch_optional(&mut **tx).await.map_err(backend)?;
     let Some(r) = r else {
         return Err(invalid("select a processing route first"));
@@ -165,6 +165,11 @@ impl UsageStore for SqliteWorkingStore {
             .map_err(backend)?;
         sqlx::query("INSERT INTO task_usage_receipts (operation_id,task_id,principal_id,request,result) VALUES (?,?,?,?,?)")
             .bind(operation.as_str()).bind(task.to_string()).bind(principal.to_string()).bind(request).bind(json).execute(&mut *tx).await.map_err(backend)?;
+        // Preserve the executed settings before staging a terminal run's future choices.
+        sqlx::query("INSERT OR IGNORE INTO task_run_history(task_id,run_id,record) SELECT task_id,json_extract(record,'$.run_id'),record FROM task_runs WHERE task_id=? AND json_extract(record,'$.status') IN ('completed','failed','cancelled','setup-failed')")
+            .bind(task.to_string()).execute(&mut *tx).await.map_err(backend)?;
+        sqlx::query("UPDATE task_runs SET record=json_set(record,'$.choices',json(?)) WHERE task_id=? AND json_extract(record,'$.status') IN ('completed','failed','cancelled','setup-failed')")
+            .bind(encode(&result.choices)?).bind(task.to_string()).execute(&mut *tx).await.map_err(backend)?;
         tx.commit().await.map_err(backend)?;
         Ok(result)
     }

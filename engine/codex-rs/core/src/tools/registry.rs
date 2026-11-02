@@ -887,22 +887,21 @@ impl ToolRegistry {
                 })?;
         }
 
-        if tool.mcp_server_name().is_none() {
-            if let Err(error) = notify_tool_start(&invocation, /*mcp_tool*/ None)
+        if tool.mcp_server_name().is_none()
+            && let Err(error) = notify_tool_start(&invocation, /*mcp_tool*/ None)
                 .or_cancel_tool(&cancellation_token)
                 .await
+        {
+            if owned_task
+                && let Some(authorization) = invocation
+                    .turn
+                    .extension_data
+                    .get::<crate::inquello_inference::TaskAuthorizationContext>(
+                )
             {
-                if owned_task {
-                    if let Some(authorization) = invocation
-                        .turn
-                        .extension_data
-                        .get::<crate::inquello_inference::TaskAuthorizationContext>(
-                    ) {
-                        authorization.0.after_tool(&invocation.call_id, false).await;
-                    }
-                }
-                return Err(error);
+                authorization.0.after_tool(&invocation.call_id, false).await;
             }
+            return Err(error);
         }
         let mut control_tool_analytics = tool
             .is_builtin_control_tool()
@@ -935,7 +934,7 @@ impl ToolRegistry {
                 .turn
                 .extension_data
                 .get::<crate::inquello_inference::TaskAuthorizationContext>()
-                .expect("private tool authorization checked before accounting");
+                .unwrap_or_else(|| panic!("private tool authorization checked before accounting"));
             if cancellation_token.is_cancelled() || authorization.0.cancellation().is_cancelled() {
                 authorization.0.after_tool(&invocation.call_id, false).await;
                 return Err(FunctionCallError::Fatal(
@@ -973,21 +972,21 @@ impl ToolRegistry {
             )
             .await
         };
-        if owned_task {
-            if let Some(authorization) = invocation
+        if owned_task
+            && let Some(authorization) = invocation
                 .turn
                 .extension_data
                 .get::<crate::inquello_inference::TaskAuthorizationContext>(
-            ) {
-                let succeeded = result
-                    .as_ref()
-                    .map(|r| r.result.success_for_logging())
-                    .unwrap_or(false);
-                authorization
-                    .0
-                    .after_tool(&invocation.call_id, succeeded)
-                    .await;
-            }
+            )
+        {
+            let succeeded = result
+                .as_ref()
+                .map(|r| r.result.success_for_logging())
+                .unwrap_or(false);
+            authorization
+                .0
+                .after_tool(&invocation.call_id, succeeded)
+                .await;
         }
         let success = match &result {
             Ok(result) => result.result.success_for_logging(),

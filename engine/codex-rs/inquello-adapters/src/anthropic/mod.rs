@@ -52,6 +52,7 @@ impl MessagesClient {
             .redirect(reqwest::redirect::Policy::none())
             .https_only(true)
             .no_proxy()
+            .use_rustls_tls()
             .add_root_certificate(certificate)
             .timeout(Duration::from_secs(10))
             .build()

@@ -160,6 +160,10 @@ async fn missing_mismatched_or_incomplete_fixture_proof_clears_final_inspection(
     }
 }
 #[tokio::test]
+#[expect(
+    clippy::disallowed_methods,
+    reason = "This owned temporary-database fault fixture deliberately corrupts persisted route data to verify inspection refuses it; production access retains the guarded store."
+)]
 async fn missing_or_invalid_persisted_route_configuration_clears_final_inspection() {
     for invalid in [false, true] {
         let (_directory, request) = store().await;

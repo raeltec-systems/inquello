@@ -420,11 +420,10 @@ impl MessageProcessor {
                     outgoing.clone(),
                     thread_state_manager.clone(),
                 )),
-                Some({
-                    let time_provider =
-                        app_server_time_provider(outgoing.clone(), thread_state_manager.clone());
-                    time_provider
-                }),
+                Some(app_server_time_provider(
+                    outgoing.clone(),
+                    thread_state_manager.clone(),
+                )),
             );
             match code_mode_session_provider {
                 Some(provider) => manager.with_code_mode_session_provider(provider),
@@ -2443,6 +2442,35 @@ impl MessageProcessor {
                         .routes_list(connection_id, params)
                         .await
                 }
+                ClientRequest::InquelloModelsCatalog { .. } => {
+                    let names = self.catalog_processor.inquello_cached_model_names().await?;
+                    self.inquello_processor
+                        .models_catalog(connection_id, names)
+                        .await
+                }
+                ClientRequest::InquelloModelResolve { params, .. } => {
+                    if let Some(response) = self
+                        .inquello_processor
+                        .model_resolve_replay(connection_id, &params)
+                        .await?
+                    {
+                        return Ok(Some(response));
+                    }
+                    let names = self.catalog_processor.inquello_cached_model_names().await?;
+                    self.inquello_processor
+                        .model_resolve(connection_id, params, names)
+                        .await
+                }
+                ClientRequest::InquelloModelBindingState { params, .. } => {
+                    self.inquello_processor
+                        .model_binding_state(connection_id, params)
+                        .await
+                }
+                ClientRequest::InquelloModelSelect { params, .. } => {
+                    self.inquello_processor
+                        .model_select(connection_id, params)
+                        .await
+                }
                 ClientRequest::InquelloRouteConfigure { params, .. } => {
                     self.inquello_processor
                         .route_configure(connection_id, params)
@@ -2610,30 +2638,37 @@ impl MessageProcessor {
         // Capture before the final fresh authority check, while the response is
         // still local. Never renew this fence once it enters either output queue.
         if private_thread.is_some() || private_scope.is_some() {
-            self.outgoing
-                .fence_request(
-                    &request_id,
-                    self.outgoing.capture_private_fence(connection_id).await,
-                )
-                .await;
+            let fence = self
+                .outgoing
+                .capture_private_fence(connection_id)
+                .await
+                .map(|fence| {
+                    if let Some((_, principal, Some(task))) = &private_scope {
+                        self.inquello_processor
+                            .scope_task_output_fence(fence, *principal, task)
+                    } else {
+                        fence
+                    }
+                });
+            self.outgoing.fence_request(&request_id, fence).await;
         }
         if let Some(thread) = private_thread {
             self.inquello_processor
                 .require_task_thread(connection_id, &thread)
                 .await?;
         }
-        if result.is_ok() {
-            if let Some(scope) = private_scope {
-                let check = self
-                    .inquello_processor
-                    .guard_private_scope_after(connection_id, &scope);
-                if saved_operation {
-                    tokio::time::timeout_at(saved_deadline, check)
-                        .await
-                        .map_err(|_| crate::request_processors::saved_timeout_error())??;
-                } else {
-                    check.await?;
-                }
+        if result.is_ok()
+            && let Some(scope) = private_scope
+        {
+            let check = self
+                .inquello_processor
+                .guard_private_scope_after(connection_id, &scope);
+            if saved_operation {
+                tokio::time::timeout_at(saved_deadline, check)
+                    .await
+                    .map_err(|_| crate::request_processors::saved_timeout_error())??;
+            } else {
+                check.await?;
             }
         }
         let _saved_queue_lease =

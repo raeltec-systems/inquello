@@ -614,10 +614,11 @@ impl inquello_domain::execution_policy::AutomatedReviewStore for SqliteWorkingSt
         }
         let revisions: (i64, i64, i64, i64) = sqlx::query_as(
             "SELECT (SELECT COALESCE(MAX(revision),0) FROM task_processing_routes WHERE task_id = ?), \
-            (SELECT COALESCE(MAX(revision),0) FROM processing_route_candidates WHERE principal_id = ? AND route_id = ?), \
+            (SELECT COALESCE(MAX(configuration_revision),0) FROM processing_model_bindings WHERE principal_id = ? AND route_id = ? AND configuration_revision = ? AND state='active'), \
             (SELECT COALESCE(MAX(revision),0) FROM user_command_rules WHERE principal_id = ?), \
             (SELECT COALESCE(MAX(revision),0) FROM task_broad_modes WHERE task_id = ?)")
             .bind(request.task_id.to_string()).bind(request.principal_id.to_string()).bind(&attribution.route_id)
+            .bind(to_db(attribution.configuration_revision)?)
             .bind(request.principal_id.to_string()).bind(request.task_id.to_string())
             .fetch_one(&mut *tx).await.map_err(backend)?;
         if revisions

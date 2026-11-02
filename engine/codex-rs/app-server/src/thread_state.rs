@@ -450,21 +450,21 @@ impl ThreadState {
                 &payload.item_id,
                 &payload.delta,
             ),
-            EventMsg::ItemCompleted(payload) => {
-                if self.canonical_live_order.turn.as_deref() == Some(payload.turn_id.as_str()) {
-                    if let Some(message) =
-                        self.canonical_live_order
-                            .messages
-                            .iter_mut()
-                            .find(|message| {
-                                message.id == canonical_item_id(&payload.item)
-                                    && message.thread == payload.thread_id.to_string()
-                            })
-                    {
-                        // Retain bounded text until the turn ends. Durable rows win
-                        // during merge; late deltas may not change a completed item.
-                        message.finished = true;
-                    }
+            EventMsg::ItemCompleted(payload)
+                if self.canonical_live_order.turn.as_deref() == Some(payload.turn_id.as_str()) =>
+            {
+                if let Some(message) =
+                    self.canonical_live_order
+                        .messages
+                        .iter_mut()
+                        .find(|message| {
+                            message.id == canonical_item_id(&payload.item)
+                                && message.thread == payload.thread_id.to_string()
+                        })
+                {
+                    // Retain bounded text until the turn ends. Durable rows win
+                    // during merge; late deltas may not change a completed item.
+                    message.finished = true;
                 }
             }
             _ => {}
@@ -543,6 +543,10 @@ mod tests {
     use pretty_assertions::assert_eq;
 
     #[tokio::test]
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "The owned guard deliberately blocks the competing future across a local barrier to verify revocation; no provider or service network I/O occurs."
+    )]
     async fn listener_source_rejects_event_waiting_across_replacement() {
         let old_source = Arc::new(());
         let new_source = Arc::new(());

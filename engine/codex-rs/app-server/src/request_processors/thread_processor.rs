@@ -7138,13 +7138,17 @@ impl ThreadRequestProcessor {
             ));
         }
         self.inquello_retained_history(id).await?;
-        if let Ok(loaded) = self.thread_manager.get_thread(id).await {
-            if matches!(loaded.agent_status().await, AgentStatus::Running) {
-                return Err(invalid_request("Retained Task is still running"));
-            }
+        if let Ok(loaded) = self.thread_manager.get_thread(id).await
+            && matches!(loaded.agent_status().await, AgentStatus::Running)
+        {
+            return Err(invalid_request("Retained Task is still running"));
         }
         Ok(())
     }
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Pass the exact retained thread, workspace, route and runtime authority explicitly without combining independent trust inputs."
+    )]
     pub(crate) async fn inquello_resume_private_thread(
         &self,
         connection: ConnectionId,
@@ -7213,6 +7217,10 @@ impl ThreadRequestProcessor {
         )
         .await
     }
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Pass the exact retained thread, workspace, route and runtime authority explicitly without combining independent trust inputs."
+    )]
     async fn inquello_open_private_thread(
         &self,
         connection: ConnectionId,
@@ -7503,6 +7511,10 @@ impl ThreadRequestProcessor {
     }
     /// Submission is not interruption confirmation. The Task journal observes
     /// the real TurnAborted event, retaining stronger local process cancellation.
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "Keep the expected active turn stable through local interrupt queue submission; this await performs no provider or service network I/O."
+    )]
     pub(crate) async fn inquello_interrupt_private_turn(
         &self,
         thread_id: &str,

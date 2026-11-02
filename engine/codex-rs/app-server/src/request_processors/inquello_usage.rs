@@ -67,6 +67,13 @@ impl InquelloRequestProcessor {
                     "Select a current route and explicitly save its settings",
                 )
             })?;
+        if self.task_route_fixture_available(route).await {
+            return Ok(Capabilities {
+                reasoning: vec!["default".into()],
+                speeds: vec!["default".into()],
+                defaults: Choices::default(),
+            });
+        }
         if selected.configuration.route_id() == routes::RouteId::ClaudeApiKey {
             return Ok(Capabilities {
                 reasoning: vec!["default".into()],
@@ -101,7 +108,7 @@ impl InquelloRequestProcessor {
             )
         })?;
         let model = catalog
-            .inquello_usage_model(selected.configuration.model())
+            .inquello_cached_usage_model(selected.configuration.model())
             .await?;
         let mut reasoning = vec!["default".into()];
         for option in model.supported_reasoning_efforts {
@@ -297,7 +304,11 @@ impl InquelloRequestProcessor {
             .as_ref()
             .map(|s| s.configuration.route_id().as_str())
             .unwrap_or("none");
-        let limits = self.usage_limits_view(source, &params.task_id).await;
+        let limits = if self.task_route_fixture_available(&route).await {
+            json!({"source":"Owned synthetic fixture","status":"unknown","reason":"No live provider account or quota is used by this isolated fixture","nextAction":"Synthetic validation only; no live account access or privacy qualification is granted"})
+        } else {
+            self.usage_limits_view(source, &params.task_id).await
+        };
         let latest = routes::task_route(&store, self.actor(connection)?, &params.task_id)
             .await
             .map_err(domain_error)?;
@@ -321,6 +332,10 @@ impl InquelloRequestProcessor {
             .into(),
         ))
     }
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "Resolve capabilities before locking, then serialize exact route authority and local SQLite settings commit."
+    )]
     pub(crate) async fn usage_set(
         &self,
         connection: ConnectionId,

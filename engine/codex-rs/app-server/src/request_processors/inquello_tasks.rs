@@ -4,7 +4,9 @@ use super::*;
 use codex_app_server_protocol::*;
 use codex_core::inquello_inference::{AttemptContext, TaskAuthorization, TaskAuthorizationContext};
 use codex_protocol::error::{CodexErr, Result as CoreResult};
-use inquello_domain::routes::{self, RouteStore};
+use inquello_domain::routes;
+#[cfg(all(feature = "inference-fixtures", debug_assertions))]
+use inquello_domain::routes::RouteStore;
 use inquello_domain::tasks::{
     NativeTaskDataTier, StartTaskIntent, TaskReservationError, TaskRunBinding, TaskRunStatus,
     TaskRunStore, TaskSetupFailure,
@@ -498,6 +500,10 @@ impl InquelloRequestProcessor {
             },
         })
     }
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "Keep the authority snapshot and local SQLite check/commit atomic with invalidation; provider and service network waits occur outside this guarded region."
+    )]
     async fn checked_candidate(
         &self,
         connection: ConnectionId,
@@ -533,18 +539,14 @@ impl InquelloRequestProcessor {
             .await?;
         let id = routes::RouteId::parse(&params.route_id)
             .ok_or_else(|| refusal("invalid", "Explicit configured route required"))?;
-        let (_, candidate) = store
-            .load_candidate_route(actor.principal_id, id)
-            .await
-            .map_err(|e| domain_error(DomainError::Store(e)))?;
-        let candidate = candidate
-            .filter(|c| c.revision.get() == params.configuration_revision)
-            .ok_or_else(|| {
-                refusal(
-                    "revision_conflict",
-                    "Route configuration changed; select and confirm current settings",
-                )
-            })?;
+        let candidate = routes::active_candidate(
+            &store,
+            actor,
+            id,
+            Revision::new(params.configuration_revision),
+        )
+        .await
+        .map_err(domain_error)?;
         let generation = self
             .routes
             .state
@@ -645,13 +647,16 @@ impl InquelloRequestProcessor {
             None
         };
         let state = self.routes.state.lock().await;
-        let (_, latest) = store
-            .load_candidate_route(actor.principal_id, id)
-            .await
-            .map_err(|e| domain_error(DomainError::Store(e)))?;
+        let current = routes::active_candidate(
+            &store,
+            actor,
+            id,
+            Revision::new(params.configuration_revision),
+        )
+        .await;
         if self.actor(connection)? != actor
             || session.cancellation.is_cancelled()
-            || latest.as_ref() != Some(&candidate)
+            || current.as_ref().ok() != Some(&candidate)
             || state.credential(actor.principal_id, &candidate.configuration) != Some(generation)
             || inherited.as_ref().is_some_and(|b| {
                 !self
@@ -814,10 +819,15 @@ impl InquelloRequestProcessor {
             )
             .await
             .map(|_| ());
-        if result.is_err() {
-            if let Ok(actor) = self.actor(connection) {
-                self.routes.invalidate_disclosure(actor.principal_id);
-            }
+        if result.is_err()
+            && let Ok(actor) = self.actor(connection)
+            && let Ok(store) = self.store().await
+            && let Ok(Some(run)) = store
+                .find_thread_run(actor.principal_id, &self.runtime_id, thread)
+                .await
+        {
+            self.routes
+                .invalidate_task_disclosure(actor.principal_id, &run.task_id);
         }
         result
     }
@@ -837,6 +847,10 @@ fn status_name(status: TaskRunStatus) -> &'static str {
 }
 
 impl InquelloRequestProcessor {
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "Keep the authority snapshot and local SQLite check/commit atomic with invalidation; provider and service network waits occur outside this guarded region."
+    )]
     pub(crate) async fn tasks_start(
         self: &Arc<Self>,
         connection: ConnectionId,
@@ -1004,7 +1018,7 @@ impl InquelloRequestProcessor {
                         || self.actor(connection)? != actor
                         || session.cancellation.is_cancelled()
                         || !self
-                            .task_authority_current(actor.principal_id, &fresh, &device, &user)
+                            .task_authority_current(actor.principal_id, &fresh, device, user)
                             .await
                     {
                         return Err(refusal(
@@ -1015,7 +1029,7 @@ impl InquelloRequestProcessor {
                     self.task_session(connection, actor, &intent.workspace_id)
                         .await?;
                     let state = self.routes.state.lock().await;
-                    if state.credential(actor.principal_id, &configuration) != Some(generation)
+                    if state.credential(actor.principal_id, configuration) != Some(generation)
                         || self.actor(connection)? != actor
                         || session.cancellation.is_cancelled()
                     {
@@ -1054,6 +1068,8 @@ impl InquelloRequestProcessor {
         #[cfg(all(feature = "inference-fixtures", debug_assertions))]
         let fixture = self.task_fixtures.lock().await.get(&connection).cloned();
         let authorization = Arc::new(TaskGuard {
+            selection_revision: 1,
+            settings_revision: 1,
             execution_lifetime: CancellationToken::new(),
             #[cfg(all(feature = "inference-fixtures", debug_assertions))]
             fixture,
@@ -1262,6 +1278,8 @@ impl InquelloRequestProcessor {
     }
 }
 struct TaskGuard {
+    selection_revision: u64,
+    settings_revision: u64,
     execution_lifetime: CancellationToken,
     #[cfg(all(feature = "inference-fixtures", debug_assertions))]
     fixture: Option<TaskFixture>,
@@ -1380,7 +1398,7 @@ impl TaskGuard {
         if result.is_err() {
             self.processor
                 .routes
-                .invalidate_disclosure(self.actor.principal_id);
+                .invalidate_task_disclosure(self.actor.principal_id, &self.run.task_id);
             self.cancellation.cancel();
         }
         result
@@ -1390,11 +1408,15 @@ impl TaskGuard {
         if result.is_err() {
             self.processor
                 .routes
-                .invalidate_disclosure(self.actor.principal_id);
+                .invalidate_task_disclosure(self.actor.principal_id, &self.run.task_id);
             self.cancellation.cancel();
         }
         result
     }
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "Keep the authority snapshot and local SQLite check/commit atomic with invalidation; provider and service network waits occur outside this guarded region."
+    )]
     async fn recheck_inner(&self) -> Result<(), JSONRPCErrorError> {
         self.paid_profile_check(false).await?;
         if self.cancellation.is_cancelled() || self.processor.actor(self.connection)? != self.actor
@@ -1495,7 +1517,7 @@ impl TaskGuard {
             .as_ref()
             .ok_or_else(|| refusal("route_unavailable", "Task route unavailable"))?;
         if route.stale_configuration
-            || route.revision.get() != 1
+            || route.revision.get() != self.selection_revision
             || selected.configuration != self.configuration
             || selected.configuration_revision.get() != self.run.configuration_revision
             || state.credential(self.actor.principal_id, &self.configuration)
@@ -1529,7 +1551,7 @@ impl TaskGuard {
             .map_err(domain_error)?
             .settings
             .ok_or_else(|| refusal("settings_unavailable", "Task settings unavailable"))?;
-        if settings.revision != 1 || settings.choices != self.run.choices {
+        if settings.revision != self.settings_revision || settings.choices != self.run.choices {
             return Err(refusal("stale", "Task settings changed"));
         }
         if self.cancellation.is_cancelled() || self.processor.actor(self.connection)? != self.actor
@@ -1717,7 +1739,7 @@ impl TaskAuthorization for TaskGuard {
                 authority_basis: self.run.operation_id.clone(),
                 authority_epoch: self.policy.authorization_epoch,
                 policy_revision: self.policy.policy_revision,
-                route_revision: 1,
+                route_revision: self.selection_revision,
                 credential_generation: self.generation,
             };
             let effective = usage::Choices {
@@ -1744,8 +1766,8 @@ impl TaskAuthorization for TaskGuard {
                     model: Some(binding.model.clone()),
                     api_version: Some(binding.api_version.clone()),
                     configuration_revision: self.run.configuration_revision,
-                    route_revision: 1,
-                    settings_revision: 1,
+                    route_revision: self.selection_revision,
+                    settings_revision: self.settings_revision,
                     requested: self.run.choices.clone(),
                     effective,
                     started_at_ms: SystemClock.now().unix_millis(),
@@ -1877,6 +1899,10 @@ impl TaskAuthorization for TaskGuard {
             Ok(())
         })
     }
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "Serialize per-call accounting and its local SQLite commit; provider/service rechecks remain outside the accounting guard."
+    )]
     fn before_command<'a>(
         &'a self,
         command: &'a [String],
@@ -1931,7 +1957,7 @@ impl TaskAuthorization for TaskGuard {
                 &self.device,
                 &self.user,
                 &self.run.task_id,
-                &command,
+                command,
             )
             .await
             .map_err(core_refusal)?;
@@ -1966,7 +1992,7 @@ impl TaskAuthorization for TaskGuard {
                     .outgoing
                     .send_request_to_connections(Some(&[self.connection]), payload, Some(thread_id))
                     .await;
-                let response = tokio::select! {biased;_=self.cancellation.cancelled()=>None,result=tokio::time::timeout(std::time::Duration::from_secs(120),response)=>result.ok().and_then(|r|r.ok()).and_then(|r|r.ok())};
+                let response = tokio::select! {biased;_=self.cancellation.cancelled()=>None,result=tokio::time::timeout(std::time::Duration::from_secs(120),response)=>result.ok().and_then(std::result::Result::ok).and_then(std::result::Result::ok)};
                 self.outgoing.cancel_request(&id).await;
                 if response
                     .as_ref()
@@ -1980,37 +2006,39 @@ impl TaskAuthorization for TaskGuard {
                 }
             }
             self.recheck().await.map_err(core_refusal)?;
-            let mut tools = self.tools.lock().await;
-            if tools.contains_key(call_id) {
-                return Err(CodexErr::Fatal(
-                    "Private tool call has already been dispatched; no retry".into(),
-                ));
+            {
+                let mut tools = self.tools.lock().await;
+                if tools.contains_key(call_id) {
+                    return Err(CodexErr::Fatal(
+                        "Private tool call has already been dispatched; no retry".into(),
+                    ));
+                }
+                let attempt_id = uuid::Uuid::new_v4().to_string();
+                store
+                    .begin_usage_attempt(usage::AttemptSnapshot {
+                        attempt_id: attempt_id.clone(),
+                        task_id: self.run.task_id.clone(),
+                        principal_id: self.actor.principal_id.to_string(),
+                        run_id: self.run.run_id.clone(),
+                        runtime_id: self.processor.runtime_id.clone(),
+                        operation_kind: usage::OperationKind::LocalTool,
+                        route_id: Some(self.run.route_id.clone()),
+                        model: Some(self.configuration.model().into()),
+                        api_version: Some(self.configuration.api_version().into()),
+                        configuration_revision: self.run.configuration_revision,
+                        route_revision: self.selection_revision,
+                        settings_revision: self.settings_revision,
+                        requested: self.run.choices.clone(),
+                        effective: self.run.choices.clone(),
+                        started_at_ms: SystemClock.now().unix_millis(),
+                    })
+                    .await
+                    .map_err(|_| CodexErr::Fatal("Private tool accounting unavailable".into()))?;
+                tools.insert(
+                    call_id.into(),
+                    (attempt_id.clone(), std::time::Instant::now()),
+                );
             }
-            let attempt_id = uuid::Uuid::new_v4().to_string();
-            store
-                .begin_usage_attempt(usage::AttemptSnapshot {
-                    attempt_id: attempt_id.clone(),
-                    task_id: self.run.task_id.clone(),
-                    principal_id: self.actor.principal_id.to_string(),
-                    run_id: self.run.run_id.clone(),
-                    runtime_id: self.processor.runtime_id.clone(),
-                    operation_kind: usage::OperationKind::LocalTool,
-                    route_id: Some(self.run.route_id.clone()),
-                    model: Some(self.configuration.model().into()),
-                    api_version: Some(self.configuration.api_version().into()),
-                    configuration_revision: self.run.configuration_revision,
-                    route_revision: 1,
-                    settings_revision: 1,
-                    requested: self.run.choices.clone(),
-                    effective: self.run.choices.clone(),
-                    started_at_ms: SystemClock.now().unix_millis(),
-                })
-                .await
-                .map_err(|_| CodexErr::Fatal("Private tool accounting unavailable".into()))?;
-            tools.insert(
-                call_id.into(),
-                (attempt_id.clone(), std::time::Instant::now()),
-            );
             if let Err(error) = self.recheck().await {
                 // Registry awaits this handler and finalizes the inserted attempt once.
                 return Err(core_refusal(error));
@@ -2018,6 +2046,10 @@ impl TaskAuthorization for TaskGuard {
             Ok(())
         })
     }
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "Serialize per-call accounting and its local SQLite commit; provider/service rechecks remain outside the accounting guard."
+    )]
     fn after_tool<'a>(
         &'a self,
         call_id: &'a str,
@@ -2461,6 +2493,10 @@ mod tests {
     }
 
     #[tokio::test]
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "The owned guard deliberately blocks the competing future across a local barrier to verify revocation; no provider or service network I/O occurs."
+    )]
     async fn private_fence_capture_waits_for_unchanged_session_reader() {
         use crate::outgoing_message::PrivateThreadAuthority;
         let processor = private_fence_fixture().await;
@@ -2479,6 +2515,10 @@ mod tests {
     }
 
     #[tokio::test]
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "The owned guard deliberately blocks the competing future across a local barrier to verify revocation; no provider or service network I/O occurs."
+    )]
     async fn private_fence_capture_preserves_principal_revocation_while_waiting() {
         use crate::outgoing_message::PrivateThreadAuthority;
         let processor = private_fence_fixture().await;
@@ -2499,6 +2539,10 @@ mod tests {
     }
 
     #[tokio::test]
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "The owned guard deliberately blocks the competing future across a local barrier to verify revocation; no provider or service network I/O occurs."
+    )]
     async fn private_fence_capture_preserves_session_revocation_while_waiting() {
         use crate::outgoing_message::PrivateThreadAuthority;
         let processor = private_fence_fixture().await;
@@ -2518,6 +2562,10 @@ mod tests {
     }
 
     #[tokio::test]
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "The owned guard deliberately blocks the competing future across a local barrier to verify revocation; no provider or service network I/O occurs."
+    )]
     async fn private_fence_capture_rejects_identity_change_while_waiting() {
         use crate::outgoing_message::PrivateThreadAuthority;
         let processor = private_fence_fixture().await;
@@ -2540,6 +2588,10 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "The owned guard deliberately blocks the competing future across a local barrier to verify revocation; no provider or service network I/O occurs."
+    )]
     async fn private_fence_capture_timeout_remains_denied() {
         use crate::outgoing_message::PrivateThreadAuthority;
         let processor = private_fence_fixture().await;
@@ -2564,6 +2616,10 @@ mod tests {
     }
 
     #[tokio::test]
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "The owned guard deliberately blocks the competing future across a local barrier to verify revocation; no provider or service network I/O occurs."
+    )]
     async fn private_fence_capture_replacement_keeps_old_generation_revoked() {
         use crate::outgoing_message::PrivateThreadAuthority;
         let processor = private_fence_fixture().await;
@@ -2733,7 +2789,7 @@ async fn current_service_policy(
         outgoing: outgoing.clone(),
         id: Some(id.clone()),
     };
-    let result = tokio::select! {biased;_=cancellation.cancelled()=>None,result=tokio::time::timeout(std::time::Duration::from_secs(15),response)=>result.ok().and_then(|r|r.ok()).and_then(|r|r.ok())};
+    let result = tokio::select! {biased;_=cancellation.cancelled()=>None,result=tokio::time::timeout(std::time::Duration::from_secs(15),response)=>result.ok().and_then(std::result::Result::ok).and_then(std::result::Result::ok)};
     outgoing.cancel_request(&id).await;
     cleanup.id = None;
     let result: InquelloTaskAuthorityResponse = result
@@ -2858,15 +2914,17 @@ fn create_private_task_folder(root: &std::path::Path, task: &str) -> Result<(), 
         root.join("tasks").join(task),
         root.join("tasks").join(task).join("output"),
     ] {
-        if let Ok(metadata) = std::fs::symlink_metadata(&directory) {
-            if !metadata.is_dir() || metadata.file_type().is_symlink() {
-                return Err(refusal(
-                    "task_folder_missing",
-                    "Private Task folder is not an isolated directory",
-                ));
-            }
+        if let Ok(metadata) = std::fs::symlink_metadata(&directory)
+            && (!metadata.is_dir() || metadata.file_type().is_symlink())
+        {
+            return Err(refusal(
+                "task_folder_missing",
+                "Private Task folder is not an isolated directory",
+            ));
         }
-        let mut builder = std::fs::DirBuilder::new();
+        let builder = std::fs::DirBuilder::new();
+        #[cfg(unix)]
+        let mut builder = builder;
         #[cfg(unix)]
         {
             use std::os::unix::fs::DirBuilderExt;
@@ -2920,12 +2978,82 @@ pub(super) struct TaskFixture {
     principal: PrincipalId,
     workspace: String,
     revision: u64,
+    additional_revisions: Vec<u64>,
     root: PathBuf,
     session_cancellation: CancellationToken,
     endpoint: String,
     certificate: Vec<u8>,
 }
 impl InquelloRequestProcessor {
+    pub(super) async fn task_route_fixture_available(&self, route: &routes::TaskRoute) -> bool {
+        #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+        {
+            let Some(selected) = route
+                .current
+                .as_ref()
+                .filter(|_| !route.stale_configuration)
+            else {
+                return false;
+            };
+            let config = &selected.configuration;
+            let matched = self.task_fixtures.lock().await.values().any(|fixture| {
+                fixture.principal == selected.principal_id
+                    && fixture.workspace == route.workspace_id.to_string()
+                    && !fixture.session_cancellation.is_cancelled()
+                    && fixture.route_id == config.route_id()
+                    && config.account_ref() == selected.principal_id.to_string()
+                    && (fixture.revision == selected.configuration_revision.get()
+                        || fixture
+                            .additional_revisions
+                            .contains(&selected.configuration_revision.get()))
+            });
+            if matched && let Ok(store) = self.store().await {
+                return store
+                    .task_data_tier(selected.principal_id, &route.task_id.to_string())
+                    .await
+                    .ok()
+                    .flatten()
+                    .as_deref()
+                    == Some("synthetic")
+                    && self
+                        .routes
+                        .state
+                        .lock()
+                        .await
+                        .credential(selected.principal_id, config)
+                        == Some(1);
+            }
+        }
+        let _ = route;
+        false
+    }
+
+    pub(super) async fn synthetic_binding_available(
+        &self,
+        connection: ConnectionId,
+        actor: Actor,
+        binding: &routes::ModelBinding,
+    ) -> bool {
+        #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+        {
+            let fixture = self.task_fixtures.lock().await.get(&connection).cloned();
+            if let Some(fixture) = fixture {
+                return binding.state == routes::ModelBindingState::Active
+                    && self
+                        .task_fixture_matches(
+                            connection,
+                            actor,
+                            &fixture.workspace,
+                            &binding.candidate.configuration,
+                            binding.candidate.revision.get(),
+                        )
+                        .await;
+            }
+        }
+        let _ = (connection, actor, binding);
+        false
+    }
+
     async fn task_fixture_matches(
         &self,
         connection: ConnectionId,
@@ -2945,7 +3073,7 @@ impl InquelloRequestProcessor {
                     !f.session_cancellation.is_cancelled()
                         && f.principal == actor.principal_id
                         && f.workspace == workspace
-                        && f.revision == revision
+                        && (f.revision == revision || f.additional_revisions.contains(&revision))
                         && config.route_id() == f.route_id
                         && config.account_ref() == actor.principal_id.to_string()
                 });
@@ -3010,7 +3138,10 @@ impl InquelloRequestProcessor {
         if fixture.principal != actor.principal_id
             || fixture.workspace != input.workspace_id
             || (quota.is_none()
-                && (fixture.revision != input.configuration_revision
+                && (!(fixture.revision == input.configuration_revision
+                    || fixture
+                        .additional_revisions
+                        .contains(&input.configuration_revision))
                     || fixture.route_id != route_id))
             || (quota.is_some()
                 && (fixture.route_id != routes::RouteId::ClaudeApiKey
@@ -3059,8 +3190,12 @@ impl InquelloRequestProcessor {
         // Match route records and credential generation under the same route lock
         // used by configuration, replacement and invalidation.
         let state = self.routes.state.lock().await;
-        let (_, candidate) = store
-            .load_candidate_route(actor.principal_id, route_id)
+        let candidate = store
+            .load_candidate_route_record(
+                actor.principal_id,
+                route_id,
+                Revision::new(input.configuration_revision),
+            )
             .await
             .map_err(|_| denied())?;
         let candidate = candidate
@@ -3207,8 +3342,12 @@ impl InquelloRequestProcessor {
                 "Fixture refuses a real-data session",
             ));
         }
-        let (_, candidate) = store
-            .load_candidate_route(actor.principal_id, route_id)
+        let candidate = store
+            .load_candidate_route_record(
+                actor.principal_id,
+                route_id,
+                Revision::new(input.configuration_revision),
+            )
             .await
             .map_err(|e| domain_error(DomainError::Store(e)))?;
         let candidate = candidate
@@ -3223,6 +3362,50 @@ impl InquelloRequestProcessor {
                 )
             })?;
         let mut state = self.routes.state.lock().await;
+        let mut fixtures = self.task_fixtures.lock().await;
+        if let Some(existing) = fixtures.get_mut(&connection) {
+            if existing.principal != actor.principal_id
+                || existing.workspace != input.workspace_id
+                || existing.route_id != route_id
+                || existing.root != session.root
+                || existing.endpoint != input.endpoint
+                || existing.certificate != input.certificate
+                || existing.fail_before_sampling != input.fail_before_sampling
+                || existing.hold_ack_for_question != input.hold_ack_for_question
+                || existing.hold_progress_publication != input.hold_progress_publication
+                || existing.session_cancellation.is_cancelled()
+                || session.cancellation.is_cancelled()
+                || state.credential(actor.principal_id, &candidate.configuration) != Some(1)
+                || self
+                    .routes
+                    .responses
+                    .as_ref()
+                    .and_then(|r| r.provider.auth_manager())
+                    .and_then(|a| a.auth_cached())
+                    .is_some()
+            {
+                return Err(refusal(
+                    "fixture_unavailable",
+                    "Existing owned fixture authority differs",
+                ));
+            }
+            if existing.revision != input.configuration_revision
+                && !existing
+                    .additional_revisions
+                    .contains(&input.configuration_revision)
+            {
+                if existing.additional_revisions.len() >= 8 {
+                    return Err(refusal(
+                        "fixture_unavailable",
+                        "Owned fixture binding limit",
+                    ));
+                }
+                existing
+                    .additional_revisions
+                    .push(input.configuration_revision);
+            }
+            return Ok(json!({"accepted":true,"providerCalls":0}));
+        }
         if self.actor(connection)? != actor
             || session.cancellation.is_cancelled()
             || state
@@ -3268,7 +3451,7 @@ impl InquelloRequestProcessor {
             (actor.principal_id.to_string(), 1),
         );
         state.generations.insert((actor.principal_id, route_id), 1);
-        self.task_fixtures.lock().await.insert(
+        fixtures.insert(
             connection,
             TaskFixture {
                 route_id,
@@ -3282,6 +3465,7 @@ impl InquelloRequestProcessor {
                 principal: actor.principal_id,
                 workspace: input.workspace_id,
                 revision: input.configuration_revision,
+                additional_revisions: Vec::new(),
                 root: session.root,
                 session_cancellation: session.cancellation,
                 endpoint: input.endpoint,
@@ -4318,6 +4502,7 @@ fn project_progress(
         incomplete,
     )
 }
+#[cfg(test)]
 fn project_progress_history(
     entries: Vec<ThreadItemEntry>,
     allowed_turns: &std::collections::HashSet<String>,
@@ -4326,6 +4511,7 @@ fn project_progress_history(
 ) -> InquelloTasksProgressResponse {
     project_progress_page(entries, allowed_turns, current_turn, incomplete, None)
 }
+#[cfg(test)]
 fn project_progress_page(
     entries: Vec<ThreadItemEntry>,
     allowed_turns: &std::collections::HashSet<String>,
@@ -4557,7 +4743,11 @@ fn canonical_progress(
             }
             sequence += 1;
             step_order.insert(
-                plan[*step_indices.get(&step_id).unwrap()].id.clone(),
+                plan[*step_indices.get(&step_id).unwrap_or_else(|| {
+                    panic!("published step must have its validated plan index")
+                })]
+                .id
+                .clone(),
                 sequence,
             );
         }
@@ -5170,6 +5360,10 @@ mod progress_tests {
     }
 
     #[test]
+    #[expect(
+        clippy::type_complexity,
+        reason = "This test keeps its distinct owned record cases together to exercise the exact display bounds."
+    )]
     fn live_display_bounds_refuse_history_but_allow_explicit_incomplete_activity() {
         let order = vec!["cmd-1".to_owned()];
         let running = command("inProgress", None).item;
@@ -5185,7 +5379,7 @@ mod progress_tests {
         if let ThreadItem::CommandExecution { command, .. } = &mut long_command {
             *command = "x".repeat(16_385);
         }
-        let mut long_id = running.clone();
+        let mut long_id = running;
         if let ThreadItem::CommandExecution { id, .. } = &mut long_id {
             *id = "x".repeat(129);
         }
@@ -6503,6 +6697,10 @@ fn measured_route_identity(
     }
 }
 impl InquelloRequestProcessor {
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Keep each independently trusted authority input explicit at the real-data dispatch fence."
+    )]
     async fn check_real_route(
         &self,
         connection: ConnectionId,
@@ -6529,6 +6727,10 @@ impl InquelloRequestProcessor {
         }
         result
     }
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Keep each independently trusted authority input explicit at the real-data dispatch fence."
+    )]
     async fn check_real_route_inner(
         &self,
         connection: ConnectionId,
@@ -6683,32 +6885,16 @@ impl InquelloRequestProcessor {
         let session = self
             .task_session(connection, actor, &run.workspace_id)
             .await?;
-        use inquello_domain::routes::RouteStore;
         let route_id = routes::RouteId::parse(&run.route_id)
             .ok_or_else(|| refusal("route_unavailable", "Retained route identity unavailable"))?;
-        let candidate = store
-            .load_candidate_route_record(
-                actor.principal_id,
-                route_id,
-                Revision::new(run.configuration_revision),
-            )
-            .await
-            .map_err(|_| {
-                refusal(
-                    "route_unavailable",
-                    "Retained route configuration unavailable",
-                )
-            })?
-            .filter(|candidate| {
-                candidate.revision.get() == run.configuration_revision
-                    && candidate.configuration.route_id() == route_id
-            })
-            .ok_or_else(|| {
-                refusal(
-                    "route_unavailable",
-                    "The run's exact retained route configuration is unavailable",
-                )
-            })?;
+        let candidate = routes::active_candidate(
+            &store,
+            actor,
+            route_id,
+            Revision::new(run.configuration_revision),
+        )
+        .await
+        .map_err(domain_error)?;
         let configuration = candidate.configuration;
         match tier.as_deref() {
             Some("synthetic") if session.real.is_none() => Ok(()),
@@ -6759,7 +6945,7 @@ async fn current_route_response(
         outgoing: outgoing.clone(),
         id: Some(id.clone()),
     };
-    let result = tokio::select! {biased;_=cancellation.cancelled()=>None,result=tokio::time::timeout(std::time::Duration::from_secs(15),response)=>result.ok().and_then(|r|r.ok()).and_then(|r|r.ok())};
+    let result = tokio::select! {biased;_=cancellation.cancelled()=>None,result=tokio::time::timeout(std::time::Duration::from_secs(15),response)=>result.ok().and_then(std::result::Result::ok).and_then(std::result::Result::ok)};
     outgoing.cancel_request(&id).await;
     cleanup.id = None;
     result
@@ -6952,6 +7138,27 @@ impl InquelloRequestProcessor {
 }
 
 impl crate::outgoing_message::PrivateThreadAuthority for InquelloRequestProcessor {
+    fn capture_thread_fence<'a>(
+        &'a self,
+        connection: ConnectionId,
+        thread: codex_protocol::ThreadId,
+    ) -> crate::outgoing_message::PrivateFenceFuture<'a> {
+        Box::pin(async move {
+            let fence = self.capture_fence(connection).await?;
+            let actor = self.actor(connection).ok()?;
+            let store = self.store().await.ok()?;
+            let run = store
+                .find_thread_run(actor.principal_id, &self.runtime_id, &thread.to_string())
+                .await
+                .ok()??;
+            Some(
+                fence.with_token(
+                    self.routes
+                        .task_disclosure_token(actor.principal_id, &run.task_id),
+                ),
+            )
+        })
+    }
     fn capture_fence<'a>(
         &'a self,
         connection: ConnectionId,
@@ -6996,11 +7203,6 @@ impl crate::outgoing_message::PrivateThreadAuthority for InquelloRequestProcesso
             let result = self
                 .require_task_thread(connection, &thread.to_string())
                 .await;
-            if result.is_err() {
-                if let Ok(actor) = self.actor(connection) {
-                    self.routes.invalidate_disclosure(actor.principal_id);
-                }
-            }
             result.is_ok()
         })
     }
@@ -7864,6 +8066,10 @@ mod bootstrap_order_tests {
         );
     }
     #[tokio::test]
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "This owned temporary-database fault fixture intentionally alters provenance after the authority wait; production database access still uses the guarded store."
+    )]
     async fn final_scope_rechecks_owned_task_provenance_after_workspace_authority_wait() {
         // Local device/user config is a unit fixture. SQLite provenance, fresh
         // Workspace request/response and the final native scope guard are real.
@@ -7982,6 +8188,10 @@ mod bootstrap_order_tests {
         );
     }
     #[tokio::test]
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "The owned guard deliberately blocks the competing future across a local barrier to verify revocation; no provider or service network I/O occurs."
+    )]
     async fn bootstrap_admission_is_blocked_while_same_principal_reset_waits_on_routes() {
         let dir = tempfile::tempdir().unwrap();
         let (processor, outgoing, mut rx) = fixture(dir.path()).await;
@@ -8340,8 +8550,7 @@ impl InquelloRequestProcessor {
             || selected.configuration != configuration
             || selected.configuration_revision.get() != run.configuration_revision
             || route.stale_configuration
-            || route.revision.get() != 1
-            || settings.revision != 1
+            || settings.route_revision != route.revision.get()
             || settings.choices != run.choices
             || !caps.reasoning.contains(&run.choices.reasoning)
             || !caps.speeds.contains(&run.choices.speed)
@@ -8475,81 +8684,71 @@ impl InquelloRequestProcessor {
             TaskLifecycleStatus::Reserved
                 | TaskLifecycleStatus::Dispatching
                 | TaskLifecycleStatus::Uncertain
-        ) {
-            if let Some(current) = store
-                .find_task_current_run(actor.principal_id, &receipt.binding.task_id)
-                .await
-                .map_err(domain_error)?
-            {
-                if current.run_id == receipt.binding.run_id
-                    && current.runtime_id == receipt.binding.runtime_id
-                {
-                    let steer_admitted = if receipt.kind == TaskLifecycleKind::Steer {
-                        let thread = current.thread_id.clone().ok_or_else(|| {
-                            refusal("not_found", "Retained Task linkage unavailable")
-                        })?;
-                        let turn = receipt.binding.turn_id.clone().ok_or_else(|| {
-                            refusal("not_found", "Retained steering turn unavailable")
-                        })?;
-                        let (entries, _) = read_progress_pages(|cursor, limit| {
-                            let thread = thread.clone();
-                            let turn = turn.clone();
-                            let binding = &receipt.binding;
-                            async move {
-                                self.authorize_task_disclosure(
-                                    connection,
-                                    actor,
-                                    &binding.workspace_id,
-                                )
-                                .await?;
-                                self.authorize_run_route_disclosure(connection, actor, binding)
-                                    .await?;
-                                let page = threads
-                                    .thread_items_list_response_inner(ThreadItemsListParams {
-                                        thread_id: thread,
-                                        turn_id: Some(turn),
-                                        cursor: cursor.map(ThreadItemsListCursor::Opaque),
-                                        limit: Some(limit),
-                                        sort_direction: Some(SortDirection::Desc),
-                                    })
-                                    .await?;
-                                self.authorize_task_disclosure(
-                                    connection,
-                                    actor,
-                                    &binding.workspace_id,
-                                )
-                                .await?;
-                                self.authorize_run_route_disclosure(connection, actor, binding)
-                                    .await?;
-                                Ok(page)
-                            }
-                        })
-                        .await?;
-                        entries.iter().any(|entry| entry.turn_id==turn && matches!(&entry.item,
-                            ThreadItem::UserMessage {client_id:Some(id),..} if id==&receipt.operation_id))
-                    } else {
-                        false
-                    };
-                    let outcome = lifecycle_observed_outcome(
-                        receipt.kind,
-                        current.status,
-                        current.turn_id.is_some(),
-                        steer_admitted,
-                    );
-                    if let (Some(outcome), Some(thread)) = (outcome, current.thread_id.as_deref()) {
-                        receipt = store
-                            .finish_task_lifecycle(
-                                actor.principal_id,
-                                &receipt.operation_id,
-                                &current.runtime_id,
-                                thread,
-                                current.turn_id.as_deref(),
-                                outcome,
-                            )
-                            .await
-                            .map_err(domain_error)?;
+        ) && let Some(current) = store
+            .find_task_current_run(actor.principal_id, &receipt.binding.task_id)
+            .await
+            .map_err(domain_error)?
+            && current.run_id == receipt.binding.run_id
+            && current.runtime_id == receipt.binding.runtime_id
+        {
+            let steer_admitted = if receipt.kind == TaskLifecycleKind::Steer {
+                let thread = current
+                    .thread_id
+                    .clone()
+                    .ok_or_else(|| refusal("not_found", "Retained Task linkage unavailable"))?;
+                let turn =
+                    receipt.binding.turn_id.clone().ok_or_else(|| {
+                        refusal("not_found", "Retained steering turn unavailable")
+                    })?;
+                let (entries, _) = read_progress_pages(|cursor, limit| {
+                    let thread = thread.clone();
+                    let turn = turn.clone();
+                    let binding = &receipt.binding;
+                    async move {
+                        self.authorize_task_disclosure(connection, actor, &binding.workspace_id)
+                            .await?;
+                        self.authorize_run_route_disclosure(connection, actor, binding)
+                            .await?;
+                        let page = threads
+                            .thread_items_list_response_inner(ThreadItemsListParams {
+                                thread_id: thread,
+                                turn_id: Some(turn),
+                                cursor: cursor.map(ThreadItemsListCursor::Opaque),
+                                limit: Some(limit),
+                                sort_direction: Some(SortDirection::Desc),
+                            })
+                            .await?;
+                        self.authorize_task_disclosure(connection, actor, &binding.workspace_id)
+                            .await?;
+                        self.authorize_run_route_disclosure(connection, actor, binding)
+                            .await?;
+                        Ok(page)
                     }
-                }
+                })
+                .await?;
+                entries.iter().any(|entry| entry.turn_id==turn && matches!(&entry.item,
+                            ThreadItem::UserMessage {client_id:Some(id),..} if id==&receipt.operation_id))
+            } else {
+                false
+            };
+            let outcome = lifecycle_observed_outcome(
+                receipt.kind,
+                current.status,
+                current.turn_id.is_some(),
+                steer_admitted,
+            );
+            if let (Some(outcome), Some(thread)) = (outcome, current.thread_id.as_deref()) {
+                receipt = store
+                    .finish_task_lifecycle(
+                        actor.principal_id,
+                        &receipt.operation_id,
+                        &current.runtime_id,
+                        thread,
+                        current.turn_id.as_deref(),
+                        outcome,
+                    )
+                    .await
+                    .map_err(domain_error)?;
             }
         }
         self.lifecycle_response(connection, actor, receipt).await
@@ -8868,6 +9067,17 @@ impl InquelloRequestProcessor {
         #[cfg(all(feature = "inference-fixtures", debug_assertions))]
         let fixture = self.task_fixtures.lock().await.get(&connection).cloned();
         let authorization = Arc::new(TaskGuard {
+            selection_revision: routes::task_route(&store, actor, &run.task_id)
+                .await
+                .map_err(domain_error)?
+                .revision
+                .get(),
+            settings_revision: usage::task_usage(&store, actor, &run.task_id)
+                .await
+                .map_err(domain_error)?
+                .settings
+                .ok_or_else(|| refusal("settings_unavailable", "Task settings unavailable"))?
+                .revision,
             execution_lifetime: CancellationToken::new(),
             #[cfg(all(feature = "inference-fixtures", debug_assertions))]
             fixture,

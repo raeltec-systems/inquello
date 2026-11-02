@@ -204,11 +204,11 @@ impl CommandExecManager {
                         CommandExecSession::UnsupportedWindowsSandbox,
                     );
                 }
-                if let Some(observer) = &usage {
-                    if let Err(error) = observer.recheck().await {
-                        self.sessions.lock().await.remove(&process_key);
-                        return Err(error);
-                    }
+                if let Some(observer) = &usage
+                    && let Err(error) = observer.recheck().await
+                {
+                    self.sessions.lock().await.remove(&process_key);
+                    return Err(error);
                 }
                 let sessions = Arc::clone(&self.sessions);
                 let usage = usage.take();
@@ -299,11 +299,11 @@ impl CommandExecManager {
                     CommandExecSession::Active { control_tx },
                 );
             }
-            if let Some(observer) = &usage {
-                if let Err(error) = observer.recheck().await {
-                    self.sessions.lock().await.remove(&process_key);
-                    return Err(error);
-                }
+            if let Some(observer) = &usage
+                && let Err(error) = observer.recheck().await
+            {
+                self.sessions.lock().await.remove(&process_key);
+                return Err(error);
             }
             let spawned = if tty {
                 codex_utils_pty::spawn_pty_process(
@@ -358,12 +358,12 @@ impl CommandExecManager {
             Ok(())
         }
         .await;
-        if result.is_err() {
-            if let Some(observer) = usage.take() {
-                observer
-                    .finish(inquello_domain::usage::AttemptStatus::Uncertain)
-                    .await;
-            }
+        if result.is_err()
+            && let Some(observer) = usage.take()
+        {
+            observer
+                .finish(inquello_domain::usage::AttemptStatus::Uncertain)
+                .await;
         }
         result
     }

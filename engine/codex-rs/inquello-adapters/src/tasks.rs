@@ -122,10 +122,10 @@ impl TaskRunStore for SqliteWorkingStore {
             }
             return Ok(old);
         }
-        let latest:Option<i64>=sqlx::query_scalar("SELECT MAX(revision) FROM processing_route_candidates WHERE principal_id=? AND route_id=?").bind(p.to_string()).bind(&intent.route_id).fetch_one(&mut *tx).await.map_err(backend)?;
-        if latest != Some(intent.configuration_revision as i64) {
+        let active:Option<i64>=sqlx::query_scalar("SELECT configuration_revision FROM processing_model_bindings WHERE principal_id=? AND route_id=? AND configuration_revision=? AND state='active'").bind(p.to_string()).bind(&intent.route_id).bind(intent.configuration_revision as i64).fetch_optional(&mut *tx).await.map_err(backend)?;
+        if active != Some(intent.configuration_revision as i64) {
             return Err(TaskReservationError::PreEffect(invalid(
-                "route configuration changed; explicitly reconfirm route and settings",
+                "selected model binding is unavailable; explicitly reconfirm model and settings",
             )));
         }
         if let Some(id) = &intent.engagement_id {
@@ -667,13 +667,15 @@ impl TaskLifecycleStore for SqliteWorkingStore {
             // dispatching it again; retain its original execution identity.
             sqlx::query("UPDATE task_lifecycle SET receipt=json_set(receipt,'$.status','unresolved') WHERE principal_id=? AND task_id=? AND json_extract(receipt,'$.binding.run_id')=? AND json_extract(receipt,'$.status')='uncertain'")
                 .bind(p.to_string()).bind(&b.task_id).bind(&b.run_id).execute(&mut *tx).await.map_err(backend)?;
-            sqlx::query("INSERT INTO task_run_history(task_id,run_id,record) VALUES(?,?,?)")
-                .bind(&b.task_id)
-                .bind(&b.run_id)
-                .bind(encode_binding(&b)?)
-                .execute(&mut *tx)
-                .await
-                .map_err(backend)?;
+            sqlx::query(
+                "INSERT OR IGNORE INTO task_run_history(task_id,run_id,record) VALUES(?,?,?)",
+            )
+            .bind(&b.task_id)
+            .bind(&b.run_id)
+            .bind(encode_binding(&b)?)
+            .execute(&mut *tx)
+            .await
+            .map_err(backend)?;
             b.run_id = Uuid::new_v4().to_string();
             b.runtime_id = intent.runtime_id.clone();
             b.turn_id = None;

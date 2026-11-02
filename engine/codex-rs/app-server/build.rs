@@ -8,12 +8,14 @@ use std::{
 pub(crate) fn collect(root: &Path, path: &Path, files: &mut Vec<PathBuf>) {
     if path.is_dir() {
         println!("cargo:rerun-if-changed={}", path.display());
-        for entry in fs::read_dir(path).expect("fingerprint input directory") {
-            let entry = entry.expect("fingerprint input");
+        for entry in fs::read_dir(path)
+            .unwrap_or_else(|error| panic!("fingerprint input directory: {error}"))
+        {
+            let entry = entry.unwrap_or_else(|error| panic!("fingerprint input: {error}"));
             let relative = entry
                 .path()
                 .strip_prefix(root)
-                .expect("input below root")
+                .unwrap_or_else(|error| panic!("input below root: {error}"))
                 .to_string_lossy()
                 .replace('\\', "/");
             if [
@@ -27,7 +29,8 @@ pub(crate) fn collect(root: &Path, path: &Path, files: &mut Vec<PathBuf>) {
             {
                 continue;
             }
-            let metadata = fs::symlink_metadata(entry.path()).expect("fingerprint metadata");
+            let metadata = fs::symlink_metadata(entry.path())
+                .unwrap_or_else(|error| panic!("fingerprint metadata: {error}"));
             // Linked dependencies do not silently escape the measured tree.
             if metadata.file_type().is_symlink() {
                 panic!("linked fingerprint input: {}", entry.path().display());
@@ -44,17 +47,20 @@ pub(crate) fn collect(root: &Path, path: &Path, files: &mut Vec<PathBuf>) {
 pub(crate) fn hash_input(hash: &mut Sha256, relative: &str, bytes: &[u8]) {
     let mut bytes = bytes.to_vec();
     if relative == "engine/codex-rs/inquello-domain/register/capabilities.json" {
-        let mut register: serde_json::Value =
-            serde_json::from_slice(&bytes).expect("capability register JSON");
+        let mut register: serde_json::Value = serde_json::from_slice(&bytes)
+            .unwrap_or_else(|error| panic!("capability register JSON: {error}"));
         for entry in register["entries"]
             .as_array_mut()
-            .expect("register entries")
+            .unwrap_or_else(|| panic!("capability register entries must be an array"))
         {
-            let entry = entry.as_object_mut().expect("register entry");
+            let entry = entry
+                .as_object_mut()
+                .unwrap_or_else(|| panic!("capability register entry must be an object"));
             entry.remove("evidence");
             entry.remove("negative_authorization");
         }
-        bytes = serde_json::to_vec(&register).expect("normalized capability register");
+        bytes = serde_json::to_vec(&register)
+            .unwrap_or_else(|error| panic!("normalized capability register: {error}"));
     }
     hash.update((relative.len() as u64).to_be_bytes());
     hash.update(relative.as_bytes());
@@ -63,8 +69,12 @@ pub(crate) fn hash_input(hash: &mut Sha256, relative: &str, bytes: &[u8]) {
 }
 
 fn main() {
-    let root = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("../../..");
-    let root = fs::canonicalize(root).expect("repository root");
+    let root = PathBuf::from(
+        env::var("CARGO_MANIFEST_DIR")
+            .unwrap_or_else(|error| panic!("fingerprint build setup: {error}")),
+    )
+    .join("../../..");
+    let root = fs::canonicalize(root).unwrap_or_else(|error| panic!("repository root: {error}"));
     let mut files = Vec::new();
     collect(&root, &root.join("engine"), &mut files);
     collect(&root, &root.join("desktop"), &mut files);
@@ -74,11 +84,12 @@ fn main() {
     for file in files {
         let relative = file
             .strip_prefix(&root)
-            .unwrap()
+            .unwrap_or_else(|error| panic!("fingerprint build setup: {error}"))
             .to_string_lossy()
             .replace('\\', "/");
         println!("cargo:rerun-if-changed={}", file.display());
-        let bytes = fs::read(&file).expect("fingerprint input bytes");
+        let bytes =
+            fs::read(&file).unwrap_or_else(|error| panic!("fingerprint input bytes: {error}"));
         hash_input(&mut hash, &relative, &bytes);
     }
     for name in [
@@ -99,7 +110,7 @@ fn main() {
     let compiler = std::process::Command::new(env::var("RUSTC").unwrap_or_else(|_| "rustc".into()))
         .arg("--version")
         .output()
-        .expect("compiler identity");
+        .unwrap_or_else(|error| panic!("compiler identity: {error}"));
     assert!(compiler.status.success());
     hash.update(compiler.stdout);
     println!(
@@ -108,9 +119,10 @@ fn main() {
     );
     println!(
         "cargo:rustc-env=INQUELLO_BUILD_PLATFORM={}",
-        env::var("TARGET").unwrap()
+        env::var("TARGET").unwrap_or_else(|error| panic!("fingerprint build setup: {error}"))
     );
-    let policy = fs::read(root.join("desktop/data-policy.json")).expect("data policy");
+    let policy = fs::read(root.join("desktop/data-policy.json"))
+        .unwrap_or_else(|error| panic!("data policy: {error}"));
     println!(
         "cargo:rustc-env=INQUELLO_DATA_POLICY_DIGEST={:x}",
         Sha256::digest(policy)

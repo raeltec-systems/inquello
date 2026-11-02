@@ -28,6 +28,61 @@ fn fixture() -> Fixture {
     Fixture { dir, processor }
 }
 
+// Workspace-tree disclosure asks the desktop for fresh authority. These tests own
+// an in-memory responder rather than weakening that production disclosure check.
+async fn with_workspace_authority(
+    mut processor: InquelloRequestProcessor,
+) -> InquelloRequestProcessor {
+    use crate::outgoing_message::{OutgoingEnvelope, OutgoingMessageSender};
+    let (tx, mut rx) = tokio::sync::mpsc::channel(8);
+    let outgoing = std::sync::Arc::new(OutgoingMessageSender::new(
+        tx,
+        codex_analytics::AnalyticsEventsClient::disabled(),
+    ));
+    let responder = outgoing.clone();
+    let store = processor
+        .store()
+        .await
+        .unwrap_or_else(|error| panic!("fixture store: {error:?}"));
+    tokio::spawn(async move {
+        while let Some(OutgoingEnvelope::ToConnection {
+            connection_id,
+            message,
+            ..
+        }) = rx.recv().await
+        {
+            let request = serde_json::to_value(message)
+                .unwrap_or_else(|error| panic!("encode authority: {error}"));
+            let id = serde_json::from_value(request["id"].clone())
+                .unwrap_or_else(|error| panic!("authority ID: {error}"));
+            let response = match request["method"].as_str() {
+                Some("inquello/tasks/authority") => {
+                    json!({"workspacePolicy":workspace_policy(WORKSPACE, 1, None)})
+                }
+                Some("inquello/context/authorize") => {
+                    use inquello_domain::organise::OrganiseStore;
+                    let tree = store
+                        .load_workspace_tree(
+                            inquello_domain::organise::WorkspaceId::parse(WORKSPACE)
+                                .unwrap_or_else(|error| panic!("workspace: {error:?}")),
+                            PrincipalId::parse(ALICE)
+                                .unwrap_or_else(|error| panic!("principal: {error:?}")),
+                        )
+                        .await
+                        .unwrap_or_else(|error| panic!("inventory: {error:?}"));
+                    json!({"available":true,"snapshot":"isolated-store-inventory","serviceEngagementIds":tree.engagements.iter().map(|e|e.service_engagement_id.to_string()).collect::<Vec<_>>()})
+                }
+                _ => panic!("Unexpected fixture authority request"),
+            };
+            responder
+                .notify_client_response(connection_id, id, response)
+                .await;
+        }
+    });
+    processor.task_layer_fixture = Some((DeviceRequirements::default(), UserConfig::default()));
+    processor.with_task_outgoing(outgoing)
+}
+
 fn decode<T: DeserializeOwned>(
     result: Result<Option<ClientResponsePayload>, JSONRPCErrorError>,
 ) -> T {
@@ -155,6 +210,7 @@ async fn organise_engagement_folder_and_task_then_move_it() {
         dir: _dir,
         processor,
     } = fixture();
+    let processor = with_workspace_authority(processor).await;
     sign_in(&processor, DESKTOP, ALICE).await;
     let created: InquelloEngagementResponse = decode(
         processor
@@ -323,6 +379,7 @@ async fn tasks_are_listed_only_for_their_creator() {
         dir: _dir,
         processor,
     } = fixture();
+    let processor = with_workspace_authority(processor).await;
     sign_in(&processor, DESKTOP, ALICE).await;
     sign_in(&processor, OTHER, BOB).await;
     let shared: InquelloEngagementResponse = decode(
@@ -650,7 +707,7 @@ async fn state_refusals_carry_their_kinds() {
 
 // ---- Effective policy and broader modes (Story 1.18) ---------------------------------
 
-const FULL_ACCESS_REACH: &str = "Full access: commands on this Task run without sandbox limits on this device, and you will not be asked before actions.";
+const FULL_ACCESS_REACH: &str = execution_policy::BroadMode::FullAccess.reach();
 
 fn workspace_policy(
     workspace: &str,
@@ -869,7 +926,7 @@ async fn the_effective_policy_names_its_sources_and_the_capability_contract() {
         effective(
             &processor,
             DESKTOP,
-            workspace_policy(WORKSPACE, 2, Some(permissive())),
+            workspace_policy(WORKSPACE, 5, Some(permissive())),
             None,
             device,
             UserConfig::default(),
@@ -896,7 +953,7 @@ async fn the_effective_policy_names_its_sources_and_the_capability_contract() {
             "config": {},
             "origins": {},
             "layers": [{
-                "name": { "type": "user", "file": "/tmp/runtime-home/config.toml", "profile": null },
+                "name": { "type": "user", "file": _dir.path().join("runtime-home").join("config.toml"), "profile": null },
                 "version": "1",
                 "config": { "sandbox_mode": "read-only", "approval_policy": "untrusted" },
             }],
@@ -909,7 +966,7 @@ async fn the_effective_policy_names_its_sources_and_the_capability_contract() {
         effective(
             &processor,
             DESKTOP,
-            workspace_policy(WORKSPACE, 2, Some(permissive())),
+            workspace_policy(WORKSPACE, 5, Some(permissive())),
             None,
             DeviceRequirements::default(),
             user,
@@ -926,7 +983,7 @@ async fn the_effective_policy_names_its_sources_and_the_capability_contract() {
             effective(
                 &processor,
                 DESKTOP,
-                workspace_policy(WORKSPACE, 2, Some(json!({ "hosted_sandbox": true }))),
+                workspace_policy(WORKSPACE, 5, Some(json!({ "hosted_sandbox": true }))),
                 None,
                 DeviceRequirements::default(),
                 UserConfig::default(),
@@ -1251,7 +1308,10 @@ async fn a_standard_task_profile_names_its_boundaries_and_runtime_form() {
         .task
         .and_then(|task| task.runtime_profile)
         .unwrap_or_else(|| panic!("no runtime profile"));
-    let output = format!("{folder}/output");
+    let output = std::path::Path::new(&folder)
+        .join("output")
+        .to_string_lossy()
+        .into_owned();
     assert_eq!(runtime.sandbox, "permission-profile");
     assert_eq!(
         runtime.permission_profile_id.as_deref(),
@@ -1309,7 +1369,7 @@ async fn a_standard_task_profile_names_its_boundaries_and_runtime_form() {
         kind(
             task_profile(
                 &processor,
-                policy(),
+                workspace_policy(WORKSPACE, 7, None),
                 &task_id,
                 Some(dir.path().join("x").to_string_lossy().into_owned())
             )
@@ -1323,7 +1383,7 @@ async fn a_standard_task_profile_names_its_boundaries_and_runtime_form() {
                 .policy_effective(
                     DESKTOP,
                     InquelloPolicyEffectiveParams {
-                        workspace_policy: policy(),
+                        workspace_policy: workspace_policy(WORKSPACE, 7, None),
                         task_id: None,
                         task_folder: Some(folder),
                     },
@@ -2112,7 +2172,7 @@ async fn the_effective_policy_lists_rules_and_the_reviewer_state() {
     assert_eq!(on.reviewer.state, "not_available");
     assert_eq!(
         on.reviewer.label,
-        "Automated permission review: not available (no processing route)"
+        "Automated permission review: not available (no verified eligible Task route)"
     );
     assert_eq!(on.reviewer.runtime_setting, "user");
     assert_eq!(on.command_rules.len(), 1);

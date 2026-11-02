@@ -140,6 +140,13 @@ pub(crate) type PrivateFenceFuture<'a> = std::pin::Pin<
 
 /// Sends messages to the client and manages request callbacks.
 pub(crate) trait PrivateThreadAuthority: Send + Sync {
+    fn capture_thread_fence<'a>(
+        &'a self,
+        connection: ConnectionId,
+        _thread: ThreadId,
+    ) -> PrivateFenceFuture<'a> {
+        self.capture_fence(connection)
+    }
     fn capture_fence<'a>(&'a self, _connection: ConnectionId) -> PrivateFenceFuture<'a> {
         Box::pin(async { None })
     }
@@ -342,7 +349,14 @@ impl OutgoingMessageSender {
         connection: ConnectionId,
         thread: ThreadId,
     ) -> Option<Option<codex_app_server_transport::PrivateOutputFence>> {
-        let fence = self.capture_private_fence(connection).await;
+        let fence = match self
+            .private_authority
+            .get()
+            .and_then(std::sync::Weak::upgrade)
+        {
+            Some(authority) => authority.capture_thread_fence(connection, thread).await,
+            None => None,
+        };
         if !self.authorize_thread_recipient(connection, thread).await
             || fence.as_ref().is_some_and(|f| !f.is_current())
         {

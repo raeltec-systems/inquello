@@ -321,7 +321,7 @@ async fn public_automated_actor_cannot_spoof_a_trusted_invocation() {
 }
 
 #[tokio::test]
-async fn route_key_policy_and_logout_invalidate_staged_verdicts() {
+async fn key_policy_and_logout_invalidate_staged_verdicts_and_pending_route_switch_is_denied() {
     for route in RouteId::ALL {
         for change in ["key", "route", "policy", "logout", "expiry"] {
             let f = Fixture::new(route, true).await;
@@ -342,20 +342,27 @@ async fn route_key_policy_and_logout_invalidate_staged_verdicts() {
                     );
                 }
                 "route" => {
-                    let _: InquelloTaskRouteResponse = decode(
-                        f.processor
-                            .task_route_set(
-                                CONNECTION,
-                                InquelloTaskRouteSetParams {
-                                    operation_id: "reselect".into(),
-                                    expected_revision: 1,
-                                    task_id: f.task.clone(),
-                                    route_id: f.route.as_str().into(),
-                                    configuration_revision: 1,
-                                },
-                            )
-                            .await,
+                    let denied = f
+                        .processor
+                        .task_route_set(
+                            CONNECTION,
+                            InquelloTaskRouteSetParams {
+                                operation_id: "reselect".into(),
+                                expected_revision: 1,
+                                task_id: f.task.clone(),
+                                route_id: f.route.as_str().into(),
+                                configuration_revision: 1,
+                            },
+                        )
+                        .await
+                        .expect_err("pending review must fence explicit selection changes");
+                    assert_eq!(denied.data.unwrap()["inquello"]["kind"], "pending_work");
+                    assert_eq!(
+                        f.apply().await.status,
+                        "decided",
+                        "a refused switch must preserve the original exact model review"
                     );
+                    continue;
                 }
                 "policy" => {
                     let mut params = f.params();
@@ -623,13 +630,14 @@ async fn selecting_another_task_does_not_cancel_staged_review_or_rebind_credenti
             )
             .await,
     );
-    let state = f.processor.routes.state.lock().await;
-    assert_eq!(
-        state.credentials.get(&(actor.principal_id, f.route)),
-        Some(&(PRINCIPAL.into(), 1))
-    );
-    assert!(state.ready.contains_key(&f.request));
-    drop(state);
+    {
+        let state = f.processor.routes.state.lock().await;
+        assert_eq!(
+            state.credentials.get(&(actor.principal_id, f.route)),
+            Some(&(PRINCIPAL.into(), 1))
+        );
+        assert!(state.ready.contains_key(&f.request));
+    }
     assert_eq!(f.apply().await.status, "decided");
 }
 
@@ -1177,18 +1185,21 @@ async fn actual_responses_body_uses_snapshot_resolved_and_explicit_choices() {
     )
     .await);
     assert_eq!(f.review().await.status, "ready");
-    let state = f.processor.routes.state.lock().await;
-    assert_eq!(state.fixture_bodies.len(), 2);
-    assert_eq!(state.fixture_bodies[0]["reasoning"]["effort"], "low");
-    assert!(state.fixture_bodies[0].get("service_tier").is_none());
-    assert_eq!(state.fixture_bodies[1]["reasoning"]["effort"], "high");
-    assert_eq!(state.fixture_bodies[1]["service_tier"], "priority");
+    let bodies = {
+        let state = f.processor.routes.state.lock().await;
+        assert_eq!(state.fixture_bodies.len(), 2);
+        assert_eq!(state.fixture_bodies[0]["reasoning"]["effort"], "low");
+        assert!(state.fixture_bodies[0].get("service_tier").is_none());
+        assert_eq!(state.fixture_bodies[1]["reasoning"]["effort"], "high");
+        assert_eq!(state.fixture_bodies[1]["service_tier"], "priority");
+        state.fixture_bodies.clone()
+    };
     let history = ok(usage::task_usage(&store, actor, &f.task).await);
     for record in history.attempts {
         let body = if record.snapshot.requested.reasoning == "default" {
-            &state.fixture_bodies[0]
+            &bodies[0]
         } else {
-            &state.fixture_bodies[1]
+            &bodies[1]
         };
         assert_eq!(
             body["reasoning"]["effort"],

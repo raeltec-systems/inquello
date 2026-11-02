@@ -582,10 +582,10 @@ impl UnifiedExecProcessManager {
             && completion.is_some()
             && context.cancellation_token.is_cancelled()
         {
-            if !process.has_exited() {
-                if let Err(err) = process.terminate_confirmed().await {
-                    process.fail_and_terminate(err.to_string());
-                }
+            if !process.has_exited()
+                && let Err(err) = process.terminate_confirmed().await
+            {
+                process.fail_and_terminate(err.to_string());
             }
             process.cancellation_token().cancel();
         }
@@ -1483,28 +1483,26 @@ impl UnifiedExecProcessManager {
             } else {
                 None
             };
-        if let Some(ctx) = tool_ctx {
-            if crate::inquello_inference::is_task_thread(&ctx.session.thread_id.to_string()) {
-                let authorization = ctx
-                    .step_context
-                    .turn
-                    .extension_data
-                    .get::<crate::inquello_inference::TaskAuthorizationContext>()
-                    .ok_or_else(|| {
-                        UnifiedExecError::create_process("Private authority unavailable".into())
-                    })?;
-                authorization.0.before_tool_effect().await.map_err(|_| {
-                    UnifiedExecError::create_process(
-                        "Private authority changed before launch".into(),
-                    )
+        if let Some(ctx) = tool_ctx
+            && crate::inquello_inference::is_task_thread(&ctx.session.thread_id.to_string())
+        {
+            let authorization = ctx
+                .step_context
+                .turn
+                .extension_data
+                .get::<crate::inquello_inference::TaskAuthorizationContext>()
+                .ok_or_else(|| {
+                    UnifiedExecError::create_process("Private authority unavailable".into())
                 })?;
-                if ctx.cancellation_token.is_cancelled()
-                    || authorization.0.cancellation().is_cancelled()
-                {
-                    return Err(UnifiedExecError::create_process(
-                        "Private command cancelled before launch".into(),
-                    ));
-                }
+            authorization.0.before_tool_effect().await.map_err(|_| {
+                UnifiedExecError::create_process("Private authority changed before launch".into())
+            })?;
+            if ctx.cancellation_token.is_cancelled()
+                || authorization.0.cancellation().is_cancelled()
+            {
+                return Err(UnifiedExecError::create_process(
+                    "Private command cancelled before launch".into(),
+                ));
             }
         }
         let spawn_result = codex_sandboxing::spawn_process(codex_sandboxing::SpawnRequest {

@@ -23,7 +23,7 @@ impl ToolExecutor<ToolInvocation> for InquelloProgressHandler {
         let parameters = json!({"type":"object","additionalProperties":false,"required":["version","plan","results"],"properties":{
             "version":{"type":"integer","enum":[1]},
             "plan":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["id","revision","text","status","evidenceIds"],"properties":{
-                "id":{"type":"string"},"revision":{"type":"integer"},"text":{"type":"string"},"status":{"type":"string","enum":["pending","running","completed"]},"evidenceIds":reference.clone()}}},
+                "id":{"type":"string"},"revision":{"type":"integer"},"text":{"type":"string"},"status":{"type":"string","enum":["pending","running","completed"]},"evidenceIds":reference}}},
             "results":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["id","kind","text","evidenceIds"],"properties":{
                 "id":{"type":"string"},"kind":{"type":"string","enum":["calculation","observation","suggestion","decision","gap"]},"text":{"type":"string"},"evidenceIds":reference,"basisId":{"type":"string"},"revision":{"type":"integer"},"state":{"type":"string","enum":["current","withdrawn"]},"changeReason":{"type":"string"}}}}
         }});
@@ -31,7 +31,7 @@ impl ToolExecutor<ToolInvocation> for InquelloProgressHandler {
             name:"inquello_progress".into(),
             description:"Publish version 1 plan and results for this private Task. When the auditor corrects ordinary instructions, revise the plan and actually rerun affected analysis before claiming adapted findings. Preserve unaffected work. Keep stable step/result IDs. Increase step revision when its text changes. For each changed result increase revision and supply changeReason explaining the correction and evidenceIds identifying the reanalysis; use state current for replacement, or withdrawn for a finding no longer valid. Withdraw only an existing result with a newer revision and reason. Omitted IDs remain current, omission is not withdrawal. Prior revisions remain inspectable, separate from current findings. Give a concise conversational summary of what changed; ask a contextual question only for material ambiguity. Admission of steering is not completed adaptation. Evidence IDs must identify actual retained items in this authorized Task history. Completed steps are claims until native evidence resolves; confirmed action text must exactly equal the native command or applied edit text. Analytical findings and all revisions are unchecked, never independent verification or carried-forward signoff. Omit basisId unless it names an actual human instruction ID whose exact text is repeated by the decision. Permission to execute is not review. No artifacts or permissions are created. At most 65536 UTF-8 bytes.".into(),
             strict:false, defer_loading:None,
-            parameters:serde_json::from_value(parameters).expect("fixed progress tool schema"), output_schema:None,
+            parameters:serde_json::from_value(parameters).unwrap_or_else(|error|panic!("fixed progress tool schema: {error}")), output_schema:None,
         })
     }
     fn handle<'a>(&'a self, invocation: ToolInvocation) -> codex_tools::ToolExecutorFuture<'a>

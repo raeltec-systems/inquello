@@ -280,10 +280,10 @@ pub fn bind_attempt(
     Ok(())
 }
 pub fn cancel_bound_attempt(thread_id: &str) {
-    if let Ok(mut pending) = pending().lock() {
-        if let Some(context) = pending.remove(thread_id) {
-            context.cancellation.cancel();
-        }
+    if let Ok(mut pending) = pending().lock()
+        && let Some(context) = pending.remove(thread_id)
+    {
+        context.cancellation.cancel();
     }
 }
 pub(crate) fn take_attempt(thread_id: &str) -> Result<Option<AttemptContext>> {

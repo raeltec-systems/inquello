@@ -217,11 +217,11 @@ impl Drop for BootstrapTransition<'_> {
         state.transitions = state
             .transitions
             .checked_sub(1)
-            .expect("balanced identity transition");
+            .unwrap_or_else(|| panic!("balanced identity transition"));
         state.generation = state
             .generation
             .checked_add(1)
-            .expect("bootstrap generation exhausted");
+            .unwrap_or_else(|| panic!("bootstrap generation exhausted"));
     }
 }
 
@@ -300,7 +300,7 @@ impl InquelloRequestProcessor {
         state.generation = state
             .generation
             .checked_add(1)
-            .expect("bootstrap generation exhausted");
+            .unwrap_or_else(|| panic!("bootstrap generation exhausted"));
         Ok(state.generation)
     }
 
@@ -317,11 +317,11 @@ impl InquelloRequestProcessor {
         state.generation = state
             .generation
             .checked_add(1)
-            .expect("bootstrap generation exhausted");
+            .unwrap_or_else(|| panic!("bootstrap generation exhausted"));
         state.transitions = state
             .transitions
             .checked_add(1)
-            .expect("identity transition count exhausted");
+            .unwrap_or_else(|| panic!("identity transition count exhausted"));
         state.closed |= close;
         BootstrapTransition {
             states: &self.task_bootstrap_generations,
@@ -855,6 +855,10 @@ impl InquelloRequestProcessor {
 impl InquelloRequestProcessor {
     // ---- Effective policy and broader modes (Story 1.18) -------------------------
 
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "Keep the authority snapshot and local SQLite check/commit atomic with invalidation; provider and service network waits occur outside this guarded region."
+    )]
     pub(crate) async fn policy_effective(
         &self,
         connection_id: ConnectionId,
@@ -953,6 +957,10 @@ impl InquelloRequestProcessor {
         ))
     }
 
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "Keep the authority snapshot and local SQLite check/commit atomic with invalidation; provider and service network waits occur outside this guarded region."
+    )]
     pub(crate) async fn broad_mode_set(
         &self,
         connection_id: ConnectionId,
@@ -1325,6 +1333,10 @@ impl InquelloRequestProcessor {
         ))
     }
 
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "Keep the authority snapshot and local SQLite check/commit atomic with invalidation; provider and service network waits occur outside this guarded region."
+    )]
     pub(crate) async fn user_rules_set(
         &self,
         connection_id: ConnectionId,
@@ -2402,6 +2414,7 @@ fn paid_profile_method_allowed(requested: bool, armed: bool, method: &str) -> bo
             | "inquello/session/setPrincipal"
             | "inquello/session/clearPrincipal"
             | "inquello/routes/privateAuth"
+            | "inquello/models/catalog"
             | "inquello/routes/invalidate"
             | "inquello/tasks/bootstrap"
             | "inquello/tasks/start"
@@ -2453,6 +2466,7 @@ mod paid_session_counter_tests {
             "inquello/tasks/forThread",
             "inquello/usage/read",
             "inquello/routes/list",
+            "inquello/models/catalog",
             "inquello/routes/invalidate",
             "inquello/session/setPrincipal",
             "inquello/tasks/bootstrap",
@@ -2493,6 +2507,9 @@ mod paid_session_counter_tests {
         for method in [
             "inquello/task/create",
             "inquello/routes/configure",
+            "inquello/models/resolve",
+            "inquello/models/select",
+            "inquello/models/binding/state",
             "inquello/usage/set",
         ] {
             assert!(!super::paid_profile_method_allowed(true, true, method));
@@ -2500,6 +2517,10 @@ mod paid_session_counter_tests {
         }
     }
     #[test]
+    #[expect(
+        clippy::needless_collect,
+        reason = "Spawn every competing reservation before joining any worker so this test actually exercises concurrent admission."
+    )]
     fn concurrent_reservations_cannot_exceed_two() {
         let state = std::sync::Arc::new(std::sync::Mutex::new(PaidSessionState::default()));
         let handles: Vec<_> = (0..16)
