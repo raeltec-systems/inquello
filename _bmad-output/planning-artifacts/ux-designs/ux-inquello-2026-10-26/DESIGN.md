@@ -182,8 +182,8 @@ spacing:
   '16': 64px
   header-height: 48px
   panel-tabs-height: 40px
-  sidebar-width: 264px
-  rail-width: 52px
+  sidebar-width: 424px
+  rail-width: 64px
   thread-max-width: 720px
   panel-min-width: 380px
   panel-default-width: 560px

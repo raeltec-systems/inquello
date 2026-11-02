@@ -22,10 +22,10 @@ export function periodText(engagement: EngagementItem | null): string | null {
   return engagement.periodStart ? `From ${engagement.periodStart}` : `Until ${engagement.periodEnd}`;
 }
 
-export function Header({ task, engagement, workspace }: HeaderProps): ReactElement {
+export function Header({ task, engagement }: HeaderProps): ReactElement {
   const period = periodText(engagement);
   return (
-    <header className="iq-header" data-header data-header-empty={!task || undefined}>
+    <header className="iq-header" data-header data-header-empty={!task && !engagement || undefined}>
       <div className="iq-header-main">
         <span className="iq-header-title" data-header-title>
           {task ? task.title : 'Inquello'}
@@ -55,10 +55,7 @@ export function Header({ task, engagement, workspace }: HeaderProps): ReactEleme
             <dd data-header-period>{period}</dd>
           </div>
         ) : null}
-        <div className="iq-header-item">
-          <dt>Workspace</dt>
-          <dd data-header-workspace>{workspace ? workspace.name : 'None selected'}</dd>
-        </div>
+
       </dl>
     </header>
   );

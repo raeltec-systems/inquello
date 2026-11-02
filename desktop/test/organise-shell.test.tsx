@@ -15,6 +15,18 @@ import type { EngagementItem, FolderItem, TaskItem } from '../src/renderer/Shell
 import { Shell } from '../src/renderer/Shell/Shell';
 import { engagementDraftErrors, EMPTY_ENGAGEMENT } from '../src/renderer/Shell/Sidebar';
 
+// Only legacy cross-workspace race cases use this adapter. Production Sidebar
+// remains real in every other case; fresh-authority and runtime behavior are never mocked.
+const workspaceHarness=vi.hoisted(()=>({enabled:false}));
+vi.mock('../src/renderer/Shell/Sidebar',async()=>{
+ const actual=await vi.importActual<typeof import('../src/renderer/Shell/Sidebar')>('../src/renderer/Shell/Sidebar');
+ const {useState}=await import('react');
+ return {...actual,Sidebar:(props:import('../src/renderer/Shell/Sidebar').SidebarProps)=>{
+  const [open,setOpen]=useState(false);
+  return <><actual.Sidebar {...props}/>{workspaceHarness.enabled&&<div data-workspace-selector data-workspace-id={props.workspaceId??''}><button onClick={()=>setOpen(!open)}>{props.state?.workspaces.find(w=>w.workspaceId===props.workspaceId)?.name??'Choose workspace'}</button>{open&&props.state?.workspaces.map(w=><button key={w.workspaceId} role="menuitemradio" aria-checked={w.workspaceId===props.workspaceId} onClick={()=>{setOpen(false);props.onSelectWorkspace(w.workspaceId);}}>{w.name}</button>)}</div>}</>;
+ }};
+});
+
 const WORKSPACE = '5d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e';
 
 interface FakeMain {
@@ -96,6 +108,7 @@ function fakeMain(options: { serviceUp?: boolean; signedIn?: boolean } = {}): Fa
 }
 
 afterEach(() => {
+  workspaceHarness.enabled=false;
   cleanup();
   delete (globalThis as { inquello?: unknown }).inquello;
 });
@@ -118,12 +131,12 @@ describe('Shell', () => {
     expect(document.querySelector('[data-shell]')).not.toBeNull();
   });
 
-  it('New thread opens a memory-only Start surface without creating a Task', async () => {
+  it('New chat opens a memory-only Start surface without creating a Task', async () => {
     const main = fakeMain();
     const user = userEvent.setup();
     renderShell();
     await waitFor(() => expect(sidebar().dataset.sidebarState).toBe('ready'));
-    await user.click(screen.getByRole('button', { name: 'New thread' }));
+    await user.click(screen.getByRole('button', { name: 'New chat' }));
     expect(screen.getByRole('heading', {name:'What should we work on?'})).toBeTruthy();
     expect(main.tasks).toHaveLength(0);
     expect(main.bridge.createTask).not.toHaveBeenCalled();
@@ -250,13 +263,14 @@ describe('Shell helpers', () => {
 });
 
 it('keeps background acceptance without taking over unrelated navigation',async()=>{
+ workspaceHarness.enabled=true;
  const main=fakeMain();const other=uuid(808);const user=userEvent.setup();let finish!:(value:unknown)=>void;let command:Record<string,unknown>={};
  main.bridge.getWorkspaces!.mockResolvedValue({signedIn:true,sharedService:'available',workspaces:[{workspaceId:WORKSPACE,name:'Synthetic Audit Co',source:'service'},{workspaceId:other,name:'Other Workspace',source:'service'}],engagementCreation:{enabled:true}});
  main.bridge.getTree!.mockImplementation(async({workspaceId}:{workspaceId:string})=>({ok:true,value:{workspaceId,engagements:[],folders:[],tasks:workspaceId===WORKSPACE?main.tasks:[]}}));
  const route={routeId:'claude-api-key',provider:'Claude',configurable:true,configuration:{routeId:'claude-api-key',deployment:'anthropic-direct',model:'claude-sonnet-5-5',apiVersion:'2026-10-21',accountRef:'account',region:null},endpoint:'https://api.anthropic.com',revision:1,credentialPresent:true,adapterSupported:true,verification:'verified_for_synthetic',enabled:true,gate:null,limits:[],evidence:['fixture'],executionFlow:'Local sandbox',inferenceFlow:'Cloud inference',connectorFlow:'Unavailable'};
  Object.assign(globalThis,{inquello:{organise:main.bridge,routes:{list:async()=>({ok:true,value:[route]})},tasks:{preflight:async()=>({ok:true,value:{routeId:route.routeId,configurationRevision:1,reasoning:['default'],speeds:['default'],available:true,reason:'Available',executionFlow:'Local sandbox',inferenceFlow:'Cloud inference'}}),start:(input:Record<string,unknown>)=>{command=input;return new Promise(resolve=>{finish=resolve;});}}}});
- renderShell();await waitFor(()=>expect(sidebar().dataset.sidebarState).toBe('ready'));await user.click(screen.getByRole('button',{name:'New thread'}));
- await screen.findByText(/Claude —/);await user.selectOptions(screen.getByLabelText('Processing route'),'claude-api-key');await screen.findByLabelText('Reasoning');await user.selectOptions(screen.getByLabelText('Reasoning'),'default');await user.selectOptions(screen.getByLabelText('Speed'),'default');await user.type(screen.getByRole('textbox'),'Review fictional R01.');await user.click(screen.getByLabelText('Send'));
+ renderShell();await waitFor(()=>expect(sidebar().dataset.sidebarState).toBe('ready'));await user.click(screen.getByRole('button',{name:'New chat'}));
+ await screen.findByText(/Claude —/);await user.click(document.querySelector('.iq-processing-settings summary')!);await user.selectOptions(screen.getByLabelText('Processing route'),'claude-api-key');await screen.findByLabelText('Reasoning');await user.selectOptions(screen.getByLabelText('Reasoning'),'default');await user.selectOptions(screen.getByLabelText('Speed'),'default');await user.type(screen.getByRole('textbox'),'Review fictional R01.');await user.click(screen.getByLabelText('Send'));
  await user.click(screen.getByRole('button',{name:'Synthetic Audit Co'}));await user.click(screen.getByRole('menuitemradio',{name:'Other Workspace'}));
  expect(document.querySelector('[data-workspace-selector]')?.getAttribute('data-workspace-id')).toBe(other);
  const task:TaskItem={taskId:uuid(809),workspaceId:WORKSPACE,engagementId:null,folderId:null,title:'Private task',runtimeThreadId:'thread-a',sourceRefs:[],artifactRefs:[],visibility:'private',revision:1};main.tasks.push(task);
@@ -269,13 +283,14 @@ it('keeps background acceptance without taking over unrelated navigation',async(
 });
 
 it('preserves newer shared no-Task draft when an older Start is accepted after navigation',async()=>{
+ workspaceHarness.enabled=true;
  const main=fakeMain();const other=uuid(808);const user=userEvent.setup();let finish!:(value:unknown)=>void;let command:Record<string,unknown>={};
  main.bridge.getWorkspaces!.mockResolvedValue({signedIn:true,sharedService:'available',workspaces:[{workspaceId:WORKSPACE,name:'Synthetic Audit Co',source:'service'},{workspaceId:other,name:'Other Workspace',source:'service'}],engagementCreation:{enabled:true}});
  main.bridge.getTree!.mockImplementation(async({workspaceId}:{workspaceId:string})=>({ok:true,value:{workspaceId,engagements:[],folders:[],tasks:workspaceId===WORKSPACE?main.tasks:[]}}));
  const route={routeId:'claude-api-key',provider:'Claude',configurable:true,configuration:{routeId:'claude-api-key',deployment:'anthropic-direct',model:'claude-sonnet-5-5',apiVersion:'2026-10-21',accountRef:'account',region:null},endpoint:'https://api.anthropic.com',revision:1,credentialPresent:true,adapterSupported:true,verification:'verified_for_synthetic',enabled:true,gate:null,limits:[],evidence:['fixture'],executionFlow:'Local sandbox',inferenceFlow:'Cloud inference',connectorFlow:'Unavailable'};
  Object.assign(globalThis,{inquello:{organise:main.bridge,routes:{list:async()=>({ok:true,value:[route]})},tasks:{preflight:async()=>({ok:true,value:{routeId:route.routeId,configurationRevision:1,reasoning:['default'],speeds:['default'],available:true,reason:'Available',executionFlow:'Local sandbox',inferenceFlow:'Cloud inference'}}),start:(input:Record<string,unknown>)=>{command=input;return new Promise(resolve=>{finish=resolve;});}}}});
- renderShell();await waitFor(()=>expect(sidebar().dataset.sidebarState).toBe('ready'));await user.click(screen.getByRole('button',{name:'New thread'}));
- await screen.findByText(/Claude —/);await user.selectOptions(screen.getByLabelText('Processing route'),'claude-api-key');await screen.findByLabelText('Reasoning');await user.selectOptions(screen.getByLabelText('Reasoning'),'default');await user.selectOptions(screen.getByLabelText('Speed'),'default');await user.type(screen.getByRole('textbox'),'Review fictional R01.');await user.click(screen.getByLabelText('Send'));
+ renderShell();await waitFor(()=>expect(sidebar().dataset.sidebarState).toBe('ready'));await user.click(screen.getByRole('button',{name:'New chat'}));
+ await screen.findByText(/Claude —/);await user.click(document.querySelector('.iq-processing-settings summary')!);await user.selectOptions(screen.getByLabelText('Processing route'),'claude-api-key');await screen.findByLabelText('Reasoning');await user.selectOptions(screen.getByLabelText('Reasoning'),'default');await user.selectOptions(screen.getByLabelText('Speed'),'default');await user.type(screen.getByRole('textbox'),'Review fictional R01.');await user.click(screen.getByLabelText('Send'));
  await user.click(screen.getByRole('button',{name:'Synthetic Audit Co'}));await user.click(screen.getByRole('menuitemradio',{name:'Other Workspace'}));
  expect(document.querySelector('[data-workspace-selector]')?.getAttribute('data-workspace-id')).toBe(other);
  await user.clear(screen.getByRole('textbox'));await user.type(screen.getByRole('textbox'),'New unsent R99 question.');
@@ -283,18 +298,19 @@ it('preserves newer shared no-Task draft when an older Start is accepted after n
  await act(async()=>{finish({ok:true,value:{operationId:command.operationId,taskId:task.taskId,runId:'run-a',threadId:'thread-a',status:'running',request:command.request,accepted:true}});});
  expect(document.querySelector('[data-workspace-selector]')?.getAttribute('data-workspace-id')).toBe(other);
  expect(screen.queryByRole('region',{name:'Accepted request'})).toBeNull();
- await user.click(screen.getByRole('button',{name:'New thread'}));
+ await user.click(screen.getByRole('button',{name:'New chat'}));
  expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('New unsent R99 question.');
 });
 
 it('removes cached private request and selection when Workspace membership disappears',async()=>{
+ workspaceHarness.enabled=true;
  const main=fakeMain();const other=uuid(808);const user=userEvent.setup();let finish!:(value:unknown)=>void;let command:Record<string,unknown>={};
  main.bridge.getWorkspaces!.mockResolvedValue({signedIn:true,sharedService:'available',workspaces:[{workspaceId:WORKSPACE,name:'Synthetic Audit Co',source:'service'},{workspaceId:other,name:'Other Workspace',source:'service'}],engagementCreation:{enabled:true}});
  main.bridge.getTree!.mockImplementation(async({workspaceId}:{workspaceId:string})=>({ok:true,value:{workspaceId,engagements:[],folders:[],tasks:workspaceId===WORKSPACE?main.tasks:[]}}));
  const route={routeId:'claude-api-key',provider:'Claude',configurable:true,configuration:{routeId:'claude-api-key',deployment:'anthropic-direct',model:'claude-sonnet-5-5',apiVersion:'2026-10-21',accountRef:'account',region:null},endpoint:'https://api.anthropic.com',revision:1,credentialPresent:true,adapterSupported:true,verification:'verified_for_synthetic',enabled:true,gate:null,limits:[],evidence:['fixture'],executionFlow:'Local sandbox',inferenceFlow:'Cloud inference',connectorFlow:'Unavailable'};
  Object.assign(globalThis,{inquello:{organise:main.bridge,routes:{list:async()=>({ok:true,value:[route]})},tasks:{preflight:async()=>({ok:true,value:{routeId:route.routeId,configurationRevision:1,reasoning:['default'],speeds:['default'],available:true,reason:'Available',executionFlow:'Local sandbox',inferenceFlow:'Cloud inference'}}),start:(input:Record<string,unknown>)=>{command=input;return new Promise(resolve=>{finish=resolve;});}}}});
- const mounted=renderShell();await waitFor(()=>expect(sidebar().dataset.sidebarState).toBe('ready'));await user.click(screen.getByRole('button',{name:'New thread'}));
- await screen.findByText(/Claude —/);await user.selectOptions(screen.getByLabelText('Processing route'),'claude-api-key');await screen.findByLabelText('Reasoning');await user.selectOptions(screen.getByLabelText('Reasoning'),'default');await user.selectOptions(screen.getByLabelText('Speed'),'default');await user.type(screen.getByRole('textbox'),'Review fictional R01.');await user.click(screen.getByLabelText('Send'));
+ const mounted=renderShell();await waitFor(()=>expect(sidebar().dataset.sidebarState).toBe('ready'));await user.click(screen.getByRole('button',{name:'New chat'}));
+ await screen.findByText(/Claude —/);await user.click(document.querySelector('.iq-processing-settings summary')!);await user.selectOptions(screen.getByLabelText('Processing route'),'claude-api-key');await screen.findByLabelText('Reasoning');await user.selectOptions(screen.getByLabelText('Reasoning'),'default');await user.selectOptions(screen.getByLabelText('Speed'),'default');await user.type(screen.getByRole('textbox'),'Review fictional R01.');await user.click(screen.getByLabelText('Send'));
  const task:TaskItem={taskId:uuid(809),workspaceId:WORKSPACE,engagementId:null,folderId:null,title:'Private task',runtimeThreadId:'thread-a',sourceRefs:[],artifactRefs:[],visibility:'private',revision:1};main.tasks.push(task);
  await act(async()=>{finish({ok:true,value:{operationId:command.operationId,taskId:task.taskId,runId:'run-a',threadId:'thread-a',status:'running',request:command.request,accepted:true}});});
  await screen.findByRole('region',{name:'Accepted request'});
@@ -335,21 +351,22 @@ it('discovers the exact retained operation and answers a mediated question while
  const reconcile=vi.fn(async()=>accepted()),answer=vi.fn((v:never)=>service.answer(v));
  const route={routeId:'claude-api-key',provider:'Claude',configurable:true,configuration:{routeId:'claude-api-key',deployment:'anthropic-direct',model:'claude-sonnet-5-5',apiVersion:'2026-10-21',accountRef:'account',region:null},endpoint:'https://api.anthropic.com',revision:1,credentialPresent:true,adapterSupported:true,verification:'verified_for_synthetic',enabled:true,gate:null,limits:[],evidence:['fixture'],executionFlow:'Local sandbox',inferenceFlow:'Cloud inference',connectorFlow:'Unavailable'};
  Object.assign(globalThis,{inquello:{organise:main.bridge,routes:{list:async()=>({ok:true,value:[route]})},tasks:{preflight:async()=>({ok:true,value:{routeId:route.routeId,configurationRevision:1,reasoning:['default'],speeds:['default'],available:true,reason:'Available',executionFlow:'Local sandbox',inferenceFlow:'Cloud inference'}}),start,reconcile,progress:(v:never)=>service.progress(v),answer,onProgressChanged:(fn:()=>void)=>{changed=fn;return()=>{changed=()=>{};};}}}});
- renderShell();await waitFor(()=>expect(sidebar().dataset.sidebarState).toBe('ready'));await user.click(screen.getByRole('button',{name:'New thread'}));
- await screen.findByText(/Claude —/);await user.selectOptions(screen.getByLabelText('Processing route'),'claude-api-key');await screen.findByLabelText('Reasoning');await user.selectOptions(screen.getByLabelText('Reasoning'),'default');await user.selectOptions(screen.getByLabelText('Speed'),'default');await user.type(screen.getByRole('textbox'),'Review fictional R01 and R02.');await user.click(screen.getByLabelText('Send'));
+ renderShell();await waitFor(()=>expect(sidebar().dataset.sidebarState).toBe('ready'));await user.click(screen.getByRole('button',{name:'New chat'}));
+ await screen.findByText(/Claude —/);await user.click(document.querySelector('.iq-processing-settings summary')!);await user.selectOptions(screen.getByLabelText('Processing route'),'claude-api-key');await screen.findByLabelText('Reasoning');await user.selectOptions(screen.getByLabelText('Reasoning'),'default');await user.selectOptions(screen.getByLabelText('Speed'),'default');await user.type(screen.getByRole('textbox'),'Review fictional R01 and R02.');await user.click(screen.getByLabelText('Send'));
  await user.click(await screen.findByRole('radio',{name:/Include R02/}));await user.click(screen.getByRole('button',{name:'Send answer'}));
  await expect(response).resolves.toEqual({answers:{scope:{answers:['Include R02']}}});expect(answer).toHaveBeenCalledOnce();expect(start).toHaveBeenCalledOnce();expect(reconcile).toHaveBeenCalledWith({operationId:command.operationId});
  await act(async()=>finish(accepted()));expect(screen.getAllByRole('region',{name:'Accepted request'})).toHaveLength(1);expect(screen.queryByRole('button',{name:'Send answer'})).toBeNull();expect(start).toHaveBeenCalledOnce();
 });
 
 it('keeps held-ack discovery background-only and ignores the later Start reply',async()=>{
+ workspaceHarness.enabled=true;
  const main=fakeMain();const other=uuid(808);const user=userEvent.setup();let finish!:(value:unknown)=>void;let command:Record<string,unknown>={};let discover!:(value:unknown)=>void;
  main.bridge.getWorkspaces!.mockResolvedValue({signedIn:true,sharedService:'available',workspaces:[{workspaceId:WORKSPACE,name:'Synthetic Audit Co',source:'service'},{workspaceId:other,name:'Other Workspace',source:'service'}],engagementCreation:{enabled:true}});
  main.bridge.getTree!.mockImplementation(async({workspaceId}:{workspaceId:string})=>({ok:true,value:{workspaceId,engagements:[],folders:[],tasks:workspaceId===WORKSPACE?main.tasks:[]}}));
  const route={routeId:'claude-api-key',provider:'Claude',configurable:true,configuration:{routeId:'claude-api-key',deployment:'anthropic-direct',model:'claude-sonnet-5-5',apiVersion:'2026-10-21',accountRef:'account',region:null},endpoint:'https://api.anthropic.com',revision:1,credentialPresent:true,adapterSupported:true,verification:'verified_for_synthetic',enabled:true,gate:null,limits:[],evidence:['fixture'],executionFlow:'Local sandbox',inferenceFlow:'Cloud inference',connectorFlow:'Unavailable'};
  Object.assign(globalThis,{inquello:{organise:main.bridge,routes:{list:async()=>({ok:true,value:[route]})},tasks:{reconcile:()=>new Promise(resolve=>{discover=resolve;}),preflight:async()=>({ok:true,value:{routeId:route.routeId,configurationRevision:1,reasoning:['default'],speeds:['default'],available:true,reason:'Available',executionFlow:'Local sandbox',inferenceFlow:'Cloud inference'}}),start:(input:Record<string,unknown>)=>{command=input;return new Promise(resolve=>{finish=resolve;});}}}});
- renderShell();await waitFor(()=>expect(sidebar().dataset.sidebarState).toBe('ready'));await user.click(screen.getByRole('button',{name:'New thread'}));
- await screen.findByText(/Claude —/);await user.selectOptions(screen.getByLabelText('Processing route'),'claude-api-key');await screen.findByLabelText('Reasoning');await user.selectOptions(screen.getByLabelText('Reasoning'),'default');await user.selectOptions(screen.getByLabelText('Speed'),'default');await user.type(screen.getByRole('textbox'),'Review fictional R01.');await user.click(screen.getByLabelText('Send'));
+ renderShell();await waitFor(()=>expect(sidebar().dataset.sidebarState).toBe('ready'));await user.click(screen.getByRole('button',{name:'New chat'}));
+ await screen.findByText(/Claude —/);await user.click(document.querySelector('.iq-processing-settings summary')!);await user.selectOptions(screen.getByLabelText('Processing route'),'claude-api-key');await screen.findByLabelText('Reasoning');await user.selectOptions(screen.getByLabelText('Reasoning'),'default');await user.selectOptions(screen.getByLabelText('Speed'),'default');await user.type(screen.getByRole('textbox'),'Review fictional R01.');await user.click(screen.getByLabelText('Send'));
  await user.click(screen.getByRole('button',{name:'Synthetic Audit Co'}));await user.click(screen.getByRole('menuitemradio',{name:'Other Workspace'}));
  expect(document.querySelector('[data-workspace-selector]')?.getAttribute('data-workspace-id')).toBe(other);
  const task:TaskItem={taskId:uuid(809),workspaceId:WORKSPACE,engagementId:null,folderId:null,title:'Private task',runtimeThreadId:'thread-a',sourceRefs:[],artifactRefs:[],visibility:'private',revision:1};main.tasks.push(task);
@@ -364,13 +381,14 @@ it('keeps held-ack discovery background-only and ignores the later Start reply',
 });
 
 it('suppresses delayed discovery and Start acknowledgement after Workspace revocation',async()=>{
+ workspaceHarness.enabled=true;
  const main=fakeMain();const other=uuid(808);const user=userEvent.setup();let finish!:(value:unknown)=>void;let command:Record<string,unknown>={};let discover!:(value:unknown)=>void;
  main.bridge.getWorkspaces!.mockResolvedValue({signedIn:true,sharedService:'available',workspaces:[{workspaceId:WORKSPACE,name:'Synthetic Audit Co',source:'service'},{workspaceId:other,name:'Other Workspace',source:'service'}],engagementCreation:{enabled:true}});
  main.bridge.getTree!.mockImplementation(async({workspaceId}:{workspaceId:string})=>({ok:true,value:{workspaceId,engagements:[],folders:[],tasks:workspaceId===WORKSPACE?main.tasks:[]}}));
  const route={routeId:'claude-api-key',provider:'Claude',configurable:true,configuration:{routeId:'claude-api-key',deployment:'anthropic-direct',model:'claude-sonnet-5-5',apiVersion:'2026-10-21',accountRef:'account',region:null},endpoint:'https://api.anthropic.com',revision:1,credentialPresent:true,adapterSupported:true,verification:'verified_for_synthetic',enabled:true,gate:null,limits:[],evidence:['fixture'],executionFlow:'Local sandbox',inferenceFlow:'Cloud inference',connectorFlow:'Unavailable'};
  Object.assign(globalThis,{inquello:{organise:main.bridge,routes:{list:async()=>({ok:true,value:[route]})},tasks:{reconcile:()=>new Promise(resolve=>{discover=resolve;}),preflight:async()=>({ok:true,value:{routeId:route.routeId,configurationRevision:1,reasoning:['default'],speeds:['default'],available:true,reason:'Available',executionFlow:'Local sandbox',inferenceFlow:'Cloud inference'}}),start:(input:Record<string,unknown>)=>{command=input;return new Promise(resolve=>{finish=resolve;});}}}});
- const mounted=renderShell();await waitFor(()=>expect(sidebar().dataset.sidebarState).toBe('ready'));await user.click(screen.getByRole('button',{name:'New thread'}));
- await screen.findByText(/Claude —/);await user.selectOptions(screen.getByLabelText('Processing route'),'claude-api-key');await screen.findByLabelText('Reasoning');await user.selectOptions(screen.getByLabelText('Reasoning'),'default');await user.selectOptions(screen.getByLabelText('Speed'),'default');await user.type(screen.getByRole('textbox'),'Review fictional R01.');await user.click(screen.getByLabelText('Send'));
+ const mounted=renderShell();await waitFor(()=>expect(sidebar().dataset.sidebarState).toBe('ready'));await user.click(screen.getByRole('button',{name:'New chat'}));
+ await screen.findByText(/Claude —/);await user.click(document.querySelector('.iq-processing-settings summary')!);await user.selectOptions(screen.getByLabelText('Processing route'),'claude-api-key');await screen.findByLabelText('Reasoning');await user.selectOptions(screen.getByLabelText('Reasoning'),'default');await user.selectOptions(screen.getByLabelText('Speed'),'default');await user.type(screen.getByRole('textbox'),'Review fictional R01.');await user.click(screen.getByLabelText('Send'));
  const task:TaskItem={taskId:uuid(809),workspaceId:WORKSPACE,engagementId:null,folderId:null,title:'Private task',runtimeThreadId:'thread-a',sourceRefs:[],artifactRefs:[],visibility:'private',revision:1};main.tasks.push(task);
  await waitFor(()=>expect(discover).toBeTypeOf('function'));
  main.bridge.getWorkspaces!.mockResolvedValue({signedIn:true,sharedService:'available',workspaces:[{workspaceId:other,name:'Other Workspace',source:'service'}],engagementCreation:{enabled:true}});
@@ -395,3 +413,32 @@ it('suppresses delayed discovery and Start acknowledgement after Workspace revoc
   main.bridge.getTree!.mockResolvedValue({ok:true,value:{workspaceId:WORKSPACE,engagements:[],folders:[],tasks:main.tasks,unavailableTasks:[{taskId:uuid(11),reason:'current_authority_unavailable',title:'WITHHELD SECRET'}]}});
   renderShell();expect(await screen.findByRole('link',{name:'Authorized draft'})).toBeTruthy();expect(await screen.findByText(/Some of your Tasks are unavailable/)).toBeTruthy();expect(document.body.textContent).not.toContain('WITHHELD SECRET');
  });
+
+it('initial authorized home uses one real StartView without creating or preflighting work; refresh keeps its draft',async()=>{
+ const main=fakeMain(),start=vi.fn(),preflight=vi.fn(),list=vi.fn(async()=>({ok:true,value:[]}));
+ Object.assign(globalThis,{inquello:{organise:main.bridge,routes:{list},tasks:{start,preflight}}});
+ const user=userEvent.setup();const mounted=renderShell();
+ await waitFor(()=>expect(document.querySelector('[data-start-view]:not([hidden])')).not.toBeNull());
+ expect(screen.getAllByRole('textbox')).toHaveLength(1);expect(list).toHaveBeenCalled();
+ expect(start).not.toHaveBeenCalled();expect(preflight).not.toHaveBeenCalled();expect(main.bridge.createTask).not.toHaveBeenCalled();
+ const textarea=screen.getByRole('textbox');await user.type(textarea,'Fictional unsent home draft');
+ mounted.rerender(<Shell active={false} onShowSpecimen={()=>undefined}/>);
+ await waitFor(()=>expect(main.bridge.getWorkspaces!.mock.calls.length).toBeGreaterThan(1));
+ mounted.rerender(<Shell active onShowSpecimen={()=>undefined}/>);
+ await waitFor(()=>expect(screen.getByRole('textbox')).toBe(textarea));
+ expect((textarea as HTMLTextAreaElement).value).toBe('Fictional unsent home draft');expect(screen.getAllByRole('textbox')).toHaveLength(1);
+ expect(start).not.toHaveBeenCalled();expect(preflight).not.toHaveBeenCalled();expect(main.bridge.createTask).not.toHaveBeenCalled();
+});
+
+it('real initial draft survives the actual Settings route without remount or dispatch',async()=>{
+ const main=fakeMain(),start=vi.fn(),preflight=vi.fn();Object.assign(globalThis,{inquello:{organise:main.bridge,routes:{list:async()=>({ok:true,value:[]})},tasks:{start,preflight}}});
+ globalThis.location.hash='#shell';const user=userEvent.setup();render(<App/>);
+ await waitFor(()=>expect(document.querySelector('[data-start-view]:not([hidden])')).not.toBeNull());
+ const textarea=screen.getByRole('textbox');await user.type(textarea,'Keep this fictional draft');
+ await user.click(screen.getByRole('button',{name:'Account and workspace'}));await user.click(screen.getByRole('menuitem',{name:'Settings'}));
+ await screen.findByRole('navigation',{name:'Settings sections'});
+ await user.click(screen.getByRole('button',{name:'Back to chat'}));
+ await waitFor(()=>expect(screen.getByRole('textbox')).toBe(textarea));expect((textarea as HTMLTextAreaElement).value).toBe('Keep this fictional draft');
+ expect(start).not.toHaveBeenCalled();expect(preflight).not.toHaveBeenCalled();expect(main.bridge.createTask).not.toHaveBeenCalled();
+ globalThis.location.hash='';
+});

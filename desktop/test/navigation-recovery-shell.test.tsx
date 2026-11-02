@@ -51,7 +51,7 @@ it('does not offer workspace recovery for a resolved question notice',async()=>{
  const progress=()=>({ok:true,value:{version:1,taskId:task.taskId,workspaceId:workspace,runId:'run',threadId:'thread',turnId:'turn',runtimeId:'runtime',status:'running',historyIncomplete:false,items:[],plan:[],results:[],artifact:'absent',questions:[{requestId:++reads===1?'old-request':'replacement',threadId:'thread',turnId:'turn',itemId:q.itemId,questions:[]}],sessionGeneration:1}});
  (globalThis as {inquello?:unknown}).inquello={organise:{recoverNavigation,getWorkspaces:async()=>({signedIn:true,sharedService:'available',workspaces:[{workspaceId:workspace,name:'Fictional Workspace',source:'service'}],engagementCreation:{enabled:false}}),getTree:async()=>({ok:true,value:{workspaceId:workspace,engagements:[],folders:[],tasks:[task]}}),reopen:()=>new Promise(r=>{resolve=r;})},tasks:{inbox:async()=>({ok:true,value:{workspaceId:workspace,items:[q],unavailable:false}}),progress:async()=>progress()}};
  render(<Shell onShowSpecimen={()=>{}}/>);await screen.findByRole('link',{name:task.title});
- const user=userEvent.setup();await user.click(screen.getByRole('button',{name:'Inbox'}));await user.click(await screen.findByRole('button',{name:/Which vendor/}));
+ const user=userEvent.setup();await user.click(screen.getByRole('button',{name:/^Inbox(?: ·|$)/}));await user.click(await screen.findByRole('button',{name:/Which vendor/}));
  await act(async()=>resolve({ok:true,value:{task,hit:null}}));await screen.findByText(/selected question was resolved or replaced while opening/);
  expect(screen.queryByRole('button',{name:'Refresh workspace'})).toBeNull();expect(recoverNavigation).not.toHaveBeenCalled();expect(document.querySelector('[data-task-view]')).toBeNull();
 });

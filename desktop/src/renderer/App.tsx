@@ -13,12 +13,13 @@ import { Button } from './primitives';
 import { createDraftStore } from './Shell/drafts';
 import { Shell } from './Shell/Shell';
 import { Onboarding } from './Onboarding';
+import { Settings } from './Settings';
 import { Specimen } from './Specimen';
 
-export type View = 'shell' | 'specimen' | 'onboarding';
+export type View = 'shell' | 'specimen' | 'onboarding' | 'settings';
 
 export function viewFor(hash: string): View {
-  return hash === '#onboarding' ? 'onboarding' : hash === '#specimen' ? 'specimen' : 'shell';
+  return /^#settings(?:-(?:account|providers|routes))?$/.test(hash) ? 'settings' : hash === '#onboarding' ? 'onboarding' : hash === '#specimen' ? 'specimen' : 'shell';
 }
 
 export function App(): ReactElement {
@@ -33,11 +34,12 @@ export function App(): ReactElement {
   }, []);
 
   const show = (next: View) => {
-    globalThis.location.hash = next === 'onboarding' ? '#onboarding' : next === 'specimen' ? '#specimen' : '#shell';
+    globalThis.location.hash = next === 'settings' ? '#settings' : next === 'onboarding' ? '#onboarding' : next === 'specimen' ? '#specimen' : '#shell';
   };
 
   return <>
-    <div hidden={view !== 'shell'}><Shell key={sessionEpoch} active={view === 'shell'} onShowSpecimen={() => show('specimen')} drafts={drafts} /></div>
+    <div hidden={view !== 'shell'}><Shell key={sessionEpoch} active={view === 'shell'} onShowSpecimen={() => show('settings')} drafts={drafts} /></div>
+    {view === 'settings' && <Settings onBack={() => show('shell')} onIdentityChanged={() => { drafts.clear(); setSessionEpoch(n => n + 1); }} />}
     {view === 'onboarding' && <Onboarding onBack={() => show('shell')} onIdentityChanged={() => { drafts.clear(); setSessionEpoch(n => n + 1); }} />}
     {view === 'specimen' && <>
       <Specimen onIdentityChanged={() => { drafts.clear(); setSessionEpoch(n => n + 1); }} />

@@ -1651,13 +1651,22 @@ const SHELL_HELPERS = `
     element.dispatchEvent(new Event('input', { bubbles: true }));
   };
   const text = (selector) => { const element = q(selector); return element ? element.textContent : null; };
-  const readHeader = () => ({
+  const readHeader = async () => {
+    const trigger = qVisible('button[aria-label="Account and workspace"]');
+    if (!trigger) throw new Error('Current workspace footer unavailable');
+    trigger.click();
+    const menu = await wait(() => qVisible('[role="menu"]'), 5000);
+    if (!menu) throw new Error('Current workspace menu unavailable');
+    const workspace = q('[role="menuitem"] .iq-menu-label', menu)?.textContent ?? null;
+    trigger.click();
+    return ({
     title: text('[data-header-title]'),
     client: text('[data-header-client]'),
     period: text('[data-header-period]'),
-    workspace: text('[data-header-workspace]'),
+    workspace,
     visibility: q('[data-header-visibility]') ? q('[data-header-visibility]').getAttribute('data-header-visibility') : null,
-  });
+    });
+  };
   const openTaskInspector = async () => {
     const inspector = await wait(() => qVisible('[data-task-inspector]'), ${SHELL_SETTLE_MS});
     if (!inspector) return false;
@@ -1680,14 +1689,14 @@ const SHELL_SIGNED_OUT_PROBE = `(async () => {
   return out;
 })()`;
 
-/** Creates the Engagement/folder through the Shell, verifies New thread opens
+/** Creates the Engagement/folder through the Shell, verifies New chat opens
  * the unsent start surface, then seeds an owned draft through the named bridge
  * for navigation checks. No inference is started to fabricate saved work. */
 function shellCreateProbe(workspaceId: string): string {
   return `(async () => {
     ${SHELL_HELPERS}
     const out = { shellOpened: await openShell() };
-    out.ready = !!(await wait(() => q('[data-sidebar][data-sidebar-state="ready"]') && q('[data-workspace-selector][data-workspace-id=${JSON.stringify(workspaceId)}]'), ${SHELL_SETTLE_MS}));
+    out.ready = !!(await wait(() => q('[data-sidebar][data-sidebar-state="ready"]') && q('[data-rail-workspace=${JSON.stringify(workspaceId)}]'), ${SHELL_SETTLE_MS}));
     out.newEngagementPressed = press('[data-action="new-engagement"]');
     const form = await wait(() => q('[data-engagement-form]'), 5000);
     if (form) {
@@ -1725,7 +1734,7 @@ function shellCreateProbe(workspaceId: string): string {
     out.taskId = task ? task.getAttribute('data-task-id') : null;
     if (task) q('a', task)?.click();
     await wait(() => text('[data-header-client]'), 5000);
-    out.header = readHeader();
+    out.header = await readHeader();
     out.openTaskShown = !!q('[data-task-view] [data-thread-placeholder]');
     out.shareControls = document.querySelectorAll('[data-shell] button[aria-label*="Share" i]').length;
     return out;
@@ -1742,14 +1751,14 @@ function shellMoveProbe(taskId: string): string {
     const row = await wait(() => qVisible('[data-task-id=${JSON.stringify(taskId)}] a'), ${SHELL_SETTLE_MS});
     if (row) row.click();
     out.opened = !!(await wait(() => qVisible('[data-task-view=${JSON.stringify(taskId)}]'), 5000));
-    out.headerBefore = readHeader();
+    out.headerBefore = await readHeader();
     if (!(await openTaskInspector())) throw new Error('Task details did not open for Move');
     out.movePressed = !!q('[data-task-move] button')?.getClientRects().length && press('[data-task-move] button');
     const target = await wait(() => [...document.querySelectorAll('[role="menuitemradio"]')].find((item) => item.textContent.includes('No Engagement')), 5000);
     if (target) target.click();
-    out.moved = !!(await wait(() => q('[data-ad-hoc-tasks] [data-task-id=${JSON.stringify(taskId)}]'), ${SHELL_SETTLE_MS}));
+    out.moved = !!(await wait(() => q('[data-recent-chats] [data-task-id=${JSON.stringify(taskId)}]'), ${SHELL_SETTLE_MS}));
     out.notice = text('[data-task-notice]');
-    out.headerAfter = readHeader();
+    out.headerAfter = await readHeader();
     return out;
   })()`;
 }
@@ -1818,7 +1827,7 @@ export function evaluateOrganise(read: OrganiseProbeRead): OrganiseReport {
   if (!read.inviteAccepted) failures.push('the seeded Workspace invite was not accepted');
   const create = read.create;
   if (!create?.shellOpened || !create.ready) failures.push('the Shell did not show the seeded Workspace');
-  if (!create?.newTaskDraftShown || !create.newTaskCreatedNothing) failures.push('New thread did not open an unsent draft without creating saved work');
+  if (!create?.newTaskDraftShown || !create.newTaskCreatedNothing) failures.push('New chat did not open an unsent draft without creating saved work');
   if (!create?.engagementId) failures.push(`no Engagement was created through the Sidebar${create?.engagementNotice ? ` (${create.engagementNotice})` : ''}`);
   if (!create?.folderId) failures.push('no folder was created through the Sidebar');
   if (!create?.taskId) failures.push('no Task was created in the folder through the Sidebar');
@@ -1826,7 +1835,7 @@ export function evaluateOrganise(read: OrganiseProbeRead): OrganiseReport {
   if (create?.header.client !== 'Synthetic Client Ltd') failures.push(`the Header client is ${JSON.stringify(create?.header.client)}`);
   if (create?.header.period !== '2026-01-01 – 2026-12-31') failures.push(`the Header period is ${JSON.stringify(create?.header.period)}`);
   if (!read.seedWorkspaceName || create?.header.workspace !== read.seedWorkspaceName) {
-    failures.push(`the Header Workspace is ${JSON.stringify(create?.header.workspace)}, expected ${JSON.stringify(read.seedWorkspaceName)}`);
+    failures.push(`the footer Workspace is ${JSON.stringify(create?.header.workspace)}, expected ${JSON.stringify(read.seedWorkspaceName)}`);
   }
   if (create?.header.visibility !== 'private') failures.push('the Header does not show the Task as private');
   if (!create?.openTaskShown) failures.push('the opened Task did not show its placeholder thread area');
@@ -2190,15 +2199,15 @@ export async function probeStates(contents: WebContents, options: OrganiseProbeO
  * cannot import; `test/shell-layout.test.tsx` holds the two equal.
  */
 export const SHELL_LAYOUT = {
-  windowMinWidth: 532,
-  sidebarWidth: 264,
-  railWidth: 52,
+  windowMinWidth: 544,
+  sidebarWidth: 424,
+  railWidth: 64,
   headerHeight: 48,
   threadMaxWidth: 720,
   /** The narrowest width that is still full mode without an artifact. */
-  fullWidth: 744,
+  fullWidth: 904,
   /** The narrowest width where the thread and a 380px artifact fit beside the rail. */
-  artifactFitWidth: 912,
+  artifactFitWidth: 924,
 } as const;
 
 /** The window content widths the probe resizes to. */
@@ -3870,12 +3879,12 @@ export async function probeStartSurface(contents:WebContents,options:Omit<Organi
   const before=await options.organise.getTree(seed.workspace_id);if(!before.ok)throw new Error('Private tree unavailable');
   const read=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}
    const opened=await openShell();const ready=await wait(()=>q('[data-sidebar][data-sidebar-state="ready"]'),${SHELL_SETTLE_MS});
-   const button=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='New thread');if(!opened||!ready||!button)return{opened:false};button.click();
-   const start=await wait(()=>q('[data-start-view]:not([hidden])'),${SHELL_SETTLE_MS});const field=start?.querySelector('textarea');const send=start?.querySelector('[aria-label="Send"]');
-   return{opened:!!start,prompt:start?.textContent.includes('What should we work on?'),focused:document.activeElement===field,empty:field?.value==='',disabled:send?.getAttribute('aria-disabled')==='true',later:start?.textContent.includes('Files and Methods are not available yet.')};
+   const button=qVisible('[data-action="new-thread"]');if(!opened||!ready||!button)return{opened:false};button.click();
+   const start=await wait(()=>qVisible('[data-start-view]'),${SHELL_SETTLE_MS});const field=start?.querySelector('textarea');const send=start?.querySelector('[aria-label="Send"]');
+   return{opened:!!start,prompt:start?.textContent.includes('What should we work on?'),focused:document.activeElement===field,empty:field?.value==='',disabled:send?.getAttribute('aria-disabled')==='true',processing:!!start?.querySelector('.iq-processing-settings > summary'),noUnsupportedControls:!start?.querySelector('[aria-label="Attach files"],[aria-label="Voice"]')};
   })()`) as Record<string,boolean>;
-  for(const key of ['opened','prompt','focused','empty','disabled','later'])if(read[key]!==true)failures.push(`Start surface ${key} not established`);
-  const after=await options.organise.getTree(seed.workspace_id);if(!after.ok||after.value.tasks.length!==before.value.tasks.length)failures.push('New thread changed persisted Tasks before Send');
+  for(const key of ['opened','prompt','focused','empty','disabled','processing','noUnsupportedControls'])if(read[key]!==true)failures.push(`Start surface ${key} not established`);
+  const after=await options.organise.getTree(seed.workspace_id);if(!after.ok||after.value.tasks.length!==before.value.tasks.length)failures.push('New chat changed persisted Tasks before Send');
  }catch{failures.push('Seeded Start surface could not be verified');}
  finally{await smokeIdentity(contents, 'signOut').catch(()=>undefined);await options.organise.syncPrincipal().catch(()=>undefined);}
  return{ok:failures.length===0,skipped:false,failures};
@@ -3886,7 +3895,8 @@ export async function probeStartSurface(contents:WebContents,options:Omit<Organi
  * The text is fixture-authored, not a live model result or product acceptance. */
 export async function probeVisualConversation(contents: WebContents, options: OrganiseProbeOptions & {
   policy: PolicyService; isolatedRoot:string; fixtureFile:string; armSyntheticSession(workspaceId:string):Promise<void>;
-}):Promise<{ok:boolean;failures:string[];synthetic:true;settingsSurface:'existing-design-specimen';captures:{name:string;path:string;width:number;height:number}[]}> {
+  resize(width:number,height:number):void; restore:{width:number;height:number};
+}):Promise<{ok:boolean;failures:string[];synthetic:true;settingsSurface:'implemented-settings';captures:{name:string;path:string;width:number;height:number}[]}> {
   const failures:string[]=[],captures:{name:string;path:string;width:number;height:number}[]=[];
   let stage='visual-fixture';
   try {
@@ -3919,10 +3929,25 @@ export async function probeVisualConversation(contents: WebContents, options: Or
     const accepted=await options.identity.session.withAccess(access=>options.identity.service!.acceptInvite(access,seed.invite_id));
     if(accepted?.workspace_id!==seed.workspace_id)throw new SmokeProbeFailure('Visual Workspace unavailable');
     await options.organise.syncPrincipal();await options.organise.getWorkspaces();
+    options.resize(1920,1200);
     const home=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}return await openShell()&&!q('[data-task-view]');})()`);
     if(!home)throw new SmokeProbeFailure('Fresh home did not mount');
+    const homeShape=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}return !!(await wait(()=>{const fields=[...document.querySelectorAll('[data-composer-input]')].filter(element=>visible(element)&&element.getClientRects().length);return Math.abs(q('nav[data-sidebar]').getBoundingClientRect().width-424)<0.5&&fields.length===1&&q('[data-rail-workspace="'+${JSON.stringify(seed.workspace_id)}+'"]')&&q('[data-shell]')?.getAttribute('data-nav-presentation')==='sidebar';},${SHELL_SETTLE_MS}));})()`);
+    if(!homeShape)throw new SmokeProbeFailure('Expanded home did not show exactly one real composer');
     await capture('01-home-synthetic');
-    if(!(await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}location.hash='#specimen';return !!(await wait(specimenReady,${SHELL_SETTLE_MS}));})()`)))throw new SmokeProbeFailure('Visual setup surface unavailable');
+    const collapsedHome=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}if(!press('[data-action="collapse-nav"]'))return false;return !!(await wait(()=>q('[data-shell]')?.getAttribute('data-nav-presentation')==='rail'&&Math.abs(q('nav[data-sidebar]').getBoundingClientRect().width-64)<0.5,5000));})()`);
+    if(!collapsedHome)throw new SmokeProbeFailure('Home navigation did not collapse');
+    await capture('01b-home-collapsed-synthetic');
+    const footerOpen=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}if(!press('button[aria-label="Account and workspace"]'))return false;return !!(await wait(()=>{const menu=qVisible('[role="menu"]');if(!menu)return false;const rect=menu.getBoundingClientRect();return rect.width>0&&rect.left>=0&&rect.right<=innerWidth&&rect.top>=0&&rect.bottom<=innerHeight;},5000));})()`);
+    if(!footerOpen)throw new SmokeProbeFailure('Account workspace menu unavailable');
+    await capture('01c-account-workspace-synthetic');
+    const expandedHome=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}press('button[aria-label="Account and workspace"]');if(!press('[data-action="expand-nav"]'))return false;return !!(await wait(()=>q('[data-shell]')?.getAttribute('data-nav-presentation')==='sidebar',5000));})()`);
+    if(!expandedHome)throw new SmokeProbeFailure('Home navigation did not expand');
+    const draftExpanded=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}const field=qVisible('[data-composer-input]');if(!field)return false;type(field,'Fictional unsent planning draft\\nSecond planning line\\nThird planning line');return !!(await wait(()=>field.getBoundingClientRect().height>48,5000));})()`);
+    if(!draftExpanded)throw new SmokeProbeFailure('Multiline unsent draft did not expand');
+    await capture('01d-multiline-unsent-synthetic');
+    await contents.executeJavaScript(`(()=>{${SHELL_HELPERS}const field=qVisible('[data-composer-input]');if(!field)throw new Error('Draft unavailable');type(field,'');})()`);
+    if(!(await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}location.hash='#settings-routes';return !!(await wait(()=>location.hash==='#settings-routes'&&!visible(q('[data-shell]'))&&qVisible('[data-processing-routes]'),${SHELL_SETTLE_MS}));})()`)))throw new SmokeProbeFailure('Visual setup surface unavailable');
     stage='visual-native-start';
     fs.writeFileSync(path.join(options.isolatedRoot,'.inquello-fictional-audit-session'),'explicit isolated visual fixture');
     await options.armSyntheticSession(seed.workspace_id);
@@ -3933,6 +3958,9 @@ export async function probeVisualConversation(contents: WebContents, options: Or
     stage='visual-native-proof';
     const proof=await options.runtimeRequest<{accepted:boolean}>('inquello/fixture/taskTransportStatus',{workspaceId:seed.workspace_id,configurationRevision:1,routeId:'claude-api-key'});
     if(proof.accepted!==true)throw new SmokeProbeFailure('Visual native transport proof refused');
+    // Direct fixture configuration bypasses RouteService.configure's normal notification.
+    // Notify only this owned visual renderer after the exact pinned transport is proved.
+    contents.send('inquello:routes-changed');
     // All work below is submitted by actual renderer controls and named main operations.
     // The probe never calls tasks/start, resume or stop directly.
     const checkFixture=async(expected:number,stopped=false)=>{
@@ -3976,7 +4004,8 @@ export async function probeVisualConversation(contents: WebContents, options: Or
       ${SHELL_HELPERS}
       if(!await openShell()||!press('[data-action="new-thread"]'))return null;
       const start=await wait(()=>qVisible('[data-start-view]'),${SHELL_SETTLE_MS});if(!start)return null;
-      const route=await wait(()=>{const select=q('select[aria-label="Processing route"]',start);return select&&[...select.options].some(o=>o.value==='claude-api-key')?select:null;},${SHELL_SETTLE_MS});if(!route)return null;
+      const processing=q('.iq-processing-settings',start);if(!processing)return null;if(!processing.open)q(':scope > summary',processing)?.click();if(!processing.open)return null;
+      const route=await wait(()=>{const select=q('select[aria-label="Processing route"]',start);return select&&[...select.options].some(o=>o.value==='claude-api-key'&&!o.disabled&&o.textContent.includes('(revision 1)'))?select:null;},${SHELL_SETTLE_MS});if(!route)return null;
       const choose=(select,value)=>{Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(select,value);select.dispatchEvent(new Event('change',{bubbles:true}));};
       choose(route,'claude-api-key');
       const reasoning=await wait(()=>q('select[aria-label="Reasoning"]',start),${POLICY_SETTLE_MS}),speed=q('select[aria-label="Speed"]',start);
@@ -3992,6 +4021,11 @@ export async function probeVisualConversation(contents: WebContents, options: Or
     const collapsed=await contents.executeJavaScript(`(()=>{const details=document.querySelector('[data-task-view="'+${JSON.stringify(taskId)}+'"] [data-task-inspector]');return !!details&&!details.open;})()`);
     if(!collapsed)throw new SmokeProbeFailure('Conversation inspector was not collapsed by default');
     await capture('02-completed-conversation-synthetic');
+    options.resize(900,900);
+    const narrow=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}return !!(await wait(()=>innerWidth===900&&q('[data-shell]')?.getAttribute('data-nav-presentation')==='rail'&&document.documentElement.scrollWidth<=document.documentElement.clientWidth,5000));})()`);
+    if(!narrow)throw new SmokeProbeFailure('Narrow conversation did not fit');
+    await capture('02b-narrow-conversation-synthetic');
+    options.resize(1920,1200);
     const sendFollowup=async(request:string)=>contents.executeJavaScript(`(async()=>{
       ${SHELL_HELPERS}
       const task=await wait(()=>{const controls=qVisible('[data-task-controls="'+${JSON.stringify(taskId)}+'"]');return controls?.getAttribute('data-task-controls-status')==='completed'?controls:null;},${POLICY_SETTLE_MS});if(!task)return false;
@@ -4053,17 +4087,18 @@ export async function probeVisualConversation(contents: WebContents, options: Or
     if(!details)throw new SmokeProbeFailure('Task details unavailable for visual capture');
     await capture('07-task-details-synthetic');
     stage='visual-settings';
-    const settings=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}location.hash='#specimen';return !!(await wait(specimenReady,${SHELL_SETTLE_MS}));})()`);
-    if(!settings)throw new SmokeProbeFailure('Existing Settings specimen unavailable');
-    await capture('08-settings-existing-specimen');
-    fs.writeFileSync(path.join(captureDir,'manifest.json'),JSON.stringify({synthetic:true,source:'Actual Electron capturePage; local pinned fixture response, not live inference',settingsSurface:'existing-design-specimen',captures},null,2));
+    const settings=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}location.hash='#settings-routes';return !!(await wait(()=>location.hash==='#settings-routes'&&!visible(q('[data-shell]'))&&qVisible('[data-processing-routes]'),${SHELL_SETTLE_MS}));})()`);
+    if(!settings)throw new SmokeProbeFailure('Implemented Settings unavailable');
+    await capture('08-settings-processing-routes');
+    fs.writeFileSync(path.join(captureDir,'manifest.json'),JSON.stringify({synthetic:true,source:'Actual Electron capturePage; local pinned fixture response, not live inference',settingsSurface:'implemented-settings',captures},null,2));
   }catch(error){failures.push(error instanceof SmokeProbeFailure?error.message:`Visual conversation failed at ${stage}${quotaFixtureDiagnostic(error)}`);const diagnostic=await captureSmokeFailure(contents,options.fixtureFile);if(diagnostic)captures.push(diagnostic);else failures.push('Diagnostic failure capture unavailable');}
   finally {
+    try{options.resize(options.restore.width,options.restore.height);}catch{failures.push('Owned visual window size could not be restored');}
     // Record BEFORE sign-out, so cleanup refusals cannot masquerade as the cause.
     try{
       const timeline=await contents.executeJavaScript(`(()=>{const rows=globalThis.__iqSyntheticStartTrace;delete globalThis.__iqSyntheticStartTrace;if(!Array.isArray(rows))return [];const events=['start-send','start-accepted','shell-accepted','tree-start','tree-result','shell-committed'];const keys=['foreground','workspaceAllowed','scopeCurrent','selected','taskPresent','receiptPresent','showStart','ok','hasTasks','selectedUnavailable'];return rows.slice(0,128).filter(row=>row&&events.includes(row.event)&&Number.isSafeInteger(row.ms)&&row.ms>=0).map(row=>({event:row.event,ms:row.ms,flags:Object.fromEntries(keys.filter(key=>typeof row.flags?.[key]==='boolean').map(key=>[key,row.flags[key]])),...(Number.isSafeInteger(row.read)&&row.read>=0?{read:row.read}:{})}));})()`);
       console.info(JSON.stringify({event:'visual-start-timeline',beforeCleanup:true,timeline}));
     }catch{console.info(JSON.stringify({event:'visual-start-timeline',beforeCleanup:true,unavailable:true}));}
     try{if(!(await smokeIdentity(contents,'signOut')).ok)failures.push('Visual identity cleanup failed');await options.organise.syncPrincipal();}catch{failures.push('Visual identity cleanup unavailable');}}
-  return{ok:failures.length===0,failures,synthetic:true,settingsSurface:'existing-design-specimen',captures};
+  return{ok:failures.length===0,failures,synthetic:true,settingsSurface:'implemented-settings',captures};
 }

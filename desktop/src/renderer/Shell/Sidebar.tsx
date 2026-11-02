@@ -1,8 +1,8 @@
 import {TaskActivityLabel} from './TaskLifecycle';
 /**
- * The 264px Sidebar (Story 1.14): the Workspace selector, the Engagements
- * section (each Engagement, then its folders, then their Tasks), the ad hoc
- * Tasks, and New thread.
+ * The 424px expanded navigation: the persistent rail and Engagements
+ * section (each Engagement, then its folders, then their Tasks), Chats,
+ * and New chat. Current workspace information lives in the account menu.
  *
  * - Lists only the signed-in principal's own Tasks (main filters them; nothing
  *   here can list another creator's). There is no Share control.
@@ -14,7 +14,7 @@ import {TaskActivityLabel} from './TaskLifecycle';
  * - Story 1.16: the 20px lockup with a Collapse control, NavRows (Task rows
  *   are links with `aria-current`; Engagements and folders are disclosure
  *   buttons with `aria-expanded`; actions are buttons), the person and
- *   Settings at the bottom, and the 52px rail: the symbol (Expand
+ *   Settings at the bottom, and the 64px rail: the symbol (Expand
  *   navigation, a keyboard-operable button), labelled icon actions with
  *   tooltips on hover and focus, the current Workspace, surface and Task
  *   marked, and the Task count. When the Sidebar does not fit, the rail's
@@ -26,7 +26,7 @@ import { useEffect, useId, useRef, useState, type FormEvent, type MouseEvent, ty
 import lockupUrl from '../design/assets/logo/inquello-lockup.svg';
 import symbolUrl from '../design/assets/logo/inquello-symbol.svg';
 import { Icon, type IconName } from '../icons/Icon';
-import { Avatar, Badge, Button, IconButton, Menu, TextField, type MenuEntry } from '../primitives';
+import { Avatar, Badge, Button, IconButton, Menu, TextField } from '../primitives';
 import type { EngagementItem, FolderItem, Outcome, TaskItem, WorkspacesState, WorkspaceTree } from './organise-bridge';
 
 export interface EngagementDraft {
@@ -53,9 +53,13 @@ export interface SidebarProps {
   onCreateFolder: (engagementId: string, name: string, operationId: string) => Promise<Outcome<FolderItem>>;
   onSignIn: () => void;
   onShowSpecimen: () => void;
+  onSearch?: () => void;
+  onInbox?: () => void;
+  /** null means current attention state is unavailable, never zero. */
+  inboxCount?: number | null;
   newOperationId: () => string;
   busy: boolean;
-  /** `sidebar`: the full 264px Sidebar; `rail`: the 52px rail. */
+  /** `sidebar`: the full 424px Sidebar; `rail`: the 64px rail. */
   presentation?: NavPresentation;
   /** In the rail, the full Sidebar is open over the work area. */
   overlayOpen?: boolean;
@@ -255,31 +259,22 @@ function FolderForm({
 }
 
 
-/** The person and Settings at the bottom of the Sidebar. */
-function SidebarFooter({ person, onShowSpecimen }: { person: PersonView | null; onShowSpecimen: () => void }): ReactElement {
-  return (
-    <div className="iq-sidebar-footer" data-sidebar-footer>
-      <div className="iq-sidebar-person" data-sidebar-person>
-        {person ? (
-          <>
-            <Avatar name={person.name} initials={initialsOf(person.name)} />
-            <span className="iq-sidebar-person-text">
-              <span className="iq-sidebar-person-name">{person.name}</span>
-              <span className="iq-sidebar-person-detail">{person.detail}</span>
-            </span>
-          </>
-        ) : (
-          <span className="iq-sidebar-person-detail">Not signed in</span>
-        )}
-      </div>
-      <IconButton icon="settings" label="Settings" onPress={onShowSpecimen} data-action="settings" />
-    </div>
-  );
+/** The sole account/organization entry, anchored to the bottom of the rail. */
+function SidebarFooter({ person, workspaceName, onShowSpecimen }: { person: PersonView | null; workspaceName: string | null; onShowSpecimen: () => void }): ReactElement {
+ return <div className="iq-sidebar-footer iq-account-footer" data-sidebar-footer data-sidebar-person>
+  <Menu label="Account and workspace" heading={person?.name ?? 'Not signed in'} className="iq-account-menu" triggerVariant="ghost"
+   triggerContent={<Avatar name={person?.name ?? 'Account'} initials={person ? initialsOf(person.name) : '?'} />}
+   items={[
+    {label:workspaceName ?? 'Workspace setup',description:workspaceName ? 'Current workspace · manage your team' : 'Create or join a workspace',onSelect:()=>{globalThis.location.hash='#onboarding';}},
+    {label:'Account',description:person?.detail,onSelect:()=>{globalThis.location.hash='#settings-account';}},
+    {label:'Settings',onSelect:onShowSpecimen},
+   ]}/>
+ </div>;
 }
 
 /** The full Sidebar's contents, inline or in the rail's overlay. */
 function SidebarContent(props: SidebarProps & { collapseLabel: string }): ReactElement {
-  const { state, workspaceId, tree, openTaskId, onSelectWorkspace, onOpenTask, onNewThread, onNewTask, newOperationId, busy, person = null } = props;
+  const { state, workspaceId, tree, openTaskId, onOpenTask, onNewThread, onNewTask, newOperationId, busy } = props;
   const [creatingEngagement, setCreatingEngagement] = useState(false);
   const [folderFor, setFolderFor] = useState<string | null>(null);
   const [collapsedRows, setCollapsedRows] = useState<ReadonlySet<string>>(() => new Set());
@@ -295,6 +290,7 @@ function SidebarContent(props: SidebarProps & { collapseLabel: string }): ReactE
   const top = (
     <div className="iq-sidebar-top">
       <img className="iq-sidebar-lockup" src={lockupUrl} alt="Inquello" />
+      {props.onSearch && <IconButton icon="search" label="Search saved work" onPress={props.onSearch} />}
       {props.onCollapse ? (
         <IconButton icon="panel-left" label={props.collapseLabel} expanded onPress={props.onCollapse} data-action="collapse-nav" />
       ) : null}
@@ -311,23 +307,12 @@ function SidebarContent(props: SidebarProps & { collapseLabel: string }): ReactE
             Sign in
           </Button>
         ) : null}
-        <SidebarFooter person={person} onShowSpecimen={props.onShowSpecimen} />
+
       </>
     );
   }
 
   const workspace = state.workspaces.find((entry) => entry.workspaceId === workspaceId) ?? null;
-  const selector: MenuEntry = {
-    kind: 'radio',
-    label: 'Workspace',
-    value: workspaceId ?? '',
-    options: state.workspaces.map((entry) => ({
-      value: entry.workspaceId,
-      label: entry.name,
-      description: entry.source === 'local' ? 'Remembered on this device' : undefined,
-    })),
-    onChange: onSelectWorkspace,
-  };
   const engagements = tree?.engagements ?? [];
   const folders = tree?.folders ?? [];
   const tasks = (tree?.tasks ?? []).filter(task=>!task.archived).sort((a,b)=>Number(!!b.pinned)-Number(!!a.pinned)||a.title.localeCompare(b.title));
@@ -338,17 +323,9 @@ function SidebarContent(props: SidebarProps & { collapseLabel: string }): ReactE
   return (
     <>
       {top}
-      <div className="iq-sidebar-workspace" data-workspace-selector data-workspace-id={workspaceId ?? ''}>
-        {state.workspaces.length > 0 ? (
-          <Menu label={workspace ? workspace.name : 'Choose a Workspace'} heading="Workspace" items={[selector]} triggerVariant="ghost" />
-        ) : (
-          <p className="iq-sidebar-empty">No Workspace is available to you yet. Create a Workspace or accept an invitation in setup.</p>
-        )}
-      </div>
-      <Button variant="quiet" size="sm" onPress={() => {globalThis.location.hash='#onboarding';}} data-action="workspace-setup">Workspace setup and team</Button>
       {(tree?.unavailableTasks?.length??0)>0?<p className="iq-sidebar-empty" role="status">Some of your Tasks are unavailable until current authority can be verified. Your drafts are kept.</p>:null}
       <Button variant="primary" size="sm" icon="plus" onPress={onNewThread} disabledReason={noWorkspace} pending={busy} data-action="new-thread">
-        New thread
+        New chat
       </Button>
 
       <section className="iq-sidebar-section" aria-labelledby={`${baseId}engagements`}>
@@ -411,11 +388,10 @@ function SidebarContent(props: SidebarProps & { collapseLabel: string }): ReactE
         </ul>
       </section>
 
-      <section className="iq-sidebar-section" aria-labelledby={`${baseId}adhoc`} data-ad-hoc-tasks>
-        <h2 className="iq-sidebar-heading" id={`${baseId}adhoc`}>
-          Ad hoc Tasks
+      <section className="iq-sidebar-section" aria-labelledby={`${baseId}recents`} data-recent-chats>
+        <h2 className="iq-sidebar-heading" id={`${baseId}recents`}>
+          Chats
         </h2>
-        {adHoc.length === 0 ? <p className="iq-sidebar-empty">No ad hoc Tasks.</p> : null}
         <ul className="iq-sidebar-list">
           {adHoc.map((task) => (
             <TaskRow key={task.taskId} task={task} open={task.taskId === openTaskId} onOpen={onOpenTask} />
@@ -423,7 +399,7 @@ function SidebarContent(props: SidebarProps & { collapseLabel: string }): ReactE
         </ul>
       </section>
 
-      <SidebarFooter person={person} onShowSpecimen={props.onShowSpecimen} />
+
     </>
   );
 }
@@ -440,7 +416,7 @@ function RailItem({ label, children }: { label: string; children: ReactNode }): 
   );
 }
 
-/** The 52px rail: symbol (Expand navigation), labelled icon actions, counts and the current marks. */
+/** The 64px rail: symbol (Expand navigation), labelled icon actions, counts and the current marks. */
 function Rail(props: SidebarProps): ReactElement {
   const { state, workspaceId, tree, openTaskId, onNewThread, onOpenTask, overlayOpen = false, person = null } = props;
   const signedIn = !!state?.signedIn;
@@ -469,16 +445,18 @@ function Rail(props: SidebarProps): ReactElement {
       </RailItem>
       {signedIn ? (
         <>
-          <RailItem label="New thread">
+          {!overlayOpen && <RailItem label="New chat">
             <IconButton
               icon="plus"
-              label="New thread"
+              label="New chat"
               onPress={onNewThread}
               disabledReason={workspace ? undefined : 'Choose a Workspace first.'}
               data-action="new-thread"
             />
-          </RailItem>
-          {railButton('folder', workspace ? `Workspace: ${workspace.name}` : 'Choose a Workspace', { 'data-rail-workspace': workspace?.workspaceId ?? '' })}
+          </RailItem>}
+          {railButton('folder', 'Engagements', { 'data-rail-workspace': workspace?.workspaceId ?? '' })}
+          {!overlayOpen && props.onSearch && <RailItem label="Search saved work"><IconButton icon="search" label="Search saved work" onPress={props.onSearch}/></RailItem>}
+          {props.onInbox && <RailItem label={props.inboxCount == null ? 'Inbox · attention unavailable' : `Inbox · ${props.inboxCount} requests for input`}><span className="iq-rail-count"><IconButton icon="inbox" label={props.inboxCount == null ? 'Inbox · attention unavailable' : `Inbox · ${props.inboxCount} requests for input`} onPress={props.onInbox}/>{props.inboxCount == null ? <span className="iq-inbox-unavailable" aria-hidden="true">!</span> : props.inboxCount > 0 ? <Badge count={props.inboxCount} label="requests for input" tone="neutral" className="iq-rail-badge"/> : null}</span></RailItem>}
           <RailItem label="Tasks">
             <span className="iq-rail-count">
               <IconButton icon="list-checks" label="Tasks" variant="active" aria-current="true" onPress={expand} data-rail-surface="tasks" />
@@ -504,18 +482,7 @@ function Rail(props: SidebarProps): ReactElement {
           ) : null}
         </>
       ) : null}
-      <div className="iq-rail-footer">
-        {person ? (
-          <RailItem label={person.name}>
-            <span className="iq-rail-person">
-              <Avatar name={person.name} initials={initialsOf(person.name)} />
-            </span>
-          </RailItem>
-        ) : null}
-        <RailItem label="Settings">
-          <IconButton icon="settings" label="Settings" onPress={props.onShowSpecimen} data-action="settings" />
-        </RailItem>
-      </div>
+      <div className="iq-rail-footer"><SidebarFooter person={person} workspaceName={workspace?.name ?? null} onShowSpecimen={props.onShowSpecimen}/></div>
     </div>
   );
 }
@@ -547,18 +514,8 @@ export function Sidebar(props: SidebarProps): ReactElement {
       data-shared-service={state?.signedIn ? state.sharedService : undefined}
       data-nav-presentation={presentation}
     >
-      {presentation === 'sidebar' ? (
-        <SidebarContent {...props} collapseLabel="Collapse navigation" />
-      ) : (
-        <>
-          <Rail {...props} />
-          {overlayOpen ? (
-            <div className="iq-nav-overlay" data-nav-overlay>
-              <SidebarContent {...props} collapseLabel="Close navigation" />
-            </div>
-          ) : null}
-        </>
-      )}
+      <Rail {...props} overlayOpen={presentation === 'sidebar' || overlayOpen} />
+      {presentation === 'sidebar' ? <div className="iq-history-pane"><SidebarContent {...props} collapseLabel="Collapse navigation" /></div> : overlayOpen ? <div className="iq-nav-overlay" data-nav-overlay><SidebarContent {...props} collapseLabel="Close navigation" /></div> : null}
     </nav>
   );
 }

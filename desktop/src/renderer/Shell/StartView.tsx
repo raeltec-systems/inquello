@@ -36,14 +36,17 @@ export function StartView({onPendingChange,runtimeEpoch = 0,workspaceId,engageme
  const reason=busy?'Confirming the private Task binding…':uncertain?'Check the pending operation before sending.':!routeId?'Choose a configured processing route.':!candidate?'Current route information is required.':!candidate.available?candidate.reason:!candidate.reasoning.includes(reasoning)||!candidate.speeds.includes(speed)?'Choose supported reasoning and speed, including provider defaults.':undefined;
  const selected=routes.find(r=>r.routeId===routeId);
  return <section className="iq-start" ref={root} hidden={!active} aria-label="Start a private Task" data-start-view>
-  <h1>What should we work on?</h1><p>A private Task in this Workspace. Files and Methods are not available yet.</p>
+  <h1>What should we work on?</h1>
+  <Composer draft={draft} onSend={()=>void send()} disabledReason={reason} readOnly={busy||uncertain}/>
+  <details className="iq-processing-settings"><summary>{selected?.configuration?.model ?? 'Processing settings'}</summary>
+  {!routes.length&&<p>No processing route is configured. <a href="#settings-routes">Open Settings</a> to configure one. No work is sent until you choose a qualified route.</p>}
   <label>Processing route<select aria-label="Processing route" value={routeId} disabled={busy||uncertain} onChange={e=>void choose(e.target.value)}><option value="">Choose a configured route</option>{routes.map(r=><option key={r.routeId} value={r.routeId} disabled={!r.configuration}>{r.provider} — {r.configuration?.model??'Not configured'} (revision {r.revision})</option>)}</select></label>
   {selected&&<p>Configuration revision {selected.revision}: {selected.configuration?.model} / {selected.configuration?.apiVersion}</p>}
   {candidate&&<><p>Execution: {candidate.executionFlow}</p><p>Inference: {candidate.inferenceFlow}</p><p>{candidate.reason}</p>
    <label>Reasoning<select aria-label="Reasoning" value={reasoning} disabled={busy||uncertain||!candidate.available} onChange={e=>setReasoning(e.target.value)}><option value="">Choose reasoning</option>{candidate.reasoning.map(v=><option key={v} value={v}>{v==='default'?'Provider default':v}</option>)}</select></label>
    <label>Speed<select aria-label="Speed" value={speed} disabled={busy||uncertain||!candidate.available} onChange={e=>setSpeed(e.target.value)}><option value="">Choose speed</option>{candidate.speeds.map(v=><option key={v} value={v}>{v==='default'?'Provider default':v}</option>)}</select></label>
    <p>Send accepts this exact route revision and these settings. No provider fallback. Automatic background compaction, memory summarization and warmup are unavailable for this Task.</p></>}
+  </details>
   {notice&&<p role="status">{notice}</p>}{uncertain&&<Button onPress={()=>void reconcile()} pending={busy}>Check operation outcome</Button>}
-  <Composer draft={draft} onSend={()=>void send()} disabledReason={reason} readOnly={busy||uncertain}/>
  </section>;
 }

@@ -3,7 +3,7 @@
  * IME owns composition Enter, Shift+Enter inserts lines, Escape keeps the draft.
  * Unavailable Send remains focusable with a visible explanation.
  */
-import { useId, type KeyboardEvent, type ReactElement, type ReactNode } from 'react';
+import { useId, useLayoutEffect, useRef, type KeyboardEvent, type ReactElement, type ReactNode } from 'react';
 
 import { IconButton } from '../primitives';
 import type { DraftBinding } from './drafts';
@@ -39,6 +39,30 @@ export interface ComposerProps {
 
 export function Composer({ draft, onSend, disabledReason, autoFocus, readOnly, onStop, stopDisabledReason, routeLabel }: ComposerProps): ReactElement {
   const inputId = useId();
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const input=inputRef.current;if(!input)return;
+    const resize=()=>{
+      input.style.height='auto';
+      const maximum=Number.parseFloat(getComputedStyle(input).maxHeight)||192;
+      const minimum=Number.parseFloat(getComputedStyle(input).lineHeight)||24;
+      const height=Math.min(maximum,Math.max(minimum,input.scrollHeight));
+      input.style.height=`${height}px`;
+      input.style.overflowY=input.scrollHeight>maximum?'auto':'hidden';
+    };
+    resize();
+    if(typeof ResizeObserver==='undefined')return;
+    let width=input.getBoundingClientRect().width;
+    const observer=new ResizeObserver(entries=>{
+      const next=entries[0]?.contentRect.width;
+      // Height-only callbacks must not form a resize feedback loop. A hidden
+      // draft becoming visible, or a narrower window, changes its width.
+      if(next===undefined||next===width)return;
+      width=next;resize();
+    });
+    observer.observe(input);
+    return()=>observer.disconnect();
+  }, [draft.value]);
   const reason = !onSend ? sendReason(draft.value) : draft.value.trim() === '' ? SEND_EMPTY_REASON : disabledReason;
   const label = draft.taskId ? COMPOSER_LABEL : COMPOSER_LABEL_NO_TASK;
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -58,11 +82,12 @@ export function Composer({ draft, onSend, disabledReason, autoFocus, readOnly, o
         {label}
       </label>
       <textarea
+        ref={inputRef}
         id={inputId}
         autoFocus={autoFocus}
         readOnly={readOnly}
         className="iq-composer-input"
-        rows={2}
+        rows={1}
         value={draft.value}
         placeholder={draft.taskId ? 'Describe what you need from this Task' : 'Describe what you need'}
         onChange={(event) => draft.onChange(event.target.value)}

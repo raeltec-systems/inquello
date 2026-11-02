@@ -49,7 +49,7 @@ import {useConversationFollow} from './use-conversation-follow';
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 
 import { identityBridge, parseIdentityStatus } from '../bridge';
-import { SegmentedControl,Button,Badge } from '../primitives';
+import { SegmentedControl,Button } from '../primitives';
 import { ArtifactArea, type ShellArtifact } from './ArtifactArea';
 import { Composer } from './Composer';
 import { StartView } from './StartView';
@@ -666,6 +666,18 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
   const draft = useDraftBinding(task?.taskId ?? null, draftStore, task?.workspaceId ?? null);
   const startDraft = useDraftBinding(null, draftStore);
   const conversationFollow=useConversationFollow(state?.signedIn&&!showStart&&task?JSON.stringify([ownerKey(person),task.workspaceId,task.taskId,runtimeEpoch]):null,!active||workView==='artifact'||!!savedHit?.hit||!!selectedQuestion||!!savedSurface);
+  // Initial home is the real memory-only draft surface, never a persisted Task.
+  // Do this once per owner/workspace and never replace a pending or visited draft.
+  const initializedHome = useRef<string | null>(null);
+  useEffect(() => {
+    if (!active || !authorizedWorkspace || !currentTree || !workspaceId) return;
+    const scope = JSON.stringify([ownerKey(person), workspaceId]);
+    if (initializedHome.current === scope) return;
+    initializedHome.current = scope;
+    if (openTaskId || openedEngagement || startLocation || pendingStart || savedSurface) return;
+    setStartLocation({workspaceId, engagementId:null, folderId:null});
+    setShowStart(true);
+  }, [active, authorizedWorkspace, currentTree, workspaceId, person, openTaskId, openedEngagement, startLocation, pendingStart, savedSurface]);
   const composer = !state?.signedIn || showStart ? null : renderComposer ? renderComposer(draft) : task?.runtimeThreadId || (task&&acceptedFor(task.taskId)) ? <TaskLifecycle key={`${runtimeEpoch}:${task!.taskId}`} taskId={task!.taskId} workspaceId={task!.workspaceId} draft={draft} operationIds={operationIds} onContinuationRequested={conversationFollow.continuation}/> : <Composer draft={draft} />;
 
   return (
@@ -673,6 +685,7 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
       ref={shellRef}
       className={`iq-shell iq-shell--${mode} iq-shell--nav-${presentation}`}
       data-shell
+      data-new-chat={state?.signedIn && !task && !openTaskId && !openedEngagement && !showStart ? true : undefined}
       data-layout-mode={mode}
       data-nav-presentation={presentation}
       data-artifact-open={openArtifact ? 'true' : 'false'}
@@ -693,6 +706,9 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
         onCreateFolder={createFolder}
         onSignIn={() => void signIn()}
         onShowSpecimen={onShowSpecimen}
+        onSearch={()=>openSavedSurface('search')}
+        onInbox={()=>openSavedSurface('inbox')}
+        inboxCount={inbox && !inbox.unavailable ? inbox.items.length : null}
         newOperationId={operationIds}
         busy={creatingTask}
         presentation={presentation}
@@ -702,11 +718,6 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
         person={person}
       />
       <div className="iq-shell-main">
-        <nav className="iq-saved-toolbar" aria-label="Saved work">
-          <Button variant="ghost" onPress={()=>openSavedSurface('search')}>Search saved work · Ctrl/Cmd+K</Button>
-          <Button variant="ghost" onPress={()=>openSavedSurface('inbox')}>Inbox</Button>
-          {inbox&&!inbox.unavailable?<Badge count={inbox.items.length} label="requests for input"/>:<span>Attention unavailable</span>}
-        </nav>
         <Header task={task} engagement={engagement} workspace={workspace} />
         <div className={`iq-work${openArtifact ? ' iq-work--artifact' : ''}`} data-work>
           {mode === 'single' && openArtifact ? (
@@ -771,7 +782,7 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
               ) : !showStart && openTaskId && acceptedFor(openTaskId) ? <AcceptedRequest accepted={acceptedFor(openTaskId)!}/> : !showStart ? (
                 <div className="iq-thread-placeholder" data-thread-placeholder="none">
                   <p className="iq-thread-placeholder-title">What should we work on?</p>
-                  <p className="iq-thread-placeholder-body">Choose a Task in the Sidebar, or start one with New thread.</p>
+                  <p className="iq-thread-placeholder-body">Start a new chat, or pick up a recent conversation.</p>
                 </div>
               ) : null}
             </div>

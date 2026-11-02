@@ -132,11 +132,13 @@ async function renderReady(options: { artifact?: ShellArtifact | null; composer?
 }
 
 async function openTask(title: string) {
-  await userEvent.setup().click(within(nav()).getByRole('link', { name: title }));
+  const user=userEvent.setup();
+  if(!within(nav()).queryByRole('link',{name:title}))await user.click(within(nav()).getByRole('button',{name:'Expand navigation'}));
+  await user.click(within(nav()).getByRole('link', { name: title }));
   await waitFor(() => expect(document.querySelector('[data-header-title]')!.textContent).toBe(title));
 }
 
-beforeEach(() => setWidth(1280));
+beforeEach(() => setWidth(SIDEBAR_WIDTH + THREAD_MIN_WIDTH + ARTIFACT_MIN_WIDTH + 16));
 
 afterEach(() => {
   cleanup();
@@ -183,7 +185,7 @@ describe('layout modes (pure)', () => {
     expect(HEADER_HEIGHT).toBe(Number.parseFloat(spacing['header-height']));
     expect(THREAD_MAX_WIDTH).toBe(Number.parseFloat(spacing['thread-max-width']));
     expect(ARTIFACT_MIN_WIDTH).toBe(Number.parseFloat(spacing['panel-min-width']));
-    expect([SIDEBAR_WIDTH, RAIL_WIDTH, HEADER_HEIGHT, THREAD_MAX_WIDTH, ARTIFACT_MIN_WIDTH]).toEqual([264, 52, 48, 720, 380]);
+    expect([SIDEBAR_WIDTH, RAIL_WIDTH, HEADER_HEIGHT, THREAD_MAX_WIDTH, ARTIFACT_MIN_WIDTH]).toEqual([424, 64, 48, 720, 380]);
     expect(WINDOW_MIN_WIDTH).toBe(RAIL_WIDTH + THREAD_MIN_WIDTH);
   });
 
@@ -223,7 +225,7 @@ describe('layout modes (pure)', () => {
 describe('keyboard rules (pure)', () => {
   const key = (overrides: Partial<Parameters<typeof isNewThreadShortcut>[0]>) => ({ key: 'n', ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...overrides });
 
-  it('Ctrl+N or Cmd+N alone is New thread; nothing else is', () => {
+  it('Ctrl+N or Cmd+N alone is New chat; nothing else is', () => {
     expect(isNewThreadShortcut(key({ ctrlKey: true }))).toBe(true);
     expect(isNewThreadShortcut(key({ metaKey: true }))).toBe(true);
     expect(isNewThreadShortcut(key({ key: 'N', ctrlKey: true }))).toBe(true);
@@ -273,7 +275,7 @@ describe('keyboard rules (pure)', () => {
 });
 
 describe('Shell layout', () => {
-  it('wide window: full mode with the 264px Sidebar, Header, thread column and no artifact area', async () => {
+  it('wide window: full mode with the 424px rail and history, Header, thread column and no artifact area', async () => {
     await renderReady();
     expect(shell().dataset.layoutMode).toBe('full');
     expect(nav().dataset.navPresentation).toBe('sidebar');
@@ -282,14 +284,16 @@ describe('Shell layout', () => {
     expect(document.querySelector('[data-header]')).not.toBeNull();
     expect(document.querySelector('main .iq-shell-content')).not.toBeNull();
     // Story 1.30 adds a named saved-work navigation alongside the Sidebar.
-    expect(screen.getAllByRole('navigation')).toHaveLength(2);
-    expect(screen.getByRole('navigation',{name:'Saved work'})).toBeTruthy();
+    expect(screen.getAllByRole('navigation')).toHaveLength(1);
+    expect(screen.getByRole('button',{name:'Search saved work'})).toBeTruthy();
+    expect(screen.getByRole('button',{name:/Inbox/})).toBeTruthy();
     expect(screen.getAllByRole('main')).toHaveLength(1);
     expect(screen.queryByRole('complementary')).toBeNull();
     expect(shell().dataset.artifactOpen).toBe('false');
     // The person and Settings sit at the bottom.
     await waitFor(() => expect(within(nav()).getByRole('img', { name: 'Priya Raman' })).toBeTruthy());
-    expect(within(nav()).getByRole('button', { name: 'Settings' })).toBeTruthy();
+    await userEvent.click(within(nav()).getByRole('button', { name: 'Account and workspace' }));
+    expect(screen.getByRole('menuitem', { name: 'Settings' })).toBeTruthy();
   });
 
   it('NavRows: Tasks are links with aria-current, Engagements and folders expose aria-expanded, actions are buttons', async () => {
@@ -320,7 +324,7 @@ describe('Shell layout', () => {
     expect(within(nav()).getByRole('button', { name: 'New folder in FY26 audit' }).tagName).toBe('BUTTON');
   });
 
-  it('narrow: rail mode at 52px keeps the open Task marked, the count and labelled icon actions with tooltips', async () => {
+  it('narrow: rail mode at 64px keeps the open Task marked, the count and labelled icon actions with tooltips', async () => {
     await renderReady();
     await openTask('Bank confirmations');
     setWidth(SIDEBAR_WIDTH + THREAD_MIN_WIDTH - 1);
@@ -331,7 +335,7 @@ describe('Shell layout', () => {
     expect(document.querySelector(`[data-task-view="${uuid(1)}"]`)).not.toBeNull();
     const current = within(nav()).getByRole('link', { name: 'Open Task: Bank confirmations' });
     expect(current.getAttribute('aria-current')).toBe('page');
-    expect(within(nav()).getByRole('button', { name: 'Workspace: Synthetic Audit Co' })).toBeTruthy();
+    expect(within(nav()).getByRole('button', { name: 'Engagements' })).toBeTruthy();
     expect(within(nav()).getByRole('button', { name: 'Tasks' }).getAttribute('aria-current')).toBe('true');
     expect(within(nav()).getByText('2 Tasks in this Workspace')).toBeTruthy();
     // Every rail action has an accessible name and a matching tooltip (shown on hover and focus by CSS).
@@ -385,7 +389,7 @@ describe('Shell layout', () => {
     expect(document.querySelector(`[data-task-view="${uuid(1)}"]`)).not.toBeNull();
   });
 
-  it('Ctrl/Cmd+N outside a text field activates New thread; inside a text field it is not intercepted', async () => {
+  it('Ctrl/Cmd+N outside a text field activates New chat; inside a text field it is not intercepted', async () => {
     const user = userEvent.setup();
     const { main } = await renderReady({ composer: true });
     (document.activeElement as HTMLElement | null)?.blur();
@@ -402,7 +406,7 @@ describe('Shell layout', () => {
   });
 
   it('Ctrl/Cmd+K opens Search without execution and Escape returns focus', async () => {
-    const {main}=await renderReady();const button=screen.getByRole('button',{name:'Search saved work · Ctrl/Cmd+K'});button.focus();
+    const {main}=await renderReady();const button=screen.getByRole('button',{name:'Search saved work'});button.focus();
     for(const modifier of [{ctrlKey:true},{metaKey:true}]){
       const event=new KeyboardEvent('keydown',{key:'k',bubbles:true,cancelable:true,...modifier});act(()=>document.body.dispatchEvent(event));expect(event.defaultPrevented).toBe(true);
       expect(screen.getByRole('dialog',{name:'Search saved work'})).toBeTruthy();
@@ -422,7 +426,7 @@ describe('Shell layout', () => {
     expect(overlay).not.toBeNull();
     expect(overlay.contains(document.activeElement)).toBe(true);
     // A Menu inside the overlay is topmost.
-    const trigger = within(overlay).getByRole('button', { name: 'Synthetic Audit Co' });
+    const trigger = within(nav()).getByRole('button', { name: 'Account and workspace' });
     await user.click(trigger);
     expect(screen.getByRole('menu')).toBeTruthy();
     await user.keyboard('{Escape}');
@@ -558,6 +562,10 @@ describe('Shell layout', () => {
   it('the Composer slot holds the Story 1.17 Composer when no other is supplied', async () => {
     await renderReady();
     const slot = document.querySelector<HTMLElement>('[data-composer-slot]')!;
+    expect(slot.dataset.composerSlot).toBe('empty');
+    expect(screen.getAllByRole('textbox')).toHaveLength(1);
+    expect(document.querySelector('[data-start-view]:not([hidden]) [data-composer]')).not.toBeNull();
+    await openTask('Bank confirmations');
     expect(slot.dataset.composerSlot).toBe('filled');
     expect(slot.querySelector('[data-composer]')).not.toBeNull();
   });
@@ -609,20 +617,21 @@ describe('no demo artifact, light theme only', () => {
 });
 
 describe('saved-work latest foreground destination',()=>{
- it('does not let a delayed Task reopen replace New thread',async()=>{
+ it('does not let a delayed Task reopen replace New chat',async()=>{
   const {main}=await renderReady();let resolve!:(v:unknown)=>void;
   const original=(globalThis as any).inquello;Object.assign(globalThis,{inquello:{...original,organise:{...original.organise,reopen:vi.fn(()=>new Promise(r=>{resolve=r;}))}}});
   // Shell captures its bridge at mount; remount with the extended named bridge.
   cleanup();render(<Shell onShowSpecimen={()=>{}} operationIds={()=>uuid(900)}/>);await screen.findByRole('link',{name:'Bank confirmations'});
   const user=userEvent.setup();await user.click(screen.getByRole('link',{name:'Bank confirmations'}));
-  await user.click(screen.getByRole('button',{name:'New thread'}));
+  await user.click(screen.getByRole('button',{name:'New chat'}));
   await act(async()=>resolve({ok:true,value:{task:main.tasks[0],hit:null}}));
   expect(document.querySelector('[data-start-view]')).not.toBeNull();expect(document.querySelector('[data-task-view]')).toBeNull();
  });
  it('blocks underlying global navigation while Search owns the modal',async()=>{
-  await renderReady();await userEvent.setup().click(screen.getByRole('button',{name:/Search saved work/}));
+  await renderReady();const user=userEvent.setup();const draft=screen.getByRole('textbox') as HTMLTextAreaElement;await user.type(draft,'Unsent modal-safe draft');await user.click(screen.getByRole('button',{name:/Search saved work/}));
   expect(screen.getByRole('dialog',{name:'Search saved work'})).toHaveProperty('open',true);
-  fireEvent.keyDown(window,{key:'n',ctrlKey:true});expect(document.querySelector('[data-start-view]')).toBeNull();
+  const before=document.querySelector('[data-start-view]');
+  fireEvent.keyDown(window,{key:'n',ctrlKey:true});expect(document.querySelector('[data-start-view]')).toBe(before);expect(draft.value).toBe('Unsent modal-safe draft');expect(screen.getByRole('dialog',{name:'Search saved work'})).toHaveProperty('open',true);
   fireEvent.keyDown(window,{key:'k',ctrlKey:true});expect(screen.getAllByRole('dialog')).toHaveLength(1);
  });
  it('does not let a delayed sidebar reopen replace a newer Engagement activation',async()=>{
@@ -648,7 +657,7 @@ describe('personal navigation projections',()=>{
   let resolve!:(v:unknown)=>void,reads=0;const original=(globalThis as any).inquello;
   const progress=()=>({ok:true,value:{version:1,taskId:q.taskId,workspaceId:WORKSPACE,runId:'run',threadId:'thread',turnId:'turn',runtimeId:'runtime',status:'running',historyIncomplete:false,items:[],plan:[],results:[],artifact:'absent',questions:[{requestId:++reads===1?'old-request':'replacement',threadId:'thread',turnId:'turn',itemId:q.itemId,questions:[]}],sessionGeneration:1}});
   Object.assign(globalThis,{inquello:{...original,organise:{...original.organise,reopen:vi.fn(()=>new Promise(r=>{resolve=r;}))},tasks:{inbox:async()=>({ok:true,value:{workspaceId:WORKSPACE,items:[q],unavailable:false}}),progress:vi.fn(async()=>progress())}}});
-  render(<Shell onShowSpecimen={()=>{}}/>);await screen.findByRole('link',{name:'Bank confirmations'});const user=userEvent.setup();await user.click(screen.getByRole('button',{name:'Inbox'}));await user.click(await screen.findByRole('button',{name:/Which vendor/}));
+  render(<Shell onShowSpecimen={()=>{}}/>);await screen.findByRole('link',{name:'Bank confirmations'});const user=userEvent.setup();await user.click(screen.getByRole('button',{name:/^Inbox(?: ·|$)/}));await user.click(await screen.findByRole('button',{name:/Which vendor/}));
   await act(async()=>resolve({ok:true,value:{task:main.tasks[0],hit:null}}));expect(await screen.findByText(/selected question was resolved or replaced while opening/)).toBeTruthy();expect(document.querySelector('[data-task-view]')).toBeNull();
  });
 });
@@ -675,6 +684,7 @@ it('keeps a refused reopen notice distinct before the idle welcome without expos
   expect(wrapper?.querySelector('[role="status"]')).toBe(notice);
   expect(wrapper?.parentElement).toBe(welcome.parentElement?.parentElement);
   expect(wrapper!.compareDocumentPosition(welcome) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  expect(screen.getByText('Choose a Task in the Sidebar, or start one with New thread.')).toBeTruthy();
+  expect(document.querySelector('[data-start-view]:not([hidden])')).not.toBeNull();
+  expect(screen.getAllByRole('textbox')).toHaveLength(1);
   expect(document.querySelector('[data-task-view]')).toBeNull();
 });

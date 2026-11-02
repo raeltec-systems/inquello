@@ -1,9 +1,9 @@
 /**
  * The Shell's layout modes (Story 1.16), decided by window width alone.
  *
- * - **full**: the 264px Sidebar, a readable thread and (when open) the 380px
+ * - **full**: the 424px navigation (64px rail plus 360px history), a readable thread and (when open) the 380px
  *   artifact area fit side by side.
- * - **rail**: the Sidebar does not fit, so navigation collapses to the 52px
+ * - **rail**: the Sidebar does not fit, so navigation collapses to the 64px
  *   rail; the thread (and the open artifact, when it still fits) keep their
  *   width.
  * - **single**: the thread and the 380px artifact area do not fit beside the
