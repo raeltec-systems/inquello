@@ -1,3 +1,4 @@
+import {ownedDevProfile,DEV_PROFILE_ENV,DEV_RUN_ENV} from './dev-profile';
 import {ownedOnboardingFixture,ONBOARDING_FIXTURE_ENV,ONBOARDING_RUN_ENV} from './onboarding-smoke';
 import {probeOnboarding} from './onboarding-smoke-probe';
 import { configureDesktopStorage } from './runtime/desktop-storage';
@@ -155,6 +156,7 @@ import { createProviders, loadProviderDevConfig, PROVIDER_DEV_CONFIG_ENV, provid
 import { probeStartSurface, probeRoutes, probeCapabilities, probeComposer, probeData, probeIdentity, probeOrganise, probePermissions, probePolicy, probeProviders, probeRenderer, probeShellLayout, probeStates, probeToolBounds, SHELL_LAYOUT } from './smoke-probe';
 
 const paidQualificationRequested = controlledPaidLaunchRequested(Object.keys(process.env), process.argv);
+const developmentProfile=ownedDevProfile({packaged:app.isPackaged,paid:paidQualificationRequested,argv:process.argv,env:process.env});
 const onboardingFixture=ownedOnboardingFixture({packaged:app.isPackaged,argv:process.argv,env:process.env});
 const onboardingSmoke=onboardingFixture!==null;
 let onboardingOk=false;
@@ -244,6 +246,8 @@ const blocked: Array<{ kind: BlockedKind; url: string }> = [];
 const policyOptions: PolicyOptions = { logger, onBlocked: (kind, url) => blocked.push({ kind, url }) };
 let quitting = false;
 
+if(developmentProfile)app.setPath('userData',developmentProfile.profile);
+
 if (smoke) {
   // Keep the smoke run's Electron profile, and with it the runtime home, out of
   // the user's real ones. Each run gets a fresh directory because Chromium
@@ -297,7 +301,7 @@ function workingStorePath(userData: string): string {
 }
 
 function runtimeEnv(runtimeHome: string, workingStore: string): NodeJS.ProcessEnv {
-  return runtimeChildEnv(process.env, { serviceConfigEnv: SERVICE_CONFIG_ENV, codexHome: runtimeHome, workingStore, blocked: [ONBOARDING_FIXTURE_ENV, ONBOARDING_RUN_ENV, PROVIDER_DEV_CONFIG_ENV, 'INQUELLO_SMOKE_SEED', 'INQUELLO_QUOTA_FIXTURE', 'INQUELLO_VISUAL_FIXTURE'] });
+  return runtimeChildEnv(process.env, { serviceConfigEnv: SERVICE_CONFIG_ENV, codexHome: runtimeHome, workingStore, blocked: [DEV_PROFILE_ENV,DEV_RUN_ENV,ONBOARDING_FIXTURE_ENV, ONBOARDING_RUN_ENV, PROVIDER_DEV_CONFIG_ENV, 'INQUELLO_SMOKE_SEED', 'INQUELLO_QUOTA_FIXTURE', 'INQUELLO_VISUAL_FIXTURE'] });
 }
 
 const runtimeLifecycle = new RuntimeLifecycle();
@@ -595,7 +599,7 @@ app.on('before-quit', (event) => {
     })
     .then((exit) => {
       try {
-        if (smoke) {
+        if (smoke || developmentProfile) {
           process.stdout.write(`${JSON.stringify({ event: 'runtime-exit', state: runtime?.state ?? 'stopped', exit })}\n`);
         } else if (exit) {
           logger.info(`app-server exited (code ${exit.exitCode}, signal ${exit.signal}, killed ${exit.killed})`);
@@ -616,6 +620,12 @@ void app.whenReady().then(async () => {
   handleAppProtocol(protocol, path.join(app.getAppPath(), 'dist', 'renderer'), logger);
   const userData = app.getPath('userData');
   roots = governedRoots(userData, app.getPath('logs'));
+  if(developmentProfile){
+    const runtimeRelative=path.relative(developmentProfile.profile,roots['runtime-home']);
+    if(!runtimeRelative||runtimeRelative.startsWith('..')||path.isAbsolute(runtimeRelative))throw new Error('Owned development runtime root mismatch');
+    if(fs.realpathSync(userData)!==developmentProfile.profile)throw new Error('Owned development profile mismatch');
+    process.stdout.write(`${JSON.stringify({event:'owned-dev-profile',runId:developmentProfile.runId,resumed:developmentProfile.resumed,userData,runtimeHome:roots['runtime-home']})}\n`);
+  }
   if (smoke) {
     // The smoke run starts signed out, with an empty runtime home and no export journal.
     fs.rmSync(identityDir(userData), { recursive: true, force: true });
@@ -846,6 +856,7 @@ void app.whenReady().then(async () => {
     if (smoke) app.quit();
     return;
   }
+  if(developmentProfile)process.stdout.write(`${JSON.stringify({event:'owned-dev-ready',runId:developmentProfile.runId})}\n`);
   if (smoke) {
     try {
       await runSmokeProbe(mainWindow.webContents);

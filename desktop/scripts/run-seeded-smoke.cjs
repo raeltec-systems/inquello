@@ -16,7 +16,7 @@ const navigationOnly=process.argv.includes('--navigation');
 const isolatedPhase=onboardingOnly?'onboarding':process.argv.includes('--visual-only')?'visual':process.argv.includes('--quota-only')?'quota':null;
 if((navigationOnly&&isolatedPhase)||(process.argv.includes('--visual-only')&&process.argv.includes('--quota-only')))throw new Error('Choose one isolated smoke phase');
 const base=onboardingOnly&&process.platform==='win32'?'D:\\Inquello\\tmp':os.tmpdir();fs.mkdirSync(base,{recursive:true});
-const dir=fs.mkdtempSync(path.join(base,'inquello-seeded-smoke-'));
+const dir=fs.realpathSync(fs.mkdtempSync(path.join(base,'inquello-seeded-smoke-')));
 const normalRequired=navigationOnly?['saved-navigation','shell-layout']:['renderer-privileges','design','identity','data','providers','organise','states','shell-layout','composer','start-surface','policy','tool-bounds','permissions','capabilities','routes','environments'];
 const required=isolatedPhase?[isolatedPhase==='onboarding'?'onboarding':isolatedPhase==='visual'?'visual-conversation':'quota']:navigationOnly?normalRequired:[...normalRequired,'quota','visual-conversation'];
 console.log(`Smoke logs: ${dir}`);
