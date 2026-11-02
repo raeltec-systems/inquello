@@ -7269,6 +7269,20 @@ impl ThreadRequestProcessor {
             ("web_search".into(), serde_json::json!("disabled")),
             ("model_reasoning_summary".into(), serde_json::json!("none")),
         ]);
+        if route.route_id() == inquello_domain::routes::RouteId::CodexResponses {
+            // This exact adapter sends static function schemas and the confirmed
+            // request-level effort. Do not generate optional Responses Lite tool
+            // declarations or effort-update history that it cannot represent.
+            // Retained history is never filtered or rewritten by this choice.
+            overrides.insert(
+                "features.incremental_tools".into(),
+                serde_json::json!(false),
+            );
+            overrides.insert(
+                "features.reasoning_effort_override".into(),
+                serde_json::json!(false),
+            );
+        }
         // Explicitly turn off each inherited MCP endpoint, not only an empty
         // overlay (which would leave merged user/project entries enabled).
         for name in self.config.mcp_servers.get().keys() {
@@ -7314,6 +7328,14 @@ impl ThreadRequestProcessor {
             .map_err(|_| {
                 invalid_request("Selected private runtime configuration could not be applied")
             })?;
+        if route.route_id() == inquello_domain::routes::RouteId::CodexResponses
+            && (config.features.enabled(Feature::IncrementalTools)
+                || config.features.enabled(Feature::ReasoningEffortOverride))
+        {
+            return Err(invalid_request(
+                "Selected model cannot use the required private runtime settings",
+            ));
+        }
         // Built-in provider IDs cannot be redefined by configuration overlays.
         // Disable retries on the selected runtime instance without replacing its
         // endpoint, authentication, or other exact-route properties.

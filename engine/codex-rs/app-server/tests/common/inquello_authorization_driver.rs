@@ -25,6 +25,25 @@ const FOLLOWUP_REQUEST: &str = "Explain why the earlier finding still needs vend
 const FOLLOWUP_ANSWER: &str = "The earlier finding remains an unchecked candidate; vendor evidence is needed before any conclusion.";
 
 fn streams(route: &str, scenario: &str) -> Vec<String> {
+    if scenario == "lifecycle-bundled-text-followup" {
+        assert_eq!(route, "codex-responses");
+        let text = |id: &str, answer: &str| {
+            event(
+                "response.created",
+                json!({"type":"response.created","response":{"id":id,"status":"in_progress"}}),
+            ) + &event(
+                "response.output_item.done",
+                json!({"type":"response.output_item.done","output_index":0,"item":{"type":"message","id":format!("msg_{id}"),"role":"assistant","status":"completed","content":[{"type":"output_text","text":answer,"annotations":[]}]}}),
+            ) + &event(
+                "response.completed",
+                json!({"type":"response.completed","response":{"id":id,"status":"completed","end_turn":true,"output":[],"usage":{"input_tokens":24,"output_tokens":12,"total_tokens":36}}}),
+            )
+        };
+        return vec![
+            text("resp_bundled_initial", LATE),
+            text("resp_bundled_followup", FOLLOWUP_ANSWER),
+        ];
+    }
     if scenario == "lifecycle-completed-followup" {
         // The first two responses genuinely finish the original tool-using turn.
         // Only the explicit follow-up may request this third, text-only response.
@@ -643,6 +662,10 @@ pub(super) async fn run(
     scenario: &'static str,
     service: Option<ServiceFixture>,
 ) {
+    let bundled_catalog = scenario == "lifecycle-bundled-text-followup";
+    if bundled_catalog {
+        assert_eq!(route, "codex-responses");
+    }
     let revoke = scenario != "allowed"
         && scenario != "search-stalled-admission"
         && !scenario.starts_with("lifecycle-");
@@ -663,7 +686,11 @@ pub(super) async fn run(
         b"explicit isolated fixture",
     )
     .unwrap();
-    let model = if route == "codex-responses" {
+    let model = if bundled_catalog {
+        // This real-catalog witness is self-contained. Ambient selector options
+        // belong to the other isolated scenarios, whose behavior stays intact.
+        "gpt-6.1-terra"
+    } else if route == "codex-responses" {
         let selection = match std::env::var("INQUELLO_SYNTHETIC_RESPONSES_MODEL") {
             Ok(value) => Some(value),
             Err(std::env::VarError::NotPresent) => None,
@@ -677,7 +704,23 @@ pub(super) async fn run(
         "claude-sonnet-5-5"
     };
     let catalog = home.join("models.json");
-    std::fs::write(&catalog,json!({"models":[{"slug":model,"display_name":"Authorization fixture","description":"Fixture only","base_instructions":"Synthetic authorization fixture.","default_reasoning_level":null,"supported_reasoning_levels":[],"shell_type":"unified_exec","visibility":"list","supported_in_api":true,"priority":1,"upgrade":null,"model_messages":null,"support_verbosity":false,"default_verbosity":null,"apply_patch_tool_type":null,"truncation_policy":{"mode":"bytes","limit":10000},"supports_image_detail_original":false,"context_window":32000,"auto_compact_token_limit":null,"experimental_supported_tools":[]}]}).to_string()).unwrap();
+    let catalog_json = if bundled_catalog {
+        let bundled = include_str!("../../../models-manager/models.json");
+        let metadata: Value = serde_json::from_str(bundled).unwrap();
+        let selected = metadata["models"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|entry| entry["slug"] == model)
+            .expect("supported bundled model");
+        assert_eq!(selected["use_responses_lite"], true);
+        assert_eq!(selected["supports_reasoning_effort_updates"], true);
+        assert_eq!(selected["default_reasoning_level"], "low");
+        bundled.to_string()
+    } else {
+        json!({"models":[{"slug":model,"display_name":"Authorization fixture","description":"Fixture only","base_instructions":"Synthetic authorization fixture.","default_reasoning_level":null,"supported_reasoning_levels":[],"shell_type":"unified_exec","visibility":"list","supported_in_api":true,"priority":1,"upgrade":null,"model_messages":null,"support_verbosity":false,"default_verbosity":null,"apply_patch_tool_type":null,"truncation_policy":{"mode":"bytes","limit":10000},"supports_image_detail_original":false,"context_window":32000,"auto_compact_token_limit":null,"experimental_supported_tools":[]}]}).to_string()
+    };
+    std::fs::write(&catalog, catalog_json).unwrap();
     std::fs::write(home.join("config.toml"),format!("model_catalog_json = {}\ncli_auth_credentials_store = \"keyring\"\n[features]\nnetwork_proxy = true\n",serde_json::to_string(&catalog).unwrap())).unwrap();
     let binary = std::env::var_os("INQUELLO_FIXTURE_APP_SERVER_BIN")
         .expect("separately built debug inference-fixtures binary required");
@@ -740,8 +783,13 @@ pub(super) async fn run(
     let policy = host.policy.clone();
     let operation = uuid::Uuid::new_v4().to_string();
     host.authority_context = json!({"configuration":configuration,"operationId":operation});
+    let initial_request = if bundled_catalog {
+        "Review fictional procurement: INV-104 K12,480 appears twice; INV-105 is distinct. Explain this fictional candidate duplicate without running tools."
+    } else {
+        "Review fictional procurement: INV-104 K12,480 appears twice; INV-105 is distinct. Write only the permitted local marker, then report the candidate duplicate."
+    };
     let command = json!({"operationId":operation,"workspaceId":workspace,"engagementId":null,"folderId":null,
-        "request":"Review fictional procurement: INV-104 K12,480 appears twice; INV-105 is distinct. Write only the permitted local marker, then report the candidate duplicate.",
+        "request":initial_request,
         "routeId":route,"configurationRevision":1,"reasoning":"default","speed":"default","workspacePolicy":policy});
     host.authority_callback = service.as_ref().map(|s| s.authority.clone());
     if scenario == "deny-before-dispatch" && service.is_none() {
@@ -784,6 +832,134 @@ pub(super) async fn run(
     );
     host.authority_context["taskId"] = start["taskId"].clone();
     host.authority_context["runId"] = start["runId"].clone();
+    if bundled_catalog {
+        // Text compatibility only: the real bundled model declares shell_command,
+        // while the fixed private tool contract separately qualifies exec_command.
+        // Do not fabricate tool support or weaken any original tool witness.
+        assert!(service.is_none());
+        let task = start["taskId"].as_str().unwrap().to_owned();
+        let thread = start["threadId"].as_str().unwrap().to_owned();
+        let first = wait_progress(&mut server, &mut host, &task, &policy, |p| {
+            p["status"] == "completed"
+        })
+        .await;
+        assert_eq!(first["threadId"], thread);
+        assert!(first["items"].to_string().contains(LATE));
+        assert_eq!(fixture.requests.lock().await.len(), 1);
+        let completed = private_rpc(
+            &mut server,
+            &mut host,
+            "inquello/tasks/forThread",
+            json!({"threadId":thread}),
+        )
+        .await;
+        assert_eq!(completed["runId"], first["runId"]);
+        assert_eq!(completed["turnId"], first["turnId"]);
+        let followup = json!({"operationId":uuid::Uuid::new_v4().to_string(),"taskId":task,"expectedRunId":completed["runId"],"expectedRuntimeId":completed["runtimeId"],"expectedTurnId":completed["turnId"],"request":FOLLOWUP_REQUEST,"workspacePolicy":policy});
+        let admitted = private_rpc(
+            &mut server,
+            &mut host,
+            "inquello/tasks/resume",
+            followup.clone(),
+        )
+        .await;
+        assert_eq!(admitted["status"], "admitted");
+        assert_eq!(admitted["taskId"], task);
+        assert_eq!(admitted["threadId"], thread);
+        assert_ne!(admitted["runId"], completed["runId"]);
+        assert_ne!(admitted["turnId"], completed["turnId"]);
+        let replay = private_rpc(&mut server, &mut host, "inquello/tasks/resume", followup).await;
+        assert_eq!(replay["runId"], admitted["runId"]);
+        assert_eq!(replay["turnId"], admitted["turnId"]);
+        let finished = wait_progress(&mut server, &mut host, &task, &policy, |p| {
+            p["status"] == "completed" && p["runId"] == admitted["runId"]
+        })
+        .await;
+        assert_eq!(finished["threadId"], thread);
+        assert!(finished["items"].to_string().contains(FOLLOWUP_REQUEST));
+        assert!(finished["items"].to_string().contains(FOLLOWUP_ANSWER));
+        {
+            let requests = fixture.requests.lock().await;
+            assert_eq!(
+                requests.len(),
+                2,
+                "one initial text turn and one explicit follow-up, without retry/fallback"
+            );
+            assert!(requests[1].to_string().contains(initial_request));
+            assert!(requests[1].to_string().contains(LATE));
+            assert!(requests[1].to_string().contains(FOLLOWUP_REQUEST));
+            for request in requests.iter() {
+                assert_eq!(request["model"], model);
+                assert_eq!(request["reasoning"]["effort"], "low");
+                assert!(request.get("service_tier").is_none());
+                // The native SDK retains its genuine Responses Lite wire prefix.
+                // These prompt-only declarations are not retained history items.
+                assert!(request.get("tools").is_none_or(Value::is_null));
+                let input = request["input"].as_array().unwrap();
+                assert!(
+                    input
+                        .iter()
+                        .all(|item| item["type"] != "configuration_update")
+                );
+                let declarations: Vec<_> = input
+                    .iter()
+                    .filter(|item| item["type"] == "additional_tools")
+                    .collect();
+                assert_eq!(declarations.len(), 1);
+                assert_eq!(declarations[0]["role"], "developer");
+                let namespaces = declarations[0]["tools"].as_array().unwrap();
+                assert_eq!(namespaces.len(), 1);
+                assert_eq!(namespaces[0]["type"], "namespace");
+                assert_eq!(namespaces[0]["name"], "functions");
+                let functions = namespaces[0]["tools"].as_array().unwrap();
+                assert!(!functions.is_empty() && functions.len() <= 3);
+                for function in functions {
+                    assert_eq!(function["type"], "function");
+                    assert!(matches!(
+                        function["name"].as_str(),
+                        Some("request_user_input" | "exec_command" | "inquello_progress")
+                    ));
+                }
+            }
+        }
+        host.authority_available = false;
+        let denied = private_rpc(&mut server, &mut host, "inquello/tasks/resume", json!({"operationId":uuid::Uuid::new_v4().to_string(),"taskId":task,"expectedRunId":finished["runId"],"expectedRuntimeId":finished["runtimeId"],"expectedTurnId":finished["turnId"],"request":"A denied additional text follow-up.","workspacePolicy":policy})).await;
+        assert!(denied.get("rpcError").is_some());
+        assert!(!denied.to_string().contains(FOLLOWUP_ANSWER));
+        assert_eq!(fixture.requests.lock().await.len(), 2);
+        server.shutdown_gracefully().await.unwrap();
+        let rollout = codex_rollout::find_thread_path_by_id_str(&home, &thread, None)
+            .await
+            .unwrap()
+            .expect("owned retained bundled-model history");
+        assert!(std::fs::metadata(&rollout).unwrap().len() < 2_097_152);
+        let retained = std::fs::read_to_string(rollout).unwrap();
+        let mut user = false;
+        let mut assistant = false;
+        for line in retained.lines() {
+            let record: Value = serde_json::from_str(line).unwrap();
+            if record["type"] == "response_item" {
+                assert!(
+                    !matches!(
+                        record["payload"]["type"].as_str(),
+                        Some("additional_tools" | "configuration_update")
+                    ),
+                    "unsupported optional modes must not enter retained history"
+                );
+                user |= record["payload"]["role"] == "user";
+                assistant |= record["payload"]["role"] == "assistant";
+            }
+        }
+        assert!(user && assistant, "positive retained conversation control");
+        assert!(
+            retained.contains(initial_request)
+                && retained.contains(FOLLOWUP_REQUEST)
+                && retained.contains(FOLLOWUP_ANSWER)
+        );
+        fixture.stop.send(()).unwrap();
+        fixture.task.await.unwrap();
+        return;
+    }
     if scenario.starts_with("lifecycle-") {
         assert!(
             service.is_none(),
