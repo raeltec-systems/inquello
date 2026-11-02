@@ -12,12 +12,13 @@ import { useEffect, useState, type ReactElement } from 'react';
 import { Button } from './primitives';
 import { createDraftStore } from './Shell/drafts';
 import { Shell } from './Shell/Shell';
+import { Onboarding } from './Onboarding';
 import { Specimen } from './Specimen';
 
-export type View = 'shell' | 'specimen';
+export type View = 'shell' | 'specimen' | 'onboarding';
 
 export function viewFor(hash: string): View {
-  return hash === '#specimen' ? 'specimen' : 'shell';
+  return hash === '#onboarding' ? 'onboarding' : hash === '#specimen' ? 'specimen' : 'shell';
 }
 
 export function App(): ReactElement {
@@ -32,11 +33,12 @@ export function App(): ReactElement {
   }, []);
 
   const show = (next: View) => {
-    globalThis.location.hash = next === 'specimen' ? '#specimen' : '#shell';
+    globalThis.location.hash = next === 'onboarding' ? '#onboarding' : next === 'specimen' ? '#specimen' : '#shell';
   };
 
   return <>
     <div hidden={view !== 'shell'}><Shell key={sessionEpoch} active={view === 'shell'} onShowSpecimen={() => show('specimen')} drafts={drafts} /></div>
+    {view === 'onboarding' && <Onboarding onBack={() => show('shell')} onIdentityChanged={() => { drafts.clear(); setSessionEpoch(n => n + 1); }} />}
     {view === 'specimen' && <>
       <Specimen onIdentityChanged={() => { drafts.clear(); setSessionEpoch(n => n + 1); }} />
       <div className="specimen specimen-back"><Button variant="quiet" size="sm" onPress={() => show('shell')}>Back to the workspace</Button></div>

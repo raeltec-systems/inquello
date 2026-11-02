@@ -40,6 +40,7 @@ function world() {
       if(receiptFailure)throw new ServiceError('transport');
       return response(receipts.get(req.url.split('/').at(-1)!)??null);
     }
+    if(req.url.includes('/workspaces/') && req.url.includes('/invitations?'))return response({workspace_id:W,invitations:[{invite_id:I,revision:'7',state:'pending',expires_at:'2027-01-01T00:00:00+00:00',roles:['member'],recipient_email:'Finch@example.invalid'}],next_cursor:null});
     if(req.url.endsWith('/invitations')) {
       if(discoveryFailure)return response({error:{kind:'denied',message:'SECRET'}},403);
       return response({invitations:[]});
@@ -271,4 +272,39 @@ it('rejects oversized, sparse, subclassed and decorated role arrays before dispa
     expect(()=>payload(inviteInput)([{workspaceId:W,email:'finch@example.invalid',roles}])).toThrow();
   }
   expect(payload(inviteInput)([{workspaceId:W,email:'finch@example.invalid',roles:['member']}]).roles).toEqual(['member']);
+});
+
+describe('current manager invitation metadata',()=>{
+ it('projects actual revision and scopes the observed cursor to the current Workspace',async()=>{
+  const w=world(),s=w.make();
+  expect(await s.members({workspaceId:W,after:I})).toMatchObject({ok:true,value:{invitations:[{inviteId:I,revision:'7',recipientEmail:'Finch@example.invalid'}],nextCursor:null}});
+  expect(w.requests.some(r=>r.url.endsWith('/workspaces/'+W+'/invitations?limit=25&after='+I))).toBe(true);
+ });
+ it('suppresses mismatched Workspace metadata and late same-principal session responses',async()=>{
+  const w=world();vi.spyOn(w.client,'managedInvitations').mockResolvedValue({workspace_id:B,invitations:[],next_cursor:null});
+  expect((await w.make().members({workspaceId:W})).ok).toBe(false);
+  vi.spyOn(w.client,'managedInvitations').mockImplementation(async()=>{w.replaceSession();return {workspace_id:W,invitations:[],next_cursor:null};});
+  expect(await w.make().members({workspaceId:W})).toEqual({ok:false,reason:ONBOARDING_REASONS.changed});
+ });
+ it('forwards the already-defined recovery operation in main instead of silently falling back',async()=>{
+  const recover=vi.fn(async()=>({ok:true,value:{accepted:true}}));
+  const op=createOperations({organise:{recoverNavigation:recover}} as unknown as OperationDeps).find(o=>o.name==='organise.recoverNavigation')!;
+  await op.handle({workspaceId:W});expect(recover).toHaveBeenCalledWith(W);
+  expect(fs.readFileSync(path.resolve(__dirname,'../src/main/main.ts'),'utf8')).toContain('recoverNavigation: workspaceId => organiseService.recoverNavigation(workspaceId)');
+ });
+});
+
+describe('conversation-preserving authority notifications',()=>{
+ it('does not emit conversation-clear events for creating or inviting, but invalidates own changed membership and acceptance',async()=>{
+  for(const kind of ['createWorkspace','invite','changeOther','changeSelf','accept'] as const){
+   const w=world(),notify=vi.fn(),s=new OnboardingService({identity:w.identity,client:w.client,store:w.store,onAuthorityChanged:notify});
+   const r=kind==='createWorkspace'?await s.createWorkspace({name:'Alder'}):kind==='invite'?await s.invite({workspaceId:W,email:'Finch@example.invalid',roles:['member']}):kind==='accept'?await s.acceptInvitation({inviteId:I,expectedRevision:'1'}):await s.changeRoles({workspaceId:W,principalId:kind==='changeSelf'?A:B,expectedRevision:'1',roles:['member']});
+   expect(r.ok).toBe(true);expect(notify).toHaveBeenCalledTimes(kind==='changeSelf'||kind==='accept'?1:0);
+  }
+ });
+ it('notifies self-removal only once its original receipt is actually confirmed',async()=>{
+  const w=world(),notify=vi.fn(),s=new OnboardingService({identity:w.identity,client:w.client,store:w.store,onAuthorityChanged:notify});w.postFailure='lost';
+  expect((await s.removeMember({workspaceId:W,principalId:A,expectedRevision:'1'})).ok).toBe(false);expect(notify).not.toHaveBeenCalled();
+  expect((await s.reconcile()).ok).toBe(true);expect(notify).toHaveBeenCalledOnce();
+ });
 });

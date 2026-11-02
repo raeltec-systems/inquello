@@ -152,7 +152,9 @@ export function Account({ onIdentityChanged }: AccountProps = {}): ReactElement 
           <dd className="specimen-account-note">{status ? STORAGE_TEXT[status.credentialStorage] : 'Checking'}</dd>
         </div>
       </dl>
+      <p className="specimen-account-note">Signup and account recovery are handled by your identity provider, separately from inference-provider credentials.</p>
       <div className="specimen-account-actions">
+        <Button variant="quiet" onPress={() => {globalThis.location.hash='#onboarding';}}>Workspace setup and team</Button>
         <Button
           variant="primary"
           data-account-action="sign-in"

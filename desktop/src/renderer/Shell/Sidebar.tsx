@@ -342,9 +342,10 @@ function SidebarContent(props: SidebarProps & { collapseLabel: string }): ReactE
         {state.workspaces.length > 0 ? (
           <Menu label={workspace ? workspace.name : 'Choose a Workspace'} heading="Workspace" items={[selector]} triggerVariant="ghost" />
         ) : (
-          <p className="iq-sidebar-empty">No Workspace is available to you yet.</p>
+          <p className="iq-sidebar-empty">No Workspace is available to you yet. Create a Workspace or accept an invitation in setup.</p>
         )}
       </div>
+      <Button variant="quiet" size="sm" onPress={() => {globalThis.location.hash='#onboarding';}} data-action="workspace-setup">Workspace setup and team</Button>
       {(tree?.unavailableTasks?.length??0)>0?<p className="iq-sidebar-empty" role="status">Some of your Tasks are unavailable until current authority can be verified. Your drafts are kept.</p>:null}
       <Button variant="primary" size="sm" icon="plus" onPress={onNewThread} disabledReason={noWorkspace} pending={busy} data-action="new-thread">
         New thread

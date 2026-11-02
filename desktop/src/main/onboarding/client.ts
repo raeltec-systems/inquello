@@ -1,6 +1,6 @@
 import { ServiceError, type HttpsTransport } from '../identity/service-client';
 import { parseErrorBody, nullable, type CommandResponse } from '../identity/wire';
-import { parseCapabilities, parseCommandResponse, parseInvitations, parseMembers, parseDeliveries, parseRolesView, type Envelope } from './contracts';
+import { parseCapabilities, parseCommandResponse, parseInvitations, parseMembers, parseDeliveries, parseManagedInvitations, parseRolesView, type Envelope } from './contracts';
 
 /** Fixed named endpoints only; neither URLs nor credentials are renderer inputs. */
 export class OnboardingClient {
@@ -19,6 +19,7 @@ export class OnboardingClient {
   capabilities() {return this.call('GET','/v1/capabilities',parseCapabilities);}
   invitations(access:string) {return this.call('GET','/v1/invitations',parseInvitations,access);}
   members(access:string,id:string) {return this.call('GET','/v1/workspaces/'+encodeURIComponent(id)+'/members',parseMembers,access);}
+  managedInvitations(access:string,id:string,after?:string) {return this.call('GET','/v1/workspaces/'+encodeURIComponent(id)+'/invitations?limit=25'+(after?'&after='+encodeURIComponent(after):''),parseManagedInvitations,access);}
   roles(access:string,id:string) {return this.call('GET','/v1/workspaces/'+encodeURIComponent(id)+'/roles',parseRolesView,access);}
   deliveries(access:string,id:string) {return this.call('GET','/v1/workspaces/'+encodeURIComponent(id)+'/invitation-deliveries',parseDeliveries,access);}
   execute(access:string,e:Envelope):Promise<CommandResponse> {

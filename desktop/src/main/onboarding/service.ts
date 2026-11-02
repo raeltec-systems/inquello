@@ -1,10 +1,10 @@
 import {randomUUID} from 'node:crypto';
 import {ServiceError} from '../identity/service-client';
 import {PROTOCOL_MAJOR,SCHEMA_VERSION,type CommandResponse} from '../identity/wire';
-import {applied,envelope,mutation,draftInput,workspaceInput} from './contracts';
+import {applied,envelope,mutation,draftInput,teamInput} from './contracts';
 import type {OnboardingClient} from './client';
 import type {OnboardingStorage,RecordState,StoredPending} from './store';
-import type {Draft,Mutation,OnboardingState,Applied,Result,Team,CreateInput,AcceptInput,InviteInput,ChangeRolesInput,RemoveMemberInput,RevokeInvitationInput,Pending} from './types';
+import type {Draft,Mutation,OnboardingState,Applied,Result,Team,TeamInput,CreateInput,AcceptInput,InviteInput,ChangeRolesInput,RemoveMemberInput,RevokeInvitationInput,Pending} from './types';
 
 export const ONBOARDING_REASONS = {
   signedOut:'Sign in to create or join a Workspace.',
@@ -12,7 +12,7 @@ export const ONBOARDING_REASONS = {
   storage:'Secure OS-backed storage is required to preserve onboarding drafts and safely reconcile requests.',
   verification:'Verify your email with your identity provider, then sign in again.',
   invitation:'This invitation is unavailable. Verify your email and sign in with the intended account, or ask the owner for a current invitation.',
-  denied:'This membership change is unavailable. Refresh the team and check your current role.',
+  denied:'This membership change is unavailable. Refresh the team and check your current role. If your verified sign-in has expired, verify your email and sign in again.',
   conflict:'The team changed before this request. Reconcile, discard the unapplied request, and review the current team before confirming again.',
   uncertain:'The outcome is not confirmed. Reconcile before retrying; do not create a replacement request.',
   pending:'Finish or reconcile the existing request before starting another.',
@@ -26,7 +26,7 @@ interface Identity {principalId():string|null;generation():number;withAccess<T>(
 export class OnboardingService {
   private queue:Promise<unknown>=Promise.resolve();
   private activeGeneration:number|null=null;
-  constructor(private readonly options:{identity:Identity;client:OnboardingClient|null;store:OnboardingStorage}) {}
+  constructor(private readonly options:{identity:Identity;client:OnboardingClient|null;store:OnboardingStorage;onAuthorityChanged?:()=>void}) {}
   private exclusive<T>(work:()=>Promise<Result<T>>):Promise<Result<T>> {
     const caller=this.options.identity.principalId(),generation=this.options.identity.generation();
     const bound=async():Promise<Result<T>>=>{
@@ -72,6 +72,12 @@ export class OnboardingService {
   private pendingView(p:StoredPending|null):Pending|null {
     return p?{...mutation(p.kind,p.input),operationId:p.operationId,state:p.state,canDiscard:p.terminalRejection}:null;
   }
+  private notifyAuthority(principal:string,pending:StoredPending):void {
+    // Acceptance can upsert the caller's roles. Ordinary invitation/admin work
+    // must not clear an unrelated still-authorized private conversation.
+    const selfChange=pending.kind==='acceptInvitation'||((pending.kind==='changeRoles'||pending.kind==='removeMember')&&pending.input.principalId===principal);
+    if(selfChange)try {this.options.onAuthorityChanged?.();}catch {/* Notification is not the committed result. */}
+  }
   private validateReceipt(p:StoredPending,r:CommandResponse) {
     if(r.operation_id!==p.operationId) throw new ServiceError('protocol',true);
     if(p.kind==='revokeInvitation' && r.resource_id!==p.input.inviteId) throw new ServiceError('protocol',true);
@@ -88,6 +94,7 @@ export class OnboardingService {
     if(receipt) {
       this.validateReceipt(pending,receipt);
       this.save(principal,{...state,pending:null});
+      this.notifyAuthority(principal,pending);
       return applied(receipt);
     }
     this.save(principal,{...state,pending:{...pending,state:'retryable'}});
@@ -113,14 +120,15 @@ export class OnboardingService {
   saveDraft(input:Draft):Promise<Result<Draft>> {return this.exclusive(async()=>{
     try {const principal=this.principal(),draft=draftInput(input,'');this.save(principal,{...this.state(principal),draft});return {ok:true,value:{...draft}};}catch(error){return fail(this.reason(error));}
   });}
-  members(input:{workspaceId:string}):Promise<Result<Team>> {return this.exclusive(async()=>{
+  members(input:TeamInput):Promise<Result<Team>> {return this.exclusive(async()=>{
     try {
-      const principal=this.principal(),{workspaceId}=workspaceInput(input,'');
+      const principal=this.principal(),{workspaceId,after}=teamInput(input,'');
       const members=await this.access(principal,a=>this.options.client!.members(a,workspaceId));
       const roles=await this.access(principal,a=>this.options.client!.roles(a,workspaceId));
       const deliveries=await this.access(principal,a=>this.options.client!.deliveries(a,workspaceId));
-      if([members.workspace_id,roles.workspace_id,deliveries.workspace_id].some(id=>id!==workspaceId)) throw new ServiceError('protocol',true);
-      return {ok:true,value:{workspaceId,members:members.members.map(m=>({principalId:m.principal_id,displayName:m.display_name??'Workspace member',roles:[...m.roles],revision:m.revision})),roles:roles.roles.map(r=>({id:r.role_id,label:r.label})),deliveries:deliveries.deliveries.map(d=>({inviteId:d.invite_id,state:d.state}))}};
+      const invitations=await this.access(principal,a=>this.options.client!.managedInvitations(a,workspaceId,after));
+      if([members.workspace_id,roles.workspace_id,deliveries.workspace_id,invitations.workspace_id].some(id=>id!==workspaceId)) throw new ServiceError('protocol',true);
+      return {ok:true,value:{workspaceId,invitations:invitations.invitations.map(i=>({inviteId:i.invite_id,revision:i.revision,state:i.state,expiresAt:i.expires_at,roles:[...i.roles],recipientEmail:i.recipient_email})),nextCursor:invitations.next_cursor,members:members.members.map(m=>({principalId:m.principal_id,displayName:m.display_name??'Workspace member',roles:[...m.roles],revision:m.revision})),roles:roles.roles.map(r=>({id:r.role_id,label:r.label})),deliveries:deliveries.deliveries.map(d=>({inviteId:d.invite_id,state:d.state}))}};
     }catch(error){return fail(this.reason(error));}
   });}
   private async send(principal:string,pending:StoredPending,knownUnapplied=false):Promise<Result<Applied>> {
@@ -131,6 +139,7 @@ export class OnboardingService {
       const response=await this.access(principal,a=>this.options.client!.execute(a,pending.envelope));
       this.validateReceipt(pending,response);
       this.save(principal,{...this.state(principal),pending:null});
+      this.notifyAuthority(principal,pending);
       return {ok:true,value:applied(response)};
     }catch(error){
       // Absence is NOT cancellation: a timed-out POST may still commit later.

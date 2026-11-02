@@ -27,6 +27,7 @@ export interface IdentityBridge {
   getStatus(): Promise<unknown>;
   signIn(): Promise<unknown>;
   signOut(): Promise<unknown>;
+  reauthenticate?(): Promise<unknown>;
 }
 
 /** The identity operations, or null outside the desktop (for example in tests). */

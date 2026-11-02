@@ -635,6 +635,7 @@ void app.whenReady().then(async () => {
   const onboardingConfig = identity.config.kind === 'configured' ? identity.config.config : null;
   const onboardingService = new OnboardingService({
     identity: identitySession,
+    onAuthorityChanged: () => taskSessionChanged(false),
     client: onboardingConfig && identity.transport ? new OnboardingClient(onboardingConfig.serviceUrl,identity.transport) : null,
     store: new OnboardingStore({dir:path.join(identityDir(app.getPath('userData')),'onboarding'),scope:JSON.stringify([onboardingConfig?.serviceUrl,onboardingConfig?.issuerUrl]),safeStorage,platform:process.platform}),
   });
@@ -799,6 +800,7 @@ void app.whenReady().then(async () => {
         codexLogout: () => providerLogoutWithCapabilities({capabilities, stopRuntime, logout: () => providerService.codexLogout(), getStatus: () => providerService.getStatus()}),
       },
       organise: {
+        recoverNavigation: workspaceId => organiseService.recoverNavigation(workspaceId),
         search: input => organiseService.search(input),
         reopen: input => organiseService.reopen(input),
         setNavigation: input => organiseService.setNavigation(input),

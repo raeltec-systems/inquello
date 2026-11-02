@@ -4,7 +4,9 @@ export interface Invitation { inviteId: string; workspaceId: string; workspaceNa
 export interface Member { principalId: string; displayName: string; roles: string[]; revision: string }
 export const DELIVERY_STATES = ['not_configured','pending','sending','provider_accepted','retry_pending','manual_reconciliation_required','cancelled','failed'] as const;
 export type DeliveryState = typeof DELIVERY_STATES[number];
-export interface Team { workspaceId: string; members: Member[]; roles: {id: string; label: string}[]; deliveries: {inviteId: string; state: DeliveryState}[] }
+export interface ManagedInvitation { inviteId:string; revision:string; state:'pending'|'accepted'|'revoked'|'expired'; expiresAt:string; roles:string[]; recipientEmail:string }
+export interface TeamInput { workspaceId:string; after?:string }
+export interface Team { invitations:ManagedInvitation[]; nextCursor:string|null; workspaceId: string; members: Member[]; roles: {id: string; label: string}[]; deliveries: {inviteId: string; state: DeliveryState}[] }
 export interface CreateInput { name: string }
 export interface AcceptInput { inviteId: string; expectedRevision: string }
 export interface InviteInput { workspaceId: string; email: string; roles: string[] }

@@ -1,5 +1,5 @@
 import type { OnboardingService } from '../onboarding/service';
-import { payload as onboardingPayload, createInput, acceptInput, workspaceInput, inviteInput, changeInput, removeInput, revokeInput, draftInput } from '../onboarding/contracts';
+import { payload as onboardingPayload, createInput, acceptInput, teamInput, inviteInput, changeInput, removeInput, revokeInput, draftInput } from '../onboarding/contracts';
 import {searchPayload,reopenPayload,navigationPayload,type SearchInput,type SearchView,type ReopenInput,type ReopenView,type NavigationInput} from '../organise';
 import type { TaskService } from '../tasks/service';
 import { taskPreflightPayload, taskStartPayload, taskReconcilePayload, taskProgressPayload, taskActivityPayload, taskAnswerPayload, taskSteerPayload, taskStopPayload, taskResumePayload } from '../tasks/validators';
@@ -543,7 +543,7 @@ export function createOperations(deps: OperationDeps): Operation[] {
   const onboarding = () => {if(!deps.onboarding)throw new Error('Onboarding unavailable');return deps.onboarding;};
   const onboardingOps: Operation[] = [{name:'onboarding.getState',validate:noPayload,handle:()=>onboarding().getState()},
 {name:'onboarding.saveDraft',validate:onboardingPayload(draftInput),handle:input=>onboarding().saveDraft(input as Parameters<OnboardingService['saveDraft']>[0])},
-{name:'onboarding.members',validate:onboardingPayload(workspaceInput),handle:input=>onboarding().members(input as Parameters<OnboardingService['members']>[0])},
+{name:'onboarding.members',validate:onboardingPayload(teamInput),handle:input=>onboarding().members(input as Parameters<OnboardingService['members']>[0])},
 {name:'onboarding.createWorkspace',validate:onboardingPayload(createInput),handle:input=>onboarding().createWorkspace(input as Parameters<OnboardingService['createWorkspace']>[0])},
 {name:'onboarding.acceptInvitation',validate:onboardingPayload(acceptInput),handle:input=>onboarding().acceptInvitation(input as Parameters<OnboardingService['acceptInvitation']>[0])},
 {name:'onboarding.invite',validate:onboardingPayload(inviteInput),handle:input=>onboarding().invite(input as Parameters<OnboardingService['invite']>[0])},

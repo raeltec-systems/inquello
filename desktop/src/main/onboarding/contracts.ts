@@ -1,4 +1,4 @@
-import { object, str, uuid, decimal, array, nullable, oneOf, parseCommandResponse, parseRolesView, parseCapabilities, SCHEMA_VERSION, type CommandResponse } from '../identity/wire';
+import { object, str, uuid, decimal, array, nullable, oneOf, optional, parseCommandResponse, parseRolesView, parseCapabilities, SCHEMA_VERSION, type CommandResponse } from '../identity/wire';
 import { DELIVERY_STATES, type Mutation, type Draft } from './types';
 export { parseCommandResponse, parseRolesView, parseCapabilities };
 export const bounded = (max: number, nonempty = true) => (v: unknown, p: string): string => {
@@ -21,6 +21,7 @@ const list = <T>(parser: (v: unknown,p: string)=>T, max: number) => (v:unknown,p
 export const createInput = object({name:bounded(200)});
 export const acceptInput = object({inviteId:uuid,expectedRevision:decimal});
 export const workspaceInput = object({workspaceId:uuid});
+export const teamInput = object({workspaceId:uuid,after:optional(uuid)});
 export const inviteInput = object({workspaceId:uuid,email:bounded(254),roles:roleList});
 export const changeInput = object({workspaceId:uuid,principalId:uuid,expectedRevision:decimal,roles:roleList});
 export const removeInput = object({workspaceId:uuid,principalId:uuid,expectedRevision:decimal});
@@ -33,6 +34,7 @@ const timestamp = (v:unknown,p:string):string => {
   return text;
 };
 export const parseInvitations = object({invitations:list(object({invite_id:uuid,workspace_id:uuid,workspace_name:bounded(200),roles:roleList,revision:decimal,expires_at:timestamp}),100)});
+export const parseManagedInvitations = object({workspace_id:uuid,invitations:list(object({invite_id:uuid,revision:decimal,state:oneOf(['pending','accepted','revoked','expired'] as const),expires_at:timestamp,roles:roleList,recipient_email:bounded(254)}),25),next_cursor:nullable(uuid)});
 export const parseMembers = object({workspace_id:uuid,members:list(object({principal_id:uuid,display_name:nullable(bounded(200,false)),roles:roleList,revision:decimal}),10000)});
 export const parseDeliveries = object({workspace_id:uuid,deliveries:list(object({invite_id:uuid,state:oneOf(DELIVERY_STATES)}),1000)});
 export type Envelope = {command_epoch:string;operation_id:string;expected_revision:string;schema_version:number;workspace_id?:string;payload:Record<string,unknown>};
