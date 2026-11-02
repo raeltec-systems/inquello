@@ -47,9 +47,10 @@ function initials(name: string): string {
 export interface AccountProps {
   /** Called after a sign-in or sign-out attempt completes, whatever its outcome. */
   onIdentityChanged?: () => void;
+  signOutOnly?: boolean;
 }
 
-export function Account({ onIdentityChanged }: AccountProps = {}): ReactElement {
+export function Account({ onIdentityChanged, signOutOnly=false }: AccountProps = {}): ReactElement {
   const bridge = identityBridge();
   const [status, setStatus] = useState<IdentityStatusView | null>(null);
   const [busy, setBusy] = useState<'sign-in' | 'sign-out' | null>(null);
@@ -109,6 +110,7 @@ export function Account({ onIdentityChanged }: AccountProps = {}): ReactElement 
         ? undefined
         : 'Not signed in.';
 
+  if(signOutOnly)return <section aria-label="Confirm sign out"><p>Signing out clears unsent drafts from this window. Saved private work stays on this device. Pending requests may already have taken effect: signing out does not roll them back. Reconcile uncertain outcomes after signing in again; do not submit a replacement blindly.</p><Button variant="primary" onPress={()=>void act('sign-out')} pending={busy==='sign-out'} disabledReason={busy==='sign-out'?undefined:signOutReason}>Sign out</Button>{notice&&<p role="status">{notice}</p>}</section>;
   return (
     <div
       className="specimen-account"

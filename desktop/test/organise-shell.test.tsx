@@ -435,7 +435,7 @@ it('real initial draft survives the actual Settings route without remount or dis
  globalThis.location.hash='#shell';const user=userEvent.setup();render(<App/>);
  await waitFor(()=>expect(document.querySelector('[data-start-view]:not([hidden])')).not.toBeNull());
  const textarea=screen.getByRole('textbox');await user.type(textarea,'Keep this fictional draft');
- await user.click(screen.getByRole('button',{name:'Account and workspace'}));await user.click(screen.getByRole('menuitem',{name:'Settings'}));
+ await user.click(screen.getByRole('button',{name:'Organization and team'}));await user.click(screen.getByRole('menuitem',{name:'Settings'}));
  await screen.findByRole('navigation',{name:'Settings sections'});
  await user.click(screen.getByRole('button',{name:'Back to chat'}));
  await waitFor(()=>expect(screen.getByRole('textbox')).toBe(textarea));expect((textarea as HTMLTextAreaElement).value).toBe('Keep this fictional draft');

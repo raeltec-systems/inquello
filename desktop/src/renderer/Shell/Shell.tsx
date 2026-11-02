@@ -1,3 +1,4 @@
+import {providerSettingsHash} from '../provider-settings';
 import {smokeStartTrace} from './smoke-start-trace';
 import {Search} from './Search';
 import {Inbox,useInbox,type InputRequest,type QuestionSelection} from './Inbox';
@@ -58,7 +59,8 @@ import { createDraftStore, useDraftBinding, type DraftBinding, type DraftStore }
 import { Header } from './Header';
 import { PermissionRequests } from './PermissionRequests';
 import { EscapeStack, isNewThreadShortcut, isTextEntry } from './keyboard';
-import { artifactFits, layoutMode, THREAD_MIN_WIDTH } from './layout';
+import { artifactFits, layoutMode, THREAD_MIN_WIDTH, workWidth } from './layout';
+import {clampSidebarWidth,readSidebarWidth,saveSidebarWidth,MAX_SIDEBAR_WIDTH} from './sidebar-width';
 import {
   newOperationId,
   organiseBridge,
@@ -168,6 +170,8 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
 
   // ---- layout (Story 1.16) ----
   const [width, setWidth] = useState(viewportWidth);
+  const [preferredSidebarWidth,setPreferredSidebarWidth]=useState(readSidebarWidth);
+  const resizeSidebar=(value:number)=>{const next=clampSidebarWidth(value);setPreferredSidebarWidth(next);saveSidebarWidth(next);};
   const [userCollapsed, setUserCollapsed] = useState(false);
   const [overlayOpen, setOverlayOpen] = useState(false);
   const [view, setView] = useState<WorkView>('conversation');
@@ -180,7 +184,9 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
   const draftStore = drafts ?? ownDrafts;
 
   const openArtifact = artifact && artifact.artifactId !== dismissedArtifact ? artifact : null;
-  const mode = layoutMode(width, openArtifact !== null);
+  const sidebarMaximum=Math.min(MAX_SIDEBAR_WIDTH,Math.max(280,width-workWidth(openArtifact!==null)));
+  const sidebarWidth=clampSidebarWidth(preferredSidebarWidth,sidebarMaximum);
+  const mode = layoutMode(width, openArtifact !== null,sidebarWidth);
   const presentation = mode === 'full' && !userCollapsed ? 'sidebar' : 'rail';
   const showOverlay = presentation === 'rail' && mode !== 'full' && overlayOpen;
   const workView: WorkView = mode === 'single' && openArtifact ? view : 'conversation';
@@ -613,7 +619,7 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
     // Archive in their saving state after the navigation write has completed.
     return mutate(()=>bridge.setNavigation!({operationId,workspaceId:task.workspaceId,taskId:task.taskId,expectedRevision,pinned,archived}),parseTask,false);
   };
-  const reconnect = (destination:string) => {onShowSpecimen();setTimeout(()=>{const target=document.getElementById(destination)??document.querySelector<HTMLElement>(`[data-provider-action="${destination}"]`);target?.focus();target?.scrollIntoView?.({block:'center'});},100);};
+  const reconnect = (destination:string) => {globalThis.location.hash=providerSettingsHash(destination);};
   const signIn = async () => {
     const identity = identityBridge();
     if (!identity) return;
@@ -691,7 +697,7 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
       data-artifact-open={openArtifact ? 'true' : 'false'}
       data-artifact-fits={artifactFits(width) ? 'true' : 'false'}
       data-work-view={workView}
-      style={{ '--iq-thread-min-width': `${THREAD_MIN_WIDTH}px` } as CSSProperties}
+      style={{ '--iq-thread-min-width': `${THREAD_MIN_WIDTH}px`, '--sidebar-width':`${sidebarWidth}px` } as CSSProperties}
     >
       <Sidebar
         state={state}
@@ -706,6 +712,8 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
         onCreateFolder={createFolder}
         onSignIn={() => void signIn()}
         onShowSpecimen={onShowSpecimen}
+        onSignOut={()=>{globalThis.location.hash='#settings-signout';}}
+        sidebarWidth={sidebarWidth} sidebarMaximum={sidebarMaximum} onResizeSidebar={resizeSidebar}
         onSearch={()=>openSavedSurface('search')}
         onInbox={()=>openSavedSurface('inbox')}
         inboxCount={inbox && !inbox.unavailable ? inbox.items.length : null}

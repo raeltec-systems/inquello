@@ -16,3 +16,26 @@ it('mounting Processing routes reads current catalog only, preserving explicit c
  await waitFor(()=>expect(routes.list).toHaveBeenCalled());expect(routes.configure).not.toHaveBeenCalled();expect(routes.select).not.toHaveBeenCalled();expect(routes.forTask).not.toHaveBeenCalled();
  fireEvent.click(screen.getByRole('button',{name:'Back to chat'}));expect(back).toHaveBeenCalledOnce();
 });
+
+it.each([
+ ['provider-claude-key','#settings-providers-claude','provider-claude-key'],
+ ['provider-codex-key','#settings-providers-openai','provider-codex-key'],
+ ['codex-chatgpt','#settings-providers-chatgpt',null],
+])('reconnect %s mounts and focuses its actual provider control without actions',async(destination,hash,id)=>{
+ const {providerSettingsHash}=await import('../src/renderer/provider-settings');
+ const {viewFor}=await import('../src/renderer/App');
+ expect(providerSettingsHash(destination)).toBe(hash);expect(viewFor(hash)).toBe('settings');
+ const provider={getStatus:vi.fn(async()=>null),setClaudeKey:vi.fn(),verifyClaudeKey:vi.fn(),removeClaudeKey:vi.fn(),codexLogin:vi.fn(),codexLogout:vi.fn()};
+ Object.assign(globalThis,{inquello:{provider}});location.hash=hash;render(<Settings onBack={vi.fn()} onIdentityChanged={vi.fn()}/>);
+ const target=id?document.getElementById(id):document.querySelector('[data-provider-action="codex-chatgpt"]');
+ expect(target).not.toBeNull();expect(document.activeElement).toBe(target);
+ await waitFor(()=>expect(provider.getStatus).toHaveBeenCalled());
+ for(const action of [provider.setClaudeKey,provider.verifyClaudeKey,provider.removeClaudeKey,provider.codexLogin,provider.codexLogout])expect(action).not.toHaveBeenCalled();
+});
+it('switching provider destinations focuses the newly requested control after commit, unknown targets cannot select arbitrary DOM',async()=>{
+ const {providerSettingsHash}=await import('../src/renderer/provider-settings');expect(providerSettingsHash('constructor')).toBe('#settings-providers');expect(providerSettingsHash('some-secret-field')).toBe('#settings-providers');
+ location.hash='#settings-providers-claude';render(<Settings onBack={vi.fn()} onIdentityChanged={vi.fn()}/>);
+ expect(document.activeElement).toBe(document.getElementById('provider-claude-key'));
+ act(()=>{location.hash='#settings-providers-openai';window.dispatchEvent(new HashChangeEvent('hashchange'));});
+ expect(document.activeElement).toBe(document.getElementById('provider-codex-key'));
+});

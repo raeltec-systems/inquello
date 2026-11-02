@@ -18,13 +18,13 @@ it('retains ungrouped private conversations under Chats and keeps Engagement cre
 });
 it('opens actual account and organization menu at the rail footer without a workspace switcher',()=>{
  const p=props();render(<Sidebar {...p} presentation="rail"/>);
- fireEvent.click(screen.getByRole('button',{name:'Account and workspace'}));const menu=screen.getByRole('menu');
+ fireEvent.click(screen.getByRole('button',{name:'Organization and team'}));const menu=screen.getByRole('menu');
  expect(within(menu).getByRole('menuitem',{name:'Fictional Audit'})).toBeTruthy();expect(within(menu).queryByRole('menuitemradio')).toBeNull();
  fireEvent.click(within(menu).getByRole('menuitem',{name:'Settings'}));expect(p.onShowSpecimen).toHaveBeenCalledOnce();expect(p.onSelectWorkspace).not.toHaveBeenCalled();
 });
 it('keeps one account trigger with expanded history and removes duplicate header organization',()=>{
  const p=props();render(<><Sidebar {...p}/><Header task={null} engagement={null} workspace={p.state!.workspaces[0]!}/></>);
- expect(screen.getAllByRole('button',{name:'Account and workspace'})).toHaveLength(1);expect(document.querySelector('[data-header-workspace]')).toBeNull();
+ expect(screen.getAllByRole('button',{name:'Organization and team'})).toHaveLength(1);expect(document.querySelector('[data-header-workspace]')).toBeNull();
 });
 it('routes implemented settings independently of the internal specimen',()=>{
  for(const hash of ['#settings','#settings-account','#settings-providers','#settings-routes'])expect(viewFor(hash)).toBe('settings');expect(viewFor('#specimen')).toBe('specimen');

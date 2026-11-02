@@ -1,4 +1,5 @@
 import { isPrivatePath } from './runtime/private-paths';
+import { observeSyntheticStartup } from './smoke-startup';
 /**
  * `--smoke` renderer privilege probe (AD-5).
  *
@@ -1652,7 +1653,7 @@ const SHELL_HELPERS = `
   };
   const text = (selector) => { const element = q(selector); return element ? element.textContent : null; };
   const readHeader = async () => {
-    const trigger = qVisible('button[aria-label="Account and workspace"]');
+    const trigger = qVisible('button[aria-label="Organization and team"]');
     if (!trigger) throw new Error('Current workspace footer unavailable');
     trigger.click();
     const menu = await wait(() => qVisible('[role="menu"]'), 5000);
@@ -2200,12 +2201,12 @@ export async function probeStates(contents: WebContents, options: OrganiseProbeO
  */
 export const SHELL_LAYOUT = {
   windowMinWidth: 544,
-  sidebarWidth: 424,
+  sidebarWidth: 320,
   railWidth: 64,
   headerHeight: 48,
   threadMaxWidth: 720,
-  /** The narrowest width that is still full mode without an artifact. */
-  fullWidth: 904,
+  /** Default-sidebar full-mode threshold; the renderer may clamp the sidebar toward 280px. */
+  fullWidth: 800,
   /** The narrowest width where the thread and a 380px artifact fit beside the rail. */
   artifactFitWidth: 924,
 } as const;
@@ -3923,6 +3924,15 @@ export async function probeVisualConversation(contents: WebContents, options: Or
       const file=path.join(captureDir,`${name}.png`);fs.writeFileSync(file,image.toPNG());
       captures.push({name,path:file,width:size.width,height:size.height});
     };
+    const usableComposer=async(stage:string,inline=false)=>{
+      const geometry=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}
+        const read=()=>{const fields=[...document.querySelectorAll('[data-composer-input]')].filter(element=>visible(element)&&element.getClientRects().length);const field=fields[0],composer=field?.closest('[data-composer]'),actions=composer?.querySelector('.iq-composer-actions');if(!field||!composer||!actions)return null;const input=field.getBoundingClientRect(),surface=composer.getBoundingClientRect(),buttons=actions.getBoundingClientRect();return {viewportWidth:innerWidth,viewportHeight:innerHeight,inputWidth:input.width,inputHeight:input.height,composerWidth:surface.width,composerHeight:surface.height,oneComposer:fields.length===1,noPageOverflow:document.documentElement.scrollWidth<=document.documentElement.clientWidth,inside:input.left>=surface.left&&input.right<=surface.right&&input.top>=surface.top&&input.bottom<=surface.bottom,inline:Math.abs((input.top+input.bottom)/2-(buttons.top+buttons.bottom)/2)<4};};
+        const usable=value=>value&&value.oneComposer&&value.noPageOverflow&&value.inside&&value.inputWidth>=240&&value.inputHeight>=20&&value.inputHeight<=112&&(!${inline}||value.inline);
+        const value=await wait(()=>{const value=read();return usable(value)?value:null;},5000)??read();return {stage:${JSON.stringify(stage)},...value,usable:!!usable(value)};
+      })()`);
+      console.info(JSON.stringify({event:'visual-composer-geometry',...geometry}));
+      if(!geometry.usable)throw new SmokeProbeFailure('Composer input geometry unusable at '+stage);
+    };
     await contents.executeJavaScript(`void Object.defineProperty(globalThis,'__iqSyntheticStartTrace',{value:[],configurable:true});`);
     stage='visual-identity';
     if(!(await smokeIdentity(contents,'signIn')).ok)throw new SmokeProbeFailure('Visual identity unavailable');
@@ -3932,20 +3942,27 @@ export async function probeVisualConversation(contents: WebContents, options: Or
     options.resize(1920,1200);
     const home=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}return await openShell()&&!q('[data-task-view]');})()`);
     if(!home)throw new SmokeProbeFailure('Fresh home did not mount');
-    const homeShape=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}return !!(await wait(()=>{const fields=[...document.querySelectorAll('[data-composer-input]')].filter(element=>visible(element)&&element.getClientRects().length);return Math.abs(q('nav[data-sidebar]').getBoundingClientRect().width-424)<0.5&&fields.length===1&&q('[data-rail-workspace="'+${JSON.stringify(seed.workspace_id)}+'"]')&&q('[data-shell]')?.getAttribute('data-nav-presentation')==='sidebar';},${SHELL_SETTLE_MS}));})()`);
+    const homeShape=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}return !!(await wait(()=>{const fields=[...document.querySelectorAll('[data-composer-input]')].filter(element=>visible(element)&&element.getClientRects().length);return Math.abs(q('nav[data-sidebar]').getBoundingClientRect().width-320)<0.5&&fields.length===1&&q('[data-rail-workspace="'+${JSON.stringify(seed.workspace_id)}+'"]')&&q('[data-shell]')?.getAttribute('data-nav-presentation')==='sidebar';},${SHELL_SETTLE_MS}));})()`);
     if(!homeShape)throw new SmokeProbeFailure('Expanded home did not show exactly one real composer');
+    await usableComposer('expanded-home',true);
     await capture('01-home-synthetic');
     const collapsedHome=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}if(!press('[data-action="collapse-nav"]'))return false;return !!(await wait(()=>q('[data-shell]')?.getAttribute('data-nav-presentation')==='rail'&&Math.abs(q('nav[data-sidebar]').getBoundingClientRect().width-64)<0.5,5000));})()`);
     if(!collapsedHome)throw new SmokeProbeFailure('Home navigation did not collapse');
     await capture('01b-home-collapsed-synthetic');
-    const footerOpen=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}if(!press('button[aria-label="Account and workspace"]'))return false;return !!(await wait(()=>{const menu=qVisible('[role="menu"]');if(!menu)return false;const rect=menu.getBoundingClientRect();return rect.width>0&&rect.left>=0&&rect.right<=innerWidth&&rect.top>=0&&rect.bottom<=innerHeight;},5000));})()`);
+    const footerOpen=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}if(!press('button[aria-label="Organization and team"]'))return false;return !!(await wait(()=>{const menu=qVisible('[role="menu"]');if(!menu)return false;const rect=menu.getBoundingClientRect();return rect.width>0&&rect.left>=0&&rect.right<=innerWidth&&rect.top>=0&&rect.bottom<=innerHeight;},5000));})()`);
     if(!footerOpen)throw new SmokeProbeFailure('Account workspace menu unavailable');
     await capture('01c-account-workspace-synthetic');
-    const expandedHome=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}press('button[aria-label="Account and workspace"]');if(!press('[data-action="expand-nav"]'))return false;return !!(await wait(()=>q('[data-shell]')?.getAttribute('data-nav-presentation')==='sidebar',5000));})()`);
+    const expandedHome=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}press('button[aria-label="Organization and team"]');if(!press('[data-action="expand-nav"]'))return false;return !!(await wait(()=>q('[data-shell]')?.getAttribute('data-nav-presentation')==='sidebar',5000));})()`);
     if(!expandedHome)throw new SmokeProbeFailure('Home navigation did not expand');
     const draftExpanded=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}const field=qVisible('[data-composer-input]');if(!field)return false;type(field,'Fictional unsent planning draft\\nSecond planning line\\nThird planning line');return !!(await wait(()=>field.getBoundingClientRect().height>48,5000));})()`);
     if(!draftExpanded)throw new SmokeProbeFailure('Multiline unsent draft did not expand');
     await capture('01d-multiline-unsent-synthetic');
+    options.resize(SHELL_LAYOUT.windowMinWidth,900);
+    const minimumHome=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}return !!(await wait(()=>{const fields=[...document.querySelectorAll('[data-composer-input]')].filter(element=>visible(element)&&element.getClientRects().length);return innerWidth===${SHELL_LAYOUT.windowMinWidth}&&q('[data-shell]')?.getAttribute('data-nav-presentation')==='rail'&&document.documentElement.scrollWidth<=document.documentElement.clientWidth&&fields.length===1&&fields[0].value==='Fictional unsent planning draft\\nSecond planning line\\nThird planning line';},5000));})()`);
+    if(!minimumHome)throw new SmokeProbeFailure('Minimum-width home overflowed or lost its draft');
+    await usableComposer('minimum-home');
+    options.resize(1920,1200);
+    if(!await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}return !!(await wait(()=>innerWidth===1920&&q('[data-shell]')?.getAttribute('data-nav-presentation')==='sidebar',5000));})()`))throw new SmokeProbeFailure('Expanded home was not restored');
     await contents.executeJavaScript(`(()=>{${SHELL_HELPERS}const field=qVisible('[data-composer-input]');if(!field)throw new Error('Draft unavailable');type(field,'');})()`);
     if(!(await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}location.hash='#settings-routes';return !!(await wait(()=>location.hash==='#settings-routes'&&!visible(q('[data-shell]'))&&qVisible('[data-processing-routes]'),${SHELL_SETTLE_MS}));})()`)))throw new SmokeProbeFailure('Visual setup surface unavailable');
     stage='visual-native-start';
@@ -4011,8 +4028,10 @@ export async function probeVisualConversation(contents: WebContents, options: Or
       const reasoning=await wait(()=>q('select[aria-label="Reasoning"]',start),${POLICY_SETTLE_MS}),speed=q('select[aria-label="Speed"]',start);
       if(!reasoning||!speed||reasoning.disabled||speed.disabled)return null;choose(reasoning,'default');choose(speed,'default');
       type(q('[data-composer-input]',start),${JSON.stringify(fixture.requests[0])});
-      const send=await wait(()=>{const button=q('[data-composer-send]',start);return button&&!button.disabled&&button.getAttribute('aria-disabled')!=='true'?button:null;},${SHELL_SETTLE_MS});if(!send)return null;send.click();
-      const began=Date.now();let task=await wait(()=>qVisible('[data-task-view]'),20000);const acceptedWithin20s=!!task;if(!task)task=await wait(()=>qVisible('[data-task-view]'),40000);globalThis.__iqSyntheticStartupObservation={acceptedWithin20s,acceptedWithin60s:!!task,elapsedMs:Date.now()-began};return task?.getAttribute('data-task-view')??null;
+      const send=await wait(()=>{const button=q('[data-composer-send]',start);return button&&!button.disabled&&button.getAttribute('aria-disabled')!=='true'?button:null;},${SHELL_SETTLE_MS});if(!send)return null;
+      const began=performance.now();send.click();
+      const {taskId,...observation}=await (${observeSyntheticStartup.toString()})(()=>qVisible('[data-task-view]')?.getAttribute('data-task-view')??null,began);
+      globalThis.__iqSyntheticStartupObservation=observation;return taskId;
     })()`) as string|null;
     // Cold Windows isolation setup is observed separately from the 20-second UX
     // expectation. Keep that metric; allow a bounded 60-second functional start.
@@ -4025,8 +4044,8 @@ export async function probeVisualConversation(contents: WebContents, options: Or
     const collapsed=await contents.executeJavaScript(`(()=>{const details=document.querySelector('[data-task-view="'+${JSON.stringify(taskId)}+'"] [data-task-inspector]');return !!details&&!details.open;})()`);
     if(!collapsed)throw new SmokeProbeFailure('Conversation inspector was not collapsed by default');
     await capture('02-completed-conversation-synthetic');
-    options.resize(900,900);
-    const narrow=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}return !!(await wait(()=>innerWidth===900&&q('[data-shell]')?.getAttribute('data-nav-presentation')==='rail'&&document.documentElement.scrollWidth<=document.documentElement.clientWidth,5000));})()`);
+    options.resize(700,900);
+    const narrow=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}return !!(await wait(()=>innerWidth===700&&q('[data-shell]')?.getAttribute('data-nav-presentation')==='rail'&&document.documentElement.scrollWidth<=document.documentElement.clientWidth,5000));})()`);
     if(!narrow)throw new SmokeProbeFailure('Narrow conversation did not fit');
     await capture('02b-narrow-conversation-synthetic');
     options.resize(1920,1200);
@@ -4059,14 +4078,34 @@ export async function probeVisualConversation(contents: WebContents, options: Or
     await checkFixture(3,true);await capture('04-interrupted-conversation-synthetic');
     // The short retained transcript fits the large desktop; establish real overflow before testing reader intent.
     options.resize(900,700);
+    const readerViewport=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}if(!await wait(()=>innerWidth===900&&innerHeight===700,5000))return false;await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));return true;})()`);
+    if(!readerViewport)throw new SmokeProbeFailure('Reader viewport did not settle');
+    await usableComposer('saved-task-900x700');
+    await capture('04a-readable-composer-narrow-synthetic');
+    const readerDistance=await contents.executeJavaScript(`(()=>{${SHELL_HELPERS}const task=qVisible('[data-task-view="'+${JSON.stringify(taskId)}+'"]'),thread=task?.closest('.iq-thread'),conversation=task?.querySelector('.iq-task-progress');if(!thread||!conversation)return null;const target=Math.max(0,Math.min(thread.scrollHeight-thread.clientHeight,conversation.getBoundingClientRect().bottom-thread.getBoundingClientRect().top+thread.scrollTop-thread.clientHeight));return {viewportWidth:innerWidth,viewportHeight:innerHeight,threadHeight:thread.clientHeight,overflow:thread.scrollHeight-thread.clientHeight,conversationTarget:target,scrollTop:thread.scrollTop};})()`);
+    console.info(JSON.stringify({event:'visual-reader-precondition',...readerDistance}));
+    if(!readerDistance)throw new SmokeProbeFailure('Conversation scroll target unavailable');
+    // A compact composer can make the conversation itself fit even while other
+    // thread content overflows. Keep the 900x700 geometry witness above, then
+    // establish genuine conversation distance in a smaller readable viewport.
+    if(readerDistance.conversationTarget<=64){
+      options.resize(900,600);
+      const smaller=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}if(!await wait(()=>innerWidth===900&&innerHeight===600,5000))return false;await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));return true;})()`);
+      if(!smaller)throw new SmokeProbeFailure('Reader distance viewport did not settle');
+      await usableComposer('reader-900x600');
+    }
     const readerJump=await contents.executeJavaScript(`(async()=>{
       ${SHELL_HELPERS}
-      const task=qVisible('[data-task-view="'+${JSON.stringify(taskId)}+'"]'),thread=task?.closest('.iq-thread');if(!thread)return false;
-      if(!await wait(()=>innerWidth===900&&innerHeight===700&&thread.scrollHeight-thread.clientHeight>64,5000))return false;thread.scrollTop=0;thread.dispatchEvent(new Event('scroll'));
+      const task=qVisible('[data-task-view="'+${JSON.stringify(taskId)}+'"]'),thread=task?.closest('.iq-thread');if(!thread)return {ok:false,phase:'thread'};
+      const read=()=>{const conversation=task.querySelector('.iq-task-progress');if(!conversation)return null;const overflow=thread.scrollHeight-thread.clientHeight,target=Math.max(0,Math.min(overflow,conversation.getBoundingClientRect().bottom-thread.getBoundingClientRect().top+thread.scrollTop-thread.clientHeight));return {viewportWidth:innerWidth,viewportHeight:innerHeight,threadHeight:thread.clientHeight,overflow,conversationTarget:target,initialTop:thread.scrollTop};};
+      const before=await wait(()=>{const value=read();return value&&value.threadHeight>=160&&value.overflow>64&&value.conversationTarget>64&&Math.abs(value.initialTop-value.conversationTarget)<=2?value:null;},5000);
+      if(!before)return {ok:false,phase:'conversation-distance',...read()};
+      thread.scrollTop=0;thread.dispatchEvent(new Event('scroll'));
       const jump=await wait(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.trim()==='Jump to latest'&&button.getClientRects().length&&!button.disabled),${SHELL_SETTLE_MS});
-      if(!jump)return false;await new Promise(resolve=>setTimeout(resolve,200));if(thread.scrollTop>2)return false;jump.click();return true;
+      if(!jump)return {ok:false,phase:'jump',...before,readerTop:thread.scrollTop};await new Promise(resolve=>setTimeout(resolve,200));if(thread.scrollTop>2)return {ok:false,phase:'reader-preservation',...before,readerTop:thread.scrollTop};jump.click();return {ok:true,phase:'jumped',...before,readerTop:0};
     })()`);
-    if(!readerJump)throw new SmokeProbeFailure('Reader scroll-up preservation or explicit Jump control failed');
+    console.info(JSON.stringify({event:'visual-reader-jump',...readerJump}));
+    if(!readerJump.ok)throw new SmokeProbeFailure('Reader scroll-up preservation or explicit Jump control failed: '+readerJump.phase);
     // Stop may discard the uncommitted live assistant fragment. This is an explicit
     // UX limitation, not proof of durable partial-answer retention. Check the latest
     // retained user prompt; live partial visibility was separately required before Stop.

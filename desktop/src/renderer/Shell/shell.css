@@ -965,9 +965,10 @@ a.iq-nav-row:hover {
 .iq-rail-footer { margin-top:auto; }
 .iq-sidebar-section { margin-top:var(--space-4); }
 .iq-sidebar-heading { padding-inline:var(--space-2); color:var(--text-secondary); }
-.iq-composer { border-radius:32px; min-height:64px; padding:var(--space-3) var(--space-4); display:flex; flex-direction:row; align-items:center; gap:var(--space-3); }
-.iq-composer-input { min-height:1.55em; flex:1; width:0; max-height:12rem; resize:none; }
-.iq-composer-actions { flex:0 1 auto; }
+.iq-composer { border-radius:32px; min-height:64px; padding:var(--space-3) var(--space-4); display:flex; flex-direction:row; flex-wrap:wrap; align-items:center; gap:var(--space-3); }
+/* Wrap by the available column, including expanded navigation and artifacts. */
+.iq-composer-input { min-height:1.55em; flex:1 1 16rem; min-width:min(100%,16rem); width:auto; max-height:12rem; resize:none; }
+.iq-composer-actions { flex:0 1 auto; margin-left:auto; }
 .iq-composer-hint { display:none; }
 .iq-composer-actions .iq-note { max-width:18rem; }
 .iq-composer-slot { max-width:992px; }
@@ -993,3 +994,10 @@ a.iq-nav-row:hover {
 @media(max-width:700px) { .iq-settings { grid-template-columns:1fr; } .iq-settings > nav { flex-direction:row; flex-wrap:wrap; padding:var(--space-3); } .iq-settings > nav h1 { width:100%; } .iq-settings-panel { padding:var(--space-4); } .iq-composer { flex-wrap:wrap; } .iq-composer-input { min-width:70%; } .iq-composer-actions { margin-left:auto; } }
 
 .iq-inbox-unavailable { position:absolute; right:0; top:0; font:var(--type-caption); color:var(--text-secondary); }
+
+/* Adjustable history is a local presentation preference, never workspace state. */
+.iq-sidebar { position:relative; }
+.iq-sidebar-top { justify-content:flex-end; min-height:32px; }
+.iq-sidebar-resize { position:absolute; inset-block:0; right:-3px; width:6px; z-index:30; cursor:col-resize; touch-action:none; }
+.iq-sidebar-resize:hover, .iq-sidebar-resize:focus-visible { background:var(--border-strong); outline:2px solid var(--blue-600); outline-offset:-2px; }
+.iq-nav-overlay { width:min(calc(var(--sidebar-width) - var(--rail-width)),calc(100vw - var(--rail-width))); }

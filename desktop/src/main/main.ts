@@ -440,8 +440,15 @@ async function runSmokeProbe(contents: WebContents): Promise<void> {
     const visualWindow=BrowserWindow.fromWebContents(contents);
     if(!visualWindow)throw new Error('Owned visual window unavailable');
     const visualSize=visualWindow.getContentSize();
+    const visualMinimum=visualWindow.getMinimumSize();
     const report=await probeVisualConversation(contents,{identity,organise,policy,seedFile:process.env.INQUELLO_SMOKE_SEED??null,
-      resize:(width,height)=>visualWindow.setContentSize(width,height),restore:{width:visualSize[0]!,height:visualSize[1]!},
+      resize:(width,height)=>{
+        // Match the layout probe: Windows' 125% frame rounding otherwise adds
+        // two CSS pixels at the minimum. Test the exact viewport, then restore.
+        if(width===SHELL_LAYOUT.windowMinWidth)visualWindow.setMinimumSize(0,0);
+        visualWindow.setContentSize(width,height);
+        if(width!==SHELL_LAYOUT.windowMinWidth)visualWindow.setMinimumSize(visualMinimum[0]!,visualMinimum[1]!);
+      },restore:{width:visualSize[0]!,height:visualSize[1]!},
       isolatedRoot:app.getPath('userData'),fixtureFile:process.env.INQUELLO_VISUAL_FIXTURE??'',armSyntheticSession:async workspaceId=>{if(!armSmokeTaskSession)throw new Error('Synthetic session unavailable');await armSmokeTaskSession(workspaceId);},
       runtimeRequest:<T,>(method:string,params?:unknown)=>runtime!.request<T>(method,params)});
     visualOk=report.ok;process.stdout.write(`${JSON.stringify({event:'visual-conversation',...report})}\n`);return;

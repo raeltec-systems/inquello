@@ -1,3 +1,4 @@
+import {DEFAULT_SIDEBAR_WIDTH,MIN_SIDEBAR_WIDTH} from '../src/renderer/Shell/sidebar-width';
 // @vitest-environment jsdom
 /// <reference lib="dom" />
 /// <reference lib="dom.iterable" />
@@ -185,7 +186,7 @@ describe('layout modes (pure)', () => {
     expect(HEADER_HEIGHT).toBe(Number.parseFloat(spacing['header-height']));
     expect(THREAD_MAX_WIDTH).toBe(Number.parseFloat(spacing['thread-max-width']));
     expect(ARTIFACT_MIN_WIDTH).toBe(Number.parseFloat(spacing['panel-min-width']));
-    expect([SIDEBAR_WIDTH, RAIL_WIDTH, HEADER_HEIGHT, THREAD_MAX_WIDTH, ARTIFACT_MIN_WIDTH]).toEqual([424, 64, 48, 720, 380]);
+    expect([SIDEBAR_WIDTH, RAIL_WIDTH, HEADER_HEIGHT, THREAD_MAX_WIDTH, ARTIFACT_MIN_WIDTH]).toEqual([320, 64, 48, 720, 380]);
     expect(WINDOW_MIN_WIDTH).toBe(RAIL_WIDTH + THREAD_MIN_WIDTH);
   });
 
@@ -275,12 +276,15 @@ describe('keyboard rules (pure)', () => {
 });
 
 describe('Shell layout', () => {
-  it('wide window: full mode with the 424px rail and history, Header, thread column and no artifact area', async () => {
+  it('wide window: full mode with the default resizable navigation, Header, thread column and no artifact area', async () => {
     await renderReady();
     expect(shell().dataset.layoutMode).toBe('full');
     expect(nav().dataset.navPresentation).toBe('sidebar');
     expect(nav().classList.contains('iq-sidebar--sidebar')).toBe(true);
-    expect(within(nav()).getByRole('img', { name: 'Inquello' }).getAttribute('src')).toMatch(/lockup/);
+    expect(nav().querySelectorAll('.iq-rail-logo img')).toHaveLength(1);
+    expect(within(nav()).getByRole('button',{name:'Close navigation'})).toBeTruthy();
+    expect(nav().querySelector('.iq-sidebar-lockup')).toBeNull();
+    expect(shell().style.getPropertyValue('--sidebar-width')).toBe(`${DEFAULT_SIDEBAR_WIDTH}px`);
     expect(document.querySelector('[data-header]')).not.toBeNull();
     expect(document.querySelector('main .iq-shell-content')).not.toBeNull();
     // Story 1.30 adds a named saved-work navigation alongside the Sidebar.
@@ -292,7 +296,7 @@ describe('Shell layout', () => {
     expect(shell().dataset.artifactOpen).toBe('false');
     // The person and Settings sit at the bottom.
     await waitFor(() => expect(within(nav()).getByRole('img', { name: 'Priya Raman' })).toBeTruthy());
-    await userEvent.click(within(nav()).getByRole('button', { name: 'Account and workspace' }));
+    await userEvent.click(within(nav()).getByRole('button', { name: 'Organization and team' }));
     expect(screen.getByRole('menuitem', { name: 'Settings' })).toBeTruthy();
   });
 
@@ -327,7 +331,7 @@ describe('Shell layout', () => {
   it('narrow: rail mode at 64px keeps the open Task marked, the count and labelled icon actions with tooltips', async () => {
     await renderReady();
     await openTask('Bank confirmations');
-    setWidth(SIDEBAR_WIDTH + THREAD_MIN_WIDTH - 1);
+    setWidth(MIN_SIDEBAR_WIDTH + THREAD_MIN_WIDTH - 1);
     expect(shell().dataset.layoutMode).toBe('rail');
     expect(nav().dataset.navPresentation).toBe('rail');
     expect(nav().classList.contains('iq-sidebar--rail')).toBe(true);
@@ -426,7 +430,7 @@ describe('Shell layout', () => {
     expect(overlay).not.toBeNull();
     expect(overlay.contains(document.activeElement)).toBe(true);
     // A Menu inside the overlay is topmost.
-    const trigger = within(nav()).getByRole('button', { name: 'Account and workspace' });
+    const trigger = within(nav()).getByRole('button', { name: 'Organization and team' });
     await user.click(trigger);
     expect(screen.getByRole('menu')).toBeTruthy();
     await user.keyboard('{Escape}');

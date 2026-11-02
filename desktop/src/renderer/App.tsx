@@ -19,7 +19,7 @@ import { Specimen } from './Specimen';
 export type View = 'shell' | 'specimen' | 'onboarding' | 'settings';
 
 export function viewFor(hash: string): View {
-  return /^#settings(?:-(?:account|providers|routes))?$/.test(hash) ? 'settings' : hash === '#onboarding' ? 'onboarding' : hash === '#specimen' ? 'specimen' : 'shell';
+  return /^#settings(?:-(?:account|providers(?:-(?:claude|openai|chatgpt))?|routes|signout))?$/.test(hash) ? 'settings' : hash === '#onboarding' ? 'onboarding' : hash === '#specimen' ? 'specimen' : 'shell';
 }
 
 export function App(): ReactElement {

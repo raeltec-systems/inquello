@@ -182,7 +182,7 @@ spacing:
   '16': 64px
   header-height: 48px
   panel-tabs-height: 40px
-  sidebar-width: 424px
+  sidebar-width: 320px
   rail-width: 64px
   thread-max-width: 720px
   panel-min-width: 380px
@@ -471,7 +471,7 @@ Inherit the supplied 4px base and half steps: 2, 4, 6, 8, 10, 12, 16, 20, 24, 28
 
 | Region | Visual contract | Relationship |
 | --- | --- | --- |
-| Sidebar / collapsed rail | {spacing.sidebar-width} / {spacing.rail-width} | Pale navigation with full lockup or symbol; the rail retains accessible actions. |
+| Sidebar / collapsed rail | {spacing.sidebar-width} / {spacing.rail-width} | Pale resizable history beside the persistent symbol rail; the rail retains accessible actions. |
 | Header | {spacing.header-height} | Title/context/actions remain identifiable while working content scrolls. |
 | Thread | Centred, max {spacing.thread-max-width} | Conversation and plan are readable alongside inspected work; Composer stays available. |
 | Artifact side panel | Default {spacing.panel-default-width}; minimum {spacing.panel-min-width} | Tabs area {spacing.panel-tabs-height}; artifact can become the dominant surface. |
@@ -527,7 +527,7 @@ The following **18 primitives and 10 source compositions** are the exact shared 
 | ApprovalCard | Amber-50 panel, amber-200 border, radius 10px, padding 12×14px; mono label, 13.5px question, optional 12.5px exact-message quote and clear action hierarchy. Context/note uses muted under proposed AX. | [ApprovalCard.jsx](imports/inquello-design-system/components/workflow/ApprovalCard.jsx) |
 | DiffLine | Add green+/remove red−/change blue~/context neutral; optional 40px gutter, 14px sign, 12.5px body text with a 1.5 line height. Gutter information uses muted under proposed AX. | [DiffLine.jsx](imports/inquello-design-system/components/workflow/DiffLine.jsx) |
 | Toast | Ink/white; 6px radius, 8×14px padding, 12.5px type with a 1.4 line height, and toast shadow. Visibility is primitive state; source container supplies top-centre positioning/2.6s timer. Critical outcomes remain readable elsewhere. | [Toast.jsx](imports/inquello-design-system/components/workflow/Toast.jsx) |
-| Sidebar | Pale 264px navigation with a 20px lockup, hierarchy of workspaces/tasks and bottom person/settings. Collapsed 52px rail retains symbol/actions. NavRow/Badge/Avatar supply content; derived surfaces retain this vocabulary. | [Shell.jsx](imports/inquello-design-system/ui_kits/workspace/Shell.jsx) |
+| Sidebar | Pale navigation defaults to {spacing.sidebar-width}, resizable from 280px to 424px with pointer and keyboard controls and a persisted local preference. The persistent {spacing.rail-width} rail holds the sole symbol and bottom organization/team menu. Expanded history shows Engagements and Chats without a duplicate wordmark; narrow windows clamp or overlay it. NavRow/Badge/Avatar supply content. | [Shell.jsx](imports/inquello-design-system/ui_kits/workspace/Shell.jsx) |
 | Header | White 48px region with a 14px semantic title, readable muted context and trailing actions; default bottom structural line. Avoid truncating the only source of task/destination identity. | [Shell.jsx](imports/inquello-design-system/ui_kits/workspace/Shell.jsx) |
 | Composer | White 14px-radius input surface, supplied composer shadow, body typography, FileChip context, compact controls and 30px send/stop. Proposed meaningful placeholder muted and essential boundary ink-600. | [Shell.jsx](imports/inquello-design-system/ui_kits/workspace/Shell.jsx) |
 | NavRow | UI 13px, 6×8px padding, 6px radius, selected ink-150 and hover source-hover. Indentation conveys hierarchy in addition to labels; essential metadata is muted. | [Shell.jsx](imports/inquello-design-system/ui_kits/workspace/Shell.jsx) |

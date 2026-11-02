@@ -14,8 +14,9 @@
  * named `inquello.provider` operations. Data attributes expose the rendered
  * state to the smoke probe.
  */
-import { useCallback, useEffect, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactElement } from 'react';
 
+import type {ProviderFocusTarget} from './provider-settings';
 import { parseProviderAction, parseProviderStatus, providerBridge, type ProviderStatusView } from './bridge';
 import { Button, StatusChip, TextField } from './primitives';
 
@@ -53,7 +54,15 @@ function accountText(status: ProviderStatusView): string {
   return 'Signed in by another method.';
 }
 
-export function Providers(): ReactElement {
+export function Providers({focusTarget}:{focusTarget?:ProviderFocusTarget}={}): ReactElement {
+  const panel=useRef<HTMLDivElement>(null);
+  useLayoutEffect(()=>{
+    if(!focusTarget)return;
+    // Runs after the actual provider panel commits, never a guessed delay or action.
+    const selector=focusTarget==='codex-chatgpt'?'[data-provider-action="codex-chatgpt"]':`#${focusTarget}`;
+    const target=panel.current?.querySelector<HTMLElement>(selector);
+    target?.focus();target?.scrollIntoView?.({block:'center'});
+  },[focusTarget]);
   const bridge = providerBridge();
   const [status, setStatus] = useState<ProviderStatusView | null>(null);
   const [claudeKey, setClaudeKey] = useState('');
@@ -137,6 +146,7 @@ export function Providers(): ReactElement {
 
   return (
     <div
+      ref={panel}
       className="specimen-account specimen-providers"
       data-providers=""
       data-claude-state={claude ?? 'unknown'}

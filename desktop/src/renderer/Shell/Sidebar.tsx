@@ -1,6 +1,6 @@
 import {TaskActivityLabel} from './TaskLifecycle';
 /**
- * The 424px expanded navigation: the persistent rail and Engagements
+ * The resizable expanded navigation: the persistent 64px rail and Engagements
  * section (each Engagement, then its folders, then their Tasks), Chats,
  * and New chat. Current workspace information lives in the account menu.
  *
@@ -23,7 +23,7 @@ import {TaskActivityLabel} from './TaskLifecycle';
  */
 import { useEffect, useId, useRef, useState, type FormEvent, type MouseEvent, type ReactElement, type ReactNode } from 'react';
 
-import lockupUrl from '../design/assets/logo/inquello-lockup.svg';
+import {SidebarResize} from './SidebarResize';
 import symbolUrl from '../design/assets/logo/inquello-symbol.svg';
 import { Icon, type IconName } from '../icons/Icon';
 import { Avatar, Badge, Button, IconButton, Menu, TextField } from '../primitives';
@@ -53,13 +53,17 @@ export interface SidebarProps {
   onCreateFolder: (engagementId: string, name: string, operationId: string) => Promise<Outcome<FolderItem>>;
   onSignIn: () => void;
   onShowSpecimen: () => void;
+  onSignOut?: () => void;
+  sidebarWidth?: number;
+  sidebarMaximum?: number;
+  onResizeSidebar?: (width:number) => void;
   onSearch?: () => void;
   onInbox?: () => void;
   /** null means current attention state is unavailable, never zero. */
   inboxCount?: number | null;
   newOperationId: () => string;
   busy: boolean;
-  /** `sidebar`: the full 424px Sidebar; `rail`: the 64px rail. */
+  /** `sidebar`: the resizable full navigation; `rail`: the 64px rail. */
   presentation?: NavPresentation;
   /** In the rail, the full Sidebar is open over the work area. */
   overlayOpen?: boolean;
@@ -260,14 +264,14 @@ function FolderForm({
 
 
 /** The sole account/organization entry, anchored to the bottom of the rail. */
-function SidebarFooter({ person, workspaceName, onShowSpecimen }: { person: PersonView | null; workspaceName: string | null; onShowSpecimen: () => void }): ReactElement {
+function SidebarFooter({ person, workspaceName, onShowSpecimen, onSignOut }: { person: PersonView | null; workspaceName: string | null; onShowSpecimen: () => void; onSignOut?:()=>void }): ReactElement {
  return <div className="iq-sidebar-footer iq-account-footer" data-sidebar-footer data-sidebar-person>
-  <Menu label="Account and workspace" heading={person?.name ?? 'Not signed in'} className="iq-account-menu" triggerVariant="ghost"
+  <Menu label="Organization and team" heading={person?.name ?? 'Not signed in'} className="iq-account-menu" triggerVariant="ghost"
    triggerContent={<Avatar name={person?.name ?? 'Account'} initials={person ? initialsOf(person.name) : '?'} />}
    items={[
-    {label:workspaceName ?? 'Workspace setup',description:workspaceName ? 'Current workspace · manage your team' : 'Create or join a workspace',onSelect:()=>{globalThis.location.hash='#onboarding';}},
-    {label:'Account',description:person?.detail,onSelect:()=>{globalThis.location.hash='#settings-account';}},
+    {label:workspaceName ?? 'Organization setup',description:workspaceName ? 'Organization and team' : 'Create or join a workspace',onSelect:()=>{globalThis.location.hash='#onboarding';}},
     {label:'Settings',onSelect:onShowSpecimen},
+    ...(person?[{label:'Sign out…',onSelect:onSignOut??(()=>{globalThis.location.hash='#settings-signout';})}]:[]),
    ]}/>
  </div>;
 }
@@ -289,7 +293,6 @@ function SidebarContent(props: SidebarProps & { collapseLabel: string }): ReactE
 
   const top = (
     <div className="iq-sidebar-top">
-      <img className="iq-sidebar-lockup" src={lockupUrl} alt="Inquello" />
       {props.onSearch && <IconButton icon="search" label="Search saved work" onPress={props.onSearch} />}
       {props.onCollapse ? (
         <IconButton icon="panel-left" label={props.collapseLabel} expanded onPress={props.onCollapse} data-action="collapse-nav" />
@@ -482,7 +485,7 @@ function Rail(props: SidebarProps): ReactElement {
           ) : null}
         </>
       ) : null}
-      <div className="iq-rail-footer"><SidebarFooter person={person} workspaceName={workspace?.name ?? null} onShowSpecimen={props.onShowSpecimen}/></div>
+      <div className="iq-rail-footer"><SidebarFooter person={person} workspaceName={workspace?.name ?? null} onShowSpecimen={props.onShowSpecimen} onSignOut={props.onSignOut}/></div>
     </div>
   );
 }
@@ -516,6 +519,7 @@ export function Sidebar(props: SidebarProps): ReactElement {
     >
       <Rail {...props} overlayOpen={presentation === 'sidebar' || overlayOpen} />
       {presentation === 'sidebar' ? <div className="iq-history-pane"><SidebarContent {...props} collapseLabel="Collapse navigation" /></div> : overlayOpen ? <div className="iq-nav-overlay" data-nav-overlay><SidebarContent {...props} collapseLabel="Close navigation" /></div> : null}
+      {presentation==='sidebar'&&props.onResizeSidebar&&<SidebarResize width={props.sidebarWidth??320} maximum={props.sidebarMaximum} onChange={props.onResizeSidebar}/>}
     </nav>
   );
 }
