@@ -1,0 +1,16 @@
+{
+  "recordedAt": "2026-11-03T06:23:33.361Z",
+  "reportPath": "_bmad-output/implementation-artifacts/production-chat-v4-verification-r2-2026-11-03.json",
+  "reportSha256": "73dddbbc77b514705f9b05af774d0425980d0bf4b11bce24e5bee427ea6b1d39",
+  "review": "Root coordinator independently reviewed the immutable r2 report and approved exact-Terra scoped software qualification attachment, relayed 2026-11-03T06:22:20Z.",
+  "changedFields": [
+    "processing.codex-responses.evidence (append only)",
+    "processing.codex-responses.negative_authorization"
+  ],
+  "projectionBeforeSha256": "90149c5ee2cb04184ff8f612e2213446754dcda84e01b5e737859ae56d64e4dd",
+  "projectionAfterSha256": "90149c5ee2cb04184ff8f612e2213446754dcda84e01b5e737859ae56d64e4dd",
+  "nonEvidenceProjectionUnchanged": true,
+  "existingSyntheticEvidenceUnchanged": true,
+  "pendingPostattachmentGate": "Actual production apply() with genuinely compiled proof must pass on owned fictional PostgreSQL, including wrong scope/policy/identity/oversized no-write negatives, plus current native compiled-positive identity.",
+  "limitations": "No organization approval, paid call, provider credential or actual profile mutation. Original report/review and r2 report remain immutable. Creation-time review-required labels are preserved; final matched Desktop/Electron and live acceptance remain separate gates."
+}
