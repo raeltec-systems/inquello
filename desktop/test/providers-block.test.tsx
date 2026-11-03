@@ -65,7 +65,7 @@ describe('Providers block', () => {
     render(<Providers />);
     expect(await screen.findByText('No key set')).toBeTruthy();
     expect(screen.getByText('Not connected')).toBeTruthy();
-    expect(screen.getByText(/never change your Inquello identity/)).toBeTruthy();
+    expect(screen.getByText(/Provider credentials stay separate from your Inquello identity/)).toBeTruthy();
     expect(screen.getByLabelText('Claude API key').getAttribute('type')).toBe('password');
     expect(screen.getByLabelText('OpenAI API key for Codex').getAttribute('type')).toBe('password');
     expect(block().getAttribute('data-claude-state')).toBe('not-configured');
@@ -146,7 +146,7 @@ describe('provider onboarding clarity', () => {
   it('keeps connection status separate from model qualification and performs no automatic check', async () => {
     const bridge = installBridge(); render(<Providers />);
     await screen.findByText('Connect your AI providers');
-    expect(screen.getByText(/not a successful model test/)).toBeTruthy();
+    expect(screen.getByText(/does not establish model access or qualification/)).toBeTruthy();
     expect(screen.getByText(/Check key does not send a prompt/)).toBeTruthy();
     expect(bridge.verifyClaudeKey).not.toHaveBeenCalled();
     expect(bridge.codexLogin).not.toHaveBeenCalled();
@@ -244,4 +244,9 @@ describe('smoke providers evaluation', () => {
     expect(needles).toContain('89abcdef');
     expect(needles.filter((needle) => needle.length === 8)).toHaveLength(25);
   });
+});
+
+it('uses cached inspection on mount and requests deliberate status refresh only from its control',async()=>{
+ const refreshStatus=vi.fn(async()=>status('not-configured','connected',{account:{type:'apiKey'}}));const bridge=installBridge({refreshStatus});render(<Providers/>);await screen.findByText('Not connected');expect(refreshStatus).not.toHaveBeenCalled();
+ await userEvent.click(button('Refresh provider status'));await screen.findByText('Connected');expect(refreshStatus).toHaveBeenCalledTimes(1);expect(bridge.verifyClaudeKey).not.toHaveBeenCalled();expect(bridge.codexLogin).not.toHaveBeenCalled();
 });

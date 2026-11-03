@@ -1,5 +1,6 @@
+import {modelCatalog,modelBindingId} from './model-fixtures';
 // @vitest-environment jsdom
-import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
+import {act,cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {afterEach,expect,it,vi} from 'vitest';
 import {App} from '../src/renderer/App';
@@ -61,14 +62,14 @@ it('lets an explicitly confirmed logout proceed during an actual pending start a
  const api=fake();let finish!:(value:unknown)=>void;api.start.mockImplementation(()=>new Promise(resolve=>{finish=resolve;}));
  const bridge=(globalThis as unknown as {inquello:{routes:unknown;tasks:unknown}}).inquello;
  const route={routeId:'claude-api-key',provider:'Claude',configurable:true,configuration:{routeId:'claude-api-key',deployment:'anthropic-direct',model:'claude-sonnet-5-5',apiVersion:'2026-10-21',accountRef:'fictional-account',region:null},endpoint:'https://api.anthropic.com/v1/messages',revision:1,credentialPresent:true,adapterSupported:true,verification:'verified_for_synthetic',enabled:true,gate:null,limits:[],evidence:['fixture'],executionFlow:'Local sandbox',inferenceFlow:'Cloud inference',connectorFlow:'Unavailable'};
- bridge.routes={list:async()=>({ok:true,value:[route]})};api.preflight.mockResolvedValue({ok:true,value:{routeId:route.routeId,configurationRevision:1,reasoning:['default'],speeds:['default'],available:true,reason:'Available',executionFlow:'Local sandbox',inferenceFlow:'Cloud inference'}});
+ bridge.routes={catalog:async()=>({ok:true,value:modelCatalog([route as never])})};api.preflight.mockResolvedValue({ok:true,value:{routeId:route.routeId,configurationRevision:1,reasoning:['default'],speeds:['default'],available:true,reason:'Available',executionFlow:'Local sandbox',inferenceFlow:'Cloud inference'}});
  location.hash='#shell';render(<App/>);await screen.findByRole('textbox');fireEvent.click(document.querySelector('.iq-processing-settings summary')!);
- await screen.findByText(/Claude —/);fireEvent.change(screen.getByLabelText('Processing route'),{target:{value:route.routeId}});await screen.findByText('Inference: Cloud inference');
+ await screen.findByText(/Claude ·/);fireEvent.change(screen.getByLabelText('Model'),{target:{value:modelBindingId(1)}});await screen.findByText('Inference: Cloud inference');
  fireEvent.change(screen.getByLabelText('Reasoning'),{target:{value:'default'}});fireEvent.change(screen.getByLabelText('Speed'),{target:{value:'default'}});fireEvent.change(screen.getByRole('textbox'),{target:{value:'Fictional pending request'}});fireEvent.click(screen.getByLabelText('Send'));
  await waitFor(()=>expect(api.start).toHaveBeenCalledTimes(1));const original=api.start.mock.calls[0][0] as {operationId:string};
  fireEvent.click(screen.getByRole('button',{name:'Organization and team'}));fireEvent.click(screen.getByRole('menuitem',{name:'Sign out…'}));
  const confirm=await screen.findByRole('button',{name:'Sign out'});await waitFor(()=>expect(confirm.getAttribute('aria-disabled')).not.toBe('true'));fireEvent.click(confirm);await waitFor(()=>expect(api.signOut).toHaveBeenCalledTimes(1));
- finish({ok:true,value:{operationId:original.operationId,taskId:'00000000-0000-4000-8000-000000000099',runId:'run-fictional',threadId:'thread-fictional',status:'active',request:'Fictional pending request',accepted:true}});
- await waitFor(()=>expect(screen.getByRole('button',{name:'Sign out'}).getAttribute('aria-disabled')).toBe('true'));
+ await act(async()=>{finish({ok:true,value:{operationId:original.operationId,taskId:'00000000-0000-4000-8000-000000000099',runId:'run-fictional',threadId:'thread-fictional',status:'active',request:'Fictional pending request',accepted:true}});});
+ expect(screen.getByRole('button',{name:'Sign out'}).getAttribute('aria-disabled')).toBe('true');
  expect(api.start).toHaveBeenCalledTimes(1);expect(document.querySelector('[data-task-view]')).toBeNull();expect(api.createTask).not.toHaveBeenCalled();
 });

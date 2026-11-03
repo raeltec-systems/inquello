@@ -118,3 +118,16 @@ describe('dedicated quota-only ordinary reader proof',()=>{
   if(kind==='identity')x.setOwner(other);else x.restartRuntime();done({accepted:true});await rejected;
  });
 });
+
+describe('owned same-provider Responses model witnesses',()=>{
+ const responses=(model:string,revision:number):RouteView=>({routeId:'codex-responses',provider:'OpenAI',configurable:true,configuration:{routeId:'codex-responses',deployment:'openai-api',model,apiVersion:'responses-v1',accountRef:principal,region:null},endpoint:null,revision,credentialPresent:true,adapterSupported:true,verification:'not_verified',enabled:false,gate:'Owned native fixture proof required',limits:[],evidence:[],executionFlow:'local',inferenceFlow:'synthetic',connectorFlow:'none'});
+ it('requires exact native proof for both bundled Terra and Sol choices',async()=>{
+  const x=setup();await x.session.arm(workspace);await x.session.verifyRoute(responses('gpt-6.1-terra',1));await x.session.verifyRoute(responses('gpt-6.1-sol',2));
+  expect(x.request).toHaveBeenLastCalledWith('inquello/fixture/taskTransportStatus',{workspaceId:workspace,routeId:'codex-responses',configurationRevision:2});
+  x.request.mockResolvedValueOnce({accepted:false});await expect(x.session.verifyRoute(responses('gpt-6.1-terra',1))).rejects.toThrow();
+ });
+ it.each(['model','deployment','apiVersion','accountRef','region'] as const)('rejects a relabelled or mismatched Responses %s before native proof',async key=>{
+  const x=setup();await x.session.arm(workspace);const route=responses('gpt-6.1-terra',1);(route.configuration as unknown as Record<string,unknown>)[key]=key==='accountRef'?other:'other';
+  await expect(x.session.verifyRoute(route)).rejects.toThrow();expect(x.request).toHaveBeenCalledTimes(1);
+ });
+});

@@ -25,3 +25,9 @@ it('exposes current authorized workspace choices separately from organization an
  await waitFor(()=>expect(api.getTree).toHaveBeenCalledWith({workspaceId:second}));expect(location.hash).toBe('#shell');
  await user.click(screen.getByRole('button',{name:'Organization and team'}));await user.click(screen.getByRole('menuitem',{name:'Fictional Second'}));expect(location.hash).toBe('#onboarding');expect(api.signOut).not.toHaveBeenCalled();
 });
+
+it('choosing the current workspace preserves the mounted conversation draft and navigation',async()=>{
+ const api=install(true),user=userEvent.setup();location.hash='#shell';render(<App/>);const draft=await screen.findByRole('textbox');await user.type(draft,'Keep current fictional conversation');
+ const reads=api.getTree.mock.calls.length;await user.click(screen.getByRole('button',{name:'Organization and team'}));expect(screen.getByText('Current workspace')).toBeTruthy();await user.click(screen.getByRole('menuitem',{name:'Switch to Fictional First'}));
+ await waitFor(()=>expect(screen.getByRole('textbox')).toBe(draft));expect((draft as HTMLTextAreaElement).value).toBe('Keep current fictional conversation');expect(api.getTree.mock.calls.length).toBe(reads);expect(location.hash).toBe('#shell');
+});

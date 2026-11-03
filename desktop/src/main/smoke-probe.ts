@@ -293,13 +293,14 @@ export const EXPECTED_BRIDGE_TREE = {
   tasks: { inbox: 'function', steer: 'function', stop: 'function', resume: 'function',preflight:'function',start:'function',reconcile:'function',progress:'function',activity:'function',settleLifecycle:'function',answer:'function',onProgressChanged:'function',onSessionChanged:'function'},
   usage: { forTask: 'function', set: 'function', onChanged: 'function' },
   environments: { forTask: 'function', onChanged: 'function' },
-  routes: { list: 'function', configure: 'function', forTask: 'function', select: 'function', onChanged: 'function' },
+  routes: { list: 'function', catalog: 'function', resolve: 'function', bindingState: 'function', selectModel: 'function', pendingModel: 'function', forTask: 'function', select: 'function', onChanged: 'function' },
   capabilities: { onChanged: 'function', getInventory: 'function', manage: 'function' },
   runtime: { getStatus: 'function' },
   identity: { reauthenticate: 'function', getStatus: 'function', signIn: 'function', signOut: 'function' },
   data: { getPolicy: 'function', export: 'function', import: 'function', delete: 'function' },
   provider: {
     getStatus: 'function',
+    refreshStatus:'function',
     setClaudeKey: 'function',
     verifyClaudeKey: 'function',
     removeClaudeKey: 'function',
@@ -2535,7 +2536,7 @@ export async function probeShellLayout(contents: WebContents, options: ShellLayo
 /** The synthetic drafts the probe types. Only their lengths and comparisons leave the renderer. */
 const COMPOSER_DRAFT_A = 'Smoke draft for Task A';
 const COMPOSER_DRAFT_B = 'Smoke draft for Task B';
-export const COMPOSER_ROUTE_REASON = 'Sending starts once a processing route is set up.';
+export const COMPOSER_ROUTE_REASON = 'Choose a model before sending.';
 export const COMPOSER_EMPTY_REASON = 'Type a request to send.';
 
 const COMPOSER_HELPERS = `
@@ -3672,7 +3673,7 @@ export async function probeEnvironments(contents: WebContents, options: Organise
       const row = await wait(() => qVisible('[data-task-id=${JSON.stringify(created.value.taskId)}] a'), ${SHELL_SETTLE_MS});
       if (!row) return false; row.click();
       if (!(await openTaskInspector())) return false;
-      const panel = await wait(() => { const node = q('[data-task-environment]'); return node?.textContent.includes('No processing route selected') ? node : null; }, ${POLICY_SETTLE_MS});
+      const panel = await wait(() => { const node = q('[data-task-environment]'); return node?.textContent.includes('No conversation model selected') ? node : null; }, ${POLICY_SETTLE_MS});
       if (!panel) return false;
       return panel.textContent.includes('This device (local host)') && panel.textContent.includes('runtime-owned configuration verified') && panel.textContent.includes('Story 8.1') && panel.textContent.includes('V2 revisit (OQ-13)') && [...panel.querySelectorAll('button[aria-disabled="true"]')].length >= 2;
     })()`) as boolean;
@@ -3704,7 +3705,7 @@ export async function probeEnvironments(contents: WebContents, options: Organise
     stage = 'mounted-route-update';
     const updated = await contents.executeJavaScript(`(async () => {
       ${SHELL_HELPERS}
-      return !!(await wait(() => { const panel = q('[data-task-environment]'); return panel?.textContent.includes('Explicit processing route') && panel.textContent.includes('claude-sonnet-5-5') && panel.textContent.includes('Unknown') && !panel.textContent.includes('No processing route selected') ? panel : null; }, ${POLICY_SETTLE_MS}));
+      return !!(await wait(() => { const panel = q('[data-task-environment]'); return panel?.textContent.includes('Selected conversation model') && panel.textContent.includes('claude-sonnet-5-5') && panel.textContent.includes('Unknown') && !panel.textContent.includes('No conversation model selected') && !/Deployment|Endpoint|API version|anthropic-direct|api[.]anthropic[.]com/i.test(panel.textContent) ? panel : null; }, ${POLICY_SETTLE_MS}));
     })()`) as boolean;
     if (!updated) failures.push('Mounted environment panel did not update via production route invalidation');
     // Story 1.24: mounted choices follow the same real main/preload notification.
@@ -3902,9 +3903,9 @@ export async function probeVisualConversation(contents: WebContents, options: Or
   let stage='visual-fixture';
   try {
     const seed=JSON.parse(fs.readFileSync(options.seedFile??'','utf8')) as {workspace_id:string;invite_id:string};
-    const fixture=JSON.parse(fs.readFileSync(options.fixtureFile,'utf8')) as {endpoint:string;certificate:number[];answer:string;answers:string[];requests:string[];stateFile:string;captureDir:string};
+    const fixture=JSON.parse(fs.readFileSync(options.fixtureFile,'utf8')) as {endpoint:string;certificate:number[];answer:string;answers:string[];requests:string[];bRequest:string;bAnswer:string;stateFile:string;captureDir:string};
     const endpoint=new URL(fixture.endpoint),captureDir=path.join(path.dirname(options.fixtureFile),'captures');
-    if(endpoint.protocol!=='https:'||endpoint.hostname!=='127.0.0.1'||endpoint.pathname!=='/v1/messages'||
+    if(endpoint.protocol!=='https:'||endpoint.hostname!=='127.0.0.1'||endpoint.pathname!=='/v1/responses'||
        !Array.isArray(fixture.certificate)||fixture.certificate.length>8192||fixture.certificate.some(n=>!Number.isInteger(n)||n<0||n>255)||
        !fixture.answer.startsWith('Synthetic visual QA response - generated by the local test fixture, not a live model.')||fixture.answer.length>4096||
        path.resolve(fixture.captureDir)!==path.resolve(captureDir)||
@@ -3969,15 +3970,15 @@ export async function probeVisualConversation(contents: WebContents, options: Or
     fs.writeFileSync(path.join(options.isolatedRoot,'.inquello-fictional-audit-session'),'explicit isolated visual fixture');
     await options.armSyntheticSession(seed.workspace_id);
     const principal=options.identity.session.principalId();
-    await options.runtimeRequest('inquello/routes/configure',{operationId:randomUUID(),expectedRevision:0,configuration:{routeId:'claude-api-key',deployment:'anthropic-direct',model:'claude-sonnet-5-5',apiVersion:'2026-10-21',accountRef:principal,region:null}});
-    const bound=await options.runtimeRequest<{accepted:boolean;providerCalls:number}>('inquello/fixture/taskTransport',{workspaceId:seed.workspace_id,configurationRevision:1,routeId:'claude-api-key',endpoint:fixture.endpoint,certificate:fixture.certificate,failBeforeSampling:false});
+    await options.runtimeRequest('inquello/routes/configure',{operationId:randomUUID(),expectedRevision:0,configuration:{routeId:'codex-responses',deployment:'openai-api',model:'gpt-6.1-terra',apiVersion:'responses-v1',accountRef:principal,region:null}});
+    const bound=await options.runtimeRequest<{accepted:boolean;providerCalls:number}>('inquello/fixture/taskTransport',{workspaceId:seed.workspace_id,configurationRevision:1,routeId:'codex-responses',endpoint:fixture.endpoint,certificate:fixture.certificate,failBeforeSampling:false});
     if(!bound.accepted||bound.providerCalls!==0)throw new SmokeProbeFailure('Visual pinned transport refused');
     stage='visual-native-proof';
-    const proof=await options.runtimeRequest<{accepted:boolean}>('inquello/fixture/taskTransportStatus',{workspaceId:seed.workspace_id,configurationRevision:1,routeId:'claude-api-key'});
+    const proof=await options.runtimeRequest<{accepted:boolean}>('inquello/fixture/taskTransportStatus',{workspaceId:seed.workspace_id,configurationRevision:1,routeId:'codex-responses'});
     if(proof.accepted!==true)throw new SmokeProbeFailure('Visual native transport proof refused');
     // Direct fixture configuration bypasses RouteService.configure's normal notification.
     // Notify only this owned visual renderer after the exact pinned transport is proved.
-    contents.send('inquello:routes-changed');
+    contents.send('inquello:routes-changed',{authority:false});
     // All work below is submitted by actual renderer controls and named main operations.
     // The probe never calls tasks/start, resume or stop directly.
     const checkFixture=async(expected:number,stopped=false)=>{
@@ -4022,9 +4023,9 @@ export async function probeVisualConversation(contents: WebContents, options: Or
       if(!await openShell()||!press('[data-action="new-thread"]'))return null;
       const start=await wait(()=>qVisible('[data-start-view]'),${SHELL_SETTLE_MS});if(!start)return null;
       const processing=q('.iq-processing-settings',start);if(!processing)return null;if(!processing.open)q(':scope > summary',processing)?.click();if(!processing.open)return null;
-      const route=await wait(()=>{const select=q('select[aria-label="Processing route"]',start);return select&&[...select.options].some(o=>o.value==='claude-api-key'&&!o.disabled&&o.textContent.includes('(revision 1)'))?select:null;},${SHELL_SETTLE_MS});if(!route)return null;
+      const route=await wait(()=>{const select=q('select[aria-label="Model"]',start);return select&&[...select.options].some(o=>!o.disabled&&o.textContent.includes('gpt-6.1-terra'))?select:null;},${SHELL_SETTLE_MS});if(!route)return null;
       const choose=(select,value)=>{Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(select,value);select.dispatchEvent(new Event('change',{bubbles:true}));};
-      choose(route,'claude-api-key');
+      choose(route,[...route.options].find(option=>option.textContent.includes('gpt-6.1-terra')).value);
       const reasoning=await wait(()=>q('select[aria-label="Reasoning"]',start),${POLICY_SETTLE_MS}),speed=q('select[aria-label="Speed"]',start);
       if(!reasoning||!speed||reasoning.disabled||speed.disabled)return null;choose(reasoning,'default');choose(speed,'default');
       type(q('[data-composer-input]',start),${JSON.stringify(fixture.requests[0])});
@@ -4041,6 +4042,39 @@ export async function probeVisualConversation(contents: WebContents, options: Or
     if(!(await waitAnswer(taskId,fixture.answers[0]!)))throw new SmokeProbeFailure('First synthetic assistant answer did not render');
     const first=await taskSnapshot(taskId,'completed');if(first.status!=='completed')throw new SmokeProbeFailure('First synthetic native turn did not complete');
     await checkFixture(1);
+    stage='visual-same-provider-model-b';
+    // Both names are present in bundled supported metadata. Only this owned,
+    // pinned Responses fixture qualifies them for fictional validation here.
+    await options.runtimeRequest('inquello/routes/configure',{operationId:randomUUID(),expectedRevision:1,configuration:{routeId:'codex-responses',deployment:'openai-api',model:'gpt-6.1-sol',apiVersion:'responses-v1',accountRef:principal,region:null}});
+    const secondBinding=await options.runtimeRequest<{accepted:boolean;providerCalls:number}>('inquello/fixture/taskTransport',{workspaceId:seed.workspace_id,configurationRevision:2,routeId:'codex-responses',endpoint:fixture.endpoint,certificate:fixture.certificate,failBeforeSampling:false});
+    if(!secondBinding.accepted||secondBinding.providerCalls!==0)throw new SmokeProbeFailure('Second exact Responses binding refused');
+    const catalog=await options.runtimeRequest<{bindings:Array<{bindingId:string;name:string;configurationRevision:number}>}>('inquello/models/catalog',{});
+    const modelB=catalog.bindings.find(binding=>binding.name==='gpt-6.1-sol'&&binding.configurationRevision===2);
+    if(!modelB)throw new SmokeProbeFailure('Supported Sol binding absent from cached catalog');
+    contents.send('inquello:routes-changed',{authority:false});
+    const taskB=await contents.executeJavaScript(`(async()=>{
+      ${SHELL_HELPERS}
+      if(!press('[data-action="new-thread"]'))return null;
+      const start=await wait(()=>qVisible('[data-start-view]'),${SHELL_SETTLE_MS});if(!start)return null;
+      const details=q('.iq-processing-settings',start);if(!details.open)q(':scope > summary',details)?.click();
+      const model=await wait(()=>{const select=q('select[aria-label="Model"]',start);return select&&[...select.options].some(option=>option.value===${JSON.stringify(modelB.bindingId)})?select:null;},${SHELL_SETTLE_MS});if(!model)return null;
+      const choose=(select,value)=>{Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(select,value);select.dispatchEvent(new Event('change',{bubbles:true}));};
+      choose(model,${JSON.stringify(modelB.bindingId)});
+      const reasoning=await wait(()=>q('select[aria-label="Reasoning"]:not(:disabled)',start),${POLICY_SETTLE_MS}),speed=q('select[aria-label="Speed"]',start);if(!reasoning||!speed)return null;
+      choose(reasoning,'default');choose(speed,'default');type(q('[data-composer-input]',start),${JSON.stringify(fixture.bRequest)});
+      const send=await wait(()=>{const button=q('[data-composer-send]',start);return button&&!button.disabled&&button.getAttribute('aria-disabled')!=='true'?button:null;},${SHELL_SETTLE_MS});if(!send)return null;
+      const began=performance.now();send.click();const observation=await (${observeSyntheticStartup.toString()})(()=>qVisible('[data-task-view]')?.getAttribute('data-task-view')??null,began);return observation.taskId;
+    })()`) as string|null;
+    if(!taskB||taskB===taskId||!await waitAnswer(taskB,fixture.bAnswer))throw new SmokeProbeFailure('Actual UI Sol conversation did not complete independently');
+    const bSnapshot=await taskSnapshot(taskB,'completed');
+    if(bSnapshot.threadId===first.threadId)throw new SmokeProbeFailure('Independent Sol conversation reused the Terra thread');
+    const bState=JSON.parse(fs.readFileSync(fixture.stateFile,'utf8')) as {bCalls:number};
+    if(bState.bCalls!==1)throw new SmokeProbeFailure('Independent Sol conversation dispatch count differed');
+    const aChoice=await options.runtimeRequest<{revision:number;configurationRevision:number;staleConfiguration:boolean;selected:{configuration:{model:string}}}>('inquello/routes/task/read',{taskId});
+    if(aChoice.revision!==1||aChoice.configurationRevision!==1||aChoice.staleConfiguration||aChoice.selected.configuration.model!=='gpt-6.1-terra')throw new SmokeProbeFailure('Creating Sol changed the Terra conversation binding');
+    const reopenedA=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}const row=await wait(()=>qVisible('[data-task-id="'+${JSON.stringify(taskId)}+'"] a'),${SHELL_SETTLE_MS});if(!row)return false;row.click();return !!(await wait(()=>qVisible('[data-task-view="'+${JSON.stringify(taskId)}+'"]'),${SHELL_SETTLE_MS}));})()`);
+    if(!reopenedA||!await waitAnswer(taskId,fixture.answers[0]!))throw new SmokeProbeFailure('Reopened Terra conversation lost its answer after Sol was created');
+    await checkFixture(1);await capture('02c-independent-sol-and-reopened-terra-synthetic');
     const collapsed=await contents.executeJavaScript(`(()=>{const details=document.querySelector('[data-task-view="'+${JSON.stringify(taskId)}+'"] [data-task-inspector]');return !!details&&!details.open;})()`);
     if(!collapsed)throw new SmokeProbeFailure('Conversation inspector was not collapsed by default');
     await capture('02-completed-conversation-synthetic');
@@ -4062,6 +4096,21 @@ export async function probeVisualConversation(contents: WebContents, options: Or
     if(second.status!=='completed'||second.threadId!==first.threadId||second.runId===first.runId)throw new SmokeProbeFailure('Follow-up did not retain Task/thread with a new run');
     if(!(await latestAnswerVisible(taskId,fixture.answers[1]!)))throw new SmokeProbeFailure('Completed follow-up remained outside the conversation viewport');
     await checkFixture(2);await capture('03-followup-conversation-synthetic');
+    stage='visual-explicit-model-switch';
+    const switched=await contents.executeJavaScript(`(async()=>{
+      ${SHELL_HELPERS}
+      if(!await openTaskInspector())return false;
+      const panel=await wait(()=>qVisible('[data-task-view="'+${JSON.stringify(taskId)}+'"] [data-processing-routes]'),${SHELL_SETTLE_MS});if(!panel)return false;
+      const model=await wait(()=>{const select=q('select[aria-label="Model"]',panel);return select&&[...select.options].some(option=>option.value===${JSON.stringify(modelB.bindingId)})?select:null;},${POLICY_SETTLE_MS});if(!model)return false;
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(model,${JSON.stringify(modelB.bindingId)});model.dispatchEvent(new Event('change',{bubbles:true}));
+      const change=await wait(()=>[...panel.querySelectorAll('button')].find(button=>button.textContent==='Change conversation model'&&button.getAttribute('aria-disabled')!=='true'),${SHELL_SETTLE_MS});if(!change)return false;change.click();
+      if(!await wait(()=>panel.textContent.includes('gpt-6.1-sol')&&panel.querySelector('strong')?.textContent==='gpt-6.1-sol',${POLICY_SETTLE_MS}))return false;
+      const usage=await wait(()=>qVisible('[data-task-view="'+${JSON.stringify(taskId)}+'"] [data-task-usage]'),${POLICY_SETTLE_MS});if(!usage)return false;
+      const save=await wait(()=>[...usage.querySelectorAll('button')].find(button=>button.textContent==='Save Task settings'&&button.getAttribute('aria-disabled')!=='true'),${POLICY_SETTLE_MS});if(!save)return false;save.click();
+      return !!(await wait(()=>!usage.textContent.includes('earlier conversation model choice'),${POLICY_SETTLE_MS}));
+    })()`);
+    const switchedRoute=await options.runtimeRequest<{revision:number;configurationRevision:number}>('inquello/routes/task/read',{taskId});
+    if(!switched||switchedRoute.revision!==2||switchedRoute.configurationRevision!==2)throw new SmokeProbeFailure('Actual saved conversation model change did not reach selection revision two');
     stage='visual-ui-stop';
     if(!(await sendFollowup(fixture.requests[2]!))||!(await waitAnswer(taskId,fixture.answers[2]!,false)))throw new SmokeProbeFailure('Held synthetic turn did not render before Stop');
     if(!(await latestAnswerVisible(taskId,fixture.answers[2]!)))throw new SmokeProbeFailure('Live streamed answer remained outside the conversation viewport');

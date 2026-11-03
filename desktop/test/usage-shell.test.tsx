@@ -4,10 +4,11 @@ import {act,cleanup,render,screen,waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {afterEach,describe,expect,it,vi} from 'vitest';
 import {notifySettledWork} from '../src/main/usage/notifications';
+import {rememberTaskModel,forgetTaskModels,type ModelAuthorityChange} from '../src/renderer/Shell/model-authority';
 import {TaskUsage} from '../src/renderer/Shell/TaskUsage';
 import {facts,attempt,taskId,principal} from './usage-fixtures';
 function setup(view=facts()){let change=(_privateScope:boolean)=>{};const unsubscribe=vi.fn();const forTask=vi.fn(async()=>({ok:true,value:view}));const set=vi.fn(async()=>({ok:true,value:view}));Object.defineProperty(globalThis,'inquello',{configurable:true,value:{usage:{forTask,set,onChanged:(fn:(privateScope:boolean)=>void)=>{change=fn;return unsubscribe;}}}});return{forTask,set,change:(privateScope=false)=>change(privateScope),unsubscribe};}
-afterEach(()=>{cleanup();Reflect.deleteProperty(globalThis,'inquello');});
+afterEach(()=>{forgetTaskModels();cleanup();Reflect.deleteProperty(globalThis,'inquello');});
 describe('Task choices and attributable history',()=>{
  it('requires explicit defaults, presents source limitations, inspection starts no work',async()=>{const h=setup();render(<TaskUsage taskId={taskId}/>);await screen.findByText(/Defaults are not saved yet/);expect(screen.getByLabelText('Reasoning')).toHaveProperty('value','default');expect(screen.getByText(/Messages supports provider defaults only/)).toBeTruthy();expect(screen.queryByRole('button',{name:/start/i})).toBeNull();expect(h.set).not.toHaveBeenCalled();await userEvent.click(screen.getByRole('button',{name:'Save Task settings'}));expect(h.set).toHaveBeenCalledWith(expect.objectContaining({taskId,expectedRevision:0,routeRevision:1,reasoning:'default',speed:'default'}));});
  it('keeps distinct failed/repeated snapshots and unknown usage, with reviewer separately labelled',async()=>{const view=facts();const a=attempt(),b=attempt('uncertain');b.snapshot.attempt_id=principal;b.snapshot.requested.reasoning='high';b.snapshot.effective.reasoning='high';b.output_ref='retained-output';view.usage.attempts=[a,b];setup(view);render(<TaskUsage taskId={taskId}/>);await screen.findByText('Automated permission review — failed');expect(screen.getByText('Automated permission review — uncertain')).toBeTruthy();expect(screen.getByText('retained-output')).toBeTruthy();expect(screen.getAllByText('high / default')).toHaveLength(2);expect(screen.getAllByText('12 / Unknown')).toHaveLength(2);expect(screen.getByText(/Do not automatically repeat/)).toBeTruthy();});
@@ -41,7 +42,24 @@ describe('Task choices and attributable history',()=>{
  });
  it('labels local-tool choices as Task context, not effective model settings',async()=>{
   const view=facts(),tool=attempt();tool.snapshot.operation_kind='local-tool';tool.snapshot.effective.reasoning='high';tool.usage.input_tokens=null;view.usage.attempts=[tool];setup(view);
-  render(<TaskUsage taskId={taskId}/>);await screen.findByText('Local tool invocation — failed');expect(screen.getByText('Task context: route / model / API')).toBeTruthy();expect(screen.getByText('Task context: requested reasoning / speed')).toBeTruthy();expect(screen.getByText('Not applicable — local tools do not use model settings')).toBeTruthy();expect(screen.queryByText('high / default')).toBeNull();
+  render(<TaskUsage taskId={taskId}/>);await screen.findByText('Local tool invocation — failed');expect(screen.getByText('Conversation model')).toBeTruthy();expect(screen.getByText('Task context: requested reasoning / speed')).toBeTruthy();expect(screen.getByText('Not applicable — local tools do not use model settings')).toBeTruthy();expect(screen.queryByText('high / default')).toBeNull();
  });
 
+});
+
+it('refreshes compatible choices only for its affected conversation and keeps unrelated model creation harmless',async()=>{
+ const view=facts();view.capabilities.reasoning=['default','high'];const h=setup(view);let change!:(event:{authority:boolean;taskId?:string})=>void;
+ Object.assign((globalThis as {inquello:Record<string,unknown>}).inquello,{routes:{onChanged:(fn:typeof change)=>{change=fn;return()=>{};}}});
+ render(<TaskUsage taskId={taskId}/>);await screen.findByLabelText('Reasoning');await userEvent.selectOptions(screen.getByLabelText('Reasoning'),'high');
+ act(()=>change({authority:false}));act(()=>change({authority:true,taskId:principal}));expect(h.forTask).toHaveBeenCalledTimes(1);expect(screen.getByLabelText('Reasoning')).toHaveProperty('value','high');
+ const next=facts();next.capabilities.routeRevision=2;h.forTask.mockResolvedValue({ok:true,value:next});act(()=>change({authority:true,taskId}));await waitFor(()=>expect(h.forTask).toHaveBeenCalledTimes(2));await screen.findByLabelText('Reasoning');
+ expect(screen.getByLabelText('Reasoning')).toHaveProperty('value','high');expect(screen.getByRole('option',{name:'high — unavailable'})).toBeTruthy();expect(h.set).not.toHaveBeenCalled();
+});
+
+it('binding invalidation preserves unrelated B capabilities while refreshing exact A with its draft intact',async()=>{
+ const view=facts();view.capabilities.reasoning=['default','high'];const h=setup(view);let change!:(event:ModelAuthorityChange)=>void;
+ rememberTaskModel({taskId,configurationRevision:2,selected:{routeId:'codex-responses'},disclosureBindings:[{routeId:'codex-responses',configurationRevision:2,active:true}]} as never);Object.assign((globalThis as {inquello:Record<string,unknown>}).inquello,{routes:{onChanged:(fn:typeof change)=>{change=fn;return()=>{};}}});
+ render(<TaskUsage taskId={taskId}/>);const reasoning=await screen.findByLabelText('Reasoning');await userEvent.selectOptions(reasoning,'high');
+ act(()=>change({authority:true,binding:{routeId:'codex-responses',configurationRevision:1}}));expect(h.forTask).toHaveBeenCalledTimes(1);expect(screen.getByLabelText('Reasoning')).toBe(reasoning);expect(reasoning).toHaveProperty('value','high');
+ act(()=>change({authority:true,binding:{routeId:'codex-responses',configurationRevision:2}}));await waitFor(()=>expect(h.forTask).toHaveBeenCalledTimes(2));await screen.findByLabelText('Reasoning');expect(screen.getByLabelText('Reasoning')).toHaveProperty('value','high');
 });

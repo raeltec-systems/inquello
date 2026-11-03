@@ -51,7 +51,7 @@ function accountText(status: ProviderStatusView): string {
   if (!account) return 'No Codex login is held.';
   if (account.type === 'apiKey') return 'Signed in with an API key, held in the OS keyring.';
   if (account.type === 'chatgpt') return `Signed in with ChatGPT${account.planType ? ` (${account.planType} plan)` : ''}, held in the OS keyring.`;
-  return 'Signed in by another method.';
+  return 'A saved provider credential is available. Account details have not been checked.';
 }
 
 export function Providers({focusTarget}:{focusTarget?:ProviderFocusTarget}={}): ReactElement {
@@ -70,10 +70,10 @@ export function Providers({focusTarget}:{focusTarget?:ProviderFocusTarget}={}): 
   const [busy, setBusy] = useState<Action | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (explicit=false) => {
     if (!bridge) return;
     try {
-      const next = parseProviderStatus(await bridge.getStatus());
+      const next = parseProviderStatus(await (explicit&&bridge.refreshStatus?bridge.refreshStatus():bridge.getStatus()));
       if (next) { setStatus(next); setNotice(current => current === 'The provider status could not be read.' ? null : current); }
     } catch {
       setNotice('The provider status could not be read.');
@@ -155,9 +155,9 @@ export function Providers({focusTarget}:{focusTarget?:ProviderFocusTarget}={}): 
       data-codex-account={status?.codex.account?.type ?? 'none'}
     >
       <h3>Connect your AI providers</h3>
-      <p className="specimen-account-note">Connect an account, then choose its model in Processing routes. Provider credentials never change your Inquello identity, and signing out of Inquello keeps them.</p>
-      <p className="specimen-account-note">A stored key or connected account is not a successful model test. Processing routes shows which exact models are qualified and available.</p>
-      <Button variant="quiet" disabledReason={anyBusy} onPress={() => void load()}>Refresh provider status</Button>
+      <p className="specimen-account-note">Connect an account, then choose its model in <a href="#settings-routes">Models</a>. Provider credentials stay separate from your Inquello identity.</p>
+      <p className="specimen-account-note">A stored key or connected account does not establish model access or qualification.</p>
+      <Button variant="quiet" disabledReason={anyBusy} onPress={() => void load(true)}>Refresh provider status</Button>
       <dl className="specimen-account-states">
         <div className="specimen-account-state">
           <dt>Claude API key</dt>

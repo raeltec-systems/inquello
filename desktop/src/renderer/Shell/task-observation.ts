@@ -1,10 +1,11 @@
+import {modelAuthorityApplies,forgetTaskModels,type ModelAuthorityChange} from './model-authority';
 /** Shared bounded observation: navigation reads status, selected work reads history. */
 import {useEffect,useState} from 'react';
 import {parseProgress,taskValue,tasksBridge,type ProgressSnapshot} from './tasks-bridge';
 type Entry={taskId:string;workspaceId:string;listeners:Map<(value:ProgressSnapshot|null)=>void,boolean>;value:ProgressSnapshot|null;busy:symbol|null;background:boolean;upgrade:boolean;dirty:boolean;generation:number};
 const entries=new Map<string,Entry>();
 let timer:ReturnType<typeof setInterval>|undefined,scheduled:ReturnType<typeof setTimeout>|undefined;
-let unsubscribe:(()=>void)|undefined,session:(()=>void)|undefined,cursor=0,activeReads=0,backgroundReads=0;
+let unsubscribe:(()=>void)|undefined,session:(()=>void)|undefined,routeChanges:(()=>void)|undefined,cursor=0,activeReads=0,backgroundReads=0;
 const full=(entry:Entry)=>[...entry.listeners.values()].some(Boolean);
 const capacity=(entry:Entry)=>activeReads<4&&(full(entry)||backgroundReads<3);
 const publish=(entry:Entry,value:ProgressSnapshot|null)=>{entry.value=value;for(const listener of entry.listeners.keys())listener(value);};
@@ -30,8 +31,8 @@ function tick(){const rows=[...entries.values()];if(!rows.length)return;
  cursor=(cursor+3)%rows.length;
 }
 function schedule(){if(!scheduled)scheduled=setTimeout(()=>{scheduled=undefined;tick();},250);}
-function start(){if(timer)return;timer=setInterval(tick,1500);const api=tasksBridge();unsubscribe=api?.onProgressChanged?.(()=>{for(const entry of entries.values())entry.dirty=true;schedule();});session=api?.onSessionChanged?.(()=>{for(const entry of entries.values()){entry.generation++;entry.dirty=true;publish(entry,null);}schedule();});}
-function stop(){if(entries.size)return;clearInterval(timer);timer=undefined;clearTimeout(scheduled);scheduled=undefined;unsubscribe?.();session?.();unsubscribe=session=undefined;}
+function start(){if(timer)return;timer=setInterval(tick,1500);const api=tasksBridge();unsubscribe=api?.onProgressChanged?.(()=>{for(const entry of entries.values())entry.dirty=true;schedule();});session=api?.onSessionChanged?.(()=>{forgetTaskModels();for(const entry of entries.values()){entry.generation++;entry.dirty=true;publish(entry,null);}schedule();});const routes=(globalThis as {inquello?:{routes?:{onChanged?(fn:(change?:ModelAuthorityChange)=>void):()=>void}}}).inquello?.routes;routeChanges=routes?.onChanged?.(change=>{if(change?.authority===false)return;for(const entry of entries.values())if(modelAuthorityApplies(change,entry.taskId)){entry.generation++;entry.dirty=true;publish(entry,null);}schedule();});}
+function stop(){if(entries.size)return;clearInterval(timer);timer=undefined;clearTimeout(scheduled);scheduled=undefined;unsubscribe?.();session?.();routeChanges?.();unsubscribe=session=routeChanges=undefined;}
 export function useTaskObservation(taskId:string,workspaceId:string,enabled=true,full=false):ProgressSnapshot|null{
  const [snapshot,setSnapshot]=useState<ProgressSnapshot|null>(null);
  useEffect(()=>{setSnapshot(null);if(!enabled)return;const key=JSON.stringify([workspaceId,taskId]);let entry=entries.get(key);if(!entry){entry={taskId,workspaceId,listeners:new Map(),value:null,busy:null,background:false,upgrade:false,dirty:true,generation:0};entries.set(key,entry);}const wasFull=[...entry.listeners.values()].some(Boolean);entry.listeners.set(setSnapshot,full);if(entry.value)setSnapshot(entry.value);start();if(full&&!wasFull&&entry.busy&&entry.background&&!entry.upgrade){entry.generation++;entry.dirty=true;entry.upgrade=true;}if((!entry.busy||entry.upgrade)&&capacity(entry)&&(entries.size<=3||full&&!wasFull))void read(entry);else if(entry.upgrade)schedule();return()=>{entry!.listeners.delete(setSnapshot);if(![...entry!.listeners.values()].some(Boolean))entry!.upgrade=false;if(!entry!.listeners.size){entry!.generation++;entries.delete(key);}stop();};},[taskId,workspaceId,enabled,full]);

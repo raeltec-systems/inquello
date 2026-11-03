@@ -23,7 +23,8 @@ export function smokeTaskSession(options:BootstrapOptions & {enabled:boolean;all
   const configuration=route.configuration;
   if(!configuration||route.routeId!==configuration.routeId||configuration.accountRef!==owner)throw unavailable();
   const quota=options.allowQuotaRoute===true&&configuration.routeId==='codex-responses'&&configuration.deployment==='openai-api'&&configuration.model==='fixture-model-20261030'&&configuration.apiVersion==='responses-v1'&&configuration.region===null;
-  if(configuration.routeId!=='claude-api-key'&&!quota)throw unavailable();
+  const responses=configuration.routeId==='codex-responses'&&configuration.deployment==='openai-api'&&['gpt-6.1-terra','gpt-6.1-sol'].includes(configuration.model)&&configuration.apiVersion==='responses-v1'&&configuration.region===null;
+  if(configuration.routeId!=='claude-api-key'&&!quota&&!responses)throw unavailable();
   // A disabled, credential-absent row grants nothing and needs no provider handoff.
   // Only the dedicated quota profile has a staged/retired configuration.
   if(options.allowQuotaRoute===true&&!route.credentialPresent){if(route.enabled)throw unavailable();return;}

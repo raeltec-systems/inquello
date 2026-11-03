@@ -250,6 +250,7 @@ export interface ProviderActionView {
 
 export interface ProviderBridge {
   getStatus(): Promise<unknown>;
+  refreshStatus?():Promise<unknown>;
   setClaudeKey(key: string): Promise<unknown>;
   verifyClaudeKey(): Promise<unknown>;
   removeClaudeKey(): Promise<unknown>;

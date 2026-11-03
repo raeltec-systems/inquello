@@ -7,7 +7,7 @@ import type { UsageService } from '../usage/service';
 import { usageReadPayload, usageSetPayload } from '../usage/validators';
 import type { EnvironmentService } from '../environments/service';
 import type { RouteService } from '../routes/service';
-import { configureRoutePayload, taskRoutePayload, selectRoutePayload } from '../routes/validators';
+import { taskRoutePayload, selectRoutePayload, resolveModelPayload, bindingStatePayload, selectModelPayload, pendingModelPayload } from '../routes/validators';
 import { capabilityPayload, inventoryPayload, type CapabilityInput, type CapabilityInventory, type CapabilityResult } from '../capabilities/types';
 /**
  * Named renderer operations (AD-5).
@@ -96,7 +96,11 @@ export const OPERATION_NAMES = [
   'usage.set',
   'environments.forTask',
   'routes.list',
-  'routes.configure',
+  'routes.catalog',
+  'routes.resolve',
+  'routes.bindingState',
+  'routes.selectModel',
+  'routes.pendingModel',
   'routes.forTask',
   'routes.select',
   'capabilities.getInventory',
@@ -110,6 +114,7 @@ export const OPERATION_NAMES = [
   'data.import',
   'data.delete',
   'provider.getStatus',
+  'provider.refreshStatus',
   'provider.setClaudeKey',
   'provider.verifyClaudeKey',
   'provider.removeClaudeKey',
@@ -280,6 +285,7 @@ export interface DataOperations {
 /** The provider service as the operations see it (main-owned; see `providers/index.ts`). */
 export interface ProviderOperations {
   getStatus(): Promise<ProviderStatus>;
+  refreshStatus():Promise<ProviderStatus>;
   setClaudeKey(key: string): Promise<ProviderActionResult>;
   verifyClaudeKey(): Promise<ProviderActionResult>;
   removeClaudeKey(): Promise<ProviderActionResult>;
@@ -330,7 +336,7 @@ export interface OperationDeps {
   tasks?: Pick<TaskService, 'preflight' | 'start' | 'reconcile' | 'progress' | 'activity' | 'inbox' | 'settleLifecycle' | 'answer' | 'steer' | 'stop' | 'resume'>;
   usage?: Pick<UsageService, 'forTask' | 'set'>;
   environments?: Pick<EnvironmentService, 'forTask'>;
-  routes?: Pick<RouteService, 'list' | 'configure' | 'forTask' | 'select'>;
+  routes?: Pick<RouteService, 'list' | 'catalog' | 'resolve' | 'bindingState' | 'selectModel' | 'pendingModel' | 'forTask' | 'select'>;
   capabilities?: {getInventory(workspaceId: string): Promise<CapabilityInventory>; manage(input: CapabilityInput): Promise<CapabilityResult>};
   runtimeState: () => RuntimeState;
   runtimeVersion: string;
@@ -397,6 +403,7 @@ export function createOperations(deps: OperationDeps): Operation[] {
     validate: noPayload,
     handle: async () => toRendererProviderStatus(await deps.provider.getStatus()),
   };
+  const providerRefresh:Operation<undefined,ProviderStatusView>={name:'provider.refreshStatus',validate:noPayload,handle:async()=>toRendererProviderStatus(await deps.provider.refreshStatus())};
   const setClaudeKey: Operation<string, ProviderActionView> = {
     name: 'provider.setClaudeKey',
     validate: credentialPayload,
@@ -536,7 +543,11 @@ export function createOperations(deps: OperationDeps): Operation[] {
     { name: 'usage.set', validate: usageSetPayload, handle: input => { if (!deps.usage) throw new Error('Usage unavailable'); return deps.usage.set(input as Parameters<UsageService['set']>[0]); } },
     { name: 'environments.forTask', validate: taskRoutePayload, handle: (input) => { if (!deps.environments) throw new Error('Environment information unavailable'); return deps.environments.forTask((input as {taskId:string}).taskId); } },
     { name: 'routes.list', validate: noPayload, handle: () => routes().list() },
-    { name: 'routes.configure', validate: configureRoutePayload, handle: (input) => routes().configure(input as Parameters<RouteService['configure']>[0]) },
+    { name: 'routes.catalog', validate: noPayload, handle: () => routes().catalog() },
+    { name: 'routes.resolve', validate: resolveModelPayload, handle: input => routes().resolve(input as Parameters<RouteService['resolve']>[0]) },
+    { name: 'routes.bindingState', validate: bindingStatePayload, handle: input => routes().bindingState(input as Parameters<RouteService['bindingState']>[0]) },
+    { name: 'routes.selectModel', validate: selectModelPayload, handle: input => routes().selectModel(input as Parameters<RouteService['selectModel']>[0]) },
+    { name: 'routes.pendingModel', validate: pendingModelPayload, handle: input => routes().pendingModel((input as {taskId:string|null}).taskId) },
     { name: 'routes.forTask', validate: taskRoutePayload, handle: (input) => routes().forTask((input as {taskId:string}).taskId) },
     { name: 'routes.select', validate: selectRoutePayload, handle: (input) => routes().select(input as Parameters<RouteService['select']>[0]) },
   ];
@@ -571,6 +582,7 @@ export function createOperations(deps: OperationDeps): Operation[] {
     dataImport,
     dataDelete,
     providerStatus,
+    providerRefresh,
     setClaudeKey,
     verifyClaudeKey,
     removeClaudeKey,

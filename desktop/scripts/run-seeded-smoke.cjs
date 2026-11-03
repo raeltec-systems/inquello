@@ -9,6 +9,7 @@ const {createOwnedProcessGuard}=require('./smoke-processes.cjs');
 const {settleSmokePhase}=require('./smoke-phase.cjs');
 const https=require('node:https'),readline=require('node:readline');
 const desktop=path.resolve(__dirname,'..'),root=path.dirname(desktop);
+if(process.env.INQUELLO_TEST_DATABASE_URL&&process.env.INQUELLO_DEV_DATABASE_URL)throw new Error('Ambiguous database configuration: explicitly clear the unused database variable before synthetic smoke.');
 const suffix=process.platform==='win32'?'.exe':'';
 const onboardingOnly=process.argv.includes('--onboarding');
 if(onboardingOnly && process.argv.slice(2).some(arg=>arg!=='--onboarding'))throw new Error('Onboarding is an exclusive owned smoke phase');
@@ -50,27 +51,34 @@ async function localTls(folder,visual=false){
 data: ${JSON.stringify(data)}
 
 `;
-  const stream=(index,complete)=>event('message_start',{type:'message_start',message:{id:'msg_visual_fixture_'+index,role:'assistant',model:'claude-sonnet-5-5',content:[],usage:{input_tokens:20}}})+
-    event('content_block_start',{type:'content_block_start',index:0,content_block:{type:'text',text:''}})+
-    event('content_block_delta',{type:'content_block_delta',index:0,delta:{type:'text_delta',text:answers[index-1]}})+
-    (complete?event('content_block_stop',{type:'content_block_stop',index:0})+event('message_delta',{type:'message_delta',delta:{stop_reason:'end_turn'},usage:{output_tokens:48}})+event('message_stop',{type:'message_stop'}):'');
+  const bRequest='Synthetic UI model B: start a separate fictional conversation with Sol. No customer data.';
+  const bAnswer=prefix+' This is the independent fictional Sol conversation.';
+  const stream=(index,complete,b=false)=>{
+    const id='resp_visual_fixture_'+(b?'b':index),item='msg_visual_fixture_'+(b?'b':index),text=b?bAnswer:answers[index-1];
+    const message={type:'message',role:'assistant',id:item,content:[{type:'output_text',text}]};
+    return event('response.created',{type:'response.created',response:{id}})+
+      event('response.output_item.added',{type:'response.output_item.added',item:{...message,content:[]}})+
+      event('response.output_text.delta',{type:'response.output_text.delta',delta:text})+
+      (complete?event('response.output_item.done',{type:'response.output_item.done',item:message})+
+        event('response.completed',{type:'response.completed',response:{id,usage:{input_tokens:20,output_tokens:48,total_tokens:68}}}):'');
+  };
   const stateFile=path.join(folder,'synthetic-journey-state.json');
-  let calls=0,invalidCalls=0,heldCancelled=false,heldTimedOut=false;
+  let calls=0,bCalls=0,totalCalls=0,invalidCalls=0,heldCancelled=false,heldTimedOut=false;
   const contextMatches=[];
-  const record=()=>{if(visual)fs.writeFileSync(stateFile,JSON.stringify({calls,invalidCalls,heldCancelled,heldTimedOut,contextMatches}));};
+  const record=()=>{if(visual)fs.writeFileSync(stateFile,JSON.stringify({calls,bCalls,totalCalls,invalidCalls,heldCancelled,heldTimedOut,contextMatches}));};
   record();
   const server=https.createServer({key:fs.readFileSync(path.join(tlsDir,'server.key')),cert:fs.readFileSync(path.join(tlsDir,'server.pem'))},(request,response)=>{
-    const index=++calls;record();
-    if(!visual||index>4||request.method!=='POST'||request.url!=='/v1/messages'){if(visual)invalidCalls++;request.resume();response.writeHead(503);response.end();record();return;}
+    ++totalCalls;record();
+    if(!visual||totalCalls>5||request.method!=='POST'||request.url!=='/v1/responses'){if(visual)invalidCalls++;request.resume();response.writeHead(503);response.end();record();return;}
     let bytes=0,body='';request.setEncoding('utf8');
     request.on('data',chunk=>{bytes+=Buffer.byteLength(chunk);if(bytes>131072){invalidCalls++;record();request.destroy();return;}body+=chunk;});
     request.on('end',()=>{
-      let valid=false;
-      try{const parsed=JSON.parse(body);const retained=JSON.stringify(parsed.messages);valid=Array.isArray(parsed.messages)&&requests.slice(0,Math.min(index,3)).every(text=>retained.includes(text));}catch{}
-      contextMatches.push(valid);body='';record();
-      if(!valid||(index===4&&!heldCancelled)){invalidCalls++;record();response.writeHead(503);response.end();return;}
+      let valid=false,b=false,index=0;
+      try{const parsed=JSON.parse(body);const retained=JSON.stringify(parsed.input);b=retained.includes(bRequest);if(b){bCalls++;valid=bCalls===1&&parsed.model==='gpt-6.1-sol'&&Array.isArray(parsed.input)&&requests.every(text=>!retained.includes(text))&&answers.every(text=>!retained.includes(text));}else{index=++calls;valid=index<=4&&parsed.model===(index<=2?'gpt-6.1-terra':'gpt-6.1-sol')&&Array.isArray(parsed.input)&&!retained.includes(bRequest)&&!retained.includes(bAnswer)&&requests.slice(0,Math.min(index,3)).every(text=>retained.includes(text));}}catch{}
+      if(!b)contextMatches.push(valid);body='';record();
+      if(!valid||(!b&&index===4&&!heldCancelled)){invalidCalls++;record();response.writeHead(503);response.end();return;}
       response.writeHead(200,{'content-type':'text/event-stream'});
-      if(index!==3){response.end(stream(index,true));return;}
+      if(b||index!==3){response.end(stream(index,true,b));return;}
       response.write(stream(index,false));
       // Deliberately incomplete SSE: only native cancellation should close it.
       const timer=setTimeout(()=>{heldTimedOut=true;record();response.destroy();},30000);
@@ -81,8 +89,8 @@ data: ${JSON.stringify(data)}
   try{await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Owned TLS fixture listen timed out')),5000);server.once('error',()=>{clearTimeout(timer);reject(new Error('Owned TLS fixture unavailable'));});server.listen(0,'127.0.0.1',()=>{clearTimeout(timer);resolve();});});}
   catch(error){server.closeAllConnections();server.close();throw error;}
   const file=path.join(folder,visual?'visual-transport.json':'quota-transport.json');
-  fs.writeFileSync(file,JSON.stringify({endpoint:`https://127.0.0.1:${server.address().port}/v1/messages`,certificate:Array.from(new X509Certificate(fs.readFileSync(path.join(tlsDir,'ca.pem'))).raw),...(visual?{answer:answers[0],answers,requests,stateFile,captureDir:path.join(folder,'captures')}: {})}));
-  return{file,calls:()=>calls,invalidCalls:()=>invalidCalls,journeyValid:()=>calls===4&&invalidCalls===0&&heldCancelled&&!heldTimedOut&&contextMatches.length===4&&contextMatches.every(Boolean),close:()=>new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Owned TLS fixture close timed out')),5000);server.close(error=>{clearTimeout(timer);error?reject(new Error('Owned TLS fixture close failed')):resolve();});server.closeAllConnections();})};
+  fs.writeFileSync(file,JSON.stringify({endpoint:`https://127.0.0.1:${server.address().port}/${visual?'v1/responses':'v1/messages'}`,certificate:Array.from(new X509Certificate(fs.readFileSync(path.join(tlsDir,'ca.pem'))).raw),...(visual?{answer:answers[0],answers,requests,bRequest,bAnswer,stateFile,captureDir:path.join(folder,'captures')}: {})}));
+  return{file,calls:()=>totalCalls,invalidCalls:()=>invalidCalls,journeyValid:()=>calls===4&&bCalls===1&&totalCalls===5&&invalidCalls===0&&heldCancelled&&!heldTimedOut&&contextMatches.length===4&&contextMatches.every(Boolean),close:()=>new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Owned TLS fixture close timed out')),5000);server.close(error=>{clearTimeout(timer);error?reject(new Error('Owned TLS fixture close failed')):resolve();});server.closeAllConnections();})};
 }
 async function launch(phase){
   const quota=phase==='quota',visual=phase==='visual',onboarding=phase==='onboarding';

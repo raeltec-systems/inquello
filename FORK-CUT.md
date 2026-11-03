@@ -780,3 +780,13 @@ Messages item/delta ordering and private tool schema selection, and corrects
 legacy-format/concurrent-Stop/idle-guest fixtures without weakening authority.
 See `_bmad-output/implementation-artifacts/validation/story130-windows-scoped-20261101.md`
 for measured results and remaining manual, release and cumulative epic gates.
+
+### Story 1.22 conversation model bindings (2026-11-02)
+
+The approved model-binding extension adds migration 0016: one independent binding-state table over immutable route configurations, preserving exact Task associations and historical receipt bytes. Named cached catalog/resolve/select/revoke/revalidation operations retain trusted native credential slots, selection/state CAS and immutable operation receipts. Creating a second model no longer stales another conversation's configuration.
+
+Task/reviewer/output guards use exact active bindings and actual selection/settings revisions. Scoped disclosure fences include current choices and retained executed model dependencies, with bounded complete metadata or refusal; identity, credential, policy, data-tier and quota checks remain independent. Terminal model/settings changes preserve executed run history before future continuation. These patches do not promote model access, privacy eligibility, paid-profile activation or Epic acceptance.
+
+The owned synthetic fixture supports exact Terra/Sol configurations on the Responses transport without real credentials. Local qualification and remaining platform/runtime gates are recorded in `docs/qualification/conversation-model-bindings-2026-11-02.md`. Build-script Clippy support preserves every existing measured-source/data-policy/symlink check and changes only failure reporting.
+
+Installed-toolchain lint support also applies equivalent let-chain, method-reference and match forms in inherited app-server/core execution paths. Intentional local authority/SQLite arbitration retains narrowly documented per-function expectations; owned race and persisted-data corruption tests keep their explicit barriers and fault setup. Concurrent reservation workers still all spawn before joining. No network wait is introduced under an authority lock, and the per-call accounting lock is released after durable attempt insertion before the final fresh authority recheck. The nonfrozen engineering companion maps these support paths.

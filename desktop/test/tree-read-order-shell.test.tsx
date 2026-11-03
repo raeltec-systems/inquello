@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import {modelCatalog,modelBindingId} from './model-fixtures';
 import {act,cleanup,render,screen,waitFor} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import {afterEach,expect,it,vi} from 'vitest';
@@ -12,11 +13,11 @@ async function acceptedWhileOldTreePending(newerFails=false){
  const getTree=vi.fn<()=>Promise<unknown>>().mockImplementationOnce(()=>new Promise(resolve=>{finishOld=resolve;})).mockImplementation(async()=>newerFails?{ok:false,code:'failed',reason:'Current private access refused.'}:tree([task]));
  const start=vi.fn(async(command:Record<string,unknown>)=>({ok:true,value:{operationId:command.operationId,taskId,runId:'run',threadId:'thread',status:'running',request:command.request,accepted:true}}));
  const route={routeId:'claude-api-key',provider:'Claude',configurable:true,configuration:{routeId:'claude-api-key',deployment:'anthropic-direct',model:'claude-sonnet-5-5',apiVersion:'2026-10-21',accountRef:'account',region:null},endpoint:'https://api.anthropic.com',revision:1,credentialPresent:true,adapterSupported:true,verification:'verified_for_synthetic',enabled:true,gate:null,limits:[],evidence:['fixture'],executionFlow:'Local sandbox',inferenceFlow:'Cloud inference',connectorFlow:'Unavailable'};
- Object.assign(globalThis,{inquello:{organise:{getWorkspaces:async()=>({signedIn:true,sharedService:'available',workspaces:[{workspaceId:workspace,name:'Fictional Workspace',source:'service'}],engagementCreation:{enabled:false}}),getTree},routes:{list:async()=>({ok:true,value:[route]})},tasks:{preflight:async()=>({ok:true,value:{routeId:route.routeId,configurationRevision:1,reasoning:['default'],speeds:['default'],available:true,reason:'Available',executionFlow:'Local sandbox',inferenceFlow:'Cloud inference'}}),start}}});
+ Object.assign(globalThis,{inquello:{organise:{getWorkspaces:async()=>({signedIn:true,sharedService:'available',workspaces:[{workspaceId:workspace,name:'Fictional Workspace',source:'service'}],engagementCreation:{enabled:false}}),getTree},routes:{catalog:async()=>({ok:true,value:modelCatalog([route as never])})},tasks:{preflight:async()=>({ok:true,value:{routeId:route.routeId,configurationRevision:1,reasoning:['default'],speeds:['default'],available:true,reason:'Available',executionFlow:'Local sandbox',inferenceFlow:'Cloud inference'}}),start}}});
  render(<Shell onShowSpecimen={()=>{}}/>);const user=userEvent.setup();
  await waitFor(()=>expect(getTree).toHaveBeenCalledOnce());await user.click(await screen.findByRole('button',{name:'New chat'}));
- await screen.findByLabelText('Processing route');await waitFor(()=>expect(screen.getByRole('option',{name:/Claude/})).toBeTruthy());
- await user.selectOptions(screen.getByLabelText('Processing route'),'claude-api-key');await screen.findByLabelText('Reasoning');
+ await screen.findByLabelText('Model');await waitFor(()=>expect(screen.getByRole('option',{name:/Claude/})).toBeTruthy());
+ await user.selectOptions(screen.getByLabelText('Model'),modelBindingId(1));await screen.findByLabelText('Reasoning');
  await user.selectOptions(screen.getByLabelText('Reasoning'),'default');await user.selectOptions(screen.getByLabelText('Speed'),'default');
  await user.type(screen.getByRole('textbox'),'Review fictional invoices.');await user.click(screen.getByLabelText('Send'));
  await waitFor(()=>expect(getTree.mock.calls.length).toBeGreaterThan(1));

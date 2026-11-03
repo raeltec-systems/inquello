@@ -9,7 +9,7 @@ import { IconButton } from '../primitives';
 import type { DraftBinding } from './drafts';
 
 /** Why Send is unavailable until runs exist (Story 1.25). */
-export const SEND_ROUTE_REASON = 'Sending starts once a processing route is set up.';
+export const SEND_ROUTE_REASON = 'Choose a model before sending.';
 /** Shown before the route reason while the request is empty. */
 export const SEND_EMPTY_REASON = 'Type a request to send.';
 

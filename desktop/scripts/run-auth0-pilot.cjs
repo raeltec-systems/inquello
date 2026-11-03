@@ -7,7 +7,7 @@ const {randomUUID,createHash}=require('node:crypto');
 const readline=require('node:readline');
 const {createOwnedProcessGuard}=require('./smoke-processes.cjs');
 const ISSUER='https://inquello-dev.uk.auth0.com/',CLIENT='lUsBSlvk4B7HGotQQfILudjs7WeKRFU9';
-const SERVICE_SHA='9af80fc7ffd3f19655cc6b15a07435bd3243f8a9133b341f6f42a13f8ef27083';
+// Retained pilot provenance stays immutable when a verified runtime is upgraded.
 const ENGINE_TREE='4846abe8470db3c1ae45e26d71ad05980a41b348';
 const OPENSSL='C:\\Program Files\\Git\\usr\\bin\\openssl.exe',PSQL='C:\\Program Files\\PostgreSQL\\18\\bin\\psql.exe';
 const failure=()=>new Error('Owned Auth0 pilot unavailable; retained state requires operator review');
@@ -20,15 +20,24 @@ function run(binary,args,options={}){try{return execFileSync(binary,args,{stdio:
 function json(file,value){fs.writeFileSync(file,JSON.stringify(value,null,2),{flag:'wx',mode:0o600});}
 function normalConfig(root,port){return {service_url:`https://127.0.0.1:${port}`,issuer_url:ISSUER,issuer_label:'Inquello development identity',client_id:CLIENT,ca_path:path.join(root,'tls','ca.pem'),identity_profile:'auth0',issuer_trust:'system',callback_port:43821};}
 async function available(port){await new Promise((resolve,reject)=>{const server=net.createServer();server.once('error',()=>reject(failure()));server.listen(port,'127.0.0.1',()=>server.close(error=>error?reject(failure()):resolve()));});}
-function verifyBuild(repo,manifestFile){const m=JSON.parse(fs.readFileSync(regular(manifestFile),'utf8'));if(m.engineTree!==ENGINE_TREE||hash(regular(m.runtime,536870912))!==String(m.runtimeSha256).toLowerCase()||hash(regular(m.cli,536870912))!==String(m.cliSha256).toLowerCase())throw failure();if(run('git',['rev-parse','HEAD:engine'],{cwd:repo,encoding:'utf8'}).trim()!==ENGINE_TREE||run('git',['status','--porcelain','--','engine'],{cwd:repo,encoding:'utf8'}).trim())throw failure();const service=regular(path.join(repo,'.tmp','story131-serve-production','inquello-service.exe'),536870912);if(hash(service)!==SERVICE_SHA)throw failure();return {...m,service};}
-function prepare(root,port,env){
+function verifyBuildMetadata(manifest,stamp,currentTree,dirty){if(manifest.manifestVersion!==2||!/^[a-f0-9]{40}$/.test(currentTree)||dirty||manifest.engineTree!==currentTree||manifest.serviceEngineTree!==currentTree||stamp.forkTreeHash!==currentTree||[manifest.runtimeSha256,manifest.cliSha256,manifest.serviceSha256,manifest.desktopDistSha256].some(digest=>typeof digest!=='string'||!/^[a-f0-9]{64}$/.test(digest)))throw failure();}
+// External matched metadata pins generated Desktop bytes without feeding their
+// hashes back into measured source. No install, live profile read or network call.
+function hashDesktopDist(directory){
+ if(!path.isAbsolute(directory)||fs.realpathSync(directory)!==directory)throw failure();
+ const digest=createHash('sha256');let files=0,total=0;
+ const visit=(folder,prefix)=>{const stat=fs.lstatSync(folder);if(!stat.isDirectory()||stat.isSymbolicLink())throw failure();for(const name of fs.readdirSync(folder).sort()){const file=path.join(folder,name),relative=prefix+name,stat=fs.lstatSync(file);if(stat.isSymbolicLink())throw failure();if(stat.isDirectory()){visit(file,relative+'/');continue;}if(!stat.isFile()||++files>8192||(total+=stat.size)>268435456)throw failure();const bytes=fs.readFileSync(file);digest.update(JSON.stringify([relative,bytes.length]));digest.update(bytes);}};
+ visit(directory,'');if(!files)throw failure();return digest.digest('hex');
+}
+function verifyBuild(repo,manifestFile){const m=JSON.parse(fs.readFileSync(regular(manifestFile),'utf8'));const stamp=JSON.parse(fs.readFileSync(regular(path.join(repo,'desktop','src','protocol','schema-stamp.json')),'utf8'));verifyBuildMetadata(m,stamp,run('git',['rev-parse','HEAD:engine'],{cwd:repo,encoding:'utf8'}).trim(),run('git',['status','--porcelain','--','engine'],{cwd:repo,encoding:'utf8'}).trim());if(hash(regular(m.runtime,536870912))!==m.runtimeSha256||hash(regular(m.cli,536870912))!==m.cliSha256)throw failure();const service=regular(m.service,536870912);if(hash(service)!==m.serviceSha256||hashDesktopDist(path.join(repo,'desktop','dist'))!==m.desktopDistSha256)throw failure();return {...m,service};}
+function prepare(root,port,env,engineTree){
  if(fs.existsSync(root)||!path.isAbsolute(root)||fs.realpathSync(path.dirname(root))!==path.dirname(root))throw failure();
  fs.mkdirSync(root);root=fs.realpathSync(root);
  // Private root ACL, inherited by keys/config/profile. No certificate trust installation.
  const identity=run('whoami.exe',['/user','/fo','csv','/nh'],{encoding:'utf8'}),sid=identity.match(/S-1-5-(?:\d+-)*\d+/)?.[0];if(!sid)throw failure();
  run('icacls.exe',[root,'/inheritance:r','/grant:r',`*${sid}:(OI)(CI)F`]);
  const runId=randomUUID(),name='inquello_auth0_'+runId.replaceAll('-',''),db=database(env,name);
- const state={version:1,runId,databaseName:name,databaseContext:createHash('sha256').update(JSON.stringify([db.pg.PGHOST,db.pg.PGPORT,db.pg.PGUSER,db.pg.PGSSLMODE??null])).digest('hex'),port,root,engineTree:ENGINE_TREE,state:'preparing'};
+ const state={version:1,runId,databaseName:name,databaseContext:createHash('sha256').update(JSON.stringify([db.pg.PGHOST,db.pg.PGPORT,db.pg.PGUSER,db.pg.PGSSLMODE??null])).digest('hex'),port,root,engineTree,state:'preparing'};
  json(path.join(root,'pilot.json'),state);
  run(PSQL,['-X','-v','ON_ERROR_STOP=1','-At','-c',`CREATE DATABASE "${name}"`],{env:{...baseEnv(env),...db.pg}});
  const tls=path.join(root,'tls');fs.mkdirSync(tls);const ssl=(...args)=>run(OPENSSL,args,{cwd:tls,env:baseEnv(env)});
@@ -42,7 +51,7 @@ function prepare(root,port,env){
  json(path.join(root,'.inquello-dev-profile'),{version:1,runId,profileRoot:profile,configFile,configSha256:hash(configFile),state:'new',profileNonce:randomUUID()});
  state.state='ready';state.configSha256=hash(configFile);state.serveSha256=hash(path.join(root,'serve.json'));state.caSha256=hash(path.join(tls,'ca.pem'));fs.writeFileSync(path.join(root,'pilot.json'),JSON.stringify(state,null,2));return state;
 }
-function resume(root){if(!path.isAbsolute(root)||fs.realpathSync(root)!==root||!fs.lstatSync(root).isDirectory()||fs.lstatSync(root).isSymbolicLink())throw failure();const s=JSON.parse(fs.readFileSync(regular(path.join(root,'pilot.json')),'utf8'));if(s.version!==1||s.root!==root||s.state!=='ready'||s.engineTree!==ENGINE_TREE||!/^inquello_auth0_[a-f0-9]{32}$/.test(s.databaseName)||s.databaseName!=='inquello_auth0_'+String(s.runId).replaceAll('-','')||!Number.isInteger(s.port)||s.port<1024||s.port>65535||s.port===43821)throw failure();for(const [file,digest]of [['config.json',s.configSha256],['serve.json',s.serveSha256],['tls/ca.pem',s.caSha256]])if(hash(regular(path.join(root,file)))!==digest)throw failure();if(JSON.stringify(JSON.parse(fs.readFileSync(path.join(root,'config.json'),'utf8')))!==JSON.stringify(normalConfig(root,s.port)))throw failure();return s;}
+function resume(root,currentTree=ENGINE_TREE){if(!/^[a-f0-9]{40}$/.test(currentTree)||!path.isAbsolute(root)||fs.realpathSync(root)!==root||!fs.lstatSync(root).isDirectory()||fs.lstatSync(root).isSymbolicLink())throw failure();const s=JSON.parse(fs.readFileSync(regular(path.join(root,'pilot.json')),'utf8'));if(s.version!==1||s.root!==root||s.state!=='ready'||![ENGINE_TREE,currentTree].includes(s.engineTree)||!/^inquello_auth0_[a-f0-9]{32}$/.test(s.databaseName)||s.databaseName!=='inquello_auth0_'+String(s.runId).replaceAll('-','')||!Number.isInteger(s.port)||s.port<1024||s.port>65535||s.port===43821)throw failure();for(const [file,digest]of [['config.json',s.configSha256],['serve.json',s.serveSha256],['tls/ca.pem',s.caSha256]])if(hash(regular(path.join(root,file)))!==digest)throw failure();if(JSON.stringify(JSON.parse(fs.readFileSync(path.join(root,'config.json'),'utf8')))!==JSON.stringify(normalConfig(root,s.port)))throw failure();return s;}
 function waitLine(child,predicate,timeout){return new Promise((resolve,reject)=>{let finished=false;const lines=readline.createInterface({input:child.stdout});const timer=setTimeout(()=>finish(failure()),timeout);const finish=(error,value)=>{if(finished)return;finished=true;clearTimeout(timer);lines.close();child.stdout.resume();child.off('exit',exit);child.off('error',errorHandler);error?reject(error):resolve(value);};const exit=()=>finish(failure()),errorHandler=()=>finish(failure());child.once('exit',exit);child.once('error',errorHandler);lines.on('line',line=>{if(line.length>65536)return finish(failure());let value;try{value=JSON.parse(line);}catch{return;}if(predicate(value))finish(null,value);});});}
 async function waitExit(child,timeout){if(child.pid===undefined)return true;if(child.exitCode!==null||child.signalCode!==null)return true;return new Promise(resolve=>{const timer=setTimeout(()=>done(false),timeout);const done=value=>{clearTimeout(timer);child.off('exit',exit);resolve(value);};const exit=()=>done(true);child.once('exit',exit);});}
 function safeEnd(child){const stream=child?.stdin;if(!stream||stream.destroyed||stream.writableEnded)return;try{stream.end();}catch{/* Fixed cleanup result below remains authoritative. */}}
@@ -52,9 +61,9 @@ async function main(args=process.argv.slice(2),env=process.env){
  const desktop=path.resolve(__dirname,'..'),repo=path.dirname(desktop),build=verifyBuild(repo,path.resolve(options['--manifest']));
  regular(OPENSSL,134217728);regular(PSQL,134217728);
  const root=path.resolve(options['--resume']||options['--root']);let state;
- if(options['--resume'])state=resume(root);
+ if(options['--resume'])state=resume(root,build.engineTree);
  const port=state?.port??Number(options['--port']);await available(port);await available(43821);
- if(!state)state=prepare(root,port,env);
+ if(!state)state=prepare(root,port,env,build.engineTree);
  const db=database(env,state.databaseName),clean=baseEnv(env);if(state.databaseContext!==createHash('sha256').update(JSON.stringify([db.pg.PGHOST,db.pg.PGPORT,db.pg.PGUSER,db.pg.PGSSLMODE??null])).digest('hex'))throw failure();let service,electron,guard,cleanRuntimeExit=false;
  const record=event=>fs.appendFileSync(path.join(root,'lifecycle.jsonl'),JSON.stringify({at:new Date().toISOString(),...event})+'\n');
  let stopping=false;const stop=()=>{stopping=true;safeEnd(electron);safeEnd(service);};process.once('SIGINT',stop);process.once('SIGTERM',stop);
@@ -62,7 +71,7 @@ async function main(args=process.argv.slice(2),env=process.env){
   service=spawn(build.service,['serve','--config',path.join(root,'serve.json'),'--exit-on-stdin-eof'],{env:{...clean,INQUELLO_PILOT_DATABASE_URL:db.url},stdio:['pipe','pipe','pipe'],windowsHide:true});
   // Never persist service stderr or session/config contents; fixed readiness only.
   service.on('error',()=>{});service.stdin.on('error',()=>{});service.stderr.resume();service.once('exit',()=>{if(electron)stopping=true;});await waitLine(service,v=>v.service_url===normalConfig(root,port).service_url&&v.deployment==='production'&&v.delivery==='not_configured',60000);
-  record({event:'service-ready',pid:service.pid,serviceUrl:normalConfig(root,port).service_url});
+  record({event:'service-ready',pid:service.pid,serviceUrl:normalConfig(root,port).service_url,engineTree:build.engineTree,profileCreatedEngineTree:state.engineTree});
   if(stopping)throw failure();
   const electronBinary=path.join(desktop,'node_modules','electron','dist','electron.exe');
   electron=spawn(electronBinary,['.',...(options['--resume']?['--resume-owned-profile']:[])],{cwd:desktop,env:{...clean,INQUELLO_SERVICE_CONFIG:path.join(root,'config.json'),INQUELLO_DEV_PROFILE:path.join(root,'profile'),INQUELLO_DEV_RUN_ID:state.runId,INQUELLO_APP_SERVER:build.runtime,INQUELLO_CODEX_CLI:build.cli},stdio:['pipe','pipe','pipe'],windowsHide:false});
@@ -78,5 +87,5 @@ async function main(args=process.argv.slice(2),env=process.env){
   console.log(JSON.stringify({event:'PILOT_STOPPED',root,retained:true,servicePid:service?.pid,electronPid:electron?.pid,cleanupErrors:failures}));if(failures.length)throw failure();
  }
 }
-module.exports={parseArgs,baseEnv,database,normalConfig,resume,safeEnd,cleanupOwned,waitLine};
+module.exports={parseArgs,baseEnv,database,normalConfig,resume,verifyBuildMetadata,hashDesktopDist,safeEnd,cleanupOwned,waitLine};
 if(require.main===module)main().catch(()=>{console.error('Owned Auth0 pilot unavailable. Inspect public lifecycle evidence; retained data was not deleted.');process.exitCode=1;});

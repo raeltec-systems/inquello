@@ -10,7 +10,7 @@ function setup(){
  const snapshot=vi.fn(()=>status),getStatus=vi.fn(async()=>status),changing=vi.fn(()=>false),handoff=vi.fn();
  const privateRouteAuth=vi.fn(),verify=vi.fn(async(_route:RouteView)=>{});
  const request=vi.fn(async()=>({routes:[structuredClone(row)]}));
- const options:RouteServiceOptions={runtime:{ready:()=>true,instance:()=>instance,request:request as never,privateRouteAuth,stop:vi.fn()},identity:{principalId:()=>owner},syncPrincipal:async()=>{},providers:{snapshot,getStatus,routeCredentialChanging:changing,handoffClaude:handoff} as unknown as RouteServiceOptions['providers'],freshPolicy:async()=>null,syntheticFixtureBinding:verify};
+ const options:RouteServiceOptions={taskBinding:async()=>({routeId:row.routeId,configurationRevision:row.revision,disclosureBindings:[{routeId:row.routeId,configurationRevision:row.revision,active:true}]}),runtime:{ready:()=>true,instance:()=>instance,request:request as never,privateRouteAuth,stop:vi.fn()},identity:{principalId:()=>owner},syncPrincipal:async()=>{},providers:{snapshot,getStatus,routeCredentialChanging:changing,handoffClaude:handoff} as unknown as RouteServiceOptions['providers'],freshPolicy:async()=>null,syntheticFixtureBinding:verify};
  return{service:new RouteService(options),status,verify,request,privateRouteAuth,handoff,changing,setOwner:()=>{owner='22222222-2222-4222-8222-222222222222';},restart:()=>{instance++;}};
 }
 describe('dedicated synthetic route verification',()=>{

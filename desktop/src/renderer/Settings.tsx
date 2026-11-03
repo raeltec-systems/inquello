@@ -12,9 +12,9 @@ export function Settings({onBack,onIdentityChanged}:{onBack:()=>void;onIdentityC
  const [focusTarget,setFocusTarget]=useState(()=>providerSettingsTarget(globalThis.location.hash));
  useEffect(()=>{const changed=()=>{setCurrent(section());setFocusTarget(providerSettingsTarget(globalThis.location.hash));};globalThis.addEventListener('hashchange',changed);return()=>globalThis.removeEventListener('hashchange',changed);},[]);
  return <main className="iq-settings" aria-label="Settings"><nav aria-label="Settings sections"><Button variant="quiet" onPress={onBack}>{current==='signout'?'Cancel · back to chat':'Back to chat'}</Button><h1>Settings</h1>
- {(['account','providers','routes'] as const).map(value=><a key={value} href={`#settings-${value}`} aria-current={current===value?'page':undefined}>{value==='account'?'Account':value==='providers'?'Providers':'Processing routes'}</a>)}
- <a href="#onboarding">Workspace and team</a></nav><section className="iq-settings-panel" aria-label={current==='signout'?'Sign out?':current==='account'?'Account':current==='providers'?'Providers':'Processing routes'}>
- <h2>{current==='signout'?'Sign out?':current==='account'?'Account':current==='providers'?'Providers':'Processing routes'}</h2>
+ {(['account','providers','routes'] as const).map(value=><a key={value} href={`#settings-${value}`} aria-current={current===value?'page':undefined}>{value==='account'?'Account':value==='providers'?'AI connections':'Models'}</a>)}
+ <a href="#onboarding">Workspace and team</a></nav><section className="iq-settings-panel" aria-label={current==='signout'?'Sign out?':current==='account'?'Account':current==='providers'?'AI connections':'Models'}>
+ <h2>{current==='signout'?'Sign out?':current==='account'?'Account':current==='providers'?'AI connections':'Models'}</h2>
  {current==='signout'?<Account signOutOnly onIdentityChanged={onIdentityChanged}/>:current==='account'?<Account onIdentityChanged={onIdentityChanged}/>:current==='providers'?<Providers focusTarget={focusTarget}/>:<ProcessingRoutes/>}
  </section></main>;
 }

@@ -53,6 +53,7 @@ const DATA_EXPORT_CHANNEL = 'inquello:op:data.export';
 const DATA_IMPORT_CHANNEL = 'inquello:op:data.import';
 const DATA_DELETE_CHANNEL = 'inquello:op:data.delete';
 const PROVIDER_STATUS_CHANNEL = 'inquello:op:provider.getStatus';
+const PROVIDER_REFRESH_STATUS_CHANNEL = 'inquello:op:provider.refreshStatus';
 const PROVIDER_SET_CLAUDE_KEY_CHANNEL = 'inquello:op:provider.setClaudeKey';
 const PROVIDER_VERIFY_CLAUDE_KEY_CHANNEL = 'inquello:op:provider.verifyClaudeKey';
 const PROVIDER_REMOVE_CLAUDE_KEY_CHANNEL = 'inquello:op:provider.removeClaudeKey';
@@ -87,7 +88,11 @@ const CAPABILITIES_INVENTORY_CHANNEL = 'inquello:op:capabilities.getInventory';
 const CAPABILITIES_MANAGE_CHANNEL = 'inquello:op:capabilities.manage';
 
 const ROUTES_LIST_CHANNEL = 'inquello:op:routes.list';
-const ROUTES_CONFIGURE_CHANNEL = 'inquello:op:routes.configure';
+const ROUTES_CATALOG_CHANNEL = 'inquello:op:routes.catalog';
+const ROUTES_RESOLVE_CHANNEL = 'inquello:op:routes.resolve';
+const ROUTES_BINDING_STATE_CHANNEL = 'inquello:op:routes.bindingState';
+const ROUTES_SELECT_MODEL_CHANNEL = 'inquello:op:routes.selectModel';
+const ROUTES_PENDING_MODEL_CHANNEL = 'inquello:op:routes.pendingModel';
 const ROUTES_TASK_CHANNEL = 'inquello:op:routes.forTask';
 const ROUTES_SELECT_CHANNEL = 'inquello:op:routes.select';
 const ROUTES_CHANGED_CHANNEL = 'inquello:routes-changed';
@@ -171,12 +176,16 @@ const api = Object.freeze({
   }),
   routes: Object.freeze({
     list: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ROUTES_LIST_CHANNEL, ...args),
-    configure: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ROUTES_CONFIGURE_CHANNEL, ...args),
+    catalog: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ROUTES_CATALOG_CHANNEL, ...args),
+    resolve: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ROUTES_RESOLVE_CHANNEL, ...args),
+    bindingState: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ROUTES_BINDING_STATE_CHANNEL, ...args),
+    selectModel: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ROUTES_SELECT_MODEL_CHANNEL, ...args),
+    pendingModel: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ROUTES_PENDING_MODEL_CHANNEL, ...args),
     forTask: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ROUTES_TASK_CHANNEL, ...args),
     select: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ROUTES_SELECT_CHANNEL, ...args),
-    onChanged: (listener: () => void): (() => void) => {
+    onChanged: (listener: (change?:{authority:boolean;taskId?:string;binding?:{routeId:string;configurationRevision:number}}) => void): (() => void) => {
       if (typeof listener !== 'function') throw new Error('expected a listener');
-      const handler = () => listener(); ipcRenderer.on(ROUTES_CHANGED_CHANNEL, handler);
+      const handler = (_event:unknown,raw:unknown) => {const r=raw&&typeof raw==='object'?raw as Record<string,unknown>:null;listener(r&&typeof r.authority==='boolean'?{authority:r.authority,...(typeof r.taskId==='string'?{taskId:r.taskId}:{}),...(r.binding&&typeof r.binding==='object'&&['codex-responses','claude-api-key'].includes(String((r.binding as Record<string,unknown>).routeId))&&Number.isSafeInteger((r.binding as Record<string,unknown>).configurationRevision)?{binding:{routeId:String((r.binding as Record<string,unknown>).routeId),configurationRevision:Number((r.binding as Record<string,unknown>).configurationRevision)}}:{})}:{authority:true});}; ipcRenderer.on(ROUTES_CHANGED_CHANNEL, handler);
       return () => ipcRenderer.removeListener(ROUTES_CHANGED_CHANNEL, handler);
     },
   }),
@@ -216,6 +225,7 @@ const api = Object.freeze({
   provider: Object.freeze({
     /** Resolves with `{ claude, codex, routes }`: states and storage kinds only, never a key. */
     getStatus: (): Promise<unknown> => ipcRenderer.invoke(PROVIDER_STATUS_CHANNEL),
+    refreshStatus:():Promise<unknown>=>ipcRenderer.invoke(PROVIDER_REFRESH_STATUS_CHANNEL),
     /** Hands the entered Claude API key to main once; resolves with `{ ok, reason?, status }`. */
     setClaudeKey: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(PROVIDER_SET_CLAUDE_KEY_CHANNEL, ...args),
     /** Runs the free key check against Anthropic's model list; resolves with `{ ok, reason?, status }`. */

@@ -1,0 +1,119 @@
+{
+  "schema": "inquello-production-chat-supplemental-verification-v1",
+  "recorded": "2026-11-03T07:15:43.575Z",
+  "status": "Software qualification and synthetic UI verified; ordinary live provider acceptance pending",
+  "sourceCommit": "ce086d71dd0a2f19ccc85e891a1f2bc21f07f405",
+  "engineTree": "9607893b7677aba18a3758e41fafc2860adef14f",
+  "implementationDigest": "88a129e2ae2995e9bdd1fa4182d3ebda18608030a73eb1b49d4e1d7e57217fa5",
+  "qualification": {
+    "path": "D:\\Projects\\inquello\\_bmad-output\\implementation-artifacts\\production-chat-v4-verification-r2-2026-11-03.json",
+    "sha256": "73dddbbc77b514705f9b05af774d0425980d0bf4b11bce24e5bee427ea6b1d39"
+  },
+  "defaultBuild": {
+    "path": "D:/Projects/inquello/.tmp/production-chat-r2-production-stack-20261103/matched-production-build.json",
+    "sha256": "f6621e537e1f10c2fd73f8d7a070d53253274940c37ef4583066539c601ce3c9",
+    "runtimeSha256": "e47432bc2b94a22fba9a9079e9426643b0adeaa51b2b70a02968774a9e2f83c1",
+    "cliSha256": "0d60d762c2b427254daee838a9a410eec73a89054a8cd50f6cac6413ee02e7af",
+    "serviceSha256": "3986b5e2feb5e13d210c2f1d4cf8ab8419b4621e12681f26bb91bd721b894158",
+    "desktopDistSha256": "e7819f185cac65552843dd3f104c3ebb412362d444f98ede238be8d7c4decf96"
+  },
+  "postattachment": {
+    "path": "D:/Projects/inquello/.tmp/production-chat-r2-postattachment-artifacts.json",
+    "sha256": "fad34a9cacdc5fa3d77778889d5746faa77da0c3325885368c452285184b8170",
+    "counts": {
+      "domain": 24,
+      "service": 7,
+      "nativeBin": 8,
+      "fingerprint": 5
+    },
+    "fmtExit": 0
+  },
+  "desktop": {
+    "passed": 2005,
+    "skipped": 22,
+    "stackStatus": "D:/Projects/inquello/.tmp/production-chat-r2-production-stack-status.json",
+    "nativeComposition": {
+      "retained": "D:\\Projects\\inquello\\.tmp\\production-chat-r2-production-stack-20261103\\desktop-full-suite-topology.exe",
+      "note": "Actual full Desktop suite uses newly rebuilt default native server and retained r2 synthetic topology from before evidence-only attachment. Current compiled-service approval positive is separately verified; not default service end-to-end qualification.",
+      "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\inquello-dev-topology.exe",
+      "recorded": "2026-11-03T06:53:42.0009878Z",
+      "sha256": "6007CC6FB275ABFB37EBBB129AC9D4E8368ED3CB42DEDEDFC9590C3E334698F0",
+      "observedDefaultServerPid": 13796,
+      "observedTopologyPid": 2000
+    }
+  },
+  "visual": {
+    "command": "node scripts/run-seeded-smoke.cjs --visual-only",
+    "exit": 0,
+    "log": "D:\\Projects\\inquello\\.tmp\\production-chat-r2-visual-journey.log",
+    "logSha256": "65329503b3f78d09798326a81a298da6b4484c93c6416a79a978e2b9ef04d0ca",
+    "compositionManifest": "D:/Projects/inquello/.tmp/production-chat-r2-production-stack-20261103/synthetic-composition/manifest.json",
+    "compositionSha256": "30d4d6bcb2f0f85257de0d96d535aac897877629c4f1b31893cda22e2aca43b3",
+    "effects": {
+      "calls": 4,
+      "bCalls": 1,
+      "totalCalls": 5,
+      "invalidCalls": 0,
+      "heldCancelled": true,
+      "heldTimedOut": false,
+      "contextMatches": [
+        true,
+        true,
+        true,
+        true
+      ]
+    },
+    "cleanupErrors": [],
+    "captures": [
+      {
+        "name": "02-completed-conversation-synthetic",
+        "path": "docs/qualification/production-chat-r2-2026-11-03/02-completed-conversation-synthetic.png",
+        "sha256": "9f3b4b9aac0570dc0d1279857dfb592d7d0e30f3494355bc8fd9d64030dd359c",
+        "source": "D:/Projects/inquello/.tmp/inquello-seeded-smoke-6OWNWn/visual/captures/02-completed-conversation-synthetic.png"
+      },
+      {
+        "name": "02b-narrow-conversation-synthetic",
+        "path": "docs/qualification/production-chat-r2-2026-11-03/02b-narrow-conversation-synthetic.png",
+        "sha256": "538eff62a50c7bcf7856a486a56edb9a24ed8099493bd28ad76f39095ccd3ad1",
+        "source": "D:/Projects/inquello/.tmp/inquello-seeded-smoke-6OWNWn/visual/captures/02b-narrow-conversation-synthetic.png"
+      },
+      {
+        "name": "04-interrupted-conversation-synthetic",
+        "path": "docs/qualification/production-chat-r2-2026-11-03/04-interrupted-conversation-synthetic.png",
+        "sha256": "45bbdbe64e17aacf27b5c3d6815e1a34502a43f4c38cb88d7867b007a544e320",
+        "source": "D:/Projects/inquello/.tmp/inquello-seeded-smoke-6OWNWn/visual/captures/04-interrupted-conversation-synthetic.png"
+      },
+      {
+        "name": "06-resumed-conversation-synthetic",
+        "path": "docs/qualification/production-chat-r2-2026-11-03/06-resumed-conversation-synthetic.png",
+        "sha256": "a4a272e61d29e6e0188a72c6e0edab3149356062e06332750da3affc0cc1e0dc",
+        "source": "D:/Projects/inquello/.tmp/inquello-seeded-smoke-6OWNWn/visual/captures/06-resumed-conversation-synthetic.png"
+      },
+      {
+        "name": "08-settings-processing-routes",
+        "path": "docs/qualification/production-chat-r2-2026-11-03/08-settings-processing-routes.png",
+        "sha256": "0d0db82cae051940a4f8fa60c7b33d5a45b54d1ef69c3d4ba733fee490f56052",
+        "source": "D:/Projects/inquello/.tmp/inquello-seeded-smoke-6OWNWn/visual/captures/08-settings-processing-routes.png"
+      }
+    ]
+  },
+  "ordinaryOffline": {
+    "root": "D:/Inquello/tmp/production-chat-r2-offline-20261103-2",
+    "defaultServiceReady": true,
+    "ownedRuntimeReady": true,
+    "launcherExit": 0,
+    "cleanupErrors": [],
+    "uiResult": "Inconclusive: UIAutomation exposed no renderer tree and exact-window PrintWindow captured white; GPU capture limitation versus blank UI was not resolved. Not a signed-out visual acceptance pass.",
+    "capturePath": "D:/Projects/inquello/.tmp/production-chat-r2-production-stack-20261103/offline-owned-window.png",
+    "captureSha256": "31f559466faf977131ff6bec6cd9153577b4ea1d0e7eef6d266457e1f8e11640",
+    "historicalAttempt": "First new root retained empty: Git PATH shadowed Windows whoami. Corrected only child PATH to System32 first; no product/ACL change."
+  },
+  "limits": [
+    "Synthetic transport and current default runtime are distinct artifacts; visual fixture source916852 is retained across evidence-only ce086 commit, not relabelled current default production E2E.",
+    "Export/recovery proof is documented native/authority/service composition, not cross-process export E2E.",
+    "Known Messages warm-policy failure and skipped/platform-specific gates remain separate.",
+    "No paid provider request, actual organization approval, actual-profile upgrade, account sign-in or credential entry occurred.",
+    "No real pilot/profile was read, seeded, reset, launched or changed. New owned roots are retained.",
+    "User rejected a spend-limit feature; ordinary continuations are unchanged and no hard aggregate cost guarantee is claimed."
+  ]
+}

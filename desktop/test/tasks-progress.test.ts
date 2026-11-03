@@ -1,3 +1,4 @@
+import {taskBindingFixture} from './model-fixtures';
 import {describe,it,expect,vi} from 'vitest';
 import {TaskService} from '../src/main/tasks/service';
 import {parseProgress,parseQuestion,parseAnswers} from '../src/main/tasks/progress';
@@ -6,8 +7,18 @@ const task='11111111-1111-4111-8111-111111111111',workspace='22222222-2222-4222-
 const input={taskId:task,workspaceId:workspace};
 function snapshot(){return{version:1,...input,runId:'run-1',threadId:'thread-1',turnId:'turn-1',runtimeId:'runtime-1',status:'running',historyIncomplete:false,items:[{id:'cmd-1',kind:'command',status:'completed',text:'echo fictional'}],plan:[{id:'step-1',revision:1,text:'echo fictional',status:'done',evidenceIds:['cmd-1']}],results:[{id:'result:1',kind:'observation',text:'R01 and R03 are duplicate candidates.',checks:'unchecked',checkScope:null,evidenceIds:['cmd-1'],basis:null}],artifact:'absent'};}
 const question={threadId:'thread-1',turnId:'turn-1',itemId:'input-1',questions:[{id:'choose-record',header:'Record',question:'Which fictional record should I examine?',isOther:false,isSecret:true,options:[{label:'R01',description:'First fictional record'},{label:'R03',description:'Third fictional record'}]}]};
-function setup(){let principal:string|null=task,instance=1;let value=snapshot();let policy:unknown={workspaceId:workspace,authorizationEpoch:1};const changed=vi.fn();const sync=vi.fn(async()=>{});const request=vi.fn(async(method:string)=>method==='inquello/tasks/forThread'?{...input,runId:'run-1',threadId:'thread-1',turnId:'turn-1',runtimeId:'runtime-1',status:'running'}:value);const fresh=vi.fn(async()=>policy as never);const service=new TaskService({runtime:{ready:()=>true,instance:()=>instance,request:request as never},identity:{principalId:()=>principal},syncPrincipal:sync,prepareRoutes:async()=>({ok:true}),freshPolicy:fresh,onProgressChanged:changed});return{service,request,fresh,changed,sync,setPolicy:(p:unknown)=>{policy=p;},setPrincipal:(p:string|null)=>{principal=p;},restart:()=>{instance++;},setValue:(v:ReturnType<typeof snapshot>)=>{value=v;}};}
+function setup(taskBinding?: (taskId:string)=>Promise<{routeId:string;configurationRevision:number;disclosureBindings?:{routeId:string;configurationRevision:number;active:boolean}[]}|null>){let principal:string|null=task,instance=1;let value=snapshot();let policy:unknown={workspaceId:workspace,authorizationEpoch:1};const changed=vi.fn(),authorityUnavailable=vi.fn();const sync=vi.fn(async()=>{});const request=vi.fn(async(method:string)=>method==='inquello/tasks/forThread'?{...input,runId:'run-1',threadId:'thread-1',turnId:'turn-1',runtimeId:'runtime-1',status:'running'}:value);const fresh=vi.fn(async()=>policy as never),prepareRoutes=vi.fn(async()=>({ok:true}));const service=new TaskService({runtime:{ready:()=>true,instance:()=>instance,request:request as never},identity:{principalId:()=>principal},syncPrincipal:sync,prepareRoutes,freshPolicy:fresh,taskBinding:taskBinding?async id=>{const binding=await taskBinding(id);return binding?{...binding,disclosureBindings:binding.disclosureBindings??[{routeId:binding.routeId,configurationRevision:binding.configurationRevision,active:true}]}:null;}:taskBindingFixture,onAuthorityUnavailable:authorityUnavailable,onProgressChanged:changed});return{service,request,fresh,changed,sync,prepareRoutes,authorityUnavailable,setPolicy:(p:unknown)=>{policy=p;},setPrincipal:(p:string|null)=>{principal=p;},restart:()=>{instance++;},setValue:(v:ReturnType<typeof snapshot>)=>{value=v;}};}
 const tick=()=>new Promise(resolve=>setTimeout(resolve,0));
+
+it('discards a native A reply waiting on final main authority while independent B still publishes',async()=>{
+ const x=setup(),other='33333333-3333-4333-8333-333333333333';let release!:(value:unknown)=>void;let reads=0;
+ const policy={workspaceId:workspace,authorizationEpoch:1};x.fresh.mockImplementation(async()=>++reads===2?new Promise(resolve=>{release=resolve;}):policy as never);
+ x.request.mockImplementation(async(_method:string,params?:unknown)=>({...snapshot(),taskId:(params as {taskId:string}).taskId}));
+ const pending=x.service.progress(input);await vi.waitFor(()=>expect(release).toBeTypeOf('function'));
+ x.service.invalidateBinding('codex-responses',1,[task]);
+ expect(await x.service.progress({...input,taskId:other})).toMatchObject({ok:true,value:{taskId:other}});
+ release(policy);expect(await pending).toMatchObject({ok:false});
+});
 describe('bounded native progress projection',()=>{
  it('keeps answer length within the exact native 4096 UTF-8 byte bound',()=>{expect(parseAnswers({q:{answers:['x'.repeat(4096)]}}).q?.answers[0]).toHaveLength(4096);expect(()=>parseAnswers({q:{answers:['x'.repeat(4097)]}})).toThrow();});
  it('uses UTF-8 answer boundaries including astral characters before consumption',()=>{for(const [valid,invalid] of [['é'.repeat(2048),'é'.repeat(2049)],['😀'.repeat(1024),'😀'.repeat(1025)]]){expect(parseAnswers({q:{answers:[valid]}}).q?.answers[0]).toBe(valid);expect(()=>parseAnswers({q:{answers:[invalid]}})).toThrow();}});
@@ -56,4 +67,39 @@ describe('Story 1.27 tool-source boundary',()=>{
   const parsed=parseProgress({...snapshot(),historyIncomplete:true,items:[{id:'call',kind:'tool',status:'completed',text}],plan:[],results:[{...snapshot().results[0],evidenceIds:['trimmed-call'],checks:'checked'}]});
   expect(parsed.items[0]?.text).toBe(text);expect(parsed.historyIncomplete).toBe(true);expect(parsed.results[0]?.checks).toBe('unchecked');expect(parsed.results[0]?.basis).toBeNull();
  });
+});
+
+it.each([false,true])('fences an omitted dependent Task beyond a bounded revoke projection without invalidating B (history=%s)',async history=>{
+ const other='33333333-3333-4333-8333-333333333333',x=setup(async id=>({routeId:'codex-responses',configurationRevision:history?2:id===task?1:2,...(history?{disclosureBindings:(id===task?[1,2]:[2]).map(configurationRevision=>({routeId:'codex-responses',configurationRevision,active:true}))}:{})}));let release!:(value:unknown)=>void;const reads=new Map<string,number>(),policy={workspaceId:workspace,authorizationEpoch:1};let taskRead=task;
+ x.fresh.mockImplementation(async()=>{const count=(reads.get(taskRead)??0)+1;reads.set(taskRead,count);return taskRead===task&&count===2?new Promise(resolve=>{release=resolve;}):policy as never;});
+ x.request.mockImplementation(async(_method:string,params?:unknown)=>({...snapshot(),taskId:(params as {taskId:string}).taskId}));
+ const a=x.service.progress(input);await vi.waitFor(()=>expect(release).toBeTypeOf('function'));x.service.invalidateBinding('codex-responses',1,[]);taskRead=other;
+ expect(await x.service.progress({...input,taskId:other})).toMatchObject({ok:true});release(policy);expect(await a).toMatchObject({ok:false});expect(x.authorityUnavailable).not.toHaveBeenCalled();expect(await x.service.progress({...input,taskId:other})).toMatchObject({ok:true});
+});
+
+it('releases only omitted A pending questions when its exact binding is revoked',async()=>{
+ const other='33333333-3333-4333-8333-333333333333',x=setup(async id=>({routeId:'codex-responses',configurationRevision:id===task?1:2}));
+ x.request.mockImplementation(async(method:string,params?:unknown)=>{const p=params as {threadId?:string;taskId?:string},b=p.threadId==='thread-b'||p.taskId===other;return method==='inquello/tasks/forThread'?{...input,taskId:b?other:task,runId:'run-1',threadId:b?'thread-b':'thread-1',turnId:b?'turn-b':'turn-1',runtimeId:'runtime-1',status:'running'}:{...snapshot(),taskId:b?other:task,threadId:b?'thread-b':'thread-1',turnId:b?'turn-b':'turn-1'};});
+ const a=x.service.question(700,question),b=x.service.question(701,{...question,threadId:'thread-b',turnId:'turn-b'});await vi.waitFor(()=>expect(x.changed).toHaveBeenCalledTimes(2));await vi.waitFor(async()=>expect(await x.service.progress({...input,taskId:other})).toMatchObject({ok:true,value:{questions:[{requestId:701}]}}));
+ x.service.invalidateBinding('codex-responses',1,[]);expect(await a).toEqual({answers:{}});expect(await x.service.progress({...input,taskId:other})).toMatchObject({ok:true,value:{questions:[{requestId:701}]}});
+ expect(await x.service.answer({...input,taskId:other,requestId:701,answers:{'choose-record':{answers:['R01']}}})).toEqual({ok:true,value:{answered:true}});expect(await b).toEqual({answers:{'choose-record':{answers:['R01']}}});
+});
+
+it('an unavailable exact A binding clears only A and leaves existing B questions and scopes usable',async()=>{
+ const other='33333333-3333-4333-8333-333333333333',x=setup(async id=>id===task?null:{routeId:'codex-responses',configurationRevision:2});x.request.mockImplementation(async(_method:string,params?:unknown)=>({...snapshot(),taskId:(params as {taskId:string}).taskId}));
+ expect(await x.service.progress({...input,taskId:other})).toMatchObject({ok:true});expect(await x.service.progress(input)).toMatchObject({ok:false});expect(x.authorityUnavailable).not.toHaveBeenCalled();expect(await x.service.progress({...input,taskId:other})).toMatchObject({ok:true});
+});
+
+it.each([undefined,[],[{routeId:'codex-responses',configurationRevision:9,active:true}]])('missing or incomplete trusted Task metadata cannot fall back to current-only authority (%j)',async refs=>{
+ const request=vi.fn(async()=>snapshot()),unavailable=vi.fn();const service=new TaskService({runtime:{ready:()=>true,instance:()=>1,request:request as never},identity:{principalId:()=>task},syncPrincipal:async()=>{},prepareRoutes:async()=>({ok:true}),taskBinding:async()=>({routeId:'codex-responses',configurationRevision:1,disclosureBindings:refs} as never),freshPolicy:async()=>({workspaceId:workspace} as never),onAuthorityUnavailable:unavailable});
+ expect(await service.progress(input)).toMatchObject({ok:false});expect(request).not.toHaveBeenCalled();expect(unavailable).not.toHaveBeenCalled();
+});
+
+it('rehydrates current provider credentials before revealing saved progress after restart',async()=>{
+ const x=setup();x.restart();let release!:(value:{ok:boolean})=>void;x.prepareRoutes.mockImplementationOnce(()=>new Promise(resolve=>{release=resolve;}));
+ const pending=x.service.progress(input);await vi.waitFor(()=>expect(release).toBeTypeOf('function'));expect(x.request).not.toHaveBeenCalled();
+ release({ok:true});expect(await pending).toMatchObject({ok:true});expect(x.request).toHaveBeenCalledWith('inquello/tasks/progress',expect.objectContaining({taskId:task}));
+});
+it('refuses saved progress if provider handoff changes identity or fails',async()=>{
+ for(const change of [false,true]){const x=setup();x.prepareRoutes.mockImplementationOnce(async()=>{if(change)x.setPrincipal(null);return{ok:change};});expect(await x.service.progress(input)).toMatchObject({ok:false});expect(x.request).not.toHaveBeenCalled();}
 });

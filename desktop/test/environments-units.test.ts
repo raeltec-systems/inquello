@@ -2,8 +2,9 @@ import { parseTaskEnvironment, LOCAL_ENVIRONMENT, REMOTE_GATE } from '../src/mai
 import { describe, expect, it, vi } from 'vitest';
 import { EnvironmentService } from '../src/main/environments/service';
 import type { TaskRouteView } from '../src/main/routes/types';
+import { taskRouteView } from './model-fixtures';
 const taskId = '22222222-2222-4222-8222-222222222222';
-const empty: TaskRouteView = {taskId,workspaceId:taskId,revision:0,configurationRevision:null,staleConfiguration:false,selected:null};
+const empty: TaskRouteView = taskRouteView({taskId,workspaceId:taskId,revision:0,configurationRevision:null,staleConfiguration:false,selected:null});
 function harness() {
   let principal: string | null = 'owner', runtime: unknown = {}, ready = true;
   const inspectEnvironment = vi.fn(async () => ({ok:true as const,value:{sandbox:'not-checked' as const}}));
@@ -17,9 +18,9 @@ describe('read-only environment inspection', () => {
     expect(h.inspectEnvironment).toHaveBeenCalledExactlyOnceWith(taskId);expect(h.forTask).toHaveBeenCalledExactlyOnceWith(taskId);
   });
   it('uses only explicit selected route facts, not host region or eligibility', async () => {
-    const h=harness(); h.forTask.mockResolvedValue({ok:true,value:{...empty,selected:{routeId:'claude-api-key',provider:'Anthropic',configurable:true,configuration:{routeId:'claude-api-key',deployment:'anthropic-direct',model:'claude-sonnet-5-5',apiVersion:'2026-10-21',accountRef:'private-not-for-ui',region:null},endpoint:'https://api.anthropic.com/v1/messages',revision:1,credentialPresent:false,adapterSupported:false,verification:'not_verified',enabled:false,gate:'Disabled',limits:[],evidence:[],executionFlow:'local',inferenceFlow:'cloud',connectorFlow:'none'}}});
+    const h=harness(); h.forTask.mockResolvedValue({ok:true,value:taskRouteView({...empty,revision:1,configurationRevision:1,selected:{routeId:'claude-api-key',provider:'Anthropic',configurable:true,configuration:{routeId:'claude-api-key',deployment:'anthropic-direct',model:'claude-sonnet-5-5',apiVersion:'2026-10-21',accountRef:'private-not-for-ui',region:null},endpoint:'https://api.anthropic.com/v1/messages',revision:1,credentialPresent:false,adapterSupported:false,verification:'not_verified',enabled:false,gate:'Disabled',limits:[],evidence:[],executionFlow:'local',inferenceFlow:'cloud',connectorFlow:'none'}})});
     const result=await h.service.forTask(taskId);expect(result).toMatchObject({ok:true,value:{inference:{status:'selected',provider:'Anthropic',deployment:'anthropic-direct',endpoint:'https://api.anthropic.com/v1/messages',model:'claude-sonnet-5-5',apiVersion:'2026-10-21',region:'Unknown'}}});expect(JSON.stringify(result)).not.toContain('private-not-for-ui');
-    const selected = (await h.forTask()).value.selected!; h.forTask.mockResolvedValue({ok:true,value:{...empty,selected:{...selected,configuration:{...selected.configuration!,region:'eu-configured'}}}});
+    const selected = (await h.forTask()).value.selected!; h.forTask.mockResolvedValue({ok:true,value:taskRouteView({...empty,revision:1,configurationRevision:1,selected:{...selected,configuration:{...selected.configuration!,region:'eu-configured'}}})});
     expect(await h.service.forTask(taskId)).toMatchObject({ok:true,value:{inference:{provider:'Anthropic',deployment:'anthropic-direct',endpoint:'https://api.anthropic.com/v1/messages',model:'claude-sonnet-5-5',apiVersion:'2026-10-21',region:'eu-configured'}}});
   });
   it('never turns route failure, malformed data or stale configuration into no route', async () => {

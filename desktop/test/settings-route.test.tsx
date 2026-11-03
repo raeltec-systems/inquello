@@ -10,10 +10,10 @@ it('mounting Providers reads status only; never verifies, stores, logs in or sta
  for(const action of [provider.setClaudeKey,provider.verifyClaudeKey,provider.removeClaudeKey,provider.codexLogin,provider.codexLogout])expect(action).not.toHaveBeenCalled();
  expect(screen.queryByText('Typography')).toBeNull();expect(screen.getByRole('link',{name:'Workspace and team'}).getAttribute('href')).toBe('#onboarding');
 });
-it('mounting Processing routes reads current catalog only, preserving explicit configuration',async()=>{
- const routes={list:vi.fn(async()=>({ok:true,value:[]})),configure:vi.fn(),select:vi.fn(),forTask:vi.fn()};Object.assign(globalThis,{inquello:{routes}});
+it('mounting Models reads only cached metadata without connecting, checking or selecting',async()=>{
+ const routes={pendingModel:vi.fn(async()=>({ok:true,value:{operation:null}})),catalog:vi.fn(async()=>({ok:true,value:{catalogVersion:'c'.repeat(64),choices:[],bindings:[]}})),resolve:vi.fn(),bindingState:vi.fn(),selectModel:vi.fn(),forTask:vi.fn()};Object.assign(globalThis,{inquello:{routes}});
  location.hash='#settings-routes';const back=vi.fn();render(<Settings onBack={back} onIdentityChanged={vi.fn()}/>);
- await waitFor(()=>expect(routes.list).toHaveBeenCalled());expect(routes.configure).not.toHaveBeenCalled();expect(routes.select).not.toHaveBeenCalled();expect(routes.forTask).not.toHaveBeenCalled();
+ await waitFor(()=>expect(routes.catalog).toHaveBeenCalled());expect(routes.resolve).not.toHaveBeenCalled();expect(routes.bindingState).not.toHaveBeenCalled();expect(routes.selectModel).not.toHaveBeenCalled();expect(routes.forTask).not.toHaveBeenCalled();
  fireEvent.click(screen.getByRole('button',{name:'Back to chat'}));expect(back).toHaveBeenCalledOnce();
 });
 

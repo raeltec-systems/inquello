@@ -1,3 +1,4 @@
+import {modelAuthorityApplies,type ModelAuthorityChange} from './model-authority';
 /** Named controls over authorized snapshots. Neither navigation nor recovery starts work. */
 import {useEffect,useRef,useState,type ReactElement} from 'react';
 import {Button} from '../primitives';
@@ -29,6 +30,8 @@ function settlementStore(api:NonNullable<ReturnType<typeof tasksBridge>>){let st
 export function TaskLifecycle({taskId,workspaceId,draft,operationIds=()=>crypto.randomUUID(),onContinuationRequested}:{taskId:string;workspaceId:string;draft:DraftBinding;operationIds?:()=>string;onContinuationRequested?:()=>()=>void}):ReactElement {
  const view=useTaskObservation(taskId,workspaceId,true,true),[busy,setBusy]=useState<'steer'|'stop'|'resume'|null>(null),[notice,setNotice]=useState('');
  const pending=useRef<{operationId:string;kind:'steer'|'stop'|'resume';request:string|null;follow?:()=>void}|null>(null),mounted=useRef(true),latest=useRef(draft);latest.current=draft;
+ const authorityEpoch=useRef(0);
+ useEffect(()=>{const routes=(globalThis as {inquello?:{routes?:{onChanged?(fn:(change?:ModelAuthorityChange)=>void):()=>void}}}).inquello?.routes;return routes?.onChanged?.(change=>{if(!modelAuthorityApplies(change,taskId))return;authorityEpoch.current++;setNotice('The saved model authority changed. Your draft is retained.');});},[taskId]);
  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
  const settle=(receipt:Pick<LifecycleReceipt,'operationId'|'taskId'|'kind'|'status'>,retained?:{kind:LifecycleReceipt['kind'];request:string|null})=>{
   const api=tasksBridge();if(!api)return;
@@ -56,7 +59,8 @@ export function TaskLifecycle({taskId,workspaceId,draft,operationIds=()=>crypto.
  const execute=async(kind:'steer'|'stop'|'resume')=>{
   const api=tasksBridge();if(!api||!view||(kind==='stop'?(busy==='stop'||pending.current?.kind==='stop'||view.lifecycleOperations?.some(op=>op.kind==='stop'&&['reserved','dispatching','uncertain'].includes(op.status))):(busy||(pending.current&&!(kind==='resume'&&resumable)))))return;const request=kind==='stop'?null:draft.value.trim()?draft.value:null;if((kind==='steer'||(kind==='resume'&&completed))&&request===null)return;
   const op={operationId:operationIds(),kind,request,follow:kind==='stop'?undefined:onContinuationRequested?.()};pending.current=op;setBusy(kind);setNotice(kind==='stop'?'Stopping… awaiting confirmed interruption.':kind==='resume'?'Checking access to retained work…':'Sending guidance…');
-  try{const base={operationId:op.operationId,taskId,workspaceId};const response=await (kind==='stop'?api.stop(base):api[kind]({...base,request}));if(response&&typeof response==='object'&&(response as {ok?:boolean;code?:string}).ok===false&&(response as {code?:string}).code!=='uncertain')pending.current=null;const value=taskValue(response) as LifecycleReceipt;if(mounted.current)settle(value);}
+  const operationEpoch=authorityEpoch.current;
+  try{const base={operationId:op.operationId,taskId,workspaceId};const response=await (kind==='stop'?api.stop(base):api[kind]({...base,request}));if(operationEpoch!==authorityEpoch.current)throw new Error('Model authority changed before the result could be shown. Your draft is retained.');if(response&&typeof response==='object'&&(response as {ok?:boolean;code?:string}).ok===false&&(response as {code?:string}).code!=='uncertain')pending.current=null;const value=taskValue(response) as LifecycleReceipt;if(mounted.current)settle(value);}
   catch(error){if(mounted.current){setNotice(error instanceof Error?error.message:'The operation is unconfirmed. Your draft is preserved.');}}
   finally{if(mounted.current)setBusy(current=>current===kind?null:current);}
  };
