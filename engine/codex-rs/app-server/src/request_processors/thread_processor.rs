@@ -470,6 +470,7 @@ struct InquelloExecutorRetirement {
 }
 struct InquelloExecutorRetirementCompletion {
     generation: uuid::Uuid,
+    setup_phase: crate::inquello_wsl::ModelSetupPhase,
     sender: tokio::sync::watch::Sender<Option<bool>>,
 }
 impl InquelloExecutorRetirementCompletion {
@@ -481,7 +482,9 @@ impl Drop for InquelloExecutorRetirementCompletion {
     fn drop(&mut self) {
         let unconfirmed = self.sender.borrow().is_none();
         if unconfirmed {
-            let _ = self.sender.send_replace(Some(false));
+            let confirmed =
+                self.setup_phase == crate::inquello_wsl::ModelSetupPhase::NoOutstandingProcess;
+            let _ = self.sender.send_replace(Some(confirmed));
         }
     }
 }
@@ -548,7 +551,11 @@ impl InquelloExecutorRetirements {
                 completion,
             }),
         );
-        Ok(InquelloExecutorRetirementCompletion { generation, sender })
+        Ok(InquelloExecutorRetirementCompletion {
+            generation,
+            sender,
+            setup_phase: Default::default(),
+        })
     }
 }
 
@@ -7518,7 +7525,7 @@ impl ThreadRequestProcessor {
                 .and_then(|name| name.to_str())
                 .ok_or_else(|| invalid_request("Private Task identity missing"))?
                 .to_owned();
-            let retirement = self
+            let mut retirement = self
                 .inquello_executor_retirements
                 .begin(
                     thread_id,
@@ -7529,6 +7536,8 @@ impl ThreadRequestProcessor {
                 )
                 .await
                 .map_err(invalid_request)?;
+            // This generation has not started any resource-bearing work yet.
+            retirement.setup_phase = crate::inquello_wsl::ModelSetupPhase::NoOutstandingProcess;
             // A predecessor may have taken time to release its guest lock.
             // Admission before that wait cannot authorize this new incarnation.
             if authorization.0.before_tool_effect().await.is_err() {
@@ -7542,6 +7551,7 @@ impl ThreadRequestProcessor {
                 &principal,
                 !profile.writable_roots.is_empty(),
                 profile.network_allowlist.clone().unwrap_or_default(),
+                &mut retirement.setup_phase,
             )
             .await
             .map_err(|error| {
@@ -7556,6 +7566,8 @@ impl ThreadRequestProcessor {
             let environment_config = plan
                 .environment_config()
                 .map_err(|_| invalid_request("Linux Task permissions invalid"))?;
+            retirement.setup_phase =
+                crate::inquello_wsl::ModelSetupPhase::UnconfirmedResourceAttempt;
             let client = plan.connect().await.map_err(|error| {
                 // A failed connection can already have spawned a guest. Dropping
                 // the completion records unconfirmed, never a no-process claim.

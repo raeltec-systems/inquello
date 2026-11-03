@@ -52,8 +52,9 @@ pub trait RouteStore: Send + Sync {
         &self,
         operation_id: &OperationId,
     ) -> impl Future<Output = Result<Option<RouteReceipt>, StoreError>> + Send;
-    /// Under one write lock, validate current creator, exact candidate revision,
-    /// operation uniqueness and Task-route revision; commit record+receipt.
+    /// Under one write lock, validate current creator, the exact active model
+    /// binding and candidate revision, operation uniqueness and expected
+    /// Task-route revision; commit record+receipt atomically.
     fn commit_task_route(
         &self,
         change: RouteChange,

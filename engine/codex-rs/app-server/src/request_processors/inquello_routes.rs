@@ -395,7 +395,7 @@ impl InquelloRequestProcessor {
                     .cancel_task(&mut state, actor.principal_id, &task.to_string());
             }
         }
-        Ok(Some(
+        Ok(Some(ClientResponsePayload::InquelloModelBindingState(
             InquelloModelBindingResponse {
                 affected_task_ids: tasks.iter().take(1024).map(ToString::to_string).collect(),
                 binding: binding_view(&outcome.binding, &state, actor.principal_id),
@@ -406,9 +406,8 @@ impl InquelloRequestProcessor {
                     resulting_revision: outcome.receipt.resulting_revision.get(),
                     replayed: outcome.replayed,
                 },
-            }
-            .into(),
-        ))
+            },
+        )))
     }
 
     pub(crate) async fn model_select(
@@ -425,17 +424,25 @@ impl InquelloRequestProcessor {
             .await
             .map_err(|e| domain_error(DomainError::Store(e)))?
             .ok_or_else(|| refusal("not_found", "Saved model binding is unavailable"))?;
-        self.task_route_set(
-            connection,
-            InquelloTaskRouteSetParams {
-                operation_id: params.operation_id,
-                task_id: params.task_id,
-                expected_revision: params.expected_revision,
-                route_id: binding.candidate.configuration.route_id().as_str().into(),
-                configuration_revision: binding.candidate.revision.get(),
-            },
-        )
-        .await
+        let response = self
+            .task_route_set(
+                connection,
+                InquelloTaskRouteSetParams {
+                    operation_id: params.operation_id,
+                    task_id: params.task_id,
+                    expected_revision: params.expected_revision,
+                    route_id: binding.candidate.configuration.route_id().as_str().into(),
+                    configuration_revision: binding.candidate.revision.get(),
+                },
+            )
+            .await?;
+        match response {
+            Some(ClientResponsePayload::InquelloTaskRouteSet(value)) => {
+                Ok(Some(ClientResponsePayload::InquelloModelSelect(value)))
+            }
+            None => Ok(None),
+            _ => Err(refusal("internal", "Model selection response unavailable")),
+        }
     }
     pub(crate) fn with_route_provider(
         mut self,
@@ -625,16 +632,15 @@ impl InquelloRequestProcessor {
             resulting_revision: outcome.receipt.resulting_revision.get(),
             replayed: outcome.replayed,
         };
-        Ok(Some(
+        Ok(Some(ClientResponsePayload::InquelloTaskRouteSet(
             task_view(
                 &task,
                 &state,
                 actor.principal_id,
                 Some(receipt),
                 task_disclosure_bindings(&store, actor, &task).await?,
-            )
-            .into(),
-        ))
+            ),
+        )))
     }
 
     #[expect(
@@ -973,7 +979,7 @@ mod model_binding_tests {
             .await
             .unwrap()
             .unwrap();
-        processor
+        let response = processor
             .model_binding_state(
                 CONNECTION,
                 InquelloModelBindingStateParams {
@@ -984,7 +990,15 @@ mod model_binding_tests {
                 },
             )
             .await
+            .unwrap()
             .unwrap();
+        assert!(matches!(
+            &response,
+            ClientResponsePayload::InquelloModelBindingState(_)
+        ));
+        let wire = serde_json::to_value(&response).unwrap();
+        assert_eq!(wire["binding"]["state"], "revoked");
+        assert_eq!(wire["receipt"]["operationId"], "scoped-revoke-a");
         assert!(token_a.is_cancelled());
         assert!(!fence_a.is_current());
         assert!(!token_b.is_cancelled());
@@ -994,6 +1008,84 @@ mod model_binding_tests {
                 .await
                 .unwrap()
                 .stale_configuration
+        );
+    }
+
+    #[tokio::test]
+    async fn inquello_model_select_and_route_set_keep_exact_response_variants() {
+        let (_dir, processor, actor) = setup().await;
+        configure(&processor, 0, "gpt-6.1-terra").await;
+        let task_id = create_bound_task(&processor, actor, 1).await;
+        let (store, _) = processor.context(CONNECTION).await.unwrap();
+        let binding = store
+            .load_configuration_binding(
+                actor.principal_id,
+                RouteId::CodexResponses,
+                Revision::new(1),
+            )
+            .await
+            .unwrap()
+            .unwrap();
+        let current = routes::task_route(&store, actor, &task_id).await.unwrap();
+        let read = processor
+            .task_route_read(
+                CONNECTION,
+                InquelloTaskRouteReadParams {
+                    task_id: task_id.clone(),
+                },
+            )
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(matches!(
+            read,
+            ClientResponsePayload::InquelloTaskRouteRead(_)
+        ));
+        let response = processor
+            .task_route_set(
+                CONNECTION,
+                InquelloTaskRouteSetParams {
+                    operation_id: "variant-route-set".into(),
+                    task_id: task_id.clone(),
+                    expected_revision: current.revision.get(),
+                    route_id: "codex-responses".into(),
+                    configuration_revision: 1,
+                },
+            )
+            .await
+            .unwrap()
+            .unwrap();
+        let ClientResponsePayload::InquelloTaskRouteSet(route) = &response else {
+            panic!("route-set response variant");
+        };
+        assert_eq!(
+            serde_json::to_value(&response).unwrap(),
+            serde_json::to_value(route).unwrap()
+        );
+        let response = processor
+            .model_select(
+                CONNECTION,
+                InquelloModelSelectParams {
+                    operation_id: "variant-model-select".into(),
+                    task_id: task_id.clone(),
+                    expected_revision: route.revision,
+                    binding_id: binding.binding_id,
+                },
+            )
+            .await
+            .unwrap()
+            .unwrap();
+        let ClientResponsePayload::InquelloModelSelect(selected) = &response else {
+            panic!("model-select response variant");
+        };
+        assert_eq!(
+            serde_json::to_value(&response).unwrap(),
+            serde_json::to_value(selected).unwrap()
+        );
+        assert_eq!(selected.task_id, task_id);
+        assert_eq!(
+            selected.receipt.as_ref().unwrap().operation_id,
+            "variant-model-select"
         );
     }
 

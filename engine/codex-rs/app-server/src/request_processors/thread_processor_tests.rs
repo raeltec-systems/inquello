@@ -1503,6 +1503,92 @@ mod inquello_executor_retirement_tests {
     use tokio_util::sync::CancellationToken;
 
     #[tokio::test]
+    async fn proven_pre_spawn_validation_failure_releases_only_its_generation() {
+        use crate::inquello_wsl::{ModelSetupPhase, WslExecPlan};
+        let retirements = InquelloExecutorRetirements::default();
+        let thread = ThreadId::new();
+        let token = CancellationToken::new();
+        let mut first = retirements
+            .begin(
+                thread,
+                "scope".into(),
+                "task".into(),
+                &token,
+                Duration::from_secs(1),
+            )
+            .await
+            .unwrap();
+        first.setup_phase = ModelSetupPhase::NoOutstandingProcess;
+        let generation = first.generation;
+        // Invalid identity fails in the actual prepare function before any probe.
+        assert!(
+            WslExecPlan::prepare_model(
+                std::path::Path::new("invalid-task-id"),
+                "principal",
+                false,
+                vec![],
+                &mut first.setup_phase
+            )
+            .await
+            .is_err()
+        );
+        assert!(first.setup_phase == ModelSetupPhase::NoOutstandingProcess);
+        drop(first);
+        let successor = retirements
+            .begin(
+                thread,
+                "scope".into(),
+                "task".into(),
+                &token,
+                Duration::from_secs(1),
+            )
+            .await
+            .unwrap();
+        assert_ne!(generation, successor.generation);
+        successor.complete(true);
+    }
+
+    #[tokio::test]
+    async fn setup_cancellation_and_probe_outcomes_preserve_retirement_proof() {
+        use crate::inquello_wsl::ModelSetupPhase;
+        for (phase, can_resume) in [
+            (ModelSetupPhase::NoOutstandingProcess, true),
+            (ModelSetupPhase::UnconfirmedResourceAttempt, false),
+        ] {
+            let retirements = InquelloExecutorRetirements::default();
+            let thread = ThreadId::new();
+            let token = CancellationToken::new();
+            let mut first = retirements
+                .begin(
+                    thread,
+                    "scope".into(),
+                    "task".into(),
+                    &token,
+                    Duration::from_secs(1),
+                )
+                .await
+                .unwrap();
+            // Successful awaited probe followed by pure validation failure is
+            // clean; cancellation/timeout/nonzero during a probe is not.
+            first.setup_phase = phase;
+            drop(first);
+            let next = retirements
+                .begin(
+                    thread,
+                    "scope".into(),
+                    "task".into(),
+                    &token,
+                    Duration::from_secs(1),
+                )
+                .await;
+            assert_eq!(next.is_ok(), can_resume);
+            if let Ok(next) = next {
+                next.complete(true);
+            }
+        }
+    }
+
+    #[tokio::test]
     async fn captured_cleanup_blocks_successor_but_not_an_unrelated_task() {
         let retirements = InquelloExecutorRetirements::default();
         let thread = ThreadId::new();

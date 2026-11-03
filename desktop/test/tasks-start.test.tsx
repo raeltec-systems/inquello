@@ -2,6 +2,7 @@ import {modelCatalog,modelBindingId} from './model-fixtures';
 // @vitest-environment jsdom
 import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {useState} from 'react';
+import type {ModelAuthorityChange} from '../src/renderer/Shell/model-authority';
 import {afterEach,describe,expect,it,vi} from 'vitest';
 import {StartView} from '../src/renderer/Shell/StartView';
 const route={routeId:'claude-api-key',provider:'Claude',configurable:true,configuration:{routeId:'claude-api-key',deployment:'anthropic-direct',model:'claude-sonnet-5-5',apiVersion:'2026-10-21',accountRef:'account',region:null},endpoint:'https://api.anthropic.com',revision:3,credentialPresent:true,adapterSupported:true,verification:'verified_for_synthetic',enabled:true,gate:null,limits:[],evidence:['fixture'],executionFlow:'Local sandbox',inferenceFlow:'Cloud inference',connectorFlow:'Unavailable'};
@@ -60,4 +61,18 @@ it('refreshes a retained hidden initial draft after a route-change notification 
  fireEvent.change(screen.getByLabelText('Model'),{target:{value:modelBindingId(4)}});
  await waitFor(()=>expect(preflight).toHaveBeenCalledWith({workspaceId:'workspace-1',routeId:route.routeId,configurationRevision:4}));
  expect(start).not.toHaveBeenCalled();expect(accepted).not.toHaveBeenCalled();
+});
+
+it.each(['authority','catalog'] as const)('allows deliberate same-model reselection after %s invalidation without losing the draft',async kind=>{
+ let changed!:(change?:ModelAuthorityChange)=>void;
+ let catalog=modelCatalog([route]);
+ const preflight=vi.fn(async()=>({ok:true,value:candidate})),start=vi.fn(),accepted=vi.fn();
+ Object.assign(globalThis,{inquello:{routes:{catalog:vi.fn(async()=>({ok:true,value:catalog})),onChanged:(fn:typeof changed)=>{changed=fn;return()=>{};}},tasks:{preflight,start,reconcile:vi.fn()}}});
+ function Harness(){const[value,setValue]=useState('');return <StartView workspaceId="workspace-1" engagementId={null} folderId={null} active draft={{taskId:null,value,onChange:setValue}} operationIds={()=>'op-reselect'} onAccepted={accepted}/>;}
+ render(<Harness/>);await choices();expect(preflight).toHaveBeenCalledTimes(1);
+ if(kind==='catalog'){catalog={...catalog,bindings:catalog.bindings.map(binding=>({...binding,stateRevision:binding.stateRevision+1}))};changed({authority:false});}else changed();
+ await waitFor(()=>expect((screen.getByLabelText('Model') as HTMLSelectElement).value).toBe(''));
+ expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe(result.request);
+ expect(screen.getByLabelText('Send').getAttribute('aria-disabled')).toBe('true');expect(start).not.toHaveBeenCalled();
+ await choices();expect(preflight).toHaveBeenCalledTimes(2);expect(screen.getByLabelText('Send').getAttribute('aria-disabled')).not.toBe('true');expect(start).not.toHaveBeenCalled();
 });

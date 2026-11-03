@@ -2726,11 +2726,71 @@ async fn inquello_private_http_unauthorized_never_refreshes_or_resends() {
     match result {
         Err(error) => assert!(matches!(
             error.details(),
-            CodexErrorDetails::Fatal(message)
-                if message == "Private Task credential changed; automatic retry is disabled"
+            CodexErrorDetails::UnexpectedStatus(response)
+                if response.status == http::StatusCode::UNAUTHORIZED
+                    && response.body.is_empty()
+                    && response.url.is_none()
+                    && response.user_message.as_deref().is_some_and(|message| message.contains("reconnect the provider"))
         )),
         Ok(_) => panic!("private unauthorized response must be terminal"),
     }
     assert_eq!(origin.received_requests().await.unwrap().len(), 1);
+    assert_eq!(attempts.load(Ordering::Relaxed), 0);
+}
+
+#[tokio::test]
+async fn inquello_private_websocket_unauthorized_is_auth_without_refresh_or_http_fallback() {
+    let origin = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/responses"))
+        .respond_with(ResponseTemplate::new(401).set_body_string("PRIVATE_PROVIDER_SENTINEL"))
+        .mount(&origin)
+        .await;
+    let attempts = Arc::new(AtomicUsize::new(0));
+    let mut info = create_oss_provider_with_base_url(&origin.uri(), WireApi::Responses);
+    info.supports_websockets = true;
+    info.request_max_retries = Some(0);
+    info.stream_max_retries = Some(0);
+    let mut client = test_model_client(SessionSource::Exec);
+    Arc::get_mut(&mut client.state).unwrap().provider = Arc::new(TestRecoveryProvider {
+        inner: create_model_provider(info, None),
+        should_fail: false,
+        attempts: Arc::clone(&attempts),
+    });
+    crate::inquello_inference::mark_task_thread(&client.state.thread_id.to_string()).unwrap();
+    let metadata = test_responses_metadata_for_client(
+        &client,
+        None,
+        format!("{}:0", client.state.thread_id),
+        None,
+        TestCodexResponsesRequestKind::Turn,
+    );
+    let mut session = client.new_session();
+    let result = session
+        .stream_responses_websocket(
+            &Prompt::default(),
+            &test_model_info(),
+            &test_session_telemetry(),
+            None,
+            codex_protocol::config_types::ReasoningSummary::None,
+            None,
+            &metadata,
+            false,
+            None,
+            &InferenceTraceContext::disabled(),
+        )
+        .await;
+    match result {
+        Err(error) => {
+            assert!(
+                matches!(error.details(), CodexErrorDetails::UnexpectedStatus(response) if response.status == http::StatusCode::UNAUTHORIZED && response.body.is_empty() && response.url.is_none())
+            );
+            assert!(!error.to_string().contains("PRIVATE_PROVIDER_SENTINEL"));
+        }
+        Ok(_) => panic!("private websocket authentication must refuse, not fall back"),
+    }
+    let requests = origin.received_requests().await.unwrap();
+    assert_eq!(requests.len(), 1);
+    assert_eq!(requests[0].method.as_str(), "GET");
     assert_eq!(attempts.load(Ordering::Relaxed), 0);
 }

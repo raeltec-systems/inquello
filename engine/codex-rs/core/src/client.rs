@@ -2128,9 +2128,7 @@ impl ResponsesHttpExecutor<'_> {
                     if crate::inquello_inference::is_task_thread(
                         &self.client.state.thread_id.to_string(),
                     ) {
-                        return Err(CodexErr::Fatal(
-                            "Private Task credential changed; automatic retry is disabled".into(),
-                        ));
+                        return Err(crate::inquello_inference::private_auth_refusal());
                     }
                     pending_retry = PendingUnauthorizedRetry::from_recovery(
                         handle_unauthorized(
@@ -2277,9 +2275,7 @@ impl ModelClientSession {
                     if crate::inquello_inference::is_task_thread(
                         &self.client.state.thread_id.to_string(),
                     ) {
-                        return Err(CodexErr::Fatal(
-                            "Private Task credential changed; automatic retry is disabled".into(),
-                        ));
+                        return Err(crate::inquello_inference::private_auth_refusal());
                     }
                     pending_retry = PendingUnauthorizedRetry::from_recovery(
                         handle_unauthorized(
@@ -2609,7 +2605,7 @@ impl ModelClientSession {
                     &self.client.state.thread_id.to_string(),
                 )?
                 .ok_or_else(|| {
-                    CodexErr::Fatal(
+                    CodexErr::UnsupportedOperation(
                         "Messages requires a trusted current Task-route binding; no fallback"
                             .into(),
                     )
@@ -2635,7 +2631,7 @@ impl ModelClientSession {
                     || provider.query_params.is_some()
                     || provider.requires_openai_auth
                 {
-                    return Err(CodexErr::Fatal(
+                    return Err(CodexErr::UnsupportedOperation(
                         "Unsupported selected Messages settings, endpoint or model; no fallback"
                             .into(),
                     ));
@@ -2651,7 +2647,7 @@ impl ModelClientSession {
                         &self.client.state.thread_id.to_string(),
                     )
                 {
-                    return Err(CodexErr::Fatal("Private Task Responses attempt requires current authorization; no fallback".into()));
+                    return Err(CodexErr::UnsupportedOperation("Private Task Responses attempt requires current authorization; no fallback".into()));
                 }
                 let request = context
                     .as_ref()
@@ -2660,7 +2656,7 @@ impl ModelClientSession {
                             || context.binding.model != model_info.slug
                             || context.binding.api_version != "responses-v1"
                         {
-                            return Err(CodexErr::Fatal(
+                            return Err(CodexErr::UnsupportedOperation(
                                 "Selected Responses route/model changed; no fallback".into(),
                             ));
                         }

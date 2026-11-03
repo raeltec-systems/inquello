@@ -570,6 +570,24 @@ fn text(value: &Value, key: &str) -> Result<String> {
         .ok_or_else(|| failure("required history field missing"))
 }
 
+/// Known private authentication refusal: retain its typed status without provider
+/// bodies, headers, URLs or an authentication refresh attempt.
+pub(crate) fn private_auth_refusal() -> CodexErr {
+    CodexErr::UnexpectedStatus(codex_protocol::error::UnexpectedResponseError {
+        status: http::StatusCode::UNAUTHORIZED,
+        body: String::new(),
+        user_message: Some(
+            "Private Task credential rejected; reconnect the provider. Automatic retry is disabled"
+                .into(),
+        ),
+        url: None,
+        cf_ray: None,
+        request_id: None,
+        identity_authorization_error: None,
+        identity_error_code: None,
+    })
+}
+
 fn provider_error_kind(error: &CodexErr) -> inquello_protocol::inference::ErrorKind {
     use codex_protocol::error::CodexErrorDetails as E;
     use inquello_protocol::inference::ErrorKind as K;
@@ -1821,6 +1839,31 @@ mod tests {
                 )));
             }
         }
+    }
+
+    #[tokio::test]
+    async fn private_auth_refusal_is_typed_and_qualification_is_not_network_or_auth() {
+        use inquello_protocol::inference::ErrorKind;
+        assert_eq!(
+            provider_error_kind(&private_auth_refusal()),
+            ErrorKind::Auth
+        );
+        assert_eq!(
+            provider_error_kind(&CodexErr::UnsupportedOperation(
+                "qualification unavailable".into()
+            )),
+            ErrorKind::UnsupportedCapability
+        );
+        assert_eq!(
+            provider_error_kind(&CodexErr::Fatal("unrelated fatal".into())),
+            ErrorKind::Transport
+        );
+        let context = response_context();
+        let result: Result<()> =
+            await_dispatch(async { Err(private_auth_refusal()) }, Some(&context)).await;
+        let error = result.expect_err("private authentication refusal");
+        assert!(error.to_string().contains("Reconnect the provider"));
+        assert!(error.retry_delay(1).is_none());
     }
 
     #[tokio::test]

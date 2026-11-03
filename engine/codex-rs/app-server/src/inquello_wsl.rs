@@ -191,7 +191,62 @@ fn uri(path: &str) -> anyhow::Result<PathUri> {
     Ok(format!("file://{path}").parse()?)
 }
 
+/// Only synchronous validation or fully completed successful setup probes prove
+/// no outstanding process. Cancellation and uncertain subprocess outcomes do not.
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) enum ModelSetupPhase {
+    NoOutstandingProcess,
+    #[default]
+    UnconfirmedResourceAttempt,
+}
+
+/// Runs only fixed synchronous setup probes, never an executor. Successful exit
+/// proves this probe completed; timeout, cancellation, write/wait failure and
+/// nonzero exit retain uncertainty. A failed spawn proves no child was created.
+async fn run_model_setup_probe(
+    process: &mut tokio::process::Command,
+    phase: &mut ModelSetupPhase,
+    input: Option<&[u8]>,
+    budget: Duration,
+) -> anyhow::Result<std::process::Output> {
+    process.kill_on_drop(true);
+    let mut child = match process.spawn() {
+        Ok(child) => child,
+        Err(error) => {
+            *phase = ModelSetupPhase::NoOutstandingProcess;
+            return Err(error.into());
+        }
+    };
+    *phase = ModelSetupPhase::UnconfirmedResourceAttempt;
+    let wait = async move {
+        if let Some(input) = input {
+            use tokio::io::AsyncWriteExt;
+            child
+                .stdin
+                .take()
+                .context("Broker input missing")?
+                .write_all(input)
+                .await?;
+        }
+        Ok::<_, anyhow::Error>(child.wait_with_output().await?)
+    };
+    let output = tokio::time::timeout(budget, wait)
+        .await
+        .context("Setup probe timed out")??;
+    if output.status.success() {
+        *phase = ModelSetupPhase::NoOutstandingProcess;
+    }
+    Ok(output)
+}
+
 async fn verified_boot_id(scope: &str) -> anyhow::Result<String> {
+    verified_boot_id_tracked(scope, None).await
+}
+
+async fn verified_boot_id_tracked(
+    scope: &str,
+    phase: Option<&mut ModelSetupPhase>,
+) -> anyhow::Result<String> {
     use base64::Engine;
     let system = std::env::var("SystemRoot")?;
     let profile = std::env::var("USERPROFILE")?;
@@ -213,11 +268,19 @@ async fn verified_boot_id(scope: &str) -> anyhow::Result<String> {
         .env("TMP", HOST_TEMP)
         .current_dir(HOST_TEMP)
         .args(["-NoProfile", "-NonInteractive", "-EncodedCommand", &encoded])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
         .kill_on_drop(true);
-    let result = tokio::time::timeout(Duration::from_secs(15), process.output())
-        .await
-        .context("Windows D-only storage preflight timed out")?
-        .context("Windows D-only storage preflight could not run")?;
+    let mut untracked = ModelSetupPhase::default();
+    let result = run_model_setup_probe(
+        &mut process,
+        phase.unwrap_or(&mut untracked),
+        None,
+        Duration::from_secs(15),
+    )
+    .await
+    .context("Windows D-only storage preflight could not complete")?;
     if !result.status.success() {
         bail!("D-only WSL host preflight failed");
     }
@@ -326,6 +389,7 @@ impl WslExecPlan {
         principal: &str,
         writable: bool,
         domains: Vec<String>,
+        phase: &mut ModelSetupPhase,
     ) -> anyhow::Result<Self> {
         let task_id = host_root
             .file_name()
@@ -345,7 +409,7 @@ impl WslExecPlan {
             domains,
             timeout_ms: None,
         };
-        let boot = verified_boot_id(&plan.scope).await?;
+        let boot = verified_boot_id_tracked(&plan.scope, Some(phase)).await?;
         let binding_dir = Path::new("D:\\Inquello\\profiles")
             .join(&plan.scope)
             .join("bindings");
@@ -430,24 +494,22 @@ impl WslExecPlan {
                 .stdout(std::process::Stdio::piped())
                 .stderr(std::process::Stdio::piped())
                 .kill_on_drop(true);
-            let mut child = child.spawn()?;
-            use tokio::io::AsyncWriteExt;
-            child
-                .stdin
-                .take()
-                .context("Broker input missing")?
-                .write_all(b"{\"action\":\"initialize\"}")
-                .await?;
-            let result = tokio::time::timeout(Duration::from_secs(30), child.wait_with_output())
-                .await
-                .context("Linux empty Task initialization timed out")?
-                .context("Linux empty Task initialization could not complete")?;
+            let result = run_model_setup_probe(
+                &mut child,
+                phase,
+                Some(b"{\"action\":\"initialize\"}"),
+                Duration::from_secs(30),
+            )
+            .await
+            .context("Linux empty Task initialization could not complete")?;
             if !result.status.success() {
                 bail!(
                     "Empty Task guest initialization failed: {}",
                     String::from_utf8_lossy(&result.stderr)
                 );
             }
+            // The initialize action creates directories synchronously, holds its
+            // locks only for this broker process, and starts no executor/children.
             std::fs::create_dir_all(&binding_dir)?;
             let temporary = binding_dir.join(format!("{}.tmp", uuid::Uuid::new_v4()));
             let mut file = std::fs::OpenOptions::new()
@@ -737,6 +799,69 @@ impl WslExecPlan {
 mod inquello_lock_release_probe_tests {
     use super::*;
     use std::sync::atomic::{AtomicBool, Ordering};
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn setup_probe_actual_spawn_exit_and_cancellation_classify_retirement() {
+        let missing = tempfile::tempdir().unwrap();
+        let mut phase = ModelSetupPhase::NoOutstandingProcess;
+        let mut absent = tokio::process::Command::new(missing.path().join("does-not-exist.exe"));
+        assert!(
+            run_model_setup_probe(&mut absent, &mut phase, None, Duration::from_secs(5))
+                .await
+                .is_err()
+        );
+        assert!(phase == ModelSetupPhase::NoOutstandingProcess);
+        let system = std::env::var("SystemRoot").unwrap();
+        let executable = Path::new(&system)
+            .join("System32")
+            .join("WindowsPowerShell")
+            .join("v1.0")
+            .join("powershell.exe");
+        for (script, budget, clean) in [
+            ("exit 0", Duration::from_secs(10), true),
+            ("exit 7", Duration::from_secs(10), false),
+            ("Start-Sleep -Seconds 60", Duration::from_millis(1), false),
+        ] {
+            let mut process = tokio::process::Command::new(&executable);
+            process
+                .args(["-NoProfile", "-NonInteractive", "-Command", script])
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::piped());
+            phase = ModelSetupPhase::NoOutstandingProcess;
+            let result = run_model_setup_probe(&mut process, &mut phase, None, budget).await;
+            assert_eq!(phase == ModelSetupPhase::NoOutstandingProcess, clean);
+            if clean {
+                assert!(result.unwrap().status.success());
+            }
+        }
+        let mut process = tokio::process::Command::new(&executable);
+        process
+            .args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "Start-Sleep -Seconds 60",
+            ])
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
+        phase = ModelSetupPhase::NoOutstandingProcess;
+        let mut pending = Box::pin(run_model_setup_probe(
+            &mut process,
+            &mut phase,
+            None,
+            Duration::from_secs(10),
+        ));
+        assert!(
+            tokio::time::timeout(Duration::from_millis(1), &mut pending)
+                .await
+                .is_err()
+        );
+        drop(pending); // Cancellation drops only this owned kill-on-drop child.
+        assert!(phase == ModelSetupPhase::UnconfirmedResourceAttempt);
+    }
 
     #[tokio::test]
     async fn bounded_probe_wait_drops_owned_future_on_expiry() {
