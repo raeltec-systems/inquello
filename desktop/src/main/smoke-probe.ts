@@ -306,6 +306,10 @@ export const EXPECTED_BRIDGE_TREE = {
     removeClaudeKey: 'function',
     codexLogin: 'function',
     codexLogout: 'function',
+    consent: 'function',
+    changeConsent: 'function',
+    reconcileConsent: 'function',
+    retryConsent: 'function',
   },
   organise: {
     search:'function',reopen:'function',setNavigation:'function',recoverNavigation:'function',

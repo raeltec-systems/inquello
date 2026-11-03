@@ -409,6 +409,10 @@ describe('operation registry', () => {
       'provider.removeClaudeKey',
       'provider.codexLogin',
       'provider.codexLogout',
+      'provider.consent',
+      'provider.changeConsent',
+      'provider.reconcileConsent',
+      'provider.retryConsent',
       'organise.getWorkspaces',
       'organise.getTree',
       'organise.recoverNavigation',
@@ -433,6 +437,17 @@ describe('operation registry', () => {
     ]);
     expect([...ipc.handlers.keys()]).toEqual(OPERATION_NAMES.map((name) => `${CHANNEL_PREFIX}${name}`));
   });
+
+  it.each(['provider.consent', 'provider.changeConsent', 'provider.reconcileConsent', 'provider.retryConsent'] as const)(
+    'rejects extra arguments at main for %s', async (name) => {
+      const workspaceId = '22222222-2222-4222-8222-222222222222';
+      const input = name === 'provider.changeConsent'
+        ? {workspaceId, expectedRevision: '0', contractVersion: 1, contractDigest: 'a'.repeat(64), action: 'allow'}
+        : {workspaceId};
+      await expect(ipc.invoke(channelFor(name), trustedEvent, input, {extra: true}))
+        .rejects.toThrow('invalid payload for ' + name);
+    },
+  );
 
   it('validates environment reads and rejects untrusted frames without dispatch', async () => {
     for (const args of [[], [{ taskId: '../private' }], [{ taskId: '22222222-2222-4222-8222-222222222222', principalId: 'other' }]]) {
@@ -904,7 +919,7 @@ describe('preload', () => {
       runtime: { getStatus: Op };
       identity: { getStatus: Op; signIn: Op; signOut: Op };
       data: { getPolicy: Op; export: Op; import: Op; delete: Op };
-      provider: { getStatus: Op; setClaudeKey: Op; verifyClaudeKey: Op; removeClaudeKey: Op; codexLogin: Op; codexLogout: Op };
+      provider: { getStatus: Op; setClaudeKey: Op; verifyClaudeKey: Op; removeClaudeKey: Op; codexLogin: Op; codexLogout: Op; consent: Op; changeConsent: Op; reconcileConsent: Op; retryConsent: Op };
     };
     expect(Object.isFrozen(typed)).toBe(true);
     expect(Object.isFrozen(typed.runtime)).toBe(true);
@@ -939,12 +954,20 @@ describe('preload', () => {
       [typed.data.delete, channelFor('data.delete')],
       [typed.provider.setClaudeKey, channelFor('provider.setClaudeKey')],
       [typed.provider.codexLogin, channelFor('provider.codexLogin')],
+      [typed.provider.consent, channelFor('provider.consent')],
+      [typed.provider.changeConsent, channelFor('provider.changeConsent')],
+      [typed.provider.reconcileConsent, channelFor('provider.reconcileConsent')],
+      [typed.provider.retryConsent, channelFor('provider.retryConsent')],
     ];
     for (const [op, channel] of dataCalls) {
       invoke.mockClear();
       await op(['task-history']);
       expect(invoke).toHaveBeenCalledTimes(1);
       expect(invoke).toHaveBeenCalledWith(channel, ['task-history']);
+      invoke.mockClear();
+      await op('inquello:op:other', { extra: true });
+      expect(invoke).toHaveBeenCalledTimes(1);
+      expect(invoke).toHaveBeenCalledWith(channel, 'inquello:op:other', { extra: true });
       invoke.mockClear();
       await op();
       expect(invoke).toHaveBeenCalledWith(channel);
@@ -1017,11 +1040,17 @@ describe('host privilege source scan', () => {
     for (const use of uses) expect(use).toMatch(/^ipcRenderer\.(?:invoke\([A-Z_]+_CHANNEL(?:, \.\.\.args)?\)|(?:on|removeListener)\((?:CAPABILITIES|ROUTES|ENVIRONMENTS|USAGE|TASKS|TASKS_PROGRESS|POLICY_SETTINGS)_CHANGED_CHANNEL, handler\))/);
     // Fixed payload operations forward arguments for main validation; onboarding/reauth include noPayload checks.
     const onboardingForwarders = ["ONBOARDING_GET_STATE_CHANNEL, ...args)","ONBOARDING_SAVE_DRAFT_CHANNEL, ...args)","ONBOARDING_MEMBERS_CHANNEL, ...args)","ONBOARDING_CREATE_WORKSPACE_CHANNEL, ...args)","ONBOARDING_ACCEPT_INVITATION_CHANNEL, ...args)","ONBOARDING_INVITE_CHANNEL, ...args)","ONBOARDING_CHANGE_ROLES_CHANNEL, ...args)","ONBOARDING_REMOVE_MEMBER_CHANNEL, ...args)","ONBOARDING_REVOKE_INVITATION_CHANNEL, ...args)","ONBOARDING_RECONCILE_CHANNEL, ...args)","ONBOARDING_RETRY_CHANNEL, ...args)","ONBOARDING_DISCARD_PENDING_CHANNEL, ...args)","IDENTITY_REAUTHENTICATE_CHANNEL, ...args)"];
-    expect((body.match(/_CHANNEL, \.\.\.args\)/g) ?? []).length).toBe(64);
+    const consentForwarders = [
+      "PROVIDER_CONSENT_CHANNEL, ...args)",
+      "PROVIDER_CHANGE_CONSENT_CHANNEL, ...args)",
+      "PROVIDER_RECONCILE_CONSENT_CHANNEL, ...args)",
+      "PROVIDER_RETRY_CONSENT_CHANNEL, ...args)",
+    ];
+    expect((body.match(/_CHANNEL, \.\.\.args\)/g) ?? []).length).toBe(68);
     expect(
       body
         .match(/[A-Z_]+_CHANNEL, \.\.\.args\)/g)
-        ?.every((use) => onboardingForwarders.includes(use) || use.startsWith('TASKS_') || use.startsWith('USAGE_') || use.startsWith('ENVIRONMENTS_') || use.startsWith('ROUTES_') || use.startsWith('CAPABILITIES_') || use.startsWith('DATA_') || use.startsWith('PROVIDER_SET_CLAUDE_KEY_') || use.startsWith('PROVIDER_CODEX_LOGIN_') || use.startsWith('ORGANISE_') || use.startsWith('STATE_') || use.startsWith('POLICY_') || use.startsWith('PERMISSIONS_')),
+        ?.every((use) => onboardingForwarders.includes(use) || consentForwarders.includes(use) || use.startsWith('TASKS_') || use.startsWith('USAGE_') || use.startsWith('ENVIRONMENTS_') || use.startsWith('ROUTES_') || use.startsWith('CAPABILITIES_') || use.startsWith('DATA_') || use.startsWith('PROVIDER_SET_CLAUDE_KEY_') || use.startsWith('PROVIDER_CODEX_LOGIN_') || use.startsWith('ORGANISE_') || use.startsWith('STATE_') || use.startsWith('POLICY_') || use.startsWith('PERMISSIONS_')),
     ).toBe(true);
     expect(preload.replace('ipcRenderer.on(TASKS_PROGRESS_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(TASKS_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(USAGE_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(ENVIRONMENTS_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(CAPABILITIES_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(ROUTES_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(POLICY_SETTINGS_CHANGED_CHANNEL, handler)', '')).not.toMatch(/\.on\(|\.send\(|sendSync|postMessage/);
   });

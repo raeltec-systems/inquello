@@ -10,9 +10,9 @@
  * passed to `data.export` or `data.import` must reach main to be rejected as
  * an invalid payload (main shows every folder dialog itself).
  *
- * Of the `provider` operations only `setClaudeKey` and `codexLogin` forward
- * the renderer's arguments: the key (or login choice) the user entered, which
- * main validates. Nothing main returns ever holds a key.
+ * Provider key/login and consent operations forward all arguments so main
+ * validates their exact payload shape and binds the signed-in principal.
+ * Nothing main returns ever holds a key.
  *
  * The `organise` operations (Story 1.14) forward the renderer's arguments so
  * main's validators judge them; main binds the signed-in principal itself.
@@ -59,6 +59,10 @@ const PROVIDER_VERIFY_CLAUDE_KEY_CHANNEL = 'inquello:op:provider.verifyClaudeKey
 const PROVIDER_REMOVE_CLAUDE_KEY_CHANNEL = 'inquello:op:provider.removeClaudeKey';
 const PROVIDER_CODEX_LOGIN_CHANNEL = 'inquello:op:provider.codexLogin';
 const PROVIDER_CODEX_LOGOUT_CHANNEL = 'inquello:op:provider.codexLogout';
+const PROVIDER_CONSENT_CHANNEL = 'inquello:op:provider.consent';
+const PROVIDER_CHANGE_CONSENT_CHANNEL = 'inquello:op:provider.changeConsent';
+const PROVIDER_RECONCILE_CONSENT_CHANNEL = 'inquello:op:provider.reconcileConsent';
+const PROVIDER_RETRY_CONSENT_CHANNEL = 'inquello:op:provider.retryConsent';
 const ORGANISE_WORKSPACES_CHANNEL = 'inquello:op:organise.getWorkspaces';
 const ORGANISE_TREE_CHANNEL = 'inquello:op:organise.getTree';
 const ORGANISE_RECOVERY_CHANNEL = 'inquello:op:organise.recoverNavigation';
@@ -223,10 +227,10 @@ const api = Object.freeze({
     delete: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(DATA_DELETE_CHANNEL, ...args),
   }),
   provider: Object.freeze({
-    consent:(input:unknown):Promise<unknown>=>ipcRenderer.invoke('inquello:op:provider.consent',input),
-    changeConsent:(input:unknown):Promise<unknown>=>ipcRenderer.invoke('inquello:op:provider.changeConsent',input),
-    reconcileConsent:(input:unknown):Promise<unknown>=>ipcRenderer.invoke('inquello:op:provider.reconcileConsent',input),
-    retryConsent:(input:unknown):Promise<unknown>=>ipcRenderer.invoke('inquello:op:provider.retryConsent',input),
+    consent: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(PROVIDER_CONSENT_CHANNEL, ...args),
+    changeConsent: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(PROVIDER_CHANGE_CONSENT_CHANNEL, ...args),
+    reconcileConsent: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(PROVIDER_RECONCILE_CONSENT_CHANNEL, ...args),
+    retryConsent: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(PROVIDER_RETRY_CONSENT_CHANNEL, ...args),
     /** Resolves with `{ claude, codex, routes }`: states and storage kinds only, never a key. */
     getStatus: (): Promise<unknown> => ipcRenderer.invoke(PROVIDER_STATUS_CHANNEL),
     refreshStatus:():Promise<unknown>=>ipcRenderer.invoke(PROVIDER_REFRESH_STATUS_CHANNEL),
