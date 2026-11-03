@@ -1,3 +1,4 @@
+import {conversationTitle} from './Header';
 import {TaskActivityLabel} from './TaskLifecycle';
 /**
  * The resizable expanded navigation: the persistent 64px rail and Engagements
@@ -109,7 +110,7 @@ function TaskRow({ task, open, onOpen }: { task: TaskItem; open: boolean; onOpen
     <li className="iq-sidebar-task" data-task-id={task.taskId}>
       <a
         href={`#task-${task.taskId}`}
-        aria-label={task.title}
+        aria-label={conversationTitle(task.title)}
         aria-describedby={task.runtimeThreadId?`task-activity-${task.taskId}`:undefined}
         className="iq-nav-row iq-sidebar-row"
         aria-current={open ? 'page' : undefined}
@@ -119,7 +120,7 @@ function TaskRow({ task, open, onOpen }: { task: TaskItem; open: boolean; onOpen
           onOpen(task);
         }}
       >
-        <span className="iq-nav-row-label">{task.pinned?"Pinned · ":""}{task.title}</span>
+        <span className="iq-nav-row-label">{task.pinned?"Pinned · ":""}{conversationTitle(task.title)}</span>
         {task.runtimeThreadId&&<TaskActivityLabel taskId={task.taskId} workspaceId={task.workspaceId}/>}
       </a>
     </li>

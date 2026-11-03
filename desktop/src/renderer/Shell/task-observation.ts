@@ -2,13 +2,13 @@ import {modelAuthorityApplies,forgetTaskModels,type ModelAuthorityChange} from '
 /** Shared bounded observation: navigation reads status, selected work reads history. */
 import {useEffect,useState} from 'react';
 import {parseProgress,taskValue,tasksBridge,type ProgressSnapshot} from './tasks-bridge';
-type Entry={taskId:string;workspaceId:string;listeners:Map<(value:ProgressSnapshot|null)=>void,boolean>;value:ProgressSnapshot|null;busy:symbol|null;background:boolean;upgrade:boolean;dirty:boolean;generation:number};
+type Entry={taskId:string;workspaceId:string;listeners:Map<(value:ProgressSnapshot|null)=>void,boolean>;value:ProgressSnapshot|null;settled:boolean;busy:symbol|null;background:boolean;upgrade:boolean;dirty:boolean;generation:number};
 const entries=new Map<string,Entry>();
 let timer:ReturnType<typeof setInterval>|undefined,scheduled:ReturnType<typeof setTimeout>|undefined;
 let unsubscribe:(()=>void)|undefined,session:(()=>void)|undefined,routeChanges:(()=>void)|undefined,cursor=0,activeReads=0,backgroundReads=0;
 const full=(entry:Entry)=>[...entry.listeners.values()].some(Boolean);
 const capacity=(entry:Entry)=>activeReads<4&&(full(entry)||backgroundReads<3);
-const publish=(entry:Entry,value:ProgressSnapshot|null)=>{entry.value=value;for(const listener of entry.listeners.keys())listener(value);};
+const publish=(entry:Entry,value:ProgressSnapshot|null)=>{entry.settled=true;entry.value=value;for(const listener of entry.listeners.keys())listener(value);};
 async function read(entry:Entry){
  if((entry.busy&&!entry.upgrade)||!entry.listeners.size||!capacity(entry))return;const background=!full(entry),token=Symbol('observation');activeReads++;if(background)backgroundReads++;entry.busy=token;entry.background=background;entry.upgrade=false;entry.dirty=false;const generation=entry.generation;
  try{const api=tasksBridge();if(!api)throw new Error();const full=[...entry.listeners.values()].some(Boolean);const result=await (full||!api.activity?api.progress({taskId:entry.taskId,workspaceId:entry.workspaceId}):api.activity({taskId:entry.taskId,workspaceId:entry.workspaceId}));const value=parseProgress(taskValue(result));if(value.taskId!==entry.taskId||value.workspaceId!==entry.workspaceId)throw new Error();if(generation===entry.generation)publish(entry,value);}
@@ -33,9 +33,12 @@ function tick(){const rows=[...entries.values()];if(!rows.length)return;
 function schedule(){if(!scheduled)scheduled=setTimeout(()=>{scheduled=undefined;tick();},250);}
 function start(){if(timer)return;timer=setInterval(tick,1500);const api=tasksBridge();unsubscribe=api?.onProgressChanged?.(()=>{for(const entry of entries.values())entry.dirty=true;schedule();});session=api?.onSessionChanged?.(()=>{forgetTaskModels();for(const entry of entries.values()){entry.generation++;entry.dirty=true;publish(entry,null);}schedule();});const routes=(globalThis as {inquello?:{routes?:{onChanged?(fn:(change?:ModelAuthorityChange)=>void):()=>void}}}).inquello?.routes;routeChanges=routes?.onChanged?.(change=>{if(change?.authority===false)return;for(const entry of entries.values())if(modelAuthorityApplies(change,entry.taskId)){entry.generation++;entry.dirty=true;publish(entry,null);}schedule();});}
 function stop(){if(entries.size)return;clearInterval(timer);timer=undefined;clearTimeout(scheduled);scheduled=undefined;unsubscribe?.();session?.();routeChanges?.();unsubscribe=session=routeChanges=undefined;}
-export function useTaskObservation(taskId:string,workspaceId:string,enabled=true,full=false):ProgressSnapshot|null{
- const [snapshot,setSnapshot]=useState<ProgressSnapshot|null>(null);
- useEffect(()=>{setSnapshot(null);if(!enabled)return;const key=JSON.stringify([workspaceId,taskId]);let entry=entries.get(key);if(!entry){entry={taskId,workspaceId,listeners:new Map(),value:null,busy:null,background:false,upgrade:false,dirty:true,generation:0};entries.set(key,entry);}const wasFull=[...entry.listeners.values()].some(Boolean);entry.listeners.set(setSnapshot,full);if(entry.value)setSnapshot(entry.value);start();if(full&&!wasFull&&entry.busy&&entry.background&&!entry.upgrade){entry.generation++;entry.dirty=true;entry.upgrade=true;}if((!entry.busy||entry.upgrade)&&capacity(entry)&&(entries.size<=3||full&&!wasFull))void read(entry);else if(entry.upgrade)schedule();return()=>{entry!.listeners.delete(setSnapshot);if(![...entry!.listeners.values()].some(Boolean))entry!.upgrade=false;if(!entry!.listeners.size){entry!.generation++;entries.delete(key);}stop();};},[taskId,workspaceId,enabled,full]);
- return snapshot?.taskId===taskId&&snapshot.workspaceId===workspaceId?snapshot:null;
+export function useTaskObservationStatus(taskId:string,workspaceId:string,enabled=true,full=false):{snapshot:ProgressSnapshot|null;settled:boolean}{
+ const [state,setState]=useState<{snapshot:ProgressSnapshot|null;settled:boolean}>({snapshot:null,settled:false});
+ const snapshot=state.snapshot;
+ useEffect(()=>{setState({snapshot:null,settled:false});const setSnapshot=(snapshot:ProgressSnapshot|null)=>setState({snapshot,settled:true});if(!enabled)return;const key=JSON.stringify([workspaceId,taskId]);let entry=entries.get(key);if(!entry){entry={taskId,workspaceId,listeners:new Map(),value:null,settled:false,busy:null,background:false,upgrade:false,dirty:true,generation:0};entries.set(key,entry);}const wasFull=[...entry.listeners.values()].some(Boolean);entry.listeners.set(setSnapshot,full);if(entry.settled)setSnapshot(entry.value);start();if(full&&!wasFull&&entry.busy&&entry.background&&!entry.upgrade){entry.generation++;entry.dirty=true;entry.upgrade=true;}if((!entry.busy||entry.upgrade)&&capacity(entry)&&(entries.size<=3||full&&!wasFull))void read(entry);else if(entry.upgrade)schedule();return()=>{entry!.listeners.delete(setSnapshot);if(![...entry!.listeners.values()].some(Boolean))entry!.upgrade=false;if(!entry!.listeners.size){entry!.generation++;entries.delete(key);}stop();};},[taskId,workspaceId,enabled,full]);
+ return {snapshot:snapshot?.taskId===taskId&&snapshot.workspaceId===workspaceId?snapshot:null,settled:state.settled};
 }
 export function refreshTaskObservation(taskId:string,workspaceId:string){const entry=entries.get(JSON.stringify([workspaceId,taskId]));if(!entry)return;entry.generation++;if(entry.busy)entry.dirty=true;else {entry.dirty=true;if(capacity(entry))void read(entry);else schedule();}}
+
+export function useTaskObservation(taskId:string,workspaceId:string,enabled=true,full=false):ProgressSnapshot|null{return useTaskObservationStatus(taskId,workspaceId,enabled,full).snapshot;}

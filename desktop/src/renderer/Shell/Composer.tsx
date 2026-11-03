@@ -13,8 +13,8 @@ export const SEND_ROUTE_REASON = 'Choose a model before sending.';
 /** Shown before the route reason while the request is empty. */
 export const SEND_EMPTY_REASON = 'Type a request to send.';
 
-export const COMPOSER_LABEL = 'Request for this Task';
-export const COMPOSER_LABEL_NO_TASK = 'Request (no Task open)';
+export const COMPOSER_LABEL = 'Message';
+export const COMPOSER_LABEL_NO_TASK = 'New message';
 
 /** Whether a keydown is Enter while an input method is composing text. */
 export function isComposingEnter(event: { key: string; keyCode?: number; nativeEvent?: { isComposing?: boolean }; isComposing?: boolean }): boolean {
@@ -77,7 +77,7 @@ export function Composer({ draft, onSend, disabledReason, autoFocus, readOnly, o
   };
 
   return (
-    <div className="iq-composer" data-composer data-composer-task={draft.taskId ?? ''}>
+    <div className="iq-composer" data-composer data-composer-empty-hint={reason === SEND_EMPTY_REASON || undefined} data-composer-task={draft.taskId ?? ''}>
       <label className="iq-visually-hidden" htmlFor={inputId}>
         {label}
       </label>
@@ -89,7 +89,7 @@ export function Composer({ draft, onSend, disabledReason, autoFocus, readOnly, o
         className="iq-composer-input"
         rows={1}
         value={draft.value}
-        placeholder={draft.taskId ? 'Describe what you need from this Task' : 'Describe what you need'}
+        placeholder="Message Inquello"
         onChange={(event) => draft.onChange(event.target.value)}
         onKeyDown={onKeyDown}
         spellCheck

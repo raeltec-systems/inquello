@@ -66,6 +66,7 @@ export interface MenuProps {
   label: string;
   /** Optional visual trigger; label remains its accessible name. */
   triggerContent?: ReactNode;
+  showChevron?: boolean;
   /** Muted heading at the top of the list; also names the menu. */
   heading?: string;
   items: readonly MenuEntry[];
@@ -127,7 +128,7 @@ function Row({ id, role, label, description, disabledReason, checked, checkColum
   );
 }
 
-export function Menu({ label, triggerContent, heading, items, triggerVariant = 'secondary', defaultOpen = false, className }: MenuProps): ReactElement {
+export function Menu({ label, triggerContent, showChevron=true, heading, items, triggerVariant = 'secondary', defaultOpen = false, className }: MenuProps): ReactElement {
   const baseId = useId();
   const triggerId = `${baseId}trigger`;
   const menuId = `${baseId}menu`;
@@ -268,7 +269,7 @@ export function Menu({ label, triggerContent, heading, items, triggerVariant = '
         }}
       >
         <span className="iq-button-label">{triggerContent ?? label}</span>
-        <Icon name="chevron-down" size={DENSE_ICON_SIZE} />
+        {showChevron&&<Icon name="chevron-down" size={DENSE_ICON_SIZE} />}
       </button>
       {open ? (
         <div

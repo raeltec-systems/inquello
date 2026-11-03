@@ -1,9 +1,12 @@
+import {TaskPolicy} from './TaskPolicy';
 import {providerSettingsHash} from '../provider-settings';
 import {smokeStartTrace} from './smoke-start-trace';
 import {Search} from './Search';
 import {Inbox,useInbox,type InputRequest,type QuestionSelection} from './Inbox';
 import {reopenView,type ReopenView} from '../../main/organise/navigation';
 import {taskValue,tasksBridge,parseProgress} from './tasks-bridge';
+import {SavedWorkDialog} from './Search';
+import {TaskDetails} from './TaskView';
 import {TaskLifecycle} from './TaskLifecycle';
 import {useConversationFollow} from './use-conversation-follow';
 /**
@@ -686,6 +689,9 @@ export function Shell({ active = true, onWorkspaceChanged, onShowSpecimen, opera
     setStartLocation({workspaceId, engagementId:null, folderId:null});
     setShowStart(true);
   }, [active, authorizedWorkspace, currentTree, workspaceId, person, openTaskId, openedEngagement, startLocation, pendingStart, savedSurface]);
+  const [conversationPermissions,setConversationPermissions]=useState<string|null>(null);
+  const [conversationOptions,setConversationOptions]=useState<string|null>(null);
+  useEffect(()=>{setConversationOptions(null);setConversationPermissions(null);},[active,showStart,task?.taskId,task?.workspaceId,runtimeEpoch,person]);
   const composer = !state?.signedIn || showStart ? null : renderComposer ? renderComposer(draft) : task?.runtimeThreadId || (task&&acceptedFor(task.taskId)) ? <TaskLifecycle key={`${runtimeEpoch}:${task!.taskId}`} taskId={task!.taskId} workspaceId={task!.workspaceId} draft={draft} operationIds={operationIds} onContinuationRequested={conversationFollow.continuation}/> : <Composer draft={draft} />;
 
   return (
@@ -728,7 +734,7 @@ export function Shell({ active = true, onWorkspaceChanged, onShowSpecimen, opera
         person={person}
       />
       <div className="iq-shell-main">
-        <Header task={task} engagement={engagement} workspace={workspace} />
+        <Header task={task} engagement={engagement} workspace={workspace} onOptions={()=>setConversationOptions(task?.taskId??null)} onPermissions={()=>setConversationPermissions(task?.taskId??null)} />
         <div className={`iq-work${openArtifact ? ' iq-work--artifact' : ''}`} data-work>
           {mode === 'single' && openArtifact ? (
             <div className="iq-work-switch" data-work-switch>
@@ -743,7 +749,7 @@ export function Shell({ active = true, onWorkspaceChanged, onShowSpecimen, opera
               />
             </div>
           ) : null}
-          <main ref={conversationFollow.threadRef} className="iq-thread" aria-label="Task work" hidden={workView === 'artifact'} data-thread>
+          <main ref={conversationFollow.threadRef} className="iq-thread" tabIndex={0} aria-label="Conversation" hidden={workView === 'artifact'} data-thread>
             <div ref={conversationFollow.contentRef} className="iq-shell-content">
               {notice ? (
                 <div className="iq-shell-notice" data-shell-notice>
@@ -823,6 +829,8 @@ export function Shell({ active = true, onWorkspaceChanged, onShowSpecimen, opera
           </div>
         </div>
       </div>
+      {active&&task&&conversationPermissions===task.taskId&&<SavedWorkDialog label="Conversation permissions" onClose={()=>setConversationPermissions(null)}><TaskPolicy compact policy={taskPolicy?.taskId===task.taskId?taskPolicy:null} notice={policyNotice} onSetMode={policyBridge()?setMode:undefined}/></SavedWorkDialog>}
+      {active&&task&&<SavedWorkDialog key={`${ownerKey(person)}:${runtimeEpoch}:${task.workspaceId}:${task.taskId}`} open={conversationOptions===task.taskId} label="Conversation options" onClose={()=>setConversationOptions(null)}><TaskDetails task={task} engagements={tree?.engagements??[]} folders={tree?.folders??[]} onNavigation={setNavigation} onRename={renameTask} onMove={moveTask} newOperationId={operationIds}/></SavedWorkDialog>}
       {active&&savedSurface==='search'&&<Search key={`${workspaceId}:${runtimeEpoch}:${authorityGeneration.current}`} workspaceId={authorizedWorkspace?workspaceId:null} onClose={()=>setSavedSurface(null)} onOpen={acceptSaved} onEngagement={e=>{if(e.workspaceId===chosenWorkspace.current&&authorizedWorkspaces.current.includes(e.workspaceId)){selectDestination();openTask.current=null;setTree(previous=>previous?{...previous,engagements:[...previous.engagements.filter(row=>row.engagementId!==e.engagementId),e]}:previous);setOpenTaskId(null);setSavedHit(null);setShowStart(false);setOpenedEngagement(e.engagementId);}}}/>}
       {active&&savedSurface==='inbox'&&<Inbox key={`${workspaceId}:${runtimeEpoch}:${authorityGeneration.current}`} view={authorizedWorkspace?inbox:null} tasks={currentTree?.tasks??[]} onClose={()=>setSavedSurface(null)} onOpen={(task,question)=>{void openTaskFromNav(task,question);}}/>}
       <div className="iq-visually-hidden" role="status" aria-live="polite" aria-atomic="true" data-shell-announcer data-announce-count={announcement.count}>

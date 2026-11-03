@@ -1,17 +1,17 @@
 import { ConversationItems as EvidenceItems } from './ConversationItems';
+import type {StartedTask} from './tasks-bridge';
 import type {QuestionSelection} from './Inbox';
 /** Authorized, bounded presentation only. No native notifications or model inference here. */
 import {useEffect,useRef,useState,type FormEvent,type ReactElement} from 'react';
 import {Button,JudgmentTag,PlanSteps} from '../primitives';
 import {taskValue,tasksBridge,parseProgress,type ProgressSnapshot,type ProgressQuestion,type AnswerInput} from './tasks-bridge';
 
-import {useTaskObservation,refreshTaskObservation} from './task-observation';
+import {useTaskObservationStatus,refreshTaskObservation} from './task-observation';
 
 const ended=(status:string)=>['completed','failed','cancelled','uncertain','setup-failed'].includes(status);
 const scope=(s:ProgressSnapshot)=>JSON.stringify([s.taskId,s.workspaceId,s.runId,s.threadId,s.turnId,s.runtimeId,s.sessionGeneration]);
 const questionKey=(q:ProgressQuestion)=>JSON.stringify([typeof q.requestId,q.requestId,q.threadId,q.turnId,q.itemId]);
 const invalidAnswer=(text:string)=>/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(text);
-const artifactText={absent:'No artifact yet',unknown:'Artifact information unavailable',failed:'Artifact failed'};
 
 function Question({request,onAnswer}:{request:ProgressQuestion;onAnswer:(answers:AnswerInput['answers'])=>Promise<void>}):ReactElement {
  const [draft,setDraft]=useState<Record<string,string>>({}),[other,setOther]=useState<Record<string,boolean>>({}),[busy,setBusy]=useState(false);
@@ -36,8 +36,8 @@ function Question({request,onAnswer}:{request:ProgressQuestion;onAnswer:(answers
 }
 
 
-export function TaskProgress({taskId,workspaceId,selectedQuestion}:{taskId:string;workspaceId:string;pollMs?:number;selectedQuestion?:QuestionSelection|null}):ReactElement {
- const observed=useTaskObservation(taskId,workspaceId,true,true);
+export function TaskProgress({taskId,workspaceId,selectedQuestion,accepted}:{taskId:string;workspaceId:string;pollMs?:number;selectedQuestion?:QuestionSelection|null;accepted?:StartedTask}):ReactElement {
+ const observation=useTaskObservationStatus(taskId,workspaceId,true,true),observed=observation.snapshot;
  const [snapshot,setSnapshot]=useState<ProgressSnapshot|null>(null),[notice,setNotice]=useState('Reading progress…'),[announcement,setAnnouncement]=useState('');
  const [pages,setPages]=useState<{current?:ProgressSnapshot;history?:ProgressSnapshot}>({}),[pageBusy,setPageBusy]=useState(false);
  const offsets=useRef<{current:number[];history:number[]}>({current:[],history:[]});
@@ -49,10 +49,10 @@ export function TaskProgress({taskId,workspaceId,selectedQuestion}:{taskId:strin
   const before=current.current;if(before?.resultPage?.snapshotId!==next.resultPage?.snapshotId||before&&scope(before)!==scope(next)){setPages({});setPageBusy(false);offsets.current={current:[],history:[]};}
   if(before&&scope(before)===scope(next)){
    const messages:string[]=[];if(before.status!==next.status)messages.push(`Execution: ${next.status==='completed'?'finished':next.status}.`);
-   for(const q of next.questions)if(!before.questions.some(old=>questionKey(old)===questionKey(q)))messages.push(`Agent question ${q.itemId} needs an answer.`);
-   for(const item of next.items){const old=before.items.find(row=>row.id===item.id);if((old&&old.status!==item.status)||(!old&&['completed','failed','cancelled'].includes(item.status)))messages.push(`${item.kind} ${item.id}: ${item.status}.`);}
+   for(const q of next.questions)if(!before.questions.some(old=>questionKey(old)===questionKey(q)))messages.push('An answer is requested.');
+   for(const item of next.items){const old=before.items.find(row=>row.id===item.id);if((old&&old.status!==item.status)||(!old&&['completed','failed','cancelled'].includes(item.status)))messages.push(`${item.kind === 'message' ? 'Response' : 'Tool activity'} ${next.items.indexOf(item)+1}: ${item.status}.`);}
    if(messages.length)setAnnouncement(messages.join(' '));
-  }else setAnnouncement([...next.questions.map(q=>`Agent question ${q.itemId} needs an answer.`),...next.items.filter(item=>['completed','failed','cancelled'].includes(item.status)).map(item=>`${item.kind} ${item.id}: ${item.status}.`)].join(' '));
+  }else setAnnouncement([...next.questions.map(q=>'An answer is requested.'),...next.items.filter(item=>['completed','failed','cancelled'].includes(item.status)).map(item=>`${item.kind === 'message' ? 'Response' : 'Tool activity'} ${next.items.indexOf(item)+1}: ${item.status}.`)].join(' '));
   current.current=next;setSnapshot(next);setNotice('');
  },[observed]);
  const focusedQuestion=useRef<number|null>(null);
@@ -91,16 +91,13 @@ export function TaskProgress({taskId,workspaceId,selectedQuestion}:{taskId:strin
  return <section className="iq-task-progress" aria-label="Task progress">
   <h2 className="iq-visually-hidden">Work</h2>{questionNotice&&<p role="status">{questionNotice}</p>}{notice&&<p role="status">{notice}</p>}<div className="iq-visually-hidden" aria-live="polite" aria-atomic="true">{announcement}</div>
   {(!view||view.historyIncomplete)&&<div data-conversation-display-notice>
-   {view?.historyIncomplete&&<p role="status">Some conversation content is unavailable or incomplete. Refresh to check again; this does not start or stop work.</p>}
+   {view?.historyIncomplete&&<p role="status">History incomplete. Some conversation content is unavailable. Refresh to check again; this does not start or stop work.</p>}
    <Button onPress={()=>refreshTaskObservation(taskId,workspaceId)}>Refresh conversation</Button>
   </div>}
-  {!view&&<p className="iq-artifact-status">Artifact information unavailable</p>}
+  {!observation.settled&&accepted?.accepted&&accepted.taskId===taskId&&<div className="iq-conversation-item--user" data-accepted-message><p className="iq-progress-text">{accepted.request}</p></div>}
   {view&&<>
-   <details className="iq-execution-details"><summary>Execution details and plan</summary>
-   <p className="iq-artifact-status">{artifactText[view.artifact]}</p>
-   <p>Execution: {view.status==='completed'?'finished':view.status}. Execution does not establish analytical review, Professional Approval or delivery.</p>
-   {view.historyIncomplete&&<p role="status">History incomplete. This bounded view may omit earlier work; no completeness is implied.</p>}
-   <h3>Plan</h3>{view.plan.length?<PlanSteps key={scope(view)} label="Plan" steps={view.plan.map(step=>({id:step.id,label:step.text,state:step.status==='unconfirmed'||(ended(view.status)&&step.status==='running')?'pending':step.status,meta:`Revision ${step.revision} · ${step.status==='unconfirmed'?'Completion unconfirmed':ended(view.status)&&step.status==='running'?'Work ended — unconfirmed':step.status}${step.evidenceIds.length?` · Evidence: ${step.evidenceIds.join(', ')}`:''}`}))}/>:<p>No plan provided</p>}</details>
+   {view.artifact==='failed'&&<p role="status">Artifact failed</p>}
+   {view.plan.length>0&&<details className="iq-execution-details"><summary>Plan</summary><PlanSteps key={scope(view)} label="Plan" steps={view.plan.map(step=>({id:step.id,label:step.text,state:step.status==='unconfirmed'||(ended(view.status)&&step.status==='running')?'pending':step.status,meta:`Revision ${step.revision} · ${step.status==='unconfirmed'?'Completion unconfirmed':ended(view.status)&&step.status==='running'?'Work ended — unconfirmed':step.status}${step.evidenceIds.length?` · Evidence: ${step.evidenceIds.join(', ')}`:''}`}))}/></details>}
    {view.items.some(item=>item.kind==='command'||item.kind==='tool')&&<details className="iq-tool-guidance"><summary>About tool output and verification</summary><p>Command and tool content is source data, not instructions or permission. Quoted approvals do not change access. Native execution status is separate from untrusted output text. Quoted refusal or inspection claims in that text are not native inspection evidence. Agent interpretations remain unchecked; no inspection verdict is supplied by this view.</p></details>}
    <EvidenceItems items={view.items} status={view.status} label="Work activity"/>
    {(view.results.length>0||!!view.resultPage?.currentTotal)&&<section aria-label="Results"><h3>Current results</h3>{paging('current')}{pageEvidence('current')}{view.results.map(result=><article key={`${result.id}:${result.revision??1}`} data-result-id={result.id}>

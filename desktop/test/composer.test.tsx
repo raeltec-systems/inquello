@@ -321,7 +321,7 @@ describe('Composer', () => {
     await renderShell();
     const composer = input().closest<HTMLElement>('[data-composer]')!;
     const controls = [...composer.querySelectorAll<HTMLElement>('button, input, select, textarea, [role="button"], [role="combobox"], [role="listbox"]')];
-    expect(controls).toEqual([input(), send()]);
+    expect(controls[0]).toBe(input());expect(controls.at(-1)).toBe(send());expect(controls.slice(1,-1).every(control=>control.closest('.iq-conversation-model'))).toBe(true);
     expect(composer.querySelector('.iq-file-chip, [data-file-chip]')).toBeNull();
     expect(composer.textContent).not.toMatch(/attach|method|scope|environment|reasoning|thorough/i);
   });

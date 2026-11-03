@@ -18,8 +18,8 @@ describe('authorized conversation presentation', () => {
     expect(screen.getByText(items[0]!.text)).toBeTruthy();
     expect(container.querySelector('script')).toBeNull();
     expect(container.querySelector('[data-progress-item="human"]')?.classList.contains('iq-conversation-item--user')).toBe(true);
-    expect(screen.getByText(/Message — speaker unavailable/)).toBeTruthy();
-    expect(screen.getAllByText(/Message content is not independent verification/)).toHaveLength(2);
+    expect(screen.getByText('Unknown speaker')).toBeTruthy();
+    expect(screen.queryByText('Source and status')).toBeNull();expect(screen.queryByText(/structured labels unavailable/)).toBeNull();
   });
 
   it('keeps stable activity rows and their disclosure across appended output', () => {
@@ -40,7 +40,7 @@ describe('authorized conversation presentation', () => {
     const item: ProgressItem = { id: 'pending', kind: 'command', status: 'running', text: 'Still unconfirmed' };
     const { container } = render(<ConversationItems items={[item]} status="failed" label="Work activity" />);
     expect(container.querySelector('[data-progress-item]')?.getAttribute('data-status')).toBe('unconfirmed');
-    expect(screen.getByText(/Execution ended — outcome unconfirmed/)).toBeTruthy();
+    expect(screen.getByText('Outcome unconfirmed')).toBeTruthy();
     expect(item.status).toBe('running');
     expect(screen.queryByText('Execution completed')).toBeNull();
   });

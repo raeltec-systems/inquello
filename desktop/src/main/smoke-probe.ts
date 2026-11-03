@@ -2567,7 +2567,7 @@ const COMPOSER_HELPERS = `
     const root = composer();
     if (!root) return null;
     const all = [...root.querySelectorAll('button, input, select, textarea, [role="button"], [role="combobox"], [role="listbox"], [role="menu"]')];
-    const others = all.filter((el) => el !== field() && el !== sendButton());
+    const others = all.filter((el) => el !== field() && el !== sendButton() && !el.closest('[data-conversation-model]'));
     return {
       others: others.length,
       enabledOthers: others.filter((el) => el.getAttribute('aria-disabled') !== 'true' && !el.hasAttribute('disabled')).length,
@@ -2741,7 +2741,7 @@ export function evaluateComposer(read: ComposerProbeRead): ComposerReport {
   if (!typed?.shellOpened) failures.push('the Shell did not open');
   else if (!typed.openedA || !typed.openedB || !typed.reopenedA || !typed.reopenedB) failures.push('a synthetic Task did not open with its Composer');
   else {
-    if (typed.label !== 'Request for this Task') failures.push(`the Composer field is labelled ${JSON.stringify(typed.label)}`);
+    if (typed.label !== 'Message') failures.push(`the Composer field is labelled ${JSON.stringify(typed.label)}`);
     if (typed.bBefore?.length !== 0) failures.push("Task B's Composer did not start empty");
     const empty = typed.emptySend;
     if (!empty || empty.ariaDisabled !== 'true' || empty.reason !== `${COMPOSER_EMPTY_REASON} ${COMPOSER_ROUTE_REASON}`) failures.push(`with no text, Send is not unavailable with the empty-request reason (${JSON.stringify(empty)})`);
@@ -3931,7 +3931,7 @@ export async function probeVisualConversation(contents: WebContents, options: Or
     };
     const usableComposer=async(stage:string,inline=false)=>{
       const geometry=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}
-        const read=()=>{const fields=[...document.querySelectorAll('[data-composer-input]')].filter(element=>visible(element)&&element.getClientRects().length);const field=fields[0],composer=field?.closest('[data-composer]'),actions=composer?.querySelector('.iq-composer-actions');if(!field||!composer||!actions)return null;const input=field.getBoundingClientRect(),surface=composer.getBoundingClientRect(),buttons=actions.getBoundingClientRect();return {viewportWidth:innerWidth,viewportHeight:innerHeight,inputWidth:input.width,inputHeight:input.height,composerWidth:surface.width,composerHeight:surface.height,oneComposer:fields.length===1,noPageOverflow:document.documentElement.scrollWidth<=document.documentElement.clientWidth,inside:input.left>=surface.left&&input.right<=surface.right&&input.top>=surface.top&&input.bottom<=surface.bottom,inline:Math.abs((input.top+input.bottom)/2-(buttons.top+buttons.bottom)/2)<4};};
+        const read=()=>{const fields=[...document.querySelectorAll('[data-composer-input]')].filter(element=>visible(element)&&element.getClientRects().length);const field=fields[0],composer=field?.closest('[data-composer]'),actions=composer?.querySelector('.iq-composer-actions');if(!field||!composer||!actions)return null;const input=field.getBoundingClientRect(),surface=composer.getBoundingClientRect(),buttons=actions.getBoundingClientRect();return {viewportWidth:innerWidth,viewportHeight:innerHeight,inputWidth:input.width,inputHeight:input.height,composerWidth:surface.width,composerHeight:surface.height,oneComposer:fields.length===1,noPageOverflow:document.documentElement.scrollWidth<=document.documentElement.clientWidth,inside:input.left>=surface.left&&input.right<=surface.right&&input.top>=surface.top&&input.bottom<=surface.bottom,inline:buttons.top>=input.bottom-1&&buttons.right<=surface.right&&buttons.bottom<=surface.bottom};};
         const usable=value=>value&&value.oneComposer&&value.noPageOverflow&&value.inside&&value.inputWidth>=240&&value.inputHeight>=20&&value.inputHeight<=112&&(!${inline}||value.inline);
         const value=await wait(()=>{const value=read();return usable(value)?value:null;},5000)??read();return {stage:${JSON.stringify(stage)},...value,usable:!!usable(value)};
       })()`);

@@ -6,10 +6,13 @@
  * attributes expose each field to the smoke probe.
  */
 import type { ReactElement } from 'react';
+import {Menu} from '../primitives';
 
 import type { EngagementItem, TaskItem, WorkspaceEntry } from './organise-bridge';
 
 export interface HeaderProps {
+  onOptions?:()=>void;
+  onPermissions?:()=>void;
   task: TaskItem | null;
   engagement: EngagementItem | null;
   workspace: WorkspaceEntry | null;
@@ -22,13 +25,13 @@ export function periodText(engagement: EngagementItem | null): string | null {
   return engagement.periodStart ? `From ${engagement.periodStart}` : `Until ${engagement.periodEnd}`;
 }
 
-export function Header({ task, engagement }: HeaderProps): ReactElement {
+export function Header({ task, engagement,onOptions,onPermissions }: HeaderProps): ReactElement {
   const period = periodText(engagement);
   return (
     <header className="iq-header" data-header data-header-empty={!task && !engagement || undefined}>
       <div className="iq-header-main">
         <span className="iq-header-title" data-header-title>
-          {task ? task.title : 'Inquello'}
+          {task ? conversationTitle(task.title) : 'Inquello'}
         </span>
         {task ? (
           <span className="iq-header-private" data-header-visibility="private">
@@ -57,6 +60,9 @@ export function Header({ task, engagement }: HeaderProps): ReactElement {
         ) : null}
 
       </dl>
+      {task&&onOptions&&<Menu showChevron={false} label="Conversation options" triggerContent={<span aria-hidden="true">•••</span>} triggerVariant="quiet" items={[{label:"Rename or organise",onSelect:onOptions},...(onPermissions?[{label:"Permissions",onSelect:onPermissions}]:[])]}/>}
     </header>
   );
 }
+
+export function conversationTitle(title:string):string {return title==='Private task'?'New chat':title;}

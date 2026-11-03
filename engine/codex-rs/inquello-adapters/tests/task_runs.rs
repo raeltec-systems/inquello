@@ -93,6 +93,48 @@ async fn atomic_private_start_replays_and_conflicts_without_duplicate_task() {
         .load_workspace_tree(ok(WorkspaceId::parse(&c.workspace_id)), a.principal_id)
         .await);
     assert_eq!(tree.tasks.len(), 1);
+    assert_eq!(
+        tree.tasks[0].title,
+        c.request.chars().take(80).collect::<String>()
+    );
+    assert!(
+        ok(s.load_workspace_tree(
+            ok(WorkspaceId::parse(&c.workspace_id)),
+            actor(2).principal_id
+        )
+        .await)
+        .tasks
+        .is_empty()
+    );
+    ok(inquello_domain::organise::rename_task(
+        &s,
+        &SystemClock,
+        a,
+        inquello_domain::organise::RenameTask {
+            operation_id: "explicit-user-rename".into(),
+            expected_revision: tree.tasks[0].revision,
+            workspace_id: c.workspace_id.clone(),
+            task_id: b.task_id.clone(),
+            title: "My chosen title".into(),
+        },
+    )
+    .await);
+    assert_eq!(
+        ok(s.reserve_task_run(
+            a.principal_id,
+            c.clone(),
+            "runtime",
+            2,
+            NativeTaskDataTier::Synthetic
+        )
+        .await),
+        b
+    );
+    let renamed = ok(s
+        .load_workspace_tree(ok(WorkspaceId::parse(&c.workspace_id)), a.principal_id)
+        .await);
+    assert_eq!(renamed.tasks[0].title, "My chosen title");
+
     let settings = ok(s.read_usage(a.principal_id, tree.tasks[0].task_id).await).settings;
     assert_eq!(settings.unwrap().choices, c.choices);
     assert_eq!(

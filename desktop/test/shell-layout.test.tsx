@@ -167,11 +167,12 @@ it('completes pin and archive without waiting for an unrelated sandbox inspectio
   await waitFor(() => expect(forTask).toHaveBeenCalled());
   const inspections = forTask.mock.calls.length;
   const user = userEvent.setup();
-  await user.click(screen.getByText('Task details and controls'));
-  await user.click(screen.getByRole('button', { name: 'Organise Task' }));
+  await user.click(screen.getByRole('button',{name:'Conversation options'}));
+  await user.click(screen.getByRole('menuitem',{name:'Rename or organise'}));
+  await user.click(screen.getByRole('button', { name: 'Organise conversation' }));
   await user.click(screen.getByRole('menuitem', { name: 'Pin', exact: true }));
   expect(await screen.findByText('Navigation preference saved.')).toBeTruthy();
-  await user.click(screen.getByRole('button', { name: 'Organise Task' }));
+  await user.click(screen.getByRole('button', { name: 'Organise conversation' }));
   await user.click(screen.getByRole('menuitem', { name: 'Archive', exact: true }));
   expect(await screen.findByText(/Archived from navigation/)).toBeTruthy();
   expect(within(nav()).queryByRole('link', { name: 'Bank confirmations' })).toBeNull();
@@ -469,7 +470,7 @@ describe('Shell layout', () => {
     const region = (element: Element | null): number => {
       if (!element || element === document.body) return -1;
       if (element.closest('nav')) return 0;
-      if (element.closest('main')) return 1;
+      if (element.closest('header, main')) return 1;
       if (element.closest('[data-review-region]')) return 3;
       if (element.closest('aside')) return 2;
       if (element.closest('[data-composer-slot]')) return 4;
@@ -480,6 +481,7 @@ describe('Shell layout', () => {
       await user.tab();
       const at = region(document.activeElement);
       if (at === -1 && seen.length > 0) break; // wrapped out of the document: no trap
+      expect(document.activeElement?.closest('dialog[hidden], [hidden] dialog')).toBeNull();
       seen.push(at);
     }
     expect(seen).not.toContain(-2);

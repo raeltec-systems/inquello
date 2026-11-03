@@ -1,6 +1,5 @@
 import type {QuestionSelection} from './Inbox';
 import { TaskProgress } from './TaskProgress';
-import { ProcessingRoutes } from '../ProcessingRoutes';
 import type { StartedTask } from './tasks-bridge';
 /**
  * The open Task (Story 1.14): a placeholder thread area, the Task's privacy,
@@ -26,13 +25,9 @@ import { Button, Menu, TextField, type MenuEntry } from '../primitives';
 import type { EngagementItem, FolderItem, Outcome, TaskItem } from './organise-bridge';
 import type { TaskPolicyItem } from '../policy-bridge';
 import type { TaskStatesItem } from './state-bridge';
-import { TaskPolicy } from './TaskPolicy';
-import { TaskStates } from './TaskStates';
-import { TaskEnvironment } from './TaskEnvironment';
-import { TaskUsage } from './TaskUsage';
 
 export function AcceptedRequest({accepted}:{accepted:StartedTask}):ReactElement {
-  return <section aria-label="Accepted request"><details className="iq-request-receipt"><summary>Initial request</summary><h2>Request</h2><p style={{whiteSpace:'pre-wrap'}}>{accepted.request}</p><p role="status">{['active','running'].includes(accepted.status) ? 'Initial execution accepted by the runtime.' : `Initial execution: ${accepted.status}.`}</p>{accepted.reason && <p>{accepted.reason}</p>}<p>Execution state is not analytical review or Professional Approval.</p></details></section>;
+  return <section aria-label="Conversation"><div className="iq-message-body iq-conversation-item--user"><p className="iq-progress-text">{accepted.request}</p></div></section>;
 }
 
 export interface MoveTarget {
@@ -70,7 +65,7 @@ export function targetKey(target: MoveTarget): string {
   return target.folderId ? `folder:${target.folderId}` : `engagement:${target.engagementId}`;
 }
 
-export function TaskView({
+export function TaskDetails({
   task,
   accepted,
   engagements,
@@ -174,25 +169,22 @@ export function TaskView({
 
   return (
     <section className="iq-task" aria-label="Task" data-task-view={task.taskId}>
-      {accepted && <AcceptedRequest accepted={accepted}/>}
-      {(accepted || task.runtimeThreadId) && <TaskProgress key={task.taskId} taskId={task.taskId} workspaceId={task.workspaceId} selectedQuestion={selectedQuestion}/> }
-      <details className="iq-task-inspector" data-task-inspector>
-        <summary>Task details and controls</summary>
+      <div className="iq-task-actions">
       <div className="iq-task-tools">
-        {onNavigation&&<Menu label="Organise Task" items={[
+        {onNavigation&&<Menu label="Organise conversation" items={[
           {label:task.pinned?'Unpin':'Pin',disabledReason:busy?'Saving navigation.':navigation?'Retry the pending navigation change first.':undefined,onSelect:()=>void navigate(!task.pinned,!!task.archived)},
           {label:task.archived?'Unarchive':'Archive',description:'Personal navigation only. No authoritative record is deleted, and running work is not stopped.',disabledReason:busy?'Saving navigation.':navigation?'Retry the pending navigation change first.':undefined,onSelect:()=>void navigate(!!task.pinned,!task.archived)}
         ]}/>}
         {navigation&&!busy&&<Button onPress={()=>void navigate(navigation.pinned,navigation.archived)}>Retry navigation change</Button>}
         {task.archived&&<p>Archived. Opening does not unarchive this Task.</p>}
         <form className="iq-task-rename" onSubmit={(event) => void save(event)} data-task-rename>
-          <TextField label="Task title" value={draft} onChange={setDraft} />
+          <TextField label="Conversation title" value={draft} onChange={setDraft} />
           <Button variant="secondary" size="sm" type="submit" pending={busy} disabledReason={draft.trim() === '' ? 'A title is required.' : undefined}>
             Rename
           </Button>
         </form>
         <div data-task-move>
-          <Menu label="Move" heading="Move this Task" items={[targets]} triggerVariant="secondary" />
+          <Menu label="Move" heading="Move this conversation" items={[targets]} triggerVariant="secondary" />
         </div>
       </div>
       {notice ? (
@@ -200,18 +192,15 @@ export function TaskView({
           {notice}
         </p>
       ) : null}
-      <TaskEnvironment taskId={task.taskId} />
-      <ProcessingRoutes taskId={task.taskId} onReconnect={onReconnect} />
-      <TaskUsage taskId={task.taskId} />
-      <TaskStates states={states && states.taskId === task.taskId ? states : null} notice={statesNotice} />
-      <TaskPolicy policy={policy && policy.taskId === task.taskId ? policy : null} notice={policyNotice} onSetMode={onSetMode} />
-      </details>
-      {!accepted && !task.runtimeThreadId && <div className="iq-thread-placeholder" data-thread-placeholder>
-        <p className="iq-thread-placeholder-title">{task.runtimeThreadId ? 'This Task has a retained runtime thread.' : 'This Task has no thread yet.'}</p>
-        <p className="iq-thread-placeholder-body">
-          {task.runtimeThreadId ? 'Current execution details have not been loaded. No completed analysis is implied.' : 'Start new work with New thread. Only you can see this Task; moving it never shares it.'}
-        </p>
-      </div>}
+      </div>
+
     </section>
   );
+}
+
+/** Ordinary chat is a transcript, not a runtime inspector. */
+export function TaskView({task,accepted,selectedQuestion}:TaskViewProps):ReactElement {
+ return <section className="iq-task" aria-label="Conversation" data-task-view={task.taskId}>
+  {(accepted||task.runtimeThreadId)?<TaskProgress key={task.taskId} taskId={task.taskId} workspaceId={task.workspaceId} selectedQuestion={selectedQuestion} accepted={accepted}/>:<p>Send a message to begin.</p>}
+ </section>;
 }

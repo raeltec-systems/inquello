@@ -24,7 +24,7 @@ import { Button, StatusChip } from '../primitives';
 import type { BroadModeOption, ReachItem, TaskPolicyItem } from '../policy-bridge';
 
 /** The reach lines main supplies, as a definition list. */
-export function ReachList({ reach, scope }: { reach: ReachItem; scope: string }): ReactElement {
+export function ReachList({ reach, scope, showSource=true }: { reach: ReachItem; scope: string; showSource?:boolean }): ReactElement {
   return (
     <dl className="iq-task-states-list" data-reach={scope} data-reach-bounded={String(reach.bounded)}>
       {reach.lines.map((line) => (
@@ -33,15 +33,16 @@ export function ReachList({ reach, scope }: { reach: ReachItem; scope: string })
           <dd className="iq-task-state-value">{line.value}</dd>
         </div>
       ))}
-      <div className="iq-task-state" data-reach-line="network-rule">
+      {showSource&&<div className="iq-task-state" data-reach-line="network-rule">
         <dt className="iq-task-state-name">Destinations set by</dt>
         <dd className="iq-task-state-value">{reach.networkSourceLabel}</dd>
-      </div>
+      </div>}
     </dl>
   );
 }
 
 export interface TaskPolicyProps {
+  compact?:boolean;
   policy: TaskPolicyItem | null;
   /** Why the policy could not be read, if it could not. */
   notice?: string | null;
@@ -51,7 +52,7 @@ export interface TaskPolicyProps {
 
 const SUMMARY = ['sandbox', 'approval', 'network'] as const;
 
-export function TaskPolicy({ policy, notice = null, onSetMode }: TaskPolicyProps): ReactElement {
+export function TaskPolicy({ policy, notice = null, onSetMode, compact=false }: TaskPolicyProps): ReactElement {
   const [confirming, setConfirming] = useState<BroadModeOption | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -96,7 +97,7 @@ export function TaskPolicy({ policy, notice = null, onSetMode }: TaskPolicyProps
   return (
     <section className="iq-task-policy" aria-labelledby="iq-task-policy-heading" data-task-policy={policy?.taskId ?? ''}>
       <h2 id="iq-task-policy-heading" className="iq-task-states-heading">
-        Policy on this device
+        {compact?'Permissions':'Policy on this device'}
       </h2>
       {notice ? (
         <p className="iq-task-notice" role="status" data-task-policy-notice>
@@ -105,7 +106,7 @@ export function TaskPolicy({ policy, notice = null, onSetMode }: TaskPolicyProps
       ) : null}
       {policy ? (
         <>
-          <dl className="iq-task-states-list" data-task-policy-summary>
+          {!compact&&<dl className="iq-task-states-list" data-task-policy-summary>
             {SUMMARY.map((name) => {
               const setting = policy.settings.find((entry) => entry.name === name);
               if (!setting) return null;
@@ -118,7 +119,7 @@ export function TaskPolicy({ policy, notice = null, onSetMode }: TaskPolicyProps
                 </div>
               );
             })}
-          </dl>
+          </dl>}
           <section className="iq-task-reach" aria-labelledby="iq-task-reach-heading" data-task-reach={policy.taskId}>
             <h3 id="iq-task-reach-heading" className="iq-task-state-name">
               What this Task's tools can reach
@@ -126,7 +127,7 @@ export function TaskPolicy({ policy, notice = null, onSetMode }: TaskPolicyProps
             <p className={policy.sandbox.status === 'unavailable' ? 'iq-task-notice' : 'iq-task-state-meta'} role={policy.sandbox.status === 'unavailable' ? 'status' : undefined} data-task-sandbox={policy.sandbox.status}>
               {policy.sandbox.label}
             </p>
-            <ReachList reach={policy.reach} scope="task" />
+            <ReachList reach={policy.reach} scope="task" showSource={!compact} />
           </section>
           <div className="iq-task-mode" data-broad-mode={broad?.recorded} data-broad-mode-status={broad?.status} data-broad-mode-effective={broad?.effectiveMode}>
             <p className="iq-task-mode-line">

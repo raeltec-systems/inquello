@@ -1,3 +1,4 @@
+import {parseRoute,record} from '../main/routes/types';
 /**
  * The Providers block (Story 1.13): the two provider routes, each shown apart
  * from the Inquello identity.
@@ -49,7 +50,7 @@ type Action = 'claude-store' | 'claude-verify' | 'claude-remove' | 'codex-api-ke
 
 function accountText(status: ProviderStatusView): string {
   const account = status.codex.account;
-  if (!account) return 'No Codex login is held.';
+  if (!account) return 'No OpenAI connection is saved.';
   if (account.type === 'apiKey') return 'Signed in with an API key, held in the OS keyring.';
   if (account.type === 'chatgpt') return `Signed in with ChatGPT${account.planType ? ` (${account.planType} plan)` : ''}, held in the OS keyring.`;
   return 'A saved provider credential is available. Account details have not been checked.';
@@ -71,6 +72,8 @@ export function Providers({focusTarget,workspaceId=null}:{focusTarget?:ProviderF
   const [codexKey, setCodexKey] = useState('');
   const [busy, setBusy] = useState<Action | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [chatgptQualified,setChatgptQualified]=useState(false);
+  useEffect(()=>{let live=true,sequence=0;const routes=(globalThis as {inquello?:{routes?:{list():Promise<unknown>;onChanged?(fn:()=>void):()=>void}}}).inquello?.routes;const check=async()=>{const n=++sequence;setChatgptQualified(false);try{if(!routes) return;const response=record(await routes.list());if(response.ok!==true||!Array.isArray(response.value))return;const rows=response.value.map(parseRoute);if(live&&n===sequence)setChatgptQualified(rows.some(row=>row.configuration?.deployment==='chatgpt-codex'&&row.adapterSupported&&row.verification==='verified_for_real_data'&&row.evidence.length>0));}catch{/* Unknown qualification never offers OAuth as working. */}};void check();const off=routes?.onChanged?.(()=>void check());return()=>{live=false;sequence++;off?.();};},[status?.codex.account?.type]);
 
   const load = useCallback(async (explicit=false) => {
     if (!bridge) return;
@@ -116,6 +119,7 @@ export function Providers({focusTarget,workspaceId=null}:{focusTarget?:ProviderF
         break;
       }
       case 'codex-chatgpt':
+        if(!chatgptQualified){setBusy(null);return false;}
         call = bridge.codexLogin({ type: 'chatgpt' });
         break;
       case 'codex-logout':
@@ -145,8 +149,8 @@ export function Providers({focusTarget,workspaceId=null}:{focusTarget?:ProviderF
   const removeReason = verifyReason;
   const codexReady = !status ? loading : codex === 'unavailable' ? (status.codex.reason ?? 'The runtime is unavailable.') : anyBusy;
   const codexKeyReason = codexReady ?? (codex === 'connecting' ? 'A ChatGPT sign-in is waiting for the browser.' : codexKey.trim() === '' ? 'Enter an API key first.' : undefined);
-  const chatgptReason = codexReady ?? (codex === 'connecting' ? 'A ChatGPT sign-in is already waiting for the browser.' : undefined);
-  const logoutReason = codexReady ?? (codex === 'not-connected' ? 'No Codex login is connected.' : undefined);
+  const chatgptReason = !chatgptQualified?'ChatGPT sign-in is not available for a supported model in this build. Use an OpenAI API key.':codexReady ?? (codex === 'connecting' ? 'A ChatGPT sign-in is already waiting for the browser.' : undefined);
+  const logoutReason = codexReady ?? (codex === 'not-connected' ? 'No OpenAI connection is saved.' : undefined);
 
   const needsOwnerConsent=!!consent.state?.view.can_manage&&consent.state.view.state!=='allowed'&&!consent.state.pending;
   return (
@@ -160,7 +164,7 @@ export function Providers({focusTarget,workspaceId=null}:{focusTarget?:ProviderF
       data-codex-account={status?.codex.account?.type ?? 'none'}
     >
       <h3>Connect your AI providers</h3>
-      <p className="specimen-account-note">Connect an account, then choose its model in <a href="#settings-routes">Models</a>. Provider credentials stay separate from your Inquello identity.</p>
+      <p className="specimen-account-note">Connect an account, then choose a model in your conversation. Provider credentials stay separate from your Inquello identity.</p>
       <p className="specimen-account-note">A stored key or connected account does not establish model access or qualification.</p>
       <Button variant="quiet" disabledReason={anyBusy} onPress={() => void load(true)}>Refresh provider status</Button>
       <dl className="specimen-account-states">
@@ -176,7 +180,7 @@ export function Providers({focusTarget,workspaceId=null}:{focusTarget?:ProviderF
           <dd className="specimen-account-note">{status ? STORAGE_TEXT[status.claude.storage] : 'Checking'}</dd>
         </div>
         <div className="specimen-account-state">
-          <dt>Codex login</dt>
+          <dt>OpenAI connection</dt>
           <dd>
             <StatusChip status={`provider-codex-${codex ?? 'unknown'}`} label={codex ? CODEX_TEXT[codex] : 'Checking'} />
             {status ? <span className="specimen-account-note">{accountText(status)}</span> : null}
@@ -226,13 +230,13 @@ export function Providers({focusTarget,workspaceId=null}:{focusTarget?:ProviderF
           {consent.notice?<p role="status" className="specimen-account-note">{consent.notice}</p>:null}
           <p className="specimen-account-note">Disconnect removes only your personal connection. Workspace permission is separate; it does not share your key or send a message.</p>
         </div>:null}
-        <p className="specimen-account-note">Use an API key for your OpenAI API credits, or sign in with ChatGPT. These are separate account and billing options.</p>
+        <p className="specimen-account-note">Use your OpenAI API credits with an API key. A ChatGPT subscription is separate.</p>
         <TextField
           id="provider-codex-key"
           type="password"
           autoComplete="off"
-          label="OpenAI API key for Codex"
-          instruction="Handed to the runtime, which keeps it in the OS keyring."
+          label="OpenAI API key"
+          instruction="Stored securely in this computer’s credential store."
           value={codexKey}
           onChange={setCodexKey}
         />
@@ -248,7 +252,7 @@ export function Providers({focusTarget,workspaceId=null}:{focusTarget?:ProviderF
           </Button>
         </div>
       </div>
-      {connecting ? <p className="specimen-account-note">Finish in your browser. Cancel sign-in and disconnect also removes any connected Codex login; it does not sign you out of Inquello.</p> : null}
+      {connecting ? <p className="specimen-account-note">Finish in your browser. Cancel sign-in and disconnect also removes any saved OpenAI connection; it does not sign you out of Inquello.</p> : null}
       {notice ? (
         <p className="specimen-account-note" role="status">
           {notice}

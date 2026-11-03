@@ -23,7 +23,7 @@ afterEach(()=>{cleanup();delete(globalThis as {inquello?:unknown}).inquello;});
 it('owner explicitly connects and allows once, with exact displayed terms and cleared key',async()=>{
  const h=setup();await screen.findByText('Fictional company');await screen.findByText(/Allow OpenAI to process permitted/);
  expect(h.bridge.changeConsent).not.toHaveBeenCalled();
- const field=screen.getByLabelText<HTMLInputElement>('OpenAI API key for Codex');fireEvent.change(field,{target:{value:key}});
+ const field=screen.getByLabelText<HTMLInputElement>('OpenAI API key');fireEvent.change(field,{target:{value:key}});
  fireEvent.click(screen.getByRole('button',{name:'Connect and allow'}));
  await waitFor(()=>expect(h.bridge.changeConsent).toHaveBeenCalledTimes(1));
  expect(h.order).toEqual(['key','allow']);expect(field.value).toBe('');
@@ -36,7 +36,7 @@ it('owner with an existing key allows without credential reentry or dispatch',as
 });
 it('nonowner can connect privately but cannot allow or revoke workspace processing',async()=>{
  const h=setup(false);await screen.findByText(/Ask your workspace owner to allow OpenAI/);
- fireEvent.change(screen.getByLabelText('OpenAI API key for Codex'),{target:{value:key}});
+ fireEvent.change(screen.getByLabelText('OpenAI API key'),{target:{value:key}});
  fireEvent.click(screen.getByRole('button',{name:'Connect with API key'}));
  await waitFor(()=>expect(h.bridge.codexLogin).toHaveBeenCalledTimes(1));expect(h.bridge.changeConsent).not.toHaveBeenCalled();
  expect(screen.queryByRole('button',{name:/Allow OpenAI for this workspace|Revoke workspace/})).toBeNull();
@@ -48,7 +48,7 @@ it('personal disconnect never revokes workspace consent',async()=>{
 });
 it('failed personal connection does not grant workspace consent',async()=>{
  const h=setup();h.bridge.codexLogin.mockResolvedValueOnce({ok:false,status:await h.bridge.getStatus()});
- await screen.findByText('Fictional company');fireEvent.change(screen.getByLabelText('OpenAI API key for Codex'),{target:{value:key}});
+ await screen.findByText('Fictional company');fireEvent.change(screen.getByLabelText('OpenAI API key'),{target:{value:key}});
  fireEvent.click(screen.getByRole('button',{name:'Connect and allow'}));
  await waitFor(()=>expect(h.bridge.codexLogin).toHaveBeenCalledTimes(1));expect(h.bridge.changeConsent).not.toHaveBeenCalled();
 });

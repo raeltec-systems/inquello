@@ -21,11 +21,22 @@ export function useConversationFollow(scope:string|null,blocked:boolean){
  useLayoutEffect(()=>{
   const s:FollowState=state.current={scope,blocked,following:!blocked,reader:0,alive:true,scrollTop:threadRef.current?.scrollTop??0};setAway(false);
   const thread=threadRef.current,content=contentRef.current;
+  let readerInput=false;
+  const onReaderInput=()=>{if(!valid())return;readerInput=true;s.reader++;s.following=false;};
+  const onKey=(event:KeyboardEvent)=>{
+   if((event.target as HTMLElement)?.closest('input,textarea,select,button,[contenteditable="true"]'))return;
+   if(['ArrowUp','ArrowDown','PageUp','PageDown','Home','End',' '].includes(event.key))onReaderInput();
+  };
   const onScroll=()=>{
    const top=target();if(!valid()||top===null)return;
    const position=thread!.scrollTop,upward=position<s.scrollTop-1;
    s.scrollTop=position;
    const near=Math.abs(top-position)<=EDGE_PX;
+   // Wheel/trackpad, scrollbar drag, touch and keyboard are reader intent in
+   // either direction. Never write scrollTop back during that scroll event.
+   if(readerInput){
+    readerInput=false;s.following=near&&position<=top+1;setAway(!s.following);return;
+   }
    // Scroll events are asynchronous: our previous write can be delivered after
    // content grows again. Distance from a NEW target is not reader intent.
    // Only actual upward movement suspends following; unchanged/forward events
@@ -36,10 +47,15 @@ export function useConversationFollow(scope:string|null,blocked:boolean){
   };
   const onResize=()=>{if(!valid())return;if(s.following)follow();else {const top=target();if(top!==null)setAway(Math.abs(top-thread!.scrollTop)>EDGE_PX);}};
   thread?.addEventListener('scroll',onScroll,{passive:true});
+  thread?.addEventListener('wheel',onReaderInput,{passive:true});
+  thread?.addEventListener('pointerdown',onReaderInput,{passive:true});
+  thread?.addEventListener('touchstart',onReaderInput,{passive:true});
+  thread?.addEventListener('keydown',onKey);
   const observer=typeof ResizeObserver==='undefined'?null:new ResizeObserver(onResize);
   if(content)observer?.observe(content);if(thread)observer?.observe(thread);
   onResize();
-  return()=>{s.alive=false;observer?.disconnect();thread?.removeEventListener('scroll',onScroll);};
+  return()=>{s.alive=false;observer?.disconnect();thread?.removeEventListener('scroll',onScroll);
+   thread?.removeEventListener('wheel',onReaderInput);thread?.removeEventListener('pointerdown',onReaderInput);thread?.removeEventListener('touchstart',onReaderInput);thread?.removeEventListener('keydown',onKey);};
  },[scope,blocked]);
  const jump=()=>{if(!valid())return;state.current.following=true;follow();};
  // Capture the reader's position generation at explicit submission. A later scroll

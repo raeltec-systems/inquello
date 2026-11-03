@@ -177,24 +177,27 @@ describe('Shell with Task states', () => {
     return state;
   }
 
-  it('reads the open Task states through state.list and never records one', async () => {
+  it('reads states without exposing technical dimensions in ordinary conversation or recording one', async () => {
     const state = fakeMain(() => ({ ok: true, value: listing([{ dimension: 'run', value: 'execution_finished', revision: 1 }]) }));
     const user = userEvent.setup();
     render(<Shell onShowSpecimen={() => undefined} operationIds={() => '00000000-0000-4000-8000-000000000999'} />);
     await user.click(await screen.findByRole('link', { name: 'Bank confirmations' }));
-    await waitFor(() => expect(chipOf('run')?.textContent).toBe('Execution finished'));
+    await waitFor(() => expect(state.list).toHaveBeenCalledWith({taskId:TASK}));
+    expect(document.querySelector('[data-task-states]')).toBeNull();
     expect(state.list).toHaveBeenCalledWith({ taskId: TASK });
     expect(state.recordTaskState).not.toHaveBeenCalled();
-    expect(within(document.querySelector<HTMLElement>('[data-task-states]')!).getByRole('heading', { name: 'States' })).toBeTruthy();
+    expect(screen.queryByRole('heading',{name:'States'})).toBeNull();
     expect(document.querySelectorAll('[data-shell] .iq-status-chip--accepted, [data-shell] .iq-status-chip--explained')).toHaveLength(0);
   });
 
-  it('shows a refused or malformed listing as unread, not half-read', async () => {
-    fakeMain(() => ({ ok: true, value: { taskId: TASK, revision: 1, dimensions: [{ dimension: 'run', records: [{ value: 'done' }] }] } }));
+  it('does not expose partial or fabricated state chrome after a malformed listing', async () => {
+    const state=fakeMain(() => ({ ok: true, value: { taskId: TASK, revision: 1, dimensions: [{ dimension: 'run', records: [{ value: 'done' }] }] } }));
     const user = userEvent.setup();
     render(<Shell onShowSpecimen={() => undefined} />);
     await user.click(await screen.findByRole('link', { name: 'Bank confirmations' }));
-    await screen.findByText(/States could not be read/);
-    expect(row('run').dataset.stateValue).toBe('not-recorded');
+    await waitFor(()=>expect(state.list).toHaveBeenCalledWith({taskId:TASK}));
+    expect(document.querySelector('[data-task-states]')).toBeNull();
+    expect(state.recordTaskState).not.toHaveBeenCalled();
+    expect(screen.queryByText('Execution finished')).toBeNull();
   });
 });

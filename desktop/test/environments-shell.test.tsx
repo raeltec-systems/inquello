@@ -5,7 +5,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LOCAL_ENVIRONMENT, REMOTE_GATE, type TaskEnvironmentView } from '../src/main/environments/types';
 import { TaskEnvironment } from '../src/renderer/Shell/TaskEnvironment';
-import { TaskView } from '../src/renderer/Shell/TaskView';
+import { TaskView, TaskDetails } from '../src/renderer/Shell/TaskView';
 import type { TaskItem } from '../src/renderer/Shell/organise-bridge';
 import { forgetTaskModels, rememberTaskModel, type ModelAuthorityChange } from '../src/renderer/Shell/model-authority';
 const taskId = '22222222-2222-4222-8222-222222222222';
@@ -106,9 +106,8 @@ describe('Task environment facts', () => {
   });
   it('refresh preserves an unsaved Task title', async () => {
     const h = setup(); const task = { taskId, title: 'Saved title', workspaceId: taskId, engagementId: null, folderId: null, revision: 0, runtimeThreadId: null, sourceRefs: [] } as unknown as TaskItem;
-    render(<TaskView task={task} engagements={[]} folders={[]} onRename={vi.fn()} onMove={vi.fn()} newOperationId={() => 'operation'} />);
-    await userEvent.click(screen.getByText('Task details and controls'));
-    const input = screen.getByRole('textbox', { name: 'Task title' }); await userEvent.clear(input); await userEvent.type(input, 'Unsent draft');
+    render(<><TaskDetails task={task} engagements={[]} folders={[]} onRename={vi.fn()} onMove={vi.fn()} newOperationId={() => 'operation'} /><TaskEnvironment taskId={taskId}/></>);
+    const input = screen.getByRole('textbox', { name: 'Conversation title' }); await userEvent.clear(input); await userEvent.type(input, 'Unsent draft');
     await screen.findByText('Anthropic'); act(() => h.change()); await waitFor(() => expect(h.forTask).toHaveBeenCalledTimes(2)); expect(input).toHaveProperty('value', 'Unsent draft');
   });
 });

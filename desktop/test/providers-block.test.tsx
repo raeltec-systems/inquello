@@ -67,7 +67,7 @@ describe('Providers block', () => {
     expect(screen.getByText('Not connected')).toBeTruthy();
     expect(screen.getByText(/Provider credentials stay separate from your Inquello identity/)).toBeTruthy();
     expect(screen.getByLabelText('Claude API key').getAttribute('type')).toBe('password');
-    expect(screen.getByLabelText('OpenAI API key for Codex').getAttribute('type')).toBe('password');
+    expect(screen.getByLabelText('OpenAI API key').getAttribute('type')).toBe('password');
     expect(block().getAttribute('data-claude-state')).toBe('not-configured');
     expect(block().getAttribute('data-codex-state')).toBe('not-connected');
     expect(button('Store key').getAttribute('aria-disabled')).toBe('true');
@@ -120,7 +120,7 @@ describe('Providers block', () => {
     const bridge = installBridge();
     render(<Providers />);
     await screen.findByText('Not connected');
-    const field = screen.getByLabelText<HTMLInputElement>('OpenAI API key for Codex');
+    const field = screen.getByLabelText<HTMLInputElement>('OpenAI API key');
     await userEvent.type(field, 'sk-proj-block-test');
     await userEvent.click(button('Connect with API key'));
     expect(bridge.codexLogin).toHaveBeenCalledWith({ type: 'apiKey', apiKey: 'sk-proj-block-test' });
@@ -130,8 +130,9 @@ describe('Providers block', () => {
     await userEvent.click(button('Disconnect'));
     expect(await screen.findByText('Not connected')).toBeTruthy();
     await userEvent.click(button('Sign in with ChatGPT'));
-    expect(bridge.codexLogin).toHaveBeenLastCalledWith({ type: 'chatgpt' });
-    expect(await screen.findByText('Waiting for the browser')).toBeTruthy();
+    expect(button('Sign in with ChatGPT').getAttribute('aria-disabled')).toBe('true');
+    expect(bridge.codexLogin).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('Waiting for the browser')).toBeNull();
   });
 
   it('says why Codex actions are unavailable while the runtime is down', async () => {
@@ -162,13 +163,12 @@ describe('provider onboarding clarity', () => {
     expect(screen.queryByText('The provider status could not be read.')).toBeNull();
   });
   it('truthfully labels cancellation as disconnect and uses only existing logout', async () => {
-    const bridge=installBridge(); render(<Providers />); await screen.findByText('Not connected');
-    await userEvent.click(button('Sign in with ChatGPT'));
+    let disconnected=false;const bridge=installBridge({getStatus:async()=>status('not-configured',disconnected?'not-connected':'connecting'),codexLogout:vi.fn(async()=>{disconnected=true;return {ok:true,status:status('not-configured','not-connected')};})}); render(<Providers />);
     await screen.findByText('Waiting for the browser');
     await userEvent.click(button('Cancel sign-in and disconnect'));
     await screen.findByText('Not connected');
     expect(bridge.codexLogout).toHaveBeenCalledTimes(1);
-    expect(bridge.codexLogin).toHaveBeenCalledTimes(1);
+    expect(bridge.codexLogin).not.toHaveBeenCalled();
   });
 });
 

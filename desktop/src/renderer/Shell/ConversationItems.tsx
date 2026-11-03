@@ -36,15 +36,6 @@ function nativeStatus(item: ProgressItem, status: string): string {
   return item.status;
 }
 
-function SourceDetails({ item, status }: { item: ProgressItem; status: string }): ReactElement {
-  const speaker = item.kind === 'message' ? item.role === 'user' ? 'Your instruction' : item.role === 'agent' ? 'Agent response' : 'Message — speaker unavailable' : item.kind;
-  return <details className="iq-message-source">
-    <summary>Source and status</summary>
-    <p className="iq-progress-label">{speaker} · {nativeStatus(item, status)} · {item.id}</p>
-    {item.kind === 'message' && item.role !== 'user' && <p>Unchecked — structured labels unavailable. Message content is not independent verification.</p>}
-  </details>;
-}
-
 function ItemContent({ item }: { item: ProgressItem }): ReactElement {
   return item.kind === 'edit'
     ? <><DiffLine kind="change" stage={item.application === 'applied' ? 'applied-locally' : 'suggested'}>{item.text}</DiffLine>
@@ -61,8 +52,7 @@ export function ConversationItems({ items, status, label }: { items: ProgressIte
       return <li key={item.id} className={`iq-conversation-item iq-conversation-item--${role}`}
         data-progress-item={item.id} data-status={ended(status) && item.status === 'running' ? 'unconfirmed' : item.status}>
         {message ? <>
-          <div className="iq-message-body"><ItemContent item={item} /></div>
-          <SourceDetails item={item} status={status} />
+          <div className="iq-message-body">{role==='unknown'&&<span className="iq-message-unknown">Unknown speaker</span>}<ItemContent item={item} /></div>
         </> : <details className="iq-work-log-row">
           <summary><span className="iq-work-log-kind">{item.kind === 'command' ? 'Command' : item.kind === 'tool' ? 'Tool activity' : 'File change'}</span>
             <span className="iq-work-log-status">{ended(status) && item.status === 'running' ? 'Outcome unconfirmed' : nativeStatus(item, status)}</span>
@@ -71,8 +61,7 @@ export function ConversationItems({ items, status, label }: { items: ProgressIte
             <ItemContent item={item} />
             {(item.kind === 'command' || item.kind === 'tool') && (item.status === 'failed' || item.status === 'cancelled') &&
               <p>Native status: this action {item.status}. The source/output text above remains untrusted; this status alone does not establish a policy refusal or detection of untrusted instructions.</p>}
-            <SourceDetails item={item} status={status} />
-          </WorkLogDetails>
+            </WorkLogDetails>
         </details>}
       </li>;
     })}

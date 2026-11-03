@@ -1001,3 +1001,28 @@ a.iq-nav-row:hover {
 .iq-sidebar-resize { position:absolute; inset-block:0; right:-3px; width:6px; z-index:30; cursor:col-resize; touch-action:none; }
 .iq-sidebar-resize:hover, .iq-sidebar-resize:focus-visible { background:var(--border-strong); outline:2px solid var(--blue-600); outline-offset:-2px; }
 .iq-nav-overlay { width:min(calc(var(--sidebar-width) - var(--rail-width)),calc(100vw - var(--rail-width))); }
+
+/* Ordinary chat: established typography, one transcript viewport and direct model choice. */
+.iq-shell { font: var(--type-body); }
+.iq-thread { overscroll-behavior-y: contain; }
+.iq-thread:focus-visible { outline: 2px solid var(--text-link); outline-offset: -2px; }
+.iq-header { overflow: visible; z-index: 20; }
+.iq-header > .iq-menu-root { flex: none; }
+.iq-header > .iq-menu-root > .iq-menu { left: auto; right: 0; }
+.iq-conversation-model { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); min-width: 0; max-width: 100%; }
+.iq-model-menu > .iq-menu { top: auto; bottom: calc(100% + var(--space-2)); left: 0; z-index: 40; max-height: min(24rem,60vh); overflow-y: auto; width: min(300px,calc(100vw - 48px)); }
+.iq-model-menu .iq-menu-trigger { max-width: 100%; }
+.iq-model-menu .iq-button-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.iq-model-notice { flex-basis: 100%; font: var(--type-caption); color: var(--text-secondary); }
+.iq-model-unavailable,.iq-message-unknown { font: var(--type-caption); color: var(--text-secondary); }
+.iq-task-actions .iq-task-tools { flex-wrap: wrap; }
+.iq-task-actions .iq-task-rename { flex-wrap: wrap; }
+
+/* Two-row composer: model and send share the lower toolbar inside one border. */
+.iq-composer { flex-direction:column; align-items:stretch; border-radius:var(--radius-composer); }
+.iq-composer-input { flex:none; width:100%; min-width:0; min-height:3.1em; }
+.iq-composer-actions { flex:none; width:100%; margin-left:0; justify-content:flex-end; }
+.iq-model-menu > .iq-menu { left:auto; right:0; }
+
+/* Empty text is an accessible disabled reason, not persistent toolbar clutter. */
+.iq-composer[data-composer-empty-hint] .iq-action:has(> [data-composer-send]) > .iq-note { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }

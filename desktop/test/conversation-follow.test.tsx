@@ -67,3 +67,13 @@ it.each(['scope','blocked'] as const)('uncommitted %s transition cannot invalida
  act(()=>admitted());expect(g.thread.scrollTop).toBe(500);
  g.grow(800);expect(g.thread.scrollTop).toBe(700);
 });
+
+it.each(['wheel','keydown','pointerdown'] as const)('lets a reader scroll downward past a short conversation using %s without snapback',kind=>{
+ render(<View/>);const g=geometry();g.grow(50);expect(g.thread.scrollTop).toBe(0);
+ if(kind==='wheel')fireEvent.wheel(g.thread,{deltaY:30});
+ if(kind==='keydown')fireEvent.keyDown(g.thread,{key:'PageDown'});
+ if(kind==='pointerdown')fireEvent.pointerDown(g.thread);
+ g.scroll(30);expect(g.thread.scrollTop).toBe(30);
+ g.grow(800);expect(g.thread.scrollTop).toBe(30);
+ fireEvent.click(screen.getByRole('button',{name:'Jump to latest'}));expect(g.thread.scrollTop).toBe(700);
+});
