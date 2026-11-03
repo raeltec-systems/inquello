@@ -6681,22 +6681,61 @@ fn measured_route_identity(
     configuration: &routes::RouteConfiguration,
 ) -> routes::RouteEvidenceIdentity {
     routes::RouteEvidenceIdentity {
+        schema_version: inquello_domain::routes::ROUTE_EVIDENCE_SCHEMA_VERSION,
         route_id: configuration.route_id().as_str().into(),
         deployment: configuration.deployment().into(),
         endpoint: configuration.endpoint().into(),
         model: configuration.model().into(),
         api_version: configuration.api_version().into(),
-        configuration_digest: routes::configuration_digest(configuration),
+        adapter_configuration_digest: routes::adapter_configuration_digest(configuration),
         implementation_digest: env!("INQUELLO_BEHAVIOR_DIGEST").into(),
         runtime_version: env!("CARGO_PKG_VERSION").into(),
         contract_version: format!(
-            "inquello-v{}-authorization-v1",
+            "inquello-v{}-authorization-v2",
             inquello_protocol::PROTOCOL_MAJOR
         ),
         platform: env!("INQUELLO_BUILD_PLATFORM").into(),
     }
 }
 impl InquelloRequestProcessor {
+    async fn real_route_credential(
+        &self,
+        actor: Actor,
+        configuration: &routes::RouteConfiguration,
+    ) -> Result<(u64, Option<reviewer::InheritedAuthBinding>), JSONRPCErrorError> {
+        let generation = self
+            .routes
+            .state
+            .lock()
+            .await
+            .credential(actor.principal_id, configuration)
+            .ok_or_else(|| {
+                refusal(
+                    "credential_unavailable",
+                    "Reconnect the selected provider in Settings",
+                )
+            })?;
+        let inherited = if configuration.route_id() == routes::RouteId::CodexResponses {
+            let responses = self.routes.responses.as_ref().ok_or_else(|| {
+                refusal("credential_unavailable", "Selected provider is unavailable")
+            })?;
+            responses.check_configuration(configuration).map_err(|_| {
+                refusal(
+                    "credential_unavailable",
+                    "Selected provider authentication or endpoint changed",
+                )
+            })?;
+            Some(responses.auth_binding().map_err(|_| {
+                refusal(
+                    "credential_unavailable",
+                    "Selected provider authentication changed",
+                )
+            })?)
+        } else {
+            None
+        };
+        Ok((generation, inherited))
+    }
     #[expect(
         clippy::too_many_arguments,
         reason = "Keep each independently trusted authority input explicit at the real-data dispatch fence."
@@ -6741,14 +6780,46 @@ impl InquelloRequestProcessor {
         policy: &InquelloWorkspaceExecutionPolicy,
         action: routes::ProtectedRouteAction,
     ) -> Result<(), JSONRPCErrorError> {
+        self.check_real_route_with_evidence(
+            connection,
+            actor,
+            session,
+            configuration,
+            task_id,
+            policy,
+            action,
+            routes::compiled_evidence_for_identity,
+        )
+        .await
+    }
+    // Private code-only dependency seam. The production wrapper above always
+    // selects the compiled register; no RPC, renderer or environment proof input.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Explicit independent authority inputs plus a sealed evidence dependency"
+    )]
+    async fn check_real_route_with_evidence(
+        &self,
+        connection: ConnectionId,
+        actor: Actor,
+        session: &SessionBinding,
+        configuration: &routes::RouteConfiguration,
+        task_id: &str,
+        policy: &InquelloWorkspaceExecutionPolicy,
+        action: routes::ProtectedRouteAction,
+        evidence: fn(
+            &routes::RouteEvidenceIdentity,
+        ) -> Option<routes::NegativeAuthorizationEvidence>,
+    ) -> Result<(), JSONRPCErrorError> {
         let real = session.real.as_ref().ok_or_else(|| {
             refusal(
                 "classification_unknown",
                 "Current native data classification unavailable",
             )
         })?;
+        let credential = self.real_route_credential(actor, configuration).await?;
         let identity = measured_route_identity(configuration);
-        let proof=routes::compiled_evidence_for_identity(&identity).ok_or_else(||refusal("route_unavailable","Complete reviewed negative-authorization evidence for this exact build, runtime, platform and route is required"))?;
+        let proof=evidence(&identity).filter(|proof| proof.complete() && proof.identity == identity && identity.matches_configuration(configuration)).ok_or_else(||refusal("route_unavailable","Complete reviewed negative-authorization evidence for this exact build, runtime, platform and route is required"))?;
         if proof.data_policy_digest != env!("INQUELLO_DATA_POLICY_DIGEST") {
             return Err(refusal(
                 "route_unavailable",
@@ -6775,13 +6846,13 @@ impl InquelloRequestProcessor {
             .and_then(|v| serde_json::from_value(v).ok())
             .ok_or_else(|| {
                 refusal(
-                    "route_unavailable",
+                    "organization_approval_required",
                     "Current organization approval is required",
                 )
             })?;
         let approval = view.approval.ok_or_else(|| {
             refusal(
-                "route_unavailable",
+                "organization_approval_required",
                 "Current organization approval is required",
             )
         })?;
@@ -6817,7 +6888,7 @@ impl InquelloRequestProcessor {
         };
         let request = inquello_protocol::workspace::RouteEligibilityCheckRequest {
             identity: identity.clone(),
-            report_digest: proof.report_digest,
+            report_digest: proof.report_digest.clone(),
             binding: expected.clone(),
         };
         let reply = current_route_response(
@@ -6846,7 +6917,8 @@ impl InquelloRequestProcessor {
         let current = self
             .task_session(connection, actor, &session.workspace)
             .await?;
-        if current.real != session.real
+        if self.real_route_credential(actor, configuration).await? != credential
+            || current.real != session.real
             || self.actor(connection)? != actor
             || session.cancellation.is_cancelled()
         {
@@ -6855,18 +6927,17 @@ impl InquelloRequestProcessor {
                 "Current session changed while checking route",
             ));
         }
-        let eligible = routes::protected_route_eligibility(
-            configuration,
-            true,
-            true,
-            &identity,
-            &expected,
-            Some(&authority),
-        );
-        if !eligible.enabled {
+        if authority.approval.evidence_digest != proof.report_digest
+            || !routes::current_route_authority_matches(
+                configuration,
+                &identity,
+                &expected,
+                &authority,
+            )
+        {
             return Err(refusal(
-                "route_unavailable",
-                eligible.gate.unwrap_or("Current route is unavailable"),
+                "organization_approval_stale",
+                "Current organization approval is missing, stale, revoked or outside its scope",
             ));
         }
         Ok(())
@@ -7212,6 +7283,7 @@ impl crate::outgoing_message::PrivateThreadAuthority for InquelloRequestProcesso
 mod bootstrap_order_tests {
     use super::*;
     use crate::outgoing_message::{OutgoingEnvelope, OutgoingMessageSender};
+    use serde_json::Value;
     const CONNECTION: ConnectionId = ConnectionId(914);
     const PRINCIPAL: &str = "11111111-1111-4111-8111-111111111111";
     const WORKSPACE: &str = "5d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e";
@@ -7275,6 +7347,219 @@ mod bootstrap_order_tests {
             allow(outgoing, id).await;
         });
         result
+    }
+
+    // Test-local proof substitution only; not a capability register or production
+    // evidence. The actual RealSession and callback awaits run without fixture features.
+    fn route_proof(
+        identity: &routes::RouteEvidenceIdentity,
+    ) -> Option<routes::NegativeAuthorizationEvidence> {
+        if !identity.valid()
+            || identity.model != "gpt-6.1-terra"
+            || identity.implementation_digest != env!("INQUELLO_BEHAVIOR_DIGEST")
+        {
+            return None;
+        }
+        Some(routes::NegativeAuthorizationEvidence {
+            suite: routes::AUTHORIZATION_SUITE.into(),
+            tested_artifact_digest: "a".repeat(64),
+            processing_scope: "default-feature native authorization fixture".into(),
+            data_policy_digest: env!("INQUELLO_DATA_POLICY_DIGEST").into(),
+            identity: identity.clone(),
+            scenarios: routes::REQUIRED_AUTHORIZATION_SCENARIOS
+                .iter()
+                .map(|name| (name.to_string(), routes::ScenarioStatus::Passed))
+                .collect(),
+            passed: routes::REQUIRED_AUTHORIZATION_SCENARIOS.len() as u32,
+            failed: 0,
+            skipped: 0,
+            command: "unit fixture only, never compiled eligibility".into(),
+            environment: "owned SQLite and native authority callback".into(),
+            report_digest: "b".repeat(64),
+            limitations: vec![
+                "Artificial test-local proof; not an executed production report".into(),
+            ],
+        })
+    }
+    async fn real_route_case(mode: &str, action: routes::ProtectedRouteAction) {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut processor, outgoing, mut rx) = fixture(dir.path()).await;
+        Arc::get_mut(&mut processor).unwrap().routes.responses =
+            Some(reviewer::InheritedResponses {
+                provider: codex_model_provider::create_model_provider(
+                    codex_model_provider_info::ModelProviderInfo::create_openai_provider(None),
+                    Some(codex_login::AuthManager::from_auth_for_testing(
+                        codex_login::CodexAuth::from_api_key("owned-non-provider-key"),
+                    )),
+                ),
+                factory: codex_http_client::HttpClientFactory::new(
+                    codex_http_client::OutboundProxyPolicy::ReqwestDefault,
+                ),
+            });
+        allowed_bootstrap(&processor, &outgoing, &mut rx, params(dir.path(), 1))
+            .await
+            .unwrap();
+        let actor = processor.actor(CONNECTION).unwrap();
+        let session = processor
+            .task_session(CONNECTION, actor, WORKSPACE)
+            .await
+            .unwrap();
+        assert!(session.real.is_some());
+        let configuration = routes::RouteConfiguration::parse(routes::RouteConfigurationInput {
+            route_id: "codex-responses".into(),
+            deployment: "openai-api".into(),
+            model: "gpt-6.1-terra".into(),
+            api_version: "responses-v1".into(),
+            account_ref: uuid::Uuid::new_v4().to_string(),
+            region: None,
+        })
+        .unwrap();
+        let policy = InquelloWorkspaceExecutionPolicy {
+            workspace_id: WORKSPACE.into(),
+            policy_revision: 1,
+            authorization_epoch: 1,
+            execution: None,
+        };
+        processor.routes.state.lock().await.credentials.insert(
+            (actor.principal_id, routes::RouteId::CodexResponses),
+            (configuration.account_ref().into(), 1),
+        );
+        let proof = route_proof(&measured_route_identity(&configuration)).unwrap();
+        let approval = routes::OrganizationRouteApproval {
+            workspace_id: WORKSPACE.into(),
+            route_id: "codex-responses".into(),
+            evidence_digest: proof.report_digest,
+            processing_scope: proof.processing_scope,
+            data_policy_digest: proof.data_policy_digest,
+            issuer: "fixture issuer".into(),
+            operator_reference: "owned fixture approval".into(),
+            valid_from: 90,
+            review_at: 110,
+            expires_at: 120,
+            revision: 1,
+            policy_revision: 1,
+            revoked: false,
+        };
+        let task = uuid::Uuid::new_v4().to_string();
+        let (result, ()) = tokio::join!(
+            processor.check_real_route_with_evidence(
+                CONNECTION,
+                actor,
+                &session,
+                &configuration,
+                &task,
+                &policy,
+                action,
+                route_proof
+            ),
+            async {
+                let id = request_id(&mut rx).await;
+                let mut view =
+                    json!({"approval":approval,"authorization_epoch":"1","policy_revision":"1"});
+                if mode == "membership" {
+                    view["authorization_epoch"] = json!("2");
+                }
+                if mode == "missing-approval" {
+                    view["approval"] = Value::Null;
+                }
+                outgoing
+                    .notify_client_response(CONNECTION, id, json!({"routeApproval":view}))
+                    .await;
+                if matches!(mode, "membership" | "missing-approval") {
+                    return;
+                }
+                let OutgoingEnvelope::ToConnection { message, .. } = rx.recv().await.unwrap()
+                else {
+                    panic!("scoped route check")
+                };
+                let message = serde_json::to_value(message).unwrap();
+                let request: inquello_protocol::workspace::RouteEligibilityCheckRequest =
+                    serde_json::from_value(message["params"]["routeCheck"].clone()).unwrap();
+                assert_eq!(request.binding.task_id, task);
+                assert_eq!(request.binding.action, action);
+                assert_eq!(request.identity, measured_route_identity(&configuration));
+                let mut authority = routes::CurrentRouteAuthority {
+                    binding: request.binding,
+                    approval,
+                    checked_at: 100,
+                };
+                match mode {
+                    "revoked" => authority.approval.revoked = true,
+                    "review-boundary" => authority.checked_at = 110,
+                    "expiry" => authority.checked_at = 120,
+                    "foreign-task" => authority.binding.task_id = uuid::Uuid::new_v4().to_string(),
+                    "foreign-workspace" => {
+                        authority.approval.workspace_id = uuid::Uuid::new_v4().to_string()
+                    }
+                    "stale-session" => authority.binding.session_revision += 1,
+                    "stale-credential-session" => authority.binding.generation += 1,
+                    "wrong-proof" => authority.approval.evidence_digest = "c".repeat(64),
+                    "session-withdrawn" => session.cancellation.cancel(),
+                    "credential-withdrawn" => {
+                        processor
+                            .routes
+                            .state
+                            .lock()
+                            .await
+                            .credentials
+                            .remove(&(actor.principal_id, routes::RouteId::CodexResponses));
+                    }
+                    "credential-rotated" => {
+                        processor.routes.state.lock().await.credentials.insert(
+                            (actor.principal_id, routes::RouteId::CodexResponses),
+                            (configuration.account_ref().into(), 2),
+                        );
+                    }
+                    _ => {}
+                }
+                outgoing
+                    .notify_client_response(
+                        CONNECTION,
+                        serde_json::from_value(message["id"].clone()).unwrap(),
+                        json!({"routeAuthority":authority}),
+                    )
+                    .await;
+            }
+        );
+        assert_eq!(result.is_ok(), mode == "allowed", "{mode}: {result:?}");
+    }
+    #[tokio::test]
+    async fn inquello_real_session_current_approval_all_protected_actions_default_features() {
+        for action in [
+            routes::ProtectedRouteAction::Read,
+            routes::ProtectedRouteAction::Derive,
+            routes::ProtectedRouteAction::Export,
+            routes::ProtectedRouteAction::Resume,
+        ] {
+            real_route_case("allowed", action).await;
+        }
+    }
+    #[tokio::test]
+    async fn inquello_real_session_withdrawal_and_late_authority_default_features() {
+        for mode in [
+            "membership",
+            "missing-approval",
+            "revoked",
+            "review-boundary",
+            "expiry",
+            "foreign-task",
+            "foreign-workspace",
+            "stale-session",
+            "stale-credential-session",
+            "wrong-proof",
+            "session-withdrawn",
+            "credential-withdrawn",
+            "credential-rotated",
+        ] {
+            for action in [
+                routes::ProtectedRouteAction::Read,
+                routes::ProtectedRouteAction::Derive,
+                routes::ProtectedRouteAction::Export,
+                routes::ProtectedRouteAction::Resume,
+            ] {
+                real_route_case(mode, action).await;
+            }
+        }
     }
 
     #[tokio::test]

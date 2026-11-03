@@ -13,6 +13,11 @@ impl ToolExecutor<ToolInvocation> for InquelloProgressHandler {
     fn tool_name(&self) -> ToolName {
         ToolName::plain("inquello_progress")
     }
+    fn exposure(&self) -> codex_tools::ToolExposure {
+        // Governed publication stays directly callable when the private Task
+        // deliberately excludes the generic Code Mode wrapper.
+        codex_tools::ToolExposure::DirectModelOnly
+    }
     fn supports_parallel_tool_calls(&self) -> bool {
         // A bounded, authorized publication must remain available while a
         // one-shot command is running; it grants no execution or filesystem effect.
@@ -102,6 +107,15 @@ mod tests {
     fn bounded_publication_can_run_alongside_one_shot_evidence() {
         assert!(InquelloProgressHandler.supports_parallel_tool_calls());
         assert!(InquelloProgressHandler.is_builtin_control_tool());
+        assert_eq!(
+            InquelloProgressHandler.exposure(),
+            codex_tools::ToolExposure::DirectModelOnly
+        );
+        assert!(
+            !InquelloProgressHandler
+                .exposure()
+                .is_available_in_code_mode()
+        );
     }
 
     #[test]

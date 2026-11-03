@@ -24,6 +24,27 @@ fn event(kind: &str, value: Value) -> String {
 const FOLLOWUP_REQUEST: &str = "Explain why the earlier finding still needs vendor evidence.";
 const FOLLOWUP_ANSWER: &str = "The earlier finding remains an unchecked candidate; vendor evidence is needed before any conclusion.";
 
+fn provider_accept_budget(scenario: &str, index: usize) -> Duration {
+    let after_resume = match scenario {
+        "lifecycle-completed-followup" | "lifecycle-progress-continuity" => index == 2,
+        "lifecycle-bundled-text-followup"
+        | "lifecycle-stop-resume"
+        | "lifecycle-restart"
+        | "lifecycle-crash"
+        | "lifecycle-revoke-during-resume"
+        | "lifecycle-stop-pending-steer"
+        | "lifecycle-stop-inflight-steer"
+        | "lifecycle-stop-provider-unavailable"
+        | "lifecycle-warm-policy-change" => index == 1,
+        _ => false,
+    };
+    if index == 0 || after_resume {
+        PRIVATE_ADMISSION_BUDGET
+    } else {
+        Duration::from_secs(45)
+    }
+}
+
 fn streams(route: &str, scenario: &str) -> Vec<String> {
     if scenario == "lifecycle-bundled-text-followup" {
         assert_eq!(route, "codex-responses");
@@ -36,7 +57,7 @@ fn streams(route: &str, scenario: &str) -> Vec<String> {
                 json!({"type":"response.output_item.done","output_index":0,"item":{"type":"message","id":format!("msg_{id}"),"role":"assistant","status":"completed","content":[{"type":"output_text","text":answer,"annotations":[]}]}}),
             ) + &event(
                 "response.completed",
-                json!({"type":"response.completed","response":{"id":id,"status":"completed","end_turn":true,"output":[],"usage":{"input_tokens":24,"output_tokens":12,"total_tokens":36}}}),
+                json!({"type":"response.completed","response":{"id":id,"status":"completed","output":[],"usage":{"input_tokens":24,"output_tokens":12,"total_tokens":36}}}),
             )
         };
         return vec![
@@ -57,7 +78,7 @@ fn streams(route: &str, scenario: &str) -> Vec<String> {
                 json!({"type":"response.output_item.done","output_index":0,"item":{"type":"message","id":"msg_followup","role":"assistant","status":"completed","content":[{"type":"output_text","text":FOLLOWUP_ANSWER,"annotations":[]}]}}),
             ) + &event(
                 "response.completed",
-                json!({"type":"response.completed","response":{"id":"resp_followup","status":"completed","end_turn":true,"output":[],"usage":{"input_tokens":24,"output_tokens":12,"total_tokens":36}}}),
+                json!({"type":"response.completed","response":{"id":"resp_followup","status":"completed","output":[],"usage":{"input_tokens":24,"output_tokens":12,"total_tokens":36}}}),
             )
         } else {
             event(
@@ -383,10 +404,11 @@ async fn fixture(
     let (stop, stopped) = tokio::sync::oneshot::channel();
     let task = tokio::spawn(async move {
         for (index, response) in streams(route, scenario).into_iter().take(count).enumerate() {
-            let (socket, _) = tokio::time::timeout(Duration::from_secs(45), listener.accept())
-                .await
-                .expect("actual provider request")
-                .unwrap();
+            let (socket, _) =
+                tokio::time::timeout(provider_accept_budget(scenario, index), listener.accept())
+                    .await
+                    .expect("actual provider request")
+                    .unwrap();
             let mut socket = acceptor.accept(socket).await.unwrap();
             let mut bytes = Vec::new();
             loop {
@@ -429,6 +451,16 @@ async fn fixture(
                             );
                         }
                         assert!(!body.to_string().contains("sk-ant-"));
+                        if route == "codex-responses" && expected_model == "gpt-6.1-terra" {
+                            let namespaces: Vec<Value> = body["input"].as_array().unwrap()
+                                .iter().filter(|item| item["type"] == "additional_tools")
+                                .flat_map(|item| item["tools"].as_array().into_iter().flatten())
+                                .map(|namespace| json!({"namespace": namespace["name"], "functions": namespace["tools"].as_array().map(|functions| functions.iter().map(|function| function["name"].clone()).collect::<Vec<_>>())}))
+                                .collect();
+                            eprintln!(
+                                "bundled fixture request {index} declared tool names: {namespaces:?}; response is synthetic plain exec_command without namespace for tool turn"
+                            );
+                        }
                         captured.lock().await.push(body);
                         break;
                     }
@@ -662,7 +694,10 @@ pub(super) async fn run(
     scenario: &'static str,
     service: Option<ServiceFixture>,
 ) {
-    let bundled_catalog = scenario == "lifecycle-bundled-text-followup";
+    let bundled_tools = scenario == "bundled-allowed";
+    let scenario = if bundled_tools { "allowed" } else { scenario };
+    let bundled_text = scenario == "lifecycle-bundled-text-followup";
+    let bundled_catalog = bundled_tools || bundled_text;
     if bundled_catalog {
         assert_eq!(route, "codex-responses");
     }
@@ -783,7 +818,7 @@ pub(super) async fn run(
     let policy = host.policy.clone();
     let operation = uuid::Uuid::new_v4().to_string();
     host.authority_context = json!({"configuration":configuration,"operationId":operation});
-    let initial_request = if bundled_catalog {
+    let initial_request = if bundled_text {
         "Review fictional procurement: INV-104 K12,480 appears twice; INV-105 is distinct. Explain this fictional candidate duplicate without running tools."
     } else {
         "Review fictional procurement: INV-104 K12,480 appears twice; INV-105 is distinct. Write only the permitted local marker, then report the candidate duplicate."
@@ -832,10 +867,9 @@ pub(super) async fn run(
     );
     host.authority_context["taskId"] = start["taskId"].clone();
     host.authority_context["runId"] = start["runId"].clone();
-    if bundled_catalog {
-        // Text compatibility only: the real bundled model declares shell_command,
-        // while the fixed private tool contract separately qualifies exec_command.
-        // Do not fabricate tool support or weaken any original tool witness.
+    if bundled_text {
+        // This witness deliberately requests only text. Bundled tool execution
+        // has its own allowed-effect scenario using the same unmodified metadata.
         assert!(service.is_none());
         let task = start["taskId"].as_str().unwrap().to_owned();
         let thread = start["threadId"].as_str().unwrap().to_owned();
@@ -2175,6 +2209,38 @@ pub(super) async fn run(
     };
     let task = final_status["taskId"].as_str().unwrap();
     let thread = final_status["threadId"].as_str().unwrap();
+    if bundled_tools {
+        let requests = fixture.requests.lock().await;
+        assert_eq!(requests.len(), 2);
+        for request in requests.iter() {
+            assert_eq!(request["model"], "gpt-6.1-terra");
+            assert_eq!(request["reasoning"]["effort"], "low");
+            let declarations = request["input"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|item| item["type"] == "additional_tools")
+                .expect("trusted Responses Lite function declarations");
+            let functions = declarations["tools"][0]["tools"].as_array().unwrap();
+            assert_eq!(functions.len(), 3);
+            for name in ["exec_command", "inquello_progress", "request_user_input"] {
+                assert!(functions.iter().any(|tool| tool["name"] == name));
+            }
+            assert!(
+                !functions
+                    .iter()
+                    .any(|tool| tool["name"] == "shell_command" || tool["name"] == "write_stdin")
+            );
+        }
+        assert!(
+            requests[1]["input"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|item| item["type"] == "function_call_output"
+                    && item["call_id"] == "call_authorized")
+        );
+    }
     if matches!(
         scenario,
         "allowed" | "revoke-model" | "search-stalled-admission"
@@ -2927,5 +2993,34 @@ fn synthetic_model_selector_refuses_unknown_or_normalized_labels() {
         "fixture-responses-other",
     ] {
         assert!(fixture_responses_model(Some(value)).is_err());
+    }
+}
+
+#[test]
+fn fixture_admission_budget_does_not_extend_effect_or_security_waits() {
+    assert_eq!(
+        provider_accept_budget("allowed", 0),
+        PRIVATE_ADMISSION_BUDGET
+    );
+    assert_eq!(
+        provider_accept_budget("lifecycle-warm-policy-change", 1),
+        PRIVATE_ADMISSION_BUDGET
+    );
+    assert_eq!(
+        provider_accept_budget("lifecycle-completed-followup", 2),
+        PRIVATE_ADMISSION_BUDGET
+    );
+    for (scenario, index) in [
+        ("allowed", 1),
+        ("revoke-model", 1),
+        ("lifecycle-steer", 1),
+        ("lifecycle-progress-cache", 1),
+        ("lifecycle-progress-continuity", 1),
+        ("lifecycle-progress-continuity", 3),
+    ] {
+        assert_eq!(
+            provider_accept_budget(scenario, index),
+            Duration::from_secs(45)
+        );
     }
 }

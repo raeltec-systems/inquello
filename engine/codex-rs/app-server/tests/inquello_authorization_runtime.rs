@@ -11,6 +11,10 @@ async fn responses_allowed() {
     driver::run("codex-responses", "allowed", None).await;
 }
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn responses_bundled_catalog_allowed_tool_effect() {
+    driver::run("codex-responses", "bundled-allowed", None).await;
+}
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn responses_bundled_catalog_text_completed_followup() {
     driver::run("codex-responses", "lifecycle-bundled-text-followup", None).await;
 }

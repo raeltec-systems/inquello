@@ -3,6 +3,19 @@
 use app_test_support::TestAppServer;
 use serde_json::{Value, json};
 use std::time::Duration;
+// Test admission envelope only: retirement 55s + serial native setup 90s
+// + 10s fixture overhead. Not a performance target or a security expiry change.
+pub(super) const PRIVATE_ADMISSION_BUDGET: Duration = Duration::from_secs(155);
+const PRIVATE_RPC_BUDGET: Duration = Duration::from_secs(45);
+
+fn private_rpc_budget(method: &str) -> Duration {
+    if matches!(method, "inquello/tasks/start" | "inquello/tasks/resume") {
+        PRIVATE_ADMISSION_BUDGET
+    } else {
+        PRIVATE_RPC_BUDGET
+    }
+}
+
 pub(super) type AuthorityCallback = std::sync::Arc<
     dyn Fn(Value) -> std::pin::Pin<Box<dyn std::future::Future<Output = Value> + Send>>
         + Send
@@ -39,7 +52,7 @@ pub(super) async fn private_rpc(
     if method == "inquello/tasks/steer" && host.authority_context["holdSteerAuthority"] == true {
         host.authority_context["heldSteerRpcId"] = json!(id);
     }
-    private_response(server, host, id).await
+    private_response_with_budget(server, host, id, private_rpc_budget(method)).await
 }
 
 async fn current_authority_response(host: &PrivateTaskHost, mut params: Value) -> Value {
@@ -85,11 +98,20 @@ pub(super) async fn private_response(
     host: &mut PrivateTaskHost,
     id: i64,
 ) -> Value {
+    private_response_with_budget(server, host, id, PRIVATE_RPC_BUDGET).await
+}
+
+async fn private_response_with_budget(
+    server: &mut TestAppServer,
+    host: &mut PrivateTaskHost,
+    id: i64,
+    budget: Duration,
+) -> Value {
     use codex_app_server_protocol::{JSONRPCMessage, RequestId};
     if let Some(response) = host.pending.remove(&id) {
         return response;
     }
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(45);
+    let deadline = tokio::time::Instant::now() + budget;
     loop {
         if let Some(response) = host.pending.remove(&id) {
             return response;
@@ -395,5 +417,21 @@ pub(super) async fn private_response(
                 .notifications
                 .push(json!({"method":notification.method,"params":notification.params})),
         }
+    }
+}
+
+#[test]
+fn fixture_rpc_budget_is_limited_to_start_and_resume() {
+    for method in ["inquello/tasks/start", "inquello/tasks/resume"] {
+        assert_eq!(private_rpc_budget(method), PRIVATE_ADMISSION_BUDGET);
+    }
+    for method in [
+        "inquello/tasks/stop",
+        "inquello/tasks/steer",
+        "inquello/tasks/progress",
+        "inquello/tasks/lifecycleReconcile",
+        "inquello/tasks/authority",
+    ] {
+        assert_eq!(private_rpc_budget(method), Duration::from_secs(45));
     }
 }

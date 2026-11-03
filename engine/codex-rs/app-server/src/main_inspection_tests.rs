@@ -11,6 +11,9 @@ use inquello_domain::usage::Choices;
 use uuid::Uuid;
 
 async fn store() -> (tempfile::TempDir, InspectRequest) {
+    store_for(RouteId::ClaudeApiKey).await
+}
+async fn store_for(route: RouteId) -> (tempfile::TempDir, InspectRequest) {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("working.sqlite");
     let store = SqliteWorkingStore::open(&path, &[]).await.unwrap();
@@ -25,10 +28,25 @@ async fn store() -> (tempfile::TempDir, InspectRequest) {
             operation_id: Uuid::new_v4().to_string(),
             expected_revision: Revision::ZERO,
             configuration: RouteConfigurationInput {
-                route_id: "claude-api-key".into(),
-                deployment: "anthropic-direct".into(),
-                model: CLAUDE_MODEL.into(),
-                api_version: CLAUDE_API_VERSION.into(),
+                route_id: route.as_str().into(),
+                deployment: if route == RouteId::CodexResponses {
+                    "openai-api"
+                } else {
+                    "anthropic-direct"
+                }
+                .into(),
+                model: if route == RouteId::CodexResponses {
+                    "gpt-6.1-terra"
+                } else {
+                    CLAUDE_MODEL
+                }
+                .into(),
+                api_version: if route == RouteId::CodexResponses {
+                    "responses-v1"
+                } else {
+                    CLAUDE_API_VERSION
+                }
+                .into(),
                 account_ref: Uuid::new_v4().to_string(),
                 region: None,
             },
@@ -45,7 +63,7 @@ async fn store() -> (tempfile::TempDir, InspectRequest) {
                 engagement_id: None,
                 folder_id: None,
                 request: "Fictional retained content only".into(),
-                route_id: "claude-api-key".into(),
+                route_id: route.as_str().into(),
                 configuration_revision: 1,
                 choices: Choices::default(),
             },
@@ -122,7 +140,7 @@ async fn real_store_exact_fixture_proof_enriches_final_serialized_inspection() {
     assert_eq!(
         identity.contract_version,
         format!(
-            "inquello-v{}-authorization-v1",
+            "inquello-v{}-authorization-v2",
             inquello_protocol::PROTOCOL_MAJOR
         )
     );
@@ -144,7 +162,7 @@ async fn missing_mismatched_or_incomplete_fixture_proof_clears_final_inspection(
                 }
                 let mut evidence = proof(identity);
                 match mode {
-                    "identity" => evidence.identity.configuration_digest = "c".repeat(64),
+                    "identity" => evidence.identity.adapter_configuration_digest = "c".repeat(64),
                     "policy" => evidence.data_policy_digest = "c".repeat(64),
                     "incomplete" => {
                         evidence
@@ -192,6 +210,54 @@ async fn missing_or_invalid_persisted_route_configuration_clears_final_inspectio
 }
 #[tokio::test]
 async fn production_compiled_register_still_refuses_real_store() {
-    let (_directory, request) = store().await;
-    refused(inspect_native_data(request).await);
+    for route in [RouteId::ClaudeApiKey, RouteId::CodexResponses] {
+        let (_directory, request) = store_for(route).await;
+        refused(inspect_native_data(request).await);
+    }
+}
+
+#[tokio::test]
+async fn terra_native_inventory_preserves_exact_proof_and_refuses_unknown_evidence() {
+    for mode in ["allowed", "missing", "wrong-model", "old-schema"] {
+        let (_directory, request) = store_for(RouteId::CodexResponses).await;
+        let response = inspect_native_data_with_evidence(request, |identity| {
+            assert_eq!(identity.route_id, "codex-responses");
+            assert_eq!(identity.model, "gpt-6.1-terra");
+            assert_eq!(identity.api_version, "responses-v1");
+            if mode == "missing" {
+                return None;
+            }
+            let mut evidence = proof(identity);
+            if mode == "wrong-model" {
+                evidence.identity.model = "gpt-6.1-sol".into();
+            }
+            if mode == "old-schema" {
+                evidence.identity.schema_version = 1;
+            }
+            Some(evidence)
+        })
+        .await;
+        if mode != "allowed" {
+            refused(response);
+            continue;
+        }
+        assert!(response.available);
+        assert!(!response.files.is_empty());
+        let serialized = serde_json::to_value(response).unwrap();
+        let task = &serialized["workspaces"][0]["tasks"][0];
+        let identity: RouteEvidenceIdentity =
+            serde_json::from_value(task["route_identity"].clone()).unwrap();
+        let configuration = RouteConfiguration::parse(
+            serde_json::from_value(task["route_configuration"].clone()).unwrap(),
+        )
+        .unwrap();
+        assert!(identity.matches_configuration(&configuration));
+        assert_eq!(
+            identity.implementation_digest,
+            env!("INQUELLO_BEHAVIOR_DIGEST")
+        );
+        assert_eq!(identity.platform, env!("INQUELLO_BUILD_PLATFORM"));
+        assert_eq!(task["data_tier"], "real");
+        assert_eq!(task["report_digest"], "b".repeat(64));
+    }
 }

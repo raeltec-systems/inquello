@@ -26,7 +26,7 @@ fn register_json(eligibility: &str, evidence: &[(&str, &str)]) -> String {
         .collect();
     let json = format!(
         r#"{{
-  "schema_version": 1,
+  "schema_version": 2,
   "entries": [{{
     "id": "test.capability",
     "owner": "test owner",
@@ -36,7 +36,7 @@ fn register_json(eligibility: &str, evidence: &[(&str, &str)]) -> String {
     "identity": "none",
     "formats": ["text"],
     "processing_scope": "local",
-    "eligibility": "{eligibility}",
+    "ceiling": "{eligibility}",
     "evidence": [{}]
   }}]
 }}"#,
@@ -46,6 +46,8 @@ fn register_json(eligibility: &str, evidence: &[(&str, &str)]) -> String {
         serde_json::from_str(&json).unwrap_or_else(|error| panic!("fixture register: {error}"));
     if eligibility == "real-data-eligible" {
         // Strict domain fixture only: never shipped evidence or executed suite evidence.
+        value["entries"][0]["id"] = Value::from("processing.codex-responses");
+        value["entries"][0]["versions"] = serde_json::json!({"model":"fixture-model", "api":"fixture-api", "deployment":"openai-api", "endpoint":"https://api.openai.com/v1/responses"});
         value["entries"][0]["negative_authorization"] = serde_json::json!({
             "suite": inquello_domain::routes::AUTHORIZATION_SUITE,
             "tested_artifact_digest": "c".repeat(64),
@@ -53,7 +55,7 @@ fn register_json(eligibility: &str, evidence: &[(&str, &str)]) -> String {
             "identity": {
                 "route_id": "codex-responses", "deployment": "openai-api",
                 "endpoint": "https://api.openai.com/v1/responses", "model": "fixture-model",
-                "api_version": "fixture-api", "configuration_digest": "a".repeat(64),
+                "schema_version":2, "api_version": "fixture-api", "adapter_configuration_digest": "a".repeat(64),
                 "implementation_digest": "b".repeat(64), "runtime_version": "fixture-runtime",
                 "contract_version": "fixture-contract", "platform": "fixture-platform"
             },
@@ -82,7 +84,14 @@ fn load(
 fn assert_invalid_entry(result: Result<CapabilityRegister, CapabilityError>, needle: &str) {
     match result {
         Err(CapabilityError::InvalidEntry { id, reason }) => {
-            assert_eq!(id, "test.capability");
+            assert!(
+                [
+                    "test.capability",
+                    "processing.codex-responses",
+                    "processing.claude-api-key"
+                ]
+                .contains(&id.as_str())
+            );
             assert!(
                 reason.contains(needle),
                 "reason {reason:?} should mention {needle:?}"
@@ -123,16 +132,18 @@ fn failed_evidence_rejects_the_register_naming_the_entry() {
 
 #[test]
 fn missing_or_pending_evidence_cannot_support_enablement() {
-    assert_invalid_entry(load("synthetic-only", &[]), "synthetic evidence");
-    assert_invalid_entry(
-        load("synthetic-only", &[("synthetic", "pending")]),
-        "synthetic evidence",
-    );
-    // A record documents limits; it never supports eligibility on its own.
-    assert_invalid_entry(
-        load("synthetic-only", &[("record", "passed")]),
-        "synthetic evidence",
-    );
+    for evidence in [
+        vec![],
+        vec![("synthetic", "pending")],
+        vec![("record", "passed")],
+    ] {
+        assert_eq!(
+            load("synthetic-only", &evidence)
+                .unwrap()
+                .enablement("test.capability"),
+            Enablement::Disabled
+        );
+    }
     // A declared-disabled entry without evidence is valid and disabled.
     let register = load("disabled", &[]).unwrap();
     assert_eq!(register.enablement("test.capability"), Enablement::Disabled);
@@ -140,27 +151,28 @@ fn missing_or_pending_evidence_cannot_support_enablement() {
 
 #[test]
 fn real_data_claim_needs_passing_negative_authorization() {
-    assert_invalid_entry(
-        load("real-data-eligible", &[("synthetic", "passed")]),
-        "negative-authorization",
-    );
-    assert_invalid_entry(
+    for evidence in [
+        vec![("synthetic", "passed")],
+        vec![
+            ("synthetic", "passed"),
+            ("negative-authorization", "pending"),
+        ],
+    ] {
+        assert_eq!(
+            load("real-data-eligible", &evidence)
+                .unwrap()
+                .enablement("processing.codex-responses"),
+            Enablement::SyntheticOnly
+        );
+    }
+    assert_eq!(
         load(
             "real-data-eligible",
-            &[
-                ("synthetic", "passed"),
-                ("negative-authorization", "pending"),
-            ],
-        ),
-        "negative-authorization",
-    );
-    // Negative authorization alone, without synthetic evidence, is not enough either.
-    assert_invalid_entry(
-        load(
-            "real-data-eligible",
-            &[("negative-authorization", "passed")],
-        ),
-        "synthetic evidence",
+            &[("negative-authorization", "passed")]
+        )
+        .unwrap()
+        .enablement("processing.codex-responses"),
+        Enablement::Disabled
     );
     let register = load(
         "real-data-eligible",
@@ -171,7 +183,7 @@ fn real_data_claim_needs_passing_negative_authorization() {
     )
     .unwrap();
     assert_eq!(
-        register.enablement("test.capability"),
+        register.enablement("processing.codex-responses"),
         Enablement::RealDataEligible
     );
 }
@@ -199,8 +211,8 @@ fn unknown_fields_are_rejected() {
         Err(CapabilityError::Parse(_))
     ));
     let json = register_json("disabled", &[]).replace(
-        r#""schema_version": 1,"#,
-        r#""schema_version": 1, "enable_all": true,"#,
+        r#""schema_version": 2,"#,
+        r#""schema_version": 2, "enable_all": true,"#,
     );
     assert!(matches!(
         CapabilityRegister::from_json(&json),
@@ -420,7 +432,7 @@ fn cross_check_fails_on_an_unknown_rule_with_a_real_data_eligible_capability() {
     )
     .unwrap();
     let problem = cross_check(&policy, &eligible).unwrap_err();
-    assert!(problem.contains("test.capability"), "{problem}");
+    assert!(problem.contains("processing.codex-responses"), "{problem}");
 
     // Synthetic-only capabilities never trip it, and neither does a disabled category.
     let synthetic = load("synthetic-only", &[("synthetic", "passed")]).unwrap();
@@ -440,7 +452,7 @@ fn cross_check_fails_on_an_unknown_rule_with_a_real_data_eligible_capability() {
 #[test]
 fn an_unreadable_data_policy_blocks() {
     assert_eq!(
-        data_policy_blockers(&serde_json::json!({ "schema_version": 1 })),
+        data_policy_blockers(&serde_json::json!({ "schema_version": 2 })),
         vec!["the data-policy register has no category list".to_string()]
     );
 }
@@ -452,7 +464,7 @@ fn prompt_inspection_and_specialist_cyber_access_are_registered_not_enabled() {
     let register = CapabilityRegister::load_embedded().unwrap();
     for id in ["prompt_inspection", "specialist_cyber_access"] {
         let entry = register.entry(id).unwrap();
-        assert_eq!(entry.eligibility, Enablement::Disabled);
+        assert_eq!(entry.ceiling, Enablement::Disabled);
         assert_eq!(entry.enablement(), Enablement::Disabled);
         assert_eq!(enablement(id), Enablement::Disabled);
         assert!(entry.evidence.is_empty());
@@ -516,8 +528,103 @@ fn unbound_negative_reference_no_longer_enables_real_data() {
         .as_object_mut()
         .unwrap()
         .remove("negative_authorization");
+    assert_eq!(
+        CapabilityRegister::from_json(&value.to_string())
+            .unwrap()
+            .enablement("processing.codex-responses"),
+        Enablement::SyntheticOnly
+    );
+}
+
+#[test]
+fn reviewed_ceiling_is_pending_until_complete_exact_evidence_and_never_overrides_it() {
+    let full: Value = serde_json::from_str(&register_json(
+        "real-data-eligible",
+        &[
+            ("synthetic", "passed"),
+            ("negative-authorization", "passed"),
+        ],
+    ))
+    .unwrap();
+    let mut pending = full.clone();
+    pending["entries"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("negative_authorization");
+    let register = CapabilityRegister::from_json(&pending.to_string()).unwrap();
+    assert_eq!(
+        register
+            .entry("processing.codex-responses")
+            .unwrap()
+            .ceiling,
+        Enablement::RealDataEligible
+    );
+    assert_eq!(
+        register.enablement("processing.codex-responses"),
+        Enablement::SyntheticOnly
+    );
+    assert_eq!(
+        CapabilityRegister::from_json(&full.to_string())
+            .unwrap()
+            .enablement("processing.codex-responses"),
+        Enablement::RealDataEligible
+    );
+    let mut incomplete = full.clone();
+    incomplete["entries"][0]["negative_authorization"]["scenarios"]["real-session-production-admission"] =
+        Value::from("not-run");
+    assert_eq!(
+        CapabilityRegister::from_json(&incomplete.to_string())
+            .unwrap()
+            .enablement("processing.codex-responses"),
+        Enablement::SyntheticOnly
+    );
+    let mut capped = full.clone();
+    capped["entries"][0]["ceiling"] = Value::from("synthetic-only");
+    assert_eq!(
+        CapabilityRegister::from_json(&capped.to_string())
+            .unwrap()
+            .enablement("processing.codex-responses"),
+        Enablement::SyntheticOnly
+    );
+    let mut old = full;
+    old["schema_version"] = Value::from(1);
+    assert!(matches!(
+        CapabilityRegister::from_json(&old.to_string()),
+        Err(CapabilityError::UnsupportedSchemaVersion {
+            found: 1,
+            expected: 2
+        })
+    ));
+}
+
+#[test]
+fn reviewed_build_proof_cannot_promote_a_different_adapter_or_scope() {
+    let original: Value = serde_json::from_str(&register_json(
+        "real-data-eligible",
+        &[
+            ("synthetic", "passed"),
+            ("negative-authorization", "passed"),
+        ],
+    ))
+    .unwrap();
+    let mut wrong_route = original.clone();
+    wrong_route["entries"][0]["id"] = Value::from("processing.claude-api-key");
     assert_invalid_entry(
-        CapabilityRegister::from_json(&value.to_string()),
+        CapabilityRegister::from_json(&wrong_route.to_string()),
+        "exact-build",
+    );
+    for field in ["model", "api", "deployment", "endpoint"] {
+        let mut changed = original.clone();
+        changed["entries"][0]["versions"][field] = Value::from("different");
+        assert_invalid_entry(
+            CapabilityRegister::from_json(&changed.to_string()),
+            "exact-build",
+        );
+    }
+    let mut changed = original;
+    changed["entries"][0]["processing_scope"] = Value::from("different");
+    assert_invalid_entry(
+        CapabilityRegister::from_json(&changed.to_string()),
         "exact-build",
     );
 }

@@ -570,6 +570,60 @@ fn text(value: &Value, key: &str) -> Result<String> {
         .ok_or_else(|| failure("required history field missing"))
 }
 
+fn provider_error_kind(error: &CodexErr) -> inquello_protocol::inference::ErrorKind {
+    use codex_protocol::error::CodexErrorDetails as E;
+    use inquello_protocol::inference::ErrorKind as K;
+    match error.details() {
+        E::RefreshTokenFailed(_) | E::GatewayLoginRequired(_) => K::Auth,
+        E::UnexpectedStatus(response) => match response.status.as_u16() {
+            401 | 403 => K::Auth,
+            400 | 404 | 422 => K::InvalidRequest,
+            429 => K::RateLimit,
+            500..=599 => K::ProviderUnavailable,
+            _ => K::Transport,
+        },
+        E::RateLimitExceeded(_) | E::UsageLimitReached(_) => K::RateLimit,
+        E::QuotaExceeded | E::UsageNotIncluded => K::CreditLimit,
+        E::InvalidRequest(_) | E::InvalidPrompt { .. } | E::ModelNotFound { .. } => {
+            K::InvalidRequest
+        }
+        E::UnsupportedOperation(_) => K::UnsupportedCapability,
+        E::ServerOverloaded | E::FlexUnavailable | E::InternalServerError => K::ProviderUnavailable,
+        E::TurnAborted | E::Interrupted => K::Cancelled,
+        _ => K::Transport,
+    }
+}
+fn provider_failure_reason(kind: inquello_protocol::inference::ErrorKind) -> &'static str {
+    use inquello_protocol::inference::ErrorKind as K;
+    match kind {
+        K::Auth => {
+            "The provider rejected the credential or model access. Reconnect the provider and confirm access to this model"
+        }
+        K::RateLimit => {
+            "The provider rate limit was reached. Wait before deliberately trying again"
+        }
+        K::CreditLimit => {
+            "The provider account has insufficient API quota. Check its billing and limits"
+        }
+        K::InvalidRequest => {
+            "The provider rejected this request or model. Confirm access to the selected model and its supported settings"
+        }
+        K::ProviderUnavailable => {
+            "The provider is temporarily unavailable. Try again when service is restored"
+        }
+        K::Transport => {
+            "The provider connection failed. Check your network before deliberately trying again"
+        }
+        K::Cancelled => "The model response was interrupted. Retained work is preserved",
+        K::UnsupportedCapability => {
+            "The selected model returned an unsupported response. Review this model's availability"
+        }
+        K::MalformedStream => {
+            "The provider response was incomplete or malformed. Retained work is preserved"
+        }
+    }
+}
+
 pub(crate) async fn await_dispatch<T>(
     future: impl std::future::Future<Output = Result<T>>,
     context: Option<&AttemptContext>,
@@ -578,7 +632,7 @@ pub(crate) async fn await_dispatch<T>(
         tokio::select! {
             biased;
             _ = context.cancellation.cancelled() => Err(failure("attempt cancelled during dispatch")),
-            result = future => result.map_err(|_| failure("bound inference dispatch failed")),
+            result = future => result.map_err(|error| failure(provider_failure_reason(provider_error_kind(&error)))),
         }
     } else {
         future.await
@@ -1052,7 +1106,10 @@ pub(crate) fn responses(
                     ..
                 }) => {
                     response_id = Some(id.clone());
-                    if *end_turn == Some(true) || has_tools {
+                    // Public Responses completion does not require Codex's optional
+                    // end_turn extension. The SDK emits this event only after a
+                    // completed frame; interrupted responses explicitly carry false.
+                    if *end_turn != Some(false) || has_tools {
                         Some(EventKind::Completed {
                             reason: if has_tools {
                                 StopReason::ToolRequests
@@ -1070,22 +1127,7 @@ pub(crate) fn responses(
                     }
                 }
                 Err(error) => {
-                    use codex_protocol::error::CodexErrorDetails as E;
-                    use inquello_protocol::inference::ErrorKind as K;
-                    let kind = match error.details() {
-                        E::RefreshTokenFailed(_) | E::GatewayLoginRequired(_) => K::Auth,
-                        E::RateLimitExceeded(_) | E::UsageLimitReached(_) => K::RateLimit,
-                        E::QuotaExceeded | E::UsageNotIncluded => K::CreditLimit,
-                        E::InvalidRequest(_)
-                        | E::InvalidPrompt { .. }
-                        | E::ModelNotFound { .. } => K::InvalidRequest,
-                        E::UnsupportedOperation(_) => K::UnsupportedCapability,
-                        E::ServerOverloaded | E::FlexUnavailable | E::InternalServerError => {
-                            K::ProviderUnavailable
-                        }
-                        E::TurnAborted | E::Interrupted => K::Cancelled,
-                        _ => K::Transport,
-                    };
+                    let kind = provider_error_kind(error);
                     Some(EventKind::Failed {
                         error: kind,
                         retryable: false,
@@ -1095,6 +1137,8 @@ pub(crate) fn responses(
                 _ => None,
             };
             let mut invalid = false;
+            let mut failure_reason =
+                "The provider response could not be accepted. Retained work is preserved";
             if let Some(event) = normalized {
                 let event = Event {
                     binding: context.binding.clone(),
@@ -1106,6 +1150,9 @@ pub(crate) fn responses(
                 let event = checked_lifecycle(&mut guard, event);
                 terminal = event.event.terminal();
                 invalid = matches!(&event.event, EventKind::Failed { .. });
+                if let EventKind::Failed { error, .. } = &event.event {
+                    failure_reason = provider_failure_reason(error.clone());
+                }
                 sequence += 1;
                 let attributed = deliver(
                     &context.events,
@@ -1125,7 +1172,7 @@ pub(crate) fn responses(
             if invalid {
                 let _ = deliver(
                     &sender,
-                    Err(failure("Responses normalized attempt failed")),
+                    Err(failure(failure_reason)),
                     &context.cancellation,
                     &consumer,
                     &revoked,
@@ -1473,6 +1520,7 @@ mod tests {
         let mut prompt = Prompt::default();
         let mut original = Vec::new();
         for entry in include_str!("../../inquello-protocol/fixtures/inference/messages-opaque.sse")
+            .replace("\r\n", "\n")
             .trim()
             .split("\n\n")
         {
@@ -1732,6 +1780,78 @@ mod tests {
         }
         (output, attributed)
     }
+    #[tokio::test]
+    async fn public_responses_completed_without_codex_extension_finishes_text_only_turn() {
+        for end_turn in [None, Some(true), Some(false)] {
+            let (output, attributed) = mapped_responses(vec![
+                ResponseEvent::Created {
+                    response_id: Some("fixture".into()),
+                },
+                ResponseEvent::OutputTextDelta("answer".into()),
+                ResponseEvent::Completed {
+                    response_id: "fixture".into(),
+                    token_usage: None,
+                    usage_metadata: None,
+                    end_turn,
+                },
+            ])
+            .await;
+            if end_turn == Some(false) {
+                assert!(output.iter().any(Result::is_err));
+                assert!(
+                    attributed
+                        .iter()
+                        .any(|event| matches!(event.event, EventKind::Failed { .. }))
+                );
+                assert!(
+                    !attributed
+                        .iter()
+                        .any(|event| matches!(event.event, EventKind::Completed { .. }))
+                );
+            } else {
+                assert!(output.iter().all(Result::is_ok));
+                assert!(attributed.iter().any(|event| matches!(
+                    event.event,
+                    EventKind::Completed {
+                        reason: StopReason::EndTurn,
+                        ..
+                    }
+                )));
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn private_provider_failures_are_actionable_redacted_and_never_retried() {
+        for (status, expected) in [
+            (401, "credential or model access"),
+            (403, "credential or model access"),
+            (400, "request or model"),
+            (404, "request or model"),
+            (422, "request or model"),
+            (429, "rate limit"),
+            (503, "temporarily unavailable"),
+        ] {
+            let context = response_context();
+            let error =
+                CodexErr::UnexpectedStatus(codex_protocol::error::UnexpectedResponseError {
+                    status: http::StatusCode::from_u16(status).unwrap(),
+                    body: "PRIVATE_PROVIDER_SENTINEL".into(),
+                    user_message: Some("PRIVATE_PROVIDER_SENTINEL".into()),
+                    url: None,
+                    cf_ray: None,
+                    request_id: None,
+                    identity_authorization_error: None,
+                    identity_error_code: None,
+                });
+            let result: Result<()> = await_dispatch(async { Err(error) }, Some(&context)).await;
+            let refusal = result.expect_err("provider refusal");
+            assert!(refusal.to_string().contains(expected));
+            assert!(!refusal.to_string().contains("PRIVATE_PROVIDER_SENTINEL"));
+            assert!(refusal.retry_delay(1).is_none());
+        }
+    }
+
     #[tokio::test]
     async fn bound_dispatch_errors_are_fatal_but_unbound_and_same_call_success_are_preserved() {
         let context = response_context();

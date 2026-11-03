@@ -406,12 +406,12 @@ mod tests {
         // This register exists only within this unit test, never in the shipped
         // register or runtime input path. It tests the gate, not adapter evidence.
         let value = serde_json::json!({
-            "schema_version": 1, "entries": [{
+            "schema_version": 2, "entries": [{
                 "id": "processing.claude-api-key", "owner": "fixture", "supply": "fixture",
                 "versions": { "model": CLAUDE_MODEL, "api": CLAUDE_API_VERSION,
                     "deployment": "anthropic-direct", "endpoint": CLAUDE_ENDPOINT },
                 "limits": ["synthetic only"], "identity": "fixture", "formats": ["text"],
-                "processing_scope": "isolated unit test", "eligibility": "synthetic-only",
+                "processing_scope": "isolated unit test", "ceiling": "synthetic-only",
                 "evidence": [{ "kind": "synthetic", "status": "passed", "reference": "fixture-only" }]
             }]
         });

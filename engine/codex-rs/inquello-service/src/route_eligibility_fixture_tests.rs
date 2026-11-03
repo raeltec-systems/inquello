@@ -25,12 +25,13 @@ fn derivation_fixture_policy() -> String {
 }
 fn identity() -> RouteEvidenceIdentity {
     RouteEvidenceIdentity {
+        schema_version: inquello_domain::routes::ROUTE_EVIDENCE_SCHEMA_VERSION,
         route_id: "codex-responses".into(),
         deployment: "openai-api".into(),
         endpoint: "https://api.openai.com/v1/responses".into(),
         model: "fixture-only".into(),
         api_version: "responses-v1".into(),
-        configuration_digest: "a".repeat(64),
+        adapter_configuration_digest: "a".repeat(64),
         implementation_digest: "b".repeat(64),
         runtime_version: "unit-fixture".into(),
         contract_version: "1".into(),
@@ -365,7 +366,7 @@ fn retained_proof(
         || id.implementation_digest != "b".repeat(64)
         || id.runtime_version != "unit-fixture"
         || id.platform != "unit-fixture"
-        || !sha256_digest(&id.configuration_digest)
+        || !sha256_digest(&id.adapter_configuration_digest)
     {
         return None;
     }
@@ -377,7 +378,7 @@ fn retained_proof(
 #[cfg(all(feature = "retained-fixtures", debug_assertions, target_os = "linux"))]
 async fn coupled_retained(route: &'static str, scenario: &'static str) {
     use inquello_domain::routes::{
-        RouteConfiguration, RouteConfigurationInput, configuration_digest,
+        RouteConfiguration, RouteConfigurationInput, adapter_configuration_digest,
     };
     let h = Harness::start().await;
     let ws = crate::admin::create_workspace(
@@ -434,7 +435,7 @@ async fn coupled_retained(route: &'static str, scenario: &'static str) {
     id.endpoint = configuration.endpoint().into();
     id.deployment = configuration.deployment().into();
     id.api_version = configuration.api_version().into();
-    id.configuration_digest = configuration_digest(&configuration);
+    id.adapter_configuration_digest = adapter_configuration_digest(&configuration);
     let proof = retained_proof(&id, &"c".repeat(64)).unwrap();
     let approval = OrganizationRouteApproval {
         workspace_id: ws.workspace_id.to_string(),

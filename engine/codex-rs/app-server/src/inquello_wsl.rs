@@ -226,8 +226,40 @@ async fn verified_boot_id(scope: &str) -> anyhow::Result<String> {
     Ok(boot)
 }
 
+// The idle broker verifies all installed binaries before acquiring any lock.
+// Measured full verification takes ~15s; allow the existing 10s scope-lock
+// bound plus 5s launch/response overhead. No startup limit or trust check changes.
+const LOCK_RELEASE_PROBE_BUDGET: Duration = Duration::from_secs(30);
+// All retries share one envelope: close 5s + host verification 15s + probe 30s.
+const EXECUTOR_CLEANUP_BUDGET: Duration = Duration::from_secs(50);
+pub(crate) const EXECUTOR_RETIREMENT_WAIT: Duration =
+    Duration::from_secs(EXECUTOR_CLEANUP_BUDGET.as_secs() + 5);
+
+async fn within_cleanup_budget<T>(
+    cleanup: impl std::future::Future<Output = anyhow::Result<T>>,
+    budget: Duration,
+) -> anyhow::Result<T> {
+    tokio::time::timeout(budget, cleanup)
+        .await
+        .context("Linux Task executor cleanup deadline elapsed; retirement unconfirmed")?
+}
+
+async fn wait_for_lock_release_probe<T>(
+    wait: impl std::future::Future<Output = std::io::Result<T>>,
+    budget: Duration,
+) -> anyhow::Result<T> {
+    tokio::time::timeout(budget, wait)
+        .await
+        .context("Linux Task lock-release probe timed out")?
+        .context("Linux Task lock-release probe could not complete")
+}
+
 impl WslExecPlan {
     pub(crate) async fn close_and_wait(&self, client: &ExecServerClient) -> anyhow::Result<()> {
+        within_cleanup_budget(self.close_and_wait_inner(client), EXECUTOR_CLEANUP_BUDGET).await
+    }
+
+    async fn close_and_wait_inner(&self, client: &ExecServerClient) -> anyhow::Result<()> {
         tokio::time::timeout(Duration::from_secs(5), client.close_isolated_stdio())
             .await
             .context("Linux executor stdio close timed out")?;
@@ -276,10 +308,10 @@ impl WslExecPlan {
                 .context("Broker input missing")?
                 .write_all(b"{\"action\":\"idle\"}")
                 .await?;
-            let result = tokio::time::timeout(Duration::from_secs(10), child.wait_with_output())
-                .await
-                .context("Linux Task lock-release probe timed out")?
-                .context("Linux Task lock-release probe could not complete")?;
+            // Expiry drops the owned wait future and its kill_on_drop child.
+            let result =
+                wait_for_lock_release_probe(child.wait_with_output(), LOCK_RELEASE_PROBE_BUDGET)
+                    .await?;
             if result.status.success() {
                 return Ok(());
             }
@@ -698,5 +730,64 @@ impl WslExecPlan {
         };
         self.close_and_wait(&client).await?;
         result
+    }
+}
+
+#[cfg(test)]
+mod inquello_lock_release_probe_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    #[tokio::test]
+    async fn bounded_probe_wait_drops_owned_future_on_expiry() {
+        struct OwnedWait(Arc<AtomicBool>);
+        impl Drop for OwnedWait {
+            fn drop(&mut self) {
+                self.0.store(true, Ordering::SeqCst);
+            }
+        }
+        let dropped = Arc::new(AtomicBool::new(false));
+        let owned = OwnedWait(Arc::clone(&dropped));
+        let pending = async move {
+            let _owned = owned;
+            std::future::pending::<std::io::Result<()>>().await
+        };
+        let error = wait_for_lock_release_probe(pending, Duration::from_millis(1))
+            .await
+            .expect_err("unconfirmed cleanup must remain bounded");
+        assert!(error.to_string().contains("probe timed out"));
+        assert!(dropped.load(Ordering::SeqCst));
+        assert_eq!(LOCK_RELEASE_PROBE_BUDGET, Duration::from_secs(30));
+    }
+
+    #[tokio::test]
+    async fn total_cleanup_envelope_expires_without_confirming_retirement() {
+        let error = within_cleanup_budget(
+            std::future::pending::<anyhow::Result<()>>(),
+            Duration::from_millis(1),
+        )
+        .await
+        .expect_err("all retries must share a finite cleanup deadline");
+        assert!(error.to_string().contains("retirement unconfirmed"));
+        assert_eq!(EXECUTOR_CLEANUP_BUDGET, Duration::from_secs(50));
+        assert_eq!(EXECUTOR_RETIREMENT_WAIT, Duration::from_secs(55));
+        within_cleanup_budget(async { Ok(()) }, Duration::from_secs(1))
+            .await
+            .expect("completed cleanup stays confirmed");
+    }
+
+    #[tokio::test]
+    async fn bounded_probe_wait_preserves_confirmation_and_io_failure() {
+        let confirmed = wait_for_lock_release_probe(async { Ok(true) }, Duration::from_secs(1))
+            .await
+            .expect("confirmed probe");
+        assert!(confirmed);
+        let error = wait_for_lock_release_probe(
+            async { Err::<(), _>(std::io::Error::other("probe unavailable")) },
+            Duration::from_secs(1),
+        )
+        .await
+        .expect_err("I/O failure must not confirm cleanup");
+        assert!(error.to_string().contains("probe could not complete"));
     }
 }
