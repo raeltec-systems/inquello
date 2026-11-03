@@ -209,10 +209,83 @@ async fn missing_or_invalid_persisted_route_configuration_clears_final_inspectio
     }
 }
 #[tokio::test]
-async fn production_compiled_register_still_refuses_real_store() {
+async fn production_compiled_inspection_requires_exact_current_qualification() {
     for route in [RouteId::ClaudeApiKey, RouteId::CodexResponses] {
         let (_directory, request) = store_for(route).await;
-        refused(inspect_native_data(request).await);
+        // Derive expected identity from actual persisted configuration, independently
+        // of the production inspection enrichment under test.
+        let raw = inquello_adapters::data_provenance::inspect(InspectRequest {
+            version: request.version,
+            store_path: request.store_path.clone(),
+            principal_id: request.principal_id.clone(),
+            task_root: request.task_root.clone(),
+            runtime_home: request.runtime_home.clone(),
+        })
+        .await;
+        assert!(raw.available);
+        let configuration = RouteConfiguration::parse(
+            raw.workspaces[0].tasks[0]
+                .route_configuration
+                .clone()
+                .unwrap(),
+        )
+        .unwrap();
+        let identity = RouteEvidenceIdentity {
+            schema_version: ROUTE_EVIDENCE_SCHEMA_VERSION,
+            route_id: configuration.route_id().as_str().into(),
+            deployment: configuration.deployment().into(),
+            endpoint: configuration.endpoint().into(),
+            model: configuration.model().into(),
+            api_version: configuration.api_version().into(),
+            adapter_configuration_digest: adapter_configuration_digest(&configuration),
+            implementation_digest: env!("INQUELLO_BEHAVIOR_DIGEST").into(),
+            runtime_version: env!("CARGO_PKG_VERSION").into(),
+            contract_version: format!(
+                "inquello-v{}-authorization-v2",
+                inquello_protocol::PROTOCOL_MAJOR
+            ),
+            platform: env!("INQUELLO_BUILD_PLATFORM").into(),
+        };
+        let expected = compiled_evidence_for_identity(&identity)
+            .filter(|proof| proof.data_policy_digest == env!("INQUELLO_DATA_POLICY_DIGEST"));
+        if route == RouteId::ClaudeApiKey {
+            assert!(expected.is_none(), "Claude remains separately unqualified");
+        }
+        let response = inspect_native_data(request).await;
+        let Some(proof) = expected else {
+            refused(response);
+            continue;
+        };
+        assert!(proof.complete());
+        assert_eq!(proof.identity, identity);
+        assert!(identity.matches_configuration(&configuration));
+        let register = inquello_domain::capability::CapabilityRegister::load_embedded().unwrap();
+        assert_eq!(
+            proof.processing_scope,
+            register
+                .entry(route.capability_id())
+                .unwrap()
+                .processing_scope
+        );
+        assert!(response.available, "{:?}", response.reason);
+        assert!(!response.files.is_empty());
+        let value = serde_json::to_value(response).unwrap();
+        let task = &value["workspaces"][0]["tasks"][0];
+        assert_eq!(task["data_tier"], "real");
+        assert_eq!(task["provenance_kind"], "task_content");
+        assert_eq!(
+            task["route_identity"],
+            serde_json::to_value(identity).unwrap()
+        );
+        assert_eq!(task["report_digest"], proof.report_digest);
+        assert_eq!(task["processing_scope"], proof.processing_scope);
+        assert_eq!(
+            task["data_policy_digest"],
+            env!("INQUELLO_DATA_POLICY_DIGEST")
+        );
+        // Inventory qualification is not a Workspace approval or an export receipt.
+        assert!(task.get("route_authority").is_none());
+        assert!(task.get("export_receipt").is_none());
     }
 }
 

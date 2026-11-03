@@ -244,8 +244,62 @@ fn duplicate_ids_and_empty_fields_are_rejected() {
     assert_invalid_entry(CapabilityRegister::from_json(&json), "owner");
 }
 
+/// Qualification may transition only with a complete, exact, digest-bound reviewed
+/// report. This independently checks committed evidence, not enablement() itself.
+fn expected_embedded_terra_enablement(register: &CapabilityRegister) -> Enablement {
+    use inquello_domain::capability::EvidenceStatus;
+    use inquello_domain::routes::{RouteConfiguration, RouteConfigurationInput};
+    use sha2::{Digest, Sha256};
+    let entry = register
+        .entry("processing.codex-responses")
+        .unwrap_or_else(|| panic!("reviewed Terra capability is missing"));
+    assert_eq!(entry.ceiling, Enablement::RealDataEligible);
+    let Some(proof) = entry.negative_authorization.as_ref() else {
+        return Enablement::SyntheticOnly;
+    };
+    assert!(
+        proof.complete(),
+        "committed authorization evidence must be complete"
+    );
+    let configuration = RouteConfiguration::parse(RouteConfigurationInput {
+        route_id: "codex-responses".into(),
+        deployment: "openai-api".into(),
+        model: "gpt-6.1-terra".into(),
+        api_version: "responses-v1".into(),
+        account_ref: "00000000-0000-4000-8000-000000000001".into(),
+        region: None,
+    })
+    .unwrap_or_else(|error| panic!("supported Terra configuration is invalid: {error}"));
+    assert!(proof.identity.matches_configuration(&configuration));
+    assert_eq!(proof.processing_scope, entry.processing_scope);
+    let policy = std::fs::read(repo_root().join("desktop/data-policy.json"))
+        .unwrap_or_else(|error| panic!("current data policy could not be read: {error}"));
+    assert_eq!(
+        proof.data_policy_digest,
+        format!("{:x}", Sha256::digest(policy))
+    );
+    assert!(
+        entry.evidence.iter().any(|reference| {
+            reference.kind == EvidenceKind::NegativeAuthorization
+                && reference.status == EvidenceStatus::Passed
+                && std::fs::read(
+                    repo_root().join(
+                        reference
+                            .reference
+                            .split('#')
+                            .next()
+                            .unwrap_or_else(|| panic!("authorization evidence reference is empty")),
+                    ),
+                )
+                .is_ok_and(|bytes| format!("{:x}", Sha256::digest(bytes)) == proof.report_digest)
+        }),
+        "passing negative-authorization reference must name the exact report bytes"
+    );
+    Enablement::RealDataEligible
+}
+
 #[test]
-fn seed_register_enables_only_synthetic_entries() {
+fn embedded_register_allows_only_the_reviewed_terra_qualification_transition() {
     let register = CapabilityRegister::load_embedded().unwrap();
     let enabled: Vec<(&str, Enablement)> = register
         .entries()
@@ -257,14 +311,18 @@ fn seed_register_enables_only_synthetic_entries() {
         vec![
             (SEED_ID, Enablement::SyntheticOnly),
             ("execution_sandbox", Enablement::SyntheticOnly),
-            ("processing.codex-responses", Enablement::SyntheticOnly),
+            (
+                "processing.codex-responses",
+                expected_embedded_terra_enablement(&register)
+            ),
         ]
     );
     assert_eq!(enablement(SEED_ID), Enablement::SyntheticOnly);
     assert!(
         register
             .entries()
-            .all(|entry| !entry.enablement().allows_real_data())
+            .all(|entry| entry.id == "processing.codex-responses"
+                || !entry.enablement().allows_real_data())
     );
 
     let seed = register.entry(SEED_ID).unwrap();
@@ -586,6 +644,22 @@ fn reviewed_ceiling_is_pending_until_complete_exact_evidence_and_never_overrides
             .enablement("processing.codex-responses"),
         Enablement::SyntheticOnly
     );
+    for (field, value) in [
+        ("model", Value::from("gpt-6.1-luna")),
+        ("schema_version", Value::from(1)),
+    ] {
+        let mut mismatched = full.clone();
+        mismatched["entries"][0]["negative_authorization"]["identity"][field] = value;
+        let result = CapabilityRegister::from_json(&mismatched.to_string());
+        if field == "model" {
+            assert_invalid_entry(result, "complete exact-build proof does not match");
+        } else {
+            assert_eq!(
+                result.unwrap().enablement("processing.codex-responses"),
+                Enablement::SyntheticOnly
+            );
+        }
+    }
     let mut old = full;
     old["schema_version"] = Value::from(1);
     assert!(matches!(
@@ -630,14 +704,14 @@ fn reviewed_build_proof_cannot_promote_a_different_adapter_or_scope() {
 }
 
 #[test]
-fn terra_responses_evidence_is_synthetic_and_exact_configuration_only() {
+fn terra_qualification_is_exact_and_never_replaces_current_authority() {
     use inquello_domain::routes::{
         DataTier, RouteConfiguration, RouteConfigurationInput, RouteVerification, route_eligibility,
     };
     let register = CapabilityRegister::load_embedded().unwrap();
     let entry = register.entry("processing.codex-responses").unwrap();
-    assert_eq!(entry.enablement(), Enablement::SyntheticOnly);
-    assert!(entry.negative_authorization.is_none());
+    let expected = expected_embedded_terra_enablement(&register);
+    assert_eq!(entry.enablement(), expected);
     assert_eq!(
         register.enablement("processing.claude-api-key"),
         Enablement::Disabled
@@ -655,7 +729,11 @@ fn terra_responses_evidence_is_synthetic_and_exact_configuration_only() {
     assert!(allowed.enabled);
     assert_eq!(
         allowed.verification,
-        RouteVerification::VerifiedForSynthetic
+        if expected == Enablement::RealDataEligible {
+            RouteVerification::VerifiedForRealData
+        } else {
+            RouteVerification::VerifiedForSynthetic
+        }
     );
     for (credential, adapter, tier) in [
         (false, true, DataTier::Synthetic),
