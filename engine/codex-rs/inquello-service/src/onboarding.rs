@@ -205,12 +205,13 @@ pub(crate) async fn command(
             if invite.try_get::<i64, _>("policy_revision")? != workspace.policy_revision {
                 return Err(unavailable());
             }
+            let roles: Vec<String> = invite.try_get("roles")?;
             let grantor: Uuid = invite
                 .try_get::<Option<Uuid>, _>("issued_by")?
                 .ok_or_else(unavailable)?;
             if !workspaces::membership(&mut tx, workspace_id, grantor, Some(LockMode::Share))
                 .await?
-                .is_some_and(|m| m.active && policy.permits(&m.roles, Action::ManageMembership))
+                .is_some_and(|m| m.active && workspaces::may_grant_roles(&policy, &m.roles, &roles))
             {
                 return Err(unavailable());
             }
@@ -222,7 +223,6 @@ pub(crate) async fn command(
             if !grantor_active {
                 return Err(unavailable());
             }
-            let roles: Vec<String> = invite.try_get("roles")?;
             if roles.is_empty() || roles.iter().any(|role| policy.role(role).is_none()) {
                 return Err(unavailable());
             }
@@ -309,12 +309,13 @@ pub(crate) async fn invitations(
             .bind(invite_id).bind(state.clock.now()).fetch_optional(&mut *tx).await? else { continue; };
         let policy =
             workspaces::load_policy(&mut tx, workspace_id, workspace.policy_revision).await?;
+        let roles: Vec<String> = current.try_get("roles")?;
         let Some(grantor) = current.try_get::<Option<Uuid>, _>("issued_by")? else {
             continue;
         };
         if !workspaces::membership(&mut tx, workspace_id, grantor, Some(LockMode::Share))
             .await?
-            .is_some_and(|m| m.active && policy.permits(&m.roles, Action::ManageMembership))
+            .is_some_and(|m| m.active && workspaces::may_grant_roles(&policy, &m.roles, &roles))
         {
             continue;
         }
@@ -329,7 +330,6 @@ pub(crate) async fn invitations(
         if current.try_get::<i64, _>("policy_revision")? != workspace.policy_revision {
             continue;
         }
-        let roles: Vec<String> = current.try_get("roles")?;
         if roles.is_empty() || roles.iter().any(|role| policy.role(role).is_none()) {
             continue;
         }

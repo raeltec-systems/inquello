@@ -127,18 +127,56 @@ async fn keep_an_administrator(
     }
 }
 
+/// Owner removal/demotion is serialized by the enclosing Workspace UPDATE lock.
+/// Historical ownerless operator workspaces are not silently migrated.
+async fn guard_owner_transition(
+    conn: &mut PgConnection,
+    authority: &WorkspaceAuthority,
+    target: Uuid,
+    current_roles: &[String],
+    replacement: &[String],
+) -> Result<(), ApiError> {
+    let was_owner = workspaces::has_owner_role(&authority.policy, current_roles);
+    let becomes_owner = workspaces::has_owner_role(&authority.policy, replacement);
+    if !was_owner && !becomes_owner {
+        return Ok(());
+    }
+    authority.require_owner()?;
+    if was_owner && !becomes_owner {
+        let others: Vec<Vec<String>> = sqlx::query_scalar(
+            "SELECT m.roles FROM memberships m JOIN principals p USING(principal_id) \
+             WHERE m.workspace_id=$1 AND m.principal_id<>$2 \
+             AND m.status='active' AND p.status='active'",
+        )
+        .bind(authority.workspace.workspace_id)
+        .bind(target)
+        .fetch_all(&mut *conn)
+        .await?;
+        if !others
+            .iter()
+            .any(|roles| workspaces::has_owner_role(&authority.policy, roles))
+        {
+            return Err(ApiError::version_conflict(
+                "the change would leave no owner",
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// Locks an active member's row for a change, checking its revision.
 async fn lock_active_member(
     conn: &mut PgConnection,
     workspace_id: Uuid,
     principal_id: Uuid,
     expected: Revision,
-) -> Result<(), ApiError> {
+) -> Result<Vec<String>, ApiError> {
     let row = workspaces::membership(conn, workspace_id, principal_id, Some(LockMode::Update))
         .await?
         .filter(|m| m.active)
         .ok_or_else(|| ApiError::version_conflict("target is not an active member"))?;
-    expect_revision(row.revision, expected)
+    expect_revision(row.revision, expected)?;
+    Ok(row.roles)
 }
 
 /// Locks an Engagement of this Workspace, checking its revision.
@@ -199,6 +237,9 @@ async fn apply(
                 return Err(ApiError::unsupported_contract("invalid invite subject"));
             }
             validate_roles(&authority.policy, roles)?;
+            if roles.iter().any(|role| role == "owner") {
+                authority.require_owner()?;
+            }
             let invite_id = Uuid::new_v4();
             sqlx::query(
                 "INSERT INTO invites (invite_id, workspace_id, issuer, subject, roles, \
@@ -227,6 +268,9 @@ async fn apply(
             let email = crate::oidc::normalize_email(email)
                 .ok_or_else(|| ApiError::unsupported_contract("invalid invitation email"))?;
             validate_roles(&authority.policy, roles)?;
+            if roles.iter().any(|role| role == "owner") {
+                authority.require_owner()?;
+            }
             let issuer: String =
                 sqlx::query_scalar("SELECT issuer FROM principals WHERE principal_id = $1")
                     .bind(authority.principal_id)
@@ -277,8 +321,10 @@ async fn apply(
             principal_id,
             roles,
         } => {
-            lock_active_member(conn, workspace_id, *principal_id, expected).await?;
+            let current_roles =
+                lock_active_member(conn, workspace_id, *principal_id, expected).await?;
             validate_roles(&authority.policy, roles)?;
+            guard_owner_transition(conn, authority, *principal_id, &current_roles, roles).await?;
             keep_an_administrator(conn, authority, *principal_id, Some(roles)).await?;
             let revision: i64 = sqlx::query_scalar(
                 "UPDATE memberships SET roles = $3, policy_revision = $4, \
@@ -299,7 +345,9 @@ async fn apply(
             })
         }
         WorkspaceCommand::RemoveMember { principal_id } => {
-            lock_active_member(conn, workspace_id, *principal_id, expected).await?;
+            let current_roles =
+                lock_active_member(conn, workspace_id, *principal_id, expected).await?;
+            guard_owner_transition(conn, authority, *principal_id, &current_roles, &[]).await?;
             keep_an_administrator(conn, authority, *principal_id, None).await?;
             sqlx::query(
                 "UPDATE engagement_memberships SET status = 'removed', \

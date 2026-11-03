@@ -1475,3 +1475,286 @@ async fn nonboolean_signed_email_verified_preserves_login_but_never_grants_proof
     );
     h.finish().await;
 }
+
+/// An ordinary membership administrator is not a workspace Owner, even when
+/// its action list matches Owner. All changes below use production HTTP paths.
+#[tokio::test]
+async fn owner_transitions_reject_admin_elevation_and_preserve_current_owner() {
+    let h = Harness::start().await;
+    let owner = verified(&h, "Maya").await;
+    let admin = verified(&h, "Theo").await;
+    let workspace = create(&h, &owner, "owner-integrity").await.resource_id;
+    let consent_path = format!("/v1/workspaces/{workspace}/provider-consents/openai-api");
+    let consent: inquello_protocol::provider_consent::ProviderConsentView = h
+        .get(&consent_path, Some(owner.access_credential.expose()))
+        .await
+        .ok();
+    let consent_command = json!({"schema_version":1,"command_epoch":h.command_epoch().await,
+        "workspace_id":workspace,"operation_id":Uuid::new_v4(),"expected_revision":consent.revision,
+        "expected_contract_version":consent.contract_version,"expected_contract_digest":consent.contract_digest,"action":"allow"});
+    h.post(
+        &consent_path,
+        &consent_command,
+        Some(owner.access_credential.expose()),
+    )
+    .await
+    .ok::<CommandResponse>();
+    // A trusted operator may define a membership administrator. This fixture
+    // deliberately gives member the same actions, not the reserved role identity.
+    sqlx::query("UPDATE workspace_policies SET document=jsonb_set(document,'{roles}',(SELECT jsonb_agg(CASE WHEN role->>'id'='member' THEN jsonb_set(role,'{actions}','[\"read\",\"derive\",\"comment\",\"manage_membership\"]'::jsonb) ELSE role END) FROM jsonb_array_elements(document->'roles') AS role)) WHERE workspace_id=$1")
+        .bind(workspace).execute(&h.pool).await.expect("fictional operator policy");
+    let invite: CommandResponse = workspace_command(
+        &h,
+        &owner,
+        workspace,
+        "0",
+        json!({"command":"issue_email_invite","email":"Theo@synthetic.invalid","roles":["member"]}),
+    )
+    .await
+    .ok();
+    let body = envelope(
+        &h,
+        "join-admin",
+        "1",
+        json!({"command":"accept_invitation","invite_id":invite.resource_id}),
+    )
+    .await;
+    h.post(
+        "/v1/onboarding/commands",
+        &body,
+        Some(admin.access_credential.expose()),
+    )
+    .await
+    .ok::<CommandResponse>();
+    let owner_id: Uuid =
+        sqlx::query_scalar("SELECT principal_id FROM principals WHERE subject='Maya'")
+            .fetch_one(&h.pool)
+            .await
+            .expect("owner");
+    let admin_id: Uuid =
+        sqlx::query_scalar("SELECT principal_id FROM principals WHERE subject='Theo'")
+            .fetch_one(&h.pool)
+            .await
+            .expect("admin");
+    let before: (i64, i64, i64) = (
+        h.count("SELECT count(*) FROM operation_receipts").await,
+        h.count("SELECT count(*) FROM invites").await,
+        sqlx::query_scalar("SELECT authorization_epoch FROM workspaces WHERE workspace_id=$1")
+            .bind(workspace)
+            .fetch_one(&h.pool)
+            .await
+            .expect("epoch"),
+    );
+    for (expected, payload) in [
+        (
+            "1",
+            json!({"command":"change_roles","principal_id":admin_id,"roles":["owner"]}),
+        ),
+        (
+            "1",
+            json!({"command":"change_roles","principal_id":owner_id,"roles":["member"]}),
+        ),
+        (
+            "1",
+            json!({"command":"remove_member","principal_id":owner_id}),
+        ),
+        (
+            "0",
+            json!({"command":"issue_email_invite","email":"Other@synthetic.invalid","roles":["owner"]}),
+        ),
+    ] {
+        workspace_command(&h, &admin, workspace, expected, payload)
+            .await
+            .assert_refused(inquello_protocol::workspace::DenyReason::RoleLacksAction);
+    }
+    assert_eq!(
+        h.count("SELECT count(*) FROM operation_receipts").await,
+        before.0
+    );
+    assert_eq!(h.count("SELECT count(*) FROM invites").await, before.1);
+    let epoch: i64 =
+        sqlx::query_scalar("SELECT authorization_epoch FROM workspaces WHERE workspace_id=$1")
+            .bind(workspace)
+            .fetch_one(&h.pool)
+            .await
+            .expect("epoch");
+    assert_eq!(epoch, before.2);
+    // The other administrator does not satisfy the last-Owner invariant.
+    for payload in [
+        json!({"command":"change_roles","principal_id":owner_id,"roles":["member"]}),
+        json!({"command":"remove_member","principal_id":owner_id}),
+    ] {
+        workspace_command(&h, &owner, workspace, "1", payload)
+            .await
+            .assert_error(ErrorKind::VersionConflict);
+    }
+    workspace_command(
+        &h,
+        &owner,
+        workspace,
+        "1",
+        json!({"command":"change_roles","principal_id":admin_id,"roles":["owner"]}),
+    )
+    .await
+    .ok::<CommandResponse>();
+    let pending: CommandResponse = workspace_command(
+        &h,
+        &owner,
+        workspace,
+        "0",
+        json!({"command":"issue_email_invite","email":"Other@synthetic.invalid","roles":["owner"]}),
+    )
+    .await
+    .ok();
+    let invited = verified(&h, "Other").await;
+    // Explicit historical legacy invitation and removed membership fixtures.
+    // Only the actual production acceptance path below may restore authority.
+    let legacy = Uuid::new_v4();
+    let invited_id: Uuid =
+        sqlx::query_scalar("SELECT principal_id FROM principals WHERE subject='Other'")
+            .fetch_one(&h.pool)
+            .await
+            .expect("invited principal");
+    sqlx::query("INSERT INTO memberships(workspace_id,principal_id,status,roles,policy_revision,revision,created_at,updated_at) VALUES($1,$2,'removed','{}',1,1,$3,$3)")
+        .bind(workspace).bind(invited_id).bind(h.now()).execute(&h.pool).await.expect("historical removed owner fixture");
+    sqlx::query("INSERT INTO invites(invite_id,workspace_id,issuer,subject,roles,policy_revision,issued_by,state,revision,created_at,expires_at) VALUES($1,$2,$3,'Other',ARRAY['owner'],1,$4,'pending',1,$5,$6)")
+        .bind(legacy).bind(workspace).bind(h.issuer.issuer()).bind(owner_id).bind(h.now()).bind(h.now()+TimeDelta::hours(1))
+        .execute(&h.pool).await.expect("historical legacy invitation fixture");
+    // Transfer is deliberate: establish a successor before demoting the owner.
+    workspace_command(
+        &h,
+        &owner,
+        workspace,
+        "1",
+        json!({"command":"change_roles","principal_id":owner_id,"roles":["member"]}),
+    )
+    .await
+    .ok::<CommandResponse>();
+    let legacy_epoch: i64 =
+        sqlx::query_scalar("SELECT authorization_epoch FROM workspaces WHERE workspace_id=$1")
+            .bind(workspace)
+            .fetch_one(&h.pool)
+            .await
+            .expect("epoch");
+    h.post(
+        &format!("/v1/invites/{legacy}/accept"),
+        &json!({}),
+        Some(invited.access_credential.expose()),
+    )
+    .await
+    .assert_error(ErrorKind::Denied);
+    let held: (String, Vec<String>, i64) = sqlx::query_as(
+        "SELECT status,roles,revision FROM memberships WHERE workspace_id=$1 AND principal_id=$2",
+    )
+    .bind(workspace)
+    .bind(invited_id)
+    .fetch_one(&h.pool)
+    .await
+    .expect("retained removed membership");
+    assert_eq!(held, ("removed".into(), Vec::<String>::new(), 1));
+    let after_epoch: i64 =
+        sqlx::query_scalar("SELECT authorization_epoch FROM workspaces WHERE workspace_id=$1")
+            .bind(workspace)
+            .fetch_one(&h.pool)
+            .await
+            .expect("unchanged epoch");
+    assert_eq!(after_epoch, legacy_epoch);
+    let transferred: inquello_protocol::provider_consent::ProviderConsentView = h
+        .get(&consent_path, Some(admin.access_credential.expose()))
+        .await
+        .ok();
+    assert_eq!(
+        transferred.state,
+        inquello_protocol::provider_consent::ProviderConsentState::Allowed
+    );
+    assert_eq!(transferred.revision.get(), 1);
+    assert!(transferred.can_manage);
+    let former: inquello_protocol::provider_consent::ProviderConsentView = h
+        .get(&consent_path, Some(owner.access_credential.expose()))
+        .await
+        .ok();
+    assert!(!former.can_manage);
+    assert_eq!(former.state, transferred.state);
+    assert_eq!(
+        h.count("SELECT count(*) FROM provider_consent_history")
+            .await,
+        1
+    );
+    let views: InvitationsView = h
+        .get("/v1/invitations", Some(invited.access_credential.expose()))
+        .await
+        .ok();
+    assert!(
+        views.invitations.is_empty(),
+        "demoted grantor still manages membership but cannot grant Owner"
+    );
+    let stale_accept = envelope(
+        &h,
+        "stale-owner-invite",
+        "1",
+        json!({"command":"accept_invitation","invite_id":pending.resource_id}),
+    )
+    .await;
+    h.post(
+        "/v1/onboarding/commands",
+        &stale_accept,
+        Some(invited.access_credential.expose()),
+    )
+    .await
+    .assert_error(ErrorKind::Denied);
+    let fake = std::sync::Arc::new(FakeDelivery::default());
+    let config = inquello_service::delivery::DeliveryConfig::new(
+        "notifications@synthetic.invalid".into(),
+        fake.clone(),
+    )
+    .expect("config");
+    for _ in 0..2 {
+        inquello_service::delivery::dispatch_one(&h.pool, h.clock.as_ref(), &config)
+            .await
+            .expect("delivery recheck");
+    }
+    assert_eq!(delivery_state(&h, pending.resource_id).await, "cancelled");
+    assert!(fake.calls.lock().expect("calls").is_empty());
+    workspace_command(
+        &h,
+        &owner,
+        workspace,
+        "2",
+        json!({"command":"change_roles","principal_id":owner_id,"roles":["owner"]}),
+    )
+    .await
+    .assert_refused(inquello_protocol::workspace::DenyReason::RoleLacksAction);
+    workspace_command(
+        &h,
+        &admin,
+        workspace,
+        "2",
+        json!({"command":"change_roles","principal_id":owner_id,"roles":["owner"]}),
+    )
+    .await
+    .ok::<CommandResponse>();
+    // A current Owner restored the grantor through the real API. Only now can
+    // the exact historical invitation restore the removed recipient.
+    h.post(
+        &format!("/v1/invites/{legacy}/accept"),
+        &json!({}),
+        Some(invited.access_credential.expose()),
+    )
+    .await
+    .ok::<inquello_protocol::workspace::AcceptInviteResponse>();
+    let restored: (String, Vec<String>, i64) = sqlx::query_as(
+        "SELECT status,roles,revision FROM memberships WHERE workspace_id=$1 AND principal_id=$2",
+    )
+    .bind(workspace)
+    .bind(invited_id)
+    .fetch_one(&h.pool)
+    .await
+    .expect("authorized restoration");
+    assert_eq!(restored, ("active".into(), vec!["owner".into()], 2));
+    assert_eq!(
+        h.count("SELECT count(*) FROM provider_consent_history")
+            .await,
+        1
+    );
+    h.finish().await;
+}

@@ -48,6 +48,7 @@ mod login;
 mod oidc;
 mod onboarding;
 pub mod postgres;
+mod provider_consents;
 pub mod route_eligibility;
 mod routes;
 pub mod serve;

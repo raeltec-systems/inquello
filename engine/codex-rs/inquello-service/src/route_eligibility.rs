@@ -245,9 +245,19 @@ pub(crate) async fn view(
     if RouteId::parse(route).is_none() {
         return Err(unavailable());
     }
-    let approval = stored(&mut tx, workspace_id, route)
-        .await?
-        .map(|(_, _, approval)| approval);
+    let current = match crate::provider_consents::project(
+        &mut tx,
+        &auth,
+        &authority,
+        route,
+        state.clock.now(),
+    )
+    .await?
+    {
+        Some(decision) => decision,
+        None => stored(&mut tx, workspace_id, route).await?,
+    };
+    let approval = current.map(|(_, _, approval)| approval);
     let expires_at: DateTime<Utc> =
         sqlx::query_scalar("SELECT expires_at FROM sessions WHERE session_id=$1")
             .bind(auth.session_id)
@@ -335,9 +345,19 @@ async fn check_with_evidence(
     {
         return Err(unavailable());
     }
-    let (revision, identity, approval) = stored(&mut tx, workspace_id, &request.identity.route_id)
-        .await?
-        .ok_or_else(unavailable)?;
+    let current = match crate::provider_consents::project(
+        &mut tx,
+        &auth,
+        &authority,
+        &request.identity.route_id,
+        state.clock.now(),
+    )
+    .await?
+    {
+        Some(decision) => decision,
+        None => stored(&mut tx, workspace_id, &request.identity.route_id).await?,
+    };
+    let (revision, identity, approval) = current.ok_or_else(unavailable)?;
     let decision_time = state.clock.now();
     let expires_at: DateTime<Utc> =
         sqlx::query_scalar("SELECT expires_at FROM sessions WHERE session_id=$1")

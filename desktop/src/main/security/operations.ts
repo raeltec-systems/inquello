@@ -1,3 +1,4 @@
+import {consentInput,type ProviderConsentService,type ConsentInput} from '../providers/consent-service';
 import type { OnboardingService } from '../onboarding/service';
 import { payload as onboardingPayload, createInput, acceptInput, teamInput, inviteInput, changeInput, removeInput, revokeInput, draftInput } from '../onboarding/contracts';
 import {searchPayload,reopenPayload,navigationPayload,type SearchInput,type SearchView,type ReopenInput,type ReopenView,type NavigationInput} from '../organise';
@@ -120,6 +121,10 @@ export const OPERATION_NAMES = [
   'provider.removeClaudeKey',
   'provider.codexLogin',
   'provider.codexLogout',
+  'provider.consent',
+  'provider.changeConsent',
+  'provider.reconcileConsent',
+  'provider.retryConsent',
   'organise.getWorkspaces',
   'organise.getTree',
   'organise.recoverNavigation',
@@ -332,6 +337,7 @@ export interface PolicyOperations {
 }
 
 export interface OperationDeps {
+  providerConsent?: ProviderConsentService;
   onboarding?: OnboardingService;
   tasks?: Pick<TaskService, 'preflight' | 'start' | 'reconcile' | 'progress' | 'activity' | 'inbox' | 'settleLifecycle' | 'answer' | 'steer' | 'stop' | 'resume'>;
   usage?: Pick<UsageService, 'forTask' | 'set'>;
@@ -588,6 +594,10 @@ export function createOperations(deps: OperationDeps): Operation[] {
     removeClaudeKey,
     codexLogin,
     codexLogout,
+    {name:'provider.consent',validate:treePayload,handle:({workspaceId}:{workspaceId:string})=>deps.providerConsent?.get(workspaceId)??Promise.resolve({ok:false,reason:'Provider permissions are unavailable.'})},
+    {name:'provider.changeConsent',validate:onboardingPayload(consentInput),handle:(input:ConsentInput)=>deps.providerConsent?.change(input)??Promise.resolve({ok:false,reason:'Provider permissions are unavailable.'})},
+    {name:'provider.reconcileConsent',validate:treePayload,handle:({workspaceId}:{workspaceId:string})=>deps.providerConsent?.reconcile(workspaceId)??Promise.resolve({ok:false,reason:'Provider permissions are unavailable.'})},
+    {name:'provider.retryConsent',validate:treePayload,handle:({workspaceId}:{workspaceId:string})=>deps.providerConsent?.reconcile(workspaceId,true)??Promise.resolve({ok:false,reason:'Provider permissions are unavailable.'})},
     organiseWorkspaces,
     organiseTree,
     {name:'organise.recoverNavigation',validate:treePayload,handle:({workspaceId}:{workspaceId:string})=>deps.organise.recoverNavigation?.(workspaceId)??Promise.resolve({ok:false,code:'failed',reason:'Current Workspace authority is unavailable. Refresh cannot restore revoked access.'})},

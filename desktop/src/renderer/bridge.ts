@@ -249,6 +249,10 @@ export interface ProviderActionView {
 }
 
 export interface ProviderBridge {
+  consent?(input:{workspaceId:string}):Promise<unknown>;
+  changeConsent?(input:{workspaceId:string;expectedRevision:string;contractVersion:number;contractDigest:string;action:'allow'|'revoke'}):Promise<unknown>;
+  reconcileConsent?(input:{workspaceId:string}):Promise<unknown>;
+  retryConsent?(input:{workspaceId:string}):Promise<unknown>;
   getStatus(): Promise<unknown>;
   refreshStatus?():Promise<unknown>;
   setClaudeKey(key: string): Promise<unknown>;

@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
-pub const AUTHORIZATION_SUITE: &str = "inquello-current-route-negative-authorization-v4";
+pub const AUTHORIZATION_SUITE: &str = "inquello-current-route-negative-authorization-v5";
 pub const ROUTE_EVIDENCE_SCHEMA_VERSION: u32 = 2;
 /// UTF-8 byte bound shared by compiled real-route scopes and service approvals.
 pub const MAX_PROCESSING_SCOPE_BYTES: usize = 256;
@@ -61,6 +61,14 @@ pub const REQUIRED_AUTHORIZATION_SCENARIOS: &[&str] = &[
     "search-retained-route-mismatch",
     "search-bounded-plain-compressed",
     "search-inventory-request-bounded",
+    "owner-consent-grant-revoke",
+    "owner-consent-compatible-qualification",
+    "owner-consent-material-change",
+    "owner-consent-late-revocation-output",
+    "owner-consent-lost-ack-cas",
+    "owner-role-transition-protection",
+    "owner-consent-legacy-no-fallback",
+    "owner-consent-credential-separation",
 ];
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -489,6 +497,26 @@ mod tests {
             "negative_authorization":proof
         }]}).to_string()).unwrap()
     }
+    #[test]
+    fn v4_or_missing_owner_consent_cases_cannot_qualify_v5() {
+        let (_, proof, _, _) = fixture();
+        assert!(proof.complete());
+        let mut old = proof.clone();
+        old.suite = "inquello-current-route-negative-authorization-v4".into();
+        assert!(!old.complete());
+        let required: Vec<_> = REQUIRED_AUTHORIZATION_SCENARIOS
+            .iter()
+            .filter(|id| id.starts_with("owner-"))
+            .collect();
+        assert_eq!(required.len(), 8);
+        for id in required {
+            let mut missing = proof.clone();
+            missing.scenarios.remove(*id);
+            missing.passed -= 1;
+            assert!(!missing.complete(), "missing consent witness: {id}");
+        }
+    }
+
     #[test]
     fn final_read_requires_fresh_same_task_authority_after_approval_boundary() {
         let (config, proof, mut binding, mut authority) = fixture();

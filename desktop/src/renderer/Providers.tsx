@@ -16,6 +16,7 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactElement } from 'react';
 
+import {useProviderConsent} from './provider-consent';
 import type {ProviderFocusTarget} from './provider-settings';
 import { parseProviderAction, parseProviderStatus, providerBridge, type ProviderStatusView } from './bridge';
 import { Button, StatusChip, TextField } from './primitives';
@@ -54,7 +55,7 @@ function accountText(status: ProviderStatusView): string {
   return 'A saved provider credential is available. Account details have not been checked.';
 }
 
-export function Providers({focusTarget}:{focusTarget?:ProviderFocusTarget}={}): ReactElement {
+export function Providers({focusTarget,workspaceId=null}:{focusTarget?:ProviderFocusTarget;workspaceId?:string|null}={}): ReactElement {
   const panel=useRef<HTMLDivElement>(null);
   useLayoutEffect(()=>{
     if(!focusTarget)return;
@@ -64,6 +65,7 @@ export function Providers({focusTarget}:{focusTarget?:ProviderFocusTarget}={}): 
     target?.focus();target?.scrollIntoView?.({block:'center'});
   },[focusTarget]);
   const bridge = providerBridge();
+  const consent=useProviderConsent(bridge,workspaceId);
   const [status, setStatus] = useState<ProviderStatusView | null>(null);
   const [claudeKey, setClaudeKey] = useState('');
   const [codexKey, setCodexKey] = useState('');
@@ -89,7 +91,7 @@ export function Providers({focusTarget}:{focusTarget?:ProviderFocusTarget}={}): 
   }, [bridge, load, connecting]);
 
   const act = async (action: Action) => {
-    if (!bridge) return;
+    if (!bridge) return false;
     setBusy(action);
     setNotice(null);
     let call: Promise<unknown>;
@@ -125,15 +127,17 @@ export function Providers({focusTarget}:{focusTarget?:ProviderFocusTarget}={}): 
       if (result?.status) setStatus(result.status);
       if (!result) setNotice('The request did not complete.');
       else if (!result.ok) setNotice(result.reason ?? 'The request did not complete.');
+      return result?.ok===true;
     } catch {
       setNotice('The request did not complete.');
+      return false;
     } finally {
       setBusy(null);
     }
   };
 
   const loading = bridge ? 'The provider status is loading.' : 'Provider actions are available in the desktop app only.';
-  const anyBusy = busy !== null ? 'Another provider action is in progress.' : undefined;
+  const anyBusy = busy !== null || consent.busy ? 'Another provider action is in progress.' : undefined;
   const claude = status?.claude.state ?? null;
   const codex = status?.codex.state ?? null;
   const storeReason = !status ? loading : (anyBusy ?? (claudeKey.trim() === '' ? 'Enter a Claude API key first.' : undefined));
@@ -144,6 +148,7 @@ export function Providers({focusTarget}:{focusTarget?:ProviderFocusTarget}={}): 
   const chatgptReason = codexReady ?? (codex === 'connecting' ? 'A ChatGPT sign-in is already waiting for the browser.' : undefined);
   const logoutReason = codexReady ?? (codex === 'not-connected' ? 'No Codex login is connected.' : undefined);
 
+  const needsOwnerConsent=!!consent.state?.view.can_manage&&consent.state.view.state!=='allowed'&&!consent.state.pending;
   return (
     <div
       ref={panel}
@@ -205,6 +210,22 @@ export function Providers({focusTarget}:{focusTarget?:ProviderFocusTarget}={}): 
       </div>
       <div className="specimen-provider-form" data-provider-codex="">
         <h4>OpenAI</h4>
+        {!workspaceId?<p className="specimen-account-note">Choose your workspace in chat to manage its OpenAI permission. You can still connect your personal account.</p>:null}
+        {workspaceId&&!consent.state?<p className="specimen-account-note">{consent.notice??'Checking workspace permission…'}</p>:null}
+        {consent.state?<div data-provider-consent="">
+          <p className="specimen-account-note"><strong>{consent.state.view.workspace_name}</strong>: {consent.state.view.state==='allowed'?'OpenAI is allowed for this workspace.':consent.state.view.can_manage?'OpenAI needs your workspace permission.':'Ask your workspace owner to allow OpenAI. You can still connect your personal account.'}</p>
+          {consent.state.view.can_manage?<p className="specimen-account-note">{consent.state.view.consent_text}</p>:null}
+          {consent.state.pending?<div className="specimen-account-actions">
+            <p className="specimen-account-note">A permission change is not confirmed. Check its result before making another change.</p>
+            <Button variant="secondary" disabledReason={anyBusy} onPress={()=>void consent.act('reconcile')}>Check permission result</Button>
+            <Button variant="quiet" disabledReason={anyBusy} onPress={()=>void consent.act('retry')}>Retry same permission request</Button>
+          </div>:consent.state.view.can_manage?<div className="specimen-account-actions">
+            {needsOwnerConsent&&status?.codex.account?.type==='apiKey'?<Button variant="primary" disabledReason={anyBusy} onPress={()=>void consent.act('allow')}>Allow OpenAI for this workspace</Button>:null}
+            {consent.state.view.state==='allowed'?<Button variant="quiet" disabledReason={anyBusy} onPress={()=>void consent.act('revoke')}>Revoke workspace OpenAI permission</Button>:null}
+          </div>:null}
+          {consent.notice?<p role="status" className="specimen-account-note">{consent.notice}</p>:null}
+          <p className="specimen-account-note">Disconnect removes only your personal connection. Workspace permission is separate; it does not share your key or send a message.</p>
+        </div>:null}
         <p className="specimen-account-note">Use an API key for your OpenAI API credits, or sign in with ChatGPT. These are separate account and billing options.</p>
         <TextField
           id="provider-codex-key"
@@ -216,8 +237,8 @@ export function Providers({focusTarget}:{focusTarget?:ProviderFocusTarget}={}): 
           onChange={setCodexKey}
         />
         <div className="specimen-account-actions">
-          <Button variant="primary" data-provider-action="codex-api-key" pending={busy === 'codex-api-key'} disabledReason={busy === 'codex-api-key' ? undefined : codexKeyReason} onPress={() => void act('codex-api-key')}>
-            Connect with API key
+          <Button variant="primary" data-provider-action="codex-api-key" pending={busy === 'codex-api-key'} disabledReason={busy === 'codex-api-key' ? undefined : codexKeyReason} onPress={() => void (needsOwnerConsent?consent.act('allow',()=>act('codex-api-key')):act('codex-api-key'))}>
+            {needsOwnerConsent?'Connect and allow':'Connect with API key'}
           </Button>
           <Button variant="secondary" data-provider-action="codex-chatgpt" pending={busy === 'codex-chatgpt'} pendingText="Opening the browser" disabledReason={busy === 'codex-chatgpt' ? undefined : chatgptReason} onPress={() => void act('codex-chatgpt')}>
             Sign in with ChatGPT

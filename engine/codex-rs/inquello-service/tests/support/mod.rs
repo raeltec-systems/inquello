@@ -66,6 +66,9 @@ const TABLES: &[&str] = &[
     "route_approvals",
     "route_approval_history",
     "route_approval_receipts",
+    "provider_consents",
+    "provider_consent_history",
+    "provider_consent_receipts",
 ];
 
 pub fn lifetimes() -> Lifetimes {
@@ -283,6 +286,14 @@ impl Response {
             self.body
         );
         serde_json::from_value(self.body).expect("response matches its wire type")
+    }
+
+    pub fn assert_refused(&self, reason: inquello_protocol::workspace::DenyReason) {
+        let expected = ErrorBody::refused(reason);
+        assert_eq!(self.status.as_u16(), expected.error.kind.http_status());
+        let actual: ErrorBody =
+            serde_json::from_value(self.body.clone()).expect("typed refusal body");
+        assert_eq!(actual, expected);
     }
 
     /// Asserts an SC-2 error of `kind` whose body is exactly the fixed body.

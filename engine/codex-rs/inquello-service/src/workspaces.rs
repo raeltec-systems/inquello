@@ -197,7 +197,36 @@ pub(crate) struct WorkspaceAuthority {
     pub(crate) engagements: BTreeSet<Uuid>,
 }
 
+/// The reserved, server-established role identity, never its display label.
+pub(crate) fn has_owner_role(policy: &WorkspacePolicy, roles: &[String]) -> bool {
+    policy.role("owner").is_some() && roles.iter().any(|role| role == "owner")
+}
+
+/// Owner invitations require a current Owner in addition to membership management.
+pub(crate) fn may_grant_roles(
+    policy: &WorkspacePolicy,
+    grantor_roles: &[String],
+    invited_roles: &[String],
+) -> bool {
+    policy.permits(grantor_roles, Action::ManageMembership)
+        && (!invited_roles.iter().any(|role| role == "owner")
+            || has_owner_role(policy, grantor_roles))
+}
+
 impl WorkspaceAuthority {
+    pub(crate) fn require_owner(&self) -> Result<(), ApiError> {
+        self.require_member()?;
+        if self
+            .membership
+            .as_ref()
+            .is_some_and(|member| member.active && has_owner_role(&self.policy, &member.roles))
+        {
+            Ok(())
+        } else {
+            Err(ApiError::refused(DenyReason::RoleLacksAction))
+        }
+    }
+
     pub(crate) fn facts(&self) -> AuthorityFacts<'_> {
         AuthorityFacts {
             principal_id: self.principal_id,
@@ -702,18 +731,24 @@ pub(crate) async fn accept_invite(
     }
 
     let policy = load_policy(&mut tx, workspace_id, workspace.policy_revision).await?;
-    // The grantor must still hold manage_membership (the operator's bootstrap
-    // invite has no principal grantor).
+    let roles: Vec<String> = invite.try_get("roles")?;
+    // A principal grantor must still hold the authority being delegated.
+    // Only the explicit trusted operator bootstrap has no principal grantor.
     let issued_by: Option<Uuid> = invite.try_get("issued_by")?;
     if let Some(grantor) = issued_by {
         let grantor_ok = membership(&mut tx, workspace_id, grantor, Some(LockMode::Share))
             .await?
-            .is_some_and(|m| m.active && policy.permits(&m.roles, Action::ManageMembership));
-        if !grantor_ok {
+            .is_some_and(|m| m.active && may_grant_roles(&policy, &m.roles, &roles));
+        let grantor_active: bool =
+            sqlx::query_scalar("SELECT status='active' FROM principals WHERE principal_id=$1")
+                .bind(grantor)
+                .fetch_optional(&mut *tx)
+                .await?
+                .unwrap_or(false);
+        if !grantor_ok || !grantor_active {
             return Err(invite_refused("grantor no longer authorized"));
         }
     }
-    let roles: Vec<String> = invite.try_get("roles")?;
     if roles.is_empty() || roles.iter().any(|role| policy.role(role).is_none()) {
         return Err(invite_refused("invited roles no longer in the policy"));
     }

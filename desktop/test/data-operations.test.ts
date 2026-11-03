@@ -686,8 +686,8 @@ describe('data service', () => {
     if (!deleted.ok) throw new Error(deleted.reason);
     expect(h.events).toEqual(['identity:signOut', 'runtime:stop', 'providers:forgetClaudeKey', 'browser:clear', 'runtime:start']);
     expect(deleted.delete.serverRevocation).toBe('confirmed');
-    // Only the keyring entry stays: Local data never deletes from the OS credential store.
-    expect(deleted.delete.retained).toEqual([{ category: 'codex-keyring-entry', label: 'Codex login (OS keyring)', files: 0 }]);
+    // Keyring credentials and unresolved permission journals are not individually deleted.
+    expect(deleted.delete.retained).toEqual([{ category: 'codex-keyring-entry', label: 'Codex login (OS keyring)', files: 0 },{category:'provider-consent-journal',label:'Workspace provider permission journal',files:0}]);
     expect(deleted.delete.survivingExports).toEqual([]);
     expect(deleted.delete.otherExportCopiesMayRemain).toBe(true); // signed out: no previous-owner paths
     expect(deleted.delete.removed.find((entry) => entry.category === 'identity-session')!.note).toMatch(/confirmed/);
@@ -814,4 +814,17 @@ describe('controlled session local-data stop fence', () => {
       expect((await service.getPolicy()).loaded).toBe(true);
     });
   }
+});
+
+it('never exports or individually deletes an unresolved provider consent journal',async()=>{
+ const {roots,journal,userData}=device();
+ const bytes=Buffer.from('encrypted immutable operation fixture');
+ const held=write(userData,'identity/provider-consents/pending.bin',bytes);
+ const destination=path.join(tempDir('consent-export'),'export');
+ const {manifest}=await exportData({policy,roots,destination,attribution:ATTRIBUTION,journal});
+ expect(manifest.omissions.find(row=>row.category==='provider-consent-journal')).toMatchObject({files:1});
+ expect(manifest.included.some(row=>row.category==='provider-consent-journal')).toBe(false);
+ for(const file of allFiles(destination))expect(fs.readFileSync(file).includes(bytes)).toBe(false);
+ await expect(deleteCategories({policy,roots,categories:['provider-consent-journal'],journalEntries:[]})).rejects.toThrow();
+ expect(fs.readFileSync(held)).toEqual(bytes);
 });

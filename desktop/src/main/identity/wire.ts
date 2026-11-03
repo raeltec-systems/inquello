@@ -349,3 +349,23 @@ export const parseWorkspaceAccess = object({decision:literal('allowed'),authoriz
 export type WorkspaceAccess = ReturnType<typeof parseWorkspaceAccess>;
 export const parseExportProvenanceReceipt = object({receipt_id:uuid,principal_id:uuid,manifest_digest:digest,workspace_ids:array(uuid)});
 export type ExportProvenanceReceipt = ReturnType<typeof parseExportProvenanceReceipt>;
+
+
+// Durable provider processing consent. Contract values are displayed CAS inputs,
+// never renderer authority. Bound all free text before it reaches the UI.
+const consentText:Parser<string>=(v,p)=>{const s=str(v,p);return s.length>0&&s.length<=4096?s:fail(p,'invalid consent text');};
+const consentDigest:Parser<string>=(v,p)=>{const s=str(v,p);return /^[0-9a-f]{64}$/.test(s)?s:fail(p,'invalid digest');};
+const consentBoolean:Parser<boolean>=(v,p)=>typeof v==='boolean'?v:fail(p,'expected boolean');
+export const parseProviderConsentView=object({
+  workspace_id:uuid,workspace_name:consentText,provider:literal('openai-api'),
+  contract_id:consentText,contract_version:u32,contract_digest:consentDigest,consent_text:consentText,
+  revision:decimal,state:oneOf(['not_allowed','allowed','revoked','changed'] as const),
+  can_manage:consentBoolean,authorization_epoch:decimal,policy_revision:decimal,
+});
+export type ProviderConsentView=ReturnType<typeof parseProviderConsentView>;
+export const parseProviderConsentCommand=object({
+  schema_version:u32,command_epoch:decimal,workspace_id:uuid,operation_id:uuid,
+  expected_revision:decimal,expected_contract_version:u32,expected_contract_digest:consentDigest,
+  action:oneOf(['allow','revoke'] as const),
+});
+export type ProviderConsentCommand=ReturnType<typeof parseProviderConsentCommand>;

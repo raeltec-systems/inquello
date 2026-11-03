@@ -223,6 +223,10 @@ const api = Object.freeze({
     delete: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(DATA_DELETE_CHANNEL, ...args),
   }),
   provider: Object.freeze({
+    consent:(input:unknown):Promise<unknown>=>ipcRenderer.invoke('inquello:op:provider.consent',input),
+    changeConsent:(input:unknown):Promise<unknown>=>ipcRenderer.invoke('inquello:op:provider.changeConsent',input),
+    reconcileConsent:(input:unknown):Promise<unknown>=>ipcRenderer.invoke('inquello:op:provider.reconcileConsent',input),
+    retryConsent:(input:unknown):Promise<unknown>=>ipcRenderer.invoke('inquello:op:provider.retryConsent',input),
     /** Resolves with `{ claude, codex, routes }`: states and storage kinds only, never a key. */
     getStatus: (): Promise<unknown> => ipcRenderer.invoke(PROVIDER_STATUS_CHANNEL),
     refreshStatus:():Promise<unknown>=>ipcRenderer.invoke(PROVIDER_REFRESH_STATUS_CHANNEL),

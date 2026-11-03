@@ -88,6 +88,7 @@ export const UNTITLED_TASK = 'Untitled thread';
 const blankToNull = (value: string): string | null => (value.trim() === '' ? null : value.trim());
 
 export interface ShellProps {
+  onWorkspaceChanged?:(workspaceId:string|null)=>void;
   active?: boolean;
   onShowSpecimen: () => void;
   /** Tests inject a deterministic ID source. */
@@ -122,10 +123,11 @@ async function readPerson(): Promise<PersonView | null> {
 /** The principal the identity status names, as a draft-ownership key; null when unknown. */
 const ownerKey = (person: PersonView | null): string | null => (person ? `${person.name}\n${person.detail}` : null);
 
-export function Shell({ active = true, onShowSpecimen, operationIds = newOperationId, artifact = null, renderComposer, drafts }: ShellProps): ReactElement {
+export function Shell({ active = true, onWorkspaceChanged, onShowSpecimen, operationIds = newOperationId, artifact = null, renderComposer, drafts }: ShellProps): ReactElement {
   const bridge = organiseBridge();
   const [state, setState] = useState<WorkspacesState | null>(null);
   const [workspaceId, setWorkspaceIdState] = useState<string | null>(null);
+  useEffect(()=>{onWorkspaceChanged?.(state?.signedIn?workspaceId:null);},[workspaceId,state?.signedIn,onWorkspaceChanged]);
   // The periodic reload reads the current choice without re-creating itself.
   const chosenWorkspace = useRef<string | null>(null);
   const setWorkspaceId = (id: string | null) => {

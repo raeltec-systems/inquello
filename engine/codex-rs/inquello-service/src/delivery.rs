@@ -274,7 +274,7 @@ async fn currently_eligible(
     invite_id: Uuid,
     now: DateTime<Utc>,
 ) -> Result<bool, sqlx::Error> {
-    use inquello_domain::authorization::{Action, WorkspacePolicy};
+    use inquello_domain::authorization::WorkspacePolicy;
     let row=sqlx::query("SELECT m.roles AS grantor_roles,i.roles AS invited_roles,p.document FROM invites i JOIN workspaces w USING(workspace_id) JOIN workspace_policies p ON p.workspace_id=w.workspace_id AND p.policy_revision=w.policy_revision JOIN principals g ON g.principal_id=i.issued_by JOIN memberships m ON m.workspace_id=w.workspace_id AND m.principal_id=i.issued_by WHERE i.invite_id=$1 AND i.state='pending' AND i.expires_at>$2 AND w.kind='internal_company' AND i.policy_revision=w.policy_revision AND g.status='active' AND m.status='active'")
         .bind(invite_id).bind(now).fetch_optional(conn).await?;
     let Some(row) = row else {
@@ -286,7 +286,9 @@ async fn currently_eligible(
     };
     let grantor_roles: Vec<String> = row.try_get("grantor_roles")?;
     let invited_roles: Vec<String> = row.try_get("invited_roles")?;
-    Ok(policy.permits(&grantor_roles, Action::ManageMembership)
-        && !invited_roles.is_empty()
-        && invited_roles.iter().all(|role| policy.role(role).is_some()))
+    Ok(
+        crate::workspaces::may_grant_roles(&policy, &grantor_roles, &invited_roles)
+            && !invited_roles.is_empty()
+            && invited_roles.iter().all(|role| policy.role(role).is_some()),
+    )
 }

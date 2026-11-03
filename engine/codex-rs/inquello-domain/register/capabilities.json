@@ -157,7 +157,8 @@
         "model": "gpt-6.1-terra",
         "api": "responses-v1",
         "deployment": "openai-api",
-        "endpoint": "https://api.openai.com/v1/responses"
+        "endpoint": "https://api.openai.com/v1/responses",
+        "processing-contract": "openai-api-standard-v1"
       },
       "limits": [
         "Exact-model-label Responses runtime qualification passed 31/31 pinned-loopback synthetic cases, with 2/2 model-selector controls; source and binary identities are recorded in the referenced evidence.",
@@ -177,102 +178,8 @@
           "kind": "synthetic",
           "status": "passed",
           "reference": "_bmad-output/implementation-artifacts/validation/terra-responses-synthetic-20261101.json#tests"
-        },
-        {
-          "kind": "negative-authorization",
-          "status": "passed",
-          "reference": "_bmad-output/implementation-artifacts/production-chat-v4-verification-r2-2026-11-03.json"
         }
-      ],
-      "negative_authorization": {
-        "suite": "inquello-current-route-negative-authorization-v4",
-        "tested_artifact_digest": "3ea41d69ff88c177808fba4e61f9f6217d0da8d3ea0925f3ee1d6cd0512c8ca1",
-        "processing_scope": "OpenAI API Responses processing for exact supported Terra configuration; requires reviewed build evidence, fresh per-operation workspace approval, current credential ownership and creator-private Task authority.",
-        "data_policy_digest": "b053b2694a39ddbc85ec01fc7303980ee6d9187132b83e00ff34f4f9710b2a21",
-        "identity": {
-          "schema_version": 2,
-          "route_id": "codex-responses",
-          "deployment": "openai-api",
-          "endpoint": "https://api.openai.com/v1/responses",
-          "model": "gpt-6.1-terra",
-          "api_version": "responses-v1",
-          "adapter_configuration_digest": "dd24d75f25112720ade3a1243dd05bb6f25a9d92b101851d01cdbd028b08053a",
-          "implementation_digest": "88a129e2ae2995e9bdd1fa4182d3ebda18608030a73eb1b49d4e1d7e57217fa5",
-          "runtime_version": "0.165.0",
-          "contract_version": "inquello-v1-authorization-v2",
-          "platform": "x86_64-pc-windows-msvc"
-        },
-        "scenarios": {
-          "real-session-production-admission": "passed",
-          "real-session-withdrawal": "passed",
-          "credential-slot-independent-proof": "passed",
-          "responses-standard-completion": "passed",
-          "cross-workspace": "passed",
-          "peer-private": "passed",
-          "foreign-thread": "passed",
-          "foreign-tool": "passed",
-          "revoked-before-dispatch": "passed",
-          "revoked-during-model": "passed",
-          "late-output": "passed",
-          "revoked-during-tool": "passed",
-          "revoked-during-permission": "passed",
-          "authority-unavailable": "passed",
-          "retained-output": "passed",
-          "reopen": "passed",
-          "export": "passed",
-          "recovery": "passed",
-          "authorized-export": "passed",
-          "authorized-recovery": "passed",
-          "authorized-procurement": "passed",
-          "resume": "passed",
-          "authorized-resume": "passed",
-          "revoked-before-resume": "passed",
-          "revoked-during-resume": "passed",
-          "resume-missing-linkage": "passed",
-          "resume-peer-private": "passed",
-          "resume-cross-company": "passed",
-          "resume-after-runtime-loss": "passed",
-          "lifecycle-lost-ack": "passed",
-          "stop-finish": "passed",
-          "steer-finish": "passed",
-          "search-private": "passed",
-          "search-revoked-before-disclosure": "passed",
-          "search-prior-lineage-revoked": "passed",
-          "search-late-response": "passed",
-          "exact-hit-reopen": "passed",
-          "exact-hit-markdown": "passed",
-          "cached-hit-revoked": "passed",
-          "search-provider-independent": "passed",
-          "search-legacy-old-turn": "passed",
-          "search-paginated-old-turn": "passed",
-          "search-legacy-markdown": "passed",
-          "search-final-await-off-page": "passed",
-          "search-final-await-history": "passed",
-          "search-final-await-lineage": "passed",
-          "search-next-cursor-scope-snapshot": "passed",
-          "search-retained-route-mismatch": "passed",
-          "search-bounded-plain-compressed": "passed",
-          "search-inventory-request-bounded": "passed"
-        },
-        "passed": 50,
-        "failed": 0,
-        "skipped": 0,
-        "command": "powershell -File .tmp/production-chat-scope-r2-final-gates.ps1; pnpm exec vitest run --configLoader runner (Desktop); exact per-layer commands, features and artifacts in referenced report",
-        "environment": "Windows x86_64-pc-windows-msvc; default-feature RealSession and loopback transport tests; separate inference-fixtures retained Responses/WSL effects, native SQLite, Desktop filesystem and PostgreSQL authority/receipt composition",
-        "report_digest": "73dddbbc77b514705f9b05af774d0425980d0bf4b11bce24e5bee427ea6b1d39",
-        "limitations": [
-          "Composed software-enforcement evidence, not a live paid OpenAI response or a grant of real organization processing authority.",
-          "Default-feature RealSession tests use private code-only synthetic proof dependency and actual authority callbacks; they do not execute each provider/tool/export effect.",
-          "Retained runtime effects use debug inference-fixtures and pinned loopback synthetic Responses streams. Only the two bundled-catalog tests use unchanged trusted bundled Terra metadata; other scenarios use minimal fixture metadata.",
-          "Export/recovery combines native SQLite serialized inventory, real Desktop authority/service owned-byte effects with parsed mock native/HTTPS responses, and separate actual PostgreSQL receipts. No integrated cross-process RealSession-to-Electron-to-HTTPS export/recovery E2E claim.",
-          "Unix-only pre-publication cancellation regression is not executable on this Windows host; its barrier-helper lint correction is mechanically equivalent. Actual retained Windows child/tool cancellation is separate evidence.",
-          "Desktop full suite has22 explicit platform/opt-in skips, not failures hidden as passes. Native Unix FIFO-specific regression is not executed on Windows; plain/compressed bounded reads are executed.",
-          "Desktop full integration suite ran before final native hash rematch; its exact default runtime provenance differs from final immutable native runtime. Final native gates/runtime suite are separately identified.",
-          "Prior setup45s failures, initial31/33 lifecycle failures, old10s idle probe expiry, paging1455 and launcher newline-parser failure remain historical observations. No fast-readiness/performance claim; final fixture admission155s is bounded composition only.",
-          "Actual user-controlled provider key/model access, current organization approval, reviewed exact-build evidence attachment, final ordinary Electron journey and real paid response remain separate gates. No secrets read or real organization approval mutated.",
-          "Messages route warm-policy baseline is separately unpassed; this report does not qualify a full two-provider suite."
-        ]
-      }
+      ]
     }
   ]
 }

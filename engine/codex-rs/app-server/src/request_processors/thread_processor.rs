@@ -7566,14 +7566,15 @@ impl ThreadRequestProcessor {
             let environment_config = plan
                 .environment_config()
                 .map_err(|_| invalid_request("Linux Task permissions invalid"))?;
-            retirement.setup_phase =
-                crate::inquello_wsl::ModelSetupPhase::UnconfirmedResourceAttempt;
-            let client = plan.connect().await.map_err(|error| {
-                // A failed connection can already have spawned a guest. Dropping
-                // the completion records unconfirmed, never a no-process claim.
-                tracing::warn!("Linux Task executor unavailable: {error:#}");
-                invalid_request("Linux Task executor unavailable; no local fallback")
-            })?;
+            let client = plan
+                .connect_tracked(&mut retirement.setup_phase)
+                .await
+                .map_err(|error| {
+                    // The tracked boundary distinguishes pure validation/spawn failure
+                    // from a spawned guest whose cleanup remains unconfirmed.
+                    tracing::warn!("Linux Task executor unavailable: {error:#}");
+                    invalid_request("Linux Task executor unavailable; no local fallback")
+                })?;
             if manager
                 .register_isolated_client(environment_id.clone(), client.clone(), cwd.clone())
                 .is_err()

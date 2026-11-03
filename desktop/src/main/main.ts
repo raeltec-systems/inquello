@@ -672,6 +672,15 @@ void app.whenReady().then(async () => {
     store: new OnboardingStore({dir:path.join(identityDir(app.getPath('userData')),'onboarding'),scope:JSON.stringify([onboardingConfig?.serviceUrl,onboardingConfig?.issuerUrl]),safeStorage,platform:process.platform}),
   });
   const sharedAuthority=identity.service;
+  const providerConsent = new ProviderConsentService({
+    identity:identitySession,service:sharedAuthority,
+    store:new ConsentStore({dir:path.join(identityDir(app.getPath('userData')),'provider-consents'),
+      scope:JSON.stringify([onboardingConfig?.serviceUrl,onboardingConfig?.issuerUrl]),safeStorage,platform:process.platform}),
+    onChanged:()=>{for(const window of BrowserWindow.getAllWindows()){
+      window.webContents.send('inquello:tasks-progress-changed');
+      window.webContents.send('inquello:routes-changed',{authority:false});
+    }},
+  });
   const taskBootstrapOptions={env:process.env,packaged:app.isPackaged,userData,runtime:{
     ready:()=>runtime?.state==='ready'&&runtimeConfigurationVerified,instance:()=>runtime,
     request:<T,>(method:string,params?:unknown)=>runtime?runtime.request<T>(method,params):Promise.reject(new Error('Runtime unavailable')),
@@ -807,6 +816,7 @@ void app.whenReady().then(async () => {
     ipcMain,
     createOperations({
       onboarding: onboardingService,
+      providerConsent,
       capabilities,
       routes,
       environments,
@@ -881,3 +891,6 @@ void app.whenReady().then(async () => {
     app.quit();
   }
 });
+
+import {ProviderConsentService} from './providers/consent-service';
+import {ConsentStore} from './providers/consent-store';

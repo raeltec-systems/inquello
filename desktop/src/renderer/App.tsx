@@ -26,6 +26,7 @@ export function App(): ReactElement {
   const [view, setView] = useState<View>(() => viewFor(globalThis.location?.hash ?? ''));
   const [drafts] = useState(createDraftStore);
   const [sessionEpoch,setSessionEpoch] = useState(0);
+  const [workspaceId,setWorkspaceId]=useState<string|null>(null);
 
   useEffect(() => {
     const onHash = () => setView(viewFor(globalThis.location.hash));
@@ -38,11 +39,11 @@ export function App(): ReactElement {
   };
 
   return <>
-    <div hidden={view !== 'shell'}><Shell key={sessionEpoch} active={view === 'shell'} onShowSpecimen={() => show('settings')} drafts={drafts} /></div>
-    {view === 'settings' && <Settings onBack={() => show('shell')} onIdentityChanged={() => { drafts.clear(); setSessionEpoch(n => n + 1); }} />}
-    {view === 'onboarding' && <Onboarding onBack={() => show('shell')} onIdentityChanged={() => { drafts.clear(); setSessionEpoch(n => n + 1); }} />}
+    <div hidden={view !== 'shell'}><Shell key={sessionEpoch} onWorkspaceChanged={setWorkspaceId} active={view === 'shell'} onShowSpecimen={() => show('settings')} drafts={drafts} /></div>
+    {view === 'settings' && <Settings workspaceId={workspaceId} onBack={() => show('shell')} onIdentityChanged={() => { drafts.clear(); setWorkspaceId(null); setSessionEpoch(n => n + 1); }} />}
+    {view === 'onboarding' && <Onboarding onBack={() => show('shell')} onIdentityChanged={() => { drafts.clear(); setWorkspaceId(null); setSessionEpoch(n => n + 1); }} />}
     {view === 'specimen' && <>
-      <Specimen onIdentityChanged={() => { drafts.clear(); setSessionEpoch(n => n + 1); }} />
+      <Specimen onIdentityChanged={() => { drafts.clear(); setWorkspaceId(null); setSessionEpoch(n => n + 1); }} />
       <div className="specimen specimen-back"><Button variant="quiet" size="sm" onPress={() => show('shell')}>Back to the workspace</Button></div>
     </>}
   </>;

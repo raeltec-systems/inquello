@@ -633,6 +633,13 @@ impl WslExecPlan {
     /// The fixed launcher validates the live guest before it opens stdio. It
     /// holds a per-Task lock until all executor-owned descendants have exited.
     pub(crate) async fn connect(&self) -> anyhow::Result<ExecServerClient> {
+        self.connect_tracked(&mut ModelSetupPhase::default()).await
+    }
+
+    pub(crate) async fn connect_tracked(
+        &self,
+        phase: &mut ModelSetupPhase,
+    ) -> anyhow::Result<ExecServerClient> {
         if !cfg!(windows) {
             bail!("the WSL backend requires Windows");
         }
@@ -657,7 +664,7 @@ impl WslExecPlan {
         // A trusted main-process preflight supplies this receipt only after a
         // live storage/isolation probe. The launcher independently checks its
         // boot identity, mounts and immutable installed binary hashes.
-        let boot_id = verified_boot_id(&self.scope).await?;
+        let boot_id = verified_boot_id_tracked(&self.scope, Some(phase)).await?;
         let system = std::env::var("SystemRoot").context("Windows system directory missing")?;
         let env = HashMap::from([
             ("SystemRoot".into(), system.clone()),
@@ -688,12 +695,13 @@ impl WslExecPlan {
         .into_iter()
         .map(str::to_owned)
         .collect();
-        let client = ExecServerClient::connect_isolated_stdio(
+        let client = ExecServerClient::connect_isolated_stdio_tracked(
             format!("{system}\\System32\\wsl.exe"),
             args,
             env,
             HOST_TEMP.into(),
             Duration::from_secs(30),
+            || *phase = ModelSetupPhase::UnconfirmedResourceAttempt,
         )
         .await
         .context("Linux isolated executor connection failed")?;
@@ -799,6 +807,24 @@ impl WslExecPlan {
 mod inquello_lock_release_probe_tests {
     use super::*;
     use std::sync::atomic::{AtomicBool, Ordering};
+
+    #[tokio::test]
+    async fn connect_validation_failure_preserves_proven_no_process_phase() {
+        let plan = WslExecPlan {
+            scope: "invalid-scope".into(),
+            task_id: uuid::Uuid::new_v4().to_string(),
+            command: vec![],
+            writable: false,
+            domains: vec![],
+            timeout_ms: None,
+        };
+        let mut phase = ModelSetupPhase::NoOutstandingProcess;
+        assert!(plan.connect_tracked(&mut phase).await.is_err());
+        assert!(phase == ModelSetupPhase::NoOutstandingProcess);
+        phase = ModelSetupPhase::UnconfirmedResourceAttempt;
+        assert!(plan.connect_tracked(&mut phase).await.is_err());
+        assert!(phase == ModelSetupPhase::UnconfirmedResourceAttempt);
+    }
 
     #[cfg(windows)]
     #[tokio::test]

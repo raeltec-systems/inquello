@@ -25,6 +25,7 @@ pub mod command;
 pub mod error;
 pub mod login;
 pub mod onboarding;
+pub mod provider_consent;
 pub mod session;
 mod values;
 pub mod workspace;
