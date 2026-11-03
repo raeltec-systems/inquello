@@ -369,3 +369,15 @@ export const parseProviderConsentCommand=object({
   action:oneOf(['allow','revoke'] as const),
 });
 export type ProviderConsentCommand=ReturnType<typeof parseProviderConsentCommand>;
+
+
+export const parseProviderConsentNotApplied=object({
+  status:literal('not_applied'),principal_id:uuid,provider:literal('openai-api'),
+  command:parseProviderConsentCommand,
+  reason:oneOf(['command_contract_changed','processing_terms_changed','revision_changed'] as const),
+  receipt_id:uuid,
+});
+export type ProviderConsentReceipt=CommandResponse|ReturnType<typeof parseProviderConsentNotApplied>;
+export const parseProviderConsentReceipt:Parser<ProviderConsentReceipt>=(value,p)=>
+  value!==null&&typeof value==='object'&&(value as Record<string,unknown>).status==='not_applied'
+    ?parseProviderConsentNotApplied(value,p):parseCommandResponse(value,p);

@@ -7,7 +7,10 @@ use inquello_protocol::{
     command::CommandResponse,
     error::ErrorKind,
     login::SessionCredentials,
-    provider_consent::{ProviderConsentState, ProviderConsentView},
+    provider_consent::{
+        ProviderConsentNotApplied, ProviderConsentNotAppliedStatus, ProviderConsentReceipt,
+        ProviderConsentRejectionReason, ProviderConsentState, ProviderConsentView,
+    },
     workspace::RouteApprovalView,
 };
 use serde_json::{Value, json};
@@ -68,7 +71,14 @@ async fn durable_consent_is_explicit_owner_cas_and_replay_not_credential_or_mode
     )
     .await
     .assert_refused(DenyReason::NotAMember);
+    assert_eq!(
+        h.count("SELECT count(*) FROM provider_consent_receipts")
+            .await,
+        0,
+        "authorization denial writes no receipt"
+    );
     let mut stale_contract = allow.clone();
+    stale_contract["operation_id"] = json!(Uuid::new_v4());
     stale_contract["expected_contract_digest"] = json!("0".repeat(64));
     h.post(
         &path(workspace),
@@ -80,7 +90,8 @@ async fn durable_consent_is_explicit_owner_cas_and_replay_not_credential_or_mode
     assert_eq!(
         h.count("SELECT count(*) FROM provider_consent_receipts")
             .await,
-        0
+        1,
+        "stale owner command records only its terminal no-effect outcome"
     );
     assert_eq!(h.count("SELECT count(*) FROM provider_consents").await, 0);
     assert_eq!(
@@ -163,7 +174,7 @@ async fn durable_consent_is_explicit_owner_cas_and_replay_not_credential_or_mode
     assert_eq!(
         h.count("SELECT count(*) FROM provider_consent_receipts")
             .await,
-        2
+        4
     );
     h.finish().await;
 }
@@ -413,12 +424,387 @@ async fn concurrent_consent_cas_has_one_winner_and_current_owner_required_for_re
     assert_eq!(
         h.count("SELECT count(*) FROM provider_consent_receipts")
             .await,
-        1
+        2,
+        "one applied result and one terminal CAS rejection; role-loss writes nothing"
     );
     assert_eq!(
         h.count("SELECT count(*) FROM provider_consent_history")
             .await,
         1
+    );
+    h.finish().await;
+}
+
+async fn consent_receipt(
+    h: &Harness,
+    owner: &SessionCredentials,
+    workspace: Uuid,
+    request: &Value,
+) -> Option<ProviderConsentReceipt> {
+    h.get(
+        &format!(
+            "/v1/workspaces/{workspace}/provider-consent-receipts/{}",
+            request["operation_id"].as_str().expect("operation")
+        ),
+        Some(owner.access_credential.expose()),
+    )
+    .await
+    .ok()
+}
+
+#[tokio::test]
+async fn stale_owner_commands_record_exact_no_effect_receipts_without_changing_permission() {
+    let h = Harness::start().await;
+    let (owner, workspace) = owner_workspace(&h).await;
+    let initial = view(&h, &owner, workspace).await;
+    let principal: Uuid =
+        sqlx::query_scalar("SELECT principal_id FROM principals WHERE subject='Maya'")
+            .fetch_one(&h.pool)
+            .await
+            .expect("owner");
+    for (index, kind) in ["terms", "revision", "epoch", "schema"]
+        .into_iter()
+        .enumerate()
+    {
+        let mut request = command(&h, &initial, "allow").await;
+        match kind {
+            "terms" => request["expected_contract_digest"] = json!("0".repeat(64)),
+            "revision" => request["expected_revision"] = json!("1"),
+            "epoch" => {
+                request["command_epoch"] =
+                    json!((h.command_epoch().await.parse::<u64>().expect("epoch") + 1).to_string())
+            }
+            "schema" => request["schema_version"] = json!(2),
+            _ => unreachable!(),
+        }
+        let error = if matches!(kind, "epoch" | "schema") {
+            ErrorKind::UnsupportedContract
+        } else {
+            ErrorKind::VersionConflict
+        };
+        h.post(
+            &path(workspace),
+            &request,
+            Some(owner.access_credential.expose()),
+        )
+        .await
+        .assert_error(error);
+        let terminal = consent_receipt(&h, &owner, workspace, &request)
+            .await
+            .expect("durable terminal");
+        let ProviderConsentReceipt::NotApplied(ref denied) = terminal else {
+            panic!("not an applied grant")
+        };
+        assert_eq!(denied.principal_id, principal);
+        assert_eq!(denied.provider, "openai-api");
+        assert_eq!(
+            serde_json::to_value(&denied.command).expect("command"),
+            request
+        );
+        assert_eq!(view(&h, &owner, workspace).await, initial);
+        assert_eq!(h.count("SELECT count(*) FROM provider_consents").await, 0);
+        assert_eq!(
+            h.count("SELECT count(*) FROM provider_consent_history")
+                .await,
+            0
+        );
+        assert_eq!(
+            h.count("SELECT count(*) FROM provider_consent_receipts")
+                .await,
+            index as i64 + 1
+        );
+        h.post(
+            &path(workspace),
+            &request,
+            Some(owner.access_credential.expose()),
+        )
+        .await
+        .assert_error(error);
+        assert_eq!(
+            consent_receipt(&h, &owner, workspace, &request).await,
+            Some(terminal)
+        );
+    }
+    h.finish().await;
+}
+
+#[tokio::test]
+async fn applied_receipt_wins_after_epoch_change_and_new_session_without_reapplying_grant() {
+    let h = Harness::start().await;
+    let (owner, workspace) = owner_workspace(&h).await;
+    let initial = view(&h, &owner, workspace).await;
+    let allow = command(&h, &initial, "allow").await;
+    // The client may lose this response; the recorded outcome is authoritative.
+    let applied: CommandResponse = h
+        .post(
+            &path(workspace),
+            &allow,
+            Some(owner.access_credential.expose()),
+        )
+        .await
+        .ok();
+    sqlx::query("UPDATE service_state SET command_epoch=command_epoch+1")
+        .execute(&h.pool)
+        .await
+        .expect("owned command epoch transition");
+    let renewed = h.sign_in("Maya").await;
+    let replay: CommandResponse = h
+        .post(
+            &path(workspace),
+            &allow,
+            Some(renewed.access_credential.expose()),
+        )
+        .await
+        .ok();
+    assert_eq!(replay, applied);
+    assert_eq!(
+        consent_receipt(&h, &renewed, workspace, &allow).await,
+        Some(ProviderConsentReceipt::Applied(applied.clone()))
+    );
+    let current = view(&h, &renewed, workspace).await;
+    let revoke = command(&h, &current, "revoke").await;
+    h.post(
+        &path(workspace),
+        &revoke,
+        Some(renewed.access_credential.expose()),
+    )
+    .await
+    .ok::<CommandResponse>();
+    h.post(
+        &path(workspace),
+        &allow,
+        Some(renewed.access_credential.expose()),
+    )
+    .await
+    .ok::<CommandResponse>();
+    let revoked = view(&h, &renewed, workspace).await;
+    assert_eq!(revoked.state, ProviderConsentState::Revoked);
+    assert_eq!(
+        h.count("SELECT count(*) FROM provider_consent_history")
+            .await,
+        2
+    );
+    // Explicit fixture authority loss: an inaccessible receipt remains unknown.
+    sqlx::query("UPDATE memberships SET roles=ARRAY['member'] WHERE workspace_id=$1")
+        .bind(workspace)
+        .execute(&h.pool)
+        .await
+        .expect("fixture owner loss");
+    h.get(
+        &format!(
+            "/v1/workspaces/{workspace}/provider-consent-receipts/{}",
+            allow["operation_id"].as_str().expect("op")
+        ),
+        Some(renewed.access_credential.expose()),
+    )
+    .await
+    .assert_refused(DenyReason::RoleLacksAction);
+    h.post(
+        &path(workspace),
+        &allow,
+        Some(renewed.access_credential.expose()),
+    )
+    .await
+    .assert_refused(DenyReason::RoleLacksAction);
+    assert_eq!(
+        h.count("SELECT count(*) FROM provider_consent_receipts")
+            .await,
+        2
+    );
+    assert_eq!(
+        h.count("SELECT count(*) FROM provider_consent_history")
+            .await,
+        2
+    );
+    assert_eq!(
+        view(&h, &renewed, workspace).await.authorization_epoch,
+        revoked.authorization_epoch
+    );
+    h.finish().await;
+}
+
+#[tokio::test]
+async fn concurrent_late_original_and_retry_share_one_terminal_receipt_then_new_operation_can_succeed()
+ {
+    let h = Harness::start().await;
+    let (owner, workspace) = owner_workspace(&h).await;
+    let initial = view(&h, &owner, workspace).await;
+    let old_allow = command(&h, &initial, "allow").await;
+    let revoke = command(&h, &initial, "revoke").await;
+    h.post(
+        &path(workspace),
+        &revoke,
+        Some(owner.access_credential.expose()),
+    )
+    .await
+    .ok::<CommandResponse>();
+    let before = view(&h, &owner, workspace).await;
+    let renewed = h.sign_in("Maya").await;
+    let mut lock = h.pool.begin().await.expect("lock");
+    sqlx::query("SELECT workspace_id FROM workspaces WHERE workspace_id=$1 FOR UPDATE")
+        .bind(workspace)
+        .fetch_one(&mut *lock)
+        .await
+        .expect("workspace lock");
+    let release = async {
+        tokio::time::timeout(std::time::Duration::from_secs(5),async {
+            loop {
+                let waiting:i64=sqlx::query_scalar("SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock'").fetch_one(&h.pool).await.expect("owned wait observation");
+                if waiting>=2 {break;}
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        }).await.expect("both exact requests waited at the authority lock");
+        lock.rollback().await.expect("release owned lock");
+    };
+    let url = path(workspace);
+    let (original, retry, ()) = tokio::join!(
+        h.post(&url, &old_allow, Some(owner.access_credential.expose())),
+        h.post(&url, &old_allow, Some(renewed.access_credential.expose())),
+        release,
+    );
+    original.assert_error(ErrorKind::VersionConflict);
+    retry.assert_error(ErrorKind::VersionConflict);
+    assert_eq!(view(&h, &owner, workspace).await, before);
+    assert_eq!(
+        h.count("SELECT count(*) FROM provider_consent_receipts")
+            .await,
+        2
+    );
+    assert_eq!(
+        h.count("SELECT count(*) FROM provider_consent_history")
+            .await,
+        1
+    );
+    let terminal = consent_receipt(&h, &renewed, workspace, &old_allow)
+        .await
+        .expect("terminal");
+    assert!(matches!(&terminal, ProviderConsentReceipt::NotApplied(_)));
+    let deliberate_revoke = command(&h, &before, "revoke").await;
+    h.post(
+        &url,
+        &deliberate_revoke,
+        Some(renewed.access_credential.expose()),
+    )
+    .await
+    .ok::<CommandResponse>();
+    let after = view(&h, &renewed, workspace).await;
+    h.post(&url, &old_allow, Some(renewed.access_credential.expose()))
+        .await
+        .assert_error(ErrorKind::VersionConflict);
+    assert_eq!(view(&h, &renewed, workspace).await, after);
+    assert_eq!(after.state, ProviderConsentState::Revoked);
+    assert_eq!(
+        consent_receipt(&h, &renewed, workspace, &old_allow).await,
+        Some(terminal)
+    );
+    h.finish().await;
+}
+
+fn sorted_json(value: Value) -> Value {
+    match value {
+        Value::Object(fields) => Value::Object(
+            fields
+                .into_iter()
+                .map(|(key, value)| (key, sorted_json(value)))
+                .collect::<std::collections::BTreeMap<_, _>>()
+                .into_iter()
+                .collect(),
+        ),
+        Value::Array(values) => Value::Array(values.into_iter().map(sorted_json).collect()),
+        scalar => scalar,
+    }
+}
+
+#[tokio::test]
+async fn historical_material_rejection_cannot_revive_under_matching_terms_or_a_new_session() {
+    use sha2::Digest as _;
+    let h = Harness::start().await;
+    let (owner, workspace) = owner_workspace(&h).await;
+    let initial = view(&h, &owner, workspace).await;
+    let original = command(&h, &initial, "allow").await;
+    let principal: Uuid =
+        sqlx::query_scalar("SELECT principal_id FROM principals WHERE subject='Maya'")
+            .fetch_one(&h.pool)
+            .await
+            .expect("owner");
+    // Explicit historical-state fixture: newer software rejected this exact
+    // command's terms, then software rolled back to today's matching contract.
+    // Actual stale-terms persistence is exercised independently above.
+    let terminal = ProviderConsentNotApplied {
+        status: ProviderConsentNotAppliedStatus::NotApplied,
+        principal_id: principal,
+        provider: "openai-api".into(),
+        command: serde_json::from_value(original.clone()).expect("command"),
+        reason: ProviderConsentRejectionReason::ProcessingTermsChanged,
+        receipt_id: Uuid::new_v4(),
+    };
+    let canonical = serde_json::to_vec(&sorted_json(
+        json!({"provider":"openai-api","request":original}),
+    ))
+    .expect("canonical envelope");
+    let digest = format!("{:x}", sha2::Sha256::digest(canonical));
+    sqlx::query("INSERT INTO provider_consent_receipts(workspace_id,operation_id,principal_id,request_digest,receipt_id,response,recorded_at) VALUES($1,$2,$3,$4,$5,$6,$7)")
+        .bind(workspace).bind(terminal.command.operation_id).bind(principal).bind(digest).bind(terminal.receipt_id)
+        .bind(sqlx::types::Json(&terminal)).bind(h.now()).execute(&h.pool).await.expect("historical exact terminal receipt");
+    let renewed = h.sign_in("Maya").await;
+    for session in [&owner, &renewed] {
+        h.post(
+            &path(workspace),
+            &original,
+            Some(session.access_credential.expose()),
+        )
+        .await
+        .assert_error(ErrorKind::VersionConflict);
+        assert_eq!(
+            consent_receipt(&h, session, workspace, &original).await,
+            Some(ProviderConsentReceipt::NotApplied(terminal.clone()))
+        );
+    }
+    assert_eq!(view(&h, &owner, workspace).await, initial);
+    assert_eq!(h.count("SELECT count(*) FROM provider_consents").await, 0);
+    assert_eq!(
+        h.count("SELECT count(*) FROM provider_consent_history")
+            .await,
+        0
+    );
+    // A different deliberate operation with the same currently supported terms
+    // succeeds, proving refusal above is the terminal fence, not bad terms.
+    let fresh = command(&h, &initial, "allow").await;
+    h.post(
+        &path(workspace),
+        &fresh,
+        Some(renewed.access_credential.expose()),
+    )
+    .await
+    .ok::<CommandResponse>();
+    let allowed = view(&h, &renewed, workspace).await;
+    let revoke = command(&h, &allowed, "revoke").await;
+    h.post(
+        &path(workspace),
+        &revoke,
+        Some(renewed.access_credential.expose()),
+    )
+    .await
+    .ok::<CommandResponse>();
+    let revoked = view(&h, &renewed, workspace).await;
+    h.post(
+        &path(workspace),
+        &original,
+        Some(renewed.access_credential.expose()),
+    )
+    .await
+    .assert_error(ErrorKind::VersionConflict);
+    assert_eq!(view(&h, &renewed, workspace).await, revoked);
+    assert_eq!(revoked.state, ProviderConsentState::Revoked);
+    assert_eq!(
+        h.count("SELECT count(*) FROM provider_consent_history")
+            .await,
+        2
+    );
+    assert_eq!(
+        h.count("SELECT count(*) FROM provider_consent_receipts")
+            .await,
+        3
     );
     h.finish().await;
 }

@@ -21,7 +21,9 @@ use inquello_protocol::{
     SCHEMA_VERSION,
     command::{CommandResponse, CommandStatus},
     provider_consent::{
-        ProviderConsentAction, ProviderConsentCommand, ProviderConsentState, ProviderConsentView,
+        ProviderConsentAction, ProviderConsentCommand, ProviderConsentNotApplied,
+        ProviderConsentNotAppliedStatus, ProviderConsentReceipt, ProviderConsentRejectionReason,
+        ProviderConsentState, ProviderConsentView,
     },
 };
 use sqlx::{PgConnection, Row, types::Json};
@@ -40,6 +42,18 @@ fn contract(provider: &str) -> Result<ProcessingContract, ApiError> {
         .entry(RouteId::CodexResponses.capability_id())
         .and_then(processing_contract_for_entry)
         .ok_or_else(unavailable)
+}
+
+fn terminal_refusal(reason: ProviderConsentRejectionReason) -> ApiError {
+    match reason {
+        ProviderConsentRejectionReason::CommandContractChanged => {
+            ApiError::unsupported_contract("consent command contract changed")
+        }
+        ProviderConsentRejectionReason::ProcessingTermsChanged
+        | ProviderConsentRejectionReason::RevisionChanged => {
+            ApiError::version_conflict("consent request was not applied; read current permission")
+        }
+    }
 }
 
 struct Consent {
@@ -133,10 +147,13 @@ pub(crate) async fn command(
     provider: &str,
     request: ProviderConsentCommand,
 ) -> Result<CommandResponse, ApiError> {
-    if request.workspace_id != workspace || request.schema_version != SCHEMA_VERSION {
+    if request.workspace_id != workspace {
         return Err(ApiError::unsupported_contract(
             "invalid consent command scope",
         ));
+    }
+    if provider != OPENAI_PROVIDER {
+        return Err(unavailable());
     }
     let mut tx = state.pool.begin().await?;
     let auth = sessions::authenticate(
@@ -147,14 +164,10 @@ pub(crate) async fn command(
         LockMode::Share,
     )
     .await?;
-    if request.command_epoch != current_epoch(&mut tx, true).await? {
-        return Err(ApiError::unsupported_contract(
-            "command epoch is not current",
-        ));
-    }
+    // Preserve lock ordering; exact terminal receipts precede new-effect checks.
+    let command_epoch = current_epoch(&mut tx, true).await?;
     let authority = workspaces::resolve(&mut tx, &auth, workspace, LockMode::Update).await?;
     authority.require_owner()?;
-    let contract = contract(provider)?;
     let digest = request_digest(&serde_json::json!({"provider":provider,"request":request}));
     let existing = sqlx::query("SELECT principal_id,request_digest,response FROM provider_consent_receipts WHERE workspace_id=$1 AND operation_id=$2")
         .bind(workspace).bind(request.operation_id).fetch_optional(&mut *tx).await?;
@@ -167,21 +180,56 @@ pub(crate) async fn command(
         if session_bounds(&mut tx, &auth).await?.1 <= state.clock.now() {
             return Err(unavailable());
         }
-        let Json(response): Json<CommandResponse> = row.try_get("response")?;
+        let Json(receipt): Json<ProviderConsentReceipt> = row.try_get("response")?;
+        if let ProviderConsentReceipt::NotApplied(ref terminal) = receipt
+            && (terminal.command != request
+                || terminal.principal_id != auth.principal_id
+                || terminal.provider != provider)
+        {
+            return Err(unavailable());
+        }
         tx.commit().await?;
-        return Ok(response);
+        return match receipt {
+            ProviderConsentReceipt::Applied(response) => Ok(response),
+            ProviderConsentReceipt::NotApplied(terminal) => Err(terminal_refusal(terminal.reason)),
+        };
     }
-    if request.expected_contract_version != contract.schema_version
-        || request.expected_contract_digest != contract.digest()
-    {
-        return Err(ApiError::version_conflict(
-            "processing terms changed; read them again",
-        ));
-    }
+    let contract = contract(provider)?;
     let previous = stored(&mut tx, workspace, provider).await?;
     let previous_revision = previous.map_or(0, |c| c.revision);
-    if workspaces::revision(previous_revision)? != request.expected_revision {
-        return Err(ApiError::version_conflict("provider consent changed"));
+    let rejection =
+        if request.schema_version != SCHEMA_VERSION || request.command_epoch != command_epoch {
+            Some(ProviderConsentRejectionReason::CommandContractChanged)
+        } else if request.expected_contract_version != contract.schema_version
+            || request.expected_contract_digest != contract.digest()
+        {
+            Some(ProviderConsentRejectionReason::ProcessingTermsChanged)
+        } else if workspaces::revision(previous_revision)? != request.expected_revision {
+            Some(ProviderConsentRejectionReason::RevisionChanged)
+        } else {
+            None
+        };
+    if let Some(reason) = rejection {
+        // This deliberate terminal receipt is the only write for a rejected
+        // owner command: no consent/history/authorization-epoch mutation.
+        // The same workspace UPDATE lock serializes a delayed original request.
+        let terminal = ProviderConsentNotApplied {
+            status: ProviderConsentNotAppliedStatus::NotApplied,
+            principal_id: auth.principal_id,
+            provider: provider.into(),
+            command: request.clone(),
+            reason,
+            receipt_id: Uuid::new_v4(),
+        };
+        sqlx::query("INSERT INTO provider_consent_receipts(workspace_id,operation_id,principal_id,request_digest,receipt_id,response,recorded_at) VALUES($1,$2,$3,$4,$5,$6,$7)")
+            .bind(workspace).bind(request.operation_id).bind(auth.principal_id).bind(digest)
+            .bind(terminal.receipt_id).bind(Json(&terminal)).bind(state.clock.now())
+            .execute(&mut *tx).await?;
+        if session_bounds(&mut tx, &auth).await?.1 <= state.clock.now() {
+            return Err(unavailable());
+        }
+        tx.commit().await.map_err(|e| ApiError::uncertain(&e))?;
+        return Err(terminal_refusal(reason));
     }
     let next = previous_revision.checked_add(1).ok_or_else(unavailable)?;
     let now = state.clock.now();
@@ -289,7 +337,7 @@ pub(crate) async fn receipt(
     access: &str,
     workspace: Uuid,
     operation: Uuid,
-) -> Result<Option<CommandResponse>, ApiError> {
+) -> Result<Option<ProviderConsentReceipt>, ApiError> {
     let mut tx = state.pool.begin().await?;
     let auth = sessions::authenticate(
         &mut tx,
@@ -301,7 +349,7 @@ pub(crate) async fn receipt(
     .await?;
     let authority = workspaces::resolve(&mut tx, &auth, workspace, LockMode::Share).await?;
     authority.require_owner()?;
-    let response: Option<Json<CommandResponse>> = sqlx::query_scalar(
+    let response: Option<Json<ProviderConsentReceipt>> = sqlx::query_scalar(
         "SELECT response FROM provider_consent_receipts WHERE workspace_id=$1 AND operation_id=$2 AND principal_id=$3")
         .bind(workspace).bind(operation).bind(auth.principal_id).fetch_optional(&mut *tx).await?;
     if session_bounds(&mut tx, &auth).await?.1 <= state.clock.now() {

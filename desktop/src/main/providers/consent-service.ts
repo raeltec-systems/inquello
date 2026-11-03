@@ -1,7 +1,8 @@
 import {randomUUID} from 'node:crypto';
+import {isDeepStrictEqual} from 'node:util';
 import {ServiceError,type SharedService} from '../identity/service-client';
 import {object,uuid,decimal,u32,str,oneOf,parseProviderConsentView,parseCommandResponse,
-  type ProviderConsentView,type ProviderConsentCommand,type CommandResponse} from '../identity/wire';
+  parseProviderConsentReceipt,type ProviderConsentReceipt,type ProviderConsentView,type ProviderConsentCommand,type CommandResponse} from '../identity/wire';
 import type {ConsentStorage} from './consent-store';
 const digest=(v:unknown,p:string)=>{const s=str(v,p);if(!/^[0-9a-f]{64}$/.test(s))throw new Error('Invalid contract digest');return s;};
 export const consentInput=object({workspaceId:uuid,expectedRevision:decimal,contractVersion:u32,contractDigest:digest,action:oneOf(['allow','revoke'] as const)});
@@ -11,6 +12,7 @@ export type ConsentResult={ok:true;value:ConsentState}|{ok:false;reason:string};
 interface Identity {principalId():string|null;generation():number;withAccess<T>(work:(access:string)=>Promise<T>):Promise<T|null>}
 const CHANGED='Your identity changed. Return with the intended account.';
 const PENDING='The permission change is not confirmed. Check its result or retry the same request.';
+const NOT_APPLIED='The earlier request was not applied. Review the current permission before trying again.';
 export class ProviderConsentService {
   private queues=new Map<string,Promise<unknown>>();
   constructor(private readonly options:{identity:Identity;service:SharedService|null;store:ConsentStorage;onChanged?:(workspace:string)=>void}) {}
@@ -24,7 +26,7 @@ export class ProviderConsentService {
       }catch(error){return {ok:false,reason:error instanceof ServiceError?
         error.kind==='denied'?'Ask your current workspace owner to allow OpenAI.':
         error.kind==='version_conflict'?'The workspace permission or processing terms changed. Read them again.':PENDING:
-        error instanceof Error&&[CHANGED,'Provider permissions are unavailable.',PENDING].includes(error.message)?error.message:'Provider permissions could not be read safely.'};}
+        error instanceof Error&&[CHANGED,'Provider permissions are unavailable.',PENDING,NOT_APPLIED].includes(error.message)?error.message:'Provider permissions could not be read safely.'};}
     };
     const next=(this.queues.get(key)??Promise.resolve()).then(action,action);
     this.queues.set(key,next);void next.finally(()=>{if(this.queues.get(key)===next)this.queues.delete(key);});
@@ -37,6 +39,18 @@ export class ProviderConsentService {
   private validateReceipt(command:ProviderConsentCommand,raw:CommandResponse):void {
     const receipt=parseCommandResponse(raw,'');
     if(receipt.operation_id!==command.operation_id||receipt.resource_id!==command.workspace_id||receipt.authorization_epoch===null||receipt.revision!==(BigInt(command.expected_revision)+1n).toString())throw new ServiceError('protocol',true);
+  }
+  private finishReceipt(principal:string,workspace:string,command:ProviderConsentCommand,check:()=>void,raw:ProviderConsentReceipt):void {
+    const receipt=parseProviderConsentReceipt(raw,'');
+    if(receipt.status==='not_applied'){
+      if(receipt.principal_id!==principal||receipt.provider!=='openai-api'||!isDeepStrictEqual(receipt.command,command))throw new ServiceError('protocol',true);
+      check();this.options.store.save(principal,workspace,null);
+      // Only an exact durable terminal receipt permits discarding uncertainty.
+      // This is not an applied permission change and emits no authority hint.
+      throw new Error(NOT_APPLIED);
+    }
+    this.validateReceipt(command,receipt);check();this.options.store.save(principal,workspace,null);
+    this.options.onChanged?.(workspace);
   }
   private async state(principal:string,workspace:string,check:()=>void):Promise<ConsentState> {
     const view=parseProviderConsentView(await this.access(check,a=>this.options.service!.providerConsent!(a,workspace)),'');
@@ -80,11 +94,20 @@ export class ProviderConsentService {
     if(!pending)return this.state(principal,workspace,check);
     const receipt=await this.access(check,a=>this.options.service!.providerConsentReceipt!(a,workspace,pending.operation_id));
     if(receipt){
-      this.validateReceipt(pending,receipt);check();this.options.store.save(principal,workspace,null);this.options.onChanged?.(workspace);
+      this.finishReceipt(principal,workspace,pending,check,receipt);
     }else if(retry){
       // Deliberate user retry only. Never replace the UUID, CAS or command epoch.
-      const response=await this.access(check,a=>this.options.service!.setProviderConsent!(a,pending));
-      this.validateReceipt(pending,response);check();this.options.store.save(principal,workspace,null);this.options.onChanged?.(workspace);
+      try{
+        const response=await this.access(check,a=>this.options.service!.setProviderConsent!(a,pending));
+        this.finishReceipt(principal,workspace,pending,check,response);
+      }catch(error){
+        if(!(error instanceof ServiceError)||!['version_conflict','unsupported_contract'].includes(error.kind))throw error;
+        // A rejection alone is not proof. Read the serialized exact outcome;
+        // absence, denial, malformed data and transport failure retain pending.
+        const terminal=await this.access(check,a=>this.options.service!.providerConsentReceipt!(a,workspace,pending.operation_id));
+        if(!terminal)throw error;
+        this.finishReceipt(principal,workspace,pending,check,terminal);
+      }
     }
     return this.state(principal,workspace,check);
   });}

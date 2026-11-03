@@ -45,7 +45,10 @@ export function useProviderConsent(bridge:ProviderBridge|null,workspaceId:string
       const result=await call;accept(result,token,id,read);
       if(valid(token,id,read)&&(result as {ok?:unknown})?.ok!==true&&bridge?.consent){
         const refreshed=await bridge.consent({workspaceId:id});accept(refreshed,token,id,read);
-        if(valid(token,id,read))setNotice('The permission change was not confirmed. Review the current state and any pending request.');
+        if(valid(token,id,read)&&(refreshed as {ok?:unknown})?.ok===true){
+          const reason=(result as {reason?:unknown}).reason;
+          setNotice(typeof reason==='string'&&reason.length<=1024?reason:'The permission change was not confirmed. Review the current state and any pending request.');
+        }
       }
     }catch{if(valid(token,id,read)){setNotice('The permission change is not confirmed. Check its result before making another change.');
       try{if(bridge?.consent)accept(await bridge.consent({workspaceId:id}),token,id,read);}catch{/* Keep unknown state. */}

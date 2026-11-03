@@ -17,7 +17,7 @@
  * Messages carry no request or response content: values may be credentials.
  */
 import https from 'node:https';
-import {parseProviderConsentView,nullable,type ProviderConsentView,type ProviderConsentCommand} from './wire';
+import {parseProviderConsentView,parseProviderConsentReceipt,nullable,type ProviderConsentView,type ProviderConsentCommand,type ProviderConsentReceipt} from './wire';
 import {parseExportProvenanceReceipt,type ExportProvenanceReceipt} from './wire';
 import {parseWorkspaceAccess,type WorkspaceAccess} from './wire';
 import {parseRouteApprovalView,parseRouteEligibilityCheckResponse,type RouteApprovalView,type RouteEligibilityCheckRequest,type RouteEligibilityCheckResponse} from './wire';
@@ -179,7 +179,7 @@ function json(text: string): unknown {
 export interface SharedService {
   providerConsent?(accessCredential:string,workspaceId:string):Promise<ProviderConsentView>;
   setProviderConsent?(accessCredential:string,request:ProviderConsentCommand):Promise<CommandResponse>;
-  providerConsentReceipt?(accessCredential:string,workspaceId:string,operationId:string):Promise<CommandResponse|null>;
+  providerConsentReceipt?(accessCredential:string,workspaceId:string,operationId:string):Promise<ProviderConsentReceipt|null>;
   createExportReceipt(accessCredential:string,request:{command_epoch:string;operation_id:string;manifest_digest:string;workspace_ids:string[]}):Promise<ExportProvenanceReceipt>;
   validateExportReceipt(accessCredential:string,receiptId:string,digest:string):Promise<ExportProvenanceReceipt>;
   workspaceAccess(accessCredential:string,workspaceId:string,action:'read'|'export'):Promise<WorkspaceAccess>;
@@ -207,7 +207,7 @@ export interface SharedService {
 export class SharedServiceClient implements SharedService {
   providerConsent(accessCredential:string,workspaceId:string):Promise<ProviderConsentView>{return this.call('GET',`/v1/workspaces/${encodeURIComponent(workspaceId)}/provider-consents/openai-api`,parseProviderConsentView,{bearer:accessCredential});}
   setProviderConsent(accessCredential:string,request:ProviderConsentCommand):Promise<CommandResponse>{return this.call('POST',`/v1/workspaces/${encodeURIComponent(request.workspace_id)}/provider-consents/openai-api`,parseCommandResponse,{body:request,bearer:accessCredential});}
-  providerConsentReceipt(accessCredential:string,workspaceId:string,operationId:string):Promise<CommandResponse|null>{return this.call('GET',`/v1/workspaces/${encodeURIComponent(workspaceId)}/provider-consent-receipts/${encodeURIComponent(operationId)}`,nullable(parseCommandResponse),{bearer:accessCredential});}
+  providerConsentReceipt(accessCredential:string,workspaceId:string,operationId:string):Promise<ProviderConsentReceipt|null>{return this.call('GET',`/v1/workspaces/${encodeURIComponent(workspaceId)}/provider-consent-receipts/${encodeURIComponent(operationId)}`,nullable(parseProviderConsentReceipt),{bearer:accessCredential});}
   createExportReceipt(accessCredential:string,request:{command_epoch:string;operation_id:string;manifest_digest:string;workspace_ids:string[]}):Promise<ExportProvenanceReceipt>{return this.call('POST','/v1/local-data/export-receipts',parseExportProvenanceReceipt,{body:request,bearer:accessCredential});}
   validateExportReceipt(accessCredential:string,receiptId:string,digest:string):Promise<ExportProvenanceReceipt>{return this.call('POST',`/v1/local-data/export-receipts/${encodeURIComponent(receiptId)}/validate`,parseExportProvenanceReceipt,{body:{manifest_digest:digest},bearer:accessCredential});}
   workspaceAccess(accessCredential:string,workspaceId:string,action:'read'|'export'):Promise<WorkspaceAccess>{return this.call('POST',`/v1/workspaces/${encodeURIComponent(workspaceId)}/access-checks`,parseWorkspaceAccess,{body:{action},bearer:accessCredential});}

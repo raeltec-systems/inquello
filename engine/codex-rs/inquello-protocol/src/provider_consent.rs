@@ -48,3 +48,37 @@ pub struct ProviderConsentCommand {
     pub expected_contract_digest: String,
     pub action: ProviderConsentAction,
 }
+
+/// Consent-only terminal reconciliation. Applied JSON stays wire-compatible;
+/// a no-effect receipt is not an organization decision or processing authority.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ProviderConsentReceipt {
+    Applied(crate::command::CommandResponse),
+    NotApplied(ProviderConsentNotApplied),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProviderConsentNotAppliedStatus {
+    NotApplied,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProviderConsentRejectionReason {
+    CommandContractChanged,
+    ProcessingTermsChanged,
+    RevisionChanged,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ProviderConsentNotApplied {
+    pub status: ProviderConsentNotAppliedStatus,
+    pub principal_id: Uuid,
+    pub provider: String,
+    pub command: ProviderConsentCommand,
+    pub reason: ProviderConsentRejectionReason,
+    pub receipt_id: Uuid,
+}

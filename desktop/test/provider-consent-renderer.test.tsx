@@ -12,9 +12,10 @@ function setup(){
  const changeConsent=vi.fn<(...args:unknown[])=>Promise<unknown>>(async()=>response({state:'revoked',revision:'2'}));
  let session!:()=>void;
  Object.assign(globalThis,{inquello:{tasks:{onSessionChanged:(fn:()=>void)=>{session=fn;return()=>{};}}}});
- const bridge={consent,changeConsent} as unknown as ProviderBridge;
+ const reconcileConsent=vi.fn<(...args:unknown[])=>Promise<unknown>>(async()=>response());
+ const bridge={consent,changeConsent,reconcileConsent} as unknown as ProviderBridge;
  const hook=renderHook(({id})=>useProviderConsent(bridge,id),{initialProps:{id:workspace}});
- return {...hook,consent,changeConsent,session:()=>session()};
+ return {...hook,consent,changeConsent,reconcileConsent,session:()=>session()};
 }
 afterEach(()=>{cleanup();vi.useRealTimers();delete(globalThis as {inquello?:unknown}).inquello;});
 describe('owner consent renderer observations',()=>{
@@ -27,6 +28,21 @@ describe('owner consent renderer observations',()=>{
   await act(async()=>{old.resolve(response({state:'changed',revision:'0'}));});
   expect(h.result.current.state?.view.state).toBe(state);expect(h.result.current.state?.view.revision).toBe('2');
   expect(h.changeConsent).toHaveBeenCalledTimes(1);
+ });
+ it('terminal no-effect reconciliation preserves its notice and permits only deliberate new changes',async()=>{
+  const h=setup();await waitFor(()=>expect(h.result.current.state).not.toBeNull());
+  const reason='The earlier request was not applied. Review the current permission before trying again.';
+  h.reconcileConsent.mockResolvedValueOnce({ok:false,reason});
+  h.consent.mockResolvedValueOnce(response({state:'not_allowed',revision:'0'}));
+  await act(async()=>{await h.result.current.act('reconcile');});
+  expect(h.result.current.notice).toBe(reason);expect(h.result.current.state?.pending).toBeNull();
+  expect(h.result.current.state?.view.state).toBe('not_allowed');expect(h.result.current.busy).toBe(false);
+  expect(h.changeConsent).not.toHaveBeenCalled();expect(h.reconcileConsent).toHaveBeenCalledTimes(1);
+  h.changeConsent.mockResolvedValueOnce(response({state:'allowed',revision:'1'}));
+  await act(async()=>{await h.result.current.act('allow');});
+  expect(h.result.current.state?.view.state).toBe('allowed');expect(h.result.current.notice).toBeNull();
+  await act(async()=>{await h.result.current.act('revoke');});
+  expect(h.result.current.state?.view.state).toBe('revoked');expect(h.changeConsent).toHaveBeenCalledTimes(2);
  });
  it('newer overlapping poll wins without any mutation',async()=>{
   vi.useFakeTimers();const h=setup();await act(async()=>{await Promise.resolve();});expect(h.result.current.state).not.toBeNull();
