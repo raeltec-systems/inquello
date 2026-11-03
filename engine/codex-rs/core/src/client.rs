@@ -1386,14 +1386,16 @@ impl ModelClient {
         endpoint: &str,
         redirect_policy: ClientRedirectPolicy,
     ) -> Result<ReqwestTransport> {
-        let redirect_policy = if api_provider
-            .headers
-            .contains_key(codex_model_provider::ACCOUNT_ROUTING_HEADER)
-        {
-            ClientRedirectPolicy::Reject
-        } else {
-            redirect_policy
-        };
+        let redirect_policy =
+            if crate::inquello_inference::is_task_thread(&self.state.thread_id.to_string())
+                || api_provider
+                    .headers
+                    .contains_key(codex_model_provider::ACCOUNT_ROUTING_HEADER)
+            {
+                ClientRedirectPolicy::Reject
+            } else {
+                redirect_policy
+            };
         let client = create_client_for_route(
             &self.http_client_factory,
             &api_provider.url_for_path(endpoint),

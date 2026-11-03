@@ -2416,10 +2416,10 @@ fn controlled_paid_body_refuses_unbounded_or_nontext_requests() {
     }
     assert_eq!(serde_json::to_vec(&exact).unwrap().len(), 32768);
     assert!(super::validate_paid_request(&exact).is_ok());
-    if let ResponseItem::Message { content, .. } = &mut exact.input[0] {
-        if let ContentItem::InputText { text } = &mut content[0] {
-            text.push('x');
-        }
+    if let ResponseItem::Message { content, .. } = &mut exact.input[0]
+        && let ContentItem::InputText { text } = &mut content[0]
+    {
+        text.push('x');
     }
     assert_eq!(serde_json::to_vec(&exact).unwrap().len(), 32769);
     assert!(super::validate_paid_request(&exact).is_err());
@@ -2493,7 +2493,7 @@ fn controlled_paid_body_refuses_unbounded_or_nontext_requests() {
     )));
     assert!(super::validate_paid_request(&changed).is_err());
 
-    changed = request.clone();
+    changed = request;
     let short_item: ResponseItem = serde_json::from_value(serde_json::json!({
         "type": "message", "role": "user",
         "content": [{"type": "input_text", "text": "R01"}]
@@ -2610,4 +2610,127 @@ async fn controlled_zero_transport_retries_counts_one_initial_attempt_for_every_
         assert!(result.is_err());
         assert_eq!(sends.load(Ordering::SeqCst), 1, "failure case {case}");
     }
+}
+
+#[tokio::test]
+async fn inquello_private_http_rejects_redirects_without_resending() {
+    use codex_client::HttpTransport;
+    use codex_login::default_client::ClientRedirectPolicy;
+    for status in [301, 302, 303, 307, 308] {
+        for private in [false, true] {
+            let origin = MockServer::start().await;
+            let destination = MockServer::start().await;
+            Mock::given(method("POST"))
+                .respond_with(
+                    ResponseTemplate::new(status)
+                        .insert_header("location", format!("{}/responses", destination.uri())),
+                )
+                .mount(&origin)
+                .await;
+            Mock::given(path("/responses"))
+                .respond_with(ResponseTemplate::new(200))
+                .mount(&destination)
+                .await;
+            let client = test_model_client(SessionSource::Exec);
+            if private {
+                crate::inquello_inference::mark_task_thread(&client.state.thread_id.to_string())
+                    .unwrap();
+            }
+            let mut setup = client
+                .current_client_setup(super::ClientRouting::ConfiguredProvider)
+                .await
+                .unwrap();
+            setup.api_provider.base_url = origin.uri();
+            assert!(
+                !setup
+                    .api_provider
+                    .headers
+                    .contains_key(codex_model_provider::ACCOUNT_ROUTING_HEADER)
+            );
+            let transport = client
+                .build_api_transport(
+                    &setup.api_provider,
+                    "/responses",
+                    ClientRedirectPolicy::Default,
+                )
+                .unwrap();
+            let result = transport
+                .execute(
+                    setup
+                        .api_provider
+                        .build_request(http::Method::POST, "/responses")
+                        .with_json(&json!({"input": "fictional redirect contract"})),
+                )
+                .await;
+            if private {
+                assert!(
+                    matches!(result, Err(TransportError::Http { status: actual, .. })
+                    if actual.as_u16() == status)
+                );
+            } else {
+                assert_eq!(result.unwrap().status, http::StatusCode::OK);
+            }
+            assert_eq!(origin.received_requests().await.unwrap().len(), 1);
+            assert_eq!(
+                destination.received_requests().await.unwrap().len(),
+                usize::from(!private)
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn inquello_private_http_unauthorized_never_refreshes_or_resends() {
+    let origin = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/responses"))
+        .respond_with(ResponseTemplate::new(401).set_body_string("synthetic unauthorized"))
+        .mount(&origin)
+        .await;
+    let attempts = Arc::new(AtomicUsize::new(0));
+    let mut info = create_oss_provider_with_base_url(&origin.uri(), WireApi::Responses);
+    info.request_max_retries = Some(0);
+    info.stream_max_retries = Some(0);
+    let mut client = test_model_client(SessionSource::Exec);
+    Arc::get_mut(&mut client.state).unwrap().provider = Arc::new(TestRecoveryProvider {
+        inner: create_model_provider(info, None),
+        should_fail: false,
+        attempts: Arc::clone(&attempts),
+    });
+    crate::inquello_inference::mark_task_thread(&client.state.thread_id.to_string()).unwrap();
+    assert!(!crate::inquello_inference::is_paid_task_thread(
+        &client.state.thread_id.to_string()
+    ));
+    let metadata = test_responses_metadata_for_client(
+        &client,
+        None,
+        format!("{}:0", client.state.thread_id),
+        None,
+        TestCodexResponsesRequestKind::Turn,
+    );
+    let result = super::ResponsesHttpExecutor::new(&client)
+        .stream_responses_http(
+            &Arc::new(std::sync::OnceLock::new()),
+            None,
+            None,
+            &Prompt::default(),
+            &test_model_info(),
+            &test_session_telemetry(),
+            None,
+            codex_protocol::config_types::ReasoningSummary::None,
+            None,
+            &metadata,
+            &InferenceTraceContext::disabled(),
+        )
+        .await;
+    match result {
+        Err(error) => assert!(matches!(
+            error.details(),
+            CodexErrorDetails::Fatal(message)
+                if message == "Private Task credential changed; automatic retry is disabled"
+        )),
+        Ok(_) => panic!("private unauthorized response must be terminal"),
+    }
+    assert_eq!(origin.received_requests().await.unwrap().len(), 1);
+    assert_eq!(attempts.load(Ordering::Relaxed), 0);
 }

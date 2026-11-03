@@ -68,7 +68,10 @@ fn valid_approval(a: &OrganizationRouteApproval, now: i64) -> bool {
         && RouteId::parse(&a.route_id).is_some()
         && sha256_digest(&a.evidence_digest)
         && sha256_digest(&a.data_policy_digest)
-        && bounded(&a.processing_scope, 256)
+        && bounded(
+            &a.processing_scope,
+            inquello_domain::routes::MAX_PROCESSING_SCOPE_BYTES,
+        )
         && bounded(&a.issuer, 512)
         && bounded(&a.operator_reference, 512)
         && !a.revoked
@@ -320,7 +323,10 @@ async fn check_with_evidence(
         || binding.session_revision != session_revision as u64
         || binding.authorization_epoch != authority.workspace.authorization_epoch as u64
         || binding.policy_revision != authority.workspace.policy_revision as u64
-        || !bounded(&binding.processing_scope, 256)
+        || !bounded(
+            &binding.processing_scope,
+            inquello_domain::routes::MAX_PROCESSING_SCOPE_BYTES,
+        )
         || !sha256_digest(&binding.data_policy_digest)
         || evidence(&request.identity, &request.report_digest).is_none_or(|proof| {
             proof.processing_scope != binding.processing_scope
@@ -385,6 +391,32 @@ mod tests {
             policy_revision: 1,
             revoked: false,
         }
+    }
+    #[test]
+    fn compiled_real_route_scopes_pass_actual_approval_validation() {
+        use inquello_domain::capability::{CapabilityRegister, Enablement};
+        let register = CapabilityRegister::load_embedded().unwrap();
+        for route in RouteId::ALL {
+            let Some(entry) = register.entry(route.capability_id()) else {
+                continue;
+            };
+            if entry.ceiling != Enablement::RealDataEligible {
+                continue;
+            }
+            let mut a = approval();
+            a.route_id = route.as_str().into();
+            a.processing_scope = entry.processing_scope.clone();
+            assert!(
+                valid_approval(&a, 11),
+                "{} compiled scope must be approvable",
+                entry.id
+            );
+        }
+        let mut a = approval();
+        a.processing_scope = "é".repeat(128);
+        assert!(valid_approval(&a, 11), "256 UTF-8 bytes are accepted");
+        a.processing_scope.push('x');
+        assert!(!valid_approval(&a, 11), "257 UTF-8 bytes are refused");
     }
     #[test]
     fn validity_is_half_open_and_revocation_is_not_a_ttl() {

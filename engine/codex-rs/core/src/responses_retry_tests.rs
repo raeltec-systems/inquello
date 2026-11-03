@@ -98,3 +98,66 @@ async fn stream_retry_preserves_deadline_across_delayed_notification() {
         "retry resumed at {resumed_at:?}, expected {advice:?}"
     );
 }
+
+#[tokio::test]
+async fn inquello_private_errors_never_enter_unbounded_retry_or_transport_fallback() {
+    use crate::session::tests::make_session_and_context_with_auth_and_config_and_rx;
+    use codex_features::Feature;
+    use codex_protocol::error::ConnectionFailedError;
+    let (session, turn, _events) = make_session_and_context_with_auth_and_config_and_rx(
+        codex_login::CodexAuth::from_api_key("synthetic-test-key"),
+        Vec::new(),
+        |config| {
+            config
+                .features
+                .enable(Feature::UnboundedConnectionRetries)
+                .unwrap_or_else(|error| panic!("retry feature fixture must be valid: {error}"));
+            config.model_provider.supports_websockets = true;
+        },
+    )
+    .await;
+    assert!(
+        turn.config
+            .features
+            .enabled(Feature::UnboundedConnectionRetries)
+    );
+    assert!(session.services.model_client.responses_websocket_enabled());
+    crate::inquello_inference::mark_task_thread(&session.thread_id.to_string()).unwrap();
+    assert!(!crate::inquello_inference::is_paid_task_thread(
+        &session.thread_id.to_string()
+    ));
+    let step = StepContext::for_test(turn);
+    let mut client = session.services.model_client.new_session();
+    for error in [
+        CodexErr::ConnectionFailed(ConnectionFailedError {
+            source: codex_http_client::HttpError::Timeout,
+        }),
+        CodexErr::Stream("synthetic interrupted stream".into()),
+        CodexErr::InternalServerError,
+        CodexErr::TurnAborted,
+    ] {
+        let expected = error.to_string();
+        let mut state = ResponsesStreamRetryState::default();
+        let result = tokio::time::timeout(
+            Duration::from_millis(100),
+            handle_response_stream_error(
+                &mut state,
+                0,
+                error,
+                &mut client,
+                &session,
+                &step,
+                ResponsesStreamRequest::Sampling,
+            ),
+        )
+        .await
+        .expect("private error must not sleep or wait for a retry");
+        assert_eq!(result.unwrap_err().to_string(), expected);
+        assert_eq!(state.retries, 0);
+        assert_eq!(state.connection_retries, 0);
+        assert!(
+            session.services.model_client.responses_websocket_enabled(),
+            "zero-budget fallback must not mutate the selected transport"
+        );
+    }
+}

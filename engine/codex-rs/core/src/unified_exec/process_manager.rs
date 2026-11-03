@@ -560,17 +560,17 @@ impl UnifiedExecProcessManager {
         } = attempt;
         let process = Arc::new(process);
         #[cfg(test)]
-        if completion.is_some() {
-            if let Some(barrier) = context
+        if completion.is_some()
+            && let Some(barrier) = context
                 .step_context
                 .turn
                 .extension_data
                 .get::<super::oneshot::publication_test_support::PublicationBarrier>(
-            ) {
-                barrier
-                    .after_spawn_before_publication(Arc::clone(&process))
-                    .await;
-            }
+            )
+        {
+            barrier
+                .after_spawn_before_publication(Arc::clone(&process))
+                .await;
         }
         if let Some(completion) = completion.as_ref() {
             let _ = completion.process.set(Arc::clone(&process));

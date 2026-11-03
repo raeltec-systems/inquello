@@ -64,7 +64,9 @@ pub(crate) async fn handle_response_stream_error(
     request: ResponsesStreamRequest,
 ) -> Result<(), CodexErr> {
     let turn_context = &step_context.turn;
-    if crate::inquello_inference::is_paid_task_thread(&sess.thread_id.to_string()) {
+    // Every private Task requires a new explicit attributable operation after an
+    // error. Neither upstream unbounded retries nor transport fallback may resend.
+    if crate::inquello_inference::is_task_thread(&sess.thread_id.to_string()) {
         return Err(err);
     }
     // Messages recovery is explicit: a new attributable attempt follows effects

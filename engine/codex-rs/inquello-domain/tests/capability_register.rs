@@ -299,6 +299,32 @@ fn expected_embedded_terra_enablement(register: &CapabilityRegister) -> Enableme
 }
 
 #[test]
+fn real_route_scopes_fit_the_service_approval_contract_before_qualification() {
+    use inquello_domain::routes::{MAX_PROCESSING_SCOPE_BYTES, RouteId};
+    let register = CapabilityRegister::load_embedded().unwrap();
+    for route in RouteId::ALL {
+        let Some(entry) = register.entry(route.capability_id()) else {
+            continue;
+        };
+        if entry.ceiling == Enablement::RealDataEligible {
+            let scope = &entry.processing_scope;
+            assert!(
+                !scope.trim().is_empty(),
+                "real route scope must be explicit"
+            );
+            assert!(!scope.chars().any(char::is_control));
+            assert!(
+                scope.len() <= MAX_PROCESSING_SCOPE_BYTES,
+                "{} scope is {} UTF-8 bytes, exceeding the service approval bound {}",
+                entry.id,
+                scope.len(),
+                MAX_PROCESSING_SCOPE_BYTES
+            );
+        }
+    }
+}
+
+#[test]
 fn embedded_register_allows_only_the_reviewed_terra_qualification_transition() {
     let register = CapabilityRegister::load_embedded().unwrap();
     let enabled: Vec<(&str, Enablement)> = register

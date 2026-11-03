@@ -8,6 +8,8 @@ use std::collections::BTreeMap;
 
 pub const AUTHORIZATION_SUITE: &str = "inquello-current-route-negative-authorization-v4";
 pub const ROUTE_EVIDENCE_SCHEMA_VERSION: u32 = 2;
+/// UTF-8 byte bound shared by compiled real-route scopes and service approvals.
+pub const MAX_PROCESSING_SCOPE_BYTES: usize = 256;
 pub const REQUIRED_AUTHORIZATION_SCENARIOS: &[&str] = &[
     "real-session-production-admission",
     "real-session-withdrawal",
