@@ -1,10 +1,22 @@
-//! Versioned behavior fingerprint. Evidence metadata is the sole source-content
-//! exclusion; generated build/cache directories are outputs, not build inputs.
+//! Versioned behavior fingerprint. Report metadata and the exact schema stamp's
+//! validated generation-tree provenance are normalized; all behavior stays measured.
+//! Full source-tree and artifact provenance is checked independently by the launcher.
 use sha2::{Digest, Sha256};
 use std::{
     env, fs,
     path::{Path, PathBuf},
 };
+pub(crate) const BEHAVIOR_FINGERPRINT_DOMAIN: &[u8] = b"inquello-behavior-fingerprint-v2\0";
+
+fn lowercase_hex(value: Option<&str>, length: usize) -> bool {
+    value.is_some_and(|value| {
+        value.len() == length
+            && value
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    })
+}
+
 pub(crate) fn collect(root: &Path, path: &Path, files: &mut Vec<PathBuf>) {
     if path.is_dir() {
         println!("cargo:rerun-if-changed={}", path.display());
@@ -62,6 +74,47 @@ pub(crate) fn hash_input(hash: &mut Sha256, relative: &str, bytes: &[u8]) {
         bytes = serde_json::to_vec(&register)
             .unwrap_or_else(|error| panic!("normalized capability register: {error}"));
     }
+    if relative == "desktop/src/protocol/schema-stamp.json" {
+        let mut stamp: serde_json::Value = serde_json::from_slice(&bytes)
+            .unwrap_or_else(|error| panic!("protocol schema stamp JSON: {error}"));
+        let fields = stamp
+            .as_object_mut()
+            .unwrap_or_else(|| panic!("protocol schema stamp must be an object"));
+        assert!(
+            ["runtimeVersion", "generator"].iter().all(|key| fields
+                .get(*key)
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|value| !value.is_empty()))
+                && fields
+                    .get("experimentalApi")
+                    .and_then(serde_json::Value::as_bool)
+                    .is_some()
+                && fields
+                    .get("fileCount")
+                    .and_then(serde_json::Value::as_u64)
+                    .is_some()
+                && lowercase_hex(
+                    fields
+                        .get("contentSha256")
+                        .and_then(serde_json::Value::as_str),
+                    64
+                )
+                && lowercase_hex(
+                    fields
+                        .get("forkTreeHash")
+                        .and_then(serde_json::Value::as_str),
+                    40
+                ),
+            "protocol schema stamp fields are malformed"
+        );
+        // A genuine regeneration after an evidence-only commit changes this Git
+        // tree, not protocol behavior. The generator/launcher still require the
+        // actual clean HEAD tree. Keep every other field, including unknown ones,
+        // and all generated protocol files in the behavioral measurement.
+        fields.remove("forkTreeHash");
+        bytes = serde_json::to_vec(&stamp)
+            .unwrap_or_else(|error| panic!("normalized protocol schema stamp: {error}"));
+    }
     hash.update((relative.len() as u64).to_be_bytes());
     hash.update(relative.as_bytes());
     hash.update((bytes.len() as u64).to_be_bytes());
@@ -80,7 +133,7 @@ fn main() {
     collect(&root, &root.join("desktop"), &mut files);
     files.sort();
     let mut hash = Sha256::new();
-    hash.update(b"inquello-behavior-fingerprint-v1\0");
+    hash.update(BEHAVIOR_FINGERPRINT_DOMAIN);
     for file in files {
         let relative = file
             .strip_prefix(&root)
