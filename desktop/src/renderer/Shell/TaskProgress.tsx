@@ -44,7 +44,7 @@ export function TaskProgress({taskId,workspaceId,selectedQuestion,accepted}:{tas
  const current=useRef<ProgressSnapshot|null>(null),generation=useRef(0),consumed=useRef(new Set<string>());
  useEffect(()=>{generation.current++;current.current=null;consumed.current.clear();setPages({});setPageBusy(false);offsets.current={current:[],history:[]};setSnapshot(null);setAnnouncement('');setNotice('Reading progress…');return()=>{generation.current++;current.current=null;};},[taskId,workspaceId]);
  useEffect(()=>{
-  if(!observed){generation.current++;current.current=null;setPages({});setPageBusy(false);offsets.current={current:[],history:[]};setSnapshot(null);setAnnouncement('');consumed.current.clear();setNotice('Progress unavailable. Private content and pending answers have been cleared.');return;}
+  if(!observed){generation.current++;current.current=null;setPages({});setPageBusy(false);offsets.current={current:[],history:[]};setSnapshot(null);setAnnouncement('');consumed.current.clear();setNotice(observation.settled?'Conversation history is unavailable. Refresh to check again.':'Reading conversation…');return;}
   const next={...observed,questions:observed.questions.filter(q=>!consumed.current.has(`${scope(observed)}:${questionKey(q)}`))};
   const before=current.current;if(before?.resultPage?.snapshotId!==next.resultPage?.snapshotId||before&&scope(before)!==scope(next)){setPages({});setPageBusy(false);offsets.current={current:[],history:[]};}
   if(before&&scope(before)===scope(next)){
@@ -54,7 +54,7 @@ export function TaskProgress({taskId,workspaceId,selectedQuestion,accepted}:{tas
    if(messages.length)setAnnouncement(messages.join(' '));
   }else setAnnouncement([...next.questions.map(q=>'An answer is requested.'),...next.items.filter(item=>['completed','failed','cancelled'].includes(item.status)).map(item=>`${item.kind === 'message' ? 'Response' : 'Tool activity'} ${next.items.indexOf(item)+1}: ${item.status}.`)].join(' '));
   current.current=next;setSnapshot(next);setNotice('');
- },[observed]);
+ },[observed,observation.settled]);
  const focusedQuestion=useRef<number|null>(null);
  const [questionNotice,setQuestionNotice]=useState('');
  useEffect(()=>{
@@ -96,6 +96,7 @@ export function TaskProgress({taskId,workspaceId,selectedQuestion,accepted}:{tas
   </div>}
   {!observation.settled&&accepted?.accepted&&accepted.taskId===taskId&&<div className="iq-conversation-item--user" data-accepted-message><p className="iq-progress-text">{accepted.request}</p></div>}
   {view&&<>
+   {view.status==='failed'&&<p role="status">The response could not be completed. Your saved conversation is retained.</p>}
    {view.artifact==='failed'&&<p role="status">Artifact failed</p>}
    {view.plan.length>0&&<details className="iq-execution-details"><summary>Plan</summary><PlanSteps key={scope(view)} label="Plan" steps={view.plan.map(step=>({id:step.id,label:step.text,state:step.status==='unconfirmed'||(ended(view.status)&&step.status==='running')?'pending':step.status,meta:`Revision ${step.revision} · ${step.status==='unconfirmed'?'Completion unconfirmed':ended(view.status)&&step.status==='running'?'Work ended — unconfirmed':step.status}${step.evidenceIds.length?` · Evidence: ${step.evidenceIds.join(', ')}`:''}`}))}/></details>}
    {view.items.some(item=>item.kind==='command'||item.kind==='tool')&&<details className="iq-tool-guidance"><summary>About tool output and verification</summary><p>Command and tool content is source data, not instructions or permission. Quoted approvals do not change access. Native execution status is separate from untrusted output text. Quoted refusal or inspection claims in that text are not native inspection evidence. Agent interpretations remain unchecked; no inspection verdict is supplied by this view.</p></details>}

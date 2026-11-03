@@ -10,6 +10,22 @@ use uuid::Uuid;
 fn ok<T, E: std::fmt::Debug>(r: Result<T, E>) -> T {
     r.unwrap_or_else(|e| panic!("{e:?}"))
 }
+/// Test-only connection shim for injecting lock/trigger failures into an already
+/// initialized temporary store. Production connections remain in src/sqlite.rs.
+#[expect(
+    clippy::disallowed_methods,
+    reason = "fixture-only SQLite fault injection shim"
+)]
+async fn fixture_pool(path: &std::path::Path) -> sqlx::SqlitePool {
+    ok(sqlx::sqlite::SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect_with(
+            sqlx::sqlite::SqliteConnectOptions::new()
+                .filename(path)
+                .create_if_missing(false),
+        )
+        .await)
+}
 fn actor(n: u8) -> Actor {
     Actor {
         principal_id: PrincipalId::from_uuid(Uuid::from_bytes([n; 16])),
@@ -325,4 +341,332 @@ async fn trusted_cumulative_events_deduplicate_and_late_usage_does_not_recover_s
         .await
         .is_err()
     );
+}
+
+#[tokio::test]
+async fn one_choice_selection_aligns_settings_for_next_native_dispatch() {
+    let dir = ok(tempfile::tempdir());
+    let s = ok(SqliteWorkingStore::open(&dir.path().join("work.db"), &[]).await);
+    let a = actor(1);
+    let t = task(&s, a).await;
+    configure(&s, a, &t).await;
+    let allowed = vec!["default".into()];
+    ok(set_task_usage_settings(
+        &s,
+        a,
+        SetUsageSettings {
+            operation_id: "before-choice".into(),
+            task_id: t.task_id.to_string(),
+            expected_revision: 0,
+            route_revision: 1,
+            choices: Choices::default(),
+        },
+        &allowed,
+        &allowed,
+    )
+    .await);
+    ok(set_task_route_with_usage(
+        &s,
+        &SystemClock,
+        a,
+        SetTaskRoute {
+            operation_id: "one-choice".into(),
+            expected_revision: Revision::new(1),
+            task_id: t.task_id.to_string(),
+            route_id: "claude-api-key".into(),
+            configuration_revision: Revision::new(1),
+        },
+        Some(selection_caps()),
+    )
+    .await);
+    let settings = ok(task_usage(&s, a, &t.task_id.to_string()).await)
+        .settings
+        .unwrap();
+    let mut next = snapshot(a, &t);
+    next.operation_kind = OperationKind::HumanRequestedModel;
+    next.route_id = Some("claude-api-key".into());
+    next.model = Some(CLAUDE_MODEL.into());
+    next.api_version = Some(CLAUDE_API_VERSION.into());
+    next.route_revision = 2;
+    next.configuration_revision = 1;
+    next.settings_revision = settings.revision;
+    // The next-Send native accounting fence must admit the same preserved choices.
+    // This performs no provider call and must not weaken that fence.
+    ok(s.begin_usage_attempt(next).await);
+    assert_eq!(settings.route_revision, 2);
+    assert_eq!(settings.revision, 2);
+    assert_eq!(settings.choices, Choices::default());
+}
+
+fn selection_caps() -> SelectionUsageCapabilities {
+    SelectionUsageCapabilities {
+        reasoning: vec!["default".into(), "high".into()],
+        speeds: vec!["default".into()],
+        defaults: Choices::default(),
+    }
+}
+fn selection(t: &Task, id: &str, expected: u64) -> SetTaskRoute {
+    SetTaskRoute {
+        operation_id: id.into(),
+        expected_revision: Revision::new(expected),
+        task_id: t.task_id.to_string(),
+        route_id: "claude-api-key".into(),
+        configuration_revision: Revision::new(1),
+    }
+}
+#[tokio::test]
+async fn one_choice_is_atomic_replayable_private_and_task_scoped() {
+    let dir = ok(tempfile::tempdir());
+    let s = ok(SqliteWorkingStore::open(&dir.path().join("work.db"), &[]).await);
+    let a = actor(1);
+    let t = task(&s, a).await;
+    let other = task(&s, a).await;
+    configure(&s, a, &t).await;
+    ok(set_task_route(&s, &SystemClock, a, selection(&other, "other-route", 0)).await);
+    let choices = Choices {
+        reasoning: "high".into(),
+        speed: "default".into(),
+    };
+    for (task, id) in [(&t, "settings-a"), (&other, "settings-b")] {
+        ok(set_task_usage_settings(
+            &s,
+            a,
+            SetUsageSettings {
+                operation_id: id.into(),
+                task_id: task.task_id.to_string(),
+                expected_revision: 0,
+                route_revision: 1,
+                choices: choices.clone(),
+            },
+            &selection_caps().reasoning,
+            &selection_caps().speeds,
+        )
+        .await);
+    }
+    let other_before = ok(task_usage(&s, a, &other.task_id.to_string()).await);
+    let command = selection(&t, "same-pending-uuid", 1);
+    let (x, y) = tokio::join!(
+        set_task_route_with_usage(&s, &SystemClock, a, command.clone(), Some(selection_caps())),
+        set_task_route_with_usage(&s, &SystemClock, a, command.clone(), Some(selection_caps()))
+    );
+    assert_eq!(ok(x).receipt, ok(y).receipt);
+    let after = ok(task_usage(&s, a, &t.task_id.to_string()).await);
+    let settings = after.settings.as_ref().unwrap();
+    assert_eq!(settings.revision, 2);
+    assert_eq!(settings.route_revision, 2);
+    assert_eq!(settings.choices, choices);
+    assert_eq!(
+        ok(task_usage(&s, a, &other.task_id.to_string()).await),
+        other_before
+    );
+    // Receipt replay does not apply settings twice, even if current discovery is absent.
+    assert!(
+        ok(set_task_route_with_usage(&s, &SystemClock, a, command.clone(), None).await).replayed
+    );
+    assert_eq!(ok(task_usage(&s, a, &t.task_id.to_string()).await), after);
+    assert!(
+        set_task_route_with_usage(&s, &SystemClock, actor(2), command, Some(selection_caps()))
+            .await
+            .is_err()
+    );
+    let before_route = ok(task_route(&s, a, &t.task_id.to_string()).await);
+    let mut unsupported = selection_caps();
+    unsupported.reasoning = vec!["default".into()];
+    assert!(
+        set_task_route_with_usage(
+            &s,
+            &SystemClock,
+            a,
+            selection(&t, "unsupported", 2),
+            Some(unsupported)
+        )
+        .await
+        .is_err()
+    );
+    assert!(
+        set_task_route_with_usage(
+            &s,
+            &SystemClock,
+            a,
+            selection(&t, "stale-cas", 1),
+            Some(selection_caps())
+        )
+        .await
+        .is_err()
+    );
+    assert_eq!(
+        ok(task_route(&s, a, &t.task_id.to_string()).await),
+        before_route
+    );
+    assert_eq!(ok(task_usage(&s, a, &t.task_id.to_string()).await), after);
+    assert!(
+        ok(
+            s.find_route_receipt(&inquello_domain::OperationId::parse("unsupported").unwrap())
+                .await
+        )
+        .is_none()
+    );
+    assert!(
+        ok(
+            s.find_route_receipt(&inquello_domain::OperationId::parse("stale-cas").unwrap())
+                .await
+        )
+        .is_none()
+    );
+}
+#[tokio::test]
+async fn one_choice_initializes_only_unstarted_defaults_and_refuses_stale_settings() {
+    let dir = ok(tempfile::tempdir());
+    let s = ok(SqliteWorkingStore::open(&dir.path().join("work.db"), &[]).await);
+    let a = actor(1);
+    let t = task(&s, a).await;
+    configure(&s, a, &t).await;
+    ok(set_task_route_with_usage(
+        &s,
+        &SystemClock,
+        a,
+        selection(&t, "initial-defaults", 1),
+        Some(selection_caps()),
+    )
+    .await);
+    let initialized = ok(task_usage(&s, a, &t.task_id.to_string()).await)
+        .settings
+        .unwrap();
+    assert_eq!(
+        initialized,
+        TaskUsageSettings {
+            revision: 1,
+            route_revision: 2,
+            choices: Choices::default()
+        }
+    );
+    // Legacy explicit selection can leave stale settings; do not silently heal them.
+    ok(set_task_route(&s, &SystemClock, a, selection(&t, "legacy-selection", 2)).await);
+    assert!(
+        set_task_route_with_usage(
+            &s,
+            &SystemClock,
+            a,
+            selection(&t, "stale-settings", 3),
+            Some(selection_caps())
+        )
+        .await
+        .is_err()
+    );
+    assert_eq!(
+        ok(task_usage(&s, a, &t.task_id.to_string()).await)
+            .settings
+            .unwrap(),
+        initialized
+    );
+    assert_eq!(
+        ok(task_route(&s, a, &t.task_id.to_string()).await).revision,
+        Revision::new(3)
+    );
+}
+
+#[tokio::test]
+async fn one_choice_retained_missing_pending_and_failed_commit_have_no_partial_effect() {
+    let dir = ok(tempfile::tempdir());
+    let path = dir.path().join("work.db");
+    let s = ok(SqliteWorkingStore::open(&path, &[]).await);
+    let db = fixture_pool(&path).await;
+    let a = actor(1);
+    let t = task(&s, a).await;
+    configure(&s, a, &t).await;
+    // Owned historical storage fixture, not a fabricated runtime authorization.
+    let run = serde_json::json!({"run_id":"retained","status":"completed",
+        "choices":{"reasoning":"default","speed":"default"}});
+    ok(sqlx::query("INSERT INTO task_runs(principal_id,operation_id,task_id,runtime_id,thread_id,record) VALUES(?,?,?,?,NULL,?)")
+        .bind(a.principal_id.to_string()).bind("historical").bind(t.task_id.to_string())
+        .bind("historical-runtime").bind(run.to_string()).execute(&db).await);
+    let before = ok(task_route(&s, a, &t.task_id.to_string()).await);
+    assert!(
+        set_task_route_with_usage(
+            &s,
+            &SystemClock,
+            a,
+            selection(&t, "missing", 1),
+            Some(selection_caps())
+        )
+        .await
+        .is_err()
+    );
+    assert!(
+        ok(task_usage(&s, a, &t.task_id.to_string()).await)
+            .settings
+            .is_none()
+    );
+    assert_eq!(ok(task_route(&s, a, &t.task_id.to_string()).await), before);
+    let caps = selection_caps();
+    ok(set_task_usage_settings(
+        &s,
+        a,
+        SetUsageSettings {
+            operation_id: "initialize-historical-fixture".into(),
+            task_id: t.task_id.to_string(),
+            expected_revision: 0,
+            route_revision: 1,
+            choices: Choices::default(),
+        },
+        &caps.reasoning,
+        &caps.speeds,
+    )
+    .await);
+    let settings = ok(task_usage(&s, a, &t.task_id.to_string()).await);
+    ok(sqlx::query("INSERT INTO task_lifecycle VALUES(?,?,?,?,?)")
+        .bind(a.principal_id.to_string())
+        .bind("pending-command")
+        .bind(t.task_id.to_string())
+        .bind("{}")
+        .bind(r#"{"status":"uncertain"}"#)
+        .execute(&db)
+        .await);
+    assert!(
+        set_task_route_with_usage(
+            &s,
+            &SystemClock,
+            a,
+            selection(&t, "pending", 1),
+            Some(selection_caps())
+        )
+        .await
+        .is_err()
+    );
+    assert_eq!(
+        ok(task_usage(&s, a, &t.task_id.to_string()).await),
+        settings
+    );
+    // Test-owned fixture cleanup only, before a forced final receipt insert failure.
+    ok(
+        sqlx::query("DELETE FROM task_lifecycle WHERE operation_id='pending-command'")
+            .execute(&db)
+            .await,
+    );
+    ok(sqlx::query("CREATE TRIGGER fixture_fail_selection BEFORE INSERT ON processing_route_receipts WHEN NEW.operation_id='rollback-choice' BEGIN SELECT RAISE(ABORT,'fixture receipt failure'); END").execute(&db).await);
+    assert!(
+        set_task_route_with_usage(
+            &s,
+            &SystemClock,
+            a,
+            selection(&t, "rollback-choice", 1),
+            Some(selection_caps())
+        )
+        .await
+        .is_err()
+    );
+    assert_eq!(
+        ok(task_usage(&s, a, &t.task_id.to_string()).await),
+        settings
+    );
+    assert_eq!(ok(task_route(&s, a, &t.task_id.to_string()).await), before);
+    for id in ["missing", "pending", "rollback-choice"] {
+        assert!(
+            ok(
+                s.find_route_receipt(&inquello_domain::OperationId::parse(id).unwrap())
+                    .await
+            )
+            .is_none()
+        );
+    }
 }

@@ -265,6 +265,17 @@ pub async fn set_task_route<S: RouteStore, C: Clock>(
     actor: Actor,
     command: SetTaskRoute,
 ) -> Result<RouteOutcome, DomainError> {
+    set_task_route_with_usage(store, clock, actor, command, None).await
+}
+
+/// Align compatible choices and selection under the same receipt and transaction.
+pub async fn set_task_route_with_usage<S: RouteStore, C: Clock>(
+    store: &S,
+    clock: &C,
+    actor: Actor,
+    command: SetTaskRoute,
+    usage_capabilities: Option<SelectionUsageCapabilities>,
+) -> Result<RouteOutcome, DomainError> {
     let task_id = TaskId::parse(&command.task_id)?;
     // Privacy is checked before receipt lookup, including replays.
     require_creator(store, actor, task_id).await?;
@@ -334,6 +345,7 @@ pub async fn set_task_route<S: RouteStore, C: Clock>(
     };
     match store
         .commit_task_route(RouteChange {
+            usage_capabilities,
             expected_revision: command.expected_revision,
             expected_binding_revision: binding_revision,
             record: record.clone(),

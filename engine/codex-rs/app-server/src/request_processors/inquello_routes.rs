@@ -424,8 +424,65 @@ impl InquelloRequestProcessor {
             .await
             .map_err(|e| domain_error(DomainError::Store(e)))?
             .ok_or_else(|| refusal("not_found", "Saved model binding is unavailable"))?;
+        // A committed exact receipt remains replayable without catalog availability.
+        let operation =
+            inquello_domain::OperationId::parse(&params.operation_id).map_err(domain_error)?;
+        let replay = store
+            .find_route_receipt(&operation)
+            .await
+            .map_err(|e| domain_error(DomainError::Store(e)))?
+            .is_some();
+        let credential = self
+            .routes
+            .state
+            .lock()
+            .await
+            .credentials
+            .get(&(
+                actor.principal_id,
+                binding.candidate.configuration.route_id(),
+            ))
+            .cloned();
+        let caps = if replay {
+            None
+        } else {
+            let mut target = routes::task_route(&store, actor, &params.task_id)
+                .await
+                .map_err(domain_error)?;
+            target.stale_configuration = false;
+            target.current = Some(routes::TaskRouteRecord {
+                task_id: target.task_id,
+                configuration_revision: binding.candidate.revision,
+                configuration: binding.candidate.configuration.clone(),
+                principal_id: actor.principal_id,
+                recorded_at: binding.candidate.recorded_at,
+                revision: target.revision,
+            });
+            let caps = self.usage_capabilities(&target).await?;
+            let usage = inquello_domain::usage::task_usage(&store, actor, &params.task_id)
+                .await
+                .map_err(domain_error)?;
+            if usage.settings.as_ref().is_some_and(|s| {
+                !caps.reasoning.contains(&s.choices.reasoning)
+                    || !caps.speeds.contains(&s.choices.speed)
+            }) {
+                return Err(refusal(
+                    "settings_unsupported",
+                    "This model does not support the conversation's current choices. Your current model was kept.",
+                ));
+            }
+            Some(ModelSelectionUsage {
+                principal: actor.principal_id,
+                credential,
+                capabilities: routes::SelectionUsageCapabilities {
+                    reasoning: caps.reasoning,
+                    speeds: caps.speeds,
+                    defaults: caps.defaults,
+                },
+            })
+        };
         let response = self
-            .task_route_set(
+            .task_route_set_with_usage(
                 connection,
                 InquelloTaskRouteSetParams {
                     operation_id: params.operation_id,
@@ -434,6 +491,7 @@ impl InquelloRequestProcessor {
                     route_id: binding.candidate.configuration.route_id().as_str().into(),
                     configuration_revision: binding.candidate.revision.get(),
                 },
+                caps,
             )
             .await?;
         match response {
@@ -576,14 +634,24 @@ impl InquelloRequestProcessor {
         ))
     }
 
-    #[expect(
-        clippy::await_holding_invalid_type,
-        reason = "Serialize the trusted cached state and local SQLite read/commit with invalidation; these guarded operations perform no provider or service network I/O."
-    )]
     pub(crate) async fn task_route_set(
         &self,
         connection: ConnectionId,
         params: InquelloTaskRouteSetParams,
+    ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        self.task_route_set_with_usage(connection, params, None)
+            .await
+    }
+
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "Serialize the trusted cached state and local SQLite read/commit with invalidation; these guarded operations perform no provider or service network I/O."
+    )]
+    async fn task_route_set_with_usage(
+        &self,
+        connection: ConnectionId,
+        params: InquelloTaskRouteSetParams,
+        caps: Option<ModelSelectionUsage>,
     ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
         let mut state = self.routes.state.lock().await;
         let (store, actor) = self.context(connection).await?;
@@ -604,7 +672,19 @@ impl InquelloRequestProcessor {
                 "Finish pending permission review before changing this conversation model",
             ));
         }
-        let outcome = routes::set_task_route(
+        if let Some(alignment) = &caps {
+            let id = RouteId::parse(&params.route_id)
+                .ok_or_else(|| refusal("invalid", "Unknown model provider"))?;
+            if alignment.principal != actor.principal_id
+                || state.credentials.get(&(actor.principal_id, id)).cloned() != alignment.credential
+            {
+                return Err(refusal(
+                    "stale",
+                    "Model availability changed. Your current model was kept.",
+                ));
+            }
+        }
+        let outcome = routes::set_task_route_with_usage(
             &store,
             &SystemClock,
             actor,
@@ -615,6 +695,7 @@ impl InquelloRequestProcessor {
                 route_id: params.route_id,
                 configuration_revision: Revision::new(params.configuration_revision),
             },
+            caps.map(|alignment| alignment.capabilities),
         )
         .await
         .map_err(domain_error)?;
@@ -842,6 +923,12 @@ fn task_view(
     }
 }
 
+struct ModelSelectionUsage {
+    principal: PrincipalId,
+    credential: Option<(String, u64)>,
+    capabilities: routes::SelectionUsageCapabilities,
+}
+
 #[cfg(test)]
 mod model_binding_tests {
     use super::*;
@@ -1014,6 +1101,12 @@ mod model_binding_tests {
     #[tokio::test]
     async fn inquello_model_select_and_route_set_keep_exact_response_variants() {
         let (_dir, processor, actor) = setup().await;
+        processor
+            .routes
+            .state
+            .lock()
+            .await
+            .enable_synthetic_catalog_for_test();
         configure(&processor, 0, "gpt-6.1-terra").await;
         let task_id = create_bound_task(&processor, actor, 1).await;
         let (store, _) = processor.context(CONNECTION).await.unwrap();
@@ -1086,6 +1179,164 @@ mod model_binding_tests {
         assert_eq!(
             selected.receipt.as_ref().unwrap().operation_id,
             "variant-model-select"
+        );
+    }
+
+    #[tokio::test]
+    async fn inquello_one_choice_aligns_native_dispatch_and_replays_without_catalog() {
+        use inquello_domain::usage::{self, UsageStore};
+        let (_dir, processor, actor) = setup().await;
+        processor
+            .routes
+            .state
+            .lock()
+            .await
+            .enable_synthetic_catalog_for_test();
+        configure(&processor, 0, "gpt-6.1-terra").await;
+        let task_id = create_bound_task(&processor, actor, 1).await;
+        let (store, _) = processor.context(CONNECTION).await.unwrap();
+        let binding = store
+            .load_configuration_binding(
+                actor.principal_id,
+                RouteId::CodexResponses,
+                Revision::new(1),
+            )
+            .await
+            .unwrap()
+            .unwrap();
+        usage::set_task_usage_settings(
+            &store,
+            actor,
+            usage::SetUsageSettings {
+                operation_id: "initial-settings".into(),
+                task_id: task_id.clone(),
+                expected_revision: 0,
+                route_revision: 1,
+                choices: usage::Choices::default(),
+            },
+            &["default".into()],
+            &["default".into()],
+        )
+        .await
+        .unwrap();
+        let command = InquelloModelSelectParams {
+            operation_id: "one-native-choice".into(),
+            task_id: task_id.clone(),
+            expected_revision: 1,
+            binding_id: binding.binding_id,
+        };
+        processor
+            .model_select(CONNECTION, command.clone())
+            .await
+            .unwrap();
+        let settings = usage::task_usage(&store, actor, &task_id)
+            .await
+            .unwrap()
+            .settings
+            .unwrap();
+        assert_eq!((settings.revision, settings.route_revision), (2, 2));
+        let attempt = usage::AttemptSnapshot {
+            attempt_id: uuid::Uuid::new_v4().to_string(),
+            task_id: task_id.clone(),
+            principal_id: actor.principal_id.to_string(),
+            run_id: "next-explicit-send".into(),
+            runtime_id: "isolated-native-test".into(),
+            operation_kind: usage::OperationKind::HumanRequestedModel,
+            route_id: Some("codex-responses".into()),
+            model: Some("gpt-6.1-terra".into()),
+            api_version: Some("responses-v1".into()),
+            configuration_revision: 1,
+            route_revision: 2,
+            settings_revision: 2,
+            requested: settings.choices.clone(),
+            effective: settings.choices.clone(),
+            started_at_ms: 1,
+        };
+        store.begin_usage_attempt(attempt).await.unwrap();
+        processor
+            .routes
+            .state
+            .lock()
+            .await
+            .fixture_capability_failure = true;
+        let Some(ClientResponsePayload::InquelloModelSelect(replay)) =
+            processor.model_select(CONNECTION, command).await.unwrap()
+        else {
+            panic!("model selection response");
+        };
+        assert!(replay.receipt.unwrap().replayed);
+        assert_eq!(
+            usage::task_usage(&store, actor, &task_id)
+                .await
+                .unwrap()
+                .settings
+                .unwrap(),
+            settings
+        );
+    }
+
+    #[tokio::test]
+    async fn inquello_one_choice_refuses_credential_change_during_capability_wait() {
+        let (_dir, processor, actor) = setup().await;
+        configure(&processor, 0, "gpt-6.1-terra").await;
+        let task_id = create_bound_task(&processor, actor, 1).await;
+        let (store, _) = processor.context(CONNECTION).await.unwrap();
+        let binding = store
+            .load_configuration_binding(
+                actor.principal_id,
+                RouteId::CodexResponses,
+                Revision::new(1),
+            )
+            .await
+            .unwrap()
+            .unwrap();
+        let started = std::sync::Arc::new(tokio::sync::Notify::new());
+        let release = std::sync::Arc::new(tokio::sync::Notify::new());
+        {
+            let mut state = processor.routes.state.lock().await;
+            state.enable_synthetic_catalog_for_test();
+            state.fixture_caps_pause = Some((started.clone(), release.clone()));
+            state.credentials.insert(
+                (actor.principal_id, RouteId::CodexResponses),
+                (PRINCIPAL.into(), 1),
+            );
+        }
+        let command = InquelloModelSelectParams {
+            operation_id: "held-choice".into(),
+            task_id: task_id.clone(),
+            expected_revision: 1,
+            binding_id: binding.binding_id,
+        };
+        let before = routes::task_route(&store, actor, &task_id).await.unwrap();
+        let (result, ()) = tokio::join!(processor.model_select(CONNECTION, command), async {
+            started.notified().await;
+            processor
+                .routes
+                .state
+                .lock()
+                .await
+                .credentials
+                .remove(&(actor.principal_id, RouteId::CodexResponses));
+            release.notify_one();
+        });
+        assert!(result.is_err());
+        assert_eq!(
+            routes::task_route(&store, actor, &task_id).await.unwrap(),
+            before
+        );
+        assert!(
+            inquello_domain::usage::task_usage(&store, actor, &task_id)
+                .await
+                .unwrap()
+                .settings
+                .is_none()
+        );
+        assert!(
+            store
+                .find_route_receipt(&inquello_domain::OperationId::parse("held-choice").unwrap())
+                .await
+                .unwrap()
+                .is_none()
         );
     }
 

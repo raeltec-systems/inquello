@@ -303,7 +303,7 @@ describe('mounted settings identity/runtime invalidation', () => {
 
 it('compact conversation permissions retain explicit confirmation but omit diagnostic policy summaries',async()=>{
  const apply=vi.fn(async()=>null),user=userEvent.setup();render(<TaskPolicy compact policy={taskPolicy({fullAvailable:true})} onSetMode={apply}/>);
- expect(screen.getByRole('heading',{name:'Permissions'})).toBeTruthy();expect(document.querySelector('[data-task-policy-summary]')).toBeNull();expect(document.querySelector('[data-task-reach]')).not.toBeNull();
+ expect(screen.getByRole('heading',{name:'Permissions'})).toBeTruthy();expect(document.querySelector('[data-task-policy-summary]')).toBeNull();expect(document.querySelector('[data-task-reach]')).not.toBeNull();expect(document.querySelector('[data-conversation-approval-policy]')?.textContent).toContain('Asks when the agent requests it');expect(document.querySelector('[data-conversation-approval-policy]')?.textContent).toContain('Inquello default');
  await user.click(screen.getByRole('button',{name:/Use Full access/}));expect(apply).not.toHaveBeenCalled();const dialog=screen.getByRole('alertdialog');expect(within(dialog).getByText(FULL_REACH)).toBeTruthy();
  await user.click(within(dialog).getByRole('button',{name:'Cancel'}));expect(apply).not.toHaveBeenCalled();
  await user.click(screen.getByRole('button',{name:/Use Full access/}));await user.click(screen.getByRole('button',{name:'Turn on Full access'}));expect(apply).toHaveBeenCalledWith('full_access',FULL_REACH);

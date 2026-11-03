@@ -129,7 +129,7 @@ it('does not retain protected content or offer Stop when both history and curren
  const activity=vi.fn(async()=>({ok:false,reason:'Access unavailable'}));Object.assign(x.api,{activity});
  render(<><x.Controls/><TaskProgress taskId="task-1" workspaceId="workspace-1"/></>);
  await waitFor(()=>expect(activity).toHaveBeenCalled());
- await screen.findByText(/Progress unavailable. Private content and pending answers have been cleared./);
+ await screen.findByText(/Conversation history is unavailable. Refresh to check again./);
  expect(screen.queryByRole('button',{name:'Stop'})).toBeNull();
  expect(x.api.stop).not.toHaveBeenCalled();expect(x.api.resume).not.toHaveBeenCalled();
  expect(document.body.textContent).not.toContain('history_unavailable');
@@ -144,7 +144,7 @@ it('session invalidation cannot republish late fallback status or hide the unava
  await x.invalidate();
  await act(async()=>release({ok:true,value:base}));
  expect(screen.queryByRole('button',{name:'Stop'})).toBeNull();
- expect(screen.getByText(/Progress unavailable. Private content and pending answers have been cleared./).closest('details')).toBeNull();
+ expect(screen.getByText(/Conversation history is unavailable. Refresh to check again./).closest('details')).toBeNull();
  expect(x.api.stop).not.toHaveBeenCalled();expect(x.api.steer).not.toHaveBeenCalled();expect(x.api.resume).not.toHaveBeenCalled();
 });
 

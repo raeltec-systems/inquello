@@ -3,6 +3,7 @@ import {act,cleanup,fireEvent,render,screen,waitFor} from '@testing-library/reac
 import {afterEach,describe,expect,it,vi} from 'vitest';
 import userEvent from '@testing-library/user-event';
 import nativeRefusal from '../../engine/codex-rs/app-server/tests/fixtures/inquello-pre-execution-refusal.json';
+import {TaskView} from '../src/renderer/Shell/TaskView';
 import {TaskProgress} from '../src/renderer/Shell/TaskProgress';
 import type {ProgressSnapshot,ProgressQuestion} from '../src/renderer/Shell/tasks-bridge';
 const base:ProgressSnapshot={version:1,taskId:'task-1',workspaceId:'workspace-1',runId:'run-1',threadId:'thread-1',turnId:'turn-1',runtimeId:'runtime-1',sessionGeneration:1,status:'running',historyIncomplete:false,items:[],plan:[],results:[],artifact:'absent',questions:[]};
@@ -21,9 +22,9 @@ describe('Story 1.26 live work',()=>{
  it('shows suggested edits without claiming application and discloses incomplete history',async()=>{setup({...base,historyIncomplete:true,items:[{id:'edit',kind:'edit',status:'completed',text:'Add an R02 approval note',application:'suggested'}]});await screen.findByText('Add an R02 approval note');expect(screen.getByText('Suggested')).toBeTruthy();expect(screen.getByText(/Not confirmed as applied/)).toBeTruthy();expect(screen.getByText(/History incomplete/)).toBeTruthy();});
  it('answers exact scoped request and option without granting permission',async()=>{const api=setup({...base,questions:[question]});fireEvent.click(await screen.findByRole('radio',{name:/Include R02/}));fireEvent.click(screen.getByRole('button',{name:'Send answer'}));await waitFor(()=>expect(api.answer).toHaveBeenCalledWith({taskId:'task-1',workspaceId:'workspace-1',requestId:42,answers:{scope:{answers:['Include R02']}}}));expect(api.answer).toHaveBeenCalledTimes(1);});
  it('hides secret free text, preserves IME, and clears controls on terminal state',async()=>{const api=setup({...base,questions:[{...question,questions:[{id:'secret',header:'Private answer',question:'Provide the synthetic code',isOther:false,isSecret:true,options:null}]}]});const input=await screen.findByLabelText('Answer for Private answer');expect(input.getAttribute('type')).toBe('password');fireEvent.change(input,{target:{value:'synthetic-only'}});fireEvent.keyDown(input,{key:'Enter',isComposing:true});expect(api.answer).not.toHaveBeenCalled();await api.update({...base,status:'completed',questions:[question]});expect(screen.queryByRole('button',{name:'Send answer'})).toBeNull();});
- it('clears private content and drafts on passive refresh failure',async()=>{const api=setup({...base,items:[{id:'m',kind:'message',status:'completed',text:'Private procurement findings'}],questions:[question]});await screen.findByText('Private procurement findings');api.progress.mockRejectedValue(new Error('authority unknown'));await api.changed();await screen.findByText(/Private content and pending answers have been cleared/);expect(screen.queryByText('Private procurement findings')).toBeNull();expect(screen.queryByRole('radio')).toBeNull();});
+ it('clears private content and drafts on passive refresh failure',async()=>{const api=setup({...base,items:[{id:'m',kind:'message',status:'completed',text:'Private procurement findings'}],questions:[question]});await screen.findByText('Private procurement findings');api.progress.mockRejectedValue(new Error('authority unknown'));await api.changed();await screen.findByText(/Conversation history is unavailable/);expect(screen.queryByText('Private procurement findings')).toBeNull();expect(screen.queryByRole('radio')).toBeNull();});
  it('suppresses delayed disclosure after session invalidation',async()=>{const api=setup();await waitFor(()=>expect(document.querySelector('.iq-task-progress [role="status"]')).toBeNull());let resolve!:(value:{ok:boolean;value:ProgressSnapshot})=>void;api.progress.mockImplementation(()=>new Promise(r=>{resolve=r;}));await api.changed();await api.invalidate();await act(async()=>resolve({ok:true,value:{...base,items:[{id:'m',kind:'message',status:'completed',text:'Late private content'}]}}));expect(screen.queryByText('Late private content')).toBeNull();});
- it('does not expose another Task returned for the selected Task',async()=>{setup({...base,taskId:'another-task',items:[{id:'m',kind:'message',status:'completed',text:'Other private task'}]});await screen.findByText(/Progress unavailable/);expect(screen.queryByText('Other private task')).toBeNull();});
+ it('does not expose another Task returned for the selected Task',async()=>{setup({...base,taskId:'another-task',items:[{id:'m',kind:'message',status:'completed',text:'Other private task'}]});await screen.findByText(/Conversation history is unavailable/);expect(screen.queryByText('Other private task')).toBeNull();});
 });
 
 it('retains invalid pasted controls for correction without consuming the request',async()=>{
@@ -63,7 +64,7 @@ it('ignores a pre-answer hydration rejection after the answer was consumed',asyn
  api.progress.mockImplementationOnce(()=>new Promise((_,r)=>{reject=r;}));await api.changed();
  fireEvent.click(screen.getByRole('radio',{name:/Include R02/}));fireEvent.click(screen.getByRole('button',{name:'Send answer'}));await screen.findByText(/Answer sent/);
  await act(async()=>reject(new Error('old read failed')));
- expect(screen.getByText('Retained fictional finding')).toBeTruthy();expect(screen.queryByText(/Progress unavailable/)).toBeNull();expect(screen.queryByRole('button',{name:'Send answer'})).toBeNull();
+ expect(screen.getByText('Retained fictional finding')).toBeTruthy();expect(screen.queryByText(/Conversation history is unavailable/)).toBeNull();expect(screen.queryByRole('button',{name:'Send answer'})).toBeNull();
 });
 it.each(['completed','failed','cancelled','uncertain','setup-failed'])('renders formerly running activity as ended and unconfirmed for %s',async status=>{
  const item={id:'unfinished-action',kind:'command' as const,status:'running' as const,text:'Inspect fictional R02'};
@@ -158,4 +159,38 @@ it('clears the accepted fallback on an explicit first-read refusal',async()=>{
  Object.assign(globalThis,{inquello:{tasks:{progress:async()=>({ok:false,reason:'Current authority refused'})}}});
  render(<TaskProgress taskId="task-1" workspaceId="workspace-1" accepted={{operationId:'submission',taskId:'task-1',runId:'run-1',threadId:'thread-1',status:'running',request:'Private pending text',accepted:true}}/>);
  await waitFor(()=>expect(screen.queryByText('Private pending text')).toBeNull());expect(document.querySelector('[data-accepted-message]')).toBeNull();
+});
+
+it('shows an actionable failure even when no activity or artifact was produced',async()=>{
+ setup({...base,status:'failed',items:[],artifact:'absent'});
+ await screen.findByText(/The response could not be completed/);
+ expect(screen.queryByText('Source and status')).toBeNull();
+});
+it.each(['cancelled','failed'] as const)('reads retained %s work after restart without a thread pointer or accepted memory',async status=>{
+ const progress=vi.fn(async()=>({ok:true,value:{...base,status,items:[{id:'retained',kind:'message',role:'user',status:'completed',text:'Retained fictional request'}]}}));
+ Object.assign(globalThis,{inquello:{tasks:{progress}}});
+ render(<TaskView task={{taskId:'task-1',workspaceId:'workspace-1',engagementId:null,folderId:null,title:'Saved conversation',runtimeThreadId:null,sourceRefs:[],artifactRefs:[],visibility:'private',revision:1}} engagements={[]} folders={[]} onRename={vi.fn()} onMove={vi.fn()} newOperationId={()=>'unused'}/>);
+ await screen.findByText('Retained fictional request');
+ expect(progress).toHaveBeenCalledWith({taskId:'task-1',workspaceId:'workspace-1'});
+ expect(screen.queryByText('Send a message to begin.')).toBeNull();
+});
+it('keeps an unstarted saved draft truthful when no history can be authorized',async()=>{
+ const progress=vi.fn(async()=>({ok:false,code:'not_found',reason:'No retained run'}));
+ Object.assign(globalThis,{inquello:{tasks:{progress}}});
+ render(<TaskView task={{taskId:'task-1',workspaceId:'workspace-1',engagementId:null,folderId:null,title:'Unstarted saved draft',runtimeThreadId:null,sourceRefs:[],artifactRefs:[],visibility:'private',revision:1}} engagements={[]} folders={[]} onRename={vi.fn()} onMove={vi.fn()} newOperationId={()=>'unused'}/>);
+ await screen.findByText(/Conversation history is unavailable/);
+ expect(screen.getByRole('button',{name:'Refresh conversation'})).toBeTruthy();
+ expect(screen.queryByText(/failed|deleted/i)).toBeNull();
+});
+
+it('shows loading rather than unavailable while the first authorized history read is pending',async()=>{
+ let resolve!:(value:unknown)=>void;
+ const progress=vi.fn(()=>new Promise(r=>{resolve=r;}));
+ Object.assign(globalThis,{inquello:{tasks:{progress}}});
+ render(<TaskProgress taskId="task-1" workspaceId="workspace-1"/>);
+ await screen.findByText('Reading conversation…');
+ expect(screen.queryByText(/Conversation history is unavailable/)).toBeNull();
+ await act(async()=>resolve({ok:true,value:{...base,status:'completed'}}));
+ await waitFor(()=>expect(screen.queryByText('Reading conversation…')).toBeNull());
+ expect(screen.queryByText(/The response could not be completed/)).toBeNull();
 });

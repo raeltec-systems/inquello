@@ -365,8 +365,16 @@ pub struct RouteOutcome {
     pub replayed: bool,
 }
 
+/// Trusted native catalog bounds for one-choice selection, never renderer input.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SelectionUsageCapabilities {
+    pub reasoning: Vec<String>,
+    pub speeds: Vec<String>,
+    pub defaults: crate::usage::Choices,
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RouteChange {
+    pub usage_capabilities: Option<SelectionUsageCapabilities>,
     pub expected_revision: Revision,
     pub expected_binding_revision: Revision,
     pub record: TaskRouteRecord,

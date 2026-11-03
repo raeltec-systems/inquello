@@ -691,7 +691,7 @@ export function Shell({ active = true, onWorkspaceChanged, onShowSpecimen, opera
   }, [active, authorizedWorkspace, currentTree, workspaceId, person, openTaskId, openedEngagement, startLocation, pendingStart, savedSurface]);
   const [conversationPermissions,setConversationPermissions]=useState<string|null>(null);
   const [conversationOptions,setConversationOptions]=useState<string|null>(null);
-  useEffect(()=>{setConversationOptions(null);setConversationPermissions(null);},[active,showStart,task?.taskId,task?.workspaceId,runtimeEpoch,person]);
+  useEffect(()=>{setConversationOptions(null);setConversationPermissions(null);},[active,showStart,task?.taskId,task?.workspaceId,runtimeEpoch,ownerKey(person)]);
   const composer = !state?.signedIn || showStart ? null : renderComposer ? renderComposer(draft) : task?.runtimeThreadId || (task&&acceptedFor(task.taskId)) ? <TaskLifecycle key={`${runtimeEpoch}:${task!.taskId}`} taskId={task!.taskId} workspaceId={task!.workspaceId} draft={draft} operationIds={operationIds} onContinuationRequested={conversationFollow.continuation}/> : <Composer draft={draft} />;
 
   return (

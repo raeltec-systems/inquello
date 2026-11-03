@@ -364,6 +364,7 @@ impl RouteStore for SqliteWorkingStore {
 
     async fn commit_task_route(&self, change: RouteChange) -> Result<(), StoreError> {
         let RouteChange {
+            usage_capabilities,
             expected_revision,
             expected_binding_revision,
             record,
@@ -429,6 +430,59 @@ impl RouteStore for SqliteWorkingStore {
         .await
         .map_err(backend)?;
         check_revision(expected_revision, current)?;
+        if let Some(caps) = usage_capabilities {
+            let previous: Option<String> = sqlx::query_scalar(
+                "SELECT record FROM task_usage_settings WHERE task_id=? ORDER BY revision DESC LIMIT 1",
+            ).bind(record.task_id.to_string()).fetch_optional(&mut *tx).await.map_err(backend)?;
+            let settings = if let Some(previous) = previous {
+                let previous: inquello_domain::usage::TaskUsageSettings =
+                    serde_json::from_str(&previous)
+                        .map_err(|_| corrupt("invalid usage settings"))?;
+                if previous.route_revision != expected_revision.get() {
+                    return Err(corrupt(
+                        "saved model settings changed; selection was not applied",
+                    ));
+                }
+                inquello_domain::usage::TaskUsageSettings {
+                    revision: previous
+                        .revision
+                        .checked_add(1)
+                        .filter(|v| *v <= i64::MAX as u64)
+                        .ok_or_else(|| corrupt("usage settings revision overflow"))?,
+                    route_revision: record.revision.get(),
+                    choices: previous.choices,
+                }
+            } else {
+                let retained: i64 =
+                    sqlx::query_scalar("SELECT COUNT(*) FROM task_runs WHERE task_id=?")
+                        .bind(record.task_id.to_string())
+                        .fetch_one(&mut *tx)
+                        .await
+                        .map_err(backend)?;
+                if retained != 0 {
+                    return Err(corrupt("retained conversation settings unavailable"));
+                }
+                inquello_domain::usage::TaskUsageSettings {
+                    revision: 1,
+                    route_revision: record.revision.get(),
+                    choices: caps.defaults,
+                }
+            };
+            if !caps.reasoning.contains(&settings.choices.reasoning)
+                || !caps.speeds.contains(&settings.choices.speed)
+            {
+                return Err(corrupt("selected model does not support saved choices"));
+            }
+            let json =
+                serde_json::to_string(&settings).map_err(|_| corrupt("invalid usage settings"))?;
+            sqlx::query("INSERT INTO task_usage_settings(task_id,revision,record) VALUES(?,?,?)")
+                .bind(record.task_id.to_string())
+                .bind(settings.revision as i64)
+                .bind(json)
+                .execute(&mut *tx)
+                .await
+                .map_err(backend)?;
+        }
         sqlx::query("INSERT INTO task_processing_routes (task_id, revision, principal_id, route_id, configuration_revision, recorded_at_ms) VALUES (?, ?, ?, ?, ?, ?)")
             .bind(record.task_id.to_string()).bind(db(record.revision)?).bind(record.principal_id.to_string())
             .bind(record.configuration.route_id().as_str()).bind(db(record.configuration_revision)?).bind(record.recorded_at.unix_millis())

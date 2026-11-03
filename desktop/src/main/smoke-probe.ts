@@ -3983,8 +3983,11 @@ export async function probeVisualConversation(contents: WebContents, options: Or
     // Direct fixture configuration bypasses RouteService.configure's normal notification.
     // Notify only this owned visual renderer after the exact pinned transport is proved.
     contents.send('inquello:routes-changed',{authority:false});
-    // All work below is submitted by actual renderer controls and named main operations.
-    // The probe never calls tasks/start, resume or stop directly.
+    // Composition boundary: creation and exact saved-binding selection use the
+    // existing public main bridge against prequalified synthetic revisions.
+    // The picker resolves fresh revisions, which this pinned fixture cannot
+    // prequalify. Actual picker input is covered separately by source-Electron.
+    // Follow-up Send, Stop, reopen and Resume below use actual renderer controls.
     const checkFixture=async(expected:number,stopped=false)=>{
       const deadline=Date.now()+5000;
       do{
@@ -4021,28 +4024,26 @@ export async function probeVisualConversation(contents: WebContents, options: Or
       ${SHELL_HELPERS}
       return !!(await wait(()=>{const task=qVisible('[data-task-view="'+${JSON.stringify(taskId)}+'"]');const thread=task?.closest('.iq-thread');if(!task||!thread)return false;const clip=thread.getBoundingClientRect();return [...task.querySelectorAll('.iq-conversation-item--'+${JSON.stringify(role)}+' .iq-message-body .iq-progress-text')].some(node=>{if(node.textContent!==${JSON.stringify(answer)})return false;const rect=node.getBoundingClientRect();return rect.height>0&&rect.bottom>clip.top&&rect.bottom<=clip.bottom+2&&rect.top<clip.bottom;});},${SHELL_SETTLE_MS}));
     })()`);
-    stage='visual-ui-first-send';
-    const taskId=await contents.executeJavaScript(`(async()=>{
+    const startPinnedConversation=async(configurationRevision:number,request:string)=>contents.executeJavaScript(`(async()=>{
       ${SHELL_HELPERS}
-      if(!await openShell()||!press('[data-action="new-thread"]'))return null;
-      const start=await wait(()=>qVisible('[data-start-view]'),${SHELL_SETTLE_MS});if(!start)return null;
-      const processing=q('.iq-processing-settings',start);if(!processing)return null;if(!processing.open)q(':scope > summary',processing)?.click();if(!processing.open)return null;
-      const route=await wait(()=>{const select=q('select[aria-label="Model"]',start);return select&&[...select.options].some(o=>!o.disabled&&o.textContent.includes('gpt-6.1-terra'))?select:null;},${SHELL_SETTLE_MS});if(!route)return null;
-      const choose=(select,value)=>{Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(select,value);select.dispatchEvent(new Event('change',{bubbles:true}));};
-      choose(route,[...route.options].find(option=>option.textContent.includes('gpt-6.1-terra')).value);
-      const reasoning=await wait(()=>q('select[aria-label="Reasoning"]',start),${POLICY_SETTLE_MS}),speed=q('select[aria-label="Speed"]',start);
-      if(!reasoning||!speed||reasoning.disabled||speed.disabled)return null;choose(reasoning,'default');choose(speed,'default');
-      type(q('[data-composer-input]',start),${JSON.stringify(fixture.requests[0])});
-      const send=await wait(()=>{const button=q('[data-composer-send]',start);return button&&!button.disabled&&button.getAttribute('aria-disabled')!=='true'?button:null;},${SHELL_SETTLE_MS});if(!send)return null;
-      const began=performance.now();send.click();
-      const {taskId,...observation}=await (${observeSyntheticStartup.toString()})(()=>qVisible('[data-task-view]')?.getAttribute('data-task-view')??null,began);
-      globalThis.__iqSyntheticStartupObservation=observation;return taskId;
-    })()`) as string|null;
-    // Cold Windows isolation setup is observed separately from the 20-second UX
-    // expectation. Keep that metric; allow a bounded 60-second functional start.
-    // This does not change native request deadlines or any later journey gate.
-    console.info('SYNTHETIC_STARTUP_OBSERVATION',JSON.stringify(await contents.executeJavaScript(`(()=>{const value=globalThis.__iqSyntheticStartupObservation;delete globalThis.__iqSyntheticStartupObservation;return value??{observationMissing:true};})()`)));
-    if(!taskId)throw new SmokeProbeFailure('Actual UI Send did not accept a synthetic Task');
+      location.hash='#settings-routes';
+      if(!await wait(()=>!visible(q('[data-shell]')),${SHELL_SETTLE_MS}))return null;
+      const preflight=await globalThis.inquello.tasks.preflight({workspaceId:${JSON.stringify(seed.workspace_id)},routeId:'codex-responses',configurationRevision:${configurationRevision}});
+      if(!preflight?.ok||!preflight.value.available||!preflight.value.reasoning.includes('default')||!preflight.value.speeds.includes('default'))return null;
+      const began=performance.now();
+      const result=await globalThis.inquello.tasks.start({operationId:${JSON.stringify(randomUUID())},workspaceId:${JSON.stringify(seed.workspace_id)},engagementId:null,folderId:null,request:${JSON.stringify(request)},routeId:'codex-responses',configurationRevision:${configurationRevision},reasoning:'default',speed:'default'});
+      const elapsedMs=Math.round(performance.now()-began);
+      console.info('SYNTHETIC_STARTUP_OBSERVATION',JSON.stringify({source:'public-main-bridge-start-not-ui-click',configurationRevision:${configurationRevision},elapsedMs,exceeded20s:elapsedMs>20000,accepted:result?.ok===true&&result.value?.accepted===true}));
+      if(!result?.ok||!result.value.accepted||!result.value.taskId)return null;
+      const id=result.value.taskId;
+      if(!await openShell())return null;
+      const row=await wait(()=>qVisible('[data-task-id="'+id+'"] a'),${SHELL_SETTLE_MS});if(!row)return null;row.click();
+      if(!await wait(()=>qVisible('[data-task-view="'+id+'"]'),${SHELL_SETTLE_MS}))return null;
+      return id;
+    })()`) as Promise<string|null>;
+    stage='visual-bridge-first-start';
+    const taskId=await startPinnedConversation(1,fixture.requests[0]!);
+    if(!taskId)throw new SmokeProbeFailure('Pinned synthetic bridge start did not open its saved conversation');
     if(!(await waitAnswer(taskId,fixture.answers[0]!)))throw new SmokeProbeFailure('First synthetic assistant answer did not render');
     const first=await taskSnapshot(taskId,'completed');if(first.status!=='completed')throw new SmokeProbeFailure('First synthetic native turn did not complete');
     await checkFixture(1);
@@ -4056,20 +4057,8 @@ export async function probeVisualConversation(contents: WebContents, options: Or
     const modelB=catalog.bindings.find(binding=>binding.name==='gpt-6.1-sol'&&binding.configurationRevision===2);
     if(!modelB)throw new SmokeProbeFailure('Supported Sol binding absent from cached catalog');
     contents.send('inquello:routes-changed',{authority:false});
-    const taskB=await contents.executeJavaScript(`(async()=>{
-      ${SHELL_HELPERS}
-      if(!press('[data-action="new-thread"]'))return null;
-      const start=await wait(()=>qVisible('[data-start-view]'),${SHELL_SETTLE_MS});if(!start)return null;
-      const details=q('.iq-processing-settings',start);if(!details.open)q(':scope > summary',details)?.click();
-      const model=await wait(()=>{const select=q('select[aria-label="Model"]',start);return select&&[...select.options].some(option=>option.value===${JSON.stringify(modelB.bindingId)})?select:null;},${SHELL_SETTLE_MS});if(!model)return null;
-      const choose=(select,value)=>{Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(select,value);select.dispatchEvent(new Event('change',{bubbles:true}));};
-      choose(model,${JSON.stringify(modelB.bindingId)});
-      const reasoning=await wait(()=>q('select[aria-label="Reasoning"]:not(:disabled)',start),${POLICY_SETTLE_MS}),speed=q('select[aria-label="Speed"]',start);if(!reasoning||!speed)return null;
-      choose(reasoning,'default');choose(speed,'default');type(q('[data-composer-input]',start),${JSON.stringify(fixture.bRequest)});
-      const send=await wait(()=>{const button=q('[data-composer-send]',start);return button&&!button.disabled&&button.getAttribute('aria-disabled')!=='true'?button:null;},${SHELL_SETTLE_MS});if(!send)return null;
-      const began=performance.now();send.click();const observation=await (${observeSyntheticStartup.toString()})(()=>qVisible('[data-task-view]')?.getAttribute('data-task-view')??null,began);return observation.taskId;
-    })()`) as string|null;
-    if(!taskB||taskB===taskId||!await waitAnswer(taskB,fixture.bAnswer))throw new SmokeProbeFailure('Actual UI Sol conversation did not complete independently');
+    const taskB=await startPinnedConversation(2,fixture.bRequest);
+    if(!taskB||taskB===taskId||!await waitAnswer(taskB,fixture.bAnswer))throw new SmokeProbeFailure('Pinned synthetic bridge Sol conversation did not complete independently');
     const bSnapshot=await taskSnapshot(taskB,'completed');
     if(bSnapshot.threadId===first.threadId)throw new SmokeProbeFailure('Independent Sol conversation reused the Terra thread');
     const bState=JSON.parse(fs.readFileSync(fixture.stateFile,'utf8')) as {bCalls:number};
@@ -4079,8 +4068,8 @@ export async function probeVisualConversation(contents: WebContents, options: Or
     const reopenedA=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}const row=await wait(()=>qVisible('[data-task-id="'+${JSON.stringify(taskId)}+'"] a'),${SHELL_SETTLE_MS});if(!row)return false;row.click();return !!(await wait(()=>qVisible('[data-task-view="'+${JSON.stringify(taskId)}+'"]'),${SHELL_SETTLE_MS}));})()`);
     if(!reopenedA||!await waitAnswer(taskId,fixture.answers[0]!))throw new SmokeProbeFailure('Reopened Terra conversation lost its answer after Sol was created');
     await checkFixture(1);await capture('02c-independent-sol-and-reopened-terra-synthetic');
-    const collapsed=await contents.executeJavaScript(`(()=>{const details=document.querySelector('[data-task-view="'+${JSON.stringify(taskId)}+'"] [data-task-inspector]');return !!details&&!details.open;})()`);
-    if(!collapsed)throw new SmokeProbeFailure('Conversation inspector was not collapsed by default');
+    const cleanConversation=await contents.executeJavaScript(`(()=>{const task=document.querySelector('[data-task-view="'+${JSON.stringify(taskId)}+'"]');return !!task&&!task.querySelector('[data-task-inspector]')&&!['Initial request','Source and status','Execution details','Environment'].some(label=>task.textContent.includes(label));})()`);
+    if(!cleanConversation)throw new SmokeProbeFailure('Ordinary conversation exposed obsolete technical chrome');
     await capture('02-completed-conversation-synthetic');
     options.resize(700,900);
     const narrow=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}return !!(await wait(()=>innerWidth===700&&q('[data-shell]')?.getAttribute('data-nav-presentation')==='rail'&&document.documentElement.scrollWidth<=document.documentElement.clientWidth,5000));})()`);
@@ -4100,21 +4089,15 @@ export async function probeVisualConversation(contents: WebContents, options: Or
     if(second.status!=='completed'||second.threadId!==first.threadId||second.runId===first.runId)throw new SmokeProbeFailure('Follow-up did not retain Task/thread with a new run');
     if(!(await latestAnswerVisible(taskId,fixture.answers[1]!)))throw new SmokeProbeFailure('Completed follow-up remained outside the conversation viewport');
     await checkFixture(2);await capture('03-followup-conversation-synthetic');
-    stage='visual-explicit-model-switch';
+    stage='visual-bridge-exact-model-switch';
     const switched=await contents.executeJavaScript(`(async()=>{
-      ${SHELL_HELPERS}
-      if(!await openTaskInspector())return false;
-      const panel=await wait(()=>qVisible('[data-task-view="'+${JSON.stringify(taskId)}+'"] [data-processing-routes]'),${SHELL_SETTLE_MS});if(!panel)return false;
-      const model=await wait(()=>{const select=q('select[aria-label="Model"]',panel);return select&&[...select.options].some(option=>option.value===${JSON.stringify(modelB.bindingId)})?select:null;},${POLICY_SETTLE_MS});if(!model)return false;
-      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(model,${JSON.stringify(modelB.bindingId)});model.dispatchEvent(new Event('change',{bubbles:true}));
-      const change=await wait(()=>[...panel.querySelectorAll('button')].find(button=>button.textContent==='Change conversation model'&&button.getAttribute('aria-disabled')!=='true'),${SHELL_SETTLE_MS});if(!change)return false;change.click();
-      if(!await wait(()=>panel.textContent.includes('gpt-6.1-sol')&&panel.querySelector('strong')?.textContent==='gpt-6.1-sol',${POLICY_SETTLE_MS}))return false;
-      const usage=await wait(()=>qVisible('[data-task-view="'+${JSON.stringify(taskId)}+'"] [data-task-usage]'),${POLICY_SETTLE_MS});if(!usage)return false;
-      const save=await wait(()=>[...usage.querySelectorAll('button')].find(button=>button.textContent==='Save Task settings'&&button.getAttribute('aria-disabled')!=='true'),${POLICY_SETTLE_MS});if(!save)return false;save.click();
-      return !!(await wait(()=>!usage.textContent.includes('earlier conversation model choice'),${POLICY_SETTLE_MS}));
+      const result=await globalThis.inquello.routes.selectModel({operationId:${JSON.stringify(randomUUID())},taskId:${JSON.stringify(taskId)},expectedRevision:1,bindingId:${JSON.stringify(modelB.bindingId)}});
+      if(!result?.ok||result.value.revision!==2||result.value.configurationRevision!==2)return false;
+      const usage=await globalThis.inquello.usage.forTask({taskId:${JSON.stringify(taskId)}});
+      return usage?.ok===true&&usage.value.usage.settings?.route_revision===2&&usage.value.usage.settings?.choices.reasoning==='default'&&usage.value.usage.settings?.choices.speed==='default';
     })()`);
     const switchedRoute=await options.runtimeRequest<{revision:number;configurationRevision:number}>('inquello/routes/task/read',{taskId});
-    if(!switched||switchedRoute.revision!==2||switchedRoute.configurationRevision!==2)throw new SmokeProbeFailure('Actual saved conversation model change did not reach selection revision two');
+    if(!switched||switchedRoute.revision!==2||switchedRoute.configurationRevision!==2)throw new SmokeProbeFailure('Exact main-bridge selection did not atomically align its saved settings');
     stage='visual-ui-stop';
     if(!(await sendFollowup(fixture.requests[2]!))||!(await waitAnswer(taskId,fixture.answers[2]!,false)))throw new SmokeProbeFailure('Held synthetic turn did not render before Stop');
     if(!(await latestAnswerVisible(taskId,fixture.answers[2]!)))throw new SmokeProbeFailure('Live streamed answer remained outside the conversation viewport');
@@ -4184,14 +4167,23 @@ export async function probeVisualConversation(contents: WebContents, options: Or
     if(last.status!=='completed'||last.threadId!==first.threadId||last.runId===interrupted.runId)throw new SmokeProbeFailure('Resume did not retain Task/thread with a new run');
     if(!(await latestAnswerVisible(taskId,fixture.answers[3]!)))throw new SmokeProbeFailure('Resumed answer remained outside the conversation viewport');
     await checkFixture(4,true);await capture('06-resumed-conversation-synthetic');
-    const details=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}return await openTaskInspector();})()`);
+    const details=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}
+      if(!press('button[aria-label="Conversation options"]'))return false;
+      const item=await wait(()=>[...document.querySelectorAll('[role="menuitem"]')].find(e=>visible(e)&&e.textContent.trim()==='Rename or organise'),${SHELL_SETTLE_MS});
+      if(!item)return false;item.click();
+      return !!(await wait(()=>qVisible('dialog[open][aria-label="Conversation options"]'),${SHELL_SETTLE_MS}));
+    })()`);
     if(!details)throw new SmokeProbeFailure('Task details unavailable for visual capture');
     await capture('07-task-details-synthetic');
     stage='visual-settings';
-    const settings=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}location.hash='#settings-routes';return !!(await wait(()=>location.hash==='#settings-routes'&&!visible(q('[data-shell]'))&&qVisible('[data-processing-routes]'),${SHELL_SETTLE_MS}));})()`);
+    const settings=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}
+      const dialog=qVisible('dialog[open][aria-label="Conversation options"]');
+      const close=dialog&&[...dialog.querySelectorAll('button')].find(button=>button.textContent.trim()==='Close Conversation options');
+      if(!close)return false;close.click();if(!await wait(()=>!qVisible('dialog[open]'),${SHELL_SETTLE_MS}))return false;
+      location.hash='#settings-routes';return !!(await wait(()=>location.hash==='#settings-routes'&&!visible(q('[data-shell]'))&&qVisible('[data-processing-routes]'),${SHELL_SETTLE_MS}));})()`);
     if(!settings)throw new SmokeProbeFailure('Implemented Settings unavailable');
     await capture('08-settings-processing-routes');
-    fs.writeFileSync(path.join(captureDir,'manifest.json'),JSON.stringify({synthetic:true,source:'Actual Electron capturePage; local pinned fixture response, not live inference',settingsSurface:'implemented-settings',captures},null,2));
+    fs.writeFileSync(path.join(captureDir,'manifest.json'),JSON.stringify({synthetic:true,source:'Actual Electron capturePage; pinned synthetic bridge creation/model selection plus renderer follow-up/Stop/Resume, not live inference',modelPicker:'Separate actual source-Electron input evidence; fresh picker resolution is not integrated in this pinned fixture',settingsSurface:'implemented-settings',captures},null,2));
   }catch(error){failures.push(error instanceof SmokeProbeFailure?error.message:`Visual conversation failed at ${stage}${quotaFixtureDiagnostic(error)}`);const diagnostic=await captureSmokeFailure(contents,options.fixtureFile);if(diagnostic)captures.push(diagnostic);else failures.push('Diagnostic failure capture unavailable');}
   finally {
     try{options.resize(options.restore.width,options.restore.height);}catch{failures.push('Owned visual window size could not be restored');}

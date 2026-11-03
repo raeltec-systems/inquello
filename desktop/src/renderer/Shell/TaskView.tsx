@@ -201,6 +201,6 @@ export function TaskDetails({
 /** Ordinary chat is a transcript, not a runtime inspector. */
 export function TaskView({task,accepted,selectedQuestion}:TaskViewProps):ReactElement {
  return <section className="iq-task" aria-label="Conversation" data-task-view={task.taskId}>
-  {(accepted||task.runtimeThreadId)?<TaskProgress key={task.taskId} taskId={task.taskId} workspaceId={task.workspaceId} selectedQuestion={selectedQuestion} accepted={accepted}/>:<p>Send a message to begin.</p>}
+  <TaskProgress key={task.taskId} taskId={task.taskId} workspaceId={task.workspaceId} selectedQuestion={selectedQuestion} accepted={accepted}/>
  </section>;
 }

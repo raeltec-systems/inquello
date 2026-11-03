@@ -281,7 +281,7 @@ it('keeps background acceptance without taking over unrelated navigation',async(
  const task:TaskItem={taskId:uuid(809),workspaceId:WORKSPACE,engagementId:null,folderId:null,title:'Private task',runtimeThreadId:'thread-a',sourceRefs:[],artifactRefs:[],visibility:'private',revision:1};main.tasks.push(task);
  await act(async()=>{finish({ok:true,value:{operationId:command.operationId,taskId:task.taskId,runId:'run-a',threadId:'thread-a',status:'running',request:command.request,accepted:true}});});
  expect(document.querySelector('[data-workspace-selector]')?.getAttribute('data-workspace-id')).toBe(other);
- expect(document.querySelector('[data-accepted-message]')).toBeNull();
+ expect(document.querySelector('[data-accepted-message]')).toBeNull();expect([...document.querySelectorAll('.iq-conversation-item--user')].some(row=>row.textContent?.includes('Review fictional R01.'))).toBe(false);
  await user.click(screen.getByRole('button',{name:'Other Workspace'}));await user.click(screen.getByRole('menuitemradio',{name:'Synthetic Audit Co'}));
  await user.click(await screen.findByRole('link',{name:'New chat'}));
  expect(await screen.findByText('Review fictional R01.')).toBeTruthy();
@@ -302,7 +302,7 @@ it('preserves newer shared no-Task draft when an older Start is accepted after n
  const task:TaskItem={taskId:uuid(809),workspaceId:WORKSPACE,engagementId:null,folderId:null,title:'Private task',runtimeThreadId:'thread-a',sourceRefs:[],artifactRefs:[],visibility:'private',revision:1};main.tasks.push(task);
  await act(async()=>{finish({ok:true,value:{operationId:command.operationId,taskId:task.taskId,runId:'run-a',threadId:'thread-a',status:'running',request:command.request,accepted:true}});});
  expect(document.querySelector('[data-workspace-selector]')?.getAttribute('data-workspace-id')).toBe(other);
- expect(document.querySelector('[data-accepted-message]')).toBeNull();
+ expect(document.querySelector('[data-accepted-message]')).toBeNull();expect([...document.querySelectorAll('.iq-conversation-item--user')].some(row=>row.textContent?.includes('Review fictional R01.'))).toBe(false);
  await user.click(screen.getByRole('button',{name:'New chat'}));
  expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('New unsent R99 question.');
 });
@@ -322,14 +322,14 @@ it('removes cached private request and selection when Workspace membership disap
  main.bridge.getWorkspaces!.mockResolvedValue({signedIn:true,sharedService:'available',workspaces:[{workspaceId:other,name:'Other Workspace',source:'service'}],engagementCreation:{enabled:true}});
  mounted.rerender(<Shell active={false} onShowSpecimen={()=>undefined}/>);
  await waitFor(()=>expect(document.querySelector('[data-workspace-selector]')?.getAttribute('data-workspace-id')).toBe(other));
- expect(document.querySelector('[data-accepted-message]')).toBeNull();
+ expect(document.querySelector('[data-accepted-message]')).toBeNull();expect([...document.querySelectorAll('.iq-conversation-item--user')].some(row=>row.textContent?.includes('Review fictional R01.'))).toBe(false);
  expect(screen.queryByText('Review fictional R01.')).toBeNull();
  main.bridge.getWorkspaces!.mockResolvedValue({signedIn:true,sharedService:'available',workspaces:[{workspaceId:WORKSPACE,name:'Synthetic Audit Co',source:'service'}],engagementCreation:{enabled:true}});
  mounted.rerender(<Shell active onShowSpecimen={()=>undefined}/>);
  await waitFor(()=>expect(document.querySelector('[data-workspace-selector]')?.getAttribute('data-workspace-id')).toBe(WORKSPACE));
  expect(screen.getByText('What should we work on?')).toBeTruthy();
  await user.click(await screen.findByRole('link',{name:'New chat'}));
- expect(document.querySelector('[data-accepted-message]')).toBeNull();
+ expect(document.querySelector('[data-accepted-message]')).toBeNull();expect([...document.querySelectorAll('.iq-conversation-item--user')].some(row=>row.textContent?.includes('Review fictional R01.'))).toBe(false);
 });
 
 it('Story 1.26 suppresses selected private work after a passive Workspace refresh fails',async()=>{
@@ -341,7 +341,7 @@ it('Story 1.26 suppresses selected private work after a passive Workspace refres
  mounted.rerender(<Shell active={false} onShowSpecimen={()=>undefined}/>);
  await screen.findByText('Your Workspaces could not be read.');
  expect(screen.queryByRole('region',{name:'Conversation'})).toBeNull();
- expect(document.querySelector('[data-accepted-message]')).toBeNull();
+ expect(document.querySelector('[data-accepted-message]')).toBeNull();expect([...document.querySelectorAll('.iq-conversation-item--user')].some(row=>row.textContent?.includes('Review fictional R01.'))).toBe(false);
  expect(screen.queryByRole('link',{name:'Private procurement review'})).toBeNull();
 });
 
@@ -379,7 +379,7 @@ it('keeps held-ack discovery background-only and ignores the later Start reply',
  await waitFor(()=>expect(discover).toBeTypeOf('function'));
  await act(async()=>{discover({ok:true,value:{operationId:command.operationId,taskId:task.taskId,runId:'run-a',threadId:'thread-a',status:'running',request:command.request,accepted:true}});});
  expect(document.querySelector('[data-workspace-selector]')?.getAttribute('data-workspace-id')).toBe(other);
- expect(document.querySelector('[data-accepted-message]')).toBeNull();
+ expect(document.querySelector('[data-accepted-message]')).toBeNull();expect([...document.querySelectorAll('.iq-conversation-item--user')].some(row=>row.textContent?.includes('Review fictional R01.'))).toBe(false);
  await act(async()=>finish({ok:true,value:{operationId:command.operationId,taskId:task.taskId,runId:'run-a',threadId:'thread-a',status:'running',request:command.request,accepted:true}}));
  await user.click(screen.getByRole('button',{name:'Other Workspace'}));await user.click(screen.getByRole('menuitemradio',{name:'Synthetic Audit Co'}));
  await user.click(await screen.findByRole('link',{name:'New chat'}));
@@ -403,7 +403,7 @@ it('suppresses delayed discovery and Start acknowledgement after Workspace revoc
  await act(async()=>{discover({ok:true,value:{operationId:command.operationId,taskId:task.taskId,runId:'run-a',threadId:'thread-a',status:'running',request:command.request,accepted:true}});});
  await act(async()=>{finish({ok:true,value:{operationId:command.operationId,taskId:task.taskId,runId:'run-a',threadId:'thread-a',status:'running',request:command.request,accepted:true}});});
 
- expect(document.querySelector('[data-accepted-message]')).toBeNull();
+ expect(document.querySelector('[data-accepted-message]')).toBeNull();expect([...document.querySelectorAll('.iq-conversation-item--user')].some(row=>row.textContent?.includes('Review fictional R01.'))).toBe(false);
  // The user's own uncertain draft remains editable; no retained Task disclosure returns.
  expect(screen.queryByRole('region',{name:'Task progress'})).toBeNull();
  main.bridge.getWorkspaces!.mockResolvedValue({signedIn:true,sharedService:'available',workspaces:[{workspaceId:WORKSPACE,name:'Synthetic Audit Co',source:'service'}],engagementCreation:{enabled:true}});
@@ -411,7 +411,7 @@ it('suppresses delayed discovery and Start acknowledgement after Workspace revoc
  await waitFor(()=>expect(document.querySelector('[data-workspace-selector]')?.getAttribute('data-workspace-id')).toBe(WORKSPACE));
  expect(screen.getByText('What should we work on?')).toBeTruthy();
  await user.click(await screen.findByRole('link',{name:'New chat'}));
- expect(document.querySelector('[data-accepted-message]')).toBeNull();
+ expect(document.querySelector('[data-accepted-message]')).toBeNull();expect([...document.querySelectorAll('.iq-conversation-item--user')].some(row=>row.textContent?.includes('Review fictional R01.'))).toBe(false);
 });
 
  it('keeps authorized Tasks visible beside title-free unavailable work',async()=>{
@@ -447,4 +447,31 @@ it('real initial draft survives the actual Settings route without remount or dis
  await waitFor(()=>expect(screen.getByRole('textbox')).toBe(textarea));expect((textarea as HTMLTextAreaElement).value).toBe('Keep this fictional draft');
  expect(start).not.toHaveBeenCalled();expect(preflight).not.toHaveBeenCalled();expect(main.bridge.createTask).not.toHaveBeenCalled();
  globalThis.location.hash='';
+});
+
+it('keeps open conversation options and rename draft through the same-owner identity poll',async()=>{
+ const main=fakeMain();
+ main.tasks.push({taskId:uuid(700),workspaceId:WORKSPACE,engagementId:null,folderId:null,title:'Poll-safe conversation',runtimeThreadId:null,sourceRefs:[],artifactRefs:[],visibility:'private',revision:1});
+ const current=(globalThis as any).inquello;
+ let displayName='Chanda Mwansa';
+ const getStatus=vi.fn(async()=>({identity:{state:'signed-in',displayName,issuerLabel:'Synthetic test issuer'},sharedService:'available',credentialStorage:'os-backed',privateWork:'local'}));
+ Object.assign(globalThis,{inquello:{...current,identity:{...current.identity,getStatus}}});
+ const intervals=vi.spyOn(globalThis,'setInterval');
+ try {
+  const user=userEvent.setup();renderShell();
+  await user.click(await screen.findByRole('link',{name:'Poll-safe conversation'}));
+  await user.click(screen.getByRole('button',{name:'Conversation options'}));
+  await user.click(screen.getByRole('menuitem',{name:'Rename or organise'}));
+  const title=screen.getByRole('textbox',{name:'Conversation title'});
+  await user.clear(title);await user.type(title,'Unsent rename draft');
+  const poll=intervals.mock.calls.find(([,delay])=>delay===30000)?.[0];
+  expect(typeof poll).toBe('function');
+  await act(async()=>{await (poll as ()=>Promise<void>)();});
+  expect(screen.getByRole('dialog',{name:'Conversation options'})).toBeTruthy();
+  expect((screen.getByRole('textbox',{name:'Conversation title'}) as HTMLInputElement).value).toBe('Unsent rename draft');
+  expect(main.bridge.renameTask).not.toHaveBeenCalled();
+  displayName='Different fictional owner';
+  await act(async()=>{await (poll as ()=>Promise<void>)();});
+  expect(screen.queryByRole('dialog',{name:'Conversation options'})).toBeNull();
+ } finally {intervals.mockRestore();}
 });

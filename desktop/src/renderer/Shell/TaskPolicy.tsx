@@ -106,6 +106,7 @@ export function TaskPolicy({ policy, notice = null, onSetMode, compact=false }: 
       ) : null}
       {policy ? (
         <>
+          {compact&&policy.settings.filter(setting=>setting.name==='approval').map(setting=><p key={setting.name} data-conversation-approval-policy>{setting.label}: {setting.valueLabel}. <span>{setting.sourceLabel}.</span></p>)}
           {!compact&&<dl className="iq-task-states-list" data-task-policy-summary>
             {SUMMARY.map((name) => {
               const setting = policy.settings.find((entry) => entry.name === name);

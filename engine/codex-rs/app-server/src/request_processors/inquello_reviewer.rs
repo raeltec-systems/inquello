@@ -83,6 +83,11 @@ struct ReadyReview {
 }
 
 impl ReviewState {
+    #[cfg(test)]
+    pub(super) fn enable_synthetic_catalog_for_test(&mut self) {
+        self.fixture_response = Some("synthetic catalog".into());
+    }
+
     pub(super) fn task_review_pending(&self, principal: PrincipalId, task: &str) -> bool {
         self.pending.values().any(|invocation| {
             invocation.principal == principal
