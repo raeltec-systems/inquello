@@ -1,0 +1,521 @@
+{
+  "schema": "inquello-qualified-delivery-and-synthetic-electron-v1",
+  "recorded": "2026-11-03T18:53:34.138Z",
+  "sourceCommit": "2f8c78a52f874e9de32bff534c8e92ec10ecba46",
+  "engineTree": "e366b0c0b6aaabe21370d63ecd85d64210ac94c0",
+  "qualificationReport": {
+    "path": "D:/Projects/inquello/_bmad-output/implementation-artifacts/production-chat-v5-conversation-verification-2026-11-03.json",
+    "sha256": "92bf79547067059b85f0dc627d201d937c186bba6c1a3145e7d8757f688c5624"
+  },
+  "postAttachmentVerification": {
+    "path": "D:/Projects/inquello/docs/qualification/model-choice-v5-postattachment-2026-11-03.json",
+    "sha256": "d78c465b7623867e9c9cb34a87052c98d2cfe723aa130092258bea0456036ee4"
+  },
+  "deliveredManifest": {
+    "path": "D:/Projects/inquello/.tmp/model-choice-v5-production-stack-20261103/matched-production-build.json",
+    "sha256": "65dd5985ed2cb74e09f817037611d3bb8770744ab50ca62ccea5d22bb7e80772",
+    "manifest": {
+      "manifestVersion": 2,
+      "engineTree": "e366b0c0b6aaabe21370d63ecd85d64210ac94c0",
+      "serviceEngineTree": "e366b0c0b6aaabe21370d63ecd85d64210ac94c0",
+      "runtime": "D:\\Projects\\inquello\\.tmp\\model-choice-v5-production-stack-20261103\\bin\\codex-app-server.exe",
+      "runtimeSha256": "2de60fb771470655d0dd52eb97ab84334beb4c6d40f1971e1a98178513153ea4",
+      "cli": "D:\\Projects\\inquello\\.tmp\\model-choice-v5-production-stack-20261103\\bin\\codex.exe",
+      "cliSha256": "6c73139b637d22d043b30c34bc59d9993e10f4761e94b5293e92098e9f443996",
+      "service": "D:\\Projects\\inquello\\.tmp\\model-choice-v5-production-stack-20261103\\bin\\inquello-service.exe",
+      "serviceSha256": "6b2900690d4ccf1c1e9346f71e63a88815a32a9e32a61644472c4f0bca3252b4",
+      "desktopDistSha256": "35c6da65a309f42ce50be5bf4c417924d1cdcfa16a876d4eb45b71db07214d1b",
+      "head": "2f8c78a52f874e9de32bff534c8e92ec10ecba46",
+      "createdAt": "2026-11-03T18:42:08.567Z",
+      "features": "default; no inference-fixtures or test-issuer",
+      "implementationDigest": "8823a541774ade55fa64b0c89267cbceee48afdab38c72f0b04ee82148191c9a",
+      "qualificationReport": "D:/Projects/inquello/_bmad-output/implementation-artifacts/production-chat-v5-conversation-verification-2026-11-03.json",
+      "qualificationReportSha256": "92bf79547067059b85f0dc627d201d937c186bba6c1a3145e7d8757f688c5624",
+      "protocolStamp": {
+        "runtimeVersion": "0.165.0",
+        "forkTreeHash": "e366b0c0b6aaabe21370d63ecd85d64210ac94c0",
+        "generator": "codex app-server generate-ts",
+        "experimentalApi": false,
+        "fileCount": 816,
+        "contentSha256": "8cb81338b827c10220b17970cbf45e4ea93a85c7949a4a551cf174a0595b11e7"
+      },
+      "retainedDist": "D:\\Projects\\inquello\\.tmp\\model-choice-v5-production-stack-20261103\\dist",
+      "testedSourceCommit": "302037382ce790ca833bdb112df9f53550717113",
+      "testedDefaultArtifact": {
+        "name": "codex-app-server",
+        "path": "D:/Projects/inquello/.tmp/model-choice-clean-qualified-native-final-20261103/default/codex-app-server.exe",
+        "sha256": "458ed917dd9732edf02c3315a7c46d5f86cc11f3dfba1887b4445ea1fcd6c0a7",
+        "features": []
+      },
+      "postAttachmentVerification": {
+        "path": "D:/Projects/inquello/docs/qualification/model-choice-v5-postattachment-2026-11-03.json",
+        "sha256": "d78c465b7623867e9c9cb34a87052c98d2cfe723aa130092258bea0456036ee4"
+      },
+      "verification": "Exact Cargo-selected delivered default artifacts and existing strict pilot validator; unchanged qualified behavioral identity. Reviewed source/full-suite and final-native-subset evidence retains its own tested artifact identities. Actual built-app journey and retained-profile user consent/response acceptance remain separate."
+    }
+  },
+  "syntheticComposition": {
+    "path": "D:/Projects/inquello/.tmp/model-choice-v5-production-stack-20261103/synthetic-composition/manifest.json",
+    "sha256": "2c6680adb62a218004cade4ac66ce09d95858ab4ba208ba0b5a56835d4540007",
+    "manifest": {
+      "createdAt": "2026-11-03T18:43:15.582Z",
+      "topology": {
+        "path": "D:/Projects/inquello/.tmp/model-choice-v5-production-stack-20261103/synthetic-composition/inquello-dev-topology.exe",
+        "sha256": "a619321a2c042cf443963997d8800b9f9cbb7dd77592a37b995b58c05441f2eb",
+        "head": "2f8c78a52f874e9de32bff534c8e92ec10ecba46",
+        "engineTree": "e366b0c0b6aaabe21370d63ecd85d64210ac94c0",
+        "cargoArtifact": {
+          "reason": "compiler-artifact",
+          "package_id": "path+file:///D:/Projects/inquello/engine/codex-rs/inquello-service#0.165.0",
+          "manifest_path": "D:\\Projects\\inquello\\engine\\codex-rs\\inquello-service\\Cargo.toml",
+          "target": {
+            "kind": [
+              "bin"
+            ],
+            "crate_types": [
+              "bin"
+            ],
+            "name": "inquello-dev-topology",
+            "src_path": "D:\\Projects\\inquello\\engine\\codex-rs\\inquello-service\\src\\bin\\inquello-dev-topology.rs",
+            "edition": "2024",
+            "required-features": [
+              "test-issuer"
+            ],
+            "doc": true,
+            "doctest": false,
+            "test": true
+          },
+          "profile": {
+            "opt_level": "0",
+            "debuginfo": "line-tables-only",
+            "debug_assertions": true,
+            "overflow_checks": true,
+            "test": false
+          },
+          "features": [
+            "test-issuer"
+          ],
+          "filenames": [
+            "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\inquello-dev-topology.exe",
+            "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\inquello_dev_topology.pdb"
+          ],
+          "executable": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\inquello-dev-topology.exe",
+          "fresh": true
+        },
+        "gate": {
+          "log": "D:\\Projects\\inquello\\.tmp\\model-choice-v5-topology-build.log",
+          "logSha256": "717F6711804E7F08C8ED7A1528B181E6291F2F012B721640F3BD0C0FD98E0933",
+          "arguments": [
+            "build",
+            "--offline",
+            "-j1",
+            "--message-format=json",
+            "-p",
+            "inquello-service",
+            "--features",
+            "test-issuer",
+            "--bin",
+            "inquello-dev-topology"
+          ],
+          "name": "build",
+          "infrastructureError": null,
+          "executable": "D:\\Toolchains\\cargo\\bin\\cargo.exe",
+          "exit": 0,
+          "finished": "2026-11-03T18:43:13.6022520Z"
+        }
+      },
+      "fixture": {
+        "path": "D:/Projects/inquello/.tmp/model-choice-clean-qualified-native-final-20261103/fixture/codex-app-server.exe",
+        "sha256": "8cc0b132f508337891683c9225793c8c54334bbce48af6abdba303c83f8a1a22",
+        "head": "302037382ce790ca833bdb112df9f53550717113",
+        "behavior": "e98f1dc57fecb269648cd516cfafcbeffc51a6aabcdb50745db8fd6df33bcb26",
+        "features": "default,inference-fixtures",
+        "identity": [
+          "cargo:rustc-env=INQUELLO_BEHAVIOR_DIGEST=e98f1dc57fecb269648cd516cfafcbeffc51a6aabcdb50745db8fd6df33bcb26",
+          "cargo:rustc-env=INQUELLO_BUILD_PLATFORM=x86_64-pc-windows-msvc",
+          "cargo:rustc-env=INQUELLO_DATA_POLICY_DIGEST=3a5a841c43d62482157d95e37c1f327be98bc7d4650c03f14a32ff8e0dcd875a"
+        ]
+      },
+      "cli": {
+        "path": "D:\\Projects\\inquello\\.tmp\\model-choice-v5-production-stack-20261103\\bin\\codex.exe",
+        "sha256": "6c73139b637d22d043b30c34bc59d9993e10f4761e94b5293e92098e9f443996",
+        "head": "2f8c78a52f874e9de32bff534c8e92ec10ecba46"
+      },
+      "desktop": {
+        "distSha256": "35c6da65a309f42ce50be5bf4c417924d1cdcfa16a876d4eb45b71db07214d1b",
+        "head": "2f8c78a52f874e9de32bff534c8e92ec10ecba46"
+      },
+      "runner": {
+        "path": "D:/Projects/inquello/desktop/scripts/run-seeded-smoke.cjs",
+        "sha256": "4d2d28a4aaf825c2a18e7c3691fb6162ed1d32011f8aaf8d5bae30f86d9787b3",
+        "arguments": [
+          "--visual-only"
+        ]
+      },
+      "scope": "Composed actual Electron five-call synthetic journey: bridge-driven pinned A/B creation and model selection, real renderer follow-up/Stop/reopen/Resume; fresh one-choice picker is separately proven by source-component Electron input, not integrated fixture or real-provider E2E. Reviewed fixture source302037 retained across evidence-only commit; current default CLI/Desktop and current test-issuer topology separately measured. Not default production or integrated owner-consent E2E, not a live provider response or actual workspace consent. This existing visual phase captures Models and chat, not AI Connections consent."
+    }
+  },
+  "gates": [
+    {
+      "phase": "production-stack",
+      "log": "D:\\Projects\\inquello\\.tmp\\model-choice-v5-production-stack-default-three-binaries.log",
+      "logSha256": "3484A8C4BF83247E7591ADD32F8934B8A4FC35DA87FBF3DA1494FB47AA9FAEE4",
+      "arguments": [
+        "build",
+        "--offline",
+        "-j1",
+        "--message-format=json",
+        "--config",
+        "profile.dev.package.codex-core.debug=0",
+        "-p",
+        "codex-cli",
+        "-p",
+        "codex-app-server",
+        "-p",
+        "inquello-service"
+      ],
+      "name": "default-three-binaries",
+      "infrastructureError": null,
+      "executable": "D:\\Toolchains\\cargo\\bin\\cargo.exe",
+      "exit": 0,
+      "finished": "2026-11-03T18:41:29.3912637Z"
+    },
+    {
+      "phase": "production-stack",
+      "log": "D:\\Projects\\inquello\\.tmp\\model-choice-v5-production-stack-selected-artifact-identity.log",
+      "logSha256": "2D1E31B57133172D32ED6F4B9E8B603666C9FD51DC9E4BBC9B87D7BF21FA4087",
+      "arguments": [
+        "D:\\Projects\\inquello\\.tmp\\model-choice-v5-production-identity.cjs"
+      ],
+      "name": "selected-artifact-identity",
+      "infrastructureError": null,
+      "executable": "C:\\Program Files\\nodejs\\node.exe",
+      "exit": 0,
+      "finished": "2026-11-03T18:41:41.4190437Z"
+    },
+    {
+      "phase": "production-stack",
+      "log": "D:\\Projects\\inquello\\.tmp\\model-choice-v5-production-stack-generate-protocol.log",
+      "logSha256": "15B22A20DEBB7B89EBAA86419C06BECD9C6D8B58857844A4F7A6C641E6E391B8",
+      "arguments": [
+        "/d",
+        "/c",
+        "pnpm",
+        "run",
+        "generate:protocol"
+      ],
+      "name": "generate-protocol",
+      "infrastructureError": null,
+      "executable": "C:\\Windows\\system32\\cmd.exe",
+      "exit": 0,
+      "finished": "2026-11-03T18:41:43.4357755Z"
+    },
+    {
+      "phase": "production-stack",
+      "log": "D:\\Projects\\inquello\\.tmp\\model-choice-v5-production-stack-desktop-main-types.log",
+      "logSha256": "D8760763BE63067F00789FCF42648CB7E89259B37690E733415676EC0B8B6596",
+      "arguments": [
+        "/d",
+        "/c",
+        "pnpm",
+        "exec",
+        "tsc",
+        "-p",
+        "tsconfig.build.json",
+        "--noEmit"
+      ],
+      "name": "desktop-main-types",
+      "infrastructureError": null,
+      "executable": "C:\\Windows\\system32\\cmd.exe",
+      "exit": 0,
+      "finished": "2026-11-03T18:41:47.6538562Z"
+    },
+    {
+      "phase": "production-stack",
+      "log": "D:\\Projects\\inquello\\.tmp\\model-choice-v5-production-stack-desktop-renderer-types.log",
+      "logSha256": "D8760763BE63067F00789FCF42648CB7E89259B37690E733415676EC0B8B6596",
+      "arguments": [
+        "/d",
+        "/c",
+        "pnpm",
+        "exec",
+        "tsc",
+        "-p",
+        "tsconfig.renderer.json",
+        "--noEmit"
+      ],
+      "name": "desktop-renderer-types",
+      "infrastructureError": null,
+      "executable": "C:\\Windows\\system32\\cmd.exe",
+      "exit": 0,
+      "finished": "2026-11-03T18:41:51.4316391Z"
+    },
+    {
+      "phase": "production-stack",
+      "log": "D:\\Projects\\inquello\\.tmp\\model-choice-v5-production-stack-desktop-build.log",
+      "logSha256": "130CACC8AEFFF35486940E30886F2484BC65A533C598203F1851C3A35E9BC079",
+      "arguments": [
+        "/d",
+        "/c",
+        "pnpm",
+        "run",
+        "build"
+      ],
+      "name": "desktop-build",
+      "infrastructureError": null,
+      "executable": "C:\\Windows\\system32\\cmd.exe",
+      "exit": 0,
+      "finished": "2026-11-03T18:42:02.2705363Z"
+    },
+    {
+      "phase": "production-stack",
+      "log": "D:\\Projects\\inquello\\.tmp\\model-choice-v5-production-stack-matched-manifest.log",
+      "logSha256": "9E379CAE8C7F721D634E272091D5BB2F1FABE94E15971A64CA9FE13C905486DE",
+      "arguments": [
+        "D:\\Projects\\inquello\\.tmp\\model-choice-v5-production-manifest.cjs"
+      ],
+      "name": "matched-manifest",
+      "infrastructureError": null,
+      "executable": "C:\\Program Files\\nodejs\\node.exe",
+      "exit": 0,
+      "finished": "2026-11-03T18:42:08.5948315Z"
+    },
+    {
+      "phase": "topology",
+      "log": "D:\\Projects\\inquello\\.tmp\\model-choice-v5-topology-build.log",
+      "logSha256": "717F6711804E7F08C8ED7A1528B181E6291F2F012B721640F3BD0C0FD98E0933",
+      "arguments": [
+        "build",
+        "--offline",
+        "-j1",
+        "--message-format=json",
+        "-p",
+        "inquello-service",
+        "--features",
+        "test-issuer",
+        "--bin",
+        "inquello-dev-topology"
+      ],
+      "name": "build",
+      "infrastructureError": null,
+      "executable": "D:\\Toolchains\\cargo\\bin\\cargo.exe",
+      "exit": 0,
+      "finished": "2026-11-03T18:43:13.6022520Z"
+    },
+    {
+      "phase": "topology",
+      "log": "D:\\Projects\\inquello\\.tmp\\model-choice-v5-topology-capture.log",
+      "logSha256": "3503EC2A90FF01B52C3CD1721ABA9132EB2353BCE0C0CC47E5AA7167AA831CA1",
+      "arguments": [
+        "D:\\Projects\\inquello\\.tmp\\model-choice-v5-topology-capture.cjs"
+      ],
+      "name": "capture",
+      "infrastructureError": null,
+      "executable": "C:\\Program Files\\nodejs\\node.exe",
+      "exit": 0,
+      "finished": "2026-11-03T18:43:16.6919003Z"
+    },
+    {
+      "phase": "visual",
+      "log": "D:\\Projects\\inquello\\.tmp\\model-choice-v5-visual-dist-preflight.log",
+      "logSha256": "D8760763BE63067F00789FCF42648CB7E89259B37690E733415676EC0B8B6596",
+      "arguments": [
+        "-e",
+        "\"const fs=require('fs'),m=JSON.parse(fs.readFileSync('../.tmp/model-choice-v5-production-stack-20261103/matched-production-build.json','utf8'));if(require('./scripts/run-auth0-pilot.cjs').hashDesktopDist(require('path').resolve('dist'))!==m.desktopDistSha256)throw Error('Dist changed');\""
+      ],
+      "name": "dist-preflight",
+      "infrastructureError": null,
+      "executable": "C:\\Program Files\\nodejs\\node.exe",
+      "exit": 0,
+      "finished": "2026-11-03T18:44:41.6691697Z"
+    },
+    {
+      "phase": "visual",
+      "log": "D:\\Projects\\inquello\\.tmp\\model-choice-v5-visual-journey.log",
+      "logSha256": "1E3343B9C22C9B7D4731327E1F7D4092C9BB586DF5CE060AA431460805EE6E66",
+      "arguments": [
+        "scripts/run-seeded-smoke.cjs",
+        "--visual-only"
+      ],
+      "name": "journey",
+      "infrastructureError": null,
+      "executable": "C:\\Program Files\\nodejs\\node.exe",
+      "exit": 0,
+      "finished": "2026-11-03T18:46:50.7459881Z"
+    }
+  ],
+  "syntheticEffects": {
+    "calls": 4,
+    "bCalls": 1,
+    "totalCalls": 5,
+    "invalidCalls": 0,
+    "heldCancelled": true,
+    "heldTimedOut": false,
+    "contextMatches": [
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "captures": [
+    {
+      "name": "01-home-synthetic",
+      "path": "D:\\Projects\\inquello\\.tmp\\inquello-seeded-smoke-D3WfSm\\visual\\captures\\01-home-synthetic.png",
+      "width": 2400,
+      "height": 1500,
+      "sha256": "317f9c460ebc731991ac676209c2c5790fd16ce9c821241f9221759447e08cfe",
+      "personallyInspected": false,
+      "repositoryPath": null
+    },
+    {
+      "name": "01b-home-collapsed-synthetic",
+      "path": "D:\\Projects\\inquello\\.tmp\\inquello-seeded-smoke-D3WfSm\\visual\\captures\\01b-home-collapsed-synthetic.png",
+      "width": 2400,
+      "height": 1500,
+      "sha256": "7b8d4174c49aea1f5f735bf5433299a5502edf84398408675d9819efb1f8730f",
+      "personallyInspected": false,
+      "repositoryPath": null
+    },
+    {
+      "name": "01c-account-workspace-synthetic",
+      "path": "D:\\Projects\\inquello\\.tmp\\inquello-seeded-smoke-D3WfSm\\visual\\captures\\01c-account-workspace-synthetic.png",
+      "width": 2400,
+      "height": 1500,
+      "sha256": "d1de7daebce0c4d3dd9a800c902982f8efd2dc603801594b6f6ca1a8f2150479",
+      "personallyInspected": false,
+      "repositoryPath": null
+    },
+    {
+      "name": "01d-multiline-unsent-synthetic",
+      "path": "D:\\Projects\\inquello\\.tmp\\inquello-seeded-smoke-D3WfSm\\visual\\captures\\01d-multiline-unsent-synthetic.png",
+      "width": 2400,
+      "height": 1500,
+      "sha256": "a2dc9a4bf99581967f7d3a9c55ed6aaf2fe21c122bcc8f5ee4ad47c85d9aade2",
+      "personallyInspected": false,
+      "repositoryPath": null
+    },
+    {
+      "name": "02c-independent-sol-and-reopened-terra-synthetic",
+      "path": "D:\\Projects\\inquello\\.tmp\\inquello-seeded-smoke-D3WfSm\\visual\\captures\\02c-independent-sol-and-reopened-terra-synthetic.png",
+      "width": 2400,
+      "height": 1500,
+      "sha256": "b193abc1dbef3c272f02e5c4e4e8fd3a0e220d843faf5cd21e48ae2413a2f099",
+      "personallyInspected": false,
+      "repositoryPath": null
+    },
+    {
+      "name": "02-completed-conversation-synthetic",
+      "path": "D:\\Projects\\inquello\\.tmp\\inquello-seeded-smoke-D3WfSm\\visual\\captures\\02-completed-conversation-synthetic.png",
+      "width": 2400,
+      "height": 1500,
+      "sha256": "b193abc1dbef3c272f02e5c4e4e8fd3a0e220d843faf5cd21e48ae2413a2f099",
+      "personallyInspected": true,
+      "repositoryPath": "docs/qualification/model-choice-v5-captures-2026-11-03/02-completed-conversation-synthetic.png"
+    },
+    {
+      "name": "02b-narrow-conversation-synthetic",
+      "path": "D:\\Projects\\inquello\\.tmp\\inquello-seeded-smoke-D3WfSm\\visual\\captures\\02b-narrow-conversation-synthetic.png",
+      "width": 875,
+      "height": 1125,
+      "sha256": "962966dd1f8047bd7ca8e27797d2fe3a83b824c7144f86202bc37b77aa0433d6",
+      "personallyInspected": false,
+      "repositoryPath": null
+    },
+    {
+      "name": "03-followup-conversation-synthetic",
+      "path": "D:\\Projects\\inquello\\.tmp\\inquello-seeded-smoke-D3WfSm\\visual\\captures\\03-followup-conversation-synthetic.png",
+      "width": 2400,
+      "height": 1500,
+      "sha256": "223a330796a8db8428548a91a32896d832db14c780d432c4460857ac6fd0e162",
+      "personallyInspected": false,
+      "repositoryPath": null
+    },
+    {
+      "name": "03b-live-streaming-conversation-synthetic",
+      "path": "D:\\Projects\\inquello\\.tmp\\inquello-seeded-smoke-D3WfSm\\visual\\captures\\03b-live-streaming-conversation-synthetic.png",
+      "width": 2400,
+      "height": 1500,
+      "sha256": "9418b467e763f5cc831dcd1f974b94365e7d7ae91c1e2ce197a32446e9437f31",
+      "personallyInspected": false,
+      "repositoryPath": null
+    },
+    {
+      "name": "04-interrupted-conversation-synthetic",
+      "path": "D:\\Projects\\inquello\\.tmp\\inquello-seeded-smoke-D3WfSm\\visual\\captures\\04-interrupted-conversation-synthetic.png",
+      "width": 2400,
+      "height": 1500,
+      "sha256": "2af1d9162d8ee8f03062c65b74ad979a96ac29f6253d463e21a7ed810dfd45c4",
+      "personallyInspected": false,
+      "repositoryPath": null
+    },
+    {
+      "name": "04a-readable-composer-narrow-synthetic",
+      "path": "D:\\Projects\\inquello\\.tmp\\inquello-seeded-smoke-D3WfSm\\visual\\captures\\04a-readable-composer-narrow-synthetic.png",
+      "width": 1125,
+      "height": 875,
+      "sha256": "5c96d15ff9d7eadc441046f6a9d73977de9ae0ef9a6f8420e69c4447537abcef",
+      "personallyInspected": false,
+      "repositoryPath": null
+    },
+    {
+      "name": "04b-reader-jump-narrow-synthetic",
+      "path": "D:\\Projects\\inquello\\.tmp\\inquello-seeded-smoke-D3WfSm\\visual\\captures\\04b-reader-jump-narrow-synthetic.png",
+      "width": 1125,
+      "height": 875,
+      "sha256": "5c96d15ff9d7eadc441046f6a9d73977de9ae0ef9a6f8420e69c4447537abcef",
+      "personallyInspected": true,
+      "repositoryPath": "docs/qualification/model-choice-v5-captures-2026-11-03/04b-reader-jump-narrow-synthetic.png"
+    },
+    {
+      "name": "05-reopened-conversation-synthetic",
+      "path": "D:\\Projects\\inquello\\.tmp\\inquello-seeded-smoke-D3WfSm\\visual\\captures\\05-reopened-conversation-synthetic.png",
+      "width": 2400,
+      "height": 1500,
+      "sha256": "93dfb16d4260e862a22313677895ab2fdd00007036aee918fda73a0ff4519304",
+      "personallyInspected": false,
+      "repositoryPath": null
+    },
+    {
+      "name": "06-resumed-conversation-synthetic",
+      "path": "D:\\Projects\\inquello\\.tmp\\inquello-seeded-smoke-D3WfSm\\visual\\captures\\06-resumed-conversation-synthetic.png",
+      "width": 2400,
+      "height": 1500,
+      "sha256": "55f1f648eae9fe851f5bb61648d17cffb6f6bcd277963a2fb9a6d06243361e0e",
+      "personallyInspected": true,
+      "repositoryPath": "docs/qualification/model-choice-v5-captures-2026-11-03/06-resumed-conversation-synthetic.png"
+    },
+    {
+      "name": "07-task-details-synthetic",
+      "path": "D:\\Projects\\inquello\\.tmp\\inquello-seeded-smoke-D3WfSm\\visual\\captures\\07-task-details-synthetic.png",
+      "width": 2400,
+      "height": 1500,
+      "sha256": "9f060d90ac2f18c6b5aacd3b3b36770b146a33ca183bd3f300d93e51cdf444fd",
+      "personallyInspected": false,
+      "repositoryPath": null
+    },
+    {
+      "name": "08-settings-processing-routes",
+      "path": "D:\\Projects\\inquello\\.tmp\\inquello-seeded-smoke-D3WfSm\\visual\\captures\\08-settings-processing-routes.png",
+      "width": 2400,
+      "height": 1500,
+      "sha256": "0d0db82cae051940a4f8fa60c7b33d5a45b54d1ef69c3d4ba733fee490f56052",
+      "personallyInspected": true,
+      "repositoryPath": "docs/qualification/model-choice-v5-captures-2026-11-03/08-settings-processing-routes.png"
+    }
+  ],
+  "cleanup": {
+    "runnerReportedNoErrors": true,
+    "remainingElectronNativeTopologyServiceProcesses": 0,
+    "observedAt": "2026-11-03T18:53:34.139Z",
+    "realProfileNotLaunched": true
+  },
+  "visualAssessment": "Personally inspected completed, narrow reader-jump, resumed and Models captures. Completed conversation shows user/assistant text without initial-request/source/status/runtime chrome, and friendly model picker inside the composer. Narrow capture shows scroll overflow and composer; separate actual input evidence records wheel/drag/keyboard/no-yank. Resume capture retains known fixture-only Sol unavailable and continuing notice; effect assertions passed, not an ideal final-idle claim. Models remains deliberate settings, not required ordinary chat selection.",
+  "limits": [
+    "Actual built Electron with synthetic loopback transport: pinned A/B creation and model selection through existing public main bridge; actual renderer follow-up/Stop/reopen/Resume. Fresh picker is separately source-component input-tested, not integrated fresh-picker/real-provider E2E.",
+    "AI Connections owner-consent screen is not captured by this existing visual-only journey. Existing real API response/connection/consent remain historical user acceptance; this revised-build user retest is separate.",
+    "Full normal-runner verifyBuild/retained-profile resume has not executed. Source manifest passed verifyBuildMetadata only; detached derived canonical artifact paths must pass full existing launcher checks.",
+    "No real workspace consent, real credential read, paid response, budget feature or full Messages qualification claim.",
+    "Tested preattachment302037 artifact provenance and newly delivered2f8c78 artifact hashes remain distinct; behavioral digest8823a541 is unchanged. Original source full4 exit1 plus corrected/affected regressions remain explicit composition, not a fabricated full green invocation. The known preexisting postcommit binding-revoke cleanup gap remains a distinct follow-up, as recorded in the reviewed qualification report."
+  ]
+}
