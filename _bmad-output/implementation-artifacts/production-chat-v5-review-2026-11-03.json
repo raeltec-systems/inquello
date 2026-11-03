@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "reviewedAt": "2026-11-03T12:57:31Z",
+  "review": "Independent parent/root review accepted the exact immutable report as scoped software-enforcement evidence; authorization relayed to implementation agent.",
+  "report": "_bmad-output/implementation-artifacts/production-chat-v5-verification-2026-11-03.json",
+  "reportSha256": "51845a72fcab21c136d910aae58f68cdbc27eff04cb75c41cb6bfa927b31c79a",
+  "decision": "approved-for-exact-Terra-software-qualification-attachment",
+  "scope": "Only processing.codex-responses evidence and negative_authorization metadata; no ceiling, processing scope, policy or other provider changes.",
+  "requiredCases": 58,
+  "testedSourceCommit": "e011a567a6a8bcc46ed92a66cd220c09a6ca718b",
+  "testedDefaultImplementationDigest": "932afd01a5044d85a1c068e60b43c11952fc2be06b9b67d3c00b65a0e4dfb014",
+  "postAttachmentCompiledConsentHttpPositive": "pending execution in separate supplemental receipt; not inferred from preattachment branch",
+  "remainingGates": [
+    "actual compiled-positive consent HTTP and refusal/no-write tests",
+    "final default delivery artifact identity and genuine protocol/behavior stability",
+    "matched built-app Electron journey and pixel inspection",
+    "user in-app workspace Owner consent and real OpenAI response acceptance"
+  ],
+  "limitations": "All immutable report composition limitations retained. This review is not workspace consent, a provider credential, paid-call permission or a live-production acceptance claim."
+}
