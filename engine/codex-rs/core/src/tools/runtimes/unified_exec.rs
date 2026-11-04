@@ -992,9 +992,23 @@ mod tests {
                         "Private Task command refused before execution: {reason}"
                     ))
                 );
+                // Every item event is followed by its legacy mirror (session
+                // `as_legacy_events`), so the one completion also arrives as one
+                // ExecCommandEnd for the same call. Nothing else may follow: no
+                // Begin and no second completion.
+                let mirror = rx.try_recv().expect("legacy mirror of the completion");
+                let EventMsg::ExecCommandEnd(end) = mirror.msg else {
+                    panic!("only the legacy completion mirror may follow, no Begin")
+                };
+                assert_eq!(end.call_id, ctx.call_id);
+                assert_eq!(end.command, command);
+                assert_eq!(
+                    end.aggregated_output,
+                    format!("Private Task command refused before execution: {reason}")
+                );
                 assert!(
                     rx.try_recv().is_err(),
-                    "exactly one event, no Begin or duplicate completion"
+                    "exactly one completion and its mirror, no Begin or duplicate completion"
                 );
                 assert!(!root.path().join("effect").exists());
             })
