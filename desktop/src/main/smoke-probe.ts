@@ -3735,11 +3735,14 @@ export async function probeEnvironments(contents: WebContents, options: Organise
       const row = await wait(() => qVisible('[data-task-id=${JSON.stringify(created.value.taskId)}] a'), ${SHELL_SETTLE_MS});
       if (!row) return false; row.click();
       if (!(await wait(() => qVisible('[data-task-view=${JSON.stringify(created.value.taskId)}]'), ${SHELL_SETTLE_MS}))) return false;
-      const panel = await wait(() => { const node = q('[data-task-environment]'); return node?.textContent.includes('No conversation model selected') ? node : null; }, ${POLICY_SETTLE_MS});
+      // Owner decision 2026-11-04: the environment chip sits beside the model in the composer footer.
+      const chip = await wait(() => qVisible('[data-composer] [data-conversation-model] [data-environment-chip]'), ${SHELL_SETTLE_MS});
+      if (!chip) return false; chip.click();
+      const panel = await wait(() => { const node = qVisible('dialog[open] [data-task-environment]'); return node?.textContent.includes('No conversation model selected') ? node : null; }, ${POLICY_SETTLE_MS});
       if (!panel) return false;
       return panel.textContent.includes('This device (local host)') && panel.textContent.includes('runtime-owned configuration verified') && panel.textContent.includes('Story 8.1') && panel.textContent.includes('V2 revisit (OQ-13)') && [...panel.querySelectorAll('button[aria-disabled="true"]')].length >= 2;
     })()`) as boolean;
-    if (!rendered) throw new SmokeProbeFailure('Environment panel did not render: no [data-task-environment] surface is mounted for the open Task');
+    if (!rendered) throw new SmokeProbeFailure('Environment panel did not render: the composer environment chip did not open [data-task-environment] for the open Task');
     // Safe synthetic selection through the real service emits main/preload invalidation.
     // No refresh click, renderer test event, credentials or inference call is used.
     stage = 'route-catalog';
@@ -3767,7 +3770,10 @@ export async function probeEnvironments(contents: WebContents, options: Organise
     stage = 'mounted-route-update';
     const updated = await contents.executeJavaScript(`(async () => {
       ${SHELL_HELPERS}
-      return !!(await wait(() => { const panel = q('[data-task-environment]'); return panel?.textContent.includes('Selected conversation model') && panel.textContent.includes('claude-sonnet-5-5') && panel.textContent.includes('Unknown') && !panel.textContent.includes('No conversation model selected') && !/Deployment|Endpoint|API version|anthropic-direct|api[.]anthropic[.]com/i.test(panel.textContent) ? panel : null; }, ${POLICY_SETTLE_MS}));
+      const updated = !!(await wait(() => { const panel = qVisible('dialog[open] [data-task-environment]'); return panel?.textContent.includes('Selected conversation model') && panel.textContent.includes('claude-sonnet-5-5') && panel.textContent.includes('Unknown') && !panel.textContent.includes('No conversation model selected') && !/Deployment|Endpoint|API version|anthropic-direct|api[.]anthropic[.]com/i.test(panel.textContent) ? panel : null; }, ${POLICY_SETTLE_MS}));
+      const close = [...document.querySelectorAll('dialog[open] button')].find((button) => button.textContent === 'Close Environment');
+      if (close) close.click();
+      return updated && !!(await wait(() => !q('dialog[open] [data-task-environment]'), ${SHELL_SETTLE_MS}));
     })()`) as boolean;
     if (!updated) failures.push('Mounted environment panel did not update via production route invalidation');
     // Story 1.24: mounted choices follow the same real main/preload notification.
@@ -3775,11 +3781,17 @@ export async function probeEnvironments(contents: WebContents, options: Organise
     stage = 'mounted-usage-settings';
     const usageChoices = await contents.executeJavaScript(`(async () => {
       ${SHELL_HELPERS}
-      const panel = await wait(() => { const node=q('[data-task-usage]'); return node?.querySelector('select[aria-label="Reasoning"]:not(:disabled)') ? node : null; }, ${POLICY_SETTLE_MS});
+      // Reasoning sits beside the model in the composer footer; it opens the explicit settings.
+      const trigger = await wait(() => { const node=qVisible('[data-composer] [data-conversation-model] [data-conversation-reasoning]'); return node?.getAttribute('data-reasoning-state')==='unsaved' ? node : null; }, ${POLICY_SETTLE_MS});
+      if (!trigger) return false; trigger.click();
+      const panel = await wait(() => { const node=qVisible('dialog[open] [data-task-reasoning]'); return node?.querySelector('select[aria-label="Reasoning"]:not(:disabled)') ? node : null; }, ${POLICY_SETTLE_MS});
       if (!panel || !panel.textContent.includes('Defaults are not saved yet')) return false;
       const save=[...panel.querySelectorAll('button')].find(button=>button.textContent==='Save Task settings');
       if (!save) return false; save.click();
-      return !!(await wait(() => { const node=q('[data-task-usage]'); return node?.querySelector('select[aria-label="Reasoning"]') && !node.textContent.includes('Defaults are not saved yet') ? node : null; }, ${POLICY_SETTLE_MS}));
+      const saved = !!(await wait(() => { const node=qVisible('dialog[open] [data-task-reasoning]'); return node?.querySelector('select[aria-label="Reasoning"]') && !node.textContent.includes('Defaults are not saved yet') && qVisible('[data-conversation-reasoning]')?.getAttribute('data-reasoning-state')==='saved' ? node : null; }, ${POLICY_SETTLE_MS}));
+      const close = [...document.querySelectorAll('dialog[open] button')].find((button) => button.textContent === 'Close Reasoning and speed');
+      if (close) close.click();
+      return saved && !!(await wait(() => !q('dialog[open] [data-task-reasoning]'), ${SHELL_SETTLE_MS}));
     })()`) as boolean;
     if (!usageChoices) failures.push('Mounted usage choices did not save explicit defaults');
     // Harmless local invocations, repeated and failed, are accounted at the real boundary.
@@ -3791,7 +3803,11 @@ export async function probeEnvironments(contents: WebContents, options: Organise
     stage = 'mounted-usage-history';
     const history = await contents.executeJavaScript(`(async () => {
       ${SHELL_HELPERS}
-      return !!(await wait(() => { const node=q('[data-task-usage]'); const rows=node?.querySelectorAll('[data-usage-attempt]'); return rows?.length>=3 && node.textContent.includes('Local tool invocation — completed') && node.textContent.includes('Local tool invocation — failed') && node.textContent.includes('Unknown / Unknown') ? node : null; }, ${POLICY_SETTLE_MS}));
+      // Attributable usage and limits live in Settings > Usage for the open conversation.
+      location.hash = '#settings-usage';
+      const found = !!(await wait(() => { const node=qVisible('[data-settings-usage-task=${JSON.stringify(created.value.taskId)}] [data-task-usage]'); const rows=node?.querySelectorAll('[data-usage-attempt]'); return rows?.length>=3 && node.textContent.includes('Local tool invocation — completed') && node.textContent.includes('Local tool invocation — failed') && node.textContent.includes('Unknown / Unknown') ? node : null; }, ${POLICY_SETTLE_MS}));
+      location.hash = '#shell';
+      return found;
     })()`) as boolean;
     if (!history) failures.push('Native repeated/failed tool history did not reach mounted usage through production notifications');
 
@@ -3869,7 +3885,7 @@ export async function probeQuota(contents: WebContents, options: OrganiseProbeOp
       location.hash='#specimen';await wait(specimenReady,5000);result.shell=await openShell();if(!result.shell)return result;
       const row=await wait(()=>qVisible('[data-task-id=${JSON.stringify(run.taskId)}] a'),${SHELL_SETTLE_MS});result.sidebar=!!row;if(!row)return result;row.click();
       result.task=!!(await wait(()=>qVisible('[data-task-view=${JSON.stringify(run.taskId)}]'),${SHELL_SETTLE_MS}));if(!result.task)return result;
-      result.controls=!!(await wait(()=>qVisible('[data-task-usage] select[aria-label="Reasoning"]'),${POLICY_SETTLE_MS}));return result;
+      result.controls=!!(await wait(()=>qVisible('[data-composer] [data-conversation-model] [data-conversation-reasoning]')&&qVisible('[data-composer] [data-conversation-model] [data-environment-chip]'),${POLICY_SETTLE_MS}));return result;
     })()`) as {shell:boolean;sidebar:boolean;task:boolean;controls:boolean};
     if(!mounted.controls)throw new SmokeProbeFailure('Classified quota Task controls did not mount; stages='+JSON.stringify(mounted));
     stage='bounded-local-invocations';
@@ -3877,7 +3893,9 @@ export async function probeQuota(contents: WebContents, options: OrganiseProbeOp
       const result=await options.policy.runTool(run.taskId,command,{timeoutMs:30_000});if(!result.ok)throw new SmokeProbeFailure('Quota local invocation unavailable');
     }
     options.usageChanged(false);
-    const history=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}return !!(await wait(()=>{const node=qVisible('[data-task-usage]');return node&&node.querySelectorAll('[data-usage-attempt]').length>=3&&node.textContent.includes('Local tool invocation — completed')&&node.textContent.includes('Local tool invocation — failed')?node:null;},${POLICY_SETTLE_MS}));})()`);
+    // Attributable usage and limits live in Settings > Usage for the open conversation.
+    const usagePanel=`qVisible('[data-settings-usage-task=${JSON.stringify(run.taskId)}] [data-task-usage]')`;
+    const history=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}location.hash='#settings-usage';const found=!!(await wait(()=>{const node=${usagePanel};return node&&node.querySelectorAll('[data-usage-attempt]').length>=3&&node.textContent.includes('Local tool invocation — completed')&&node.textContent.includes('Local tool invocation — failed')?node:null;},${POLICY_SETTLE_MS}));location.hash='#shell';return found;})()`);
     if(!history)throw new SmokeProbeFailure('Quota prior local history did not mount');
     // Combined Story 1.24 gate: existing default-off debug fixture dispatcher,
     // production native reviewer/ledger, then the real mounted preload panel.
@@ -3901,16 +3919,25 @@ export async function probeQuota(contents: WebContents, options: OrganiseProbeOp
       options.usageChanged(true);
       const defaultsSaved=await contents.executeJavaScript(`(async()=>{
         ${SHELL_HELPERS}
-        const panel=await wait(()=>{const node=q('[data-task-usage]');return node?.textContent.includes('synthetic fixture')&&node.querySelector('select[aria-label="Reasoning"]:not(:disabled)')?node:null;},${POLICY_SETTLE_MS});
+        // The usage surface first reflects the prepared fixture's inherited limits.
+        location.hash='#settings-usage';
+        const fixtureSeen=!!(await wait(()=>{const node=${usagePanel};return node?.textContent.includes('synthetic fixture')?node:null;},${POLICY_SETTLE_MS}));
+        location.hash='#shell';if(!fixtureSeen)return false;
+        // Then defaults are saved explicitly from the composer footer, beside the model.
+        const trigger=await wait(()=>qVisible('[data-task-view=${JSON.stringify(run.taskId)}]')&&qVisible('[data-composer] [data-conversation-model] [data-conversation-reasoning]'),${POLICY_SETTLE_MS});
+        if(!trigger)return false;trigger.click();
+        const panel=await wait(()=>{const node=qVisible('dialog[open] [data-task-reasoning]');return node?.querySelector('select[aria-label="Reasoning"]:not(:disabled)')?node:null;},${POLICY_SETTLE_MS});
         if(!panel)return false;
         const save=[...panel.querySelectorAll('button')].find(button=>button.textContent==='Save Task settings');if(!save)return false;save.click();
-        return !!(await wait(()=>{const node=q('[data-task-usage]');return node?.textContent.includes('synthetic fixture')&&!node.textContent.includes('older route revision')?node:null;},${POLICY_SETTLE_MS}));
+        const saved=!!(await wait(()=>{const node=qVisible('dialog[open] [data-task-reasoning]');return node&&!node.textContent.includes('older route revision')&&!node.textContent.includes('Defaults are not saved yet')&&qVisible('[data-conversation-reasoning]')?.getAttribute('data-reasoning-state')==='saved'?node:null;},${POLICY_SETTLE_MS}));
+        const close=[...document.querySelectorAll('dialog[open] button')].find(button=>button.textContent==='Close Reasoning and speed');if(close)close.click();
+        return saved&&!!(await wait(()=>!q('dialog[open] [data-task-reasoning]'),${SHELL_SETTLE_MS}));
       })()`) as boolean;
       if(!defaultsSaved)throw new SmokeProbeFailure('Mounted fixture defaults were not saved');
       const nativeHistory=await options.runtimeRequest<{usage:{attempts:Array<{snapshot:{attempt_id:string;operation_kind:string}}>}}>('inquello/usage/read',{taskId:run.taskId});
       const retainedIds=nativeHistory.usage.attempts.map(row=>row.snapshot.attempt_id);
       if(nativeHistory.usage.attempts.filter(row=>row.snapshot.operation_kind==='local-tool').length<3)throw new SmokeProbeFailure('Quota native local history incomplete');
-      const allHistoryMounted=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}const retained=${JSON.stringify(retainedIds)};return !!(await wait(()=>{const panel=qVisible('[data-task-usage]');if(!panel||!panel.getClientRects().length)return false;const ids=[...panel.querySelectorAll('[data-usage-attempt]')].map(node=>node.getAttribute('data-usage-attempt'));return ids.length===retained.length&&retained.every(id=>ids.includes(id));},${POLICY_SETTLE_MS}));})()`);
+      const allHistoryMounted=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}const retained=${JSON.stringify(retainedIds)};location.hash='#settings-usage';const found=!!(await wait(()=>{const panel=${usagePanel};if(!panel||!panel.getClientRects().length)return false;const ids=[...panel.querySelectorAll('[data-usage-attempt]')].map(node=>node.getAttribute('data-usage-attempt'));return ids.length===retained.length&&retained.every(id=>ids.includes(id));},${POLICY_SETTLE_MS}));location.hash='#shell';return found;})()`);
       if(!allHistoryMounted)throw new SmokeProbeFailure('Quota mounted history omitted retained native attempts');
       stage = 'quota-fixture-refuse';
       const refused=await fixture('refuse');
@@ -3919,11 +3946,20 @@ export async function probeQuota(contents: WebContents, options: OrganiseProbeOp
       options.usageChanged(false);
       const mountedRefusal=await contents.executeJavaScript(`(async()=>{
         ${SHELL_HELPERS}
-        const retained=${JSON.stringify(retainedIds)};
-        return !!(await wait(()=>{const node=q('[data-task-usage]');if(!node)return null;const ids=[...node.querySelectorAll('[data-usage-attempt]')].map(row=>row.getAttribute('data-usage-attempt'));
+        const retained=${JSON.stringify(retainedIds)};const result={usage:false,inline:false};let refusedId=null;
+        // Settings > Usage: the refused attempt joins the retained history with the limit explanation.
+        location.hash='#settings-usage';
+        result.usage=!!(await wait(()=>{const node=${usagePanel};if(!node)return null;const ids=[...node.querySelectorAll('[data-usage-attempt]')].map(row=>row.getAttribute('data-usage-attempt'));
+          refusedId=ids.find(id=>!retained.includes(id))??null;
           return node.textContent.includes('Automated permission review — refused')&&node.textContent.includes('exhausted')&&node.textContent.includes('Codex plan/Workspace')&&node.textContent.includes('Use permitted human handling')&&ids.length===retained.length+1&&retained.every(id=>ids.includes(id))?node:null;},${POLICY_SETTLE_MS}));
-      })()`) as boolean;
-      if(!mountedRefusal)failures.push('Native quota refusal did not reach mounted usage with retained prior work');
+        // The conversation: an inline notice at the point the limit stopped work, naming the refused attempt.
+        location.hash='#shell';
+        result.inline=!!refusedId&&!!(await wait(()=>{const node=qVisible('[data-task-view=${JSON.stringify(run.taskId)}] [data-usage-limit-notice][data-usage-attempt="'+refusedId+'"]');
+          return node&&node.textContent.includes('Automated permission review — refused')&&node.textContent.includes('exhausted')&&node.textContent.includes('Codex plan/Workspace')&&node.textContent.includes('Use permitted human handling')&&node.textContent.includes(refusedId)?node:null;},${POLICY_SETTLE_MS}));
+        return result;
+      })()`) as {usage:boolean;inline:boolean};
+      if(!mountedRefusal.usage)failures.push('Native quota refusal did not reach mounted usage with retained prior work');
+      if(!mountedRefusal.inline)failures.push('Native quota refusal did not show an inline limit notice in the conversation');
     } finally {try{await fixture('clear');}catch{failures.push('Quota fixture cleanup failed');}options.usageChanged(true);}
   }catch(error){failures.push((error instanceof SmokeProbeFailure?error.message:`Quota smoke could not finish at ${stage}`)+quotaFixtureDiagnostic(error));failureCapture=await captureSmokeFailure(contents,options.fixtureFile);if(!failureCapture)failures.push('Diagnostic failure capture unavailable');}
   finally {try{if(!(await smokeIdentity(contents,'signOut')).ok)failures.push('Quota sign-out failed');await options.organise.syncPrincipal();}catch{failures.push('Quota identity cleanup failed');}}

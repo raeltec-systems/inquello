@@ -123,6 +123,9 @@ fs.writeFileSync(policyFile,JSON.stringify(policy));
       env.INQUELLO_ONBOARDING_FIXTURE=marker;env.INQUELLO_ONBOARDING_RUN=runId;
     }
     delete env.INQUELLO_QUOTA_FIXTURE;delete env.INQUELLO_VISUAL_FIXTURE;if(quota)env.INQUELLO_QUOTA_FIXTURE=tls.file;if(visual)env.INQUELLO_VISUAL_FIXTURE=tls.file;
+    // The quota and visual journeys need the debug inference-fixtures app-server;
+    // every other phase keeps the default (or explicitly inherited) runtime.
+    delete env.INQUELLO_FIXTURE_APP_SERVER_BIN;if((quota||visual)&&process.env.INQUELLO_FIXTURE_APP_SERVER_BIN)env.INQUELLO_APP_SERVER=process.env.INQUELLO_FIXTURE_APP_SERVER_BIN;
     stage='electron-journey';
     const electronBinary=path.join(desktop,`node_modules/electron/dist/electron${suffix}`);
     electron=spawn(electronBinary,['.',onboarding?'--smoke-onboarding':quota?'--smoke-quota':visual?'--smoke-visual':navigationOnly?'--smoke-navigation':'--smoke'],{cwd:desktop,env,stdio:['ignore',out,err],windowsHide:true,detached:process.platform!=='win32'});
