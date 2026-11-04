@@ -170,7 +170,10 @@ export class RouteService {
       return{requestId,workspacePolicy:policy,authorityEpoch:policy.authorizationEpoch,dataTier};
     };
     try{
-      {const binding=await this.options.taskBinding(taskId);if(!binding||!current())return 'denied';const refs=parseModelDisclosureBindings(binding.disclosureBindings,binding.routeId,binding.configurationRevision);if(refs.some(ref=>!ref.active))return 'denied';bindingKeys=refs.map(ref=>JSON.stringify([ref.routeId,ref.configurationRevision]));if(!current())return 'denied';}
+      {const binding=await this.options.taskBinding(taskId);if(!current())return 'denied';
+      // No saved, active conversation model means no automated reviewer can act: the request
+      // stays with the person (Story 1.20), it is not refused on their behalf.
+      if(!binding)return null;const refs=parseModelDisclosureBindings(binding.disclosureBindings,binding.routeId,binding.configurationRevision);if(refs.some(ref=>!ref.active))return null;bindingKeys=refs.map(ref=>JSON.stringify([ref.routeId,ref.configurationRevision]));if(!current())return 'denied';}
       // Bind credentials first: no async catalog work between the freshness read and dispatch.
       const catalog=await this.list();if(!catalog.ok||!current())return 'denied';
       const before=await fresh();
