@@ -43,9 +43,17 @@ pub(crate) fn collect(root: &Path, path: &Path, files: &mut Vec<PathBuf>) {
             }
             let metadata = fs::symlink_metadata(entry.path())
                 .unwrap_or_else(|error| panic!("fingerprint metadata: {error}"));
-            // Linked dependencies do not silently escape the measured tree.
+            // Linked dependencies do not silently escape the measured tree. A
+            // link that stays inside it is measured by its link text (see
+            // `input_bytes`), never by what it points at.
             if metadata.file_type().is_symlink() {
-                panic!("linked fingerprint input: {}", entry.path().display());
+                let target = fs::canonicalize(entry.path())
+                    .unwrap_or_else(|error| panic!("linked fingerprint input: {error}"));
+                if !target.starts_with(root) {
+                    panic!("linked fingerprint input: {}", entry.path().display());
+                }
+                files.push(entry.path());
+                continue;
             }
             collect(root, &entry.path(), files);
         }
@@ -121,6 +129,20 @@ pub(crate) fn hash_input(hash: &mut Sha256, relative: &str, bytes: &[u8]) {
     hash.update(bytes);
 }
 
+/// A file's measured bytes. An in-tree link is measured by its link text, which
+/// is exactly what a checkout without symlink support (Windows) writes as the
+/// file's content, so every platform measures the same tree.
+pub(crate) fn input_bytes(file: &Path) -> Vec<u8> {
+    let metadata =
+        fs::symlink_metadata(file).unwrap_or_else(|error| panic!("fingerprint metadata: {error}"));
+    if metadata.file_type().is_symlink() {
+        let target =
+            fs::read_link(file).unwrap_or_else(|error| panic!("fingerprint link: {error}"));
+        return target.to_string_lossy().replace('\\', "/").into_bytes();
+    }
+    fs::read(file).unwrap_or_else(|error| panic!("fingerprint input bytes: {error}"))
+}
+
 fn main() {
     let root = PathBuf::from(
         env::var("CARGO_MANIFEST_DIR")
@@ -141,9 +163,7 @@ fn main() {
             .to_string_lossy()
             .replace('\\', "/");
         println!("cargo:rerun-if-changed={}", file.display());
-        let bytes =
-            fs::read(&file).unwrap_or_else(|error| panic!("fingerprint input bytes: {error}"));
-        hash_input(&mut hash, &relative, &bytes);
+        hash_input(&mut hash, &relative, &input_bytes(&file));
     }
     for name in [
         "TARGET",
