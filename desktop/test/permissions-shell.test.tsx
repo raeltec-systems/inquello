@@ -212,3 +212,17 @@ it('fences a delayed pre-decision permission read and suppresses consumed IDs be
  await act(async()=>finish({ok:true,value:all}));expect(screen.getAllByRole('region',{name:/Permission needed/})).toHaveLength(1);
  await act(async()=>vi.advanceTimersByTimeAsync(20));expect(screen.getAllByRole('region',{name:/Permission needed/})).toHaveLength(1);expect(screen.getByRole('button',{name:'Run `inspect R06`'})).toBeTruthy();expect(screen.queryByRole('button',{name:'Run `inspect R00`'})).toBeNull();
 });
+
+it('re-polls past a stalled pending read so a card still appears, and the late stale answer never hides it',async()=>{
+ vi.useFakeTimers();let finishStalled!:(value:unknown)=>void;
+ const pending=vi.fn<()=>Promise<unknown>>().mockImplementationOnce(()=>new Promise(resolve=>{finishStalled=resolve;})).mockResolvedValue({ok:true,value:[card('after-stall')]});
+ installBridge({pending,decide:vi.fn()});
+ const announce=vi.fn();
+ render(<PermissionRequests taskId={TASK} announce={announce} pollMs={100} readBoundMs={1_000}/>);
+ await act(async()=>vi.advanceTimersByTimeAsync(900));expect(pending).toHaveBeenCalledOnce();
+ await act(async()=>vi.advanceTimersByTimeAsync(150));expect(pending).toHaveBeenCalledTimes(2);
+ expect(screen.getByRole('button',{name:'Run `git push origin main`'})).toBeTruthy();expect(announce).toHaveBeenCalledWith('Permission to act needed: Run `git push origin main`');
+ // The abandoned first read answers late with nothing: the newer answer stands.
+ await act(async()=>finishStalled({ok:true,value:[]}));expect(screen.getByRole('button',{name:'Run `git push origin main`'})).toBeTruthy();
+ await act(async()=>vi.advanceTimersByTimeAsync(100));expect(screen.getByRole('button',{name:'Run `git push origin main`'})).toBeTruthy();
+});

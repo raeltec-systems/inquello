@@ -212,11 +212,24 @@ export interface PermissionMediatorOptions {
   automatedReview?: (taskId: string, requestId: string) => Promise<'allowed' | 'denied' | null>;
   setTimer?: (callback: () => void, ms: number) => unknown;
   clearTimer?: (handle: unknown) => void;
+  /**
+   * How long a pending read waits for the runtime before it answers from the
+   * requests this host is itself waiting on. Default `PENDING_READ_BOUND_MS`.
+   */
+  pendingReadMs?: number;
+  now?: () => number;
 }
+
+/** The longest a pending read waits for the runtime's own answer. */
+export const PENDING_READ_BOUND_MS = 1_500;
 
 interface Waiter {
   resolve: (outcome: 'allowed' | 'denied' | 'expired') => void;
   timer: unknown;
+  /** The runtime's own record of the request, as `inquello/permissions/request` returned it. */
+  card: PermissionCardView | null;
+  /** An automated review of this request is in flight. */
+  reviewing: boolean;
 }
 
 /** A refusal's `data.inquello` from the runtime, if it is one. */
@@ -256,14 +269,26 @@ export class PermissionMediator {
       return { ok: false, error };
     }
     const id = String(response.request.requestId);
+    let card: PermissionCardView | null = null;
+    try {
+      card = response.request.status === 'pending' ? permissionCardView(response.request) : null;
+    } catch {
+      card = null;
+    }
     const outcome = await new Promise<'allowed' | 'denied' | 'expired'>((resolve) => {
       const setTimer = this.options.setTimer ?? ((callback: () => void, ms: number) => setTimeout(callback, ms));
       const timer = setTimer(() => void this.expire(id), this.ttlMs);
-      this.waiters.set(id, { resolve, timer });
-      if (this.options.automatedReview) void this.options.automatedReview(input.taskId, id).then((decision) => {
-        if (decision === 'denied') void this.declineByHost(id);
-        else if (decision === 'allowed') this.wake(id, decision);
-      }, () => { /* unavailable review leaves the existing human mediator pending */ });
+      const waiter: Waiter = { resolve, timer, card, reviewing: false };
+      this.waiters.set(id, waiter);
+      if (this.options.automatedReview) {
+        waiter.reviewing = true;
+        const settled = () => { waiter.reviewing = false; };
+        void this.options.automatedReview(input.taskId, id).then((decision) => {
+          settled();
+          if (decision === 'denied') void this.declineByHost(id);
+          else if (decision === 'allowed') this.wake(id, decision);
+        }, () => { settled(); /* unavailable review leaves the existing human mediator pending */ });
+      }
     });
     return { ok: true, requestId: id, outcome };
   }
@@ -341,10 +366,47 @@ export class PermissionMediator {
     return { ok: true, outcome: recorded, rulePrefix: rulePrefixOf(response.request) };
   }
 
-  /** The person's pending requests for one Task, as cards. */
+  /**
+   * The person's pending requests for one Task, as cards.
+   *
+   * The runtime answers `inquello/permissions/pending` from its one serialized
+   * `inquello` request queue. That queue also carries reads that wait on this
+   * host (Workspace tree and list wait for main's authority answers) and the
+   * policy reads an automated review issues, so a pending read sent while a
+   * review runs can sit behind them for many seconds. A pending read therefore
+   * never waits behind an automated review: while one is in flight for this
+   * Task, the cards come from the runtime's own records of the requests this
+   * host created and is still waiting on. Otherwise the runtime is asked, for
+   * at most `pendingReadMs`, before answering from those same records.
+   * A decision still goes through the runtime, which refuses a stale request.
+   */
   async pending(taskId: string): Promise<PermissionCardView[]> {
-    const response = await this.options.runtime.request<InquelloPermissionsPendingResponse>('inquello/permissions/pending', { taskId });
-    return response.requests.filter((request) => request.status === 'pending').map(permissionCardView);
+    if (this.reviewingTask(taskId)) return this.heldCards(taskId);
+    const read = this.options.runtime.request<InquelloPermissionsPendingResponse>('inquello/permissions/pending', { taskId })
+      .then((response) => response.requests.filter((request) => request.status === 'pending').map(permissionCardView));
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const bound = new Promise<null>((resolve) => { timer = setTimeout(() => resolve(null), this.options.pendingReadMs ?? PENDING_READ_BOUND_MS); });
+    try {
+      const answered = await Promise.race([read, bound]);
+      if (answered !== null) return answered;
+      // The late runtime answer is dropped; the next read asks again.
+      read.catch(() => undefined);
+      return this.heldCards(taskId);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  /** Whether an automated review is in flight for one of this Task's requests. */
+  reviewingTask(taskId: string): boolean {
+    for (const waiter of this.waiters.values()) if (waiter.reviewing && waiter.card?.taskId === taskId) return true;
+    return false;
+  }
+
+  /** The runtime's own records of this Task's requests that this host still waits on. */
+  private heldCards(taskId: string): PermissionCardView[] {
+    const now = (this.options.now ?? Date.now)();
+    return [...this.waiters.values()].flatMap((waiter) => (waiter.card && waiter.card.taskId === taskId && waiter.card.expiresAt > now ? [waiter.card] : []));
   }
 
   /** Declines every waiting request (the runtime stopped or the person signed out). */
