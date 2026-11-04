@@ -536,7 +536,7 @@ async fn coupled_retained(route: &'static str, scenario: &'static str) {
         .is_err(),
         "shipping checker never uses fixture proof"
     );
-    let policy = json!({"workspaceId":ws.workspace_id,"policyRevision":1,"authorizationEpoch":request.binding.authorization_epoch,"execution":{"command_rules":[{"prefix":["/bin/sh"],"decision":"prompt"}]}});
+    let policy = json!({"workspaceId":ws.workspace_id,"policyRevision":1,"authorizationEpoch":request.binding.authorization_epoch,"execution":{"command_rules":[{"prefix":[retained_driver::fixture_shell()],"decision":"prompt"}]}});
     let access = alice.access_credential.expose().to_string();
     let callback_policy = policy.clone();
     let workspace = ws.workspace_id;

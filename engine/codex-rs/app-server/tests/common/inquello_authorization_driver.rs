@@ -520,12 +520,30 @@ fn shell_process(pid: u32) -> Option<(String, String)> {
     ))
 }
 // Bounded fixture Tasks use the actual Linux executor on Windows too.
-fn fixture_shell() -> String {
-    if cfg!(windows) {
-        "/bin/bash".into()
-    } else {
-        "/bin/sh".into()
-    }
+//
+// On Linux the runtime keeps only the shell type from the model's `shell` and runs the
+// `sh` it discovers on `PATH` (upstream `get_shell_by_model_provided_path`), for example
+// `/usr/bin/sh` where `PATH` lists `/usr/bin` first. Workspace rules and permission argv
+// name that executable, so the fixture's rules must name it too.
+#[cfg(windows)]
+pub(crate) fn fixture_shell() -> String {
+    "/bin/bash".into()
+}
+#[cfg(unix)]
+pub(crate) fn fixture_shell() -> String {
+    use std::os::unix::fs::PermissionsExt;
+    std::env::var_os("PATH")
+        .into_iter()
+        .flat_map(|path| std::env::split_paths(&path).collect::<Vec<_>>())
+        .map(|dir| dir.join("sh"))
+        .find(|candidate| {
+            std::fs::metadata(candidate)
+                .is_ok_and(|meta| meta.is_file() && meta.permissions().mode() & 0o111 != 0)
+        })
+        .map_or_else(
+            || "/bin/sh".into(),
+            |found| found.to_string_lossy().into_owned(),
+        )
 }
 #[cfg(windows)]
 fn shell_process(pid: u32) -> Option<(String, String)> {
