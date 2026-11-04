@@ -29,6 +29,8 @@ struct UsageLimitParams {
     task_id: String,
     workspace_policy: InquelloWorkspaceExecutionPolicy,
 }
+/// Request ID the fixture's admitted `inquello/tools/exec` command answers on.
+const FIXTURE_EXEC_REQUEST_ID: &str = "inquello-fixture-exec";
 fn failed() -> JSONRPCErrorError {
     invalid_request("Synthetic in-runtime Messages fixture failed")
 }
@@ -184,6 +186,14 @@ impl MessageProcessor {
             permission_request_id: None,
             sandbox_probe_target: None,
         };
+        // An admitted command runs asynchronously and answers its own request ID. Give
+        // fixture commands a distinct ID so that answer never settles this fixture call;
+        // the parent test waits for it before checking the final file effects.
+        let exec_request = crate::outgoing_message::ConnectionRequestId {
+            connection_id: request_id.connection_id,
+            request_id: RequestId::String(FIXTURE_EXEC_REQUEST_ID.into()),
+        };
+        let request_id = &exec_request;
         let refused = self
             .inquello_tools_exec(connection, request_id, exec.clone())
             .await
@@ -239,6 +249,16 @@ impl MessageProcessor {
                 }
             } else {
                 result?;
+                // Wait for the admitted command's in-folder effect; the parent test
+                // re-checks every file effect after the command's own answer.
+                let created = std::path::Path::new(&params.task_folder).join("output/fixture.txt");
+                let deadline = tokio::time::Instant::now() + Duration::from_secs(15);
+                while !created.is_file() {
+                    if tokio::time::Instant::now() >= deadline {
+                        return Err(failed());
+                    }
+                    tokio::time::sleep(Duration::from_millis(20)).await;
+                }
                 if self
                     .inquello_tools_exec(connection, request_id, exec.clone())
                     .await
