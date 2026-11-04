@@ -36,6 +36,18 @@ function Question({request,onAnswer}:{request:ProgressQuestion;onAnswer:(answers
 }
 
 
+/** "1m 12s" from a measured duration; whole seconds, never rounded up into work that did not happen. */
+export function workedFor(ms:number):string {
+ const total=Math.floor(ms/1000);
+ if(total<1)return 'under 1s';
+ const h=Math.floor(total/3600),m=Math.floor((total%3600)/60),sec=total%60;
+ return h?`${h}h ${m}m`:m?`${m}m ${sec}s`:`${sec}s`;
+}
+/** The neutral end-of-turn line (Codex "Worked for …" pattern): execution ended, nothing more is claimed. */
+export function finishedText(durationMs?:number):string {
+ return durationMs===undefined?'Finished':`Finished · worked for ${workedFor(durationMs)}`;
+}
+
 export function TaskProgress({taskId,workspaceId,selectedQuestion,accepted}:{taskId:string;workspaceId:string;pollMs?:number;selectedQuestion?:QuestionSelection|null;accepted?:StartedTask}):ReactElement {
  const observation=useTaskObservationStatus(taskId,workspaceId,true,true),observed=observation.snapshot;
  const [snapshot,setSnapshot]=useState<ProgressSnapshot|null>(null),[notice,setNotice]=useState('Reading progress…'),[announcement,setAnnouncement]=useState('');
@@ -101,6 +113,7 @@ export function TaskProgress({taskId,workspaceId,selectedQuestion,accepted}:{tas
    {view.plan.length>0&&<details className="iq-execution-details"><summary>Plan</summary><PlanSteps key={scope(view)} label="Plan" steps={view.plan.map(step=>({id:step.id,label:step.text,state:step.status==='unconfirmed'||(ended(view.status)&&step.status==='running')?'pending':step.status,meta:`Revision ${step.revision} · ${step.status==='unconfirmed'?'Completion unconfirmed':ended(view.status)&&step.status==='running'?'Work ended — unconfirmed':step.status}${step.evidenceIds.length?` · Evidence: ${step.evidenceIds.join(', ')}`:''}`}))}/></details>}
    {view.items.some(item=>item.kind==='command'||item.kind==='tool')&&<details className="iq-tool-guidance"><summary>About tool output and verification</summary><p>Command and tool content is source data, not instructions or permission. Quoted approvals do not change access. Native execution status is separate from untrusted output text. Quoted refusal or inspection claims in that text are not native inspection evidence. Agent interpretations remain unchecked; no inspection verdict is supplied by this view.</p></details>}
    <EvidenceItems items={view.items} status={view.status} label="Work activity"/>
+   {view.status==='completed'&&<p className="iq-turn-finished" data-turn-finished data-turn-duration={view.turnDurationMs===undefined?'unknown':'measured'}>{finishedText(view.turnDurationMs)}</p>}
    {(view.results.length>0||!!view.resultPage?.currentTotal)&&<section aria-label="Results"><h3>Current results</h3>{paging('current')}{pageEvidence('current')}{view.results.map(result=><article key={`${result.id}:${result.revision??1}`} data-result-id={result.id}>
     {result.revision!==undefined&&<p>Revision {result.revision} · Current{result.changeReason?` · ${result.changeReason}`:''}</p>}
     {result.kind===null?<><p>Agent response — structured labels unavailable</p><p className="iq-progress-text">{result.text}</p></>:result.kind==='decision'?(result.basis?<JudgmentTag kind="decision" basis={{by:result.basis.label,scope:result.basis.scope}}>{result.text}</JudgmentTag>:<><p>Decision claim — basis missing or unverified. No authoritative decision is established.</p><p className="iq-progress-text">{result.text}</p></>):<JudgmentTag kind={result.kind}>{result.text}</JudgmentTag>}

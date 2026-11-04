@@ -1,5 +1,6 @@
 import type {QuestionSelection} from './Inbox';
 import { TaskProgress } from './TaskProgress';
+import { TaskStates } from './TaskStates';
 import type { StartedTask } from './tasks-bridge';
 /**
  * The open Task (Story 1.14): a placeholder thread area, the Task's privacy,
@@ -11,8 +12,10 @@ import type { StartedTask } from './tasks-bridge';
  * - Move offers no Engagement (ad hoc), each Engagement, and each of its
  *   folders. A move keeps the Task's ID, thread and references; it never
  *   changes who can see it.
- * - The States section (Story 1.15) lists every state dimension separately,
- *   each with its value or "Not recorded".
+ * - Task states (Story 1.15, owner amendment 2026-11-04): execution shows as
+ *   the sidebar's live status and the neutral end-of-turn line in the
+ *   conversation; checks, review, Professional Approval and Delivery appear
+ *   only once a record exists, with no "Not recorded" placeholders.
  * - The policy section (Story 1.18) summarises the effective policy on this
  *   device and the Task's execution mode, with the explicit confirmation a
  *   broader mode needs.
@@ -199,8 +202,9 @@ export function TaskDetails({
 }
 
 /** Ordinary chat is a transcript, not a runtime inspector. */
-export function TaskView({task,accepted,selectedQuestion}:TaskViewProps):ReactElement {
+export function TaskView({task,accepted,selectedQuestion,states=null}:TaskViewProps):ReactElement {
  return <section className="iq-task" aria-label="Conversation" data-task-view={task.taskId}>
   <TaskProgress key={task.taskId} taskId={task.taskId} workspaceId={task.workspaceId} selectedQuestion={selectedQuestion} accepted={accepted}/>
+  <TaskStates states={states?.taskId===task.taskId?states:null}/>
  </section>;
 }

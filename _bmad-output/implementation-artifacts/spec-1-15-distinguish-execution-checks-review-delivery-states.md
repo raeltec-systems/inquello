@@ -48,6 +48,7 @@ context:
   - `execution_finished` reads "Execution finished" in a neutral style, never green.
   - Review and markers use separate truthful labels ("Approval noted locally — not an authoritative record"; "Delivery attempted / confirmed / uncertain — local marker") through StatusChip's custom-label path (Story 1.7), never the accepted or explained chips.
   - No toast or green chip ever states acceptance.
+  - The first rule above (States section, every dimension or "Not recorded") is replaced by the Owner amendment (2026-11-04) after this block.
 - **Host methods:**
   - `inquello/state/list {taskId}` (dimensions with history, latest first).
   - `inquello/state/record {taskId, dimension, scopeKind, scopeId, value, expectedRevision, operationId}`, where main supplies the actor kind (`system` for desktop-originated Task states). Human-actor writes come later from the UI; there is no human-dimension writer in this story.
@@ -75,6 +76,16 @@ context:
 | History | Task planned → running → interrupted | All three listed with versions and actors | N/A |
 
 </frozen-after-approval>
+
+## Owner amendment (2026-11-04)
+
+**Decision:** adopt the Codex desktop pattern for this story's display. The frozen Display rule "The open Task shows a States section that lists every dimension, with its value or 'Not recorded'" (and the matching "Run finished" matrix row's "Not recorded" output) is replaced by:
+
+1. **Sidebar status stays.** The live status in the sidebar row (`TaskActivityLabel`: Running, Waiting for your answer, Interrupted, Stopped after an error; hidden when completed) remains the execution indicator.
+2. **Neutral end-of-turn line.** When a turn finishes, the conversation shows "Finished · worked for 1m 12s" at the end of that turn. The duration comes only from the native turn's own timestamps (`durationMs`, else `completedAt - startedAt`, from the runtime's `turn/completed` notification, matched to the exact finished turn); when it is unknown the line reads "Finished". It is muted text, never green, never a success or accepted chip, never a toast, and never says accepted, approved or done. Interrupted, failed and uncertain turns keep their existing wording.
+3. **Other dimensions only when recorded.** Checks, review, Professional Approval and Delivery are shown only once a record exists, through StatusChip's custom-label path with their truthful labels. Nothing writes them in Epic 1, so no "Not recorded" placeholders appear.
+
+Unchanged: the stored state model, its seven dimensions and vocabularies, the writer rules, the `inquello/state/*` methods and the engine. The remaining Display bullets (neutral "Execution finished" text, truthful marker labels, no acceptance toast or green chip) still apply wherever a state is shown.
 
 ## Code Map
 

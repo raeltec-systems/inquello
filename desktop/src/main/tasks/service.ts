@@ -14,6 +14,14 @@ export interface TaskServiceOptions {runtime:OrganiseRuntime;identity:Pick<Organ
 export const INBOX_OBSERVATION_TIMEOUT_MS=10_000;
 const unavailable='The local runtime, signed-in identity or Workspace policy is unavailable. Your request is preserved.';
 const changed='Your identity, runtime or authority changed. Your draft is preserved; reconcile the existing request before submitting again.';
+/** A finished native turn's measured duration: `durationMs`, else `completedAt - startedAt` (Unix seconds). Null when unknown; never estimated. */
+export function nativeTurnDurationMs(turn:unknown):number|null {
+ if(!turn||typeof turn!=='object')return null;
+ const t=turn as {durationMs?:unknown;startedAt?:unknown;completedAt?:unknown};
+ if(typeof t.durationMs==='number'&&Number.isSafeInteger(t.durationMs)&&t.durationMs>=0)return t.durationMs;
+ if(typeof t.startedAt==='number'&&typeof t.completedAt==='number'&&Number.isSafeInteger(t.startedAt)&&Number.isSafeInteger(t.completedAt)&&t.startedAt>0&&t.completedAt>=t.startedAt)return (t.completedAt-t.startedAt)*1000;
+ return null;
+}
 export class TaskService {
  private epoch=0;
  private readonly taskEpochs=new Map<string,number>();
@@ -25,6 +33,8 @@ export class TaskService {
  private incarnation(value:Pick<ProgressSnapshot,"runId"|"runtimeId"|"threadId"|"turnId">){return JSON.stringify([value.runId,value.runtimeId,value.threadId,value.turnId]);}
  private readonly activeTurns=new Map<string,string|null>();
  private readonly completedTurns=new Set<string>();
+ /** Native turn/completed durations, keyed by [threadId, turnId]; a bounded number per turn, never native bodies. */
+ private readonly turnDurations=new Map<string,number>();
 
  private readonly active=new Map<string,string>();
  private readonly pending=new Set<string>();
@@ -33,7 +43,7 @@ export class TaskService {
  private completionSequence=0;
  private readonly completedThreads=new Map<string,number>();
  private readonly operationSequences=new Map<string,number>();
- private clearActivity(){this.active.clear();this.incarnations.clear();this.activeTurns.clear();this.completedTurns.clear();this.pending.clear();this.completedThreads.clear();this.operationSequences.clear();this.completionSequence=0;this.activityUncertain=false;}
+ private clearActivity(){this.active.clear();this.incarnations.clear();this.activeTurns.clear();this.completedTurns.clear();this.turnDurations.clear();this.pending.clear();this.completedThreads.clear();this.operationSequences.clear();this.completionSequence=0;this.activityUncertain=false;}
  private syncActivity(){const instance=this.options.runtime.instance();if(instance!=null&&instance!==this.activeRuntime&&this.options.runtime.ready()){this.clearActivity();this.activeRuntime=instance;}}
  activeTasks(){this.syncActivity();return this.active.size+this.pending.size;}
  /** Only permits attempting native shutdown; this is not proof of quiescence. */
@@ -169,7 +179,7 @@ export class TaskService {
  async reconcile(operationId:string):Promise<TasksResult<StartedTaskView>>{const s=this.scope();try{if(!this.current(s))return{ok:false,reason:unavailable};await this.options.syncPrincipal();if(!this.current(s))return{ok:false,reason:changed};const workspace=this.operationWorkspaces.get(operationId);if(workspace){await this.bootstrap(workspace);if(!this.current(s))return{ok:false,reason:changed};}const value=parseStarted(await this.options.runtime.request('inquello/tasks/reconcile',{operationId}));if(!this.current(s))return{ok:false,reason:changed};if(value.operationId!==operationId)throw new Error();await this.bindTaskScope(s,value.taskId);this.registerAccepted(value,s);return{ok:true,value};}catch(e){return this.failure(e,true);}}
  /** Notifications are invalidation hints only. No native body reaches the renderer. */
  notification(method:string,params:unknown):void {
-  if(method==='turn/completed'){try{const r=object(params);if(typeof r.threadId==='string'){const turn=r.turn&&typeof r.turn==='object'?(r.turn as {id?:unknown}).id:r.turnId;if(typeof turn==='string'){this.completedTurns.add(JSON.stringify([r.threadId,turn]));if(this.completedTurns.size>256)this.completedTurns.delete(this.completedTurns.values().next().value!);}if(!this.activeTurns.has(r.threadId)||this.activeTurns.get(r.threadId)===turn)this.completed(r.threadId);}}catch{}}
+  if(method==='turn/completed'){try{const r=object(params);if(typeof r.threadId==='string'){const turn=r.turn&&typeof r.turn==='object'?(r.turn as {id?:unknown}).id:r.turnId;if(typeof turn==='string'){const key=JSON.stringify([r.threadId,turn]);this.completedTurns.add(key);if(this.completedTurns.size>256)this.completedTurns.delete(this.completedTurns.values().next().value!);const ms=nativeTurnDurationMs(r.turn);if(ms!==null){this.turnDurations.delete(key);this.turnDurations.set(key,ms);if(this.turnDurations.size>256)this.turnDurations.delete(this.turnDurations.keys().next().value!);}}if(!this.activeTurns.has(r.threadId)||this.activeTurns.get(r.threadId)===turn)this.completed(r.threadId);}}catch{}}
   if(method==='serverRequest/resolved'){try{const r=object(params);for(const [key,q] of this.questions)if(q.view.threadId===r.threadId&&q.view.requestId===r.requestId)this.dropQuestion(key);}catch{/* malformed notification reveals nothing */}}
   if(['turn/completed','turn/started','item/started','item/completed','item/agentMessage/delta','item/commandExecution/outputDelta','turn/plan/updated','serverRequest/resolved'].includes(method))this.options.onProgressChanged?.();
  }
@@ -252,6 +262,7 @@ export class TaskService {
    for(const [key,q] of this.questions){if(q.binding?.taskId!==input.taskId)continue;if(!this.current(q.scope)||q.binding.workspaceId!==value.workspaceId||q.binding.runId!==value.runId||q.binding.runtimeId!==value.runtimeId||q.view.threadId!==value.threadId||q.view.turnId!==value.turnId||terminalProgress(value.status))this.dropQuestion(key);}
    value.questions=[...this.questions.values()].filter(q=>q.binding?.taskId===value.taskId&&this.current(q.scope)).map(q=>q.view);
    if(terminalProgress(value.status))this.completed(value.threadId);
+   if(value.status==='completed'&&value.turnId!==null){const ms=this.turnDurations.get(JSON.stringify([value.threadId,value.turnId]));if(ms!==undefined)value.turnDurationMs=ms;}
    if(!terminalProgress(value.status)){this.activeTurns.set(value.threadId,value.turnId);if(pending?.kind==='resume'&&pending.receipt?.runId===value.runId){this.pending.delete(pending.input.operationId);this.active.set(value.threadId,pending.input.operationId);}}
    if(pending?.receipt&&this.current(pending.scope))value.lifecycle={...pending.receipt};
    value.lifecycleOperations=operations.filter(entry=>!entry.settled).map(entry=>({operationId:entry.input.operationId,kind:entry.kind,request:entry.input.request,status:entry.receipt?.status??'dispatching'}));

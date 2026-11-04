@@ -1,26 +1,29 @@
 /**
- * The open Task's States section (Story 1.15).
+ * Recorded Task states in the conversation (Story 1.15, owner amendment
+ * 2026-11-04, following the Codex desktop pattern).
  *
- * - Every dimension is listed on its own row with its latest value, or "Not
- *   recorded"; nothing is defaulted or derived from another dimension.
+ * - Execution is shown elsewhere: the sidebar's live status and the neutral
+ *   end-of-turn line. The Task, run and output dimensions are not listed here.
+ * - Checks, review, Professional Approval and Delivery appear only once a
+ *   record exists. Nothing is defaulted and there is no "Not recorded"
+ *   placeholder; with no record this renders nothing.
  * - Every value goes through StatusChip's custom `label` path, so it renders
- *   in the neutral outlined style with its own truthful text. A finished run
- *   reads "Execution finished", never accepted, approved or done, and nothing
- *   here is ever green.
- * - The approval and delivery markers say they are local markers, not an
- *   authoritative record.
+ *   in the neutral outlined style with its own truthful text, never green and
+ *   never accepted, approved or done. The approval and delivery markers say
+ *   they are local markers, not an authoritative record.
  * - Earlier records of a dimension are listed under it, latest first, with
  *   their version and who recorded them.
  */
 import type { ReactElement } from 'react';
 
 import { StatusChip } from '../primitives';
-import { ACTOR_TEXT, DIMENSION_LABEL, NOT_RECORDED, STATE_DIMENSIONS, stateText, type StateRecordItem, type TaskStatesItem } from './state-bridge';
+import { ACTOR_TEXT, DIMENSION_LABEL, stateText, type StateDimension, type StateRecordItem, type TaskStatesItem } from './state-bridge';
+
+/** The dimensions shown in the conversation, and only when recorded. */
+export const RECORDED_ONLY_DIMENSIONS = ['checks', 'review', 'approval_marker', 'delivery_marker'] as const satisfies readonly StateDimension[];
 
 export interface TaskStatesProps {
   states: TaskStatesItem | null;
-  /** Why the states could not be read, if they could not. */
-  notice?: string | null;
 }
 
 /** The chip's status key: never one of StatusChip's source states. */
@@ -30,37 +33,23 @@ function recordMeta(record: StateRecordItem): string {
   return `Version ${record.version}, recorded by ${ACTOR_TEXT[record.actorKind]}`;
 }
 
-function StateValue({ record }: { record: StateRecordItem }): ReactElement {
-  return <StatusChip status={statusKey(record)} label={stateText(record.dimension, record.value) ?? record.value} />;
-}
-
-export function TaskStates({ states, notice }: TaskStatesProps): ReactElement {
+export function TaskStates({ states }: TaskStatesProps): ReactElement | null {
+  const recorded = RECORDED_ONLY_DIMENSIONS.flatMap((dimension) => {
+    const records = states?.dimensions.find((entry) => entry.dimension === dimension)?.records ?? [];
+    return records.length ? [{ dimension, records }] : [];
+  });
+  if (!recorded.length) return null;
   return (
-    <section className="iq-task-states" aria-labelledby="iq-task-states-heading" data-task-states>
-      <h2 id="iq-task-states-heading" className="iq-task-states-heading">
-        States
-      </h2>
-      {notice ? (
-        <p className="iq-task-notice" role="status" data-task-states-notice>
-          {notice}
-        </p>
-      ) : null}
+    <section className="iq-task-states" aria-label="Recorded states" data-task-states>
       <dl className="iq-task-states-list">
-        {STATE_DIMENSIONS.map((dimension) => {
-          const records = states?.dimensions.find((entry) => entry.dimension === dimension)?.records ?? [];
-          const [latest, ...earlier] = records;
+        {recorded.map(({ dimension, records }) => {
+          const [latest, ...earlier] = records as [StateRecordItem, ...StateRecordItem[]];
           return (
-            <div key={dimension} className="iq-task-state" data-state-dimension={dimension} data-state-value={latest?.value ?? 'not-recorded'}>
+            <div key={dimension} className="iq-task-state" data-state-dimension={dimension} data-state-value={latest.value}>
               <dt className="iq-task-state-name">{DIMENSION_LABEL[dimension]}</dt>
               <dd className="iq-task-state-value">
-                {latest ? (
-                  <>
-                    <StateValue record={latest} />
-                    <span className="iq-task-state-meta">{recordMeta(latest)}</span>
-                  </>
-                ) : (
-                  <span className="iq-task-state-none">{NOT_RECORDED}</span>
-                )}
+                <StatusChip status={statusKey(latest)} label={stateText(latest.dimension, latest.value) ?? latest.value} />
+                <span className="iq-task-state-meta">{recordMeta(latest)}</span>
                 {earlier.length > 0 ? (
                   <ol className="iq-task-state-history" aria-label={`Earlier ${DIMENSION_LABEL[dimension]} states`} data-state-history>
                     {earlier.map((record) => (

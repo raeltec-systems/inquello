@@ -7,7 +7,7 @@ export interface ProgressResult {revision?:number;state?:'current'|'superseded'|
 export interface ProgressQuestion {requestId:NativeRequestId;threadId:string;turnId:string;itemId:string;questions:{id:string;header:string;question:string;isOther:boolean;isSecret:boolean;options:null|{label:string;description:string}[]}[]}
 export interface ResultPageRequest {snapshotId?:string;currentOffset?:number;historyOffset?:number}
 export interface ResultPage {snapshotId:string;currentOffset:number;historyOffset:number;currentTotal:number;historyTotal:number;currentNextOffset:number|null;historyNextOffset:number|null}
-export interface ProgressSnapshot {resultPage?:ResultPage;lifecycleOperations?:Array<{operationId:string;kind:LifecycleReceipt["kind"];request:string|null;status:LifecycleReceipt["status"]}>;lifecycle?:LifecycleReceipt;version:1;taskId:string;runId:string;workspaceId:string;threadId:string;turnId:string|null;runtimeId:string;status:string;historyIncomplete:boolean;items:ProgressItem[];plan:ProgressStep[];results:ProgressResult[];resultHistory?:ProgressResult[];artifact:'absent'|'unknown'|'failed';questions:ProgressQuestion[];sessionGeneration:number}
+export interface ProgressSnapshot {resultPage?:ResultPage;lifecycleOperations?:Array<{operationId:string;kind:LifecycleReceipt["kind"];request:string|null;status:LifecycleReceipt["status"]}>;lifecycle?:LifecycleReceipt;version:1;taskId:string;runId:string;workspaceId:string;threadId:string;turnId:string|null;runtimeId:string;status:string;historyIncomplete:boolean;items:ProgressItem[];plan:ProgressStep[];results:ProgressResult[];resultHistory?:ProgressResult[];artifact:'absent'|'unknown'|'failed';questions:ProgressQuestion[];sessionGeneration:number;/** The finished turn's native duration; present only when the runtime reported it. */turnDurationMs?:number}
 export interface ProgressInput {taskId:string;workspaceId:string;resultPage?:ResultPageRequest}
 export interface AnswerInput extends ProgressInput {requestId:NativeRequestId;answers:Record<string,{answers:string[]}>}
 
@@ -32,5 +32,7 @@ export function parseProgress(v:unknown):ProgressSnapshot {
  if(r.resultHistory!==undefined&&(!Array.isArray(r.resultHistory)||r.resultHistory.length>128))throw new Error('Progress information unavailable.');
  for(const [key,max] of [['items',256],['plan',64],['results',64],['questions',16]] as const){if(!Array.isArray(r[key])||(r[key] as unknown[]).length>max)throw new Error('Progress information unavailable.');}
  if(!['absent','unknown','failed'].includes(String(r.artifact)))throw new Error('Progress information unavailable.');
+ // A duration is shown only for a finished turn and only as main measured it; anything else is unknown, never guessed.
+ if(r.turnDurationMs!==undefined&&(r.status!=='completed'||typeof r.turnDurationMs!=='number'||!Number.isSafeInteger(r.turnDurationMs)||r.turnDurationMs<0))delete r.turnDurationMs;
  return r as unknown as ProgressSnapshot;
 }

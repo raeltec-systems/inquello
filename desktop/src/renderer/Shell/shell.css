@@ -640,7 +640,14 @@ a.iq-nav-row:hover {
   padding-top: 0;
 }
 
-/* Story 1.15: the open Task's States. Every value uses StatusChip's neutral custom-label style. */
+/* Owner amendment 2026-11-04: the neutral end-of-turn line, like Codex's "Worked for …". Muted, never green, never a chip. */
+.iq-turn-finished {
+  margin: var(--space-2) 0 var(--space-4);
+  font: var(--type-caption);
+  color: var(--text-muted);
+}
+
+/* Story 1.15 (amended 2026-11-04): checks, review and the local markers, shown only once recorded. Every value uses StatusChip's neutral custom-label style. */
 .iq-task-states {
   margin-bottom: var(--space-4);
 }
