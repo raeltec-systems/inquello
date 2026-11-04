@@ -1,3 +1,4 @@
+import {ConversationModelPicker} from './ConversationModelPicker';
 import {TaskPolicy} from './TaskPolicy';
 import {providerSettingsHash} from '../provider-settings';
 import {smokeStartTrace} from './smoke-start-trace';
@@ -92,6 +93,8 @@ const blankToNull = (value: string): string | null => (value.trim() === '' ? nul
 
 export interface ShellProps {
   onWorkspaceChanged?:(workspaceId:string|null)=>void;
+  /** The open conversation, for Settings > Usage; null when none is open. */
+  onConversationChanged?:(conversation:{taskId:string;title:string}|null)=>void;
   active?: boolean;
   onShowSpecimen: () => void;
   /** Tests inject a deterministic ID source. */
@@ -126,7 +129,7 @@ async function readPerson(): Promise<PersonView | null> {
 /** The principal the identity status names, as a draft-ownership key; null when unknown. */
 const ownerKey = (person: PersonView | null): string | null => (person ? `${person.name}\n${person.detail}` : null);
 
-export function Shell({ active = true, onWorkspaceChanged, onShowSpecimen, operationIds = newOperationId, artifact = null, renderComposer, drafts }: ShellProps): ReactElement {
+export function Shell({ active = true, onWorkspaceChanged, onConversationChanged, onShowSpecimen, operationIds = newOperationId, artifact = null, renderComposer, drafts }: ShellProps): ReactElement {
   const bridge = organiseBridge();
   const [state, setState] = useState<WorkspacesState | null>(null);
   const [workspaceId, setWorkspaceIdState] = useState<string | null>(null);
@@ -692,7 +695,9 @@ export function Shell({ active = true, onWorkspaceChanged, onShowSpecimen, opera
   const [conversationPermissions,setConversationPermissions]=useState<string|null>(null);
   const [conversationOptions,setConversationOptions]=useState<string|null>(null);
   useEffect(()=>{setConversationOptions(null);setConversationPermissions(null);},[active,showStart,task?.taskId,task?.workspaceId,runtimeEpoch,ownerKey(person)]);
-  const composer = !state?.signedIn || showStart ? null : renderComposer ? renderComposer(draft) : task?.runtimeThreadId || (task&&acceptedFor(task.taskId)) ? <TaskLifecycle key={`${runtimeEpoch}:${task!.taskId}`} taskId={task!.taskId} workspaceId={task!.workspaceId} draft={draft} operationIds={operationIds} onContinuationRequested={conversationFollow.continuation}/> : <Composer draft={draft} />;
+  const composer = !state?.signedIn || showStart ? null : renderComposer ? renderComposer(draft) : task?.runtimeThreadId || (task&&acceptedFor(task.taskId)) ? <TaskLifecycle key={`${runtimeEpoch}:${task!.taskId}`} taskId={task!.taskId} workspaceId={task!.workspaceId} draft={draft} operationIds={operationIds} onContinuationRequested={conversationFollow.continuation}/> : <Composer draft={draft} routeBeforeField routeLabel={task?<ConversationModelPicker key={`${runtimeEpoch}:${task.taskId}`} taskId={task.taskId} workspaceId={task.workspaceId} selected={null}/>:undefined} />;
+  const conversationTitle=state?.signedIn&&!showStart&&task?task.title:null;
+  useEffect(()=>{onConversationChanged?.(conversationTitle!==null&&task?{taskId:task.taskId,title:conversationTitle}:null);},[task?.taskId,conversationTitle,onConversationChanged]);
 
   return (
     <div

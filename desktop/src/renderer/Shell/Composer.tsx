@@ -35,9 +35,15 @@ export interface ComposerProps {
   onStop?: () => void;
   stopDisabledReason?: string;
   routeLabel?: ReactNode;
+  /**
+   * A conversation's footer (model, reasoning, environment) shows in the footer
+   * row but reads before the field, so Send stays the next stop after the message
+   * and the field and Send stay last. Start keeps its model between them.
+   */
+  routeBeforeField?: boolean;
 }
 
-export function Composer({ draft, onSend, disabledReason, autoFocus, readOnly, onStop, stopDisabledReason, routeLabel }: ComposerProps): ReactElement {
+export function Composer({ draft, onSend, disabledReason, autoFocus, readOnly, onStop, stopDisabledReason, routeLabel, routeBeforeField = false }: ComposerProps): ReactElement {
   const inputId = useId();
   const inputRef = useRef<HTMLTextAreaElement>(null);
   useLayoutEffect(() => {
@@ -77,10 +83,11 @@ export function Composer({ draft, onSend, disabledReason, autoFocus, readOnly, o
   };
 
   return (
-    <div className="iq-composer" data-composer data-composer-empty-hint={reason === SEND_EMPTY_REASON || undefined} data-composer-task={draft.taskId ?? ''}>
+    <div className={routeLabel && routeBeforeField ? 'iq-composer iq-composer--route' : 'iq-composer'} data-composer data-composer-empty-hint={reason === SEND_EMPTY_REASON || undefined} data-composer-task={draft.taskId ?? ''}>
       <label className="iq-visually-hidden" htmlFor={inputId}>
         {label}
       </label>
+      {routeLabel && routeBeforeField ? <div className="iq-composer-route">{routeLabel}</div> : null}
       <textarea
         ref={inputRef}
         id={inputId}
@@ -96,7 +103,7 @@ export function Composer({ draft, onSend, disabledReason, autoFocus, readOnly, o
         data-composer-input
       />
       <div className="iq-composer-actions">
-        {routeLabel}
+        {routeBeforeField ? null : routeLabel}
         <span className="iq-composer-hint">Shift+Enter for a new line</span>
         {onStop && <IconButton variant="stop" label="Stop" disabledReason={stopDisabledReason} onPress={onStop} data-composer-stop />}
         <IconButton variant="send" label="Send" disabledReason={reason} onPress={() => { if (!readOnly) onSend?.(); }} data-composer-send />

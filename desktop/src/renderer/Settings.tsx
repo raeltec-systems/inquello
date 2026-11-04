@@ -4,17 +4,26 @@ import {Account} from './Account';
 import {Providers} from './Providers';
 import {ProcessingRoutes} from './ProcessingRoutes';
 import {Button} from './primitives';
-type Section='account'|'providers'|'routes'|'signout';
-const section=():Section=>globalThis.location.hash==='#settings-signout'?'signout':(globalThis.location.hash==='#settings-providers'||providerSettingsTarget(globalThis.location.hash))?'providers':globalThis.location.hash==='#settings-routes'?'routes':'account';
+import {TaskUsage} from './Shell/TaskUsage';
+type Section='account'|'providers'|'routes'|'usage'|'signout';
+const section=():Section=>globalThis.location.hash==='#settings-signout'?'signout':(globalThis.location.hash==='#settings-providers'||providerSettingsTarget(globalThis.location.hash))?'providers':globalThis.location.hash==='#settings-routes'?'routes':globalThis.location.hash==='#settings-usage'?'usage':'account';
+const titles:Record<Exclude<Section,'signout'>,string>={account:'Account',providers:'AI connections',routes:'Models',usage:'Usage'};
 /** Ordinary settings mounts only implemented controls; no specimen examples. */
-export function Settings({onBack,onIdentityChanged,workspaceId=null}:{onBack:()=>void;onIdentityChanged:()=>void;workspaceId?:string|null}):ReactElement {
+export function Settings({onBack,onIdentityChanged,workspaceId=null,conversation=null}:{onBack:()=>void;onIdentityChanged:()=>void;workspaceId?:string|null;conversation?:{taskId:string;title:string}|null}):ReactElement {
  const [current,setCurrent]=useState(section);
  const [focusTarget,setFocusTarget]=useState(()=>providerSettingsTarget(globalThis.location.hash));
  useEffect(()=>{const changed=()=>{setCurrent(section());setFocusTarget(providerSettingsTarget(globalThis.location.hash));};globalThis.addEventListener('hashchange',changed);return()=>globalThis.removeEventListener('hashchange',changed);},[]);
+ const title=current==='signout'?'Sign out?':titles[current];
  return <main className="iq-settings" aria-label="Settings"><nav aria-label="Settings sections"><Button variant="quiet" onPress={onBack}>{current==='signout'?'Cancel · back to chat':'Back to chat'}</Button><h1>Settings</h1>
- {(['account','providers','routes'] as const).map(value=><a key={value} href={`#settings-${value}`} aria-current={current===value?'page':undefined}>{value==='account'?'Account':value==='providers'?'AI connections':'Models'}</a>)}
- <a href="#onboarding">Workspace and team</a></nav><section className="iq-settings-panel" aria-label={current==='signout'?'Sign out?':current==='account'?'Account':current==='providers'?'AI connections':'Models'}>
- <h2>{current==='signout'?'Sign out?':current==='account'?'Account':current==='providers'?'AI connections':'Models'}</h2>
- {current==='signout'?<Account signOutOnly onIdentityChanged={onIdentityChanged}/>:current==='account'?<Account onIdentityChanged={onIdentityChanged}/>:current==='providers'?<Providers focusTarget={focusTarget} workspaceId={workspaceId}/>:<ProcessingRoutes/>}
+ {(['account','providers','routes','usage'] as const).map(value=><a key={value} href={`#settings-${value}`} aria-current={current===value?'page':undefined}>{titles[value]}</a>)}
+ <a href="#onboarding">Workspace and team</a></nav><section className="iq-settings-panel" aria-label={title}>
+ <h2>{title}</h2>
+ {current==='signout'?<Account signOutOnly onIdentityChanged={onIdentityChanged}/>:current==='account'?<Account onIdentityChanged={onIdentityChanged}/>:current==='providers'?<Providers focusTarget={focusTarget} workspaceId={workspaceId}/>:current==='usage'?<SettingsUsage conversation={conversation}/>:<ProcessingRoutes/>}
  </section></main>;
+}
+
+/** Attributable usage is recorded per private conversation; limits are inherited from the provider account. */
+function SettingsUsage({conversation}:{conversation:{taskId:string;title:string}|null}):ReactElement {
+ if(!conversation)return <div data-settings-usage><p>Open a conversation to see its attributable usage and the inherited limits that apply to it. Usage is recorded per conversation; no totals are estimated.</p></div>;
+ return <div data-settings-usage data-settings-usage-task={conversation.taskId}><p>Usage for the open conversation: <strong>{conversation.title}</strong></p><TaskUsage key={conversation.taskId} taskId={conversation.taskId} part="history"/></div>;
 }

@@ -1,8 +1,10 @@
 /** Read-only execution facts. Inspection never starts a tool, probe, or inference. */
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { parseTaskEnvironment, REMOTE_GATE, type TaskEnvironmentView } from '../../main/environments/types';
+import { LOCAL_ENVIRONMENT } from '../../main/environments/types';
 import { Button } from '../primitives';
 import { modelAuthorityApplies, type ModelAuthorityChange } from './model-authority';
+import { SavedWorkDialog } from './Search';
 
 interface EnvironmentBridge {
   forTask(input: { taskId: string }): Promise<unknown>;
@@ -75,5 +77,23 @@ export function TaskEnvironment({ taskId }: { taskId: string }): ReactElement {
         <Button size="sm" disabledReason="V2 revisit (OQ-13)">Hosted browser / sandbox — not enabled</Button>
       </div>
     </section>
+  );
+}
+
+/**
+ * Composer-footer chip beside the model (Codex desktop pattern). Execution is
+ * fixed to this device (Story 1.23); the dialog keeps where commands run apart
+ * from where inference runs. Opening it reads facts only; it starts nothing.
+ */
+export function EnvironmentChip({ taskId }: { taskId: string }): ReactElement {
+  const [open, setOpen] = useState(false);
+  useEffect(() => { setOpen(false); }, [taskId]);
+  return (
+    <>
+      <Button size="sm" variant="quiet" onPress={() => setOpen(true)} data-environment-chip aria-haspopup="dialog" aria-label={`Environment: runs on ${LOCAL_ENVIRONMENT}. Show where commands and inference run.`}>
+        Runs on this device
+      </Button>
+      {open && <SavedWorkDialog label="Environment" onClose={() => setOpen(false)}><TaskEnvironment taskId={taskId} /></SavedWorkDialog>}
+    </>
   );
 }

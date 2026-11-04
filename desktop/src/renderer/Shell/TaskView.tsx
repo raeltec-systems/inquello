@@ -1,6 +1,7 @@
 import type {QuestionSelection} from './Inbox';
 import { TaskProgress } from './TaskProgress';
 import { TaskStates } from './TaskStates';
+import { UsageLimitNotices } from './TaskUsage';
 import type { StartedTask } from './tasks-bridge';
 /**
  * The open Task (Story 1.14): a placeholder thread area, the Task's privacy,
@@ -205,6 +206,7 @@ export function TaskDetails({
 export function TaskView({task,accepted,selectedQuestion,states=null}:TaskViewProps):ReactElement {
  return <section className="iq-task" aria-label="Conversation" data-task-view={task.taskId}>
   <TaskProgress key={task.taskId} taskId={task.taskId} workspaceId={task.workspaceId} selectedQuestion={selectedQuestion} accepted={accepted}/>
+  <UsageLimitNotices taskId={task.taskId}/>
   <TaskStates states={states?.taskId===task.taskId?states:null}/>
  </section>;
 }

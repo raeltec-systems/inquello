@@ -7,6 +7,8 @@ export function displayModelName(name:string):string {
  return name.replace(/^gpt-(\d+(?:\.\d+)?)-([a-z]+)$/,(_,version:string,model:string)=>'GPT-'+version+' '+model[0]!.toUpperCase()+model.slice(1));
 }
 import {rememberTaskModel,type ModelAuthorityChange} from './model-authority';
+import {TaskReasoningControl} from './TaskUsage';
+import {EnvironmentChip} from './TaskEnvironment';
 
 interface Routes {
  catalog():Promise<unknown>; pendingModel(input:{taskId:string|null}):Promise<unknown>;
@@ -120,6 +122,8 @@ export function ConversationModelPicker({workspaceId,taskId,selected,disabled=fa
     {label:'AI connections',onSelect:()=>{globalThis.location.hash='#settings-providers';}}
    ]}/>
   {unavailable&&<span className="iq-model-unavailable" title={unavailable}>Unavailable</span>}
+  {taskId&&<TaskReasoningControl taskId={taskId}/>}
+  {taskId&&<EnvironmentChip taskId={taskId}/>}
   {pending&&<Button size="sm" variant="quiet" pending={busy} onPress={()=>void run(pending,false)} disabledReason={disabled?'Finish or stop the current response first.':undefined}>Confirm model change</Button>}
   {notice&&<span role="status" className="iq-model-notice">{notice}</span>}
  </div>;
