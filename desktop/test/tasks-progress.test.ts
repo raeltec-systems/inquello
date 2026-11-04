@@ -90,6 +90,24 @@ it('an unavailable exact A binding clears only A and leaves existing B questions
  expect(await x.service.progress({...input,taskId:other})).toMatchObject({ok:true});expect(await x.service.progress(input)).toMatchObject({ok:false});expect(x.authorityUnavailable).not.toHaveBeenCalled();expect(await x.service.progress({...input,taskId:other})).toMatchObject({ok:true});
 });
 
+const notStarted=()=>Object.assign(new Error('app-server inquello/tasks/progress failed (-32600): Private runtime binding unavailable'),{rpcCode:-32600,data:{inquello:{kind:'not_found'}}});
+it('a conversation with a chosen model that has not started stays Task-local and keeps the session open',async()=>{
+ const other='33333333-3333-4333-8333-333333333333',x=setup();
+ x.request.mockImplementation(async(method:string,params?:unknown)=>{const taskId=(params as {taskId:string}).taskId;if(method==='inquello/tasks/progress'&&taskId===task)throw notStarted();return{...snapshot(),taskId};});
+ expect(await x.service.progress({...input,taskId:other})).toMatchObject({ok:true});
+ expect(await x.service.progress(input)).toMatchObject({ok:false,code:'refused'});
+ expect(await x.service.activity(input)).toMatchObject({ok:false,code:'refused'});
+ expect(x.authorityUnavailable).not.toHaveBeenCalled();
+ expect(await x.service.progress({...input,taskId:other})).toMatchObject({ok:true});
+});
+it('a Task-local refusal still reports lost authority when the Workspace authority re-read changed',async()=>{
+ const x=setup();let reads=0;
+ x.fresh.mockImplementation(async()=>(++reads>=2?{workspaceId:workspace,authorizationEpoch:2}:{workspaceId:workspace,authorizationEpoch:1}) as never);
+ x.request.mockImplementation(async(method:string)=>{if(method==='inquello/tasks/progress')throw notStarted();return snapshot();});
+ expect(await x.service.progress(input)).toMatchObject({ok:false});
+ expect(x.authorityUnavailable).toHaveBeenCalledTimes(1);
+});
+
 it.each([undefined,[],[{routeId:'codex-responses',configurationRevision:9,active:true}]])('missing or incomplete trusted Task metadata cannot fall back to current-only authority (%j)',async refs=>{
  const request=vi.fn(async()=>snapshot()),unavailable=vi.fn();const service=new TaskService({runtime:{ready:()=>true,instance:()=>1,request:request as never},identity:{principalId:()=>task},syncPrincipal:async()=>{},prepareRoutes:async()=>({ok:true}),taskBinding:async()=>({routeId:'codex-responses',configurationRevision:1,disclosureBindings:refs} as never),freshPolicy:async()=>({workspaceId:workspace} as never),onAuthorityUnavailable:unavailable});
  expect(await service.progress(input)).toMatchObject({ok:false});expect(request).not.toHaveBeenCalled();expect(unavailable).not.toHaveBeenCalled();

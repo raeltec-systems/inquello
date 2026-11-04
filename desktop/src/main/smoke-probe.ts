@@ -3784,14 +3784,8 @@ export async function probeEnvironments(contents: WebContents, options: Organise
     stage = 'mounted-usage-settings';
     const usageChoices = await contents.executeJavaScript(`(async () => {
       ${SHELL_HELPERS}
-      // An authority change after the model selection can close the conversation; a
-      // person opens it again. Retry the row until the conversation is shown.
-      await wait(() => {
-        if (qVisible('[data-task-view=${JSON.stringify(created.value.taskId)}]')) return true;
-        const row = qVisible('[data-task-id=${JSON.stringify(created.value.taskId)}] a');
-        if (row && !row.dataset.smokeClicked) { row.dataset.smokeClicked = 'true'; row.click(); setTimeout(() => { delete row.dataset.smokeClicked; }, 2000); }
-        return false;
-      }, ${SHELL_SETTLE_MS});
+      // Choosing the conversation model must leave the open conversation in place.
+      if (!qVisible('[data-task-view=${JSON.stringify(created.value.taskId)}]')) return JSON.stringify({taskView:false,trigger:null,dialog:!!q('dialog[open]')});
       // Reasoning sits beside the model in the composer footer; it opens the explicit settings.
       const trigger = await wait(() => { const node=qVisible('[data-composer] [data-conversation-model] [data-conversation-reasoning]'); return node?.getAttribute('data-reasoning-state')==='unsaved' ? node : null; }, ${POLICY_SETTLE_MS});
       if (!trigger) { const node = q('[data-conversation-reasoning]'); return JSON.stringify({taskView: !!qVisible('[data-task-view=${JSON.stringify(created.value.taskId)}]'), trigger: node ? node.getAttribute('data-reasoning-state') : null, dialog: !!q('dialog[open]')}); }
