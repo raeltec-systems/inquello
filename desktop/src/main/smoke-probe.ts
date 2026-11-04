@@ -79,9 +79,11 @@ import { observeSyntheticStartup } from './smoke-startup';
  * seed file named by `INQUELLO_SMOKE_SEED`) it signs the synthetic user in,
  * accepts the seeded first-administrator invite, opens the Shell, and through
  * the UI creates an Engagement (client and period), a folder and a Task in it.
- * It reads the Header (title, client, period, Workspace), records a synthetic
- * thread ref on the Task in main, moves the Task through the Move menu, and
- * requires the same Task ID, thread ref and references, private visibility,
+ * It reads the Header (title, client, period, Workspace), then through
+ * "Conversation options" › "Rename or organise" moves the Task through the
+ * Move menu and renames it, and requires the same Task ID, no thread binding
+ * (threads are bound only by the native Task start workflow), the same
+ * references, the new title, private visibility,
  * and that a second principal bound to the runtime lists none of the Tasks.
  * It signs out at the end. `evaluateOrganise` is pure and decides pass/fail.
  *
@@ -90,10 +92,12 @@ import { observeSyntheticStartup } from './smoke-startup';
  * by main's validator. With the dev topology it signs in again, creates an ad
  * hoc Task in main, and through the renderer's `state.recordTaskState` records
  * task planned, then running, then run execution_finished. It opens the Task
- * in the Shell and requires the States section to show "Execution finished"
- * in the neutral custom-label chip (not the accepted style, not green), every
- * other dimension "Not recorded", no accepted or explained chip and no text
- * claiming acceptance. A review write is refused by main's validator and, sent
+ * in the Shell and, per the owner amendment of 2026-11-04, requires the
+ * truthful pre-run conversation: no end-of-turn line (no native turn ran), no
+ * state rows and no "Not recorded" placeholder, nothing green, no accepted or
+ * explained chip and no text claiming acceptance. The neutral "Finished ·
+ * worked for …" line is checked on fixture-backed turns in the
+ * visual-conversation phase. A review write is refused by main's validator and, sent
  * straight to the runtime as a system actor, with `human_actor_required`. A
  * second principal is refused the Task's states as `not_found`.
  * `evaluateStates` is pure and decides pass/fail.
@@ -183,14 +187,15 @@ export async function probeSavedNavigation(contents: WebContents, options: {
       const row = await wait(() => qVisible('[data-task-id="${taskId}"] a'), ${SHELL_SETTLE_MS});
       require(row, 'Owned draft not shown').click();
       require(await wait(() => qVisible('[data-task-view="${taskId}"]'), ${SHELL_SETTLE_MS}), 'Draft did not open');
-      require(await openTaskInspector(), 'Task details did not open');
-      const menu = require(button('Organise Task'), 'Organise menu unavailable');
+      const dialog = require(await openConversationDialog('Rename or organise'), 'Rename or organise did not open');
+      const menu = require(button('Organise conversation', dialog), 'Organise menu unavailable');
       require(menu.getClientRects().length > 0, 'Organise menu is hidden'); menu.click();
-      require(await wait(() => button('Pin'), 5000), 'Pin unavailable').click();
+      require(await wait(() => button('Pin', dialog), 5000), 'Pin unavailable').click();
       require(await wait(() => qVisible('[data-task-id="${taskId}"]')?.textContent.includes('Pinned'), 5000), 'Pin did not persist to navigation');
-      require(button('Organise Task'), 'Organise menu disappeared').click();
-      require(await wait(() => button('Archive'), 5000), 'Archive unavailable').click();
+      require(button('Organise conversation', dialog), 'Organise menu disappeared').click();
+      require(await wait(() => button('Archive', dialog), 5000), 'Archive unavailable').click();
       require(await wait(() => !q('[data-task-id="${taskId}"]'), 5000), 'Archived Task remained in navigation');
+      require(await closeConversationDialogs(), 'Rename or organise did not close');
     `);
     checks.push('Pin and archive through actual Task menus');
     await options.restartRuntime();
@@ -219,11 +224,12 @@ export async function probeSavedNavigation(contents: WebContents, options: {
       const hit = await wait(() => [...dialog.querySelectorAll('.iq-saved-results button')].find(el => el.textContent.includes('Procurement January')), 10000);
       require(hit, 'Archived search hit missing').click();
       require(await wait(() => !q('dialog[open]') && q('[data-task-view="${taskId}"]'), 10000), 'Archived hit did not reopen');
-      require(await openTaskInspector(), 'Reopened Task details did not open');
-      require(q('[data-task-view]').textContent.includes('Opening does not unarchive'), 'Reopen silently unarchived');
-      require(button('Organise Task'), 'Reopened Task menu unavailable').click();
-      require(await wait(() => button('Unarchive'), 5000), 'Unarchive unavailable').click();
+      const reopened = require(await openConversationDialog('Rename or organise'), 'Reopened Rename or organise did not open');
+      require(reopened.textContent.includes('Opening does not unarchive'), 'Reopen silently unarchived');
+      require(button('Organise conversation', reopened), 'Reopened Task menu unavailable').click();
+      require(await wait(() => button('Unarchive', reopened), 5000), 'Unarchive unavailable').click();
       require(await wait(() => qVisible('[data-task-id="${taskId}"]'), 5000), 'Unarchive did not restore navigation');
+      require(await closeConversationDialogs(), 'Reopened Rename or organise did not close');
       const tree = await globalThis.inquello.organise.getTree({workspaceId:${JSON.stringify(workspaceId)}});
       const task = tree.ok && tree.value.tasks.find(t => t.taskId === '${taskId}');
       require(task?.pinned && !task.archived && task.runtimeThreadId === null, 'Navigation changed execution or lost the Task');
@@ -1627,7 +1633,6 @@ export async function probeProviders(contents: WebContents, options: ProviderPro
 
 /** How long a Shell step may take to show up in the renderer. */
 const SHELL_SETTLE_MS = 20_000;
-const SMOKE_THREAD_REF = 'smoke-thread-1';
 const OTHER_SMOKE_PRINCIPAL = '00000000-0000-4000-8000-00000000beef';
 
 const SHELL_HELPERS = `
@@ -1673,11 +1678,30 @@ const SHELL_HELPERS = `
     visibility: q('[data-header-visibility]') ? q('[data-header-visibility]').getAttribute('data-header-visibility') : null,
     });
   };
-  const openTaskInspector = async () => {
-    const inspector = await wait(() => qVisible('[data-task-inspector]'), ${SHELL_SETTLE_MS});
-    if (!inspector) return false;
-    if (!inspector.open) inspector.querySelector(':scope > summary')?.click();
-    return inspector.open === true;
+  // The open conversation's controls live in two dialogs reached from the
+  // Header's "Conversation options" menu: "Rename or organise" (Move, rename)
+  // and "Permissions" (the compact policy, reach and execution mode).
+  const CONVERSATION_DIALOGS = { 'Rename or organise': 'Conversation options', Permissions: 'Conversation permissions' };
+  const openConversationDialog = async (item) => {
+    const label = CONVERSATION_DIALOGS[item];
+    const selector = 'dialog[open][aria-label="' + label + '"]';
+    const already = qVisible(selector);
+    if (already) return already;
+    const trigger = await wait(() => qVisible('[data-header] button[aria-label="Conversation options"]'), ${SHELL_SETTLE_MS});
+    if (!trigger) return null;
+    trigger.click();
+    const entry = await wait(() => [...document.querySelectorAll('[role="menuitem"]')].find((element) => visible(element) && element.textContent.trim() === item), 5000);
+    if (!entry) return null;
+    entry.click();
+    return await wait(() => qVisible(selector), ${SHELL_SETTLE_MS});
+  };
+  const closeConversationDialogs = async () => {
+    for (const label of Object.values(CONVERSATION_DIALOGS)) {
+      const dialog = qVisible('dialog[open][aria-label="' + label + '"]');
+      const close = dialog && [...dialog.querySelectorAll('button')].find((button) => button.textContent.trim() === 'Close ' + label);
+      if (close) close.click();
+    }
+    return !!(await wait(() => !document.querySelector('dialog[open]'), 5000));
   };
   const openShell = async () => {
     location.hash = '#shell';
@@ -1741,13 +1765,18 @@ function shellCreateProbe(workspaceId: string): string {
     if (task) q('a', task)?.click();
     await wait(() => text('[data-header-client]'), 5000);
     out.header = await readHeader();
-    out.openTaskShown = !!q('[data-task-view] [data-thread-placeholder]');
+    // A draft Task has no run yet: its conversation area opens with no turns and no end-of-turn line.
+    const view = await wait(() => qVisible('[data-task-view=' + JSON.stringify(out.taskId) + ']'), 5000);
+    out.openTaskShown = !!view && !q('[data-progress-item], [data-turn-finished]', view);
     out.shareControls = document.querySelectorAll('[data-shell] button[aria-label*="Share" i]').length;
     return out;
   })()`;
 }
 
-/** Reopens the Shell (re-reading the tree), opens the Task and moves it to no Engagement. */
+export const SMOKE_RENAMED_TITLE = 'Smoke renamed thread';
+
+/** Reopens the Shell (re-reading the tree), opens the Task, moves it to no
+ * Engagement and renames it through "Conversation options" › "Rename or organise". */
 function shellMoveProbe(taskId: string): string {
   return `(async () => {
     ${SHELL_HELPERS}
@@ -1758,12 +1787,23 @@ function shellMoveProbe(taskId: string): string {
     if (row) row.click();
     out.opened = !!(await wait(() => qVisible('[data-task-view=${JSON.stringify(taskId)}]'), 5000));
     out.headerBefore = await readHeader();
-    if (!(await openTaskInspector())) throw new Error('Task details did not open for Move');
-    out.movePressed = !!q('[data-task-move] button')?.getClientRects().length && press('[data-task-move] button');
-    const target = await wait(() => [...document.querySelectorAll('[role="menuitemradio"]')].find((item) => item.textContent.includes('No Engagement')), 5000);
+    const dialog = await openConversationDialog('Rename or organise');
+    if (!dialog) throw new Error('Rename or organise did not open for Move');
+    const move = q('[data-task-move] button', dialog);
+    out.movePressed = !!move?.getClientRects().length && (move.click(), true);
+    const target = await wait(() => [...dialog.querySelectorAll('[role="menuitemradio"]')].find((item) => item.textContent.includes('No Engagement')), 5000);
     if (target) target.click();
     out.moved = !!(await wait(() => q('[data-recent-chats] [data-task-id=${JSON.stringify(taskId)}]'), ${SHELL_SETTLE_MS}));
     out.notice = text('[data-task-notice]');
+    const title = await wait(() => qVisible('[data-task-rename] input', dialog), 5000);
+    if (title) {
+      type(title, ${JSON.stringify(SMOKE_RENAMED_TITLE)});
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      q('[data-task-rename] button[type="submit"]', dialog)?.click();
+    }
+    out.renamed = !!(await wait(() => text('[data-header-title]') === ${JSON.stringify(SMOKE_RENAMED_TITLE)}, ${SHELL_SETTLE_MS}));
+    out.renameNotice = text('[data-task-notice]');
+    out.dialogClosed = await closeConversationDialogs();
     out.headerAfter = await readHeader();
     return out;
   })()`;
@@ -1801,12 +1841,13 @@ export interface OrganiseProbeRead {
     openTaskShown: boolean;
     shareControls: number;
   };
-  fabricatedAttachmentRefused?: boolean;
   before?: TaskView | null;
-  move?: { shellOpened: boolean; opened: boolean; headerBefore: HeaderRead; movePressed: boolean; moved: boolean; notice: string | null; headerAfter: HeaderRead };
+  move?: { shellOpened: boolean; opened: boolean; headerBefore: HeaderRead; movePressed: boolean; moved: boolean; notice: string | null; renamed: boolean; renameNotice: string | null; dialogClosed: boolean; headerAfter: HeaderRead };
   after?: TaskView | null;
   listedForCreator?: boolean;
   listedForOtherPrincipal?: number;
+  /** The runtime refused the other principal's tree read (nothing disclosed). */
+  otherPrincipalRefused?: boolean;
   signedOutAtEnd?: boolean;
   error?: string;
 }
@@ -1844,12 +1885,13 @@ export function evaluateOrganise(read: OrganiseProbeRead): OrganiseReport {
     failures.push(`the footer Workspace is ${JSON.stringify(create?.header.workspace)}, expected ${JSON.stringify(read.seedWorkspaceName)}`);
   }
   if (create?.header.visibility !== 'private') failures.push('the Header does not show the Task as private');
-  if (!create?.openTaskShown) failures.push('the opened Task did not show its placeholder thread area');
+  if (!create?.openTaskShown) failures.push('the opened draft Task did not show an empty conversation');
   if (create?.shareControls !== 0) failures.push('a Share control is shown');
-  if (!read.fabricatedAttachmentRefused) failures.push('a fabricated thread binding was not refused');
   const before = read.before;
   const after = read.after;
   if (!read.move?.moved) failures.push(`the Task was not moved through the Move menu${read.move?.notice ? ` (${read.move.notice})` : ''}`);
+  if (!read.move?.renamed || read.move.headerAfter.title !== SMOKE_RENAMED_TITLE) failures.push(`the Task was not renamed through Rename or organise${read.move?.renameNotice ? ` (${read.move.renameNotice})` : ''}`);
+  if (read.move && !read.move.dialogClosed) failures.push('the Rename or organise dialog did not close');
   if (!before || !after) failures.push('the Task could not be read before and after the move');
   else {
     if (after.taskId !== before.taskId) failures.push('the move changed the Task ID');
@@ -1858,6 +1900,7 @@ export function evaluateOrganise(read: OrganiseProbeRead): OrganiseReport {
       failures.push('the move changed the references');
     }
     if (after.visibility !== 'private') failures.push('the Task is not private after the move');
+    if (after.title !== SMOKE_RENAMED_TITLE) failures.push(`main reads the renamed Task as ${JSON.stringify(after.title)}`);
     if (after.engagementId !== null || after.folderId !== null) failures.push('the Task did not move to no Engagement');
   }
   if (read.move && (read.move.headerAfter.client !== null || read.move.headerAfter.period !== null)) failures.push('an ad hoc Task still shows a client or period');
@@ -1918,21 +1961,24 @@ export async function probeOrganise(contents: WebContents, options: OrganiseProb
       const tree = await organise.getTree(workspaceId);
       return tree.ok ? (tree.value.tasks.find((task) => task.taskId === taskId) ?? null) : null;
     };
-    const created = await findTask();
-    const attached = created
-      ? await organise.attachThread({ operationId: randomUUID(), workspaceId, taskId, expectedRevision: created.revision, runtimeThreadId: SMOKE_THREAD_REF })
-      : null;
-    read.fabricatedAttachmentRefused = attached?.ok === false;
+    // Thread binding happens only through the native Task start workflow (see
+    // the visual-conversation phase); no renderer- or probe-supplied binding is tried.
     read.before = await findTask();
     read.move = (await contents.executeJavaScript(shellMoveProbe(taskId))) as OrganiseProbeRead['move'];
     read.after = await findTask();
     read.listedForCreator = read.after !== null;
 
-    // A second principal bound to the same runtime lists none of these Tasks.
+    // A second principal bound to the same runtime lists none of these Tasks:
+    // the runtime either answers an empty tree or refuses the Workspace outright.
     await runtimeRequest('inquello/session/setPrincipal', { principalId: OTHER_SMOKE_PRINCIPAL });
     try {
       const other = await runtimeRequest<{ tasks: unknown[] }>('inquello/workspace/tree', { workspaceId });
       read.listedForOtherPrincipal = other.tasks.length;
+    } catch (error) {
+      // Only a runtime refusal counts; a transport or internal failure stays a failure.
+      if (!(error instanceof RpcResponseError) || error.rpcCode !== -32600) throw error;
+      read.listedForOtherPrincipal = 0;
+      read.otherPrincipalRefused = true;
     } finally {
       await runtimeRequest('inquello/session/setPrincipal', { principalId: identity.session.principalId() });
     }
@@ -1949,7 +1995,6 @@ export async function probeOrganise(contents: WebContents, options: OrganiseProb
 // ---- states (Story 1.15) ------------------------------------------------------
 
 const SMOKE_RUN_REF = 'smoke-run-1';
-const STATE_DIMENSION_NAMES = ['task', 'run', 'output', 'checks', 'review', 'approval_marker', 'delivery_marker'] as const;
 
 /** Signed out: listing is refused by main and a review write never passes the validator. */
 const STATES_SIGNED_OUT_PROBE = `(async () => {
@@ -1977,7 +2022,16 @@ function statesRecordProbe(taskId: string, operationIds: readonly string[]): str
   })()`;
 }
 
-/** Opens the Task in the Shell and reads its States section. */
+/**
+ * Opens the Task in the Shell and reads what its conversation shows (owner
+ * amendment 2026-11-04). This Task never ran a native turn (no model runs in
+ * the normal phase), so the truthful pre-run state is: no end-of-turn line, no
+ * state rows (nothing recorded checks, review or the markers), no "Not
+ * recorded" placeholder, and nothing green or accepted. The recorded run state
+ * is a stored record, not a finished native turn, so it adds no line. The
+ * finished line itself is checked on fixture-backed native turns in the
+ * visual-conversation phase.
+ */
 function statesViewProbe(taskId: string): string {
   return `(async () => {
     ${SHELL_HELPERS}
@@ -1986,34 +2040,18 @@ function statesViewProbe(taskId: string): string {
     const out = { shellOpened: await openShell() };
     const row = await wait(() => qVisible('[data-task-id=${JSON.stringify(taskId)}] a'), ${SHELL_SETTLE_MS});
     if (row) row.click();
-    out.opened = !!(await wait(() => qVisible('[data-task-view=${JSON.stringify(taskId)}]'), 5000));
-    if (!(await openTaskInspector())) throw new Error('Task details did not open for States');
-    out.shown = !!(await wait(() => { const state = q('[data-task-states] [data-state-dimension="run"][data-state-value="execution_finished"]'); const chip = state?.querySelector('.iq-status-chip'); return q('[data-task-inspector]')?.open && chip?.getClientRects().length ? state : null; }, ${SHELL_SETTLE_MS}));
-    out.dimensions = [...document.querySelectorAll('[data-task-states] [data-state-dimension]')].map((row) => ({
-      dimension: row.getAttribute('data-state-dimension'),
-      value: row.getAttribute('data-state-value'),
-      text: (q('dd', row) || row).textContent,
-    }));
-    const chip = q('[data-task-states] [data-state-dimension="run"] .iq-status-chip');
-    if (chip) {
-      const reference = document.createElement('span');
-      reference.className = 'iq-status-chip iq-status-chip--accepted';
-      document.body.appendChild(reference);
-      const style = getComputedStyle(chip);
-      const accepted = getComputedStyle(reference);
-      out.runChip = {
-        text: chip.textContent,
-        className: chip.className,
-        color: style.color,
-        background: style.backgroundColor,
-        border: style.borderTopColor,
-        acceptedColor: accepted.color,
-        acceptedBackground: accepted.backgroundColor,
-        acceptedBorder: accepted.borderTopColor,
-      };
-      reference.remove();
-    }
+    const view = await wait(() => qVisible('[data-task-view=${JSON.stringify(taskId)}]'), 5000);
+    out.opened = !!view;
+    // Let the conversation read settle (it reports unavailable history for a Task that never ran).
+    out.settled = !!(await wait(() => view && !/Reading (progress|conversation)/.test(view.textContent) ? view : null, ${SHELL_SETTLE_MS}));
+    out.finishedLine = view ? q('[data-turn-finished]', view)?.textContent ?? null : null;
+    out.stateRows = view ? [...view.querySelectorAll('[data-task-states] [data-state-dimension]')].map((row) => row.getAttribute('data-state-dimension')) : [];
     const shellRoot = q('[data-shell]');
+    out.notRecorded = shellRoot ? shellRoot.textContent.includes('Not recorded') : true;
+    out.chips = view ? [...view.querySelectorAll('.iq-status-chip')].map((chip) => {
+      const style = getComputedStyle(chip);
+      return { className: chip.className, color: style.color, background: style.backgroundColor, border: style.borderTopColor };
+    }) : [];
     out.acceptedChips = shellRoot ? shellRoot.querySelectorAll('.iq-status-chip--accepted, .iq-status-chip--explained').length : -1;
     out.acceptanceText = shellRoot ? /\\baccept|\\bapproved\\b/i.test(shellRoot.textContent) : true;
     out.toasts = [...document.querySelectorAll('.iq-toast')].map((toast) => toast.textContent);
@@ -2032,9 +2070,11 @@ export interface StatesProbeRead {
   view?: {
     shellOpened: boolean;
     opened: boolean;
-    shown: boolean;
-    dimensions: Array<{ dimension: string | null; value: string | null; text: string | null }>;
-    runChip?: { text: string | null; className: string; color: string; background: string; border: string; acceptedColor: string; acceptedBackground: string; acceptedBorder: string };
+    settled: boolean;
+    finishedLine: string | null;
+    stateRows: Array<string | null>;
+    notRecorded: boolean;
+    chips: PolicyChipRead[];
     acceptedChips: number;
     acceptanceText: boolean;
     toasts: string[];
@@ -2079,25 +2119,13 @@ export function evaluateStates(read: StatesProbeRead): StatesReport {
   if (read.runtimeReviewRefusal !== 'human_actor_required') failures.push(`a system review write reached the runtime and answered ${JSON.stringify(read.runtimeReviewRefusal)}`);
   const view = read.view;
   if (!view?.shellOpened || !view.opened) failures.push('the Task did not open in the Shell');
-  if (!view?.shown) failures.push('the States section did not show the finished run');
-  const rows = new Map((view?.dimensions ?? []).map((row) => [row.dimension, row]));
-  if (JSON.stringify([...rows.keys()]) !== JSON.stringify(STATE_DIMENSION_NAMES)) failures.push(`the States section lists ${JSON.stringify([...rows.keys()])}`);
-  const run = rows.get('run');
-  if (!run?.text?.includes('Execution finished')) failures.push(`the run state reads ${JSON.stringify(run?.text)}`);
-  const task = rows.get('task');
-  if (task?.value !== 'running' || !task.text?.includes('Running') || !task.text.includes('Planned')) failures.push(`the Task state reads ${JSON.stringify(task?.text)}`);
-  for (const dimension of STATE_DIMENSION_NAMES.slice(2)) {
-    const row = rows.get(dimension);
-    if (row?.value !== 'not-recorded' || row.text?.trim() !== 'Not recorded') failures.push(`${dimension} is not shown as "Not recorded" (${JSON.stringify(row?.text)})`);
-  }
-  const chip = view?.runChip;
-  if (!chip) failures.push('the run state has no chip');
-  else {
-    if (chip.text !== 'Execution finished') failures.push(`the run chip reads ${JSON.stringify(chip.text)}`);
-    if (!chip.className.includes('iq-status-chip--other') || /--accepted|--explained/.test(chip.className)) failures.push(`the run chip is styled ${chip.className}`);
-    if (chip.color === chip.acceptedColor || chip.background === chip.acceptedBackground || chip.border === chip.acceptedBorder) failures.push('the run chip shares the accepted style');
-    if (isGreenish(chip.color) || isGreenish(chip.background) || isGreenish(chip.border)) failures.push('the run chip is green');
-  }
+  if (!view?.settled) failures.push('the conversation read did not settle');
+  // No native turn ran: a stored run record is not a finished turn and must not read as one.
+  if (view?.finishedLine !== null) failures.push(`a Task that never ran shows an end-of-turn line (${JSON.stringify(view?.finishedLine)})`);
+  // Checks, review and the markers appear only once recorded; none is recorded here.
+  if ((view?.stateRows ?? ['unread']).length !== 0) failures.push(`the conversation lists state rows ${JSON.stringify(view?.stateRows)}`);
+  if (view?.notRecorded !== false) failures.push('the Shell shows a "Not recorded" placeholder');
+  checkChips(view?.chips, 'the conversation', failures);
   if (view?.acceptedChips !== 0) failures.push('an accepted or explained chip is shown');
   if (view?.acceptanceText !== false) failures.push('the Shell states acceptance or approval');
   if ((view?.toasts ?? []).some((toast) => /accept|approv/i.test(toast))) failures.push('a toast states acceptance');
@@ -2893,7 +2921,8 @@ function policySettingsProbe(workspaceId: string | null): string {
   })()`;
 }
 
-/** Opens the Task, reads its policy section, then tries Full access through the renderer bridge. */
+/** Opens the Task's "Permissions" dialog (Conversation options), reads its
+ * compact policy, then tries Full access through the renderer bridge. */
 function policyTaskProbe(taskId: string, operationId: string): string {
   return `(async () => {
     ${SHELL_HELPERS}
@@ -2903,12 +2932,14 @@ function policyTaskProbe(taskId: string, operationId: string): string {
     const row = await wait(() => qVisible('[data-task-id=${JSON.stringify(taskId)}] a'), ${SHELL_SETTLE_MS});
     if (row) row.click();
     out.opened = !!(await wait(() => qVisible('[data-task-view=${JSON.stringify(taskId)}]'), ${SHELL_SETTLE_MS}));
-    if (!(await openTaskInspector())) throw new Error('Task details did not open for Policy');
-    const mode = await wait(() => { const control = q('[data-task-policy=${JSON.stringify(taskId)}] [data-broad-mode]'); return control?.getClientRects().length ? control : null; }, ${POLICY_SETTLE_MS});
-    const section = q('[data-task-policy]');
+    const dialog = await openConversationDialog('Permissions');
+    if (!dialog) throw new Error('Permissions did not open for Policy');
+    const mode = await wait(() => { const control = q('[data-task-policy=${JSON.stringify(taskId)}] [data-broad-mode]', dialog); return control?.getClientRects().length ? control : null; }, ${POLICY_SETTLE_MS});
+    const section = q('[data-task-policy]', dialog);
     out.status = mode ? mode.getAttribute('data-broad-mode-status') : null;
     out.effective = mode ? mode.getAttribute('data-broad-mode-effective') : null;
-    out.summary = section && q('[data-task-policy-summary]', section) ? q('[data-task-policy-summary]', section).textContent : null;
+    // The compact dialog states the asking setting with its source; S07 lists every setting's source.
+    out.summary = section && q('[data-conversation-approval-policy]', section) ? q('[data-conversation-approval-policy]', section).textContent : null;
     const full = q('[data-broad-mode-option="full_access"]');
     out.fullDisabled = full ? full.getAttribute('aria-disabled') : null;
     out.fullReason = full && full.getAttribute('aria-describedby') ? (document.getElementById(full.getAttribute('aria-describedby').split(' ')[0]) || {}).textContent || null : null;
@@ -2926,6 +2957,7 @@ function policyTaskProbe(taskId: string, operationId: string): string {
     const set = (confirmation) => globalThis.inquello.policy.setBroadMode({ operationId: ${JSON.stringify(operationId)}, taskId: ${JSON.stringify(taskId)}, expectedRevision: 0, mode: 'full_access', confirmation });
     out.request = await set(${JSON.stringify(FULL_ACCESS_REACH)}).then((value) => value, (error) => String(error && error.message));
     out.unconfirmed = await set(null).then(() => 'accepted', (error) => String(error && error.message));
+    out.dialogClosed = await closeConversationDialogs();
     return out;
   })()`;
 }
@@ -2976,6 +3008,7 @@ export interface PolicyProbeRead {
     confirmOpened: boolean;
     request: unknown;
     unconfirmed: string;
+    dialogClosed: boolean;
   };
   threadSettings?: unknown;
   signedOutAtEnd?: boolean;
@@ -3040,7 +3073,8 @@ export function evaluatePolicy(read: PolicyProbeRead): PolicyReport {
   const t = read.task;
   if (!t?.shellOpened || !t.opened) failures.push('the Task did not open in the Shell');
   if (t?.status !== 'standard' || t.effective !== 'standard') failures.push(`the Task mode is ${JSON.stringify(t?.status)} / ${JSON.stringify(t?.effective)}`);
-  if (!t?.summary?.includes('Sandbox ceiling') || !t.summary.includes('Inquello default')) failures.push(`the Task policy summary reads ${JSON.stringify(t?.summary)}`);
+  if (!t?.summary?.includes('Asks when the agent requests it') || !t.summary.includes('Inquello default')) failures.push(`the Task policy summary reads ${JSON.stringify(t?.summary)}`);
+  if (t && !t.dialogClosed) failures.push('the Permissions dialog did not close');
   if (!t?.sectionText?.includes('Broader execution mode')) failures.push('the Task does not label its execution mode');
   const ruleText = 'Full access is not available: not permitted by the Inquello default.';
   if (t?.fullDisabled !== 'true' || !t.fullReason?.includes(ruleText)) failures.push(`the Full access control is not unavailable with its rule (${JSON.stringify(t?.fullDisabled)}, ${JSON.stringify(t?.fullReason)})`);
@@ -3114,7 +3148,7 @@ const TOOL_BOUNDS_SYSTEM = 'system (read-only)';
 const TOOL_BOUNDS_PERMITTED = 'working folder (read/write), output folder, system (read-only)';
 const TOOL_BOUNDS_DESTINATION = 'example.com';
 
-/** Opens the Task and reads what its tools can reach, then S07's sandbox entry and reach. */
+/** Opens the Task's "Permissions" dialog and reads what its tools can reach, then S07's sandbox entry and reach. */
 function toolBoundsRendererProbe(taskId: string, workspaceId: string): string {
   return `(async () => {
     ${SHELL_HELPERS}
@@ -3123,13 +3157,15 @@ function toolBoundsRendererProbe(taskId: string, workspaceId: string): string {
     const out = { shellOpened: await openShell() };
     const row = await wait(() => qVisible('[data-task-id=${JSON.stringify(taskId)}] a'), ${SHELL_SETTLE_MS});
     if (row) row.click();
-    if (!(await wait(() => qVisible('[data-task-view=${JSON.stringify(taskId)}]'), ${SHELL_SETTLE_MS})) || !(await openTaskInspector())) throw new Error('Task details did not open for tool reach');
-    const reach = await wait(() => { const control = q('[data-task-reach=${JSON.stringify(taskId)}] [data-reach]'); return control?.getClientRects().length ? control : null; }, ${POLICY_SETTLE_MS});
-    const section = q('[data-task-reach=${JSON.stringify(taskId)}]');
+    const dialog = (await wait(() => qVisible('[data-task-view=${JSON.stringify(taskId)}]'), ${SHELL_SETTLE_MS})) ? await openConversationDialog('Permissions') : null;
+    if (!dialog) throw new Error('Permissions did not open for tool reach');
+    const reach = await wait(() => { const control = q('[data-task-reach=${JSON.stringify(taskId)}] [data-reach]', dialog); return control?.getClientRects().length ? control : null; }, ${POLICY_SETTLE_MS});
+    const section = q('[data-task-reach=${JSON.stringify(taskId)}]', dialog);
     out.bounded = reach ? reach.getAttribute('data-reach-bounded') : null;
     out.lines = reach ? [...reach.querySelectorAll('[data-reach-line]')].map((line) => ({ name: line.getAttribute('data-reach-line'), text: line.textContent })) : [];
     out.sandbox = section && q('[data-task-sandbox]', section) ? { status: q('[data-task-sandbox]', section).getAttribute('data-task-sandbox'), text: q('[data-task-sandbox]', section).textContent } : null;
     out.sectionText = section ? section.textContent : null;
+    out.dialogClosed = await closeConversationDialogs();
     location.hash = '#specimen';
     await wait(specimenReady, 5000);
     await wait(() => q('[data-policy-workspace=${JSON.stringify(workspaceId)}] [data-reach]'), ${POLICY_SETTLE_MS});
@@ -3171,6 +3207,7 @@ export interface ToolBoundsProbeRead {
     sectionText: string | null;
     settingsReach: string | null;
     contract: { text: string | null; enabled: string | null } | null;
+    dialogClosed?: boolean;
     /** Whether any rendered text held a device path of a Task folder. */
     pathShown?: boolean;
     wording?: boolean;
@@ -3219,6 +3256,7 @@ export function evaluateToolBounds(read: ToolBoundsProbeRead): ToolBoundsReport 
   if (!line('write').includes("This Task's working folder") || !line('write').includes('Output folder')) failures.push(`the Task's write line reads ${JSON.stringify(line('write'))}`);
   if (!line('contact').includes('No network destinations')) failures.push(`the Task's contact line reads ${JSON.stringify(line('contact'))}`);
   if (ui?.sandbox?.status !== 'available') failures.push(`the Task's sandbox reads ${JSON.stringify(ui?.sandbox)}`);
+  if (ui && ui.dialogClosed === false) failures.push('the Permissions dialog did not close');
   if (ui?.pathShown !== false) failures.push('a device path of a Task folder is shown');
   if (ui?.wording !== false) failures.push('the reach uses review or approval wording');
   if (!ui?.settingsReach?.includes('No network destinations')) failures.push(`S07 reach reads ${JSON.stringify(ui?.settingsReach)}`);
@@ -3335,10 +3373,15 @@ function permissionCardProbe(taskId: string, press: 'deny' | 'run', skip: readon
   return `(async () => {
     ${SHELL_HELPERS}
     const out = { shellOpened: visible(q('[data-shell]')) || await openShell() };
-    if (!q('[data-task-view=${JSON.stringify(taskId)}]')) {
-      const row = await wait(() => qVisible('[data-task-id=${JSON.stringify(taskId)}] a'), ${SHELL_SETTLE_MS});
-      if (row) row.click();
-    }
+    // An authority or model-catalog change while the Task is opening (the
+    // permission review refreshes the catalog) correctly drops that open, so
+    // a person would click again: retry the row until the Task view is shown.
+    out.taskOpened = !!(await wait(() => {
+      if (q('[data-task-view=${JSON.stringify(taskId)}]')) return true;
+      const row = qVisible('[data-task-id=${JSON.stringify(taskId)}] a');
+      if (row && !row.dataset.smokeClicked) { row.dataset.smokeClicked = 'true'; row.click(); setTimeout(() => { delete row.dataset.smokeClicked; }, 2000); }
+      return false;
+    }, ${SHELL_SETTLE_MS}));
     const skip = ${JSON.stringify(skip)};
     const holder = await wait(() => [...document.querySelectorAll('[data-permission-review=${JSON.stringify(taskId)}] [data-permission-state="pending"]')].find((el) => !skip.includes(el.getAttribute('data-permission-request'))), ${PERMISSION_SETTLE_MS});
     out.found = !!holder;
@@ -3369,6 +3412,7 @@ function permissionCardProbe(taskId: string, press: 'deny' | 'run', skip: readon
 
 interface PermissionCardRead {
   shellOpened: boolean;
+  taskOpened?: boolean;
   found: boolean;
   requestId?: string | null;
   regionLabel?: string | null;
@@ -3618,25 +3662,39 @@ export async function probeCapabilities(contents: WebContents, options: Capabili
 // ---- governed processing routes (Story 1.22) ------------------------------------
 /** Fixed probe diagnostics only; runtime/provider error text never enters reports. */
 class SmokeProbeFailure extends Error {}
-export interface RoutesReport { ok:boolean; failures:string[]; configured:boolean; verification:'configuration-only'; inferenceFixture:'not-run'; renderer?:{present:boolean;noDefault:boolean;unknownRegion:boolean}; selected?:boolean; reopened?:boolean }
+export interface RoutesReport { ok:boolean; failures:string[]; configured:boolean; verification:'configuration-only'; inferenceFixture:'not-run'; renderer?:{present:boolean;noDefault:boolean;configuredNotUsable:boolean;bindings:number}; selected?:boolean; reopened?:boolean }
 /** No provider call or credential verification. Packaged inference fixtures remain a separate required gate. */
 export async function probeRoutes(contents:WebContents, options:Omit<OrganiseProbeOptions,'runtimeRequest'> & {routes: import('./routes/service').RouteService}):Promise<RoutesReport>{
   const report:RoutesReport={ok:false,failures:[],configured:options.identity.config.kind==='configured',verification:'configuration-only',inferenceFixture:'not-run'};
+  // Fixed local stage names only: never raw RPC, provider or credential errors.
+  let stage='seeded-identity';
   try{
     if(!report.configured){report.failures.push('Seeded identity/runtime topology unavailable; route smoke unmet');return report;}
     const seed=JSON.parse(fs.readFileSync(options.seedFile??'','utf8')) as {workspace_id?:string};if(!seed.workspace_id)throw new SmokeProbeFailure('Missing seed');
     if(!(await smokeIdentity(contents, 'signIn')).ok)throw new SmokeProbeFailure('Sign-in unavailable');await options.organise.syncPrincipal();options.routes.resume();
-    const initial=await options.routes.list();if(!initial.ok)throw new SmokeProbeFailure('Routes unavailable');
+    stage='route-catalog';const initial=await options.routes.list();if(!initial.ok)throw new SmokeProbeFailure('Routes unavailable');
     const candidate=initial.value.find(r=>r.routeId==='claude-api-key');if(!candidate)throw new SmokeProbeFailure('Missing Claude route');
-    const saved=await options.routes.configure({operationId:randomUUID(),expectedRevision:candidate.revision,routeId:'claude-api-key',deployment:'anthropic-direct',model:'claude-sonnet-5-5',apiVersion:'2026-10-21',region:null});if(!saved.ok)throw new SmokeProbeFailure('Configuration refused');
+    stage='route-configure';const saved=await options.routes.configure({operationId:randomUUID(),expectedRevision:candidate.revision,routeId:'claude-api-key',deployment:'anthropic-direct',model:'claude-sonnet-5-5',apiVersion:'2026-10-21',region:null});if(!saved.ok)throw new SmokeProbeFailure('Configuration refused');
     const route=saved.value.find(r=>r.routeId==='claude-api-key');if(!route?.configuration||route.configuration.region!==null||route.enabled)report.failures.push('Configuration or unknown region falsely established eligibility');
-    const created=await options.organise.createTask({operationId:randomUUID(),workspaceId:seed.workspace_id,engagementId:null,folderId:null,title:'Synthetic processing route smoke'});if(!created.ok)throw new SmokeProbeFailure('Task unavailable');
+    stage='task-route';const created=await options.organise.createTask({operationId:randomUUID(),workspaceId:seed.workspace_id,engagementId:null,folderId:null,title:'Synthetic processing route smoke'});if(!created.ok)throw new SmokeProbeFailure('Task unavailable');
     const before=await options.routes.forTask(created.value.taskId);if(!before.ok||before.value.selected!==null)report.failures.push('A new Task had an implicit default route');
     const selected=await options.routes.select({operationId:randomUUID(),expectedRevision:0,taskId:created.value.taskId,routeId:'claude-api-key',configurationRevision:route!.revision});report.selected=selected.ok;
     const reopened=await options.routes.forTask(created.value.taskId);report.reopened=reopened.ok&&reopened.value.selected?.configuration?.model==='claude-sonnet-5-5';if(!report.selected||!report.reopened)report.failures.push('Explicit Task route did not reopen');
-    report.renderer=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}location.hash='#specimen';const section=await wait(()=>q('[data-processing-route="claude-api-key"]'),${POLICY_SETTLE_MS});const routeText=section?.closest('[data-processing-routes]')?.textContent??'';return{present:!!section,noDefault:routeText.includes('No implicit default'),unknownRegion:routeText.includes('Unknown')};})()`);
-    if(!report.renderer?.present||!report.renderer.noDefault||!report.renderer.unknownRegion)report.failures.push('Processing routes did not render truthful states');
-  }catch(error){report.failures.push(error instanceof SmokeProbeFailure ? error.message : 'Route smoke could not finish; native runtime/topology required');}
+    stage='settings-models';
+    // Settings › Models: no model is preselected, and every saved binding of the
+    // configured-but-unconnected Sonnet model is shown unavailable with main's own reason.
+    report.renderer=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}
+      location.hash='#settings-routes';
+      const section=await wait(()=>{const node=qVisible('[data-processing-routes]');return node&&q('select[aria-label="Model"]',node)?node:null;},${POLICY_SETTLE_MS});
+      const select=section?q('select[aria-label="Model"]',section):null;
+      const raw=await globalThis.inquello.routes.catalog();const bindings=raw?.ok?raw.value.bindings.filter(b=>b.name==='claude-sonnet-5-5'&&b.state==='active'):[];
+      const shown=section?.textContent??'';
+      const configuredNotUsable=bindings.every(b=>!b.available&&(!b.reason||shown.includes(b.reason)));
+      location.hash='#specimen';await wait(specimenReady,5000);
+      return{present:!!section,noDefault:select?.value==='',configuredNotUsable,bindings:bindings.length};
+    })()`);
+    if(!report.renderer?.present||!report.renderer.noDefault||!report.renderer.configuredNotUsable)report.failures.push(`Processing routes did not render truthful states (${JSON.stringify(report.renderer)})`);
+  }catch(error){report.failures.push(error instanceof SmokeProbeFailure ? error.message : `Route smoke could not finish at ${stage}; native runtime/topology required`);}
   finally{if(report.configured){await options.routes.quiesce();await smokeIdentity(contents, 'signOut');await options.organise.syncPrincipal().catch(()=>{});options.routes.resume();}}
   report.ok=report.failures.length===0;return report;
 }
@@ -3676,12 +3734,12 @@ export async function probeEnvironments(contents: WebContents, options: Organise
       if (!(await openShell())) return false;
       const row = await wait(() => qVisible('[data-task-id=${JSON.stringify(created.value.taskId)}] a'), ${SHELL_SETTLE_MS});
       if (!row) return false; row.click();
-      if (!(await openTaskInspector())) return false;
+      if (!(await wait(() => qVisible('[data-task-view=${JSON.stringify(created.value.taskId)}]'), ${SHELL_SETTLE_MS}))) return false;
       const panel = await wait(() => { const node = q('[data-task-environment]'); return node?.textContent.includes('No conversation model selected') ? node : null; }, ${POLICY_SETTLE_MS});
       if (!panel) return false;
       return panel.textContent.includes('This device (local host)') && panel.textContent.includes('runtime-owned configuration verified') && panel.textContent.includes('Story 8.1') && panel.textContent.includes('V2 revisit (OQ-13)') && [...panel.querySelectorAll('button[aria-disabled="true"]')].length >= 2;
     })()`) as boolean;
-    if (!rendered) throw new SmokeProbeFailure('Environment panel did not render');
+    if (!rendered) throw new SmokeProbeFailure('Environment panel did not render: no [data-task-environment] surface is mounted for the open Task');
     // Safe synthetic selection through the real service emits main/preload invalidation.
     // No refresh click, renderer test event, credentials or inference call is used.
     stage = 'route-catalog';
@@ -3807,13 +3865,12 @@ export async function probeQuota(contents: WebContents, options: OrganiseProbeOp
     stage='mounted-native-task';
     const mounted=await contents.executeJavaScript(`(async()=>{
       ${SHELL_HELPERS}
-      const result={shell:false,sidebar:false,task:false,inspector:false,controls:false};
+      const result={shell:false,sidebar:false,task:false,controls:false};
       location.hash='#specimen';await wait(specimenReady,5000);result.shell=await openShell();if(!result.shell)return result;
       const row=await wait(()=>qVisible('[data-task-id=${JSON.stringify(run.taskId)}] a'),${SHELL_SETTLE_MS});result.sidebar=!!row;if(!row)return result;row.click();
       result.task=!!(await wait(()=>qVisible('[data-task-view=${JSON.stringify(run.taskId)}]'),${SHELL_SETTLE_MS}));if(!result.task)return result;
-      result.inspector=await openTaskInspector();if(!result.inspector)return result;
       result.controls=!!(await wait(()=>qVisible('[data-task-usage] select[aria-label="Reasoning"]'),${POLICY_SETTLE_MS}));return result;
-    })()`) as {shell:boolean;sidebar:boolean;task:boolean;inspector:boolean;controls:boolean};
+    })()`) as {shell:boolean;sidebar:boolean;task:boolean;controls:boolean};
     if(!mounted.controls)throw new SmokeProbeFailure('Classified quota Task controls did not mount; stages='+JSON.stringify(mounted));
     stage='bounded-local-invocations';
     for(const command of [['/bin/sh','-c','exit 0'],['/bin/sh','-c','exit 7'],['/bin/sh','-c','exit 0']]){
@@ -3887,9 +3944,10 @@ export async function probeStartSurface(contents:WebContents,options:Omit<Organi
    const opened=await openShell();const ready=await wait(()=>q('[data-sidebar][data-sidebar-state="ready"]'),${SHELL_SETTLE_MS});
    const button=qVisible('[data-action="new-thread"]');if(!opened||!ready||!button)return{opened:false};button.click();
    const start=await wait(()=>qVisible('[data-start-view]'),${SHELL_SETTLE_MS});const field=start?.querySelector('textarea');const send=start?.querySelector('[aria-label="Send"]');
-   return{opened:!!start,prompt:start?.textContent.includes('What should we work on?'),focused:document.activeElement===field,empty:field?.value==='',disabled:send?.getAttribute('aria-disabled')==='true',processing:!!start?.querySelector('.iq-processing-settings > summary'),noUnsupportedControls:!start?.querySelector('[aria-label="Attach files"],[aria-label="Voice"]')};
+   return{opened:!!start,prompt:start?.textContent.includes('What should we work on?'),focused:document.activeElement===field,empty:field?.value==='',disabled:send?.getAttribute('aria-disabled')==='true',modelChoice:!!start?.querySelector('[data-conversation-model] button[aria-label="Choose model"]'),noUnsupportedControls:!start?.querySelector('[aria-label="Attach files"],[aria-label="Voice"]')};
   })()`) as Record<string,boolean>;
-  for(const key of ['opened','prompt','focused','empty','disabled','processing','noUnsupportedControls'])if(read[key]!==true)failures.push(`Start surface ${key} not established`);
+  // The conversation model is chosen in the Composer; response options appear only when a model offers non-default choices.
+  for(const key of ['opened','prompt','focused','empty','disabled','modelChoice','noUnsupportedControls'])if(read[key]!==true)failures.push(`Start surface ${key} not established`);
   const after=await options.organise.getTree(seed.workspace_id);if(!after.ok||after.value.tasks.length!==before.value.tasks.length)failures.push('New chat changed persisted Tasks before Send');
  }catch{failures.push('Seeded Start surface could not be verified');}
  finally{await smokeIdentity(contents, 'signOut').catch(()=>undefined);await options.organise.syncPrincipal().catch(()=>undefined);}
@@ -4041,12 +4099,32 @@ export async function probeVisualConversation(contents: WebContents, options: Or
       if(!await wait(()=>qVisible('[data-task-view="'+id+'"]'),${SHELL_SETTLE_MS}))return null;
       return id;
     })()`) as Promise<string|null>;
+    // Story 1.15 owner amendment (2026-11-04): a finished native turn ends with
+    // the neutral "Finished · worked for …" line, measured from the turn's own
+    // timestamps; an interrupted turn keeps its wording and shows no such line.
+    const endOfTurn=async(id:string,finished:boolean,where:string)=>{
+      const read=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}
+        const view=()=>qVisible('[data-task-view="'+${JSON.stringify(id)}+'"]');
+        const line=await wait(()=>{const task=view();if(!task)return null;const node=q('[data-turn-finished]',task);return ${finished}?(node&&node.getAttribute('data-turn-duration')==='measured'&&node.getClientRects().length?node:null):(node?null:task);},${POLICY_SETTLE_MS});
+        if(!line)return {found:false,text:view()?.querySelector('[data-turn-finished]')?.textContent??null};
+        if(!${finished})return {found:true,absent:true};
+        const style=getComputedStyle(line),items=view().querySelector('.iq-conversation-items');
+        return {found:true,text:line.textContent,className:line.className,color:style.color,background:style.backgroundColor,border:style.borderTopColor,afterItems:!!items&&!!(items.compareDocumentPosition(line)&Node.DOCUMENT_POSITION_FOLLOWING),chip:!!line.closest('.iq-status-chip,[role="alert"]')||!!line.querySelector('.iq-status-chip')};
+      })()`) as {found:boolean;absent?:boolean;text?:string|null;className?:string;color?:string;background?:string;border?:string;afterItems?:boolean;chip?:boolean};
+      console.info(JSON.stringify({event:'visual-end-of-turn',where,finished,...read}));
+      if(!finished){if(!read.found)throw new SmokeProbeFailure(`An interrupted turn showed an end-of-turn line at ${where}`);return;}
+      if(!read.found)throw new SmokeProbeFailure(`The finished turn showed no measured end-of-turn line at ${where} (${JSON.stringify(read.text)})`);
+      if(!/^Finished · worked for (\d+h \d+m|\d+m \d+s|\d+s|under 1s)$/.test(read.text??'')||/accept|approv|\bdone\b/i.test(read.text??''))throw new SmokeProbeFailure(`The end-of-turn line reads ${JSON.stringify(read.text)} at ${where}`);
+      if(read.className!=='iq-turn-finished'||read.chip||isGreenish(read.color??'')||isGreenish(read.background??'')||isGreenish(read.border??''))throw new SmokeProbeFailure(`The end-of-turn line is not neutral at ${where}`);
+      if(!read.afterItems)throw new SmokeProbeFailure(`The end-of-turn line is not at the end of the turn at ${where}`);
+    };
     stage='visual-bridge-first-start';
     const taskId=await startPinnedConversation(1,fixture.requests[0]!);
     if(!taskId)throw new SmokeProbeFailure('Pinned synthetic bridge start did not open its saved conversation');
     if(!(await waitAnswer(taskId,fixture.answers[0]!)))throw new SmokeProbeFailure('First synthetic assistant answer did not render');
     const first=await taskSnapshot(taskId,'completed');if(first.status!=='completed')throw new SmokeProbeFailure('First synthetic native turn did not complete');
     await checkFixture(1);
+    await endOfTurn(taskId,true,'first-turn');
     stage='visual-same-provider-model-b';
     // Both names are present in bundled supported metadata. Only this owned,
     // pinned Responses fixture qualifies them for fictional validation here.
@@ -4111,6 +4189,7 @@ export async function probeVisualConversation(contents: WebContents, options: Or
     if(!stopped)throw new SmokeProbeFailure('Actual Stop did not expose explicit Resume');
     const interrupted=await taskSnapshot(taskId,'cancelled');
     if(interrupted.status!=='cancelled'||interrupted.threadId!==first.threadId||interrupted.runId===second.runId)throw new SmokeProbeFailure('Native interruption binding was not confirmed');
+    await endOfTurn(taskId,false,'interrupted-turn');
     await checkFixture(3,true);await capture('04-interrupted-conversation-synthetic');
     // The short retained transcript fits the large desktop; establish real overflow before testing reader intent.
     options.resize(900,700);
@@ -4165,6 +4244,7 @@ export async function probeVisualConversation(contents: WebContents, options: Or
     if(!resumed||!(await waitAnswer(taskId,fixture.answers[3]!)))throw new SmokeProbeFailure('Explicit Resume did not complete the retained synthetic Task');
     const last=await taskSnapshot(taskId,'completed');
     if(last.status!=='completed'||last.threadId!==first.threadId||last.runId===interrupted.runId)throw new SmokeProbeFailure('Resume did not retain Task/thread with a new run');
+    await endOfTurn(taskId,true,'resumed-turn');
     if(!(await latestAnswerVisible(taskId,fixture.answers[3]!)))throw new SmokeProbeFailure('Resumed answer remained outside the conversation viewport');
     await checkFixture(4,true);await capture('06-resumed-conversation-synthetic');
     const details=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}
