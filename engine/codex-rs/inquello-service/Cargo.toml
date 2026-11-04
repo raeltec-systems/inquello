@@ -15,7 +15,7 @@ license.workspace = true
 
 [features]
 # Only selects cfg(test) retained-child coupling; never exposes a runtime route.
-retained-fixtures = ["test-issuer", "dep:app_test_support", "dep:codex-app-server-protocol"]
+retained-fixtures = ["test-issuer", "dep:app_test_support", "dep:codex-app-server-protocol", "dep:codex-protocol", "dep:codex-rollout"]
 # The synthetic OIDC test issuer and the synthetic-test deployment. Without this
 # feature no test issuer can be configured at all; with it, a production
 # deployment still refuses one.
@@ -26,6 +26,8 @@ test-issuer = ["dep:rcgen", "dep:ring", "dep:time", "dep:tracing-subscriber"]
 # test harness; ordinary service checks must remain a separate build.
 app_test_support = { workspace = true, optional = true }
 codex-app-server-protocol = { workspace = true, optional = true }
+codex-protocol = { workspace = true, optional = true }
+codex-rollout = { workspace = true, optional = true }
 axum = { workspace = true, default-features = false, features = [
     "http1",
     "json",
