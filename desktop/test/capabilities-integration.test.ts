@@ -126,6 +126,11 @@ describe.skipIf(!databaseConfigured)('capabilities against the real runtime and 
       schemaStamp,
       stderrLogPath: path.join(dir, 'logs', 'app-server-stderr.log'),
       logger: recordingLogger(),
+      onServerRequest: async (method, params) => {
+        if (method === 'inquello/context/authorize') return organise?.authorizeContext(params) ?? { available: false, snapshot: null, serviceEngagementIds: [] };
+        if (method === 'inquello/tasks/authority') return { workspacePolicy: await policy?.startPolicy((params as { workspaceId: string }).workspaceId) ?? null };
+        return undefined;
+      },
     };
     runtime = new AppServerRuntime(runtimeOptions);
     await runtime.start();
