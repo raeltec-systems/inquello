@@ -2600,7 +2600,9 @@ const COMPOSER_HELPERS = `
       others: others.length,
       enabledOthers: others.filter((el) => el.getAttribute('aria-disabled') !== 'true' && !el.hasAttribute('disabled')).length,
       fileChips: root.querySelectorAll('.iq-file-chip').length,
-      laterWords: /attach|add files|method|scope|environment|reasoning|thorough/i.test(root.textContent || ''),
+      // The conversation's model control now also holds its reasoning and environment
+      // (owner decision 2026-11-04); no other later input may appear.
+      laterWords: /attach|add files|method|scope|environment|reasoning|thorough/i.test((() => { const copy = root.cloneNode(true); copy.querySelectorAll('[data-conversation-model]').forEach((node) => node.remove()); return copy.textContent || ''; })()),
     };
   };
 `;
@@ -3773,17 +3775,27 @@ export async function probeEnvironments(contents: WebContents, options: Organise
       const updated = !!(await wait(() => { const panel = qVisible('dialog[open] [data-task-environment]'); return panel?.textContent.includes('Selected conversation model') && panel.textContent.includes('claude-sonnet-5-5') && panel.textContent.includes('Unknown') && !panel.textContent.includes('No conversation model selected') && !/Deployment|Endpoint|API version|anthropic-direct|api[.]anthropic[.]com/i.test(panel.textContent) ? panel : null; }, ${POLICY_SETTLE_MS}));
       const close = [...document.querySelectorAll('dialog[open] button')].find((button) => button.textContent === 'Close Environment');
       if (close) close.click();
-      return updated && !!(await wait(() => !q('dialog[open] [data-task-environment]'), ${SHELL_SETTLE_MS}));
-    })()`) as boolean;
-    if (!updated) failures.push('Mounted environment panel did not update via production route invalidation');
+      if (!updated) { const panel = q('dialog[open] [data-task-environment]'); return JSON.stringify({taskView: !!qVisible('[data-task-view=${JSON.stringify(created.value.taskId)}]'), chip: !!qVisible('[data-environment-chip]'), dialog: !!q('dialog[open]'), panel: panel ? panel.textContent.slice(0, 400) : null}); }
+      return !!(await wait(() => !q('dialog[open] [data-task-environment]'), ${SHELL_SETTLE_MS}));
+    })()`) as boolean | string;
+    if (updated !== true) failures.push('Mounted environment panel did not update via production route invalidation' + (typeof updated === 'string' ? '; observed=' + updated : ''));
     // Story 1.24: mounted choices follow the same real main/preload notification.
     // Persist defaults explicitly; this does not enable the disabled route or call a provider.
     stage = 'mounted-usage-settings';
     const usageChoices = await contents.executeJavaScript(`(async () => {
       ${SHELL_HELPERS}
+      // An authority change after the model selection can close the conversation; a
+      // person opens it again. Retry the row until the conversation is shown.
+      await wait(() => {
+        if (qVisible('[data-task-view=${JSON.stringify(created.value.taskId)}]')) return true;
+        const row = qVisible('[data-task-id=${JSON.stringify(created.value.taskId)}] a');
+        if (row && !row.dataset.smokeClicked) { row.dataset.smokeClicked = 'true'; row.click(); setTimeout(() => { delete row.dataset.smokeClicked; }, 2000); }
+        return false;
+      }, ${SHELL_SETTLE_MS});
       // Reasoning sits beside the model in the composer footer; it opens the explicit settings.
       const trigger = await wait(() => { const node=qVisible('[data-composer] [data-conversation-model] [data-conversation-reasoning]'); return node?.getAttribute('data-reasoning-state')==='unsaved' ? node : null; }, ${POLICY_SETTLE_MS});
-      if (!trigger) return false; trigger.click();
+      if (!trigger) { const node = q('[data-conversation-reasoning]'); return JSON.stringify({taskView: !!qVisible('[data-task-view=${JSON.stringify(created.value.taskId)}]'), trigger: node ? node.getAttribute('data-reasoning-state') : null, dialog: !!q('dialog[open]')}); }
+      trigger.click();
       const panel = await wait(() => { const node=qVisible('dialog[open] [data-task-reasoning]'); return node?.querySelector('select[aria-label="Reasoning"]:not(:disabled)') ? node : null; }, ${POLICY_SETTLE_MS});
       if (!panel || !panel.textContent.includes('Defaults are not saved yet')) return false;
       const save=[...panel.querySelectorAll('button')].find(button=>button.textContent==='Save Task settings');
@@ -3792,13 +3804,13 @@ export async function probeEnvironments(contents: WebContents, options: Organise
       const close = [...document.querySelectorAll('dialog[open] button')].find((button) => button.textContent === 'Close Reasoning and speed');
       if (close) close.click();
       return saved && !!(await wait(() => !q('dialog[open] [data-task-reasoning]'), ${SHELL_SETTLE_MS}));
-    })()`) as boolean;
-    if (!usageChoices) failures.push('Mounted usage choices did not save explicit defaults');
+    })()`) as boolean | string;
+    if (usageChoices !== true) failures.push('Mounted usage choices did not save explicit defaults' + (typeof usageChoices === 'string' ? '; observed=' + usageChoices : ''));
     // Harmless local invocations, repeated and failed, are accounted at the real boundary.
     stage = 'bounded-local-invocations';
     for (const command of [['/bin/sh','-c','exit 0'],['/bin/sh','-c','exit 7'],['/bin/sh','-c','exit 0']]) {
       const run=await options.policy.runTool(created.value.taskId,command,{timeoutMs:30_000});
-      if (!run.ok) throw new SmokeProbeFailure('Synthetic local invocation unavailable');
+      if (!run.ok) throw new SmokeProbeFailure('Synthetic local invocation unavailable ('+run.code+')');
     }
     stage = 'mounted-usage-history';
     const history = await contents.executeJavaScript(`(async () => {
@@ -3806,10 +3818,11 @@ export async function probeEnvironments(contents: WebContents, options: Organise
       // Attributable usage and limits live in Settings > Usage for the open conversation.
       location.hash = '#settings-usage';
       const found = !!(await wait(() => { const node=qVisible('[data-settings-usage-task=${JSON.stringify(created.value.taskId)}] [data-task-usage]'); const rows=node?.querySelectorAll('[data-usage-attempt]'); return rows?.length>=3 && node.textContent.includes('Local tool invocation — completed') && node.textContent.includes('Local tool invocation — failed') && node.textContent.includes('Unknown / Unknown') ? node : null; }, ${POLICY_SETTLE_MS}));
+      const observed = found ? null : JSON.stringify({settings: !!q('[data-settings-usage]'), task: q('[data-settings-usage]')?.getAttribute('data-settings-usage-task') === ${JSON.stringify(created.value.taskId)}, rows: q('[data-task-usage]')?.querySelectorAll('[data-usage-attempt]').length ?? null, text: q('[data-task-usage]')?.textContent.slice(0, 300) ?? null});
       location.hash = '#shell';
-      return found;
-    })()`) as boolean;
-    if (!history) failures.push('Native repeated/failed tool history did not reach mounted usage through production notifications');
+      return found || observed;
+    })()`) as boolean | string;
+    if (history !== true) failures.push('Native repeated/failed tool history did not reach mounted usage through production notifications' + (typeof history === 'string' ? '; observed=' + history : ''));
 
 
 
