@@ -1,7 +1,7 @@
 # Messages warm-policy change: proposal
 
 Date: 2026-11-05
-Status: **Proposal only.** No product code, tests or fixtures were changed. This needs an owner decision before anyone implements it.
+Status: **Implemented 2026-11-05 (option A, owner-approved 2026-11-05).** See §5 and the FORK-CUT entry "Messages warm policy change: native mid-conversation system message". The original proposal text below is kept as written.
 Builds on: `validation/messages-warm-policy-representation-gap-20261101.md` (the Codex root-cause review). Its source chain is still accurate and is not repeated here.
 
 ## 1. What the test expects
@@ -75,3 +75,39 @@ Acceptance for A, in addition to the existing assertions in `lifecycle-warm-poli
 6. Responses behaviour and its warm-policy test are unchanged.
 
 Before implementing, confirm against the live Anthropic documentation that mid-conversation system messages and their placement rules apply to `claude-sonnet-5-5` with API version `2026-10-21` on the direct Claude API. Real-provider acceptance still requires its own explicit authorisation.
+
+## 5. Implementation record (2026-11-05)
+
+**Live documentation check (accessed 2026-11-05).**
+- https://platform.claude.com/docs/en/build-with-claude/mid-conversation-system-messages and https://platform.claude.com/docs/en/api/messages/create.
+- They confirm that mid-conversation `{"role":"system"}` messages are available on Claude Sonnet 5.5, with no beta header, on the Claude API. They are not available on Claude Sonnet 5.
+- An entry that carries content must immediately follow a `user` turn (one that carries `tool_result` blocks counts) or an `assistant` turn that ends in a server tool result. It must be last or be immediately followed by an `assistant` turn. Anything else is a 400.
+- Two points differ from §2: the live page lists Amazon Bedrock as available, without the InvokeModel-only caveat, and it says a tool-result user turn is a valid predecessor. Neither widens what we implemented.
+
+**What was built.** `inquello-adapters/src/anthropic/request.rs::encode_request` emits a late System run as one native system message directly after the next native user message, in one shape only:
+- nothing before the run is an assistant `tool_use` awaiting its result;
+- the run is followed only by user-input messages (never tool output);
+- those messages are followed by an assistant message or by the end of history.
+
+Every other late shape keeps the existing refusal and dispatches nothing. The top-level `system` and all earlier entries stay byte-identical (append-only).
+
+**Deviation from §3.A, recorded deliberately.** §1–§3 assumed turn 1 ends with a plain assistant message and allowed the run only "with no tool results in between". The actual retained history in `lifecycle-warm-policy-change` is different:
+
+`… assistant(tool_use), user(tool_result), user(<turn_aborted>), developer(permissions), user(<environment_context>), user(resume)`
+
+Under the literal §3.A rule the acceptance test could not pass. The implemented rule keeps every security limit in §3.A and §4:
+- tool output is never crossed or merged into: it stays before the instruction, as in native order;
+- runs inside a tool loop, before an assistant message, at the end of history, or two runs without an assistant turn between them are refused;
+- only the pinned binding is accepted.
+
+The rule keys on what follows the run, not on a plain assistant message before it. The only move is the run going after the new turn's user input, which is the move this proposal intended.
+
+**Acceptance status against §4.**
+1. Met by fixture, including the wire-shape assertions now in the driver.
+2. Met by unit tests.
+3. Met by unit tests.
+4. Met for a provider 400 by a loopback test. An unsupported model is refused before dispatch.
+5. Re-emission and append-only order are met by unit tests. Restart and a second Resume are covered at the encoder level only.
+6. Met: Responses is unchanged and its test passes.
+
+Real-provider acceptance has not been run.

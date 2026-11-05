@@ -2164,6 +2164,35 @@ pub(super) async fn run(
                     .any(|(turn, mode)| turn == current && mode == "read-only"),
                 "same-thread warm Resume must instantiate the new effective read-only sandbox, not merely replace its guard: {modes:?}"
             );
+            if route == "claude-api-key" {
+                // Option A: the new permissions travel as one native mid-conversation
+                // system message directly after the resume user message. The first
+                // request's top-level system and messages stay byte-identical.
+                let requests = fixture.requests.lock().await;
+                assert_eq!(requests.len(), 2, "one sample per turn, no retry");
+                assert_eq!(requests[1]["system"], requests[0]["system"]);
+                let first = requests[0]["messages"].as_array().unwrap();
+                let warm = requests[1]["messages"].as_array().unwrap();
+                assert_eq!(&warm[..first.len()], first.as_slice(), "append-only");
+                let late: Vec<_> = warm
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, m)| m["role"] == "system")
+                    .map(|(i, _)| i)
+                    .collect();
+                assert_eq!(late, vec![warm.len() - 1], "{warm:?}");
+                let resume = &warm[warm.len() - 2];
+                assert_eq!(resume["role"], "user");
+                assert!(
+                    resume
+                        .to_string()
+                        .contains("Resume this same retained Task")
+                );
+                assert_eq!(warm[warm.len() - 3]["role"], "assistant");
+                let policy = warm[warm.len() - 1]["content"].to_string();
+                assert!(policy.contains("read-only"), "{policy}");
+                assert!(!requests[1]["system"].to_string().contains(&policy));
+            }
         }
         fixture.stop.send(()).unwrap();
         fixture.task.await.unwrap();

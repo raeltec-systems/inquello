@@ -521,3 +521,117 @@ async fn authority_and_receiver_closure_cancel_http_while_waiting_for_headers() 
         assert!(cancelled.is_cancelled());
     }
 }
+
+#[tokio::test]
+async fn provider_rejection_of_a_mid_conversation_system_message_fails_the_turn() {
+    use std::sync::Arc;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let certified =
+        rcgen::generate_simple_self_signed(vec!["localhost".into(), "127.0.0.1".into()])
+            .expect("test certificate");
+    let certificate = reqwest::Certificate::from_der(certified.cert.der()).expect("test CA");
+    let key = rustls::pki_types::PrivatePkcs8KeyDer::from(certified.signing_key.serialize_der());
+    let config = rustls::ServerConfig::builder_with_provider(Arc::new(
+        rustls::crypto::aws_lc_rs::default_provider(),
+    ))
+    .with_safe_default_protocol_versions()
+    .expect("TLS versions")
+    .with_no_client_auth()
+    .with_single_cert(vec![certified.cert.der().clone()], key.into())
+    .expect("TLS config");
+    let acceptor = tokio_rustls::TlsAcceptor::from(Arc::new(config));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("loopback listener");
+    let endpoint = format!(
+        "https://127.0.0.1:{}/v1/messages",
+        listener.local_addr().expect("address").port()
+    );
+    let server = tokio::spawn(async move {
+        let (socket, _) = listener.accept().await.expect("accept one request");
+        let mut tls = acceptor.accept(socket).await.expect("TLS handshake");
+        let mut received = Vec::new();
+        loop {
+            let mut chunk = [0; 8192];
+            let n = tls.read(&mut chunk).await.expect("HTTP request");
+            assert!(n > 0);
+            received.extend_from_slice(&chunk[..n]);
+            assert!(received.len() < 65536);
+            if let Some(end) = received.windows(4).position(|v| v == b"\r\n\r\n") {
+                let headers = String::from_utf8_lossy(&received[..end]).to_ascii_lowercase();
+                let length: usize = headers
+                    .lines()
+                    .find_map(|l| l.strip_prefix("content-length: "))
+                    .expect("content length")
+                    .parse()
+                    .expect("length");
+                if received.len() >= end + 4 + length {
+                    break;
+                }
+            }
+        }
+        let text = String::from_utf8(received).expect("request UTF8");
+        let body: serde_json::Value =
+            serde_json::from_str(text.split_once("\r\n\r\n").expect("body").1).expect("JSON");
+        let messages = body["messages"].as_array().expect("messages");
+        assert_eq!(messages.last().expect("entry")["role"], "system");
+        assert_eq!(messages[messages.len() - 2]["role"], "user");
+        let error = r#"{"type":"error","error":{"type":"invalid_request_error","message":"messages.3: role 'system' is not supported here"}}"#;
+        tls.write_all(format!("HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{error}",error.len()).as_bytes()).await.expect("response");
+        tls.shutdown().await.expect("close TLS");
+        // No retry, downgrade or fallback request follows the rejection.
+        assert!(
+            tokio::time::timeout(Duration::from_millis(200), listener.accept())
+                .await
+                .is_err()
+        );
+    });
+    let client = MessagesClient::fixture(&endpoint, certificate).expect("loopback fixture");
+    let mut request = request();
+    request.messages.extend([
+        Message {
+            message_id: "a1".into(),
+            role: Role::Assistant,
+            origin: Origin::AssistantOutput,
+            blocks: vec![ContentBlock::Text {
+                text: "Done.".into(),
+            }],
+        },
+        Message {
+            message_id: "policy-2".into(),
+            role: Role::System,
+            origin: Origin::TrustedInstruction,
+            blocks: vec![ContentBlock::Text {
+                text: "Permissions changed: read-only.".into(),
+            }],
+        },
+        Message {
+            message_id: "resume".into(),
+            role: Role::User,
+            origin: Origin::UserInput,
+            blocks: vec![ContentBlock::Text {
+                text: "Resume.".into(),
+            }],
+        },
+    ]);
+    let store = store(&request);
+    let lease = store.lease(&request.binding).expect("lease");
+    let mut events = client.stream(request, lease).await.expect("stream");
+    let mut terminal = Vec::new();
+    while let Some(event) = events.recv().await {
+        assert!(!matches!(event.event, EventKind::Completed { .. }));
+        if event.event.terminal() {
+            terminal.push(event.event);
+        }
+    }
+    assert_eq!(terminal.len(), 1);
+    assert!(matches!(
+        terminal[0],
+        EventKind::Failed {
+            error: ErrorKind::InvalidRequest,
+            retryable: false,
+            ..
+        }
+    ));
+    server.await.expect("fixture server");
+}
