@@ -111,3 +111,7 @@ The rule keys on what follows the run, not on a plain assistant message before i
 6. Met: Responses is unchanged and its test passes.
 
 Real-provider acceptance has not been run.
+
+## Owner decision (2026-11-05)
+
+The implemented placement rule is accepted as built: a late System run is sent as one native system entry only when no unresolved tool_use precedes it and only user-input messages follow it. Earlier tool output stays before it in its original order, never reordered or merged. The literal "no tool results in between" wording is superseded, because it cannot match real interrupted-turn history.
