@@ -1134,3 +1134,9 @@ a.iq-nav-row:hover {
 @media (forced-colors: active) {
   .iq-result-check, .iq-markdown-pre, .iq-markdown-table { border-color: CanvasText; }
 }
+.iq-result-details > summary::before, .iq-result-history > summary::before, .iq-result-evidence > details > summary::before { content: '›'; width: 1ch; margin-right: var(--space-1); transition: transform var(--duration-fast) var(--ease-standard); }
+.iq-result-details[open] > summary::before, .iq-result-history[open] > summary::before, .iq-result-evidence > details[open] > summary::before { transform: rotate(90deg); }
+.iq-result-details > summary:focus-visible, .iq-result-history > summary:focus-visible, .iq-result-evidence summary:focus-visible, .iq-activity > summary:focus-visible { outline: 2px solid var(--blue-600); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  .iq-result-details > summary::before, .iq-result-history > summary::before, .iq-result-evidence > details > summary::before { transition: none; }
+}
