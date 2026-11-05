@@ -1931,7 +1931,7 @@ impl TaskAuthorization for TaskGuard {
                 .map_err(|_| CodexErr::Fatal("Linux Task root unavailable".into()))?
             } else {
                 codex_utils_path_uri::PathUri::from_abs_path(
-                    &codex_utils_absolute_path::AbsolutePathBuf::try_from(root)
+                    &codex_utils_absolute_path::AbsolutePathBuf::try_from(root.clone())
                         .map_err(|_| CodexErr::Fatal("Task root unavailable".into()))?,
                 )
             };
@@ -1958,6 +1958,8 @@ impl TaskAuthorization for TaskGuard {
                 &self.user,
                 &self.run.task_id,
                 command,
+                // The runtime runs it in the Task root checked above.
+                self.processor.exec_lookup(Some(root.as_path())),
             )
             .await
             .map_err(core_refusal)?;
@@ -2845,6 +2847,13 @@ impl InquelloRequestProcessor {
         }
         self.observe_review_authority(connection, &params.workspace_policy, &device, &user)
             .await?;
+        // The runtime runs the command in the private Task root; without a
+        // bound session a relative program stays unresolved (never allowed).
+        let run_root = self
+            .task_session(connection, actor, &task.workspace_id.to_string())
+            .await
+            .ok()
+            .map(|session| session.root.join("tasks").join(&params.task_id));
         let evaluated = evaluate_task_command(
             &store,
             actor,
@@ -2853,6 +2862,7 @@ impl InquelloRequestProcessor {
             &user,
             &params.task_id,
             &params.command,
+            self.exec_lookup(run_root.as_deref()),
         )
         .await?;
         if evaluated.evaluation.decision == RuleDecision::Forbid || evaluated.evaluation.cannot_ask

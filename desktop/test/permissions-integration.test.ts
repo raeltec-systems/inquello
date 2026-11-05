@@ -229,6 +229,44 @@ describe.skipIf(!databaseConfigured)('permission to act against the real runtime
     expect(ok(await policy.pendingPermissions(task))).toEqual([]);
   }, 60_000);
 
+  // Security fix 2026-11-05: rules match the resolved program, not its spelling.
+  it('applies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program', async () => {
+    const links = tempDir('program-links');
+    const alias = path.join(links, 'alias-sh');
+    fs.symlinkSync('/bin/sh', alias);
+    usePolicy({ command_rules: [{ prefix: ['/bin/sh'], decision: 'forbid' }] });
+    const task = await newTask('Resolved program');
+    for (const program of ['/usr/bin/sh', 'sh', alias]) {
+      const refused = await policy.runTool(task, [program, '-c', 'true']);
+      expect(refused).toMatchObject({ ok: false, code: 'command-forbidden' });
+      expect((refused as { reason: string }).reason).toContain(`Rule: \`/bin/sh\` (forbid), from Workspace policy, revision ${revision}.`);
+    }
+    expect(ok(await policy.pendingPermissions(task))).toEqual([]);
+
+    // An allow on /usr/bin/true does not reach touch through a link named `true`.
+    const trick = path.join(links, 'true');
+    fs.symlinkSync('/usr/bin/touch', trick);
+    usePolicy({ approvals: ['untrusted'], command_rules: [{ prefix: ['/usr/bin/true'], decision: 'allow' }] });
+    const linked = await newTask('Link trick');
+    const settings = ok(await policy.effectiveThreadSettings(linked));
+    expect(ok(await policy.runTool(linked, ['/usr/bin/true'])).exitCode).toBe(0);
+    const asked = policy.runTool(linked, [trick, 'output/tricked.txt']);
+    const card = await cardFor(linked, `${trick} output/tricked.txt`);
+    ok(await policy.decidePermission({ operationId: randomUUID(), requestId: card.requestId, choice: 'deny' }));
+    expect(await asked).toMatchObject({ ok: false, code: 'permission-denied' });
+    expect(await taskFiles(settings.folders.working, identity.principalId()!).read('output/tricked.txt')).toBeNull();
+
+    // A program that does not resolve is not allowed by an allow naming it literally.
+    const missing = path.join(links, 'missing', 'tool');
+    usePolicy({ command_rules: [{ prefix: [missing], decision: 'allow' }] });
+    const unresolved = await newTask('Unresolved program');
+    const pending = policy.runTool(unresolved, [missing]);
+    const unresolvedCard = await cardFor(unresolved, missing);
+    expect(unresolvedCard.action).toContain('could not be resolved to one executable');
+    ok(await policy.decidePermission({ operationId: randomUUID(), requestId: unresolvedCard.requestId, choice: 'deny' }));
+    expect(await pending).toMatchObject({ ok: false, code: 'permission-denied' });
+  }, 180_000);
+
   it('lets the person\'s forbid win over a Workspace allow, refuses a person\'s allow, and records Deny and forbid', async () => {
     usePolicy({ command_rules: [{ prefix: ['/bin/echo'], decision: 'allow' }, { prefix: ['/bin/cat'], decision: 'prompt' }] });
     const task = await newTask('Conflict');

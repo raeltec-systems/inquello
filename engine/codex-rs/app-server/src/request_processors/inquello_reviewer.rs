@@ -795,6 +795,7 @@ impl InquelloRequestProcessor {
                 &authority.user,
                 &original.task_id.to_string(),
                 &original.evaluation.command,
+                self.exec_lookup(None),
             )
             .await?;
             if evaluated.evaluation.decision == RuleDecision::Forbid
@@ -1146,6 +1147,7 @@ impl InquelloRequestProcessor {
             &fresh.user,
             &current.task_id.to_string(),
             &current.evaluation.command,
+            self.exec_lookup(None),
         )
         .await?;
         if fresh_evaluation.evaluation.decision == RuleDecision::Forbid
@@ -1247,6 +1249,7 @@ impl InquelloRequestProcessor {
             &authority.user,
             &original.task_id.to_string(),
             &original.evaluation.command,
+            self.exec_lookup(None),
         )
         .await?;
         if evaluated.evaluation.decision == RuleDecision::Forbid || evaluated.evaluation.cannot_ask

@@ -250,6 +250,9 @@ pub(crate) struct InquelloRequestProcessor {
     agent_writable_roots: Vec<PathBuf>,
     store: tokio::sync::OnceCell<SqliteWorkingStore>,
     principals: Mutex<HashMap<ConnectionId, PrincipalId>>,
+    /// The PATH the runtime gives a command it runs (its shell environment
+    /// policy), used to resolve a command's program before rules match.
+    exec_search_path: Option<std::ffi::OsString>,
 }
 
 impl InquelloRequestProcessor {
@@ -281,6 +284,22 @@ impl InquelloRequestProcessor {
             agent_writable_roots,
             store: tokio::sync::OnceCell::new(),
             principals: Mutex::new(HashMap::new()),
+            exec_search_path: std::env::var_os("PATH"),
+        }
+    }
+
+    /// The PATH the runtime's shell environment policy gives the commands it
+    /// runs; command rules resolve a bare program name through it.
+    pub(crate) fn with_exec_search_path(mut self, path: Option<std::ffi::OsString>) -> Self {
+        self.exec_search_path = path;
+        self
+    }
+
+    /// How the runtime would find a command's program run in `cwd`.
+    pub(crate) fn exec_lookup<'a>(&'a self, cwd: Option<&'a std::path::Path>) -> ExecLookup<'a> {
+        ExecLookup {
+            cwd,
+            search_path: self.exec_search_path.as_deref(),
         }
     }
 
@@ -1066,6 +1085,12 @@ impl InquelloRequestProcessor {
                 params.command.clone()
             }
         };
+        // The command runs in the Task's working folder; its program is
+        // resolved from there before rules match.
+        let run_folder = TaskId::parse(&params.task_id)
+            .ok()
+            .and_then(|task_id| task_folder(&params.task_folder, task_id).ok())
+            .map(|folder| folder.root().to_path_buf());
         let evaluated = evaluate_task_command(
             &store,
             actor,
@@ -1074,6 +1099,7 @@ impl InquelloRequestProcessor {
             &user,
             &params.task_id,
             &command,
+            self.exec_lookup(run_folder.as_deref()),
         )
         .await?;
         if params.sandbox_probe_target.is_none() {
@@ -1215,41 +1241,158 @@ impl InquelloRequestProcessor {
 /// runtime's matcher.
 const RULE_MARK: &str = "inquello-rule:";
 
+/// Where the runtime would look for a command's program: the working folder
+/// it runs in and the PATH its shell environment policy gives it. `None`
+/// means unknown, and a program that needs it stays unresolved.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct ExecLookup<'a> {
+    pub(crate) cwd: Option<&'a std::path::Path>,
+    pub(crate) search_path: Option<&'a std::ffi::OsStr>,
+}
+
+/// Resolves a program word the way the runtime's spawn does (`execvp`): a
+/// word holding `/` is a path (relative to `cwd`), a bare word is looked up
+/// along PATH (empty or relative entries against `cwd`), the first
+/// executable regular file wins. The result is canonical: symlinks followed.
+/// `None` when it cannot be resolved here, including on Windows, where a
+/// bounded command runs in the Linux guest rather than on this host.
+pub(crate) fn resolve_program(program: &str, lookup: ExecLookup<'_>) -> Option<PathBuf> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        use std::path::Path;
+        let executable = |path: &Path| {
+            std::fs::metadata(path)
+                .is_ok_and(|meta| meta.is_file() && meta.permissions().mode() & 0o111 != 0)
+        };
+        let anchored = |path: &Path| -> Option<PathBuf> {
+            if path.is_absolute() {
+                Some(path.to_path_buf())
+            } else {
+                lookup.cwd.map(|cwd| cwd.join(path))
+            }
+        };
+        if program.is_empty() || program.contains('\0') {
+            return None;
+        }
+        let found = if program.contains('/') {
+            anchored(Path::new(program)).filter(|path| executable(path))
+        } else {
+            std::env::split_paths(lookup.search_path?)
+                .filter_map(|dir| {
+                    if dir.as_os_str().is_empty() {
+                        lookup.cwd.map(Path::to_path_buf)
+                    } else {
+                        anchored(&dir)
+                    }
+                })
+                .map(|dir| dir.join(program))
+                .find(|path| executable(path))
+        }?;
+        std::fs::canonicalize(found)
+            .ok()
+            .filter(|path| executable(path))
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (program, lookup);
+        None
+    }
+}
+
+/// Which rules match one command, and whether its program resolved.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct RuleMatches {
+    pub(crate) matched: Vec<bool>,
+    pub(crate) resolution: execution_policy::ProgramResolution,
+}
+
 /// Which of `rules` match `command` under the runtime's own exec-policy
 /// prefix matching (`codex-execpolicy`, reached through the requirements
 /// form `codex-config` exposes). Each rule becomes one prefix rule whose
 /// justification carries its index. The matcher's decision is not used:
 /// Inquello combines the matches itself (forbid over prompt over allow), so
 /// every rule is given to the matcher as `prompt`.
+///
+/// Security fix 2026-11-05: rules match the program, not only its spelling.
+/// `argv[0]` is resolved through `lookup` to its canonical executable, and
+/// a rule's first word is resolved the same way and accepted in either form.
+/// A prompt or forbid rule matches any form of the command: the literal
+/// `argv[0]`, the resolved path, or either one's file name (for bare-name
+/// rules). An allow rule matches only the resolved program, so a link or
+/// another path cannot borrow an allow; an unresolved program matches no
+/// allow rule and is reported as unresolved.
 pub(crate) fn matched_rules(
     command: &[String],
     rules: &[SourcedRule],
-) -> Result<Vec<bool>, JSONRPCErrorError> {
+    lookup: ExecLookup<'_>,
+) -> Result<RuleMatches, JSONRPCErrorError> {
+    let resolved = command
+        .first()
+        .and_then(|program| resolve_program(program, lookup));
+    let resolution = if resolved.is_some() {
+        execution_policy::ProgramResolution::Resolved
+    } else {
+        execution_policy::ProgramResolution::Unresolved
+    };
     let mut matched = vec![false; rules.len()];
     if rules.is_empty() || command.is_empty() {
-        return Ok(matched);
+        return Ok(RuleMatches {
+            matched,
+            resolution,
+        });
+    }
+    let resolved_text = resolved
+        .as_ref()
+        .and_then(|path| path.to_str().map(str::to_string));
+    let file_name = |word: &str| {
+        std::path::Path::new(word)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .map(str::to_string)
+    };
+    // The forms of argv[0] that restrictive rules see; the first (when
+    // present) is the resolved program, the only form allow rules see.
+    let mut heads: Vec<String> = Vec::new();
+    for head in [
+        resolved_text.clone(),
+        Some(command[0].clone()),
+        file_name(&command[0]),
+        resolved_text.as_deref().and_then(file_name),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if !heads.contains(&head) {
+            heads.push(head);
+        }
     }
     let requirements = codex_config::RequirementsExecPolicyToml {
         prefix_rules: rules
             .iter()
             .enumerate()
-            .map(
-                |(index, sourced)| codex_config::RequirementsExecPolicyPrefixRuleToml {
-                    pattern: sourced
-                        .rule
-                        .prefix
-                        .iter()
-                        .map(
-                            |token| codex_config::RequirementsExecPolicyPatternTokenToml {
-                                token: Some(token.clone()),
-                                any_of: None,
-                            },
-                        )
-                        .collect(),
+            .map(|(index, sourced)| {
+                let token = |token: &String| codex_config::RequirementsExecPolicyPatternTokenToml {
+                    token: Some(token.clone()),
+                    any_of: None,
+                };
+                let mut pattern: Vec<_> = sourced.rule.prefix.iter().map(token).collect();
+                if let Some(first) = sourced.rule.prefix.first()
+                    && let Some(alias) = resolve_program(first, lookup)
+                        .and_then(|path| path.to_str().map(str::to_string))
+                        .filter(|alias| alias != first)
+                {
+                    pattern[0] = codex_config::RequirementsExecPolicyPatternTokenToml {
+                        token: None,
+                        any_of: Some(vec![first.clone(), alias]),
+                    };
+                }
+                codex_config::RequirementsExecPolicyPrefixRuleToml {
+                    pattern,
                     decision: Some(codex_config::RequirementsExecPolicyDecisionToml::Prompt),
                     justification: Some(format!("{RULE_MARK}{index}")),
-                },
-            )
+                }
+            })
             .collect(),
     };
     let policy = requirements.to_policy().map_err(|error| {
@@ -1259,19 +1402,28 @@ pub(crate) fn matched_rules(
             "the command rules could not be applied",
         )
     })?;
-    for found in policy.matches_for_command(command, None) {
-        let value = serde_json::to_value(&found).unwrap_or_default();
-        let index = value["prefixRuleMatch"]["justification"]
-            .as_str()
-            .and_then(|justification| justification.strip_prefix(RULE_MARK))
-            .and_then(|index| index.parse::<usize>().ok());
-        if let Some(index) = index
-            && let Some(slot) = matched.get_mut(index)
-        {
-            *slot = true;
+    for (position, head) in heads.iter().enumerate() {
+        let identity = position == 0 && resolved_text.is_some();
+        let mut form = command.to_vec();
+        form[0] = head.clone();
+        for found in policy.matches_for_command(&form, None) {
+            let value = serde_json::to_value(&found).unwrap_or_default();
+            let index = value["prefixRuleMatch"]["justification"]
+                .as_str()
+                .and_then(|justification| justification.strip_prefix(RULE_MARK))
+                .and_then(|index| index.parse::<usize>().ok());
+            if let Some(index) = index
+                && let Some(slot) = matched.get_mut(index)
+                && (identity || rules[index].rule.decision != RuleDecision::Allow)
+            {
+                *slot = true;
+            }
         }
     }
-    Ok(matched)
+    Ok(RuleMatches {
+        matched,
+        resolution,
+    })
 }
 
 /// One command evaluated for a Task, with the inputs it came from.
@@ -1283,7 +1435,12 @@ pub(crate) struct TaskEvaluation {
 }
 
 /// Evaluates `command` for the caller's Task under the Workspace layer, the
-/// device and user layers and the person's own rules.
+/// device and user layers and the person's own rules, with its program
+/// resolved through `lookup` (where the runtime would run it).
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Each input is an independent authority layer or the run location; bundling them would hide which caller supplies which."
+)]
 async fn evaluate_task_command(
     store: &SqliteWorkingStore,
     actor: Actor,
@@ -1292,6 +1449,7 @@ async fn evaluate_task_command(
     user: &UserConfig,
     task_id: &str,
     command: &[String],
+    lookup: ExecLookup<'_>,
 ) -> Result<TaskEvaluation, JSONRPCErrorError> {
     let policy = execution_policy::effective_policy(layer, device, user);
     let broad = execution_policy::task_broad_mode(store, actor, task_id)
@@ -1305,8 +1463,15 @@ async fn evaluate_task_command(
         .await
         .map_err(domain_error)?;
     let rules = execution_policy::effective_rules(&policy, &own.rules, own.revision);
-    let matched = matched_rules(command, &rules)?;
-    let evaluation = execution_policy::evaluate_command(command, &rules, &matched, &policy, status);
+    let matches = matched_rules(command, &rules, lookup)?;
+    let evaluation = execution_policy::evaluate_resolved_command(
+        command,
+        &rules,
+        &matches.matched,
+        &policy,
+        status,
+        matches.resolution,
+    );
     Ok(TaskEvaluation {
         policy,
         broad,
@@ -1405,6 +1570,9 @@ impl InquelloRequestProcessor {
             &user,
             &params.task_id,
             &params.command,
+            // A request names no working folder: a relative program stays
+            // unresolved here and is resolved again where it runs.
+            self.exec_lookup(None),
         )
         .await?;
         if evaluated.evaluation.decision == RuleDecision::Forbid {

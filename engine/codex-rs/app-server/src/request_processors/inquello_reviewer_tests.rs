@@ -145,6 +145,7 @@ impl Fixture {
             &UserConfig::default(),
             &task,
             &["/usr/bin/true".into()],
+            processor.exec_lookup(None),
         )
         .await)
         .evaluation;

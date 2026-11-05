@@ -1589,9 +1589,62 @@ fn words(command: &[&str]) -> Vec<String> {
     command.iter().map(ToString::to_string).collect()
 }
 
+/// A folder of stand-in programs (`#!/bin/sh` scripts) and a PATH over it,
+/// so matching resolves programs without depending on the host's layout.
+#[cfg(unix)]
+struct Programs {
+    dir: TempDir,
+    path: std::ffi::OsString,
+}
+
+#[cfg(unix)]
+impl Programs {
+    /// `bin/<name>` for each name; `usr/bin` and `bin` on PATH, in that order.
+    fn new(names: &[&str]) -> Self {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = TempDir::new().unwrap_or_else(|error| panic!("{error}"));
+        for sub in ["bin", "usr/bin", "links"] {
+            std::fs::create_dir_all(dir.path().join(sub)).unwrap_or_else(|error| panic!("{error}"));
+        }
+        for name in names {
+            let file = dir.path().join("bin").join(name);
+            std::fs::write(&file, "#!/bin/sh\n").unwrap_or_else(|error| panic!("{error}"));
+            std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o755))
+                .unwrap_or_else(|error| panic!("{error}"));
+        }
+        let path = std::env::join_paths([dir.path().join("usr/bin"), dir.path().join("bin")])
+            .unwrap_or_else(|error| panic!("{error}"));
+        Self { dir, path }
+    }
+
+    /// The canonical root (the temp folder may sit behind a symlink).
+    fn root(&self) -> PathBuf {
+        std::fs::canonicalize(self.dir.path()).unwrap_or_else(|error| panic!("{error}"))
+    }
+
+    fn at(&self, relative: &str) -> String {
+        self.root().join(relative).to_string_lossy().into_owned()
+    }
+
+    /// `relative` becomes a symlink to `target` (relative to the root).
+    fn link(&self, relative: &str, target: &str) {
+        std::os::unix::fs::symlink(self.root().join(target), self.root().join(relative))
+            .unwrap_or_else(|error| panic!("{error}"));
+    }
+
+    fn lookup(&self) -> ExecLookup<'_> {
+        ExecLookup {
+            cwd: Some(self.dir.path()),
+            search_path: Some(self.path.as_os_str()),
+        }
+    }
+}
+
+#[cfg(unix)]
 #[test]
 fn rules_match_through_the_runtime_exec_policy_prefix_matching() {
     use execution_policy::RuleDecision::*;
+    let programs = Programs::new(&["git", "rm", "rmdir", "echo", "ls"]);
     let rules = vec![
         sourced(&["git", "push"], Prompt),
         sourced(&["git"], Allow),
@@ -1599,7 +1652,9 @@ fn rules_match_through_the_runtime_exec_policy_prefix_matching() {
         sourced(&["git", "push", "--force"], Forbid),
     ];
     let matched = |command: &[&str]| {
-        matched_rules(&words(command), &rules).unwrap_or_else(|error| panic!("{error:?}"))
+        matched_rules(&words(command), &rules, programs.lookup())
+            .unwrap_or_else(|error| panic!("{error:?}"))
+            .matched
     };
     assert_eq!(
         matched(&["git", "push", "origin"]),
@@ -1614,9 +1669,250 @@ fn rules_match_through_the_runtime_exec_policy_prefix_matching() {
     assert_eq!(matched(&["rmdir", "x"]), vec![false, false, false, false]);
     assert_eq!(matched(&["echo", "rm"]), vec![false, false, false, false]);
     assert!(
-        matched_rules(&words(&["ls"]), &[])
+        matched_rules(&words(&["ls"]), &[], programs.lookup())
+            .map(|matches| matches.matched)
             .unwrap_or_default()
             .is_empty()
+    );
+}
+
+/// Security fix 2026-11-05: a forbid on one path to a program blocks every
+/// other way of naming it: another path, the bare name through PATH, a
+/// symlink alias (absolute or relative to the working folder).
+#[cfg(unix)]
+#[test]
+fn a_forbid_on_a_program_blocks_its_other_paths_names_and_aliases() {
+    use execution_policy::RuleDecision::*;
+    let programs = Programs::new(&["sh", "true"]);
+    // `usr/bin/sh` -> `bin/sh`, as on a merged-/usr system; `links/alias` too.
+    programs.link("usr/bin/sh", "bin/sh");
+    programs.link("links/alias", "bin/sh");
+    let forbid = programs.at("bin/sh");
+    let rules = vec![sourced(&[forbid.as_str()], Forbid)];
+    let check = |command: &[&str]| {
+        let matches = matched_rules(&words(command), &rules, programs.lookup())
+            .unwrap_or_else(|error| panic!("{error:?}"));
+        assert_eq!(
+            matches.resolution,
+            execution_policy::ProgramResolution::Resolved,
+            "{command:?}"
+        );
+        matches.matched
+    };
+    let usr_sh = programs.at("usr/bin/sh");
+    let alias = programs.at("links/alias");
+    assert_eq!(check(&[forbid.as_str(), "-c", "true"]), vec![true]);
+    assert_eq!(check(&[usr_sh.as_str(), "-c", "true"]), vec![true]);
+    assert_eq!(check(&["sh", "-c", "true"]), vec![true]);
+    assert_eq!(check(&[alias.as_str(), "-c", "true"]), vec![true]);
+    assert_eq!(check(&["links/alias", "-c", "true"]), vec![true]);
+    assert_eq!(check(&["./links/alias"]), vec![true]);
+    assert_eq!(check(&["true"]), vec![false]);
+
+    // A rule naming the alias (or the bare name) forbids the program too.
+    for head in [alias.as_str(), "sh", usr_sh.as_str()] {
+        let rules = vec![sourced(&[head], Forbid)];
+        let matched = matched_rules(&words(&[forbid.as_str()]), &rules, programs.lookup())
+            .unwrap_or_else(|error| panic!("{error:?}"))
+            .matched;
+        assert_eq!(matched, vec![true], "{head}");
+    }
+    // A bare-name forbid also matches the file name of the literal path.
+    let rules = vec![sourced(&["sh"], Forbid)];
+    let matched = matched_rules(&words(&["/nowhere/sh"]), &rules, programs.lookup())
+        .unwrap_or_else(|error| panic!("{error:?}"));
+    assert_eq!(matched.matched, vec![true]);
+    assert_eq!(
+        matched.resolution,
+        execution_policy::ProgramResolution::Unresolved
+    );
+}
+
+/// An allow matches only the program the command resolves to: a link that
+/// carries an allowed name or path to another program borrows nothing,
+/// and the stricter rule on the real program still applies.
+#[cfg(unix)]
+#[test]
+fn an_allow_does_not_reach_another_program_through_a_link() {
+    use execution_policy::RuleDecision::*;
+    let programs = Programs::new(&["ls", "rm"]);
+    std::fs::create_dir_all(programs.root().join("trick"))
+        .unwrap_or_else(|error| panic!("{error}"));
+    programs.link("trick/ls", "bin/rm");
+    let real_ls = programs.at("bin/ls");
+    let rules = vec![
+        sourced(&[real_ls.as_str()], Allow),
+        sourced(&["ls"], Allow),
+        sourced(&[programs.at("bin/rm").as_str()], Prompt),
+    ];
+    let matched = |command: &[&str]| {
+        matched_rules(&words(command), &rules, programs.lookup())
+            .unwrap_or_else(|error| panic!("{error:?}"))
+            .matched
+    };
+    assert_eq!(matched(&["ls"]), vec![true, true, false]);
+    assert_eq!(matched(&[real_ls.as_str()]), vec![true, true, false]);
+    let trick = programs.at("trick/ls");
+    assert_eq!(matched(&[trick.as_str()]), vec![false, false, true]);
+    assert_eq!(matched(&["trick/ls"]), vec![false, false, true]);
+
+    // Evaluated: the trick asks under the rm prompt rule, the real ls is allowed.
+    let policy = execution_policy::effective_policy(
+        &workspace_layer(&workspace_policy(
+            WORKSPACE,
+            1,
+            Some(json!({ "approvals": ["untrusted"] })),
+        ))
+        .unwrap_or_else(|error| panic!("{error:?}")),
+        &DeviceRequirements::default(),
+        &UserConfig::default(),
+    );
+    let evaluate = |command: &[&str]| {
+        let command = words(command);
+        let matches = matched_rules(&command, &rules, programs.lookup())
+            .unwrap_or_else(|error| panic!("{error:?}"));
+        execution_policy::evaluate_resolved_command(
+            &command,
+            &rules,
+            &matches.matched,
+            &policy,
+            BroadModeStatus::Standard,
+            matches.resolution,
+        )
+    };
+    let tricked = evaluate(&[trick.as_str()]);
+    assert_eq!(tricked.decision, Prompt);
+    assert_eq!(
+        tricked.controlling_rule.map(|rule| rule.prefix),
+        Some(vec![programs.at("bin/rm")])
+    );
+    assert_eq!(evaluate(&["ls"]).decision, Allow);
+}
+
+/// A program that cannot be resolved matches no allow rule, even one that
+/// names it literally, and is never allowed by the asking behaviour.
+#[cfg(unix)]
+#[test]
+fn an_unresolved_program_is_not_allowed_by_literal_only_allow_rules() {
+    use execution_policy::RuleDecision::*;
+    let programs = Programs::new(&["ls"]);
+    let missing = programs.at("missing/ls");
+    let rules = vec![
+        sourced(&[missing.as_str()], Allow),
+        sourced(&["ls"], Allow),
+        sourced(&["./tool"], Allow),
+    ];
+    let policy = execution_policy::effective_policy(
+        &workspace_layer(&workspace_policy(WORKSPACE, 1, None))
+            .unwrap_or_else(|error| panic!("{error:?}")),
+        &DeviceRequirements::default(),
+        &UserConfig::default(),
+    );
+    for (command, lookup) in [
+        (missing.as_str(), programs.lookup()),
+        // No working folder known: a relative program cannot be resolved.
+        (
+            "./tool",
+            ExecLookup {
+                cwd: None,
+                search_path: programs.lookup().search_path,
+            },
+        ),
+        // No PATH known: a bare name cannot be resolved.
+        (
+            "ls",
+            ExecLookup {
+                cwd: programs.lookup().cwd,
+                search_path: None,
+            },
+        ),
+    ] {
+        let command = words(&[command]);
+        let matches =
+            matched_rules(&command, &rules, lookup).unwrap_or_else(|error| panic!("{error:?}"));
+        assert_eq!(matches.matched, vec![false, false, false], "{command:?}");
+        assert_eq!(
+            matches.resolution,
+            execution_policy::ProgramResolution::Unresolved
+        );
+        let evaluation = execution_policy::evaluate_resolved_command(
+            &command,
+            &rules,
+            &matches.matched,
+            &policy,
+            BroadModeStatus::Standard,
+            matches.resolution,
+        );
+        assert_eq!(evaluation.decision, Prompt, "{command:?}");
+        assert_eq!(evaluation.controlling_rule, None);
+    }
+}
+
+/// Through `inquello/tools/exec`'s plan: the Task's working folder and the
+/// runtime's PATH resolve the program before the Workspace rules apply.
+#[cfg(unix)]
+#[tokio::test]
+async fn tools_exec_applies_rules_to_the_resolved_program() {
+    let Fixture { dir, processor } = fixture();
+    let programs = Programs::new(&["sh", "ls"]);
+    programs.link("usr/bin/sh", "bin/sh");
+    let processor = processor.with_exec_search_path(Some(programs.path.clone()));
+    sign_in(&processor, DESKTOP, ALICE).await;
+    let task_id = new_task(&processor, DESKTOP, "task-1").await;
+    make_folder(&dir, &task_id);
+    let folder = dir.path().join("tasks").join(&task_id);
+    let folder_text = folder.to_string_lossy().into_owned();
+    std::os::unix::fs::symlink(programs.root().join("bin/sh"), folder.join("alias"))
+        .unwrap_or_else(|error| panic!("{error}"));
+    let forbid = programs.at("bin/sh");
+    let missing = programs.at("missing/ls");
+    let policy = || {
+        workspace_policy(
+            WORKSPACE,
+            1,
+            Some(json!({ "command_rules": [
+                { "prefix": [forbid], "decision": "forbid" },
+                { "prefix": [missing], "decision": "allow" },
+            ] })),
+        )
+    };
+    let usr_sh = programs.at("usr/bin/sh");
+    for command in [usr_sh.as_str(), "sh", "./alias"] {
+        let error = plan(
+            &processor,
+            DESKTOP,
+            exec_params(policy(), &task_id, &folder_text, &[command, "-c", "true"]),
+        )
+        .await
+        .err()
+        .unwrap_or_else(|| panic!("{command} was not refused"));
+        let (kind, evaluation) = refusal_of(&error);
+        assert_eq!(kind, "command_forbidden", "{command}");
+        assert_eq!(
+            evaluation["controllingRule"]["prefix"],
+            json!([forbid]),
+            "{command}"
+        );
+    }
+    let error = plan(
+        &processor,
+        DESKTOP,
+        exec_params(policy(), &task_id, &folder_text, &[missing.as_str()]),
+    )
+    .await
+    .err()
+    .unwrap_or_else(|| panic!("the unresolved program was not refused"));
+    let (kind, evaluation) = refusal_of(&error);
+    assert_eq!(kind, "permission_required");
+    assert_eq!(evaluation["controllingRule"], serde_json::Value::Null);
+    assert!(
+        plan(
+            &processor,
+            DESKTOP,
+            exec_params(policy(), &task_id, &folder_text, &["ls"])
+        )
+        .await
+        .is_ok()
     );
 }
 

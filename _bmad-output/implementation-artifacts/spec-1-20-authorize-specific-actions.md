@@ -206,6 +206,13 @@ context:
     - Model-originated requests (Story 1.25), and the escalation route with real threads.
     - macOS and Windows.
   - Step-04 review was skipped by owner rule.
+- **Security fix (2026-11-05): rules match the resolved program.** Rules matched the literal `argv[0]`, so a forbid or prompt rule on `/bin/sh` missed `/usr/bin/sh`, `sh`, a symlink alias or a relative path to the same program. Owner decision 2026-11-05 (FORK-CUT "Security fix: command rules match the resolved program"):
+  - Before matching, `argv[0]` is resolved as the runtime would run it (the Task's working folder and the PATH of the runtime's shell environment policy) and canonicalised, following symlinks. Each rule's first word is resolved the same way.
+  - Prompt and forbid rules are checked against the resolved path, the literal `argv[0]` and either one's file name (bare-name rules). An allow rule applies only to the resolved program. The most restrictive outcome wins (forbid > prompt > allow), so the fix never widens.
+  - A program that cannot be resolved is never allowed: no allow rule applies and the asking behaviour's allow becomes a prompt (refused where the mode never asks). The analysis says the program could not be resolved.
+  - Applied in `inquello/tools/exec`, permission requests and reviewer re-evaluations (no working folder: a relative program stays unresolved there), private-Task model commands and `inquello/tasks/consumePermission`. The decision record and ApprovalCard still name the rule as written.
+  - Tests: domain `an_unresolved_program_is_never_allowed`; app-server lib tests for other paths, the bare name and symlink aliases, an allow through a link, literal-only allows on unresolved programs and the `inquello/tools/exec` plan; and a real-runtime case in `desktop/test/permissions-integration.test.ts` through `inquello/tools/exec`.
+  - Not verified: Windows. There the program is never resolved on the host, so every command asks (or is refused under No prompt) until resolution runs inside the Linux guest.
 
 ## Verification
 

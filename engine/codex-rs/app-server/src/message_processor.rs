@@ -524,7 +524,15 @@ impl MessageProcessor {
                 )
                 .with_usage_sources(account_processor.clone(), catalog_processor.clone())
                 .with_task_outgoing(outgoing.clone())
-                .with_task_config(config_processor.clone()),
+                .with_task_config(config_processor.clone())
+                .with_exec_search_path(
+                    codex_core::exec_env::create_env(
+                        &config.permissions.shell_environment_policy,
+                        /*thread_id*/ None,
+                    )
+                    .remove("PATH")
+                    .map(std::ffi::OsString::from),
+                ),
         );
         outgoing.bind_private_authority(&inquello_processor);
         let initialize_processor = InitializeRequestProcessor::new(

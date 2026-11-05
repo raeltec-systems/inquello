@@ -406,6 +406,38 @@ impl CommandEvaluation {
     }
 }
 
+/// Whether the host could resolve a command's program to one real
+/// executable before matching (security fix 2026-11-05).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ProgramResolution {
+    /// `argv[0]` resolved, through the runtime's PATH and working folder,
+    /// to one canonical executable; allow rules were matched against it.
+    Resolved,
+    /// `argv[0]` could not be resolved. No allow applies: the command asks
+    /// (or is refused where nothing may ask), unless a stricter rule
+    /// matched one of its forms.
+    Unresolved,
+}
+
+/// Evaluates one command for a Task whose program resolved (see
+/// [`evaluate_resolved_command`]).
+pub fn evaluate_command(
+    command: &[String],
+    rules: &[SourcedRule],
+    matched: &[bool],
+    policy: &EffectivePolicy,
+    status: BroadModeStatus,
+) -> CommandEvaluation {
+    evaluate_resolved_command(
+        command,
+        rules,
+        matched,
+        policy,
+        status,
+        ProgramResolution::Resolved,
+    )
+}
+
 /// Evaluates one command for a Task.
 ///
 /// `matched[i]` says whether `rules[i]` matched the command under the
@@ -415,12 +447,17 @@ impl CommandEvaluation {
 /// effective asking behaviour decides: `untrusted` asks, `on_request` and
 /// `never` allow (the command still runs inside the Task's profile). A
 /// prompt under a mode that never asks is refused instead.
-pub fn evaluate_command(
+///
+/// An [`ProgramResolution::Unresolved`] program is never allowed: an allow
+/// (from a rule or from the asking behaviour) becomes a prompt, so the
+/// stricter of prompt and the asking behaviour decides.
+pub fn evaluate_resolved_command(
     command: &[String],
     rules: &[SourcedRule],
     matched: &[bool],
     policy: &EffectivePolicy,
     status: BroadModeStatus,
+    resolution: ProgramResolution,
 ) -> CommandEvaluation {
     let settings = thread_settings(policy, status);
     let reach = tool_reach(policy, status);
@@ -434,8 +471,19 @@ pub fn evaluate_command(
             controlling = Some(rule);
         }
     }
+    let unresolved = resolution == ProgramResolution::Unresolved;
+    if unresolved && controlling.is_some_and(|rule| rule.rule.decision == RuleDecision::Allow) {
+        controlling = None;
+    }
     let (mut decision, controlling_rule, source) = match controlling {
         Some(rule) => (rule.rule.decision, Some(rule.rule.clone()), rule.source),
+        None if unresolved => (
+            RuleDecision::Prompt,
+            None,
+            RuleSource::ApprovalBehaviour {
+                behaviour: settings.approval,
+            },
+        ),
         None => (
             if settings.approval == ApprovalBehaviour::Untrusted {
                 RuleDecision::Prompt
@@ -452,13 +500,21 @@ pub fn evaluate_command(
     if cannot_ask {
         decision = RuleDecision::Forbid;
     }
+    let mut analysis = analysis(command, &reach);
+    if unresolved {
+        let program = command.first().map(String::as_str).unwrap_or_default();
+        analysis = format!(
+            "`{}` could not be resolved to one executable on this device, so no allow applies. {analysis}",
+            display_command(&[program.to_string()])
+        );
+    }
     CommandEvaluation {
         decision,
         controlling_rule,
         source,
         cannot_ask,
         command: command.to_vec(),
-        analysis: analysis(command, &reach),
+        analysis,
         destination: destination(&reach),
         consequence: consequence(&reach),
     }
