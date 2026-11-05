@@ -4,9 +4,14 @@ import {useEffect,useState} from 'react';
 import {parseProgress,taskValue,tasksBridge,type ProgressSnapshot} from './tasks-bridge';
 type Entry={taskId:string;workspaceId:string;listeners:Map<(value:ProgressSnapshot|null)=>void,boolean>;value:ProgressSnapshot|null;settled:boolean;busy:symbol|null;background:boolean;upgrade:boolean;dirty:boolean;generation:number};
 const entries=new Map<string,Entry>();
-let timer:ReturnType<typeof setInterval>|undefined,scheduled:ReturnType<typeof setTimeout>|undefined;
+let timer:ReturnType<typeof setInterval>|undefined,scheduled:ReturnType<typeof setTimeout>|undefined,liveScheduled:ReturnType<typeof setTimeout>|undefined,lastLive=0;
+/** The open Task's faster refresh while main reports changes (for example streamed text). */
+export const LIVE_REFRESH_MS=120;
+const terminal=(status:string)=>['completed','failed','cancelled','uncertain','setup-failed'].includes(status);
 let unsubscribe:(()=>void)|undefined,session:(()=>void)|undefined,routeChanges:(()=>void)|undefined,cursor=0,activeReads=0,backgroundReads=0;
 const full=(entry:Entry)=>[...entry.listeners.values()].some(Boolean);
+/** Only a selected (full-history) Task whose last authorized read was still running. */
+const live=(entry:Entry)=>full(entry)&&!!entry.value&&!terminal(entry.value.status);
 const capacity=(entry:Entry)=>activeReads<4&&(full(entry)||backgroundReads<3);
 const publish=(entry:Entry,value:ProgressSnapshot|null)=>{entry.settled=true;entry.value=value;for(const listener of entry.listeners.keys())listener(value);};
 async function read(entry:Entry){
@@ -20,19 +25,25 @@ async function read(entry:Entry){
   // interruption. Re-read only cheap current status; never reuse stale content.
   try{const api=tasksBridge();if(![...entry.listeners.values()].some(Boolean)||!api?.activity)throw new Error();const value=parseProgress(taskValue(await api.activity({taskId:entry.taskId,workspaceId:entry.workspaceId})));if(value.taskId!==entry.taskId||value.workspaceId!==entry.workspaceId)throw new Error();if(generation===entry.generation)publish(entry,{...value,historyIncomplete:true});}
   catch{if(generation===entry.generation)publish(entry,null);}
- }finally{if(entry.busy===token){entry.busy=null;entry.background=false;}activeReads--;if(background)backgroundReads--;if(entry.dirty&&entry.listeners.size)schedule();}
+ }finally{if(entry.busy===token){entry.busy=null;entry.background=false;}activeReads--;if(background)backgroundReads--;if(entry.dirty&&entry.listeners.size){if(live(entry))scheduleLive();schedule();}}
 }
-function tick(){const rows=[...entries.values()];if(!rows.length)return;
- const ordered=[...rows.slice(cursor),...rows.slice(0,cursor)];
+/** Interval ticks poll every observed Task; invalidation ticks read only what is still dirty (a live read may already have served it). */
+function tick(onlyDirty=false){const rows=[...entries.values()];if(!rows.length)return;
+ const ordered=[...rows.slice(cursor),...rows.slice(0,cursor)].filter(entry=>!onlyDirty||entry.dirty);
  // A selected Task never queues behind navigation. Background work can use
  // at most three slots, leaving one for controls/questions and invalidations.
  const priority=ordered.filter(full),background=ordered.filter(entry=>!full(entry));
  for(const entry of [...priority.filter(e=>e.dirty),...priority.filter(e=>!e.dirty),...background.filter(e=>e.dirty),...background.filter(e=>!e.dirty)])if((!entry.busy||entry.upgrade)&&capacity(entry))void read(entry);
  cursor=(cursor+3)%rows.length;
 }
-function schedule(){if(!scheduled)scheduled=setTimeout(()=>{scheduled=undefined;tick();},250);}
-function start(){if(timer)return;timer=setInterval(tick,1500);const api=tasksBridge();unsubscribe=api?.onProgressChanged?.(()=>{for(const entry of entries.values())entry.dirty=true;schedule();});session=api?.onSessionChanged?.(()=>{forgetTaskModels();for(const entry of entries.values()){entry.generation++;entry.dirty=true;publish(entry,null);}schedule();});const routes=(globalThis as {inquello?:{routes?:{onChanged?(fn:(change?:ModelAuthorityChange)=>void):()=>void}}}).inquello?.routes;routeChanges=routes?.onChanged?.(change=>{if(change?.authority===false)return;for(const entry of entries.values())if(modelAuthorityApplies(change,entry.taskId)){entry.generation++;entry.dirty=true;publish(entry,null);}schedule();});}
-function stop(){if(entries.size)return;clearInterval(timer);timer=undefined;clearTimeout(scheduled);scheduled=undefined;unsubscribe?.();session?.();routeChanges?.();unsubscribe=session=routeChanges=undefined;}
+function schedule(){if(!scheduled)scheduled=setTimeout(()=>{scheduled=undefined;tick(true);},250);}
+/** Bounded fast lane: only dirty, idle, live selected Tasks; at most one read start per LIVE_REFRESH_MS, through the same fenced read. */
+function scheduleLive(){
+ if(liveScheduled||![...entries.values()].some(live))return;
+ liveScheduled=setTimeout(()=>{liveScheduled=undefined;lastLive=Date.now();for(const entry of entries.values())if(live(entry)&&entry.dirty&&!entry.busy&&capacity(entry))void read(entry);},Math.max(0,LIVE_REFRESH_MS-(Date.now()-lastLive)));
+}
+function start(){if(timer)return;timer=setInterval(()=>tick(),1500);const api=tasksBridge();unsubscribe=api?.onProgressChanged?.(()=>{for(const entry of entries.values())entry.dirty=true;scheduleLive();schedule();});session=api?.onSessionChanged?.(()=>{forgetTaskModels();for(const entry of entries.values()){entry.generation++;entry.dirty=true;publish(entry,null);}schedule();});const routes=(globalThis as {inquello?:{routes?:{onChanged?(fn:(change?:ModelAuthorityChange)=>void):()=>void}}}).inquello?.routes;routeChanges=routes?.onChanged?.(change=>{if(change?.authority===false)return;for(const entry of entries.values())if(modelAuthorityApplies(change,entry.taskId)){entry.generation++;entry.dirty=true;publish(entry,null);}schedule();});}
+function stop(){if(entries.size)return;clearInterval(timer);timer=undefined;clearTimeout(scheduled);scheduled=undefined;clearTimeout(liveScheduled);liveScheduled=undefined;unsubscribe?.();session?.();routeChanges?.();unsubscribe=session=routeChanges=undefined;}
 export function useTaskObservationStatus(taskId:string,workspaceId:string,enabled=true,full=false):{snapshot:ProgressSnapshot|null;settled:boolean}{
  const [state,setState]=useState<{snapshot:ProgressSnapshot|null;settled:boolean}>({snapshot:null,settled:false});
  const snapshot=state.snapshot;
