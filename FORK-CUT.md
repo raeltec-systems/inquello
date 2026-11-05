@@ -820,3 +820,29 @@ Owner decision 2026-11-05: option A of `_bmad-output/implementation-artifacts/pr
 - **Provider rejection.** A 400 (for example `role 'system' is not supported`) maps to `ErrorKind::InvalidRequest`, not retryable. The turn ends as failed, never completed, with no retry, downgrade or fallback (existing transport behaviour, now covered by a test).
 - **Tests.** `inquello-adapters`: `late_system_tests::{warm_policy_run_follows_the_resume_user_message_and_keeps_the_prefix, warm_run_after_an_interrupted_tool_turn_stays_after_the_tool_output, historical_run_is_re_emitted_in_place_on_every_later_request, consecutive_late_system_messages_form_one_run_in_order, every_other_late_system_shape_is_refused, instructions_are_never_merged_into_or_reordered_across_tool_output, the_boundary_shape_is_only_for_the_pinned_model_and_version}` and `tests::provider_rejection_of_a_mid_conversation_system_message_fails_the_turn`. The app-server fixture `messages_lifecycle_warm_policy_change` now passes and also asserts the wire shape: one `system` entry, directly after the resume user message and carrying the new read-only permissions; the top-level `system` is identical to the first request's; and the first request's messages are an unchanged prefix. `responses_lifecycle_warm_policy_change` is unchanged and still passes.
 - No core, Responses, protocol, wire-schema, dependency or lockfile change. Real-provider acceptance is not claimed: the fixture provider does not enforce Anthropic's placement rules, and a live call needs its own authorisation.
+
+### Command rules resolve the program inside the Windows Linux guest (Stories 1.20 and 1.21, 2026-11-05)
+
+Owner decision 2026-11-05. This follows "Security fix: command rules match the resolved program". On Windows, a bounded command runs inside the Linux guest. The host could not resolve the guest's programs, so every such command was "unresolved" and asked. The program is now resolved in the environment where the command runs.
+
+- **`app-server/src/inquello_program.rs` (new).** `ProgramResolver` resolves the program words once, before rules match: `argv[0]` and each rule's first word (`program_words`). On any failure it returns `Resolutions::unresolved()`, and `resolve_within` enforces a budget (`RESOLUTION_BUDGET`, 10 s). There are two implementations:
+  - Host: `ExecLookup`, the existing `resolve_program`.
+  - Guest: `GuestResolver<F: GuestFs>`. It does `execvp`-style lookup on guest paths only. A word with `/` resolves against the guest working folder. A bare word is searched along the guest PATH. Each candidate is checked as a regular file and then canonicalised in the guest, following symlinks. Guest queries do not report execute bits, so different files with the same name on PATH stay unresolved instead of guessing. A query failure other than "not found" makes every word unresolved, including a path the sandbox hides.
+- **`inquello_processor.rs`.**
+  - `matched_resolved_rules` matches against pre-resolved words. `matched_rules` (host-resolved) is kept for tests.
+  - `evaluate_task_command` takes an `ExecPlacement`: `Host`, `BoundedGuest` (`inquello/tools/exec`, which uses the guest when `cfg!(windows)` and `tool_reach(policy, status).bounded`, otherwise the host) or `Guest` (private-Task model commands on Windows).
+  - Rule semantics are unchanged. Permission requests and reviewer re-evaluations still resolve on the host with no working folder, and are re-evaluated where the command runs.
+- **`inquello_wsl.rs`.**
+  - `GuestChannel` implements `GuestFs` over the existing `ExecServerClient`, using `fs/getMetadata` (follow symlinks) and `fs/canonicalize` with the Task's `FileSystemSandboxContext`. A path that does not round-trip through its file URI is never queried.
+  - `GuestTarget::Connect` (`tools/exec`) opens the Task's own executor read-only, with no network domains, and closes it with `close_and_wait` before the command runs.
+  - `GuestTarget::Retained` (private Tasks) uses the live executor connection that `thread_processor.rs` registers with `retain_channel` at setup and removes with `release_channel` at retirement. The registry is keyed by scope and Task and owned by generation. A missing channel means unresolved.
+  - `GUEST_PATH` (`/usr/bin:/bin`) is now one constant shared by execution and resolution.
+  - No new network, port, process type, privilege, protocol or dependency.
+- **Tests (Linux, fake guest channel):**
+  - `inquello_program::tests::{guest_paths_resolve_through_the_guest_path_cwd_and_symlinks, different_programs_of_one_name_on_the_guest_path_stay_unresolved, an_unreachable_or_slow_guest_leaves_every_word_unresolved, one_failed_guest_query_leaves_every_word_unresolved, a_relative_guest_path_without_a_known_guest_folder_is_unresolved}`.
+  - `inquello_processor::tests::{command_rules_match_the_program_resolved_inside_the_guest, a_bounded_placement_resolves_on_this_host_off_windows}`.
+- **Unverified (Windows not available here):**
+  - the real WSL connection and guest filesystem queries, including the exact error code the guest returns for a sandbox-hidden path;
+  - the retained-channel registration in a live private Task;
+  - the latency of the extra executor launch per bounded `tools/exec` command;
+  - Windows Full access (unbounded) commands, which run on the Windows host and are still unresolved there (they ask).

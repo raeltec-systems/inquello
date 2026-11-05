@@ -213,6 +213,11 @@ context:
   - Applied in `inquello/tools/exec`, permission requests and reviewer re-evaluations (no working folder: a relative program stays unresolved there), private-Task model commands and `inquello/tasks/consumePermission`. The decision record and ApprovalCard still name the rule as written.
   - Tests: domain `an_unresolved_program_is_never_allowed`; app-server lib tests for other paths, the bare name and symlink aliases, an allow through a link, literal-only allows on unresolved programs and the `inquello/tools/exec` plan; and a real-runtime case in `desktop/test/permissions-integration.test.ts` through `inquello/tools/exec`.
   - Not verified: Windows. There the program is never resolved on the host, so every command asks (or is refused under No prompt) until resolution runs inside the Linux guest.
+- **Guest resolution (2026-11-05, owner-approved).** A command that runs inside the Windows Linux guest now has its program resolved inside that guest (FORK-CUT "Command rules resolve the program inside the Windows Linux guest"):
+  - Resolution sits behind a `ProgramResolver` trait (`app-server/src/inquello_program.rs`). The host implementation is the existing lookup. The guest implementation queries the guest over the existing executor channel (`fs/getMetadata` and `fs/canonicalize` under the Task's sandbox), with the guest PATH (`/usr/bin:/bin`) and the guest Task folder, following symlinks there.
+  - `inquello/tools/exec` resolves in the guest exactly when its profile is bounded on Windows. A private Task's model commands and `consumePermission` resolve over the Task's retained executor connection.
+  - The rules are unchanged. The strictest outcome wins, and an allow counts only against the resolved program. A guest that is unreachable, fails a query, or takes longer than 10 s leaves every word unresolved, so the command asks. Different files with the same name on the guest PATH are unresolved, because the guest does not report execute bits.
+  - Verified on Linux only by unit tests with a fake guest channel (`inquello_program::tests::*`, `command_rules_match_the_program_resolved_inside_the_guest`, `a_bounded_placement_resolves_on_this_host_off_windows`). The real WSL path (connection, guest queries, retained-channel registration) has not been run.
 
 ## Verification
 

@@ -43,6 +43,7 @@
 
 use crate::error_code::INTERNAL_ERROR_CODE;
 use crate::error_code::INVALID_REQUEST_ERROR_CODE;
+use crate::inquello_program::Resolutions;
 use crate::outgoing_message::ConnectionId;
 use codex_app_server_protocol::AskForApproval;
 use codex_app_server_protocol::ClientResponsePayload;
@@ -1086,11 +1087,29 @@ impl InquelloRequestProcessor {
             }
         };
         // The command runs in the Task's working folder; its program is
-        // resolved from there before rules match.
+        // resolved from there before rules match. A bounded profile on
+        // Windows runs it in the Task's Linux guest, so it is resolved there.
         let run_folder = TaskId::parse(&params.task_id)
             .ok()
             .and_then(|task_id| task_folder(&params.task_folder, task_id).ok())
             .map(|folder| folder.root().to_path_buf());
+        let host = self.exec_lookup(run_folder.as_deref());
+        let guest_scope = run_folder
+            .as_deref()
+            .and_then(std::path::Path::parent)
+            .and_then(|parent| {
+                crate::inquello_wsl::scope_key(parent, &actor.principal_id.to_string()).ok()
+            });
+        let placement = match guest_scope {
+            Some(scope) if cfg!(windows) => ExecPlacement::BoundedGuest {
+                host,
+                guest: crate::inquello_wsl::GuestTarget::Connect {
+                    scope,
+                    task_id: params.task_id.clone(),
+                },
+            },
+            _ => ExecPlacement::Host(host),
+        };
         let evaluated = evaluate_task_command(
             &store,
             actor,
@@ -1099,7 +1118,7 @@ impl InquelloRequestProcessor {
             &user,
             &params.task_id,
             &command,
-            self.exec_lookup(run_folder.as_deref()),
+            placement,
         )
         .await?;
         if params.sandbox_probe_target.is_none() {
@@ -1254,8 +1273,9 @@ pub(crate) struct ExecLookup<'a> {
 /// word holding `/` is a path (relative to `cwd`), a bare word is looked up
 /// along PATH (empty or relative entries against `cwd`), the first
 /// executable regular file wins. The result is canonical: symlinks followed.
-/// `None` when it cannot be resolved here, including on Windows, where a
-/// bounded command runs in the Linux guest rather than on this host.
+/// `None` when it cannot be resolved here, including on a Windows host. A
+/// bounded command there runs in the Linux guest and is resolved inside it
+/// (see [`ExecPlacement`]).
 pub(crate) fn resolve_program(program: &str, lookup: ExecLookup<'_>) -> Option<PathBuf> {
     #[cfg(unix)]
     {
@@ -1300,6 +1320,81 @@ pub(crate) fn resolve_program(program: &str, lookup: ExecLookup<'_>) -> Option<P
     }
 }
 
+/// Resolution on this host (see `crate::inquello_program`).
+impl crate::inquello_program::ProgramResolver for ExecLookup<'_> {
+    fn resolve_all<'a>(
+        &'a self,
+        words: &'a [String],
+    ) -> impl std::future::Future<Output = Resolutions> + Send + 'a {
+        std::future::ready(host_resolutions(words, *self))
+    }
+}
+
+fn host_resolutions(words: &[String], lookup: ExecLookup<'_>) -> Resolutions {
+    let mut resolutions = Resolutions::default();
+    for word in words {
+        resolutions.insert(
+            word,
+            resolve_program(word, lookup).and_then(|path| path.to_str().map(str::to_string)),
+        );
+    }
+    resolutions
+}
+
+/// The program words a command's rules need resolved: `argv[0]` and each
+/// rule's first word.
+pub(crate) fn program_words(command: &[String], rules: &[SourcedRule]) -> Vec<String> {
+    let mut words: Vec<String> = Vec::new();
+    for word in command.first().into_iter().chain(
+        rules
+            .iter()
+            .filter_map(|sourced| sourced.rule.prefix.first()),
+    ) {
+        if !words.contains(word) {
+            words.push(word.clone());
+        }
+    }
+    words
+}
+
+/// Where a command will run, so its program is resolved in that environment
+/// (owner decision 2026-11-05, Stories 1.20 and 1.21).
+pub(crate) enum ExecPlacement<'a> {
+    /// On this host.
+    Host(ExecLookup<'a>),
+    /// `inquello/tools/exec`: inside the Task's Linux guest when the Task's
+    /// profile is bounded on Windows, otherwise on this host.
+    BoundedGuest {
+        host: ExecLookup<'a>,
+        guest: crate::inquello_wsl::GuestTarget,
+    },
+    /// A private Task's model command on Windows: always inside its guest.
+    Guest(crate::inquello_wsl::GuestTarget),
+}
+
+impl ExecPlacement<'_> {
+    async fn resolve(
+        &self,
+        words: &[String],
+        policy: &EffectivePolicy,
+        status: BroadModeStatus,
+    ) -> Resolutions {
+        use crate::inquello_program::RESOLUTION_BUDGET;
+        use crate::inquello_program::resolve_within;
+        match self {
+            Self::Host(lookup) => resolve_within(lookup, words, RESOLUTION_BUDGET).await,
+            Self::BoundedGuest { host, guest } => {
+                if cfg!(windows) && execution_policy::tool_reach(policy, status).bounded {
+                    guest.resolve(words).await
+                } else {
+                    resolve_within(host, words, RESOLUTION_BUDGET).await
+                }
+            }
+            Self::Guest(guest) => guest.resolve(words).await,
+        }
+    }
+}
+
 /// Which rules match one command, and whether its program resolved.
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct RuleMatches {
@@ -1322,14 +1417,24 @@ pub(crate) struct RuleMatches {
 /// rules). An allow rule matches only the resolved program, so a link or
 /// another path cannot borrow an allow; an unresolved program matches no
 /// allow rule and is reported as unresolved.
+#[cfg(test)]
 pub(crate) fn matched_rules(
     command: &[String],
     rules: &[SourcedRule],
     lookup: ExecLookup<'_>,
 ) -> Result<RuleMatches, JSONRPCErrorError> {
-    let resolved = command
-        .first()
-        .and_then(|program| resolve_program(program, lookup));
+    let resolutions = host_resolutions(&program_words(command, rules), lookup);
+    matched_resolved_rules(command, rules, &resolutions)
+}
+
+/// [`matched_rules`] with every program word already resolved where the
+/// command runs (`resolutions` covers [`program_words`]).
+pub(crate) fn matched_resolved_rules(
+    command: &[String],
+    rules: &[SourcedRule],
+    resolutions: &Resolutions,
+) -> Result<RuleMatches, JSONRPCErrorError> {
+    let resolved = command.first().and_then(|program| resolutions.get(program));
     let resolution = if resolved.is_some() {
         execution_policy::ProgramResolution::Resolved
     } else {
@@ -1342,9 +1447,7 @@ pub(crate) fn matched_rules(
             resolution,
         });
     }
-    let resolved_text = resolved
-        .as_ref()
-        .and_then(|path| path.to_str().map(str::to_string));
+    let resolved_text = resolved.map(str::to_string);
     let file_name = |word: &str| {
         std::path::Path::new(word)
             .file_name()
@@ -1378,8 +1481,9 @@ pub(crate) fn matched_rules(
                 };
                 let mut pattern: Vec<_> = sourced.rule.prefix.iter().map(token).collect();
                 if let Some(first) = sourced.rule.prefix.first()
-                    && let Some(alias) = resolve_program(first, lookup)
-                        .and_then(|path| path.to_str().map(str::to_string))
+                    && let Some(alias) = resolutions
+                        .get(first)
+                        .map(str::to_string)
                         .filter(|alias| alias != first)
                 {
                     pattern[0] = codex_config::RequirementsExecPolicyPatternTokenToml {
@@ -1436,7 +1540,7 @@ pub(crate) struct TaskEvaluation {
 
 /// Evaluates `command` for the caller's Task under the Workspace layer, the
 /// device and user layers and the person's own rules, with its program
-/// resolved through `lookup` (where the runtime would run it).
+/// resolved where the runtime will run it (`placement`).
 #[expect(
     clippy::too_many_arguments,
     reason = "Each input is an independent authority layer or the run location; bundling them would hide which caller supplies which."
@@ -1449,7 +1553,7 @@ async fn evaluate_task_command(
     user: &UserConfig,
     task_id: &str,
     command: &[String],
-    lookup: ExecLookup<'_>,
+    placement: ExecPlacement<'_>,
 ) -> Result<TaskEvaluation, JSONRPCErrorError> {
     let policy = execution_policy::effective_policy(layer, device, user);
     let broad = execution_policy::task_broad_mode(store, actor, task_id)
@@ -1463,7 +1567,10 @@ async fn evaluate_task_command(
         .await
         .map_err(domain_error)?;
     let rules = execution_policy::effective_rules(&policy, &own.rules, own.revision);
-    let matches = matched_rules(command, &rules, lookup)?;
+    let resolutions = placement
+        .resolve(&program_words(command, &rules), &policy, status)
+        .await;
+    let matches = matched_resolved_rules(command, &rules, &resolutions)?;
     let evaluation = execution_policy::evaluate_resolved_command(
         command,
         &rules,
@@ -1572,7 +1679,7 @@ impl InquelloRequestProcessor {
             &params.command,
             // A request names no working folder: a relative program stays
             // unresolved here and is resolved again where it runs.
-            self.exec_lookup(None),
+            ExecPlacement::Host(self.exec_lookup(None)),
         )
         .await?;
         if evaluated.evaluation.decision == RuleDecision::Forbid {

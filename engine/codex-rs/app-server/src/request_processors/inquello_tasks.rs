@@ -1963,8 +1963,15 @@ impl TaskAuthorization for TaskGuard {
                 &self.user,
                 &self.run.task_id,
                 command,
-                // The runtime runs it in the Task root checked above.
-                self.processor.exec_lookup(Some(root.as_path())),
+                // The runtime runs it in the Task root checked above: on
+                // Windows that is the Task's Linux guest, resolved there
+                // through the Task's retained executor channel.
+                private_task_placement(
+                    self.processor.exec_lookup(Some(root.as_path())),
+                    &session.root.join("tasks"),
+                    &self.actor.principal_id.to_string(),
+                    &self.run.task_id,
+                ),
             )
             .await
             .map_err(core_refusal)?;
@@ -2911,7 +2918,15 @@ impl InquelloRequestProcessor {
             &user,
             &params.task_id,
             &params.command,
-            self.exec_lookup(run_root.as_deref()),
+            match &run_root {
+                Some(run_root) => private_task_placement(
+                    self.exec_lookup(Some(run_root.as_path())),
+                    run_root.parent().unwrap_or(run_root),
+                    &actor.principal_id.to_string(),
+                    &params.task_id,
+                ),
+                None => ExecPlacement::Host(self.exec_lookup(None)),
+            },
         )
         .await?;
         if evaluated.evaluation.decision == RuleDecision::Forbid || evaluated.evaluation.cannot_ask
@@ -7335,6 +7350,32 @@ impl crate::outgoing_message::PrivateThreadAuthority for InquelloRequestProcesso
                 .await;
             result.is_ok()
         })
+    }
+}
+
+/// Where a private Task's model command runs: on Windows always inside the
+/// Task's Linux guest, resolved through its retained executor channel (no
+/// channel or no scope leaves the program unresolved, so it asks); on this
+/// host otherwise.
+fn private_task_placement<'a>(
+    host: ExecLookup<'a>,
+    task_parent: &std::path::Path,
+    principal: &str,
+    task_id: &str,
+) -> ExecPlacement<'a> {
+    if !cfg!(windows) {
+        return ExecPlacement::Host(host);
+    }
+    match crate::inquello_wsl::scope_key(task_parent, principal) {
+        Ok(scope) => ExecPlacement::Guest(crate::inquello_wsl::GuestTarget::Retained {
+            scope,
+            task_id: task_id.to_string(),
+        }),
+        // An unknown guest scope must not fall back to host resolution.
+        Err(_) => ExecPlacement::Host(ExecLookup {
+            cwd: None,
+            search_path: None,
+        }),
     }
 }
 

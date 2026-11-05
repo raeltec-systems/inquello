@@ -2565,3 +2565,119 @@ async fn actual_native_create_keeps_draft_and_mixed_tree_projection_never_expose
     assert!(private_task_tree_item(&peer, actor, WORKSPACE, false).is_none());
     assert!(private_task_tree_item(&own, actor, OTHER_WORKSPACE, false).is_none());
 }
+
+/// Guest resolution (owner decision 2026-11-05): a bounded Windows command
+/// runs in the Linux guest, so its program and the rules' programs are
+/// resolved there, over the guest channel (a fake here), with the same
+/// rules: the strictest outcome wins and an allow counts only against the
+/// resolved program. None of these guest paths need exist on this host.
+#[tokio::test]
+async fn command_rules_match_the_program_resolved_inside_the_guest() {
+    use crate::inquello_program::ProgramResolver;
+    use crate::inquello_program::tests::guest;
+    use crate::inquello_program::tests::ubuntu;
+    use execution_policy::RuleDecision::*;
+    let rules = vec![
+        sourced(&["/bin/sh"], Forbid),
+        sourced(&["/usr/bin/true"], Allow),
+    ];
+    let policy = execution_policy::effective_policy(
+        &workspace_layer(&workspace_policy(WORKSPACE, 1, None))
+            .unwrap_or_else(|error| panic!("{error:?}")),
+        &DeviceRequirements::default(),
+        &UserConfig::default(),
+    );
+    let evaluate = |command: &[String], resolutions: &Resolutions| {
+        let matches = matched_resolved_rules(command, &rules, resolutions)
+            .unwrap_or_else(|error| panic!("{error:?}"));
+        let evaluation = execution_policy::evaluate_resolved_command(
+            command,
+            &rules,
+            &matches.matched,
+            &policy,
+            BroadModeStatus::Standard,
+            matches.resolution,
+        );
+        (matches, evaluation)
+    };
+    let resolver = guest(ubuntu());
+    for program in ["sh", "/usr/bin/sh", "/usr/bin/dash", "/bin/dash"] {
+        let command = words(&[program, "-c", "id"]);
+        let resolutions = resolver.resolve_all(&program_words(&command, &rules)).await;
+        let (matches, evaluation) = evaluate(&command, &resolutions);
+        assert_eq!(
+            matches.resolution,
+            execution_policy::ProgramResolution::Resolved,
+            "{program}"
+        );
+        assert_eq!(evaluation.decision, Forbid, "{program}");
+    }
+    // The allowed program, named bare: allowed, because it resolved to it.
+    let command = words(&["true"]);
+    let resolutions = resolver.resolve_all(&program_words(&command, &rules)).await;
+    assert_eq!(evaluate(&command, &resolutions).1.decision, Allow);
+    // A link named `true` in the guest Task folder is `touch`: the allow on
+    // `/usr/bin/true` does not reach it (only the default behaviour applies).
+    let command = words(&["./true"]);
+    let resolutions = resolver.resolve_all(&program_words(&command, &rules)).await;
+    assert_eq!(resolutions.get("./true"), Some("/usr/bin/touch"));
+    let (matches, evaluation) = evaluate(&command, &resolutions);
+    assert_eq!(matches.matched, vec![false, false]);
+    assert_eq!(evaluation.controlling_rule, None);
+
+    // Guest unreachable, or resolution timed out: unresolved, so it asks.
+    let mut down = ubuntu();
+    down.unreachable = true;
+    let mut slow = ubuntu();
+    slow.hang = true;
+    let command = words(&["true"]);
+    for resolutions in [
+        guest(down)
+            .resolve_all(&program_words(&command, &rules))
+            .await,
+        crate::inquello_program::resolve_within(
+            &guest(slow),
+            &program_words(&command, &rules),
+            std::time::Duration::from_millis(50),
+        )
+        .await,
+    ] {
+        let (matches, evaluation) = evaluate(&command, &resolutions);
+        assert_eq!(
+            matches.resolution,
+            execution_policy::ProgramResolution::Unresolved
+        );
+        assert_eq!(matches.matched, vec![false, false]);
+        assert_eq!(evaluation.decision, Prompt);
+    }
+    // A forbid named by its literal path still wins without the guest.
+    let command = words(&["/bin/sh"]);
+    let (_, evaluation) = evaluate(&command, &Resolutions::unresolved());
+    assert_eq!(evaluation.decision, Forbid);
+}
+
+/// Off Windows a bounded Task's command runs on this host, so the
+/// tools/exec placement resolves it here and never contacts a guest.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_bounded_placement_resolves_on_this_host_off_windows() {
+    let programs = Programs::new(&["ls"]);
+    let policy = execution_policy::effective_policy(
+        &workspace_layer(&workspace_policy(WORKSPACE, 1, None))
+            .unwrap_or_else(|error| panic!("{error:?}")),
+        &DeviceRequirements::default(),
+        &UserConfig::default(),
+    );
+    assert!(execution_policy::tool_reach(&policy, BroadModeStatus::Standard).bounded);
+    let placement = ExecPlacement::BoundedGuest {
+        host: programs.lookup(),
+        guest: crate::inquello_wsl::GuestTarget::Connect {
+            scope: "0".repeat(64),
+            task_id: "00000000-0000-4000-8000-000000000001".into(),
+        },
+    };
+    let resolutions = placement
+        .resolve(&words(&["ls"]), &policy, BroadModeStatus::Standard)
+        .await;
+    assert_eq!(resolutions.get("ls"), Some(programs.at("bin/ls").as_str()));
+}

@@ -32,6 +32,8 @@ use sha2::Digest;
 use sha2::Sha256;
 
 const GUEST_BIN: &str = "/opt/inquello/runtime/bin";
+/// The PATH every guest command is given (one-shot and private-Task).
+pub(crate) const GUEST_PATH: &str = "/usr/bin:/bin";
 const HOST_TEMP: &str = "D:\\Inquello\\tmp";
 
 #[derive(Clone, Default)]
@@ -537,7 +539,7 @@ impl WslExecPlan {
             shell_environment_policy: codex_protocol::config_types::ShellEnvironmentPolicy {
                 inherit: codex_protocol::config_types::ShellEnvironmentPolicyInherit::None,
                 r#set: HashMap::from([
-                    ("PATH".into(), "/usr/bin:/bin".into()),
+                    ("PATH".into(), GUEST_PATH.into()),
                     ("HOME".into(), self.root()),
                     ("LANG".into(), "C.UTF-8".into()),
                     ("TMPDIR".into(), "/tmp".into()),
@@ -724,7 +726,7 @@ impl WslExecPlan {
             env_policy: None,
             shell_snapshot: None,
             env: HashMap::from([
-                ("PATH".into(), "/usr/bin:/bin".into()),
+                ("PATH".into(), GUEST_PATH.into()),
                 ("HOME".into(), root.clone()),
                 ("TMPDIR".into(), "/tmp".into()),
                 ("LANG".into(), "C.UTF-8".into()),
@@ -800,6 +802,196 @@ impl WslExecPlan {
         };
         self.close_and_wait(&client).await?;
         result
+    }
+}
+
+/// Not-found as the guest executor's filesystem handler reports it
+/// (`exec-server`'s `rpc::not_found`).
+const GUEST_NOT_FOUND: i64 = -32004;
+
+/// The guest's read-only filesystem queries over an existing executor
+/// connection, under the Task's sandbox. Used only to resolve programs.
+#[derive(Clone)]
+pub(crate) struct GuestChannel {
+    client: ExecServerClient,
+    sandbox: FileSystemSandboxContext,
+}
+
+impl crate::inquello_program::GuestFs for GuestChannel {
+    fn entry<'a>(
+        &'a self,
+        path: &'a str,
+    ) -> impl std::future::Future<
+        Output = Result<
+            crate::inquello_program::GuestEntry,
+            crate::inquello_program::GuestUnavailable,
+        >,
+    > + Send
+    + 'a {
+        use crate::inquello_program::GuestEntry;
+        use crate::inquello_program::GuestUnavailable;
+        use codex_exec_server::ExecServerError;
+        async move {
+            // A program word that does not survive the file-URI round trip
+            // exactly is never queried under another name.
+            let uri = uri(path).map_err(|_| GuestUnavailable)?;
+            if uri.decoded_path_bytes().as_ref() != path.as_bytes() {
+                return Err(GuestUnavailable);
+            }
+            let not_found = |error: &ExecServerError| matches!(error, ExecServerError::Server { code, .. } if *code == GUEST_NOT_FOUND);
+            let metadata = match self
+                .client
+                .fs_get_metadata(codex_exec_server_protocol::FsGetMetadataParams {
+                    path: uri.clone(),
+                    follow_symlinks: Some(true),
+                    sandbox: Some(self.sandbox.clone()),
+                })
+                .await
+            {
+                Ok(metadata) => metadata,
+                Err(error) if not_found(&error) => return Ok(GuestEntry::Missing),
+                Err(_) => return Err(GuestUnavailable),
+            };
+            if !metadata.is_file {
+                return Ok(GuestEntry::NotFile);
+            }
+            match self
+                .client
+                .fs_canonicalize(codex_exec_server_protocol::FsCanonicalizeParams {
+                    path: uri,
+                    sandbox: Some(self.sandbox.clone()),
+                })
+                .await
+            {
+                Ok(canonical) => {
+                    String::from_utf8(canonical.path.decoded_path_bytes().into_owned())
+                        .map(GuestEntry::File)
+                        .map_err(|_| GuestUnavailable)
+                }
+                Err(error) if not_found(&error) => Ok(GuestEntry::Missing),
+                Err(_) => Err(GuestUnavailable),
+            }
+        }
+    }
+}
+
+type RetainedKey = (String, String);
+
+/// Each private Task's retained executor channel, by (scope, Task), with the
+/// generation that registered it.
+static RETAINED: std::sync::LazyLock<
+    std::sync::Mutex<HashMap<RetainedKey, (uuid::Uuid, GuestChannel)>>,
+> = std::sync::LazyLock::new(Default::default);
+
+impl WslExecPlan {
+    /// Makes this private Task's live executor connection available to
+    /// resolve its commands' programs, until [`Self::release_channel`].
+    pub(crate) fn retain_channel(
+        &self,
+        generation: uuid::Uuid,
+        client: &ExecServerClient,
+    ) -> anyhow::Result<()> {
+        let channel = GuestChannel {
+            client: client.clone(),
+            sandbox: self.sandbox()?,
+        };
+        RETAINED
+            .lock()
+            .map_err(|_| anyhow::anyhow!("guest channel registry unavailable"))?
+            .insert(
+                (self.scope.clone(), self.task_id.clone()),
+                (generation, channel),
+            );
+        Ok(())
+    }
+
+    /// Forgets the channel this generation registered (a successor's stays).
+    pub(crate) fn release_channel(&self, generation: uuid::Uuid) {
+        if let Ok(mut retained) = RETAINED.lock() {
+            let key = (self.scope.clone(), self.task_id.clone());
+            if retained
+                .get(&key)
+                .is_some_and(|(owner, _)| *owner == generation)
+            {
+                retained.remove(&key);
+            }
+        }
+    }
+}
+
+/// The Linux guest a command will run in, for resolving its program there.
+pub(crate) enum GuestTarget {
+    /// `inquello/tools/exec`: a short read-only connection to the Task's own
+    /// guest executor, with no network, closed before the command runs.
+    Connect { scope: String, task_id: String },
+    /// A private Task's model command: its live executor connection.
+    Retained { scope: String, task_id: String },
+}
+
+impl GuestTarget {
+    /// Resolves `words` inside the guest, with its PATH and the Task's guest
+    /// working folder. Unreachable, failing or slow means unresolved.
+    pub(crate) async fn resolve(&self, words: &[String]) -> crate::inquello_program::Resolutions {
+        use crate::inquello_program::GuestResolver;
+        use crate::inquello_program::RESOLUTION_BUDGET;
+        use crate::inquello_program::Resolutions;
+        use crate::inquello_program::resolve_within;
+        let (scope, task_id) = match self {
+            Self::Connect { scope, task_id } | Self::Retained { scope, task_id } => {
+                (scope, task_id)
+            }
+        };
+        let plan = WslExecPlan {
+            scope: scope.clone(),
+            task_id: task_id.clone(),
+            command: vec![],
+            writable: false,
+            domains: vec![],
+            timeout_ms: None,
+        };
+        let resolver = |channel: GuestChannel| GuestResolver {
+            fs: channel,
+            cwd: plan.root(),
+            search_path: GUEST_PATH.to_string(),
+        };
+        match self {
+            Self::Retained { .. } => {
+                let channel = RETAINED.lock().ok().and_then(|retained| {
+                    retained
+                        .get(&(scope.clone(), task_id.clone()))
+                        .map(|(_, channel)| channel.clone())
+                });
+                match channel {
+                    Some(channel) => {
+                        resolve_within(&resolver(channel), words, RESOLUTION_BUDGET).await
+                    }
+                    None => Resolutions::unresolved(),
+                }
+            }
+            Self::Connect { .. } => {
+                let Ok(sandbox) = plan.sandbox() else {
+                    return Resolutions::unresolved();
+                };
+                let client = match plan.connect().await {
+                    Ok(client) => client,
+                    Err(error) => {
+                        tracing::warn!("Linux program resolution unavailable: {error:#}");
+                        return Resolutions::unresolved();
+                    }
+                };
+                let channel = GuestChannel {
+                    client: client.clone(),
+                    sandbox,
+                };
+                let resolutions =
+                    resolve_within(&resolver(channel), words, RESOLUTION_BUDGET).await;
+                // Release the guest's Task lock before the command itself runs.
+                if let Err(error) = plan.close_and_wait(&client).await {
+                    tracing::warn!("Linux program resolution cleanup unconfirmed: {error:#}");
+                }
+                resolutions
+            }
+        }
     }
 }
 

@@ -7583,6 +7583,13 @@ impl ThreadRequestProcessor {
                 retirement.complete(confirmed);
                 return Err(invalid_request("Linux Task registration unavailable"));
             }
+            // The Task's commands resolve their programs inside this guest,
+            // over this same connection (owner decision 2026-11-05). Without
+            // it they stay unresolved and ask; it never grants anything.
+            if let Err(error) = plan.retain_channel(retirement.generation, &client) {
+                tracing::warn!("Linux program resolution channel unavailable: {error:#}");
+            }
+            let channel_generation = retirement.generation;
             local_request = codex_protocol::protocol::TurnEnvironmentRequest {
                 environment_id,
                 cwd: cwd.clone(),
@@ -7593,6 +7600,7 @@ impl ThreadRequestProcessor {
             let finished = authorization.0.execution_lifetime();
             tokio::spawn(async move {
                 tokio::select! {_=revoked.cancelled()=>{},_=finished.cancelled()=>{}}
+                plan.release_channel(channel_generation);
                 let cleanup = plan.close_and_wait(&client).await;
                 if let Err(error) = &cleanup {
                     tracing::warn!("Linux Task executor cleanup unconfirmed: {error:#}");
