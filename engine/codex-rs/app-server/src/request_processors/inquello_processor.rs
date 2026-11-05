@@ -116,6 +116,8 @@ use codex_app_server_protocol::InquelloWorkspaceTreeParams;
 use codex_app_server_protocol::InquelloWorkspaceTreeResponse;
 use codex_app_server_protocol::JSONRPCErrorError;
 use codex_app_server_protocol::SandboxMode;
+#[cfg(windows)]
+use codex_utils_absolute_path::AbsolutePathBuf;
 use inquello_adapters::SqliteWorkingStore;
 use inquello_adapters::SystemClock;
 use inquello_domain::Clock;
@@ -1273,9 +1275,10 @@ pub(crate) struct ExecLookup<'a> {
 /// word holding `/` is a path (relative to `cwd`), a bare word is looked up
 /// along PATH (empty or relative entries against `cwd`), the first
 /// executable regular file wins. The result is canonical: symlinks followed.
-/// `None` when it cannot be resolved here, including on a Windows host. A
-/// bounded command there runs in the Linux guest and is resolved inside it
-/// (see [`ExecPlacement`]).
+/// On Windows, only ordinary fully-qualified drive paths to existing `.exe`
+/// files are resolved. No PATH/PATHEXT search or shell expansion is attempted.
+/// Bounded commands still resolve inside the Linux guest (see [`ExecPlacement`]).
+/// Unsupported or missing programs remain unresolved.
 pub(crate) fn resolve_program(program: &str, lookup: ExecLookup<'_>) -> Option<PathBuf> {
     #[cfg(unix)]
     {
@@ -1313,7 +1316,38 @@ pub(crate) fn resolve_program(program: &str, lookup: ExecLookup<'_>) -> Option<P
             .ok()
             .filter(|path| executable(path))
     }
-    #[cfg(not(unix))]
+    #[cfg(windows)]
+    {
+        use std::path::Component;
+        use std::path::Path;
+        use std::path::Prefix;
+
+        let _ = lookup;
+        let ordinary_exe = |path: &Path| {
+            let Some(text) = path.to_str() else {
+                return false;
+            };
+            let mut components = path.components();
+            matches!(components.next(), Some(Component::Prefix(prefix)) if matches!(prefix.kind(), Prefix::Disk(_)))
+                && matches!(components.next(), Some(Component::RootDir))
+                && !text.contains('\0')
+                && !text.get(2..).is_some_and(|tail| tail.contains(':'))
+                && path
+                    .extension()
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case("exe"))
+        };
+        let path = Path::new(program);
+        if !ordinary_exe(path) {
+            return None;
+        }
+        let canonical = AbsolutePathBuf::from_absolute_path_checked(path)
+            .ok()?
+            .canonicalize()
+            .ok()?
+            .into_path_buf();
+        (ordinary_exe(&canonical) && canonical.is_file()).then_some(canonical)
+    }
+    #[cfg(not(any(unix, windows)))]
     {
         let _ = (program, lookup);
         None

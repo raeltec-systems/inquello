@@ -1219,6 +1219,151 @@ fn make_folder(dir: &TempDir, task_id: &str) -> String {
     root.to_string_lossy().into_owned()
 }
 
+#[cfg(windows)]
+struct WindowsGuestFixture<'a> {
+    dir: &'a TempDir,
+    task_id: &'a str,
+    node: PathBuf,
+    modules: PathBuf,
+    environment: Vec<(String, std::ffi::OsString)>,
+}
+
+#[cfg(windows)]
+impl<'a> WindowsGuestFixture<'a> {
+    fn new(dir: &'a TempDir, task_id: &'a str) -> Self {
+        let task_parent = dir.path().join("tasks");
+        assert!(
+            task_parent.is_dir()
+                && dir
+                    .path()
+                    .to_string_lossy()
+                    .replace('\\', "/")
+                    .to_lowercase()
+                    .starts_with("d:/"),
+            "native guest fixture requires an existing TempDir/tasks on D:"
+        );
+        let node = std::env::var_os("PATH")
+            .into_iter()
+            .flat_map(|value| std::env::split_paths(&value).collect::<Vec<_>>())
+            .filter(|path| path.is_absolute())
+            .map(|path| path.join("node.exe"))
+            .find(|path| path.is_file())
+            .and_then(|path| AbsolutePathBuf::from_absolute_path_checked(path).ok())
+            .and_then(|path| path.canonicalize().ok())
+            .map(AbsolutePathBuf::into_path_buf)
+            .unwrap_or_else(|| {
+                panic!("installed absolute node.exe is required; no download is attempted")
+            });
+        let modules =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../desktop/dist/main/runtime");
+        for name in ["wsl.js", "wsl-tasks.js", "wsl-data.js"] {
+            assert!(
+                modules.join(name).is_file(),
+                "build desktop first: missing {name}"
+            );
+        }
+        let mut environment = Vec::new();
+        for key in ["SystemRoot", "WINDIR", "USERPROFILE"] {
+            let value = std::env::var_os(key)
+                .unwrap_or_else(|| panic!("{key} is required for native guest preflight"));
+            environment.push((key.to_string(), value));
+        }
+        let system = PathBuf::from(&environment[0].1);
+        environment.push(("PATH".to_string(), system.join("System32").into_os_string()));
+        for key in ["TEMP", "TMP", "TMPDIR"] {
+            environment.push((key.to_string(), dir.path().as_os_str().to_owned()));
+        }
+        // Own cleanup before invoking any code that can create a profile,
+        // binding, transfer journal or guest Task.
+        let guard = Self {
+            dir,
+            task_id,
+            node,
+            modules,
+            environment,
+        };
+        guard.run("setup").unwrap_or_else(|error| panic!("{error}"));
+        guard
+    }
+
+    fn run(&self, action: &str) -> Result<(), String> {
+        let script = r#"
+const path = require('node:path');
+const [modules, taskParent, principal, taskId, action] = process.argv.slice(1);
+const { wslScope, preflightWsl } = require(path.join(modules, 'wsl.js'));
+const { WslTasks } = require(path.join(modules, 'wsl-tasks.js'));
+const { wslDataStorage } = require(path.join(modules, 'wsl-data.js'));
+(async () => {
+    const scope = wslScope(taskParent, principal);
+    console.log(JSON.stringify({ action, scope, taskId, taskParent, result: 'started' }));
+    if (action === 'setup') {
+        preflightWsl();
+        const tasks = new WslTasks(taskParent, principal);
+        await tasks.transition(taskId, 'linux');
+        const binding = tasks.binding(taskId);
+        if (binding?.scope !== scope || binding?.taskId !== taskId
+            || binding?.backend !== 'linux' || binding?.state !== 'ready') {
+            throw new Error('Real guest transition did not produce a ready binding');
+        }
+    } else if (action === 'cleanup') {
+        await wslDataStorage(taskParent, () => null).erase();
+        if (WslTasks.discoverScopes(taskParent).length !== 0) {
+            throw new Error('Owned guest profile cleanup was not complete');
+        }
+    } else {
+        throw new Error('Unknown fixture action');
+    }
+    console.log(JSON.stringify({ action, scope, taskId, result: 'passed' }));
+})().catch(error => { console.error(error); process.exitCode = 1; });
+"#;
+        let output = std::process::Command::new(&self.node)
+            .env_clear()
+            .envs(self.environment.iter().map(|(key, value)| (key, value)))
+            .current_dir(self.dir.path())
+            .args(["-e", script])
+            .arg(&self.modules)
+            .arg(self.dir.path().join("tasks"))
+            .arg(ALICE)
+            .arg(self.task_id)
+            .arg(action)
+            .output()
+            .map_err(|error| {
+                format!(
+                    "native guest {action} task={} failed to start: {error}",
+                    self.task_id
+                )
+            })?;
+        eprintln!(
+            "native guest {action} task={} status={}\n{}\n{}",
+            self.task_id,
+            output.status,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+        );
+        if !output.status.success() {
+            return Err(format!(
+                "native guest {action} failed for task {}; see fixture output",
+                self.task_id
+            ));
+        }
+        Ok(())
+    }
+}
+
+#[cfg(windows)]
+impl Drop for WindowsGuestFixture<'_> {
+    fn drop(&mut self) {
+        if let Err(error) = self.run("cleanup") {
+            if std::thread::panicking() {
+                // Preserve the original assertion and the cleanup evidence.
+                eprintln!("CLEANUP FAILED while unwinding: {error}");
+            } else {
+                panic!("{error}");
+            }
+        }
+    }
+}
+
 async fn task_profile(
     processor: &InquelloRequestProcessor,
     policy: InquelloWorkspaceExecutionPolicy,
@@ -1396,6 +1541,39 @@ async fn a_standard_task_profile_names_its_boundaries_and_runtime_form() {
     );
 }
 
+// These tests plan host commands; they do not spawn them. Use actual native
+// executables so the positive path exercises resolution on every platform.
+#[cfg(windows)]
+fn windows_host_test_program(relative: &str) -> String {
+    let root = std::env::var_os("SystemRoot")
+        .unwrap_or_else(|| panic!("SystemRoot is required for native Windows fixtures"));
+    let path = PathBuf::from(root).join(relative);
+    assert!(
+        path.is_file(),
+        "native fixture is missing: {}",
+        path.display()
+    );
+    path.to_string_lossy().into_owned()
+}
+
+fn host_noop_command(unix_command: &[&str]) -> Vec<String> {
+    #[cfg(windows)]
+    {
+        let _ = unix_command;
+        words(&[
+            &windows_host_test_program(r"System32\WindowsPowerShell\v1.0\powershell.exe"),
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "exit 0",
+        ])
+    }
+    #[cfg(not(windows))]
+    {
+        words(unix_command)
+    }
+}
+
 #[tokio::test]
 async fn a_permitted_full_access_profile_states_no_filesystem_limits() {
     let Fixture { dir, processor } = fixture();
@@ -1433,10 +1611,12 @@ async fn a_permitted_full_access_profile_states_no_filesystem_limits() {
     // The Workspace's standard reach stays bounded.
     assert!(response.reach.bounded);
 
+    let command_words = host_noop_command(&["true"]);
+    let command: Vec<_> = command_words.iter().map(String::as_str).collect();
     let plan = processor
         .tools_exec_plan(
             DESKTOP,
-            exec_params(open(), &task_id, &folder, &["true"]),
+            exec_params(open(), &task_id, &folder, &command),
             DeviceRequirements::default(),
             UserConfig::default(),
         )
@@ -1451,6 +1631,7 @@ async fn a_permitted_full_access_profile_states_no_filesystem_limits() {
         Some(codex_app_server_protocol::SandboxPolicy::DangerFullAccess)
     );
     assert_eq!(plan.exec.permission_profile, None);
+    assert_eq!(plan.exec.command, command_words);
 }
 
 #[tokio::test]
@@ -1463,11 +1644,14 @@ async fn tools_exec_plans_the_bounded_profile_for_the_creator_only() {
     let folder = dir.path().join("tasks").join(&task_id);
     let folder_text = folder.to_string_lossy().into_owned();
 
+    // With no existing folder, resolution uses the host before the folder check.
+    let missing_command = host_noop_command(&["true"]);
+    let missing_argv: Vec<_> = missing_command.iter().map(String::as_str).collect();
     // The folder must exist first.
     let missing = processor
         .tools_exec_plan(
             DESKTOP,
-            exec_params(policy(), &task_id, &folder_text, &["true"]),
+            exec_params(policy(), &task_id, &folder_text, &missing_argv),
             DeviceRequirements::default(),
             UserConfig::default(),
         )
@@ -1480,6 +1664,8 @@ async fn tools_exec_plans_the_bounded_profile_for_the_creator_only() {
         Some(json!("task_folder_missing"))
     );
     make_folder(&dir, &task_id);
+    #[cfg(windows)]
+    let _guest = WindowsGuestFixture::new(&dir, &task_id);
 
     let plan = processor
         .tools_exec_plan(
@@ -1587,6 +1773,159 @@ fn sourced(prefix: &[&str], decision: execution_policy::RuleDecision) -> Sourced
 
 fn words(command: &[&str]) -> Vec<String> {
     command.iter().map(ToString::to_string).collect()
+}
+
+#[cfg(windows)]
+#[test]
+fn windows_host_resolution_accepts_only_existing_drive_rooted_executables() {
+    let dir = TempDir::new().unwrap_or_else(|error| panic!("{error}"));
+    let exe = dir.path().join("Program.exe");
+    std::fs::write(&exe, b"resolution fixture").unwrap_or_else(|error| panic!("{error}"));
+    let lookup = ExecLookup {
+        cwd: Some(dir.path()),
+        search_path: Some(dir.path().as_os_str()),
+    };
+    let canonical = AbsolutePathBuf::from_absolute_path_checked(&exe)
+        .unwrap_or_else(|error| panic!("{error}"))
+        .canonicalize()
+        .unwrap_or_else(|error| panic!("{error}"))
+        .into_path_buf();
+    for spelling in [
+        exe.to_string_lossy().into_owned(),
+        exe.to_string_lossy().to_uppercase(),
+        exe.to_string_lossy().replace('\\', "/"),
+        dir.path()
+            .join(".")
+            .join("Program.exe")
+            .to_string_lossy()
+            .into_owned(),
+    ] {
+        assert_eq!(
+            resolve_program(&spelling, lookup),
+            Some(canonical.clone()),
+            "{spelling}"
+        );
+    }
+    let directory = dir.path().join("directory.exe");
+    std::fs::create_dir(&directory).unwrap_or_else(|error| panic!("{error}"));
+    let script = dir.path().join("script.cmd");
+    std::fs::write(&script, b"echo fixture").unwrap_or_else(|error| panic!("{error}"));
+    let rejected = [
+        String::new(),
+        "Program.exe".into(),
+        ".\\Program.exe".into(),
+        "D:Program.exe".into(),
+        "\\Program.exe".into(),
+        r"\\server\share\Program.exe".into(),
+        format!(r"\\?\{}", exe.display()),
+        format!(r"\\.\{}", exe.display()),
+        format!("{}:stream.exe", exe.display()),
+        format!("{}\0.exe", exe.display()),
+        dir.path()
+            .join("missing.exe")
+            .to_string_lossy()
+            .into_owned(),
+        directory.to_string_lossy().into_owned(),
+        script.to_string_lossy().into_owned(),
+    ];
+    for spelling in rejected {
+        assert_eq!(resolve_program(&spelling, lookup), None, "{spelling:?}");
+    }
+    let missing = dir
+        .path()
+        .join("missing.exe")
+        .to_string_lossy()
+        .into_owned();
+    // Rule tokens use literal forward slashes; backslashes are rejected by
+    // the existing domain grammar. Command argv retains its Windows spelling.
+    let rule_head = missing.replace('\\', "/");
+    let rules = vec![sourced(
+        &[&rule_head],
+        execution_policy::RuleDecision::Allow,
+    )];
+    let matches = matched_rules(&words(&[&missing]), &rules, lookup)
+        .unwrap_or_else(|error| panic!("{error:?}"));
+    assert_eq!(
+        matches.resolution,
+        execution_policy::ProgramResolution::Unresolved
+    );
+    assert_eq!(matches.matched, vec![false]);
+}
+
+#[cfg(windows)]
+#[test]
+fn windows_host_forbid_matches_canonical_case_and_symlink_aliases() {
+    use execution_policy::RuleDecision::*;
+    let dir = TempDir::new().unwrap_or_else(|error| panic!("{error}"));
+    let exe = dir.path().join("Program.exe");
+    let alias = dir.path().join("Alias.exe");
+    let other = dir.path().join("Other.exe");
+    for file in [&exe, &other] {
+        std::fs::write(file, b"resolution fixture").unwrap_or_else(|error| panic!("{error}"));
+    }
+    std::os::windows::fs::symlink_file(&exe, &alias)
+        .unwrap_or_else(|error| panic!("create fixture symlink: {error}"));
+    let lookup = ExecLookup {
+        cwd: None,
+        search_path: None,
+    };
+    let exe = exe.to_string_lossy().into_owned();
+    let alias = alias.to_string_lossy().into_owned();
+    let other = other.to_string_lossy().into_owned();
+    for head in [&exe, &alias, &exe.to_uppercase()] {
+        let rule_head = head.replace('\\', "/");
+        let other_head = other.replace('\\', "/");
+        let rules = vec![
+            sourced(&[&rule_head], Forbid),
+            sourced(&[&other_head], Allow),
+        ];
+        for command in [&exe, &alias, &exe.to_uppercase()] {
+            let argv = words(&[command, "-fixture"]);
+            let original = argv.clone();
+            let matches =
+                matched_rules(&argv, &rules, lookup).unwrap_or_else(|error| panic!("{error:?}"));
+            assert_eq!(
+                matches.resolution,
+                execution_policy::ProgramResolution::Resolved
+            );
+            assert_eq!(matches.matched, vec![true, false]);
+            assert_eq!(argv, original);
+        }
+    }
+    let bare = sourced(&["Program.exe"], Forbid);
+    assert_eq!(
+        matched_rules(&words(&[&exe]), &[bare], lookup)
+            .unwrap_or_else(|error| panic!("{error:?}"))
+            .matched,
+        vec![true]
+    );
+}
+
+#[cfg(windows)]
+#[test]
+fn windows_host_resolution_rejects_broken_links_and_non_executable_targets() {
+    let dir = TempDir::new().unwrap_or_else(|error| panic!("{error}"));
+    let lookup = ExecLookup {
+        cwd: None,
+        search_path: None,
+    };
+    for target in ["missing.exe", "script.cmd", "directory.exe"] {
+        let target_path = dir.path().join(target);
+        if target == "script.cmd" {
+            std::fs::write(&target_path, b"echo fixture").unwrap_or_else(|error| panic!("{error}"));
+        } else if target == "directory.exe" {
+            std::fs::create_dir(&target_path).unwrap_or_else(|error| panic!("{error}"));
+        }
+        let alias = dir.path().join(format!("alias-{target}.exe"));
+        if target == "directory.exe" {
+            std::os::windows::fs::symlink_dir(&target_path, &alias)
+                .unwrap_or_else(|error| panic!("create fixture directory symlink: {error}"));
+        } else {
+            std::os::windows::fs::symlink_file(&target_path, &alias)
+                .unwrap_or_else(|error| panic!("create fixture symlink: {error}"));
+        }
+        assert_eq!(resolve_program(&alias.to_string_lossy(), lookup), None);
+    }
 }
 
 /// A folder of stand-in programs (`#!/bin/sh` scripts) and a PATH over it,
@@ -2010,6 +2349,8 @@ async fn a_prompt_rule_needs_one_allowed_request_for_exactly_that_command() {
     sign_in(&processor, OTHER, BOB).await;
     let task_id = new_task(&processor, DESKTOP, "task-1").await;
     let folder = make_folder(&dir, &task_id);
+    #[cfg(windows)]
+    let _guest = WindowsGuestFixture::new(&dir, &task_id);
     let policy = || {
         workspace_policy(
             WORKSPACE,
@@ -2302,6 +2643,8 @@ async fn user_rules_only_ask_or_forbid_and_win_over_a_workspace_allow() {
     sign_in(&processor, DESKTOP, ALICE).await;
     let task_id = new_task(&processor, DESKTOP, "task-1").await;
     let folder = make_folder(&dir, &task_id);
+    #[cfg(windows)]
+    let _guest = WindowsGuestFixture::new(&dir, &task_id);
     let policy = || {
         workspace_policy(
             WORKSPACE,

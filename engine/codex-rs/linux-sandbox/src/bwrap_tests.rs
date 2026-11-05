@@ -954,6 +954,105 @@ fn restricted_read_only_with_platform_defaults_includes_usr_when_present() {
 }
 
 #[test]
+fn merged_usr_aliases_require_exact_known_targets_and_existing_usr_access() {
+    let roots = BTreeSet::from([PathBuf::from("/usr")]);
+    for alias in ["/bin", "/sbin", "/lib", "/lib64"] {
+        let target = Path::new("/usr").join(Path::new(alias).file_name().unwrap());
+        for link in [target.as_path(), target.strip_prefix("/").unwrap()] {
+            assert_eq!(
+                merged_usr_alias(Path::new(alias), link, &roots),
+                Some(target.clone())
+            );
+            assert_eq!(
+                merged_usr_alias(Path::new(alias), link, &BTreeSet::new()),
+                None
+            );
+        }
+        for link in [
+            "/home/private",
+            "../usr/bin",
+            "/usr/other",
+            "/usr/bin/../bin",
+        ] {
+            assert_eq!(
+                merged_usr_alias(Path::new(alias), Path::new(link), &roots),
+                None
+            );
+        }
+    }
+    assert_eq!(
+        merged_usr_alias(Path::new("/custom"), Path::new("/usr/custom"), &roots),
+        None
+    );
+}
+
+#[test]
+fn restricted_platform_roots_preserve_merged_usr_links_and_deny_targets() {
+    let temp_dir = TempDir::new().expect("temp dir");
+    let policy = FileSystemSandboxPolicy::restricted(vec![
+        FileSystemSandboxEntry {
+            path: FileSystemPath::Special {
+                value: FileSystemSpecialPath::Minimal,
+            },
+            access: FileSystemAccessMode::Read,
+            missing_path_behavior: None,
+        },
+        FileSystemSandboxEntry {
+            path: AbsolutePathBuf::from_absolute_path("/usr/bin")
+                .unwrap()
+                .into(),
+            access: FileSystemAccessMode::Deny,
+            missing_path_behavior: None,
+        },
+    ]);
+    let args = create_filesystem_args(&policy, temp_dir.path(), BwrapOptions::default())
+        .expect("filesystem args");
+    for alias in ["/bin", "/sbin", "/lib", "/lib64"] {
+        let path = Path::new(alias);
+        let Ok(link) = std::fs::read_link(path) else {
+            continue;
+        };
+        let roots = BTreeSet::from([PathBuf::from("/usr")]);
+        if let Some(target) = merged_usr_alias(path, &link, &roots) {
+            let target = path_to_string(&target);
+            assert!(
+                args.args
+                    .windows(3)
+                    .any(|window| window == ["--symlink", target.as_str(), alias])
+            );
+            assert!(
+                !args
+                    .args
+                    .windows(3)
+                    .any(|window| window == ["--ro-bind", alias, alias])
+            );
+        }
+    }
+    // Denying the shared directory must mask both /usr/bin and its /bin alias.
+    // File denies remain path-specific; they need not mask a symlink's target.
+    if Path::new("/usr/bin").is_dir() {
+        let mount = args
+            .args
+            .windows(3)
+            .position(|window| window == ["--ro-bind", "/usr", "/usr"])
+            .expect("readable system root");
+        let deny = args
+            .args
+            .windows(4)
+            .position(|window| window == ["--perms", "000", "--tmpfs", "/usr/bin"])
+            .expect("shared directory denial");
+        assert!(deny > mount);
+        if let Some(alias) = args
+            .args
+            .windows(3)
+            .position(|window| window == ["--symlink", "/usr/bin", "/bin"])
+        {
+            assert!(deny > alias);
+        }
+    }
+}
+
+#[test]
 fn split_policy_reapplies_unreadable_carveouts_after_writable_binds() {
     let temp_dir = TempDir::new().expect("temp dir");
     let writable_root = temp_dir.path().join("workspace");
