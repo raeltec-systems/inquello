@@ -1296,7 +1296,9 @@ struct TaskGuard {
     defaults: usage::Choices,
     terminal: std::sync::atomic::AtomicBool,
     outgoing: Arc<crate::outgoing_message::OutgoingMessageSender>,
-    tools: tokio::sync::Mutex<HashMap<String, (String, std::time::Instant)>>,
+    /// Per call: its local-tool attempt, when it began, and whether that
+    /// attempt has been finalized.
+    tools: tokio::sync::Mutex<HashMap<String, (String, std::time::Instant, bool)>>,
 }
 impl TaskGuard {
     async fn paid_profile_check(&self, reserve: bool) -> Result<bool, JSONRPCErrorError> {
@@ -1641,6 +1643,9 @@ impl TaskAuthorization for TaskGuard {
             if bound.run_id != self.run.run_id || bound.runtime_id != self.run.runtime_id {
                 return;
             }
+            // Before the run reads as terminal, so a terminal run never shows
+            // an open attempt.
+            self.finish_open_tool_attempts(&store).await;
             let Some(_thread) = bound.thread_id.as_deref() else {
                 self.processor
                     .routes
@@ -2038,7 +2043,7 @@ impl TaskAuthorization for TaskGuard {
                     .map_err(|_| CodexErr::Fatal("Private tool accounting unavailable".into()))?;
                 tools.insert(
                     call_id.into(),
-                    (attempt_id.clone(), std::time::Instant::now()),
+                    (attempt_id.clone(), std::time::Instant::now(), false),
                 );
             }
             if let Err(error) = self.recheck().await {
@@ -2058,10 +2063,13 @@ impl TaskAuthorization for TaskGuard {
         success: bool,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
-            let tools = self.tools.lock().await;
-            let Some((id, began)) = tools.get(call_id) else {
+            let mut tools = self.tools.lock().await;
+            let Some((id, began, finished)) = tools.get_mut(call_id) else {
                 return;
             }; // Shape/permission refusal never created accounting.
+            if *finished {
+                return;
+            }
             let Ok(store) = self.processor.store().await else {
                 self.processor
                     .routes
@@ -2102,8 +2110,47 @@ impl TaskAuthorization for TaskGuard {
                     .routes
                     .invalidate_disclosure(self.actor.principal_id);
                 self.cancellation.cancel();
+            } else {
+                *finished = true;
             }
         })
+    }
+}
+
+impl TaskGuard {
+    /// Closes local-tool attempts whose handler never reached `after_tool`:
+    /// an interrupted turn aborts a running handler, so its attempt would
+    /// stay open. The process may already have had effects, so the attempt
+    /// is `uncertain`, never completed. A finalization that already won the
+    /// race is left as recorded (storage refuses terminal rewrites).
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "Serialize per-call accounting and its local SQLite commit with after_tool; no provider or service wait happens under the accounting guard."
+    )]
+    async fn finish_open_tool_attempts(&self, store: &SqliteWorkingStore) {
+        let Ok(task) = TaskId::parse(&self.run.task_id) else {
+            return;
+        };
+        let mut tools = self.tools.lock().await;
+        for (id, began, finished) in tools.values_mut().filter(|(_, _, finished)| !*finished) {
+            let closed = store
+                .finish_usage_attempt(
+                    self.actor.principal_id,
+                    task,
+                    id,
+                    usage::FinishAttempt {
+                        status: usage::AttemptStatus::Uncertain,
+                        ended_at_ms: SystemClock.now().unix_millis(),
+                        elapsed_ms: began.elapsed().as_millis().try_into().unwrap_or(u64::MAX),
+                        output_ref: None,
+                    },
+                )
+                .await;
+            if let Err(error) = closed {
+                tracing::warn!("open private tool attempt not finalized at turn end: {error}");
+            }
+            *finished = true;
+        }
     }
 }
 
@@ -2293,17 +2340,19 @@ impl InquelloRequestProcessor {
             .ok_or_else(|| refusal("not_found", "Private Task/thread ownership required"))?;
         self.require_task_thread(connection, thread).await?;
         if method == "turn/interrupt" {
+            // The bound creator's interruption is not revocation. Like
+            // `inquello/tasks/stop` it only interrupts the native turn, which
+            // ends as TurnAborted (cancelled) and answers this request. It
+            // must not cancel the Task's authorization (`routes.cancel_task`):
+            // a cancelled authorization fails every later disclosure check,
+            // so the TurnAborted that answers the interrupt would never be
+            // delivered and the request would hang.
             let (store, actor) = self.context(connection).await?;
-            let run = store
+            store
                 .find_thread_run(actor.principal_id, &self.runtime_id, thread)
                 .await
                 .map_err(domain_error)?
                 .ok_or_else(|| refusal("not_found", "Private Task binding unavailable"))?;
-            self.routes.cancel_task(
-                &mut *self.routes.state.lock().await,
-                actor.principal_id,
-                &run.task_id,
-            );
         }
         Ok(Some(thread.into()))
     }
