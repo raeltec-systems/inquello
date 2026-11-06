@@ -1140,3 +1140,15 @@ a.iq-nav-row:hover {
 @media (prefers-reduced-motion: reduce) {
   .iq-result-details > summary::before, .iq-result-history > summary::before, .iq-result-evidence > details > summary::before { transition: none; }
 }
+
+/* Keep Settings navigation available beside long connection inventories. */
+@media(min-width:701px) { .iq-settings > nav { position:sticky; top:0; align-self:start; height:100vh; overflow-y:auto; box-sizing:border-box; } }
+.iq-settings-panel { min-width:0; overflow-wrap:anywhere; }
+.iq-settings-panel [data-capabilities-section] { max-width:none; }
+.iq-settings-panel .iq-tools-add { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:var(--space-3); margin-block:var(--space-3); padding:var(--space-4); border:1px solid var(--border-default); border-radius:var(--radius-md); }
+.iq-settings-panel .iq-tools-add > :is(h3,h4) { margin:0; font:var(--type-ui); font-weight:500; grid-column:1 / -1; }
+.iq-settings-panel .iq-tools-add > :nth-child(n+4) { grid-column:1 / -1; }
+.iq-settings-panel .iq-tools-add > label { display:grid; gap:var(--space-1); align-content:start; font:var(--type-ui); }
+.iq-settings-panel .iq-tools-add select { min-width:0; max-width:100%; min-height:32px; font:inherit; color:var(--text-primary); background:var(--surface-app); border:1px solid var(--border-default); border-radius:var(--radius-md); padding:var(--space-1) var(--space-2); }
+.iq-settings-panel .iq-tools-add input { min-width:0; }
+@media(max-width:700px) { .iq-settings-panel .iq-tools-add { grid-template-columns:minmax(0,1fr); } }

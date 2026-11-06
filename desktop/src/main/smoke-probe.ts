@@ -4421,6 +4421,38 @@ export async function probeToolsManagement(contents: WebContents, options: Organ
     requireCheck(await ui(`if(!(await openTools()))return false;return !row()&&!!qVisible('form[aria-label="Add MCP server"]');`),'removed-reopened');
     requireCheck(await state(null),'removed-still-absent');
     await capture('tools-03-removed-reopened');
+    stage='settings-usability';
+    requireCheck(await ui(`
+      const form=qVisible('form[aria-label="Add MCP server"]'),provider=qVisible('[data-provider-session]');
+      return !!form&&!!provider&&(form.compareDocumentPosition(provider)&Node.DOCUMENT_POSITION_FOLLOWING)!==0&&[...document.querySelectorAll('.iq-settings h3')].every(node=>node.textContent!=='Tools and connections');
+    `),'setup-before-inventory');
+    requireCheck(await ui(`
+      window.scrollTo(0,document.documentElement.scrollHeight);
+      await new Promise(resolve=>requestAnimationFrame(resolve));
+      const nav=qVisible('.iq-settings > nav'),rect=nav?.getBoundingClientRect();
+      return innerWidth<=700||!!rect&&rect.top>=-1&&rect.top<2&&rect.bottom<=innerHeight+1;
+    `),'navigation-stays-reachable');
+    requireCheck(await ui(`
+      const link=qVisible('a[href="#settings-usage"]');if(!link)return false;link.focus();link.click();
+      return !!(await wait(()=>{const h=qVisible('.iq-settings h2');return h?.textContent==='Usage'&&document.activeElement===h&&h.getBoundingClientRect().top>=0;},5000));
+    `),'section-focus-from-scrolled-inventory');
+    requireCheck(await ui(`
+      history.back();if(!(await wait(()=>location.hash==='#settings-tools'&&qVisible('[data-capabilities-loaded="true"]'),5000)))return false;
+      history.forward();if(!(await wait(()=>location.hash==='#settings-usage'&&document.activeElement===qVisible('.iq-settings h2'),5000)))return false;
+      const link=qVisible('a[href="#settings-tools"]');link?.focus();link?.click();
+      return !!(await wait(()=>qVisible('[data-capabilities-loaded="true"]')&&document.activeElement===qVisible('.iq-settings h2'),5000));
+    `),'settings-history-and-repeat-navigation');
+    const priorZoom=contents.getZoomFactor();
+    try {
+      contents.setZoomFactor(2);
+      requireCheck(await ui(`
+        await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+        return document.documentElement.scrollWidth<=document.documentElement.clientWidth&&!!qVisible('form[aria-label="Add MCP server"]');
+      `),'settings-200-percent-no-horizontal-overflow');
+      await capture('tools-04-removed-zoomed');
+      await ui(`qVisible('form[aria-label="Add MCP server"]')?.scrollIntoView({block:'start'});`);
+      await capture('tools-05-zoomed-form');
+    } finally {contents.setZoomFactor(priorZoom);}
     requireCheck(fixture.counts.forbidden===0,'no-tool-invocations-or-auth');
   } catch {report.failures.push('Tools management failed at '+stage);try {if(options.seedFile)await capture('tools-failure');}catch {report.failures.push('Failure capture unavailable');}}
   finally {

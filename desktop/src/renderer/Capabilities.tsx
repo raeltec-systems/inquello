@@ -123,7 +123,7 @@ export function Capabilities({ workspaceId, showProcessingRoutes = true }: { wor
     {!bridge ? <p role="status">Tools and connections are available in the desktop app only.</p> : !workspaceId ? <p role="status">Select a Workspace in chat to manage its tools and connections.</p> : loading ? <p role="status">Loading tools and connections for the selected Workspace.</p> : view && !workspaces.length ? <p role="status">The selected Workspace is unavailable. Return to chat and select an accessible Workspace.</p> : null}
     {workspaces.map(workspace => <section key={workspace.workspaceId} aria-label={`Tools settings for ${workspace.name}`}>
       <p>Workspace: <strong>{workspace.name}</strong></p>
-      <CapabilityInventory workspaceId={workspace.workspaceId} workspaceName={workspace.name} />
+      <CapabilityInventory workspaceId={workspace.workspaceId} workspaceName={workspace.name} showHeading={false} />
       <details><summary>Workspace policy and capability limits</summary>
         {workspace.policy ? <PolicySettings policy={workspace.policy} /> : <p>{workspace.reason ?? 'The policy could not be read.'}</p>}
         <CapabilityContract capabilities={capabilities} />

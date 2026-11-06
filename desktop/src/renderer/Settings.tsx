@@ -15,7 +15,8 @@ export function Settings({onBack,onIdentityChanged,workspaceId=null,conversation
  const [focusTarget,setFocusTarget]=useState(()=>providerSettingsTarget(globalThis.location.hash));
  useEffect(()=>{const changed=()=>{setCurrent(section());setFocusTarget(providerSettingsTarget(globalThis.location.hash));};globalThis.addEventListener('hashchange',changed);return()=>globalThis.removeEventListener('hashchange',changed);},[]);
  const heading=useRef<HTMLHeadingElement>(null);
- useEffect(()=>{if(current==='tools')heading.current?.focus();},[current]);
+ // Provider reconnect destinations focus their own exact control.
+ useEffect(()=>{if(!focusTarget)heading.current?.focus();},[current,focusTarget]);
  const title=current==='signout'?'Sign out?':titles[current];
  return <main className="iq-settings" aria-label="Settings"><nav aria-label="Settings sections"><Button variant="quiet" onPress={onBack}>{current==='signout'?'Cancel · back to chat':'Back to chat'}</Button><h1>Settings</h1>
  {(['account','providers','routes','tools','usage'] as const).map(value=><a key={value} href={`#settings-${value}`} aria-current={current===value?'page':undefined}>{titles[value]}</a>)}
