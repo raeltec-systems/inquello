@@ -34,7 +34,6 @@ import {
   outsideDenialText,
   PermissionMediator,
   PolicyService,
-  type ExecutionPolicyRoutes,
   type PermissionCardView,
   type ToolRunView,
 } from '../src/main/policy';
@@ -55,6 +54,7 @@ let config: ServiceConfig;
 let seed: { workspace_id: string; invite_id: string };
 let runtime: AppServerRuntime;
 let identity: IdentitySession;
+let service: SharedServiceClient;
 let organise: OrganiseService;
 let policy: PolicyService;
 let runtimeHome: string;
@@ -144,7 +144,14 @@ describe.skipIf(!databaseConfigured)('permission to act against the real runtime
     });
     await runtime.start();
     const transport = httpsTransport(config.ca);
-    const service = new SharedServiceClient(config.serviceUrl, transport);
+    service = new SharedServiceClient(config.serviceUrl, transport);
+    // Production binds identity and policy to one service client. Keep the
+    // fixture on that same fixed GET, after the actual authenticated membership
+    // response; never replace authorization or route an arbitrary callback.
+    const executionPolicy = service.executionPolicy.bind(service);
+    service.executionPolicy = async (access, workspaceId) => ({
+      ...(await executionPolicy(access, workspaceId)), policy_revision: String(revision), execution,
+    });
     identity = new IdentitySession({
       config: { kind: 'configured', config },
       vault: new CredentialVault({ safeStorage: fakeSafeStorage('gnome_libsecret'), platform: 'linux', dir: path.join(dir, 'identity') }),
@@ -155,14 +162,18 @@ describe.skipIf(!databaseConfigured)('permission to act against the real runtime
     });
     expect((await identity.signIn()).ok).toBe(true);
     expect((await identity.withAccess((access) => service.acceptInvite(access, seed.invite_id)))?.workspace_id).toBe(seed.workspace_id);
-    const routes: ExecutionPolicyRoutes = {
-      executionPolicy: async (access, workspaceId) => ({ ...(await service.executionPolicy(access, workspaceId)), policy_revision: String(revision), execution }),
-    };
     const organiseRuntime = { ready: () => runtime.state === 'ready', instance: () => runtime, request: <T,>(method: string, params?: unknown) => runtime.request<T>(method, params) };
     organise = new OrganiseService({ runtime: organiseRuntime, identity, service, logger: recordingLogger() });
     mediator = new PermissionMediator({ runtime: organiseRuntime, logger: recordingLogger(), newId: randomUUID });
-    policy = new PolicyService({ runtime: organiseRuntime, identity, organise, service: routes, logger: recordingLogger(), taskFolders: path.join(dir, 'tasks'), sandboxProbeTarget: workingStoreDir, permissions: mediator });
+    policy = new PolicyService({ runtime: organiseRuntime, identity, organise, service, logger: recordingLogger(), taskFolders: path.join(dir, 'tasks'), sandboxProbeTarget: workingStoreDir, permissions: mediator });
   }, 120_000);
+
+  it('binds the fixed authenticated policy read to the fixture policy and rejects foreign membership', async () => {
+    usePolicy({ allow_full_access: true });
+    const view = await identity.readExecutionPolicy(seed.workspace_id);
+    expect(view).toMatchObject({ workspace_id: seed.workspace_id, policy_revision: String(revision), execution });
+    await expect(identity.readExecutionPolicy(randomUUID())).rejects.toMatchObject({ kind: 'denied' });
+  });
 
   afterAll(async () => {
     await runtime?.stop();
@@ -231,35 +242,62 @@ describe.skipIf(!databaseConfigured)('permission to act against the real runtime
 
   // Security fix 2026-11-05: rules match the resolved program, not its spelling.
   it('applies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program', async () => {
-    const links = tempDir('program-links');
-    const alias = path.join(links, 'alias-sh');
-    fs.symlinkSync('/bin/sh', alias);
-    usePolicy({ command_rules: [{ prefix: ['/bin/sh'], decision: 'forbid' }] });
+    const links = process.platform === 'win32' ? null : tempDir('program-links');
+    const programPath = async (task: string, ...parts: string[]): Promise<string> => {
+      if (links !== null) return path.join(links, ...parts);
+      const settings = ok(await policy.effectiveThreadSettings(task));
+      return path.posix.join(taskFiles(settings.folders.working, identity.principalId()!).root, ...parts);
+    };
+    const createLink = async (task: string, target: string, link: string): Promise<void> => {
+      if (links !== null) { fs.symlinkSync(target, link); return; }
+      // The actual bounded run creates the link in this Task's guest folder.
+      // Do this before enabling the forbid/untrusted policy being tested.
+      usePolicy(null);
+      expect(ok(await policy.runTool(task, ['/usr/bin/ln', '-s', target, link])).exitCode).toBe(0);
+    };
+    const removeLink = async (task: string, link: string): Promise<void> => {
+      if (links !== null) return;
+      // Guest snapshots deliberately reject links. Remove only this fixture
+      // through the real policy path, including when an assertion fails.
+      usePolicy(null);
+      expect(ok(await policy.runTool(task, ['/usr/bin/rm', '-f', '--', link])).exitCode).toBe(0);
+    };
     const task = await newTask('Resolved program');
-    for (const program of ['/usr/bin/sh', 'sh', alias]) {
-      const refused = await policy.runTool(task, [program, '-c', 'true']);
-      expect(refused).toMatchObject({ ok: false, code: 'command-forbidden' });
-      expect((refused as { reason: string }).reason).toContain(`Rule: \`/bin/sh\` (forbid), from Workspace policy, revision ${revision}.`);
+    const alias = await programPath(task, 'alias-sh');
+    try {
+      await createLink(task, '/bin/sh', alias);
+      usePolicy({ command_rules: [{ prefix: ['/bin/sh'], decision: 'forbid' }] });
+      for (const program of ['/usr/bin/sh', 'sh', alias]) {
+        const refused = await policy.runTool(task, [program, '-c', 'true']);
+        expect(refused).toMatchObject({ ok: false, code: 'command-forbidden' });
+        expect((refused as { reason: string }).reason).toContain(`Rule: \`/bin/sh\` (forbid), from Workspace policy, revision ${revision}.`);
+      }
+      expect(ok(await policy.pendingPermissions(task))).toEqual([]);
+    } finally {
+      await removeLink(task, alias);
     }
-    expect(ok(await policy.pendingPermissions(task))).toEqual([]);
 
     // An allow on /usr/bin/true does not reach touch through a link named `true`.
-    const trick = path.join(links, 'true');
-    fs.symlinkSync('/usr/bin/touch', trick);
-    usePolicy({ approvals: ['untrusted'], command_rules: [{ prefix: ['/usr/bin/true'], decision: 'allow' }] });
     const linked = await newTask('Link trick');
+    const trick = await programPath(linked, 'true');
     const settings = ok(await policy.effectiveThreadSettings(linked));
-    expect(ok(await policy.runTool(linked, ['/usr/bin/true'])).exitCode).toBe(0);
-    const asked = policy.runTool(linked, [trick, 'output/tricked.txt']);
-    const card = await cardFor(linked, `${trick} output/tricked.txt`);
-    ok(await policy.decidePermission({ operationId: randomUUID(), requestId: card.requestId, choice: 'deny' }));
-    expect(await asked).toMatchObject({ ok: false, code: 'permission-denied' });
+    try {
+      await createLink(linked, '/usr/bin/touch', trick);
+      usePolicy({ approvals: ['untrusted'], command_rules: [{ prefix: ['/usr/bin/true'], decision: 'allow' }] });
+      expect(ok(await policy.runTool(linked, ['/usr/bin/true'])).exitCode).toBe(0);
+      const asked = policy.runTool(linked, [trick, 'output/tricked.txt']);
+      const card = await cardFor(linked, `${trick} output/tricked.txt`);
+      ok(await policy.decidePermission({ operationId: randomUUID(), requestId: card.requestId, choice: 'deny' }));
+      expect(await asked).toMatchObject({ ok: false, code: 'permission-denied' });
+    } finally {
+      await removeLink(linked, trick);
+    }
     expect(await taskFiles(settings.folders.working, identity.principalId()!).read('output/tricked.txt')).toBeNull();
 
     // A program that does not resolve is not allowed by an allow naming it literally.
-    const missing = path.join(links, 'missing', 'tool');
-    usePolicy({ command_rules: [{ prefix: [missing], decision: 'allow' }] });
     const unresolved = await newTask('Unresolved program');
+    const missing = await programPath(unresolved, 'missing', 'tool');
+    usePolicy({ command_rules: [{ prefix: [missing], decision: 'allow' }] });
     const pending = policy.runTool(unresolved, [missing]);
     const unresolvedCard = await cardFor(unresolved, missing);
     expect(unresolvedCard.action).toContain('could not be resolved to one executable');
@@ -320,7 +358,7 @@ describe.skipIf(!databaseConfigured)('permission to act against the real runtime
       runtime: { ready: () => runtime.state === 'ready', instance: () => runtime, request: <T,>(method: string, params?: unknown) => runtime.request<T>(method, params) },
       identity,
       organise,
-      service: { executionPolicy: async () => ({ workspace_id: seed.workspace_id, policy_revision: String(revision), authorization_epoch: '1', execution }) },
+      service,
       logger: recordingLogger(),
       taskFolders: path.dirname(settings.folders.working),
       sandboxProbeTarget: workingStoreDir,

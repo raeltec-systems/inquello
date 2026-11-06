@@ -649,3 +649,27 @@ describe('settings scope fences', () => {
     expect(h.calls).toHaveLength(0);
   });
 });
+
+
+describe('concurrent authority observation ordering',()=>{
+  const view=(revision:string):ExecutionPolicyView=>({workspace_id:WORKSPACE,authorization_epoch:'9',policy_revision:revision,execution:null});
+  const deferred=()=>{let resolve!:(value:ExecutionPolicyView)=>void,reject!:(error:Error)=>void;const promise=new Promise<ExecutionPolicyView>((yes,no)=>{resolve=yes;reject=no;});return{promise,resolve,reject};};
+  it('rejects a lower local revision without poisoning a newer in-flight decision',async()=>{
+    const old=deferred(),newer=deferred(),last=deferred();const queue=[old,newer,last];
+    const h=harness({service:{executionPolicy:async()=>queue.shift()!.promise}});
+    const a=h.policy.startPolicy(WORKSPACE),b=h.policy.startPolicy(WORKSPACE),c=h.policy.startPolicy(WORKSPACE);
+    newer.resolve(view('5'));expect((await b)?.policyRevision).toBe(5);old.resolve(view('4'));expect(await a).toBeNull();last.resolve(view('5'));expect((await c)?.policyRevision).toBe(5);
+  });
+  it.each(['denied','transport'] as const)('a genuinely late %s still invalidates an overlapping allowed response',async kind=>{
+    const old=deferred(),newer=deferred(),last=deferred();const queue=[old,newer,last];
+    const h=harness({service:{executionPolicy:async()=>queue.shift()!.promise}});
+    const a=h.policy.startPolicy(WORKSPACE),b=h.policy.startPolicy(WORKSPACE),c=h.policy.startPolicy(WORKSPACE);
+    newer.resolve(view('5'));expect((await b)?.policyRevision).toBe(5);old.reject(new ServiceError(kind,true));expect(await a).toBeNull();last.resolve(view('5'));expect(await c).toBeNull();
+  });
+  it('does not cascade invalidation when an already-superseded response settles',async()=>{
+    const denied=deferred(),old=deferred(),fresh=deferred();const queue=[denied,old,fresh];
+    const h=harness({service:{executionPolicy:async()=>queue.shift()!.promise}});
+    const a=h.policy.startPolicy(WORKSPACE),b=h.policy.startPolicy(WORKSPACE);denied.reject(new ServiceError('denied',true));expect(await a).toBeNull();
+    const c=h.policy.startPolicy(WORKSPACE);old.resolve(view('5'));expect(await b).toBeNull();fresh.resolve(view('5'));expect((await c)?.policyRevision).toBe(5);
+  });
+});

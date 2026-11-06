@@ -106,3 +106,24 @@ describe('quiet results in the transcript', () => {
     for (const button of nav.querySelectorAll('button')) expect(button.classList.contains('iq-button--sm')).toBe(true);
   });
 });
+
+it('does not resurrect an old completed read when a follow-up starts during that read',async()=>{
+ let changed=()=>{},release!:(value:unknown)=>void,reads=0;
+ let next:ProgressSnapshot={...base,status:'completed',items:[agent('Earlier answer','completed')]};
+ const progress=vi.fn(async()=>{
+  reads++;
+  if(reads===2)return new Promise(resolve=>{release=resolve;});
+  return {ok:true,value:next};
+ });
+ Object.assign(globalThis,{inquello:{tasks:{progress,answer:vi.fn(),onProgressChanged:(fn:()=>void)=>{changed=fn;return()=>{};},onSessionChanged:()=>()=>{}}}});
+ render(<TaskProgress taskId="task-1" workspaceId="workspace-1"/>);
+ await screen.findByText('Earlier answer');
+ await act(async()=>{changed();});
+ await waitFor(()=>expect(release).toBeTypeOf('function'));
+ next={...base,runId:'run-2',turnId:'turn-2',items:[agent('Held follow-up text')]};
+ const {refreshTaskObservation}=await import('../src/renderer/Shell/task-observation');
+ await act(async()=>{refreshTaskObservation('task-1','workspace-1');changed();release({ok:true,value:{...base,status:'completed',items:[agent('Stale completed response','completed')]}});});
+ await screen.findByText('Held follow-up text');
+ expect(screen.queryByText('Stale completed response')).toBeNull();
+ expect(screen.queryByText(/^Finished/)).toBeNull();
+});

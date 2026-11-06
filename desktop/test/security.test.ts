@@ -325,11 +325,14 @@ describe('operation registry', () => {
     const standard = { ...set, mode: 'standard', confirmation: null };
     await expect(ipc.invoke(channelFor('policy.setBroadMode'), trustedEvent, standard)).resolves.toMatchObject({ ok: false });
     await expect(ipc.invoke(channelFor('policy.forTask'), trustedEvent, { taskId })).resolves.toMatchObject({ ok: false });
+    for (const inspectionOnly of [false, 'true', 1, null]) await expect(ipc.invoke(channelFor('policy.forTask'), trustedEvent, { taskId, inspectionOnly })).rejects.toThrow('invalid payload for policy.forTask');
+    await expect(ipc.invoke(channelFor('policy.forTask'), trustedEvent, { taskId, inspectionOnly: true })).resolves.toMatchObject({ ok: false });
     await expect(ipc.invoke(channelFor('policy.getSettings'), trustedEvent)).resolves.toMatchObject({ signedIn: false });
     expect(policyCalls).toEqual([
       `setBroadMode:${JSON.stringify([set])}`,
       `setBroadMode:${JSON.stringify([standard])}`,
       `forTask:${JSON.stringify([taskId])}`,
+      `inspectTask:${JSON.stringify([taskId])}`,
       'settings',
     ]);
   });

@@ -33,7 +33,12 @@ function tick(onlyDirty=false){const rows=[...entries.values()];if(!rows.length)
  // A selected Task never queues behind navigation. Background work can use
  // at most three slots, leaving one for controls/questions and invalidations.
  const priority=ordered.filter(full),background=ordered.filter(entry=>!full(entry));
- for(const entry of [...priority.filter(e=>e.dirty),...priority.filter(e=>!e.dirty),...background.filter(e=>e.dirty),...background.filter(e=>!e.dirty)])if((!entry.busy||entry.upgrade)&&capacity(entry))void read(entry);
+ for(const entry of [...priority.filter(e=>e.dirty),...priority.filter(e=>!e.dirty),...background.filter(e=>e.dirty),...background.filter(e=>!e.dirty)]){
+  // Stream invalidations share the fast lane's bound. The general dirty timer
+  // must not insert an extra read between two scheduled live reads.
+  if(onlyDirty&&live(entry)){scheduleLive();continue;}
+  if((!entry.busy||entry.upgrade)&&capacity(entry))void read(entry);
+ }
  cursor=(cursor+3)%rows.length;
 }
 function schedule(){if(!scheduled)scheduled=setTimeout(()=>{scheduled=undefined;tick(true);},250);}

@@ -140,7 +140,7 @@ export interface ReachView {
 
 /** Whether the local sandbox applies to the Task on this device. */
 export interface SandboxView {
-  status: 'available' | 'unavailable' | 'not-applicable';
+  status: 'available' | 'unavailable' | 'not-applicable' | 'not-checked';
   label: string;
 }
 
@@ -493,10 +493,11 @@ export interface SetBroadModeInput {
   confirmation: string | null;
 }
 
-export const taskPolicyPayload: PayloadValidator<{ taskId: string }> = (args) => {
+export const taskPolicyPayload: PayloadValidator<{ taskId: string; inspectionOnly?: true }> = (args) => {
   const record = plainObject(args);
-  exactKeys(record, ['taskId']);
-  return { taskId: uuid(record.taskId, 'taskId') };
+  exactKeys(record, Object.hasOwn(record, 'inspectionOnly') ? ['taskId', 'inspectionOnly'] : ['taskId']);
+  if (record.inspectionOnly !== undefined && record.inspectionOnly !== true) throw new OperationError('inspectionOnly must be true when present');
+  return { taskId: uuid(record.taskId, 'taskId'), ...(record.inspectionOnly === true ? { inspectionOnly: true as const } : {}) };
 };
 
 /**

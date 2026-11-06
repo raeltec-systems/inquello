@@ -2,7 +2,8 @@
  * Only the current user, SYSTEM and Administrators receive access. Changes
  * apply to the named path, never recursively to unrelated descendants.
  */
-import { execFileSync } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
+import { promisify } from 'node:util';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -78,6 +79,47 @@ export function ensurePrivateDirectory(target: string): void {
   fs.mkdirSync(target, { recursive: true, mode: 0o700 });
   if (process.platform === 'win32') windowsAcl(target, 'directory', 'restrict');
   else fs.chmodSync(target, 0o700);
+}
+
+/** Apply the same protected DACL without blocking main's IPC and navigation. */
+export async function ensurePrivateDirectoryAsync(target: string): Promise<void> {
+  await ensurePrivateDirectoriesAsync([target]);
+}
+
+/** Protect each parent before creating its child, in one asynchronous Windows process. */
+export async function ensurePrivateDirectoriesAsync(targets: readonly string[]): Promise<void> {
+  const resolved = targets.map(target => path.resolve(target));
+  for (const target of resolved) assertUnredirected(target);
+  if (process.platform !== 'win32') {
+    for (const target of resolved) ensurePrivateDirectory(target);
+    return;
+  }
+  const executable = path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+  const script = `
+$ErrorActionPreference = 'Stop'
+foreach ($privateTarget in (ConvertFrom-Json $env:INQUELLO_PRIVATE_PATHS)) {
+  # Recheck every ancestor after the asynchronous process boundary, before mutation.
+  $current = $privateTarget
+  while ($current) {
+    try {
+      $attributes = [IO.File]::GetAttributes($current)
+      if (($attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'Private storage cannot use redirected paths' }
+    } catch [IO.FileNotFoundException] {} catch [IO.DirectoryNotFoundException] {}
+    $parent = [IO.Path]::GetDirectoryName($current)
+    if ($parent -eq $current) { break }
+    $current = $parent
+  }
+  [IO.Directory]::CreateDirectory($privateTarget) | Out-Null
+  $env:INQUELLO_PRIVATE_PATH = $privateTarget
+  & {
+${WINDOWS_ACL}
+  }
+}
+`;
+  await promisify(execFile)(executable, ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], {
+    encoding: 'utf8', windowsHide: true, timeout: 15_000,
+    env: { ...process.env, PSModulePath: path.join(path.dirname(executable), 'Modules'), INQUELLO_PRIVATE_PATHS: JSON.stringify(resolved), INQUELLO_PRIVATE_KIND: 'directory', INQUELLO_PRIVATE_OPERATION: 'restrict' },
+  });
 }
 
 export function restrictPrivateFile(target: string): void {

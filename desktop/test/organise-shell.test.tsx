@@ -475,3 +475,55 @@ it('keeps open conversation options and rename draft through the same-owner iden
   expect(screen.queryByRole('dialog',{name:'Conversation options'})).toBeNull();
  } finally {intervals.mockRestore();}
 });
+
+
+function inspectionFixture(taskId:string) {
+  return {taskId,environmentLabel:'Linux on this device',policyRevision:1,settings:[],device:{label:'Synthetic device'},capabilities:[],
+    reach:{bounded:true,lines:[{name:'write',label:'Can write',value:'Task folder only'}],networkSourceLabel:'Inquello default'},
+    broadMode:{label:'Broader execution mode',revision:0,recorded:'standard',status:'standard',effectiveMode:'standard',reach:'Standard',statusLabel:'Standard',suspendedReason:null},
+    options:[],sandbox:{status:'not-checked',label:'Sandbox has not been checked for this Task.'}};
+}
+
+it('shows fresh policy while sandbox preparation is pending and ignores an older navigation inspection', async () => {
+  const main=fakeMain();const taskId=uuid(127);const user=userEvent.setup();
+  main.tasks.push({taskId,workspaceId:WORKSPACE,engagementId:null,folderId:null,title:'Inspection-only navigation',runtimeThreadId:null,sourceRefs:[],artifactRefs:[],visibility:'private',revision:1});
+  let inspections=0;let old!:()=>void;let finish!:()=>void;
+  const forTask=vi.fn(({inspectionOnly}:{taskId:string;inspectionOnly?:true}) => inspectionOnly
+    ? ++inspections===1 ? new Promise(resolve=>{old=()=>resolve({ok:false,code:'failed',reason:'Obsolete inspection'});heldReads.push(old);})
+      : Promise.resolve({ok:true,value:inspectionFixture(taskId)})
+    : new Promise(resolve=>{finish=()=>resolve({ok:false,code:'failed',reason:'Current explicit sandbox check'});heldReads.push(finish);}));
+  Object.assign(globalThis,{inquello:{organise:main.bridge,policy:{forTask}}});
+  renderShell();await user.click(await screen.findByRole('link',{name:'Inspection-only navigation'}));
+  await waitFor(()=>expect(forTask).toHaveBeenCalledWith({taskId,inspectionOnly:true}));
+  expect(forTask.mock.calls.every(([request])=>request.inspectionOnly===true)).toBe(true);
+  await user.click(screen.getByRole('button',{name:'Conversation options'}));await user.click(screen.getByRole('menuitem',{name:'Permissions'}));
+  const dialog=screen.getByRole('dialog',{name:'Conversation permissions'});
+  await within(dialog).findByText('Sandbox has not been checked for this Task.');
+  expect(dialog.querySelector('[data-broad-mode-effective="standard"]')).not.toBeNull();
+  expect(dialog.querySelector('[data-task-reach]')).toBeNull();
+  expect(forTask).toHaveBeenCalledWith({taskId});
+  await act(async()=>old());
+  expect(within(dialog).queryByText(/Obsolete inspection/)).toBeNull();
+  expect(dialog.querySelector('[data-broad-mode-effective="standard"]')).not.toBeNull();
+  await act(async()=>finish());
+  await within(dialog).findByText(/Current explicit sandbox check/);
+  expect(dialog.querySelector('[data-broad-mode]')).toBeNull();
+});
+
+it('does not replace a reopened Permissions dialog with its previous unfinished check', async () => {
+  const main=fakeMain();const taskId=uuid(128);const user=userEvent.setup();
+  main.tasks.push({taskId,workspaceId:WORKSPACE,engagementId:null,folderId:null,title:'Reopened permissions',runtimeThreadId:null,sourceRefs:[],artifactRefs:[],visibility:'private',revision:1});
+  let checks=0;let finishOld!:()=>void;
+  const forTask=vi.fn(({inspectionOnly}:{taskId:string;inspectionOnly?:true}) => inspectionOnly
+    ? Promise.resolve({ok:true,value:inspectionFixture(taskId)})
+    : ++checks===1 ? new Promise(resolve=>{finishOld=()=>resolve({ok:false,code:'failed',reason:'Obsolete sandbox check'});heldReads.push(finishOld);})
+      : Promise.resolve({ok:false,code:'failed',reason:'New sandbox check'}));
+  Object.assign(globalThis,{inquello:{organise:main.bridge,policy:{forTask}}});
+  renderShell();await user.click(await screen.findByRole('link',{name:'Reopened permissions'}));
+  const open=async()=>{await user.click(screen.getByRole('button',{name:'Conversation options'}));await user.click(screen.getByRole('menuitem',{name:'Permissions'}));};
+  await open();await waitFor(()=>expect(checks).toBe(1));
+  await user.keyboard('{Escape}');await waitFor(()=>expect(screen.queryByRole('dialog',{name:'Conversation permissions'})).toBeNull());
+  await open();await screen.findByText(/New sandbox check/);
+  await act(async()=>finishOld());
+  expect(screen.queryByText(/Obsolete sandbox check/)).toBeNull();expect(screen.getByText(/New sandbox check/)).toBeTruthy();
+});

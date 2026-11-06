@@ -172,6 +172,10 @@ export function Shell({ active = true, onWorkspaceChanged, onConversationChanged
   const [statesNotice, setStatesNotice] = useState<string | null>(null);
   const [taskPolicy, setTaskPolicy] = useState<TaskPolicyItem | null>(null);
   const [policyNotice, setPolicyNotice] = useState<string | null>(null);
+  const [conversationPermissions,setConversationPermissions]=useState<string|null>(null);
+  const permissionsFor = useRef<string | null>(null);
+  permissionsFor.current = conversationPermissions;
+  const policyRead = useRef(0);
   const openTask = useRef<string | null>(null);
   openTask.current = openTaskId;
   const [person, setPerson] = useState<PersonView | null>(null);
@@ -298,26 +302,34 @@ export function Shell({ active = true, onWorkspaceChanged, onConversationChanged
 
   /** Reads one Task's effective policy and execution mode, recomputed by main on each read. */
   const loadPolicy = useCallback(async (taskId: string | null) => {
+    const generation = ++policyRead.current;
     const api = policyBridge();
     if (!api || !taskId) {
       setTaskPolicy(null);
       setPolicyNotice(null);
       return;
     }
-    let result: Outcome<TaskPolicyItem>;
-    try {
-      result = parseOutcome(await api.forTask({ taskId }), parseTaskPolicy);
-    } catch {
-      result = { ok: false, code: 'failed', reason: 'The request did not complete.' };
-    }
-    if (openTask.current !== taskId) return;
-    if (result.ok) {
-      setTaskPolicy(result.value);
-      setPolicyNotice(null);
-    } else {
-      setTaskPolicy(null);
-      setPolicyNotice(`The policy could not be read. ${result.reason}`);
-    }
+    const current = () => openTask.current === taskId && generation === policyRead.current;
+    const read = async (inspectionOnly: boolean): Promise<boolean> => {
+      let result: Outcome<TaskPolicyItem>;
+      try {
+        result = parseOutcome(await api.forTask(inspectionOnly ? { taskId, inspectionOnly: true } : { taskId }), parseTaskPolicy);
+      } catch {
+        result = { ok: false, code: 'failed', reason: 'The request did not complete.' };
+      }
+      if (!current()) return false;
+      if (result.ok) {
+        setTaskPolicy(result.value);
+        setPolicyNotice(null);
+      } else {
+        setTaskPolicy(null);
+        setPolicyNotice('The policy could not be read. ' + result.reason);
+      }
+      return result.ok;
+    };
+    // Show current policy promptly. Storage preparation is separate and cannot
+    // delay the policy's governing rules; unchecked reach is not shown as ready.
+    if (await read(true) && current() && permissionsFor.current === taskId) await read(false);
   }, []);
 
   /** Sets the open Task's execution mode under one fresh operation ID; resolves with a refusal reason. */
@@ -326,6 +338,7 @@ export function Shell({ active = true, onWorkspaceChanged, onConversationChanged
       const api = policyBridge();
       const taskId = openTask.current;
       if (!api || !taskId || !taskPolicy || taskPolicy.taskId !== taskId) return 'The policy is not loaded.';
+      const generation = ++policyRead.current;
       let result: Outcome<TaskPolicyItem>;
       try {
         result = parseOutcome(
@@ -335,7 +348,7 @@ export function Shell({ active = true, onWorkspaceChanged, onConversationChanged
       } catch {
         result = { ok: false, code: 'failed', reason: 'The request did not complete.' };
       }
-      if (openTask.current !== taskId) return null;
+      if (openTask.current !== taskId || generation !== policyRead.current) return null;
       if (result.ok) {
         setTaskPolicy(result.value);
         return null;
@@ -692,9 +705,8 @@ export function Shell({ active = true, onWorkspaceChanged, onConversationChanged
     setStartLocation({workspaceId, engagementId:null, folderId:null});
     setShowStart(true);
   }, [active, authorizedWorkspace, currentTree, workspaceId, person, openTaskId, openedEngagement, startLocation, pendingStart, savedSurface]);
-  const [conversationPermissions,setConversationPermissions]=useState<string|null>(null);
   const [conversationOptions,setConversationOptions]=useState<string|null>(null);
-  useEffect(()=>{setConversationOptions(null);setConversationPermissions(null);},[active,showStart,task?.taskId,task?.workspaceId,runtimeEpoch,ownerKey(person)]);
+  useEffect(()=>{permissionsFor.current=null;setConversationOptions(null);setConversationPermissions(null);},[active,showStart,task?.taskId,task?.workspaceId,runtimeEpoch,ownerKey(person)]);
   const composer = !state?.signedIn || showStart ? null : renderComposer ? renderComposer(draft) : task?.runtimeThreadId || (task&&acceptedFor(task.taskId)) ? <TaskLifecycle key={`${runtimeEpoch}:${task!.taskId}`} taskId={task!.taskId} workspaceId={task!.workspaceId} draft={draft} operationIds={operationIds} onContinuationRequested={conversationFollow.continuation}/> : <Composer draft={draft} routeBeforeField routeLabel={task?<ConversationModelPicker key={`${runtimeEpoch}:${task.taskId}`} taskId={task.taskId} workspaceId={task.workspaceId} selected={null}/>:undefined} />;
   const conversationTitle=state?.signedIn&&!showStart&&task?task.title:null;
   useEffect(()=>{onConversationChanged?.(conversationTitle!==null&&task?{taskId:task.taskId,title:conversationTitle}:null);},[task?.taskId,conversationTitle,onConversationChanged]);
@@ -739,7 +751,7 @@ export function Shell({ active = true, onWorkspaceChanged, onConversationChanged
         person={person}
       />
       <div className="iq-shell-main">
-        <Header task={task} engagement={engagement} workspace={workspace} onOptions={()=>setConversationOptions(task?.taskId??null)} onPermissions={()=>setConversationPermissions(task?.taskId??null)} />
+        <Header task={task} engagement={engagement} workspace={workspace} onOptions={()=>setConversationOptions(task?.taskId??null)} onPermissions={()=>{const id=task?.taskId??null;permissionsFor.current=id;setConversationPermissions(id);setTaskPolicy(null);setPolicyNotice(null);void loadPolicy(id);}} />
         <div className={`iq-work${openArtifact ? ' iq-work--artifact' : ''}`} data-work>
           {mode === 'single' && openArtifact ? (
             <div className="iq-work-switch" data-work-switch>
@@ -834,7 +846,7 @@ export function Shell({ active = true, onWorkspaceChanged, onConversationChanged
           </div>
         </div>
       </div>
-      {active&&task&&conversationPermissions===task.taskId&&<SavedWorkDialog label="Conversation permissions" onClose={()=>setConversationPermissions(null)}><TaskPolicy compact policy={taskPolicy?.taskId===task.taskId?taskPolicy:null} notice={policyNotice} onSetMode={policyBridge()?setMode:undefined}/></SavedWorkDialog>}
+      {active&&task&&conversationPermissions===task.taskId&&<SavedWorkDialog label="Conversation permissions" onClose={()=>{policyRead.current++;permissionsFor.current=null;setConversationPermissions(null);}}><TaskPolicy compact policy={taskPolicy?.taskId===task.taskId?taskPolicy:null} notice={policyNotice} onSetMode={policyBridge()?setMode:undefined}/></SavedWorkDialog>}
       {active&&task&&<SavedWorkDialog key={`${ownerKey(person)}:${runtimeEpoch}:${task.workspaceId}:${task.taskId}`} open={conversationOptions===task.taskId} label="Conversation options" onClose={()=>setConversationOptions(null)}><TaskDetails task={task} engagements={tree?.engagements??[]} folders={tree?.folders??[]} onNavigation={setNavigation} onRename={renameTask} onMove={moveTask} newOperationId={operationIds}/></SavedWorkDialog>}
       {active&&savedSurface==='search'&&<Search key={`${workspaceId}:${runtimeEpoch}:${authorityGeneration.current}`} workspaceId={authorizedWorkspace?workspaceId:null} onClose={()=>setSavedSurface(null)} onOpen={acceptSaved} onEngagement={e=>{if(e.workspaceId===chosenWorkspace.current&&authorizedWorkspaces.current.includes(e.workspaceId)){selectDestination();openTask.current=null;setTree(previous=>previous?{...previous,engagements:[...previous.engagements.filter(row=>row.engagementId!==e.engagementId),e]}:previous);setOpenTaskId(null);setSavedHit(null);setShowStart(false);setOpenedEngagement(e.engagementId);}}}/>}
       {active&&savedSurface==='inbox'&&<Inbox key={`${workspaceId}:${runtimeEpoch}:${authorityGeneration.current}`} view={authorizedWorkspace?inbox:null} tasks={currentTree?.tasks??[]} onClose={()=>setSavedSurface(null)} onOpen={(task,question)=>{void openTaskFromNav(task,question);}}/>}

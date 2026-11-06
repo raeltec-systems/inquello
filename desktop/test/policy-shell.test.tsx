@@ -308,3 +308,14 @@ it('compact conversation permissions retain explicit confirmation but omit diagn
  await user.click(within(dialog).getByRole('button',{name:'Cancel'}));expect(apply).not.toHaveBeenCalled();
  await user.click(screen.getByRole('button',{name:/Use Full access/}));await user.click(screen.getByRole('button',{name:'Turn on Full access'}));expect(apply).toHaveBeenCalledWith('full_access',FULL_REACH);
 });
+
+
+it('parses and displays an untested sandbox without claiming it is available', () => {
+  const item=taskPolicy();item.sandbox={status:'not-checked',label:'Sandbox has not been checked for this Task.'};
+  // Rebuild the wire-only device field omitted by the renderer parser.
+  const wire={...item,device:{configured:false,label:item.deviceLabel}};
+  expect(parseTaskPolicy(wire)?.sandbox.status).toBe('not-checked');
+  render(<TaskPolicy policy={item}/>);
+  expect(screen.getByText('Sandbox has not been checked for this Task.')).toBeTruthy();
+  expect(document.querySelector('[data-sandbox-status="available"]')).toBeNull();
+});

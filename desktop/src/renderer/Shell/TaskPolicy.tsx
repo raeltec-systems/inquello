@@ -121,7 +121,9 @@ export function TaskPolicy({ policy, notice = null, onSetMode, compact=false }: 
               );
             })}
           </dl>}
-          <section className="iq-task-reach" aria-labelledby="iq-task-reach-heading" data-task-reach={policy.taskId}>
+          {policy.sandbox.status === 'not-checked' ? (
+            <p className="iq-task-state-meta" role="status">{policy.sandbox.label}</p>
+          ) : <section className="iq-task-reach" aria-labelledby="iq-task-reach-heading" data-task-reach={policy.taskId}>
             <h3 id="iq-task-reach-heading" className="iq-task-state-name">
               What this Task's tools can reach
             </h3>
@@ -129,7 +131,7 @@ export function TaskPolicy({ policy, notice = null, onSetMode, compact=false }: 
               {policy.sandbox.label}
             </p>
             <ReachList reach={policy.reach} scope="task" showSource={!compact} />
-          </section>
+          </section>}
           <div className="iq-task-mode" data-broad-mode={broad?.recorded} data-broad-mode-status={broad?.status} data-broad-mode-effective={broad?.effectiveMode}>
             <p className="iq-task-mode-line">
               <span className="iq-task-state-name">{broad?.label}</span>{' '}

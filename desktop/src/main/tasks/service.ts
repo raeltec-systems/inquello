@@ -9,6 +9,7 @@ import type {InquelloWorkspaceExecutionPolicy} from '../../protocol/generated/v2
 import {uuid,object} from '../usage/types';
 import type {EscalationRoute} from '../policy/tools';
 import {inquelloRefusal} from '../policy/permissions';
+import {RpcResponseError} from '../runtime';
 import {parseCandidate,parseStarted,type TaskCandidateInput,type TaskCandidateView,type StartTaskInput,type StartedTaskView,type TasksResult} from './types';
 export interface TaskServiceOptions {runtime:OrganiseRuntime;identity:Pick<OrganiseIdentity,'principalId'>;syncPrincipal():Promise<void>;bootstrap?(workspaceId:string):Promise<void>;prepareRoutes():Promise<{ok:boolean}>;taskBinding(taskId:string):Promise<{routeId:string;configurationRevision:number;disclosureBindings:{routeId:string;configurationRevision:number;active:boolean}[]}|null>;freshPolicy(workspaceId:string):Promise<InquelloWorkspaceExecutionPolicy|null>;routeApproval?(workspaceId:string,routeId:string):Promise<RouteApprovalView|null>;routeCheck?(workspaceId:string,request:RouteEligibilityCheckRequest):Promise<RouteEligibilityCheckResponse|null>;onAuthorityUnavailable?():void;authorityDiagnostic?:(stage:'start-input'|'start-sync'|'start-routes'|'start-bootstrap'|'start-policy'|'start-native'|'start-result'|'start-error'|'input'|'scope-before'|'policy-read'|'policy-null'|'scope-after'|'route-discovery'|'route-check'|'progress-scope'|'progress-sync'|'progress-bootstrap'|'progress-pre-policy'|'progress-reconcile'|'progress-native'|'progress-parse'|'progress-binding'|'progress-post-policy'|'progress-superseded'|'progress-page'|'progress-publish'|'progress-kind-stale_snapshot'|'progress-kind-session_changed'|'progress-kind-classification_unknown'|'progress-kind-authority_unknown'|'progress-kind-stale'|'progress-kind-not_found'|'progress-kind-transport-fence'|'progress-kind-other'|'progress-recheck-denied',scope:'current'|'changed')=>void;onAccepted?():void;onProgressChanged?():void;askPermission?(taskId:string,command:readonly string[]):Promise<'allowed'|'denied'|'expired'>}
 export const INBOX_OBSERVATION_TIMEOUT_MS=10_000;
@@ -253,7 +254,17 @@ export class TaskService {
    const operations=[...this.lifecycleOperations.values()].filter(entry=>entry.input.taskId===input.taskId&&entry.input.workspaceId===input.workspaceId&&entry.scope.principal===s.principal);
    stage='progress-reconcile';for(const entry of operations)if(reconcileOperations&&entry.dispatched&&!entry.promise&&this.lifecycleOpen(entry.receipt))await this.reconcileLifecycle(entry);
    const pending=operations.at(-1);if(!this.current(s))throw new Error();
-   stage='progress-native';const raw=await this.options.runtime.request('inquello/tasks/progress',{taskId:input.taskId,workspacePolicy:policy,...(activityOnly?{activityOnly:true}:input.resultPage?{resultPage:input.resultPage}:{})});
+   const request={taskId:input.taskId,workspacePolicy:policy,...(activityOnly?{activityOnly:true}:input.resultPage?{resultPage:{...input.resultPage}}:{})};
+   stage='progress-native';let raw:unknown;
+   try{raw=await this.options.runtime.request('inquello/tasks/progress',request);}
+   catch(error){
+    // A changed observation is not revoked authority. Like saved-work reads,
+    // retry this read once rather than serialize a status-only fallback ahead
+    // of the next history read. Never replay an effect or retry a stale page.
+    if(input.resultPage||!(error instanceof RpcResponseError)||error.method!=='inquello/tasks/progress'||error.rpcCode!==-32600||inquelloRefusal(error)?.kind!=='stale_snapshot'||!this.current(s)||superseded())throw error;
+    stage='progress-pre-policy';authorityFailure=true;const retryPolicy=await this.options.freshPolicy(input.workspaceId);if(!retryPolicy||!this.current(s)||superseded()||JSON.stringify(retryPolicy)!==JSON.stringify(policy))throw new Error();authorityFailure=false;
+    stage='progress-native';raw=await this.options.runtime.request('inquello/tasks/progress',request);
+   }
    stage='progress-parse';const value=parseProgress(raw);
    stage='progress-binding';if(!this.current(s)||value.taskId!==input.taskId||value.workspaceId!==input.workspaceId||lifecycleAtRead!==this.lifecycleTasks.get(input.taskId))throw new Error();
    stage='progress-post-policy';authorityFailure=true;const after=await this.options.freshPolicy(input.workspaceId);if(!after||!this.current(s)||JSON.stringify(after)!==JSON.stringify(policy))throw new Error();authorityFailure=false;stage='progress-superseded';if(superseded())throw new Error();

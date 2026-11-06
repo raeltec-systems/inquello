@@ -222,7 +222,7 @@ function taskSessionChanged(identityChanged = false): void {
   for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:tasks-session-changed', identityChanged);
 }
 function usageChanged(privateScope = false): void {
-  usage?.invalidate();
+  if(privateScope)usage?.invalidate();else usage?.observationsChanged();
   for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:usage-changed', privateScope);
 }
 function environmentChanged(privateScope = true): void {
@@ -863,6 +863,7 @@ void app.whenReady().then(async () => {
       },
       policy: {
         settings: () => policyService.settings(),
+        inspectTask: (taskId) => policyService.inspectTask(taskId),
         forTask: (taskId) => policyService.forTask(taskId),
         setBroadMode: (input) => policyService.setBroadMode(input),
         pendingPermissions: (taskId) => policyService.pendingPermissions(taskId),

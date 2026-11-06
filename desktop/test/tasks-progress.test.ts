@@ -1,6 +1,7 @@
 import {taskBindingFixture} from './model-fixtures';
 import {describe,it,expect,vi} from 'vitest';
 import {TaskService} from '../src/main/tasks/service';
+import {RpcResponseError} from '../src/main/runtime';
 import {parseProgress,parseQuestion,parseAnswers} from '../src/main/tasks/progress';
 import {taskProgressPayload,taskAnswerPayload} from '../src/main/tasks/validators';
 const task='11111111-1111-4111-8111-111111111111',workspace='22222222-2222-4222-8222-222222222222';
@@ -120,4 +121,39 @@ it('rehydrates current provider credentials before revealing saved progress afte
 });
 it('refuses saved progress if provider handoff changes identity or fails',async()=>{
  for(const change of [false,true]){const x=setup();x.prepareRoutes.mockImplementationOnce(async()=>{if(change)x.setPrincipal(null);return{ok:change};});expect(await x.service.progress(input)).toMatchObject({ok:false});expect(x.request).not.toHaveBeenCalled();}
+});
+
+describe('bounded current progress reconstruction retry',()=>{
+ const stale=(kind='stale_snapshot',code=-32600,method='inquello/tasks/progress')=>new RpcResponseError(method,code,'Fixed refusal',{inquello:{kind}});
+ it('reconstructs once after output changes, with fresh policy before and after, without a fallback or effect',async()=>{
+  const x=setup();x.request.mockRejectedValueOnce(stale());
+  expect(await x.service.progress(input)).toMatchObject({ok:true,value:{runId:'run-1'}});
+  expect(x.request).toHaveBeenCalledTimes(2);expect(x.fresh).toHaveBeenCalledTimes(3);
+  expect(x.request.mock.calls.map(call=>call[0])).toEqual(['inquello/tasks/progress','inquello/tasks/progress']);
+  expect(x.authorityUnavailable).not.toHaveBeenCalled();
+ });
+ it('stops after a second changed snapshot',async()=>{
+  const x=setup();x.request.mockRejectedValue(stale());
+  expect(await x.service.progress(input)).toMatchObject({ok:false});expect(x.request).toHaveBeenCalledTimes(2);
+ });
+ it.each([stale('authority_unknown'),stale('session_changed'),stale('not_found'),stale('stale'),stale('stale_snapshot',-32001),stale('stale_snapshot',-32600,'inquello/tasks/resume'),new Error('stale_snapshot'),{rpcCode:-32600,data:{inquello:{kind:'stale_snapshot'}}}])('does not retry non-exact or authority errors',async error=>{
+  const x=setup();x.request.mockRejectedValue(error);
+  expect(await x.service.progress(input)).toMatchObject({ok:false});expect(x.request).toHaveBeenCalledTimes(1);
+ });
+ it.each(['principal','runtime','task','policy','unavailable'] as const)('does not retry after %s changes',async change=>{
+  const x=setup();x.request.mockImplementationOnce(async()=>{
+   if(change==='principal')x.setPrincipal(null);else if(change==='runtime')x.restart();else if(change==='task')x.service.invalidateTask(task);else x.setPolicy(change==='unavailable'?null:{workspaceId:workspace,authorizationEpoch:2});
+   throw stale();
+  });
+  expect(await x.service.progress(input)).toMatchObject({ok:false});expect(x.request).toHaveBeenCalledTimes(1);
+ });
+ it('still suppresses a second reply when policy changes while it waits',async()=>{
+  const x=setup();x.request.mockRejectedValueOnce(stale()).mockImplementationOnce(async()=>{x.setPolicy({workspaceId:workspace,authorizationEpoch:2});return snapshot();});
+  expect(await x.service.progress(input)).toMatchObject({ok:false});expect(x.request).toHaveBeenCalledTimes(2);
+ });
+ it('does not retry a page tied to a changed analytical snapshot',async()=>{
+  const x=setup();x.request.mockRejectedValue(stale());
+  expect(await x.service.progress({...input,resultPage:{snapshotId:task,currentOffset:1,historyOffset:0}})).toMatchObject({ok:false});
+  expect(x.request).toHaveBeenCalledTimes(1);
+ });
 });

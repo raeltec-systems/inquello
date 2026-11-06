@@ -320,6 +320,7 @@ export interface OrganiseOperations {
 
 /** The effective managed policy as the operations see it (main-owned; see `policy/service.ts`). */
 export interface PolicyOperations {
+  inspectTask(taskId: string): Promise<PolicyResult<TaskPolicyView>>;
   /** Story 1.18 S07: each Workspace's effective policy and the Capability Contract. */
   settings(): Promise<SettingsPolicyView>;
   /** Story 1.18: a Task's effective policy and broader mode, for its creator only. */
@@ -497,10 +498,10 @@ export function createOperations(deps: OperationDeps): Operation[] {
     validate: noPayload,
     handle: () => deps.policy.settings(),
   };
-  const policyForTask: Operation<{ taskId: string }, PolicyResult<TaskPolicyView>> = {
+  const policyForTask: Operation<{ taskId: string; inspectionOnly?: true }, PolicyResult<TaskPolicyView>> = {
     name: 'policy.forTask',
     validate: taskPolicyPayload,
-    handle: ({ taskId }) => deps.policy.forTask(taskId),
+    handle: ({ taskId, inspectionOnly }) => inspectionOnly ? deps.policy.inspectTask(taskId) : deps.policy.forTask(taskId),
   };
   const policySetBroadMode: Operation<SetBroadModeInput, PolicyResult<TaskPolicyView>> = {
     name: 'policy.setBroadMode',

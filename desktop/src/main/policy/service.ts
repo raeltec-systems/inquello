@@ -77,7 +77,7 @@ import {
   type SetUserRulesInput,
   type UserRulesView,
 } from './permissions';
-import { ensureTaskFolder, SANDBOX_UNAVAILABLE, translateDenials, type ToolDenial } from './tools';
+import { ensureTaskFolder, ensureTaskFolderAsync, SANDBOX_UNAVAILABLE, translateDenials, type ToolDenial } from './tools';
 import {
   BROAD_MODE_TITLE,
   DEFAULT_CAPABILITIES,
@@ -148,7 +148,7 @@ export interface PolicyServiceOptions {
   /** Main-only host selection; isolated unit harnesses can model another OS. */
   executionPlatform?: NodeJS.Platform;
   runtime: OrganiseRuntime;
-  identity: OrganiseIdentity;
+  identity: OrganiseIdentity & { readExecutionPolicy?(workspaceId: string): Promise<ExecutionPolicyView | null> };
   organise: PolicyOrganise;
   /** Absent when the shared service is not configured. */
   service: ExecutionPolicyRoutes | null;
@@ -201,6 +201,8 @@ function workspaceLayer(view: ExecutionPolicyView): InquelloWorkspaceExecutionPo
   };
 }
 
+class SupersededPolicyObservation extends Error {}
+
 export class PolicyService {
   private linuxTasks: { principal: string; tasks: WslTasks } | null = null;
   private get usesWsl(): boolean { return (this.options.executionPlatform ?? process.platform) === 'win32'; }
@@ -230,8 +232,9 @@ export class PolicyService {
   }
 
   private readonly highest=new Map<string,{epoch:bigint;policy:bigint}>();
-  /** The sandbox check per runtime process. */
+  /** Last observed check for the Capability Contract; exact checks remain bounded below. */
   private sandboxCheck: { runtime: unknown; key: string; available: Promise<boolean> } | null = null;
+  private readonly sandboxChecks = new Map<string, Promise<boolean>>();
 
   constructor(private readonly options: PolicyServiceOptions) {}
 
@@ -315,14 +318,18 @@ export class PolicyService {
     if (!service) return fail('policy-unavailable', POLICY_REASONS.notConfigured);
     const generation=this.authorityGeneration,principal=this.options.identity.principalId(),runtime=this.options.runtime.instance();
     try {
-      const view = await this.options.identity.withAccess((access) => service.executionPolicy(access, workspaceId));
-      if (!view||!principal||generation!==this.authorityGeneration||principal!==this.options.identity.principalId()||runtime!==this.options.runtime.instance()||view.workspace_id!==workspaceId)throw new Error('Authority changed');
+      const view = this.options.identity.readExecutionPolicy
+        ? await this.options.identity.readExecutionPolicy(workspaceId)
+        : await this.options.identity.withAccess((access) => service.executionPolicy(access, workspaceId));
+      if(generation!==this.authorityGeneration||principal!==this.options.identity.principalId()||runtime!==this.options.runtime.instance())throw new SupersededPolicyObservation('Authority observation superseded');
+      if(!view||!principal||view.workspace_id!==workspaceId)throw new Error('Authority changed');
       const epoch=BigInt(view.authorization_epoch),policy=BigInt(view.policy_revision),key=`${principal}:${workspaceId}`,prior=this.highest.get(key);
-      if(epoch<1n||policy<1n||epoch>BigInt(Number.MAX_SAFE_INTEGER)||policy>BigInt(Number.MAX_SAFE_INTEGER)||(prior&&(epoch<prior.epoch||policy<prior.policy)))throw new Error('Stale authority');
+      if(epoch<1n||policy<1n||epoch>BigInt(Number.MAX_SAFE_INTEGER)||policy>BigInt(Number.MAX_SAFE_INTEGER))throw new Error('Invalid authority');
+      if(prior&&(epoch<prior.epoch||policy<prior.policy))throw new SupersededPolicyObservation('Authority observation superseded');
       this.highest.set(key,{epoch,policy});
       return { ok: true, value: workspaceLayer(view) };
     } catch (error) {
-      this.authorityGeneration++;
+      if (!(error instanceof SupersededPolicyObservation)) this.authorityGeneration++;
       if (error instanceof ServiceError) {
         if (error.kind === 'unauthenticated') return fail('signed-out', POLICY_REASONS.signedOut);
         if (error.kind === 'denied') return fail('policy-unavailable', POLICY_REASONS.notAMember);
@@ -404,7 +411,9 @@ export class PolicyService {
     if (withFolder) {
       if (!this.options.taskFolders) return fail('failed', POLICY_REASONS.noTaskFolders);
       try {
-        folders = ensureTaskFolder(this.options.taskFolders, taskId);
+        folders = await ensureTaskFolderAsync(this.options.taskFolders, taskId);
+        checkpoint = current();
+        if (!checkpoint.ok) return checkpoint;
       } catch (error) {
         this.options.logger.warn(`policy: the Task folder could not be created (${(error as Error).message})`);
         return fail('failed', POLICY_REASONS.failed);
@@ -460,8 +469,17 @@ export class PolicyService {
   private sandboxAvailable(context: TaskContext, taskId: string): Promise<boolean> {
     const runtime = this.options.runtime.instance();
     const principal = this.options.identity.principalId();
-    const key = this.usesWsl ? JSON.stringify([taskId, context.layer, context.response.task?.runtimeProfile]) : '';
-    if (this.sandboxCheck && this.sandboxCheck.runtime === runtime && this.sandboxCheck.key === key) return this.sandboxCheck.available;
+    const key = this.usesWsl ? JSON.stringify([principal, taskId, context.layer, context.response.task?.runtimeProfile]) : JSON.stringify([principal]);
+    if (this.sandboxCheck?.runtime !== runtime) this.sandboxChecks.clear();
+    const cached = this.sandboxChecks.get(key);
+    if (cached) {
+      // Reuse only this exact local probe, after taskContext's fresh authority and
+      // transfer checks. Switching Tasks must not enqueue the same probe again.
+      this.sandboxChecks.delete(key);
+      this.sandboxChecks.set(key, cached);
+      this.sandboxCheck = { runtime, key, available: cached };
+      return cached;
+    }
     const target = this.options.sandboxProbeTarget;
     const available = (async () => {
       const folders = context.folders;
@@ -497,6 +515,11 @@ export class PolicyService {
       }
     })();
     this.sandboxCheck = { runtime, key, available };
+    this.sandboxChecks.set(key, available);
+    if (this.sandboxChecks.size > 32) {
+      const oldest = this.sandboxChecks.keys().next().value;
+      if (oldest !== undefined) this.sandboxChecks.delete(oldest);
+    }
     return available;
   }
 
@@ -559,6 +582,25 @@ export class PolicyService {
    * reach, recomputed now. A bounded Task also shows whether the local
    * sandbox applies on this device (the check creates the Task's folder).
    */
+  async inspectTask(taskId: string): Promise<PolicyResult<TaskPolicyView>> {
+    // Navigation reads authority and effective policy, never prepares execution storage
+    // or queues a sandbox command. Execution and the explicit permissions dialog still
+    // use forTask/effectiveThreadSettings and their complete admission checks.
+    const context = await this.taskContext(taskId, false);
+    if (!context.ok) return context;
+    try {
+      const task = context.value.response.task!;
+      const view = taskPolicyView(context.value.response, task, false);
+      if (task.reach.bounded) view.sandbox = { status: 'not-checked', label: 'Sandbox has not been checked for this Task.' };
+      if (this.usesWsl) view.environmentLabel = task.reach.bounded ? 'Linux on this device' : 'Windows on this device';
+      return { ok: true, value: view };
+    } catch (error) {
+      this.options.logger.warn(`policy: the runtime answer was not understood (${(error as Error).message})`);
+      return fail('failed', POLICY_REASONS.failed);
+    }
+  }
+
+  /** Explicit sandbox inspection, including fresh storage and authority checks. */
   async forTask(taskId: string): Promise<PolicyResult<TaskPolicyView>> {
     const context = await this.taskContext(taskId, this.options.taskFolders !== null, true);
     if (!context.ok) return context;
