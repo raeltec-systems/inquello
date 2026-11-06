@@ -846,3 +846,8 @@ Owner decision 2026-11-05. This follows "Security fix: command rules match the r
   - the retained-channel registration in a live private Task;
   - the latency of the extra executor launch per bounded `tools/exec` command;
   - Windows Full access (unbounded) commands, which run on the Windows host and are still unresolved there (they ask).
+
+
+### Windows native-fixture diagnostics (2026-11-06)
+
+The Windows-only `WindowsGuestFixture` in `app-server/src/request_processors/inquello_processor_tests.rs` now uses a scoped tracing subscriber with the test writer instead of direct stderr prints. Setup and cleanup diagnostics, original assertions and cleanup/panic behavior remain unchanged. This uses existing tracing dependencies, with no lint suppression or production behavior change. The matching 166 Inquello native tests, all-targets app-server Clippy, formatting check and standard Windows CLI/app-server build pass. Full desktop and seeded-smoke acceptance remain separate.

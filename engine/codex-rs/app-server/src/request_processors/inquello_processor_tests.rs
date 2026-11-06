@@ -1333,13 +1333,13 @@ const { wslDataStorage } = require(path.join(modules, 'wsl-data.js'));
                     self.task_id
                 )
             })?;
-        eprintln!(
+        log_windows_guest_fixture(format_args!(
             "native guest {action} task={} status={}\n{}\n{}",
             self.task_id,
             output.status,
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr),
-        );
+        ));
         if !output.status.success() {
             return Err(format!(
                 "native guest {action} failed for task {}; see fixture output",
@@ -1351,12 +1351,25 @@ const { wslDataStorage } = require(path.join(modules, 'wsl-data.js'));
 }
 
 #[cfg(windows)]
+fn log_windows_guest_fixture(message: std::fmt::Arguments<'_>) {
+    // Keep fixture evidence in test output without writing directly to server stderr.
+    tracing::subscriber::with_default(
+        tracing_subscriber::fmt()
+            .with_test_writer()
+            .with_ansi(false)
+            .without_time()
+            .finish(),
+        || tracing::info!("{message}"),
+    );
+}
+
+#[cfg(windows)]
 impl Drop for WindowsGuestFixture<'_> {
     fn drop(&mut self) {
         if let Err(error) = self.run("cleanup") {
             if std::thread::panicking() {
                 // Preserve the original assertion and the cleanup evidence.
-                eprintln!("CLEANUP FAILED while unwinding: {error}");
+                log_windows_guest_fixture(format_args!("CLEANUP FAILED while unwinding: {error}"));
             } else {
                 panic!("{error}");
             }
