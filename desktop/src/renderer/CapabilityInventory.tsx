@@ -103,9 +103,10 @@ export function CapabilityInventory({ workspaceId, workspaceName }: { workspaceI
   };
   const stale = failed || view?.stale === true;
   const current = view?.available === true && !stale;
-  return <section className="specimen-policy" aria-label={`Tools and connections for ${workspaceName}`} data-capabilities-section data-capabilities-loaded={String(view !== null)}>
+  return <section className="specimen-policy" aria-label={`Tools and connections for ${workspaceName}`} data-capabilities-section data-capabilities-workspace={workspaceId} data-capabilities-loaded={String(view !== null)}>
     <h3 className="specimen-policy-heading">Tools and connections</h3>
     <p>Changes here are governed by this Workspace's policy. Installing a plugin does not connect its apps or grant credentials.</p>
+    <p>Runtime readiness describes configuration and connection status, not permission to use an integration in a private Task. Private Tasks currently keep configured MCP servers, apps and plugins disabled.</p>
     <Button onPress={() => void load()}>{`Refresh tools and connections for ${workspaceName}`}</Button>
     {!bridge ? <p>Tools and connections are available in the desktop app only.</p> : null}
     {notice ? <p role="status">{notice}</p> : null}
@@ -115,7 +116,7 @@ export function CapabilityInventory({ workspaceId, workspaceName }: { workspaceI
     {view ? <>
       <section aria-label="Provider session" data-provider-session>
         <h4>Provider session — separate from your Inquello identity</h4>
-        <dl><dt>Provider</dt><dd>{view.provider.provider}</dd><dt>Account type</dt><dd>{view.provider.accountType}</dd><dt>Effective route</dt><dd>{view.provider.effectiveRoute}</dd></dl>
+        <dl><dt>Provider</dt><dd>{view.provider.provider}</dd><dt>Account type</dt><dd>{view.provider.accountType}</dd><dt>Model selection</dt><dd>{view.provider.effectiveRoute}</dd></dl>
         <ul>{view.provider.limits.map((limit, i) => <li key={i}>{limit}</li>)}</ul>
         <p>Provider sign-in does not change your Workspaces, Engagements, memberships, reviews or policies.</p>
       </section>
@@ -124,7 +125,7 @@ export function CapabilityInventory({ workspaceId, workspaceName }: { workspaceI
         <ul>{view.entries.filter(entry => entry.kind === kind).map(entry => <li key={entry.id} data-inventory-entry={entry.id}>
           <h5>{entry.display_name}</h5>
           <dl><dt>Source</dt><dd>{entry.source}</dd><dt>Version</dt><dd>{entry.version ?? 'Not reported by runtime'}</dd><dt>Dependencies</dt><dd>{entry.dependencies.length ? entry.dependencies.join('; ') : 'None reported'}</dd><dt>Effective permission</dt><dd>{entry.effective_permission}</dd></dl>
-          <p>{entry.state_known === false ? 'Installation state unavailable' : entry.installed ? 'Installed' : 'Available — not installed'}; {entry.state_known === false ? 'Enablement state unavailable' : entry.enabled ? 'Enabled' : 'Disabled'}; {current && entry.callable_now ? 'Callable now' : 'Not callable now'}.</p>
+          <p>{entry.state_known === false ? 'Installation state unavailable' : entry.installed ? 'Installed' : 'Available — not installed'}; {entry.state_known === false ? 'Enablement state unavailable' : entry.enabled ? 'Enabled' : 'Disabled'}; {entry.kind === 'built_in' ? current && entry.callable_now ? 'Callable now' : 'Not callable now' : current && entry.callable_now ? 'Runtime configuration ready' : 'Runtime configuration not ready'}.</p>
           {entry.reason_not_callable ? <p>{entry.reason_not_callable}</p> : null}
           {entry.next_action ? <p>{`Next action: ${entry.next_action}`}</p> : null}
           {entry.actions.map(action => <Button key={action} pending={busy} disabledReason={!current && action !== 'cancel' ? 'Refresh a current runtime inventory before making changes.' : undefined} onPress={() => { const request={workspaceId,action,kind,id:entry.id}; if(entry.requires_local_confirmation && (action==='install'||action==='enable')) setPendingLocalPlugin({request,name:entry.display_name}); else void manage(request); }}>{`${VERBS[action]} ${entry.display_name}${kind === 'plugin' ? ' plugin' : ''}`}</Button>)}

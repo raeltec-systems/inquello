@@ -160,10 +160,12 @@ const developmentProfile=ownedDevProfile({packaged:app.isPackaged,paid:paidQuali
 const onboardingFixture=ownedOnboardingFixture({packaged:app.isPackaged,argv:process.argv,env:process.env});
 const onboardingSmoke=onboardingFixture!==null;
 let onboardingOk=false;
+const toolsManagementSmoke = !app.isPackaged && process.argv.includes('--smoke-tools-management');
+let toolsManagementOk = false;
 const navigationSmoke = !app.isPackaged && process.argv.includes('--smoke-navigation');
 const quotaSmoke = !app.isPackaged && process.argv.includes('--smoke-quota');
 const visualSmoke = !app.isPackaged && process.argv.includes('--smoke-visual');
-const smoke = process.argv.includes('--smoke') || navigationSmoke || quotaSmoke || visualSmoke || onboardingSmoke;
+const smoke = process.argv.includes('--smoke') || navigationSmoke || quotaSmoke || visualSmoke || onboardingSmoke || toolsManagementSmoke;
 let visualOk = false;
 let quotaOk = false;
 let navigationOk = false;
@@ -435,6 +437,15 @@ async function runSmokeProbe(contents: WebContents): Promise<void> {
     const report=await probeOnboarding(contents,{fixture:onboardingFixture,identity});
     onboardingOk=report.ok;process.stdout.write(`${JSON.stringify({event:'onboarding',...report})}\n`);return;
   }
+  if (toolsManagementSmoke) {
+    if (!identity || !organise || !capabilities || !runtime) throw new Error('Tools management services unavailable');
+    const {probeToolsManagement}=await import('./smoke-probe');
+    const report=await probeToolsManagement(contents,{identity,organise,capabilities,seedFile:process.env.INQUELLO_SMOKE_SEED??null,
+      runtimeHome:governedRoots(app.getPath('userData'),app.getPath('logs'))['runtime-home'],
+      restartRuntime:async()=>{await stopRuntime();await startRuntime();},
+      runtimeRequest:<T,>(method:string,params?:unknown)=>runtime!.request<T>(method,params)});
+    toolsManagementOk=report.ok;process.stdout.write(JSON.stringify({event:'tools-management',...report})+'\n');return;
+  }
   if (visualSmoke) {
     if (!identity || !organise || !policy || !runtime) throw new Error('Visual smoke services unavailable');
     const visualWindow=BrowserWindow.fromWebContents(contents);
@@ -592,6 +603,7 @@ async function runSmokeProbe(contents: WebContents): Promise<void> {
 function exitCodeFor(exit: ExitInfo | undefined): number {
   if (!smoke) return 0;
   if (onboardingSmoke) return handshakeOk && onboardingOk && exit?.exitCode === 0 && !exit.killed ? 0 : 1;
+  if (toolsManagementSmoke) return handshakeOk && toolsManagementOk && exit?.exitCode === 0 && !exit.killed ? 0 : 1;
   if (visualSmoke) return handshakeOk && visualOk && exit?.exitCode === 0 && !exit.killed ? 0 : 1;
   if (quotaSmoke) return handshakeOk && quotaOk && exit?.exitCode === 0 && !exit.killed ? 0 : 1;
   if (navigationSmoke) return handshakeOk && navigationOk && shellLayoutOk && exit?.exitCode === 0 && !exit.killed ? 0 : 1;

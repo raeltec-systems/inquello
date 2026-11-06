@@ -3604,7 +3604,7 @@ export async function probePermissions(contents: WebContents, options: Permissio
 export interface CapabilitiesReport {
   ok: boolean; failures: string[]; configured: boolean;
   inventory?: CapabilityInventory; refusal?: CapabilityResult;
-  renderer?: { kinds: string[]; builtins: number; providerSeparate: boolean; providerText: string; text: string };
+  renderer?: { kinds: string[]; builtins: number; providerSeparate: boolean; providerText: string; text: string; ordinarySettings?: boolean; focused?: boolean; returnedToChat?: boolean };
   signedOutAtEnd?: boolean;
 }
 export interface CapabilitiesProbeOptions extends Omit<OrganiseProbeOptions, 'runtimeRequest'> { capabilities: CapabilityService }
@@ -3632,22 +3632,39 @@ export async function probeCapabilities(contents: WebContents, options: Capabili
       if (report.refusal.ok || !report.refusal.reason?.includes('extensions not allowed')) report.failures.push('plugin install was not refused with the extensions rule named');
       report.renderer = await contents.executeJavaScript(`(async () => {
         ${SHELL_HELPERS}
-        location.hash = '#specimen';
-        await wait(specimenReady, 5000);
-        const section = await wait(() => q('[data-capabilities-section][data-capabilities-loaded="true"]'), ${POLICY_SETTLE_MS});
-        if (!section) return {kinds:[],builtins:0,providerSeparate:false,providerText:'',text:''};
+        const empty = {kinds:[],builtins:0,providerSeparate:false,providerText:'',text:'',ordinarySettings:false,focused:false,returnedToChat:false};
+        if (!(await openShell())) return empty;
+        const trigger = await wait(() => qVisible('button[aria-label="Organization and team"]'), ${SHELL_SETTLE_MS});
+        if (!trigger) return empty;
+        trigger.click();
+        const settings = await wait(() => [...document.querySelectorAll('[role="menuitem"]')].find(node => visible(node) && node.textContent.trim() === 'Settings'), 5000);
+        if (!settings) return empty;
+        settings.click();
+        const tools = await wait(() => qVisible('a[href="#settings-tools"]'), 5000);
+        if (!tools) return empty;
+        tools.focus(); tools.click();
+        const section = await wait(() => qVisible('.iq-settings [data-capabilities-section][data-capabilities-loaded="true"]'), ${POLICY_SETTLE_MS});
+        if (!section) return empty;
         const provider = q('[data-provider-session]', section);
-        return {
+        const result = {
           kinds:[...section.querySelectorAll('[data-capability-kind]')].map(node => node.getAttribute('data-capability-kind')),
           builtins:section.querySelectorAll('[data-capability-kind="built_in"] [data-inventory-entry]').length,
           providerSeparate:!!provider && !provider.closest('[data-identity-section]') && /separate from your Inquello identity/.test(provider.textContent),
-          providerText:provider ? provider.textContent : '', text:section.textContent
+          providerText:provider ? provider.textContent : '', text:section.textContent,
+          ordinarySettings:location.hash === '#settings-tools' && tools.getAttribute('aria-current') === 'page' && section.getAttribute('data-capabilities-workspace') === ${JSON.stringify(seed.workspace_id)} && document.querySelectorAll('.iq-settings [data-capabilities-section]').length === 1 && !qVisible('.specimen-back'),
+          focused:document.activeElement === q('.iq-settings-panel h2'), returnedToChat:false
         };
+        const back = [...document.querySelectorAll('.iq-settings button')].find(node => node.textContent.trim() === 'Back to chat');
+        if (back) back.click();
+        result.returnedToChat = !!(await wait(() => location.hash === '#shell' && visible(q('[data-shell]')), 5000));
+        return result;
       })()`) as CapabilitiesReport['renderer'];
       for (const kind of ['built_in','app','mcp_server','plugin','skill']) if (!report.renderer?.kinds.includes(kind)) report.failures.push(`inventory kind ${kind} did not render`);
+      if (!report.renderer?.ordinarySettings || !report.renderer?.focused || !report.renderer?.returnedToChat) report.failures.push('ordinary Settings tools navigation, focus or return to chat failed');
+      if (!report.renderer?.text.includes('Private Tasks currently keep configured MCP servers, apps and plugins disabled.')) report.failures.push('runtime readiness was not distinguished from private Task use');
       if (!report.renderer?.builtins) report.failures.push('built-in tools did not render');
       if (!report.renderer?.providerSeparate) report.failures.push('provider session was not separate from Inquello identity');
-      if (!report.renderer?.providerText.includes('Account type') || !report.renderer.providerText.includes('Effective route')) report.failures.push('provider account type or effective route was missing');
+      if (!report.renderer?.providerText.includes('Account type') || !report.renderer.providerText.includes('Model selection')) report.failures.push('provider account type or effective route was missing');
     }
   } catch { report.failures.push('capabilities smoke could not finish; inspect local runtime availability and seeded topology'); }
   finally {
@@ -4306,6 +4323,12 @@ export async function probeVisualConversation(contents: WebContents, options: Or
       location.hash='#settings-routes';return !!(await wait(()=>location.hash==='#settings-routes'&&!visible(q('[data-shell]'))&&qVisible('[data-processing-routes]'),${SHELL_SETTLE_MS}));})()`);
     if(!settings)throw new SmokeProbeFailure('Implemented Settings unavailable');
     await capture('08-settings-processing-routes');
+    stage='visual-tools-settings';
+    const toolsSettings=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}
+      const link=qVisible('a[href="#settings-tools"]');if(!link)return false;link.click();
+      return !!(await wait(()=>location.hash==='#settings-tools'&&qVisible('.iq-settings [data-capabilities-section][data-capabilities-loaded="true"]'),${POLICY_SETTLE_MS}));})()`);
+    if(!toolsSettings)throw new SmokeProbeFailure('Ordinary tools Settings unavailable for visual capture');
+    await capture('09-settings-tools-and-connections');
     fs.writeFileSync(path.join(captureDir,'manifest.json'),JSON.stringify({synthetic:true,source:'Actual Electron capturePage; pinned synthetic bridge creation/model selection plus renderer follow-up/Stop/Resume, not live inference',modelPicker:'Separate actual source-Electron input evidence; fresh picker resolution is not integrated in this pinned fixture',settingsSurface:'implemented-settings',captures},null,2));
   }catch(error){failures.push(error instanceof SmokeProbeFailure?error.message:`Visual conversation failed at ${stage}${quotaFixtureDiagnostic(error)}`);const diagnostic=await captureSmokeFailure(contents,options.fixtureFile);if(diagnostic)captures.push(diagnostic);else failures.push('Diagnostic failure capture unavailable');}
   finally {
@@ -4317,4 +4340,100 @@ export async function probeVisualConversation(contents: WebContents, options: Or
     }catch{console.info(JSON.stringify({event:'visual-start-timeline',beforeCleanup:true,unavailable:true}));}
     try{if(!(await smokeIdentity(contents,'signOut')).ok)failures.push('Visual identity cleanup failed');await options.organise.syncPrincipal();}catch{failures.push('Visual identity cleanup unavailable');}}
   return{ok:failures.length===0,failures,synthetic:true,settingsSurface:'implemented-settings',captures};
+}
+
+
+/** Separate permitted, fictional loopback setup journey. Never invokes a tool/model. */
+export async function probeToolsManagement(contents: WebContents, options: OrganiseProbeOptions & {
+  capabilities: CapabilityService; runtimeHome: string; restartRuntime: () => Promise<void>;
+}): Promise<{ok:boolean;failures:string[];checks:string[];fixture:{initialize:number;toolsList:number;forbidden:number};captures:string[]}> {
+  const {startToolsSmokeFixture} = await import('./tools-smoke-fixture');
+  const report = {ok:false,failures:[] as string[],checks:[] as string[],fixture:{initialize:0,toolsList:0,forbidden:0},captures:[] as string[]};
+  let fixture: Awaited<ReturnType<typeof startToolsSmokeFixture>> | null = null;
+  let workspaceId: string | null = null, stage = 'fixture-start';
+  const name = 'inquello_ui_' + randomUUID().replaceAll('-','');
+  const requireCheck = (value: unknown, label: string) => {if (!value) throw new Error(label); report.checks.push(label);};
+  const ui = async (body: string) => contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}
+    const row=()=>qVisible('[data-inventory-entry="${name}"]');
+    const button=(label,root=document)=>[...root.querySelectorAll('button')].find(node=>visible(node)&&node.textContent.trim()===label&&node.getAttribute('aria-disabled')!=='true');
+    const openTools=async()=>{
+      if(!(await openShell()))return false;
+      const trigger=await wait(()=>qVisible('button[aria-label="Organization and team"]'),${SHELL_SETTLE_MS});if(!trigger)return false;trigger.click();
+      const settings=await wait(()=>[...document.querySelectorAll('[role="menuitem"]')].find(node=>visible(node)&&node.textContent.trim()==='Settings'),5000);if(!settings)return false;settings.click();
+      const link=await wait(()=>qVisible('a[href="#settings-tools"]'),5000);if(!link)return false;link.focus();link.click();
+      return !!(await wait(()=>qVisible('.iq-settings [data-capabilities-workspace="${workspaceId}"][data-capabilities-loaded="true"]'),${POLICY_SETTLE_MS}));
+    };
+    ${body}
+  })()`);
+  const state = async (enabled: boolean | null) => {
+    const response = await options.runtimeRequest<{config:{mcp_servers?:Record<string,{url?:string;enabled?:boolean}>}}>('config/read',{includeLayers:false});
+    const entry = response.config.mcp_servers?.[name];
+    const disk = fs.readFileSync(path.join(options.runtimeHome,'config.toml'),'utf8');
+    if (enabled === null) return !entry && !disk.includes(name) && !disk.includes(fixture!.url);
+    return entry?.url === fixture!.url && entry.enabled === enabled && disk.includes(name) && disk.includes(fixture!.url);
+  };
+  const capture = async (label: string) => {
+    await ui(label.includes('removed') ? "window.scrollTo(0,0);" : "row()?.scrollIntoView({block:'start'});");
+    await contents.executeJavaScript('(async()=>{await document.fonts.ready;await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));})()');
+    const image = await contents.capturePage();
+    if (image.isEmpty()) throw new Error('Empty capture');
+    const folder = path.join(path.dirname(options.seedFile!), 'captures');fs.mkdirSync(folder,{recursive:true});
+    const file = path.join(folder,label+'.png');fs.writeFileSync(file,image.toPNG());report.captures.push(file);
+  };
+  try {
+    if (options.identity.config.kind !== 'configured' || !options.seedFile) throw new Error('Missing isolated topology');
+    const seed = JSON.parse(fs.readFileSync(options.seedFile,'utf8')) as {workspace_id?:string;invite_id?:string};
+    if (!seed.workspace_id || !seed.invite_id) throw new Error('Missing Workspace');
+    workspaceId = seed.workspace_id;fixture = await startToolsSmokeFixture();
+    stage='sign-in';requireCheck((await smokeIdentity(contents,'signIn')).ok,'identity-signed-in');
+    const accepted=await options.identity.session.withAccess(access=>options.identity.service!.acceptInvite(access,seed.invite_id!));
+    requireCheck(accepted?.workspace_id===workspaceId,'fictional-workspace-membership');
+    await options.organise.syncPrincipal();await options.organise.getWorkspaces();
+    requireCheck(await state(null),'initial-config-absent');
+    stage='ordinary-settings-add';
+    requireCheck(await ui(`
+      if(!(await openTools()))return false;
+      const form=qVisible('form[aria-label="Add MCP server"]');if(!form)return false;
+      const field=label=>{const node=[...form.querySelectorAll('label')].find(node=>node.textContent.trim()===label);return node?document.getElementById(node.htmlFor):null;};
+      const serverName=field('MCP server name'),url=field('MCP server URL');if(!serverName||!url)return false;
+      type(serverName,${JSON.stringify(name)});type(url,${JSON.stringify(fixture.url)});
+      const add=await wait(()=>button(${JSON.stringify('Add '+name+' MCP server')},form),5000);if(!add)return false;add.focus();add.click();
+      return !!(await wait(()=>{const entry=row();return entry&&entry.textContent.includes('Installed; Enabled;')&&button(${JSON.stringify('Disable '+name)},entry);},${POLICY_SETTLE_MS}));
+    `),'form-add-visible');
+    requireCheck(await state(true),'add-native-and-durable');
+    requireCheck(fixture.counts.initialize>0&&fixture.counts.toolsList>0&&fixture.counts.forbidden===0,'loopback-discovery-only');
+    await capture('tools-01-added');
+    stage='disable';
+    requireCheck(await ui(`const disable=button(${JSON.stringify('Disable '+name)},row());if(!disable)return false;disable.click();return !!(await wait(()=>row()?.textContent.includes('Disabled by you')&&button(${JSON.stringify('Enable '+name)},row()),${POLICY_SETTLE_MS}));`),'disable-visible');
+    requireCheck(await state(false),'disable-native-and-durable');
+    stage='restart-and-reopen';
+    await options.restartRuntime();
+    requireCheck(await state(false),'disabled-survives-native-restart');
+    requireCheck(await ui(`if(!(await openTools()))return false;return !!(await wait(()=>row()?.textContent.includes('Disabled by you')&&button(${JSON.stringify('Enable '+name)},row()),${POLICY_SETTLE_MS}));`),'disabled-reopened');
+    await capture('tools-02-disabled-reopened');
+    stage='enable';
+    requireCheck(await ui(`const enable=button(${JSON.stringify('Enable '+name)},row());if(!enable)return false;enable.click();return !!(await wait(()=>row()?.textContent.includes('Installed; Enabled;')&&button(${JSON.stringify('Disable '+name)},row()),${POLICY_SETTLE_MS}));`),'enable-visible');
+    requireCheck(await state(true),'enable-native-and-durable');
+    stage='remove';
+    requireCheck(await ui(`const remove=button(${JSON.stringify('Remove '+name)},row());if(!remove)return false;remove.click();return !!(await wait(()=>!row(),${POLICY_SETTLE_MS}));`),'remove-visible');
+    requireCheck(await state(null),'remove-native-and-durable');
+    stage='removed-reopened';
+    requireCheck(await ui(`if(!(await openTools()))return false;return !row()&&!!qVisible('form[aria-label="Add MCP server"]');`),'removed-reopened');
+    requireCheck(await state(null),'removed-still-absent');
+    await capture('tools-03-removed-reopened');
+    requireCheck(fixture.counts.forbidden===0,'no-tool-invocations-or-auth');
+  } catch {report.failures.push('Tools management failed at '+stage);try {if(options.seedFile)await capture('tools-failure');}catch {report.failures.push('Failure capture unavailable');}}
+  finally {
+    if (workspaceId && fixture) {
+      try {
+        if (!(await state(null))) {
+          const removed = await options.capabilities.manage({workspaceId,kind:'mcp_server',id:name,action:'remove'});
+          if (!removed.ok || !(await state(null))) report.failures.push('Owned MCP configuration cleanup failed');
+        }
+      } catch {report.failures.push('Owned MCP configuration cleanup unavailable');}
+    }
+    try {if (!(await smokeIdentity(contents,'signOut')).ok) report.failures.push('Identity cleanup failed');await options.organise.syncPrincipal();} catch {report.failures.push('Identity cleanup unavailable');}
+    if (fixture) {report.fixture={...fixture.counts};try {await fixture.close();} catch {report.failures.push('Loopback fixture cleanup failed');}}
+  }
+  report.ok=report.failures.length===0;return report;
 }

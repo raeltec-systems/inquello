@@ -39,7 +39,7 @@ function origin(x: unknown): string { try {
 catch {
     return 'local';
 } }
-const unavailableProvider = () => ({ provider: 'Codex', accountType: 'Unavailable', effectiveRoute: 'No processing route configured', limits: ['Provider sign-in grants no Inquello permissions.', 'Model runs are not enabled (Story 1.25).'] });
+const unavailableProvider = () => ({ provider: 'Codex', accountType: 'Unavailable', effectiveRoute: 'Selected per Task; see Models', limits: ['Provider sign-in grants no Inquello permissions.', 'Task execution requires its selected model and current authorization.'] });
 interface Target {
     fact: CapabilityFact;
     pluginParams?: Obj;

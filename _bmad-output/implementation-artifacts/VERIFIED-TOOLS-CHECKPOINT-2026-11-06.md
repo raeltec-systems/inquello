@@ -1,0 +1,26 @@
+# Verified Tools and connections checkpoint
+
+2026-11-06. This checkpoint records the ordinary Settings Tools management delivery and OAuth callback repair. Story 1.21 and Epic 1 remain in progress; no frozen acceptance requirement is changed or marked complete.
+
+## Delivered behavior
+- Ordinary Settings exposes Tools and connections for only the selected Workspace. Loading, missing selection, unavailable Workspace and identity transitions remain distinct. Heading focus, repeated navigation, Workspace switching and Back to chat are covered.
+- Configuration readiness is distinguished from private-Task permission. Provider identity remains separate from Inquello identity and model selection. Private Tasks still disable configured MCP servers, apps and plugins.
+- Native OAuth cancellation owns and closes the listener and accepted connections before terminal return. Response flush precedes callback delivery; existing credential-save/cancel arbitration is retained. No new dependency or public protocol change.
+- A separate loopback-only smoke phase exercises the actual Settings add, disable, native restart, reopen, enable and remove flow against native durable configuration. Discovery is allowed only inside the isolated fictional fixture; invocation and auth are refused.
+
+## Final-source evidence
+The final snapshot was created at 18:05 UTC on native repair HEAD 612e99e2e345d3b87a488aa50a0b4f353aebd71a. Its 11,033 engine/desktop file hashes were rechecked unchanged after the full suite and smoke, before this checkpoint commit. Manifest: verification-2026-11-05/tools-final-source-manifest-v2-20261106.json, SHA256 5e7a42ba9fb1a2930f0f8608be393083c09b430353663a3343bb736365a49854. Logs named below are retained beside that manifest on the development machine; raw authentication diagnostics are not published.
+
+- Linux: cargo fmt check and codex-rmcp-client all-targets clippy with warnings denied passed. Library tests: 270 passed, 0 failed, 1 existing ignored. The original unchanged OAuth cancellation RPC passed, 1/1. Log: oauth-final-20261106.log. The same RPC had reproduced the pre-repair failure; no timeout or assertion was weakened.
+- Windows: native library tests 263 passed, 0 failed, 1 existing ignored; original cancellation RPC 1/1 passed. Standard CLI/app-server, isolated topology and separate fixture app-server builds passed. Logs: tools-final-windows-rmcp-20261106.log, tools-final-windows-rpc-20261106.log, tools-final-windows-build-20261106.log, tools-windows-topology-20261106.log, tools-windows-fixture-20261106.log.
+- Genuine protocol generation emitted 816 unchanged schema files with updated fork tree d2e7f259a8110d7e25cfec6b66f679d075cfd72b. Production TypeScript/Vite build passed. Logs: tools-final-protocol-generation-20261106.log, tools-final-desktop-build-20261106.log.
+- Full single-worker desktop suite: 118 files passed, 4 existing opt-in/platform suites skipped; 2,241 tests passed, 0 failed, 21 existing skips. Duration 894.39 seconds. Command: pnpm test -- --maxWorkers=1 using the owned loopback database fixture. Log: desktop-full-docker-tools-final-20261106.log.
+- Full aggregate seeded smoke: all 19 required reports passed across normal, quota, visual and tools phases; no missing reports or cleanup errors. Visual used five local synthetic model responses with no invalid fixture calls. Tools passed all 17 lifecycle checks, with four initialize and four list calls, zero forbidden/invocation/auth requests. Command: node desktop/scripts/run-seeded-smoke.cjs through the owned fixture runner. Log: seeded-smoke-baseline-docker-tools-final-20261106.log.
+- Actual final-run pixels inspected: tools-01-added.png, tools-02-disabled-reopened.png, tools-03-removed-reopened.png and visual/09-settings-tools-and-connections.png under D:\Inquello\tmp\inquello-seeded-smoke-gRHJPb. The native lifecycle also checked config/read and config.toml; screenshots alone are not the persistence evidence.
+- Standard Windows app-server SHA256: bb0bf9232f268449cfd75d6d58d712a77a73c310c5cfc4a97b7b4747e78de9ec. Standard CLI SHA256: 235b9abc9aa9e34a5b995f531f4916e4ccc83727e8e0b70699fb5a07d650801a. Final tools smoke handshake matched the generated fork tree above.
+- git diff --check passed. No Inquello test/build process remained active after verification. Existing unrelated planning, research, local rules, logs and user changes were preserved outside the scoped commit.
+
+## Boundaries and remaining gates
+The synthetic Windows keyring independence test ran rather than skipping; it uses only a fresh CODEX_HOME-keyed entry and verifies logout cleanup. This is not a real provider or OAuth grant acceptance test. The 21 aggregate skips are not passes. Existing Windows dead-code and Vite bundle-size advisories remain.
+
+No real provider request, paid inference, organization consent, account migration, install, merge or deployment was performed. Broader current-build real-provider and team-flow acceptance remains open. Private-Task external integration invocation requires the owner-approved scope/architecture amendment identified in verification-2026-11-05/epic1-next-gates-20261106.md. Cancellation and authorization tests provide bounded evidence, not a formal proof. The exact branch commit and remote publication result are recorded in the continuation report after committing.
