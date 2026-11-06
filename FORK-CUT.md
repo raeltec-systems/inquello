@@ -851,3 +851,11 @@ Owner decision 2026-11-05. This follows "Security fix: command rules match the r
 ### Windows native-fixture diagnostics (2026-11-06)
 
 The Windows-only `WindowsGuestFixture` in `app-server/src/request_processors/inquello_processor_tests.rs` now uses a scoped tracing subscriber with the test writer instead of direct stderr prints. Setup and cleanup diagnostics, original assertions and cleanup/panic behavior remain unchanged. This uses existing tracing dependencies, with no lint suppression or production behavior change. The matching 166 Inquello native tests, all-targets app-server Clippy, formatting check and standard Windows CLI/app-server build pass. Full desktop and seeded-smoke acceptance remain separate.
+
+### Runtime-owned OAuth callback socket teardown (Story 1.21, 2026-11-06)
+
+The callback server now uses the existing Axum/Tokio dependencies instead of tiny_http. Its guard owns shutdown of both the listening socket and accepted HTTP connections, including idle and partially received requests. Completion, timeout and cancellation wait for actual server closure. The callback result is delivered only after its HTTP response has flushed and the connection closes, so a fast token exchange cannot truncate the browser response.
+
+Credential persistence still uses the existing atomic cancellation arbitration: winning cancellation prevents a late write; an already-started write can win and is reported as Completed. Callback path/state/issuer validation, exact login-attempt selection, configured redirects, public protocol and dependencies are unchanged. No real provider grant or credential is used by verification.
+
+The unchanged app-server cancellation RPC reproduced a pre-repair timeout on Linux. The candidate passes the Windows RPC regression, 263 Windows rmcp library tests and 270 Linux rmcp library tests (one pre-existing ignored subprocess helper per library run). New checks cover idle/partial sockets, same-port reuse, a proven accepted partial reader, keep-alive response delivery, provider errors and timeout/drop. Candidate Linux RPC, lint, final source-matched desktop suite and seeded smoke remain separate gates recorded in the continuation evidence; these bounded tests are not a formal isolation proof.
