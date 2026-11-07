@@ -1,0 +1,1290 @@
+use crate::outgoing_message::ConnectionId;
+use crate::outgoing_message::ConnectionRequestId;
+use codex_app_server_protocol::RequestId;
+use codex_app_server_protocol::ThreadGoal;
+use codex_app_server_protocol::ThreadHistoryBuilder;
+use codex_app_server_protocol::ThreadHistoryTurnMetadata;
+use codex_app_server_protocol::ThreadItem;
+use codex_app_server_protocol::ThreadSettings;
+use codex_app_server_protocol::Turn;
+use codex_app_server_protocol::TurnError;
+use codex_app_server_protocol::TurnItemsView;
+use codex_core::CodexThread;
+use codex_core::ThreadConfigSnapshot;
+use codex_file_watcher::WatchRegistration;
+use codex_protocol::ThreadId;
+#[cfg(test)]
+use codex_protocol::config_types::MultiAgentMode;
+use codex_protocol::items::AgentMessageContent as CoreAgentMessageContent;
+use codex_protocol::items::TurnItem as CoreTurnItem;
+use codex_protocol::models::MessagePhase;
+use codex_protocol::protocol::EventMsg;
+use codex_rollout::RolloutItem;
+use codex_rollout::state_db::StateDbHandle;
+use codex_utils_path_uri::LegacyAppPathString;
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::sync::Arc;
+use std::sync::Mutex as StdMutex;
+use std::sync::Weak;
+use tokio::sync::Mutex;
+use tokio::sync::mpsc;
+use tokio::sync::oneshot;
+use tokio::sync::watch;
+use tracing::error;
+
+type PendingInterruptQueue = Vec<ConnectionRequestId>;
+
+// Removing an unload entry drops its sender and wakes deferred listener attachment.
+pub(crate) type PendingThreadUnloads = Arc<Mutex<HashMap<ThreadId, watch::Sender<()>>>>;
+
+pub(crate) struct PendingThreadResumeRequest {
+    pub(crate) request_id: ConnectionRequestId,
+    pub(crate) history_items: Vec<RolloutItem>,
+    /// Usage attribution already resolved while cold-loading a paginated child.
+    pub(crate) cold_resume_token_usage_turn_id: Option<String>,
+    pub(crate) config_snapshot: ThreadConfigSnapshot,
+    pub(crate) instruction_sources: Vec<LegacyAppPathString>,
+    pub(crate) thread_summary: codex_app_server_protocol::Thread,
+    pub(crate) emit_thread_goal_update: bool,
+    pub(crate) thread_goal_state_db: Option<StateDbHandle>,
+    pub(crate) include_turns: bool,
+    pub(crate) initial_turns_page:
+        Option<codex_app_server_protocol::ThreadResumeInitialTurnsPageParams>,
+    pub(crate) paginated_turns: Option<Vec<Turn>>,
+    pub(crate) paginated_initial_turns_page: Option<codex_app_server_protocol::TurnsPage>,
+    pub(crate) paginated_initial_turns_page_with_active_slot:
+        Option<codex_app_server_protocol::TurnsPage>,
+    pub(crate) resume_cursor_store: Option<Arc<dyn codex_thread_store::ThreadStore>>,
+    pub(crate) redact_resume_payloads: bool,
+}
+
+// ThreadListenerCommand is used to perform operations in the context of the thread listener, for serialization purposes.
+pub(crate) enum ThreadListenerCommand {
+    // SendThreadResumeResponse is used to resume an already running thread by sending the thread's history to the client and atomically subscribing for new updates.
+    SendThreadResumeResponse {
+        request: Box<PendingThreadResumeRequest>,
+        completion_tx: oneshot::Sender<()>,
+    },
+    // EmitThreadGoalUpdated is used to order goal updates with running-thread resume responses and goal clears.
+    EmitThreadGoalUpdated {
+        turn_id: Option<String>,
+        goal: ThreadGoal,
+    },
+    // EmitThreadQueueChanged orders durable queue updates with thread notifications.
+    EmitThreadQueueChanged,
+    // EmitWarning is used to order extension warnings with other thread notifications.
+    EmitWarning {
+        message: String,
+    },
+    // EmitThreadGoalCleared is used to order app-server goal clears with running-thread resume responses.
+    EmitThreadGoalCleared,
+    // EmitThreadGoalSnapshot is used to read and emit the latest goal state in the listener order.
+    EmitThreadGoalSnapshot {
+        state_db: StateDbHandle,
+    },
+    // ResolveServerRequest is used to notify the client that the request has been resolved.
+    // It is executed in the thread listener's context to ensure that the resolved notification is ordered with regard to the request itself.
+    ResolveServerRequest {
+        request_id: RequestId,
+        completion_tx: oneshot::Sender<()>,
+    },
+}
+
+/// Per-conversation accumulation of the latest states e.g. error message while a turn runs.
+#[derive(Default, Clone)]
+pub(crate) struct TurnSummary {
+    pub(crate) started_at: Option<i64>,
+    pub(crate) command_execution_started: HashSet<String>,
+    pub(crate) last_error: Option<TurnError>,
+    pub(crate) last_agent_message: Option<ThreadItem>,
+}
+
+const LIVE_CANONICAL_ORDER_LIMIT: usize = 4096;
+const LIVE_CANONICAL_ID_BYTES: usize = 128;
+const LIVE_MESSAGE_LIMIT: usize = 128;
+const LIVE_MESSAGE_BYTES: usize = 16_384;
+const LIVE_MESSAGE_TOTAL_BYTES: usize = 1_048_576;
+
+struct CanonicalLiveMessage {
+    thread: String,
+    id: String,
+    text: String,
+    finished: bool,
+}
+
+/// The presentation history uses synthetic item-N message IDs. Private progress
+/// must instead join retained rows to IDs observed in canonical lifecycle events.
+#[derive(Default)]
+struct CanonicalLiveOrder {
+    turn: Option<String>,
+    ids: Vec<String>,
+    messages: Vec<CanonicalLiveMessage>,
+    message_bytes: usize,
+    message_overflowed: bool,
+    overflowed: bool,
+}
+
+impl CanonicalLiveOrder {
+    fn begin(&mut self, turn: &str) {
+        *self = Self::default();
+        if turn.is_empty() || turn.len() > LIVE_CANONICAL_ID_BYTES {
+            self.overflowed = true;
+        } else {
+            self.turn = Some(turn.to_owned());
+        }
+    }
+
+    fn record(&mut self, turn: &str, id: &str) {
+        if self.turn.as_deref() != Some(turn) || self.overflowed {
+            return;
+        }
+        if id.is_empty() || id.len() > LIVE_CANONICAL_ID_BYTES {
+            self.overflowed = true;
+            self.ids.clear();
+        } else if !self.ids.iter().any(|existing| existing == id) {
+            if self.ids.len() == LIVE_CANONICAL_ORDER_LIMIT {
+                self.overflowed = true;
+                self.ids.clear();
+            } else {
+                self.ids.push(id.to_owned());
+            }
+        }
+    }
+
+    fn start_message(
+        &mut self,
+        thread: &str,
+        turn: &str,
+        item: &codex_protocol::items::AgentMessageItem,
+    ) {
+        if self.for_turn(turn).is_none() || self.message_overflowed {
+            return;
+        }
+        // A repeated start is not permission to erase or replay accumulated text.
+        if self.messages.iter().any(|message| message.id == item.id) {
+            return;
+        }
+        let bytes = item
+            .content
+            .iter()
+            .map(|content| match content {
+                CoreAgentMessageContent::Text { text } => text.len(),
+            })
+            .fold(0usize, usize::saturating_add);
+        if self.messages.len() >= LIVE_MESSAGE_LIMIT
+            || bytes > LIVE_MESSAGE_BYTES
+            || self.message_bytes.saturating_add(bytes) > LIVE_MESSAGE_TOTAL_BYTES
+            || thread.is_empty()
+            || thread.len() > LIVE_CANONICAL_ID_BYTES
+        {
+            self.message_overflowed = true;
+            self.messages.clear();
+            return;
+        }
+        let mut text = String::with_capacity(bytes);
+        for content in &item.content {
+            let CoreAgentMessageContent::Text { text: part } = content;
+            text.push_str(part);
+        }
+        self.message_bytes += bytes;
+        self.messages.push(CanonicalLiveMessage {
+            thread: thread.to_owned(),
+            id: item.id.clone(),
+            text,
+            finished: false,
+        });
+    }
+
+    fn message_delta(&mut self, thread: &str, turn: &str, id: &str, delta: &str) {
+        if self.for_turn(turn).is_none() || self.message_overflowed {
+            return;
+        }
+        let Some(message) = self
+            .messages
+            .iter_mut()
+            .find(|message| message.thread == thread && message.id == id && !message.finished)
+        else {
+            return;
+        };
+        if message.text.len().saturating_add(delta.len()) > LIVE_MESSAGE_BYTES
+            || self.message_bytes.saturating_add(delta.len()) > LIVE_MESSAGE_TOTAL_BYTES
+        {
+            self.message_overflowed = true;
+            self.messages.clear();
+            return;
+        }
+        // Byte bounds are checked before appending; UTF-8 is never sliced.
+        message.text.push_str(delta);
+        self.message_bytes += delta.len();
+    }
+
+    fn messages_for_turn(&self, turn: &str) -> Option<Vec<ThreadItem>> {
+        self.for_turn(turn)?;
+        if self.message_overflowed {
+            return None;
+        }
+        Some(
+            self.messages
+                .iter()
+                .filter(|message| !message.text.is_empty())
+                .map(|message| ThreadItem::AgentMessage {
+                    id: message.id.clone(),
+                    text: message.text.clone(),
+                    phase: None,
+                    memory_citation: None,
+                    delivery: None,
+                    questions: None,
+                })
+                .collect(),
+        )
+    }
+
+    fn for_turn(&self, turn: &str) -> Option<&[String]> {
+        (!self.overflowed && self.turn.as_deref() == Some(turn)).then_some(self.ids.as_slice())
+    }
+}
+
+/// Borrow before applying the bound; do not clone arbitrary model-supplied IDs.
+fn canonical_item_id(item: &CoreTurnItem) -> &str {
+    match item {
+        CoreTurnItem::UserMessage(item) => &item.id,
+        CoreTurnItem::FunctionCallOutput(item) => &item.id,
+        CoreTurnItem::HookPrompt(item) => &item.id,
+        CoreTurnItem::AgentMessage(item) => &item.id,
+        CoreTurnItem::Plan(item) => &item.id,
+        CoreTurnItem::Reasoning(item) => &item.id,
+        CoreTurnItem::CommandExecution(item) => &item.id,
+        CoreTurnItem::DynamicToolCall(item) => &item.id,
+        CoreTurnItem::CollabAgentToolCall(item) => &item.id,
+        CoreTurnItem::SubAgentActivity(item) => &item.id,
+        CoreTurnItem::WebSearch(item) => &item.id,
+        CoreTurnItem::ImageView(item) => &item.id,
+        CoreTurnItem::Extension(item) => item.id(),
+        CoreTurnItem::ImageGeneration(item) => &item.id,
+        CoreTurnItem::EnteredReviewMode(item) => &item.id,
+        CoreTurnItem::ExitedReviewMode(item) => &item.id,
+        CoreTurnItem::FileChange(item) => &item.id,
+        CoreTurnItem::McpToolCall(item) => &item.id,
+        CoreTurnItem::ContextCompaction(item) => &item.id,
+    }
+}
+
+#[derive(Default)]
+pub(crate) struct ThreadState {
+    goal_resume_lock: Arc<Mutex<()>>,
+    pub(crate) pending_interrupts: PendingInterruptQueue,
+    pub(crate) turn_summary: TurnSummary,
+    pub(crate) last_terminal_turn_id: Option<String>,
+    /// Lets an internal runtime replacement wait until the old listener has processed Core's
+    /// `ShutdownComplete` event before that listener is superseded.
+    shutdown_drain_waiter: Option<oneshot::Sender<()>>,
+    pub(crate) cancel_tx: Option<oneshot::Sender<()>>,
+    pub(crate) experimental_raw_events: bool,
+    pub(crate) listener_generation: u64,
+    last_thread_settings: Option<ThreadSettings>,
+    listener_command_tx: Option<mpsc::UnboundedSender<ThreadListenerCommand>>,
+    current_turn_history: ThreadHistoryBuilder,
+    canonical_live_order: CanonicalLiveOrder,
+    listener_thread: Option<Weak<CodexThread>>,
+    watch_registration: WatchRegistration,
+}
+
+fn listener_source_is_current<T>(
+    current_generation: u64,
+    source_generation: u64,
+    current_source: Option<&Weak<T>>,
+    source: &Arc<T>,
+) -> bool {
+    current_generation == source_generation
+        && current_source
+            .and_then(Weak::upgrade)
+            .is_some_and(|current| Arc::ptr_eq(&current, source))
+}
+
+impl ThreadState {
+    /// Caller holds the state mutex across this check and event tracking.
+    pub(crate) fn accepts_listener_event(
+        &self,
+        source_generation: u64,
+        source: &Arc<CodexThread>,
+    ) -> bool {
+        listener_source_is_current(
+            self.listener_generation,
+            source_generation,
+            self.listener_thread.as_ref(),
+            source,
+        )
+    }
+
+    pub(crate) fn listener_matches(&self, conversation: &Arc<CodexThread>) -> bool {
+        self.listener_thread
+            .as_ref()
+            .and_then(Weak::upgrade)
+            .is_some_and(|existing| Arc::ptr_eq(&existing, conversation))
+    }
+
+    pub(crate) fn set_listener(
+        &mut self,
+        cancel_tx: oneshot::Sender<()>,
+        conversation: &Arc<CodexThread>,
+        watch_registration: WatchRegistration,
+        thread_settings_baseline: ThreadSettings,
+    ) -> (mpsc::UnboundedReceiver<ThreadListenerCommand>, u64) {
+        if let Some(previous) = self.cancel_tx.replace(cancel_tx) {
+            let _ = previous.send(());
+        }
+        self.listener_generation = self.listener_generation.wrapping_add(1);
+        self.canonical_live_order = CanonicalLiveOrder::default();
+        self.last_thread_settings = Some(thread_settings_baseline);
+        let (listener_command_tx, listener_command_rx) = mpsc::unbounded_channel();
+        self.listener_command_tx = Some(listener_command_tx);
+        self.listener_thread = Some(Arc::downgrade(conversation));
+        self.watch_registration = watch_registration;
+        (listener_command_rx, self.listener_generation)
+    }
+
+    pub(crate) fn clear_listener(&mut self) {
+        if let Some(cancel_tx) = self.cancel_tx.take() {
+            let _ = cancel_tx.send(());
+        }
+        self.shutdown_drain_waiter = None;
+        self.listener_command_tx = None;
+        self.current_turn_history.reset();
+        self.canonical_live_order = CanonicalLiveOrder::default();
+        self.listener_thread = None;
+        self.watch_registration = WatchRegistration::default();
+    }
+
+    pub(crate) fn set_experimental_raw_events(&mut self, enabled: bool) {
+        self.experimental_raw_events = enabled;
+    }
+
+    pub(crate) fn listener_command_tx(
+        &self,
+    ) -> Option<mpsc::UnboundedSender<ThreadListenerCommand>> {
+        self.listener_command_tx.clone()
+    }
+
+    /// Borrowed view lets private progress bound and filter activity before cloning.
+    pub(crate) fn active_turn_items(
+        &self,
+    ) -> Option<(&str, &codex_app_server_protocol::TurnStatus, &[ThreadItem])> {
+        self.current_turn_history.active_turn_items()
+    }
+
+    pub(crate) fn canonical_active_order(&self, turn: &str) -> Option<&[String]> {
+        self.canonical_live_order.for_turn(turn)
+    }
+
+    pub(crate) fn canonical_live_messages(&self, turn: &str) -> Option<Vec<ThreadItem>> {
+        self.canonical_live_order.messages_for_turn(turn)
+    }
+
+    pub(crate) fn active_turn_snapshot(&self) -> Option<Turn> {
+        self.current_turn_history.active_turn_snapshot()
+    }
+
+    /// Returns the same turn ID as `active_turn_snapshot` without cloning its items.
+    pub(crate) fn active_turn_id(&self) -> Option<&str> {
+        self.current_turn_history.active_turn_id()
+    }
+
+    pub(crate) fn active_turn_snapshot_with_items_view(
+        &self,
+        items_view: TurnItemsView,
+    ) -> Option<Turn> {
+        self.current_turn_history
+            .active_turn_snapshot_with_items_view(items_view)
+    }
+
+    pub(crate) fn active_turn_metadata_snapshot(&self) -> Option<ThreadHistoryTurnMetadata> {
+        self.current_turn_history.active_turn_metadata_snapshot()
+    }
+
+    pub(crate) fn register_shutdown_drain_waiter(&mut self) -> oneshot::Receiver<()> {
+        let (completion_tx, completion_rx) = oneshot::channel();
+        self.shutdown_drain_waiter = Some(completion_tx);
+        completion_rx
+    }
+
+    pub(crate) fn take_shutdown_drain_waiter(&mut self) -> Option<oneshot::Sender<()>> {
+        self.shutdown_drain_waiter.take()
+    }
+
+    pub(crate) fn track_current_turn_event(&mut self, event_turn_id: &str, event: &EventMsg) {
+        match event {
+            EventMsg::TurnStarted(payload) => self.canonical_live_order.begin(&payload.turn_id),
+            EventMsg::ItemStarted(payload) => self
+                .canonical_live_order
+                .record(&payload.turn_id, canonical_item_id(&payload.item)),
+            EventMsg::ItemCompleted(payload) => self
+                .canonical_live_order
+                .record(&payload.turn_id, canonical_item_id(&payload.item)),
+            EventMsg::ExecCommandBegin(payload) => self
+                .canonical_live_order
+                .record(&payload.turn_id, &payload.call_id),
+            EventMsg::ExecCommandEnd(payload) => self
+                .canonical_live_order
+                .record(&payload.turn_id, &payload.call_id),
+            EventMsg::TurnComplete(_) | EventMsg::TurnAborted(_)
+                if self.canonical_live_order.turn.as_deref() == Some(event_turn_id) =>
+            {
+                self.canonical_live_order = CanonicalLiveOrder::default();
+            }
+            _ => {}
+        }
+        match event {
+            EventMsg::ItemStarted(payload) => {
+                if let CoreTurnItem::AgentMessage(item) = &payload.item {
+                    self.canonical_live_order.start_message(
+                        &payload.thread_id.to_string(),
+                        &payload.turn_id,
+                        item,
+                    );
+                }
+            }
+            EventMsg::AgentMessageContentDelta(payload) => self.canonical_live_order.message_delta(
+                &payload.thread_id,
+                &payload.turn_id,
+                &payload.item_id,
+                &payload.delta,
+            ),
+            EventMsg::ItemCompleted(payload)
+                if self.canonical_live_order.turn.as_deref() == Some(payload.turn_id.as_str()) =>
+            {
+                if let Some(message) =
+                    self.canonical_live_order
+                        .messages
+                        .iter_mut()
+                        .find(|message| {
+                            message.id == canonical_item_id(&payload.item)
+                                && message.thread == payload.thread_id.to_string()
+                        })
+                {
+                    // Retain bounded text until the turn ends. Durable rows win
+                    // during merge; late deltas may not change a completed item.
+                    message.finished = true;
+                }
+            }
+            _ => {}
+        }
+        if let EventMsg::TurnStarted(payload) = event {
+            self.turn_summary.started_at = payload.started_at;
+        }
+        if let EventMsg::ItemCompleted(payload) = event
+            && let CoreTurnItem::AgentMessage(item) = &payload.item
+            && matches!(item.phase, Some(MessagePhase::FinalAnswer) | None)
+            && item.content.iter().any(|content| {
+                matches!(content, CoreAgentMessageContent::Text { text } if !text.trim().is_empty())
+            })
+        {
+            self.turn_summary.last_agent_message =
+                Some(ThreadItem::from(CoreTurnItem::AgentMessage(item.clone())));
+        }
+        self.current_turn_history.handle_event(event);
+        if matches!(event, EventMsg::TurnAborted(_) | EventMsg::TurnComplete(_)) {
+            self.last_terminal_turn_id = Some(event_turn_id.to_string());
+            if !self.current_turn_history.has_active_turn() {
+                self.current_turn_history.reset();
+            }
+        }
+    }
+
+    pub(crate) fn note_thread_settings(&mut self, thread_settings: ThreadSettings) -> bool {
+        let changed = self.last_thread_settings.as_ref() != Some(&thread_settings);
+        self.last_thread_settings = Some(thread_settings);
+        changed
+    }
+}
+
+pub(crate) async fn resolve_server_request_on_thread_listener(
+    thread_state: &Arc<Mutex<ThreadState>>,
+    request_id: RequestId,
+) {
+    let (completion_tx, completion_rx) = oneshot::channel();
+    let listener_command_tx = {
+        let state = thread_state.lock().await;
+        state.listener_command_tx()
+    };
+    let Some(listener_command_tx) = listener_command_tx else {
+        error!("failed to remove pending client request: thread listener is not running");
+        return;
+    };
+
+    if listener_command_tx
+        .send(ThreadListenerCommand::ResolveServerRequest {
+            request_id,
+            completion_tx,
+        })
+        .is_err()
+    {
+        error!(
+            "failed to remove pending client request: thread listener command channel is closed"
+        );
+        return;
+    }
+
+    if let Err(err) = completion_rx.await {
+        error!("failed to remove pending client request: {err}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use codex_app_server_protocol::ApprovalsReviewer;
+    use codex_app_server_protocol::AskForApproval;
+    use codex_app_server_protocol::SandboxPolicy;
+    use codex_protocol::config_types::CollaborationMode;
+    use codex_protocol::config_types::ModeKind;
+    use codex_protocol::config_types::Settings;
+    use codex_utils_absolute_path::AbsolutePathBuf;
+    use pretty_assertions::assert_eq;
+
+    #[tokio::test]
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "The owned guard deliberately blocks the competing future across a local barrier to verify revocation; no provider or service network I/O occurs."
+    )]
+    async fn listener_source_rejects_event_waiting_across_replacement() {
+        let old_source = Arc::new(());
+        let new_source = Arc::new(());
+        let state = Arc::new(Mutex::new((
+            7_u64,
+            Some(Arc::downgrade(&old_source)),
+            CanonicalLiveOrder::default(),
+        )));
+        // Hold the same mutex used by replacement and event ingestion. The old
+        // listener has obtained an event, but cannot inspect current identity yet.
+        let mut replacement = state.lock().await;
+        let (event_selected, selected) = oneshot::channel();
+        let listener_state = Arc::clone(&state);
+        let listener_source = Arc::clone(&old_source);
+        let listener = tokio::spawn(async move {
+            event_selected.send(()).unwrap();
+            let mut current = listener_state.lock().await;
+            if !listener_source_is_current(current.0, 7, current.1.as_ref(), &listener_source) {
+                return false;
+            }
+            current.2.record("new-turn", "stale-event");
+            true
+        });
+        selected.await.unwrap();
+        replacement.0 = 8;
+        replacement.1 = Some(Arc::downgrade(&new_source));
+        replacement.2.begin("new-turn");
+        drop(replacement);
+
+        assert!(!listener.await.unwrap());
+        let mut current = state.lock().await;
+        assert!(current.2.for_turn("new-turn").unwrap().is_empty());
+        // Neither generation alone nor source identity alone is sufficient.
+        assert!(!listener_source_is_current(
+            8,
+            7,
+            current.1.as_ref(),
+            &new_source
+        ));
+        assert!(!listener_source_is_current(
+            8,
+            8,
+            current.1.as_ref(),
+            &old_source
+        ));
+        assert!(listener_source_is_current(
+            8,
+            8,
+            current.1.as_ref(),
+            &new_source
+        ));
+        current.2.record("new-turn", "current-event");
+        assert_eq!(current.2.for_turn("new-turn").unwrap(), &["current-event"]);
+    }
+
+    #[test]
+    fn listener_source_rejects_cleared_or_expired_identity() {
+        let source = Arc::new(());
+        assert!(!listener_source_is_current(1, 1, None, &source));
+        let expired = {
+            let removed = Arc::new(());
+            Arc::downgrade(&removed)
+        };
+        assert!(!listener_source_is_current(1, 1, Some(&expired), &source));
+    }
+
+    fn start_canonical_turn(state: &mut ThreadState, turn: &str) {
+        state.track_current_turn_event(
+            turn,
+            &EventMsg::TurnStarted(codex_protocol::protocol::TurnStartedEvent {
+                turn_attribution: None,
+                turn_id: turn.into(),
+                root_turn_id: None,
+                trace_id: None,
+                started_at: Some(100),
+                model_context_window: None,
+                collaboration_mode_kind: Default::default(),
+            }),
+        );
+    }
+
+    fn canonical_message(id: &str, text: &str) -> codex_protocol::items::AgentMessageItem {
+        codex_protocol::items::AgentMessageItem {
+            id: id.into(),
+            content: vec![CoreAgentMessageContent::Text { text: text.into() }],
+            phase: None,
+            memory_citation: None,
+            delivery: None,
+            questions: None,
+        }
+    }
+
+    #[test]
+    fn canonical_live_messages_bind_start_thread_turn_and_ignore_repeated_start() {
+        let mut order = CanonicalLiveOrder::default();
+        order.begin("turn");
+        order.record("turn", "canonical-agent");
+        order.start_message("thread", "turn", &canonical_message("canonical-agent", ""));
+        order.message_delta("wrong-thread", "turn", "canonical-agent", "hidden");
+        order.message_delta("thread", "wrong-turn", "canonical-agent", "hidden");
+        order.message_delta("thread", "turn", "item-1", "hidden");
+        order.message_delta("thread", "turn", "canonical-agent", "go");
+        order.start_message(
+            "thread",
+            "turn",
+            &canonical_message("canonical-agent", "replacement"),
+        );
+        // Equal deltas can be genuine repeated text: protocol has no sequence ID.
+        order.message_delta("thread", "turn", "canonical-agent", "go");
+        let messages = order.messages_for_turn("turn").unwrap();
+        assert_eq!(messages.len(), 1);
+        assert!(
+            matches!(&messages[0], ThreadItem::AgentMessage { id, text, .. }
+            if id == "canonical-agent" && text == "gogo")
+        );
+        assert!(order.messages_for_turn("wrong-turn").is_none());
+        order.begin("new-turn");
+        assert!(order.messages_for_turn("new-turn").unwrap().is_empty());
+    }
+
+    #[test]
+    fn canonical_live_message_utf8_limits_fail_closed_without_unbounded_clone() {
+        let mut order = CanonicalLiveOrder::default();
+        order.begin("turn");
+        order.record("turn", "agent");
+        order.start_message("thread", "turn", &canonical_message("agent", ""));
+        order.message_delta(
+            "thread",
+            "turn",
+            "agent",
+            &"\u{00e9}".repeat(LIVE_MESSAGE_BYTES / 2),
+        );
+        assert_eq!(order.messages[0].text.len(), LIVE_MESSAGE_BYTES);
+        assert!(order.messages_for_turn("turn").is_some());
+        order.message_delta("thread", "turn", "agent", "\u{00e9}");
+        assert!(order.messages_for_turn("turn").is_none());
+        assert!(order.messages.is_empty());
+        // A fresh turn restores display, never the overflowed old payload.
+        order.begin("next");
+        assert!(order.messages_for_turn("next").unwrap().is_empty());
+    }
+
+    #[test]
+    fn canonical_live_message_total_and_count_limits_are_bounded() {
+        let mut order = CanonicalLiveOrder::default();
+        order.begin("turn");
+        for n in 0..LIVE_MESSAGE_LIMIT {
+            let id = format!("agent-{n}");
+            order.record("turn", &id);
+            order.start_message("thread", "turn", &canonical_message(&id, "x"));
+        }
+        order.record("turn", "one-too-many");
+        order.start_message("thread", "turn", &canonical_message("one-too-many", ""));
+        assert!(order.messages_for_turn("turn").is_none());
+        order.begin("next");
+        for n in 0..(LIVE_MESSAGE_TOTAL_BYTES / LIVE_MESSAGE_BYTES) {
+            let id = format!("agent-{n}");
+            order.record("next", &id);
+            order.start_message(
+                "thread",
+                "next",
+                &canonical_message(&id, &"x".repeat(LIVE_MESSAGE_BYTES)),
+            );
+        }
+        order.record("next", "over-total");
+        order.start_message("thread", "next", &canonical_message("over-total", "x"));
+        assert!(order.messages_for_turn("next").is_none());
+    }
+
+    #[test]
+    fn canonical_live_message_completion_retains_bounded_text_but_rejects_late_delta() {
+        use codex_protocol::protocol::{
+            AgentMessageContentDeltaEvent, ItemCompletedEvent, ItemStartedEvent,
+        };
+        let mut state = ThreadState::default();
+        let thread = ThreadId::new();
+        let item = CoreTurnItem::AgentMessage(canonical_message("canonical", ""));
+        start_canonical_turn(&mut state, "turn");
+        state.track_current_turn_event(
+            "turn",
+            &EventMsg::ItemStarted(ItemStartedEvent {
+                thread_id: thread,
+                turn_id: "turn".into(),
+                item: item.clone(),
+                started_at_ms: 100,
+            }),
+        );
+        let delta = |text: &str| {
+            EventMsg::AgentMessageContentDelta(AgentMessageContentDeltaEvent {
+                thread_id: thread.to_string(),
+                turn_id: "turn".into(),
+                item_id: "canonical".into(),
+                delta: text.into(),
+            })
+        };
+        state.track_current_turn_event("turn", &delta("partial"));
+        state.track_current_turn_event(
+            "turn",
+            &EventMsg::ItemCompleted(ItemCompletedEvent {
+                thread_id: thread,
+                turn_id: "turn".into(),
+                item,
+                started_at_ms: Some(100),
+                completed_at_ms: 101,
+            }),
+        );
+        state.track_current_turn_event("turn", &delta("late"));
+        assert!(matches!(&state.canonical_live_messages("turn").unwrap()[0],
+            ThreadItem::AgentMessage { text, .. } if text == "partial"));
+        state.canonical_live_order = CanonicalLiveOrder::default();
+        assert!(state.canonical_live_messages("turn").is_none());
+    }
+
+    #[test]
+    fn canonical_live_order_joins_uuid_messages_not_legacy_presentation_ids() {
+        use codex_protocol::protocol::{ItemCompletedEvent, ItemStartedEvent, UserMessageEvent};
+        let mut state = ThreadState::default();
+        let turn = "active-turn";
+        let canonical_id = "11111111-1111-4111-8111-111111111111";
+        start_canonical_turn(&mut state, turn);
+        state.track_current_turn_event(
+            turn,
+            &EventMsg::UserMessage(UserMessageEvent {
+                message: "Fictional input".into(),
+                ..Default::default()
+            }),
+        );
+        assert_eq!(state.active_turn_items().unwrap().2[0].id(), "item-1");
+        let item = CoreTurnItem::UserMessage(codex_protocol::items::UserMessageItem {
+            id: canonical_id.into(),
+            client_id: None,
+            content: Vec::new(),
+        });
+        state.track_current_turn_event(
+            turn,
+            &EventMsg::ItemStarted(ItemStartedEvent {
+                thread_id: ThreadId::new(),
+                turn_id: turn.into(),
+                item: item.clone(),
+                started_at_ms: 100,
+            }),
+        );
+        state.track_current_turn_event(
+            turn,
+            &EventMsg::ItemCompleted(ItemCompletedEvent {
+                thread_id: ThreadId::new(),
+                turn_id: turn.into(),
+                item,
+                started_at_ms: Some(100),
+                completed_at_ms: 101,
+            }),
+        );
+        // Completion does not duplicate or replace the canonical start ordering.
+        assert_eq!(
+            state.canonical_active_order(turn).unwrap(),
+            &[canonical_id.to_string()]
+        );
+        assert_eq!(state.active_turn_items().unwrap().2[0].id(), "item-1");
+        assert!(state.canonical_active_order("another-turn").is_none());
+    }
+
+    #[test]
+    fn canonical_live_order_ends_on_completion_and_listener_reset() {
+        let mut state = ThreadState::default();
+        start_canonical_turn(&mut state, "turn-a");
+        state.canonical_live_order.record("turn-a", "command-a");
+        state.track_current_turn_event(
+            "turn-a",
+            &EventMsg::TurnComplete(codex_protocol::protocol::TurnCompleteEvent {
+                root_turn_id: None,
+                turn_id: "turn-a".into(),
+                last_agent_message: None,
+                error: None,
+                started_at: Some(100),
+                completed_at: Some(102),
+                duration_ms: Some(2000),
+                time_to_first_token_ms: None,
+            }),
+        );
+        assert!(state.canonical_active_order("turn-a").is_none());
+        start_canonical_turn(&mut state, "turn-b");
+        state
+            .canonical_live_order
+            .record("turn-a", "late-old-command");
+        state.canonical_live_order.record("turn-b", "command-b");
+        assert_eq!(
+            state.canonical_active_order("turn-b").unwrap(),
+            &["command-b".to_string()]
+        );
+        state.clear_listener();
+        assert!(state.canonical_active_order("turn-b").is_none());
+        // Reattachment without a new TurnStarted event cannot revive old order.
+        state
+            .canonical_live_order
+            .record("turn-b", "late-after-reset");
+        assert!(state.canonical_active_order("turn-b").is_none());
+    }
+
+    #[test]
+    fn canonical_live_order_overflow_is_sticky_and_bounded_until_next_turn() {
+        let mut order = CanonicalLiveOrder::default();
+        order.begin("turn-a");
+        for index in 0..LIVE_CANONICAL_ORDER_LIMIT {
+            order.record("turn-a", &format!("id-{index}"));
+        }
+        assert_eq!(
+            order.for_turn("turn-a").unwrap().len(),
+            LIVE_CANONICAL_ORDER_LIMIT
+        );
+        order.record("turn-a", "id-0");
+        assert_eq!(
+            order.for_turn("turn-a").unwrap().len(),
+            LIVE_CANONICAL_ORDER_LIMIT
+        );
+        order.record("turn-a", "overflow");
+        assert!(order.for_turn("turn-a").is_none());
+        assert!(order.ids.is_empty());
+        order.record("turn-a", "later");
+        assert!(order.for_turn("turn-a").is_none());
+        order.begin("turn-b");
+        order.record("turn-b", &"x".repeat(LIVE_CANONICAL_ID_BYTES + 1));
+        assert!(order.for_turn("turn-b").is_none());
+        assert!(order.ids.is_empty());
+        order.begin("turn-c");
+        order.record("turn-c", "valid");
+        assert_eq!(order.for_turn("turn-c").unwrap(), &["valid".to_string()]);
+    }
+
+    #[test]
+    fn note_thread_settings_reports_only_effective_changes() {
+        let mut state = ThreadState::default();
+        let initial = thread_settings("mock-model");
+        let updated = thread_settings("mock-model-2");
+
+        let results = vec![
+            state.note_thread_settings(initial.clone()),
+            state.note_thread_settings(initial),
+            state.note_thread_settings(updated.clone()),
+            state.note_thread_settings(updated),
+        ];
+
+        assert_eq!(results, vec![true, false, true, false]);
+    }
+
+    fn thread_settings(model: &str) -> ThreadSettings {
+        ThreadSettings {
+            disabled_plugin_ids: Vec::new(),
+            cwd: AbsolutePathBuf::from_absolute_path("/tmp").expect("absolute path"),
+            approval_policy: AskForApproval::OnRequest,
+            approvals_reviewer: ApprovalsReviewer::User,
+            sandbox_policy: SandboxPolicy::ReadOnly {
+                network_access: false,
+            },
+            active_permission_profile: None,
+            model: model.to_string(),
+            model_provider: "mock_provider".to_string(),
+            service_tier: None,
+            effort: None,
+            summary: None,
+            collaboration_mode: CollaborationMode {
+                mode: ModeKind::Default,
+                settings: Settings {
+                    model: model.to_string(),
+                    reasoning_effort: None,
+                    developer_instructions: None,
+                },
+            },
+            multi_agent_mode: MultiAgentMode::ExplicitRequestOnly,
+            personality: None,
+        }
+    }
+}
+
+struct ThreadEntry {
+    state: Arc<Mutex<ThreadState>>,
+    connection_ids: HashSet<ConnectionId>,
+    has_connections_watcher: watch::Sender<bool>,
+}
+
+impl Default for ThreadEntry {
+    fn default() -> Self {
+        Self {
+            state: Arc::new(Mutex::new(ThreadState::default())),
+            connection_ids: HashSet::new(),
+            has_connections_watcher: watch::channel(false).0,
+        }
+    }
+}
+
+impl ThreadEntry {
+    fn update_has_connections(&self) {
+        let _ = self.has_connections_watcher.send_if_modified(|current| {
+            let prev = *current;
+            *current = !self.connection_ids.is_empty();
+            prev != *current
+        });
+    }
+}
+
+#[derive(Default)]
+struct ThreadStateManagerInner {
+    live_connections: HashMap<ConnectionId, ConnectionCapabilities>,
+    threads: HashMap<ThreadId, ThreadEntry>,
+    thread_ids_by_connection: HashMap<ConnectionId, HashSet<ThreadId>>,
+}
+
+#[derive(Clone, Copy, Default)]
+pub(crate) struct ConnectionCapabilities {
+    pub(crate) request_attestation: bool,
+}
+
+#[derive(Clone, Default)]
+pub(crate) struct ThreadStateManager {
+    state: Arc<Mutex<ThreadStateManagerInner>>,
+    // Extension event sinks are synchronous, so they need an await-free way to
+    // enqueue work on the active per-thread listener.
+    listener_commands:
+        Arc<StdMutex<HashMap<ThreadId, mpsc::UnboundedSender<ThreadListenerCommand>>>>,
+}
+
+impl ThreadStateManager {
+    /// Coordinates goal edits with cold/path-based resume for just this thread.
+    pub(crate) async fn lock_goal_resume(
+        &self,
+        thread_id: ThreadId,
+    ) -> tokio::sync::OwnedMutexGuard<()> {
+        let lock = self
+            .thread_state(thread_id)
+            .await
+            .lock()
+            .await
+            .goal_resume_lock
+            .clone();
+        lock.lock_owned().await
+    }
+
+    pub(crate) fn new() -> Self {
+        Self::default()
+    }
+
+    pub(crate) async fn connection_initialized(
+        &self,
+        connection_id: ConnectionId,
+        capabilities: ConnectionCapabilities,
+    ) {
+        self.state
+            .lock()
+            .await
+            .live_connections
+            .insert(connection_id, capabilities);
+    }
+
+    pub(crate) async fn first_attestation_capable_connection_for_thread(
+        &self,
+        thread_id: ThreadId,
+    ) -> Option<ConnectionId> {
+        let state = self.state.lock().await;
+        state
+            .threads
+            .get(&thread_id)?
+            .connection_ids
+            .iter()
+            .filter_map(|connection_id| {
+                state
+                    .live_connections
+                    .get(connection_id)?
+                    .request_attestation
+                    .then_some(*connection_id)
+            })
+            .min_by_key(|connection_id| connection_id.0)
+    }
+
+    pub(crate) async fn wait_for_thread_subscriber(&self, thread_id: ThreadId) {
+        let mut has_connections = {
+            let mut state = self.state.lock().await;
+            state
+                .threads
+                .entry(thread_id)
+                .or_default()
+                .has_connections_watcher
+                .subscribe()
+        };
+        while !*has_connections.borrow_and_update() {
+            if has_connections.changed().await.is_err() {
+                break;
+            }
+        }
+    }
+
+    pub(crate) async fn subscribed_connection_ids(&self, thread_id: ThreadId) -> Vec<ConnectionId> {
+        let state = self.state.lock().await;
+        state
+            .threads
+            .get(&thread_id)
+            .map(|thread_entry| thread_entry.connection_ids.iter().copied().collect())
+            .unwrap_or_default()
+    }
+
+    pub(crate) async fn thread_state(&self, thread_id: ThreadId) -> Arc<Mutex<ThreadState>> {
+        let mut state = self.state.lock().await;
+        state.threads.entry(thread_id).or_default().state.clone()
+    }
+
+    pub(crate) fn current_listener_command_tx(
+        &self,
+        thread_id: ThreadId,
+    ) -> Option<mpsc::UnboundedSender<ThreadListenerCommand>> {
+        self.listener_commands
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&thread_id)
+            .cloned()
+    }
+
+    pub(crate) fn register_listener_command_tx(
+        &self,
+        thread_id: ThreadId,
+        tx: mpsc::UnboundedSender<ThreadListenerCommand>,
+    ) {
+        self.listener_commands
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert(thread_id, tx);
+    }
+
+    pub(crate) fn unregister_listener_command_tx(&self, thread_id: ThreadId) {
+        self.listener_commands
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(&thread_id);
+    }
+
+    pub(crate) async fn remove_thread_state(&self, thread_id: ThreadId) {
+        let thread_state = {
+            let mut state = self.state.lock().await;
+            let thread_state = state
+                .threads
+                .remove(&thread_id)
+                .map(|thread_entry| thread_entry.state);
+            state.thread_ids_by_connection.retain(|_, thread_ids| {
+                thread_ids.remove(&thread_id);
+                !thread_ids.is_empty()
+            });
+            thread_state
+        };
+        self.unregister_listener_command_tx(thread_id);
+
+        if let Some(thread_state) = thread_state {
+            let mut thread_state = thread_state.lock().await;
+            tracing::debug!(
+                thread_id = %thread_id,
+                listener_generation = thread_state.listener_generation,
+                had_listener = thread_state.cancel_tx.is_some(),
+                had_active_turn = thread_state.active_turn_id().is_some(),
+                "clearing thread listener during thread-state teardown"
+            );
+            thread_state.clear_listener();
+        }
+    }
+
+    /// Removes an unsubscribed listener's entry without clearing a replacement's state.
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "the listener generation must stay fixed while removing its map entry"
+    )]
+    pub(crate) async fn remove_unsubscribed_listener(
+        &self,
+        thread_id: ThreadId,
+        expected: &Arc<Mutex<ThreadState>>,
+        generation: u64,
+    ) -> bool {
+        let mut thread_state = expected.lock().await;
+        let mut state = self.state.lock().await;
+        if thread_state.listener_generation != generation
+            || !state.threads.get(&thread_id).is_some_and(|entry| {
+                Arc::ptr_eq(&entry.state, expected) && entry.connection_ids.is_empty()
+            })
+        {
+            return false;
+        }
+        state.threads.remove(&thread_id);
+        self.unregister_listener_command_tx(thread_id);
+        thread_state.clear_listener();
+        true
+    }
+
+    pub(crate) async fn clear_all_listeners(&self) {
+        let thread_states = {
+            let state = self.state.lock().await;
+            state
+                .threads
+                .iter()
+                .map(|(thread_id, thread_entry)| (*thread_id, thread_entry.state.clone()))
+                .collect::<Vec<_>>()
+        };
+
+        for (thread_id, thread_state) in thread_states {
+            self.unregister_listener_command_tx(thread_id);
+            let mut thread_state = thread_state.lock().await;
+            tracing::debug!(
+                thread_id = %thread_id,
+                listener_generation = thread_state.listener_generation,
+                had_listener = thread_state.cancel_tx.is_some(),
+                had_active_turn = thread_state.active_turn_id().is_some(),
+                "clearing thread listener during app-server shutdown"
+            );
+            thread_state.clear_listener();
+        }
+    }
+
+    pub(crate) async fn unsubscribe_connection_from_thread(
+        &self,
+        thread_id: ThreadId,
+        connection_id: ConnectionId,
+    ) -> bool {
+        {
+            let mut state = self.state.lock().await;
+            if !state.threads.contains_key(&thread_id) {
+                return false;
+            }
+
+            if !state
+                .thread_ids_by_connection
+                .get(&connection_id)
+                .is_some_and(|thread_ids| thread_ids.contains(&thread_id))
+            {
+                return false;
+            }
+
+            if let Some(thread_ids) = state.thread_ids_by_connection.get_mut(&connection_id) {
+                thread_ids.remove(&thread_id);
+                if thread_ids.is_empty() {
+                    state.thread_ids_by_connection.remove(&connection_id);
+                }
+            }
+            if let Some(thread_entry) = state.threads.get_mut(&thread_id) {
+                thread_entry.connection_ids.remove(&connection_id);
+                thread_entry.update_has_connections();
+            }
+        };
+
+        true
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn has_subscribers(&self, thread_id: ThreadId) -> bool {
+        self.state
+            .lock()
+            .await
+            .threads
+            .get(&thread_id)
+            .is_some_and(|thread_entry| !thread_entry.connection_ids.is_empty())
+    }
+
+    pub(crate) async fn try_ensure_connection_subscribed(
+        &self,
+        thread_id: ThreadId,
+        connection_id: ConnectionId,
+        experimental_raw_events: bool,
+    ) -> Option<Arc<Mutex<ThreadState>>> {
+        let thread_state = {
+            let mut state = self.state.lock().await;
+            if !state.live_connections.contains_key(&connection_id) {
+                return None;
+            }
+            state
+                .thread_ids_by_connection
+                .entry(connection_id)
+                .or_default()
+                .insert(thread_id);
+            let thread_entry = state.threads.entry(thread_id).or_default();
+            thread_entry.connection_ids.insert(connection_id);
+            thread_entry.update_has_connections();
+            thread_entry.state.clone()
+        };
+        {
+            let mut thread_state_guard = thread_state.lock().await;
+            if experimental_raw_events {
+                thread_state_guard.set_experimental_raw_events(/*enabled*/ true);
+            }
+        }
+        Some(thread_state)
+    }
+
+    pub(crate) async fn try_add_connection_to_thread(
+        &self,
+        thread_id: ThreadId,
+        connection_id: ConnectionId,
+    ) -> bool {
+        let mut state = self.state.lock().await;
+        if !state.live_connections.contains_key(&connection_id) {
+            return false;
+        }
+        state
+            .thread_ids_by_connection
+            .entry(connection_id)
+            .or_default()
+            .insert(thread_id);
+        let thread_entry = state.threads.entry(thread_id).or_default();
+        thread_entry.connection_ids.insert(connection_id);
+        thread_entry.update_has_connections();
+        true
+    }
+
+    pub(crate) async fn remove_connection(&self, connection_id: ConnectionId) -> Vec<ThreadId> {
+        {
+            let mut state = self.state.lock().await;
+            state.live_connections.remove(&connection_id);
+            let thread_ids = state
+                .thread_ids_by_connection
+                .remove(&connection_id)
+                .unwrap_or_default();
+            for thread_id in &thread_ids {
+                if let Some(thread_entry) = state.threads.get_mut(thread_id) {
+                    thread_entry.connection_ids.remove(&connection_id);
+                    thread_entry.update_has_connections();
+                }
+            }
+            thread_ids
+                .into_iter()
+                .filter(|thread_id| {
+                    state
+                        .threads
+                        .get(thread_id)
+                        .is_some_and(|thread_entry| thread_entry.connection_ids.is_empty())
+                })
+                .collect::<Vec<_>>()
+        }
+    }
+
+    pub(crate) async fn subscribe_to_has_connections(
+        &self,
+        thread_id: ThreadId,
+    ) -> Option<watch::Receiver<bool>> {
+        let state = self.state.lock().await;
+        state
+            .threads
+            .get(&thread_id)
+            .map(|thread_entry| thread_entry.has_connections_watcher.subscribe())
+    }
+}

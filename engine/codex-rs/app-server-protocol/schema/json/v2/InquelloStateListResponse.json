@@ -1,0 +1,107 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "InquelloStateDimension": {
+      "description": "One dimension and its records, latest first; empty when not recorded.",
+      "properties": {
+        "dimension": {
+          "type": "string"
+        },
+        "records": {
+          "items": {
+            "$ref": "#/definitions/InquelloStateRecord"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "dimension",
+        "records"
+      ],
+      "type": "object"
+    },
+    "InquelloStateRecord": {
+      "description": "One immutable state record.",
+      "properties": {
+        "actorKind": {
+          "description": "`human`, `runtime` or `system`.",
+          "type": "string"
+        },
+        "actorRef": {
+          "description": "The principal ID for a human; the runtime or host name otherwise.",
+          "type": "string"
+        },
+        "dimension": {
+          "description": "`task`, `run`, `output`, `checks`, `review`, `approval_marker` or `delivery_marker`.",
+          "type": "string"
+        },
+        "recordedAt": {
+          "description": "Milliseconds since the Unix epoch.",
+          "format": "int64",
+          "type": "integer"
+        },
+        "revision": {
+          "description": "The Task-state revision this record created.",
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "scopeId": {
+          "description": "The Task ID, a run reference or an output/version reference.",
+          "type": "string"
+        },
+        "scopeKind": {
+          "description": "`task`, `run` or `output`.",
+          "type": "string"
+        },
+        "value": {
+          "description": "A value of the dimension's own vocabulary.",
+          "type": "string"
+        },
+        "version": {
+          "description": "1 for the first record of this dimension and scope, then one more per record.",
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "actorKind",
+        "actorRef",
+        "dimension",
+        "recordedAt",
+        "revision",
+        "scopeId",
+        "scopeKind",
+        "value",
+        "version"
+      ],
+      "type": "object"
+    }
+  },
+  "properties": {
+    "dimensions": {
+      "description": "All seven dimensions, in a fixed order.",
+      "items": {
+        "$ref": "#/definitions/InquelloStateDimension"
+      },
+      "type": "array"
+    },
+    "revision": {
+      "description": "The Task's state revision: 0 before the first record.",
+      "format": "uint64",
+      "minimum": 0.0,
+      "type": "integer"
+    },
+    "taskId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "dimensions",
+    "revision",
+    "taskId"
+  ],
+  "title": "InquelloStateListResponse",
+  "type": "object"
+}

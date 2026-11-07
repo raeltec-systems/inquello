@@ -1,0 +1,78 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "InquelloKnownWorkspace": {
+      "description": "A Workspace this device knows for the bound principal.",
+      "properties": {
+        "labelRevision": {
+          "description": "The label's revision; 0 when no label is stored.",
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "name": {
+          "description": "The last name the principal saw for it; null when only a Task names it.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "labelRevision",
+        "workspaceId"
+      ],
+      "type": "object"
+    },
+    "InquelloReceipt": {
+      "description": "What a mutation's receipt recorded.",
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "replayed": {
+          "description": "True when this answer came from an earlier application of the operation.",
+          "type": "boolean"
+        },
+        "resultingRevision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "command",
+        "expectedRevision",
+        "operationId",
+        "replayed",
+        "resultingRevision"
+      ],
+      "type": "object"
+    }
+  },
+  "properties": {
+    "receipt": {
+      "$ref": "#/definitions/InquelloReceipt"
+    },
+    "workspace": {
+      "$ref": "#/definitions/InquelloKnownWorkspace"
+    }
+  },
+  "required": [
+    "receipt",
+    "workspace"
+  ],
+  "title": "InquelloWorkspaceRememberResponse",
+  "type": "object"
+}

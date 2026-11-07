@@ -1,0 +1,275 @@
+/* Story 1.5/1.6 specimen layout. Later shell stories replace this page. */
+.specimen-section {
+  margin: 0 0 var(--space-5);
+}
+.specimen-heading {
+  margin: 0 0 var(--space-2);
+  font: var(--type-label);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.specimen-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+.specimen-hook {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: flex-start;
+  min-width: 0;
+}
+.specimen-hook:has(.iq-field, .iq-choice-group) {
+  flex: 1 1 var(--panel-min-width);
+}
+/* Story 1.8: the plan, approval and diff specimens take the full row. */
+.specimen-hook:has(.iq-plan, .iq-approval, .specimen-diff) {
+  flex: 1 1 100%;
+}
+.specimen-diff {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+.specimen {
+  max-width: var(--thread-max-width);
+  margin: 0 auto;
+  padding: var(--space-6);
+  color: var(--text-primary);
+}
+.specimen-title {
+  margin: 0 0 var(--space-3);
+  font: var(--type-display);
+  letter-spacing: var(--tracking-display);
+}
+.specimen-body {
+  margin: 0 0 var(--space-4);
+  font: var(--type-body);
+  color: var(--text-secondary);
+}
+.specimen-icons {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  font: var(--type-ui);
+  color: var(--text-secondary);
+}
+.specimen-icon-row {
+  display: inline-flex;
+  gap: var(--space-1-5);
+  align-items: center;
+}
+/* Visually hidden but laid out, so each declared face is requested. */
+.specimen-weights {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+.specimen-sans { font-family: var(--font-sans); }
+.specimen-mono { font-family: var(--font-mono); }
+.specimen-400 { font-weight: 400; }
+.specimen-500 { font-weight: 500; }
+.specimen-600 { font-weight: 600; }
+/* Story 1.7: room below the open specimen menu, which floats over the page. */
+.specimen-hook[data-contrast='menu-open'] {
+  padding-bottom: var(--console-height);
+}
+
+/* Story 1.10b: the Account block. Identity, shared service and private work are separate rows. */
+.specimen-account {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+}
+.specimen-account-states {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+}
+.specimen-account-state {
+  display: contents;
+}
+.specimen-account-state dt {
+  font: var(--type-label);
+  letter-spacing: var(--tracking-label);
+  color: var(--text-secondary);
+}
+.specimen-account-state dd {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  margin: 0;
+  font: var(--type-ui);
+  color: var(--text-primary);
+}
+.specimen-account-who {
+  display: inline-flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+.specimen-account-issuer,
+.specimen-account-note {
+  font: var(--type-ui);
+  color: var(--text-secondary);
+}
+.specimen-account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+/* Story 1.12: the Local data block. One row per data-policy category. */
+.specimen-local-data {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+}
+.specimen-local-data-blockers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+.specimen-local-data-list,
+.specimen-local-data-categories {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font: var(--type-ui);
+  color: var(--text-primary);
+}
+.specimen-local-data-category {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.specimen-local-data-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+}
+.specimen-local-data-label {
+  font: var(--type-ui);
+  color: var(--text-primary);
+}
+.specimen-local-data-rules {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-1) var(--space-4);
+  margin: 0;
+}
+.specimen-local-data-rules dt {
+  font: var(--type-label);
+  letter-spacing: var(--tracking-label);
+  color: var(--text-secondary);
+}
+.specimen-local-data-rules dd {
+  margin: 0;
+  font: var(--type-ui);
+  color: var(--text-primary);
+}
+.specimen-local-data-report {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* Providers block (Story 1.13). */
+.specimen-provider-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 480px;
+}
+
+/* Capabilities and processing, S07 (Story 1.18). */
+.specimen-policy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: 720px;
+}
+.specimen-policy-workspace,
+.specimen-policy-contract {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.specimen-policy-heading {
+  margin: 0;
+  font: var(--type-label);
+  letter-spacing: var(--tracking-label);
+  color: var(--text-primary);
+}
+.specimen-policy-settings {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-1) var(--space-4);
+  margin: 0;
+}
+.specimen-policy-setting {
+  display: contents;
+}
+.specimen-policy-settings dt {
+  font: var(--type-ui);
+  color: var(--text-secondary);
+}
+.specimen-policy-settings dd {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  margin: 0;
+}
+.specimen-policy-source {
+  font: var(--type-ui);
+  color: var(--text-secondary);
+}
+.specimen-policy-capabilities {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.specimen-policy-capabilities li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+.specimen-policy-capability {
+  font: var(--type-ui);
+  color: var(--text-primary);
+}
+
+/* Story 1.21: current runtime inventory. Status remains textual, not colour-coded. */
+[data-capabilities-section] { min-width: 0; font: var(--type-ui); }
+[data-capabilities-section] p { color: var(--text-secondary); overflow-wrap: anywhere; }
+[data-capabilities-section] h4, [data-capabilities-section] h5 { font: var(--type-label); }
+[data-capability-kind] > ul { list-style: none; padding: 0; }
+[data-inventory-entry] { padding: var(--space-3) 0; border-top: 1px solid var(--border-default); }
+[data-inventory-entry] dl, [data-provider-session] dl { display: grid; grid-template-columns: minmax(7rem, 1fr) minmax(0, 3fr); gap: var(--space-1) var(--space-3); }
+[data-inventory-entry] dd, [data-provider-session] dd { margin: 0; overflow-wrap: anywhere; }
+[data-inventory-entry] .iq-action { margin: 0 var(--space-2) var(--space-2) 0; }
+[data-capabilities-section] select { font: inherit; max-width: 100%; color: var(--text-primary); background: var(--surface-app); padding: var(--space-2); }
+[data-capabilities-section] input[type='checkbox'] { margin-right: var(--space-2); }

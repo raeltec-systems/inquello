@@ -1,0 +1,58 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "properties": {
+    "clientEntity": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "expectedRevision": {
+      "format": "uint64",
+      "minimum": 0.0,
+      "type": "integer"
+    },
+    "name": {
+      "type": "string"
+    },
+    "objectives": {
+      "type": "string"
+    },
+    "operationId": {
+      "type": "string"
+    },
+    "periodEnd": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "periodStart": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "scope": {
+      "type": "string"
+    },
+    "serviceEngagementId": {
+      "description": "The shared-service Engagement main created first (Story 1.11).",
+      "type": "string"
+    },
+    "workspaceId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "expectedRevision",
+    "name",
+    "objectives",
+    "operationId",
+    "scope",
+    "serviceEngagementId",
+    "workspaceId"
+  ],
+  "title": "InquelloEngagementCreateParams",
+  "type": "object"
+}

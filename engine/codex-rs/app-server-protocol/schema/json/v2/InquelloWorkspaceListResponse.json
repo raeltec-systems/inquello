@@ -1,0 +1,44 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "InquelloKnownWorkspace": {
+      "description": "A Workspace this device knows for the bound principal.",
+      "properties": {
+        "labelRevision": {
+          "description": "The label's revision; 0 when no label is stored.",
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "name": {
+          "description": "The last name the principal saw for it; null when only a Task names it.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "labelRevision",
+        "workspaceId"
+      ],
+      "type": "object"
+    }
+  },
+  "properties": {
+    "workspaces": {
+      "items": {
+        "$ref": "#/definitions/InquelloKnownWorkspace"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "workspaces"
+  ],
+  "title": "InquelloWorkspaceListResponse",
+  "type": "object"
+}

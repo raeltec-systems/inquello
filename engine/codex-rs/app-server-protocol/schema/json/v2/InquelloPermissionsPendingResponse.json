@@ -1,0 +1,249 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "InquelloCommandEvaluation": {
+      "description": "The decision record of one command.",
+      "properties": {
+        "analysis": {
+          "description": "The action and its destination in plain words.",
+          "type": "string"
+        },
+        "cannotAsk": {
+          "description": "A prompt refused because the Task's mode never asks.",
+          "type": "boolean"
+        },
+        "command": {
+          "description": "The exact command.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "commandText": {
+          "description": "The exact command as people read it.",
+          "type": "string"
+        },
+        "consequence": {
+          "description": "What changes and whether it can be undone.",
+          "type": "string"
+        },
+        "controllingRule": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/InquelloCommandRule"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The rule that controls the decision; null when the asking behaviour decides."
+        },
+        "decision": {
+          "description": "`allow`, `prompt` or `forbid`.",
+          "type": "string"
+        },
+        "destination": {
+          "description": "Where it takes effect, with no device path.",
+          "type": "string"
+        },
+        "ruleText": {
+          "description": "The controlling rule and its source in words.",
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/definitions/InquelloRuleSource"
+        }
+      },
+      "required": [
+        "analysis",
+        "cannotAsk",
+        "command",
+        "commandText",
+        "consequence",
+        "decision",
+        "destination",
+        "ruleText",
+        "source"
+      ],
+      "type": "object"
+    },
+    "InquelloCommandRule": {
+      "description": "One command rule: a literal command prefix and its decision.",
+      "properties": {
+        "decision": {
+          "description": "`allow`, `prompt` or `forbid` (a person's own rules: `prompt` or `forbid`).",
+          "type": "string"
+        },
+        "note": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "prefix": {
+          "description": "The literal command words, in order.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "decision",
+        "prefix"
+      ],
+      "type": "object"
+    },
+    "InquelloPermissionDecision": {
+      "description": "A recorded permission decision.",
+      "properties": {
+        "actorKind": {
+          "description": "`human`, `automated_reviewer` or `system`.",
+          "type": "string"
+        },
+        "actorRef": {
+          "type": "string"
+        },
+        "decidedAt": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "label": {
+          "description": "\"Automated permission review — not analytical review or Professional Approval\" for the reviewer; null otherwise.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "outcome": {
+          "description": "`allowed`, `denied` or `expired`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "actorKind",
+        "actorRef",
+        "decidedAt",
+        "outcome"
+      ],
+      "type": "object"
+    },
+    "InquelloPermissionRequest": {
+      "description": "One request for permission to act.",
+      "properties": {
+        "createdAt": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "decision": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/InquelloPermissionDecision"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "evaluation": {
+          "$ref": "#/definitions/InquelloCommandEvaluation"
+        },
+        "expiresAt": {
+          "format": "int64",
+          "type": "integer"
+        },
+        "label": {
+          "description": "Always \"Permission to act\".",
+          "type": "string"
+        },
+        "origin": {
+          "description": "`tools_exec` or `runtime`.",
+          "type": "string"
+        },
+        "requestId": {
+          "type": "string"
+        },
+        "revision": {
+          "description": "1 while undecided, 2 once decided.",
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "status": {
+          "description": "`pending`, `allowed`, `denied` or `expired`.",
+          "type": "string"
+        },
+        "taskId": {
+          "type": "string"
+        },
+        "used": {
+          "type": "boolean"
+        },
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "createdAt",
+        "evaluation",
+        "expiresAt",
+        "label",
+        "origin",
+        "requestId",
+        "revision",
+        "status",
+        "taskId",
+        "used",
+        "workspaceId"
+      ],
+      "type": "object"
+    },
+    "InquelloRuleSource": {
+      "description": "Where a command decision comes from.",
+      "properties": {
+        "behaviour": {
+          "description": "The asking behaviour, for `approval_behaviour`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "description": "`workspace_policy`, `user_rule` or `approval_behaviour`.",
+          "type": "string"
+        },
+        "label": {
+          "description": "The source in words, for example \"Workspace policy, revision 4\" or \"your rule\".",
+          "type": "string"
+        },
+        "revision": {
+          "description": "The policy revision (Workspace) or rules version (user rule).",
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "label"
+      ],
+      "type": "object"
+    }
+  },
+  "properties": {
+    "requests": {
+      "items": {
+        "$ref": "#/definitions/InquelloPermissionRequest"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "requests"
+  ],
+  "title": "InquelloPermissionsPendingResponse",
+  "type": "object"
+}

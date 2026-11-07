@@ -1,0 +1,88 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "InquelloCommandRule": {
+      "description": "One command rule: a literal command prefix and its decision.",
+      "properties": {
+        "decision": {
+          "description": "`allow`, `prompt` or `forbid` (a person's own rules: `prompt` or `forbid`).",
+          "type": "string"
+        },
+        "note": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "prefix": {
+          "description": "The literal command words, in order.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "decision",
+        "prefix"
+      ],
+      "type": "object"
+    },
+    "InquelloReceipt": {
+      "description": "What a mutation's receipt recorded.",
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "expectedRevision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "operationId": {
+          "type": "string"
+        },
+        "replayed": {
+          "description": "True when this answer came from an earlier application of the operation.",
+          "type": "boolean"
+        },
+        "resultingRevision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "command",
+        "expectedRevision",
+        "operationId",
+        "replayed",
+        "resultingRevision"
+      ],
+      "type": "object"
+    }
+  },
+  "properties": {
+    "receipt": {
+      "$ref": "#/definitions/InquelloReceipt"
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0.0,
+      "type": "integer"
+    },
+    "rules": {
+      "items": {
+        "$ref": "#/definitions/InquelloCommandRule"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "receipt",
+    "revision",
+    "rules"
+  ],
+  "title": "InquelloUserRulesSetResponse",
+  "type": "object"
+}

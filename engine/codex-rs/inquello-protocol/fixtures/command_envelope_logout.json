@@ -1,0 +1,10 @@
+{
+  "command_epoch": "1",
+  "operation_id": "op-logout-0001",
+  "expected_revision": "1",
+  "schema_version": 1,
+  "payload": {
+    "command": "logout",
+    "session_id": "3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f"
+  }
+}

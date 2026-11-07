@@ -1,0 +1,909 @@
+import {ownedDevProfile,DEV_PROFILE_ENV,DEV_RUN_ENV} from './dev-profile';
+import {ownedOnboardingFixture,ONBOARDING_FIXTURE_ENV,ONBOARDING_RUN_ENV} from './onboarding-smoke';
+import {probeOnboarding} from './onboarding-smoke-probe';
+import { configureDesktopStorage } from './runtime/desktop-storage';
+import { smokeCatalogArgs } from './runtime/smoke-catalog';
+import { wslDataStorage } from './runtime/wsl-data';
+import { ensurePrivateDirectory } from './runtime/private-paths';
+import {createDataAuthority} from './data/authority';
+import { taskBootstrap } from './tasks/bootstrap';
+import { smokeTaskSession } from './tasks/smoke-session';
+import { TaskService } from './tasks/service';
+import { notifySettledWork } from './usage/notifications';
+import { UsageService } from './usage/service';
+import { probeEnvironments, probeQuota, probeVisualConversation } from './smoke-probe';
+import { EnvironmentService } from './environments/service';
+import { RouteService } from './routes/service';
+import { signOutWithCapabilities, providerLogoutWithCapabilities } from './capabilities/lifecycle';
+import { CapabilityService } from './capabilities/service';
+/**
+ * Inquello desktop main process.
+ *
+ * Owns the `codex-app-server` runtime as a stdio child: starts it once Electron
+ * is ready and stops it (stdin EOF, bounded grace) before quitting.
+ *
+ * Renderer isolation (AD-5): every window is sandboxed and context-isolated
+ * with no Node integration, loads only `inquello://app/` (served from the
+ * Vite build in `dist/renderer/`), and reaches main only through the named operations of the
+ * self-contained preload. Navigation, window, webview, permission and request
+ * policies apply to every `webContents` through `web-contents-created`.
+ *
+ * `--smoke` runs headless: it prints the handshake as one JSON line on stdout,
+ * then probes the live renderer and prints a `renderer-privileges` line and a
+ * `design` line, quits, prints the runtime's exit as a final JSON line, and
+ * exits 0 only if the handshake and version check passed, the renderer showed
+ * no unexpected privilege, the design specimen loaded all five fonts with the
+ * right icon semantics, every rendered primitive contrast pair met its
+ * threshold, Tab showed the `:focus-visible` indicator on each focus hook, and
+ * the runtime exited 0 on its own.
+ *
+ * Identity (Story 1.10b): main owns the Inquello sign-in (`identity/`). It
+ * reads the dev config named by `INQUELLO_SERVICE_CONFIG` (without it the
+ * shared service is `not-configured` and nothing is contacted), keeps
+ * credentials in main only and persists them only through OS-backed
+ * `safeStorage`. The renderer reaches it through the three named
+ * `identity.*` operations. In `--smoke`, the identity probe signs in through
+ * the headless opener when configured and prints an `identity` line; the run
+ * also requires that line to pass.
+ *
+ * Local data (Story 1.12): the runtime has its own home,
+ * `CODEX_HOME = <userData>/runtime-home`, so a personal `~/.codex` is never
+ * read or written. Every category the desktop can hold is governed by the
+ * shipped register (`data/policy.ts`); the renderer reaches inspect, export,
+ * import and delete through the four `data.*` operations, and main shows every
+ * folder dialog. Import and delete stop the runtime and restart it afterwards.
+ * In `--smoke` the data probe prints a `data` line (policy loaded, every held
+ * file classified, the runtime home under userData, and an export plus
+ * reimport round trip in temp dirs); the run also requires it to pass.
+ *
+ * Provider credentials (Story 1.13): main owns two provider routes, separate
+ * from the Inquello identity (`providers/`). The Claude API key lives in the
+ * provider vault (`<userData>/providers/claude.bin`, OS-backed `safeStorage`
+ * or memory-only); the inherited Codex login lives in the OS keyring, which
+ * the runtime uses because main enforces startup overrides and verifies the
+ * effective keyring-only configuration before enabling credential operations. The runtime
+ * child gets no inherited provider credential variable. The renderer reaches
+ * both routes through the six `provider.*` operations. In `--smoke` the
+ * providers probe connects and disconnects both routes with a sentinel key
+ * and prints a `providers` line; the run also requires it to pass.
+ *
+ * Private Workspace organisation (Story 1.14): the runtime hosts the Inquello
+ * working store (`INQUELLO_WORKING_STORE = <userData>/working/working.sqlite`)
+ * behind its `inquello/*` methods. Main binds the signed-in principal to the
+ * runtime connection, creates Engagements at the shared service first, and is
+ * the only caller (`organise/`); the renderer reaches it through the named
+ * `organise.*` operations. The app opens on the Shell (Sidebar, Header, Task
+ * placeholder); `--smoke` opens the design specimen (`#specimen`) for the
+ * earlier probes, then the organise probe drives the Shell and prints an
+ * `organise` line; the run also requires it to pass.
+ *
+ * Task states (Story 1.15) go through the same service: `state.list` and
+ * `state.recordTaskState` (Task and run states only, recorded as `system`).
+ *
+ * The effective managed policy (Story 1.18) is computed through `policy/`:
+ * main fetches the Workspace execution policy from the shared service and
+ * the runtime adds its own managed requirements and user configuration. The
+ * renderer reads it through `policy.getSettings` (S07) and `policy.forTask`,
+ * and sets a Task's broader mode through `policy.setBroadMode` with the reach
+ * the person confirmed. `PolicyService.effectiveThreadSettings` is the only
+ * source of a thread's sandbox and approval settings. In `--smoke` a `policy`
+ * line follows `composer`; the run also requires it to pass.
+ * `--smoke` then runs the states probe and prints a `states` line, which the
+ * run also requires to pass.
+ *
+ * The window has a minimum content width (Story 1.16: the rail beside a
+ * readable thread), so the Shell's layout modes never overflow horizontally.
+ * `--smoke` then runs the shell-layout probe, which resizes this window to
+ * each layout width through the smoke-only `resize` it is given, and prints a
+ * `shell-layout` line that the run also requires to pass.
+ *
+ * `--smoke` then runs the composer probe (Story 1.17) and prints a `composer`
+ * line, which the run also requires to pass. It reports draft lengths and
+ * comparisons only, never draft text.
+ *
+ * Bounded tools (Story 1.19): each Task gets a private working folder with an
+ * `output` folder under `<userData>/tasks` (the `task-folders` category of
+ * the data register), created on first use. `PolicyService.runTool` runs a
+ * command for a Task only through `effectiveThreadSettings` and the runtime's
+ * `inquello/tools/exec`, inside the Task's tool profile (the local sandbox
+ * with the bundled bubblewrap, and the runtime's network proxy with the
+ * Workspace's allowed domains), and refuses when the local sandbox is
+ * unavailable. Escalations the runtime raises are answered by the escalation
+ * gate: recorded as pending authorization requests and declined, naming the
+ * boundary. After `policy`, `--smoke` runs the tool-bounds probe and prints a
+ * `tool-bounds` line, which the run also requires to pass; it reports denial
+ * texts and outcomes, never a device path or a command's output.
+ *
+ * Permission to act (Story 1.20): `inquello/tools/exec` applies the
+ * Workspace command rules and the person's own rules. A command whose rules
+ * ask waits on a pending request (`PermissionMediator`), shown in the Task's
+ * contextual review area as an ApprovalCard; only the person's "Run …" lets
+ * it run, once, inside the Task's profile, and a request no one decides in
+ * time is declined by default. The renderer reads the cards and rules and
+ * records decisions through the `permissions.*` operations. After
+ * `tool-bounds`, `--smoke` runs the permissions probe and prints a
+ * `permissions` line, which the run also requires to pass.
+ */
+import { RuntimeLifecycle, controlledPaidLaunchRequested } from './runtime/lifecycle';
+import { randomUUID } from 'node:crypto';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+import { app, BrowserWindow, dialog, ipcMain, protocol, safeStorage, session, type WebContents } from 'electron';
+
+import schemaStamp from '../protocol/schema-stamp.json';
+import { DataService, ExportJournal, governedRoots, JOURNAL_DIR, loadShippedPolicy, type GovernedRoots, type DataServiceOptions, type ImportActionResult } from './data';
+import { OnboardingClient } from './onboarding/client';
+import { OnboardingStore } from './onboarding/store';
+import { OnboardingService } from './onboarding/service';
+import { createIdentity, headlessOpener, identityDir, SERVICE_CONFIG_ENV, type IdentityWiring } from './identity';
+import { openSystemBrowser } from './identity/browser';
+import { AppServerRuntime, consoleLogger, isProviderCredentialVar, recordingConsoleLogger, resolveAppServerBinary, runtimeChildEnv, writeRuntimeConfig, RUNTIME_OWNED_CONFIG_ARGS, verifyRuntimeOwnedConfig, type ExitInfo } from './runtime';
+import { APP_SCHEME_PRIVILEGES, handleAppProtocol } from './security/app-protocol';
+import { createOperations, registerOperations } from './security/operations';
+import {
+  APP_ENTRY_URL,
+  applyContentsPolicy,
+  applySessionPolicy,
+  secureWebPreferences,
+  type BlockedKind,
+  type PolicyOptions,
+} from './security/policy';
+import { OrganiseService } from './organise';
+import { EscalationGate, PermissionMediator, PolicyService, taskFoldersRoot } from './policy';
+import { createProviders, loadProviderDevConfig, PROVIDER_DEV_CONFIG_ENV, providersDir, type ProviderService } from './providers';
+import { probeStartSurface, probeRoutes, probeCapabilities, probeComposer, probeData, probeIdentity, probeOrganise, probePermissions, probePolicy, probeProviders, probeRenderer, probeShellLayout, probeStates, probeToolBounds, SHELL_LAYOUT } from './smoke-probe';
+
+const paidQualificationRequested = controlledPaidLaunchRequested(Object.keys(process.env), process.argv);
+const developmentProfile=ownedDevProfile({packaged:app.isPackaged,paid:paidQualificationRequested,argv:process.argv,env:process.env});
+const onboardingFixture=ownedOnboardingFixture({packaged:app.isPackaged,argv:process.argv,env:process.env});
+const onboardingSmoke=onboardingFixture!==null;
+let onboardingOk=false;
+const toolsManagementSmoke = !app.isPackaged && process.argv.includes('--smoke-tools-management');
+let toolsManagementOk = false;
+const navigationSmoke = !app.isPackaged && process.argv.includes('--smoke-navigation');
+const quotaSmoke = !app.isPackaged && process.argv.includes('--smoke-quota');
+const visualSmoke = !app.isPackaged && process.argv.includes('--smoke-visual');
+const smoke = process.argv.includes('--smoke') || navigationSmoke || quotaSmoke || visualSmoke || onboardingSmoke || toolsManagementSmoke;
+let visualOk = false;
+let quotaOk = false;
+let navigationOk = false;
+// The smoke run keeps what main logs, so the providers probe can scan it for a leaked key.
+const recordedLogger = smoke ? recordingConsoleLogger() : undefined;
+const logger = recordedLogger ?? consoleLogger;
+
+let runtime: AppServerRuntime | undefined;
+let mainWindow: BrowserWindow | undefined;
+let handshakeOk = false;
+let privilegesOk = false;
+let designOk = false;
+let identityOk = false;
+let dataOk = false;
+let providersOk = false;
+let organiseOk = false;
+let policyOk = false;
+let statesOk = false;
+let shellLayoutOk = false;
+let composerOk = false;
+let startSurfaceOk = false;
+let toolBoundsOk = false;
+let permissionsOk = false;
+let capabilitiesOk = false;
+let routesOk = false;
+let environmentsOk = false;
+let runtimeConfigurationVerified = false;
+let organise: OrganiseService | undefined;
+let policy: PolicyService | undefined;
+let capabilities: CapabilityService | undefined;
+let routes: RouteService | undefined;
+let environments: EnvironmentService | undefined;
+let usage: UsageService | undefined;
+let tasks: TaskService | undefined;
+let armSmokeTaskSession: ((workspaceId:string)=>Promise<void>) | undefined;
+function notifySettingsChanged(settled: boolean): void {
+  for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:policy-settings-changed', settled);
+}
+function settingsChanged(): void {
+  notifySettingsChanged(policy?.invalidateSettings() ?? true);
+}
+/** Tokens belong to a single transition; nested runtime/identity work cannot settle its peer. */
+function beginSettingsTransition(): () => void {
+  const owner = policy;
+  const token = owner?.beginSettingsTransition();
+  notifySettingsChanged(false);
+  let finished = false;
+  return () => {
+    if (finished) return;
+    finished = true;
+    notifySettingsChanged(owner && token !== undefined ? owner.endSettingsTransition(token) : true);
+  };
+}
+function taskSessionChanged(identityChanged = false): void {
+  tasks?.invalidate();
+  for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:tasks-session-changed', identityChanged);
+}
+function usageChanged(privateScope = false): void {
+  if(privateScope)usage?.invalidate();else usage?.observationsChanged();
+  for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:usage-changed', privateScope);
+}
+function environmentChanged(privateScope = true): void {
+  if (privateScope) settingsChanged();
+  if (privateScope) tasks?.invalidate();
+  usageChanged(privateScope);
+  environments?.invalidate();
+  for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:environments-changed');
+}
+let permissionMediator: PermissionMediator | undefined;
+/** Escalations the runtime raises: pending authorization requests, declined in Story 1.19. */
+const escalations = new EscalationGate({ newId: randomUUID, resolveRouteFor: threadId => tasks?.permissionRoute(threadId) ?? Promise.resolve(null) });
+let identity: IdentityWiring | undefined;
+let providers: ProviderService | undefined;
+let dataService: DataService | undefined;
+let smokeRecover: ((roots: GovernedRoots, source: string) => Promise<ImportActionResult>) | undefined;
+let roots: GovernedRoots | undefined;
+/** `webContents` ids main created for app windows; the only trusted operation senders. */
+const trustedWebContentsIds = new Set<number>();
+const blocked: Array<{ kind: BlockedKind; url: string }> = [];
+const policyOptions: PolicyOptions = { logger, onBlocked: (kind, url) => blocked.push({ kind, url }) };
+let quitting = false;
+
+if(developmentProfile)app.setPath('userData',developmentProfile.profile);
+
+if (smoke) {
+  // Keep the smoke run's Electron profile, and with it the runtime home, out of
+  // the user's real ones. Each run gets a fresh directory because Chromium
+  // and runtime descendants may still hold a prior disposable profile open.
+  app.setPath('userData', onboardingFixture?.profile ?? path.join(process.platform === 'win32' ? 'D:\\Inquello\\tmp' : os.tmpdir(), `inquello-smoke-${randomUUID()}`));
+}
+
+if (process.platform === 'win32') configureDesktopStorage(app, app.getPath('userData'));
+
+// Every renderer is sandboxed; must be called before `ready`.
+app.enableSandbox();
+// The app scheme must be privileged before `ready`.
+protocol.registerSchemesAsPrivileged([APP_SCHEME_PRIVILEGES]);
+
+// Every webContents, including ones created later, gets the boundary policy.
+app.on('web-contents-created', (_event, contents) => {
+  applyContentsPolicy(contents, policyOptions);
+  applySessionPolicy(contents.session, policyOptions);
+});
+
+const WINDOW_WIDTH = 1200;
+const WINDOW_HEIGHT = 800;
+const WINDOW_MIN_HEIGHT = 400;
+
+function createWindow(): BrowserWindow {
+  const window = new BrowserWindow({
+    width: WINDOW_WIDTH,
+    height: WINDOW_HEIGHT,
+    useContentSize: true,
+    minWidth: SHELL_LAYOUT.windowMinWidth,
+    minHeight: WINDOW_MIN_HEIGHT,
+    show: !smoke || onboardingSmoke,
+    title: 'Inquello',
+    webPreferences: {
+      ...secureWebPreferences(path.join(__dirname, '..', 'preload', 'preload.js')),
+      // Only the unpackaged synthetic capture run needs hidden-window animation frames.
+      ...((visualSmoke || onboardingSmoke) ? { backgroundThrottling: false } : {}),
+    },
+  });
+  const id = window.webContents.id;
+  trustedWebContentsIds.add(id);
+  window.webContents.once('destroyed', () => trustedWebContentsIds.delete(id));
+  // The smoke run's earlier probes read the design specimen; the app opens on the Shell.
+  void window.loadURL(onboardingSmoke ? `${APP_ENTRY_URL}#onboarding` : smoke ? `${APP_ENTRY_URL}#specimen` : APP_ENTRY_URL);
+  return window;
+}
+
+/** The Inquello working store (Story 1.14): outside the runtime home, owner-only. */
+function workingStorePath(userData: string): string {
+  return path.join(userData, 'working', 'working.sqlite');
+}
+
+function runtimeEnv(runtimeHome: string, workingStore: string): NodeJS.ProcessEnv {
+  return runtimeChildEnv(process.env, { serviceConfigEnv: SERVICE_CONFIG_ENV, codexHome: runtimeHome, workingStore, blocked: [DEV_PROFILE_ENV,DEV_RUN_ENV,ONBOARDING_FIXTURE_ENV, ONBOARDING_RUN_ENV, PROVIDER_DEV_CONFIG_ENV, 'INQUELLO_SMOKE_SEED', 'INQUELLO_QUOTA_FIXTURE', 'INQUELLO_VISUAL_FIXTURE'] });
+}
+
+const runtimeLifecycle = new RuntimeLifecycle();
+// Trusted launch opt-in only. Native independently validates the complete
+// envelope/classification. No runtime restart grants another paid allowance.
+let paidQualificationRuntimeStarted = false;
+
+/** Runtime start/stop never overlap, including the initial asynchronous handshake. */
+function startRuntime(): Promise<void> {
+  return runtimeLifecycle.run(startRuntimeNow);
+}
+
+/** Starts a new runtime child; local-data recovery calls this only after copying is complete. */
+async function startRuntimeNow(): Promise<void> {
+  if (paidQualificationRequested) {
+    if (paidQualificationRuntimeStarted) throw new Error('The controlled fictional session cannot restart; reconcile consumed budget with the owner first');
+    paidQualificationRuntimeStarted = true;
+  }
+  const settled = beginSettingsTransition();
+  try {
+  taskSessionChanged();
+  runtimeConfigurationVerified = false;
+  environmentChanged();
+  if (quitting) throw new Error('the application is quitting; the runtime will not restart');
+  if (!roots) throw new Error('local data roots were not set up');
+  if(fs.existsSync(path.join(roots['user-data'],'data','recovery-unvalidated')))throw new Error('Recovered data awaits current validation; the runtime remains stopped');
+  const runtimeHome = roots['runtime-home'];
+  ensurePrivateDirectory(runtimeHome);
+  const workingStore = workingStorePath(app.getPath('userData'));
+  ensurePrivateDirectory(path.dirname(workingStore));
+  // Preserve runtime management edits; immutable startup overrides enforce credential safety.
+  writeRuntimeConfig(runtimeHome);
+  providers?.codex.runtimeReset();
+  capabilities?.runtimeUnavailable(); routes?.runtimeUnavailable(); permissionMediator?.declineAll();
+  const binary = resolveAppServerBinary({
+    env: process.env,
+    isPackaged: app.isPackaged,
+    resourcesPath: process.resourcesPath,
+    appPath: app.getAppPath(),
+  });
+  logger.info(`starting app-server (${binary.source}): ${binary.path}`);
+  runtime = new AppServerRuntime({
+    command: binary.path,
+    commandArgsPrefix: smoke && !app.isPackaged
+      ? [...RUNTIME_OWNED_CONFIG_ARGS, ...smokeCatalogArgs(smoke, app.isPackaged, app.getAppPath()), '--disable-plugin-startup-tasks-for-tests']
+      : RUNTIME_OWNED_CONFIG_ARGS,
+    env: runtimeEnv(runtimeHome, workingStore),
+    clientInfo: { name: 'inquello_desktop', title: 'Inquello', version: app.getVersion() },
+    schemaStamp,
+    stderrLogPath: path.join(app.getPath('logs'), 'app-server-stderr.log'),
+    logger,
+    onNotification: ({ method, params }) => { tasks?.notification(method, params); providers?.codex.handleNotification(method, params); if (method === 'account/updated') void routes?.invalidate('codex-responses'); capabilities?.handleNotification(method, params); if (method === 'account/updated') settingsChanged(); if (['app/list/updated','skills/changed','mcpServer/startupStatus/updated','mcpServerStatus','mcpServer/oauthLogin/completed','account/updated'].includes(method)) for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:capabilities-changed'); },
+    onServerRequest: (method, params, id) => method === 'inquello/context/authorize' ? organise?.authorizeContext(params) ?? {available:false,snapshot:null,serviceEngagementIds:[]} : method === 'item/tool/requestUserInput' ? tasks?.question(id, params) ?? {answers:{}} : method === 'inquello/tasks/authority' ? tasks?.authority(params) ?? {workspacePolicy:null} : escalations.answer(method, params),
+  });
+  runtime.on('state', ({ state, error }) => {
+    if (['disconnected','failed','stopped'].includes(state)) { taskSessionChanged(); runtimeConfigurationVerified = false;
+  environmentChanged(); capabilities?.runtimeUnavailable(); routes?.runtimeUnavailable(); permissionMediator?.declineAll(); for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:capabilities-changed'); }
+    if (state === 'disconnected' && error) logger.error(`runtime disconnected; not restarting. ${error.message}`);
+  });
+  const handshake = await runtime.start();
+  try { await verifyRuntimeOwnedConfig((method,params) => runtime!.request(method,params)); }
+  catch (error) { await runtime.stop(); throw error; }
+  runtimeConfigurationVerified = true;
+  environmentChanged();
+  capabilities?.runtimeReset();
+  routes?.runtimeReset();
+  for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:capabilities-changed');
+  if (smoke && !handshakeOk) {
+    process.stdout.write(
+      `${JSON.stringify({
+        event: 'handshake',
+        state: runtime.state,
+        versionCheck: 'passed',
+        schema: { runtimeVersion: schemaStamp.runtimeVersion, forkTreeHash: schemaStamp.forkTreeHash },
+        initialize: handshake,
+      })}\n`,
+    );
+  }
+  handshakeOk = true;
+  // A new runtime process has no principal bound yet.
+  await organise?.syncPrincipal().catch((error: unknown) => logger.warn(`organise: principal not bound after start (${(error as Error).message})`));
+  } finally { settled(); }
+}
+
+function stopRuntime(): Promise<void> {
+  return runtimeLifecycle.run(stopRuntimeNow);
+}
+
+async function stopRuntimeNow(): Promise<void> {
+  const settled = beginSettingsTransition();
+  try {
+  taskSessionChanged();
+  permissionMediator?.declineAll();
+  await routes?.quiesce();
+  runtimeConfigurationVerified = false;
+  environmentChanged();
+  await capabilities?.quiesce();
+  const current = runtime;
+  if (!current) return;
+  const exit = await current.stop();
+  tasks?.runtimeStopped(current);
+  capabilities?.clearConnectionTracking();
+  logger.info(`app-server stopped (code ${exit.exitCode}, signal ${exit.signal}, killed ${exit.killed})`);
+  } finally { settled(); }
+}
+
+function exportStamp(): string {
+  return new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+}
+
+async function chooseExportDestination(): Promise<string | null> {
+  const options: Electron.SaveDialogOptions = {
+    title: 'Export local data',
+    buttonLabel: 'Export',
+    defaultPath: path.join(app.getPath('documents'), `inquello-export-${exportStamp()}`),
+    properties: ['createDirectory', 'showOverwriteConfirmation'],
+  };
+  const result = mainWindow ? await dialog.showSaveDialog(mainWindow, options) : await dialog.showSaveDialog(options);
+  return result.canceled || !result.filePath ? null : result.filePath;
+}
+
+async function chooseImportSource(): Promise<string | null> {
+  const options: Electron.OpenDialogOptions = { title: 'Import local data', buttonLabel: 'Import', properties: ['openDirectory'] };
+  const result = mainWindow ? await dialog.showOpenDialog(mainWindow, options) : await dialog.showOpenDialog(options);
+  return result.canceled || result.filePaths.length !== 1 ? null : result.filePaths[0]!;
+}
+
+async function runSmokeProbe(contents: WebContents): Promise<void> {
+  if(onboardingFixture){
+    if(!identity)throw new Error('Onboarding identity unavailable');
+    const report=await probeOnboarding(contents,{fixture:onboardingFixture,identity});
+    onboardingOk=report.ok;process.stdout.write(`${JSON.stringify({event:'onboarding',...report})}\n`);return;
+  }
+  if (toolsManagementSmoke) {
+    if (!identity || !organise || !capabilities || !runtime) throw new Error('Tools management services unavailable');
+    const {probeToolsManagement}=await import('./smoke-probe');
+    const report=await probeToolsManagement(contents,{identity,organise,capabilities,seedFile:process.env.INQUELLO_SMOKE_SEED??null,
+      runtimeHome:governedRoots(app.getPath('userData'),app.getPath('logs'))['runtime-home'],
+      restartRuntime:async()=>{await stopRuntime();await startRuntime();},
+      runtimeRequest:<T,>(method:string,params?:unknown)=>runtime!.request<T>(method,params)});
+    toolsManagementOk=report.ok;process.stdout.write(JSON.stringify({event:'tools-management',...report})+'\n');return;
+  }
+  if (visualSmoke) {
+    if (!identity || !organise || !policy || !runtime) throw new Error('Visual smoke services unavailable');
+    const visualWindow=BrowserWindow.fromWebContents(contents);
+    if(!visualWindow)throw new Error('Owned visual window unavailable');
+    const visualSize=visualWindow.getContentSize();
+    const visualMinimum=visualWindow.getMinimumSize();
+    const report=await probeVisualConversation(contents,{identity,organise,policy,seedFile:process.env.INQUELLO_SMOKE_SEED??null,
+      resize:(width,height)=>{
+        // Match the layout probe: Windows' 125% frame rounding otherwise adds
+        // two CSS pixels at the minimum. Test the exact viewport, then restore.
+        if(width===SHELL_LAYOUT.windowMinWidth)visualWindow.setMinimumSize(0,0);
+        visualWindow.setContentSize(width,height);
+        if(width!==SHELL_LAYOUT.windowMinWidth)visualWindow.setMinimumSize(visualMinimum[0]!,visualMinimum[1]!);
+      },restore:{width:visualSize[0]!,height:visualSize[1]!},
+      isolatedRoot:app.getPath('userData'),fixtureFile:process.env.INQUELLO_VISUAL_FIXTURE??'',armSyntheticSession:async workspaceId=>{if(!armSmokeTaskSession)throw new Error('Synthetic session unavailable');await armSmokeTaskSession(workspaceId);},
+      runtimeRequest:<T,>(method:string,params?:unknown)=>runtime!.request<T>(method,params)});
+    visualOk=report.ok;process.stdout.write(`${JSON.stringify({event:'visual-conversation',...report})}\n`);return;
+  }
+  if (quotaSmoke) {
+    if (!identity || !organise || !routes || !policy || !runtime) throw new Error('Quota smoke services unavailable');
+    const report=await probeQuota(contents,{identity,organise,routes,policy,seedFile:process.env.INQUELLO_SMOKE_SEED??null,
+      isolatedRoot:app.getPath('userData'),fixtureFile:process.env.INQUELLO_QUOTA_FIXTURE??'',usageChanged,armSyntheticSession:async workspaceId=>{if(!armSmokeTaskSession)throw new Error('Synthetic session unavailable');await armSmokeTaskSession(workspaceId);},
+      runtimeRequest:<T,>(method:string,params?:unknown)=>runtime!.request<T>(method,params)});
+    quotaOk=report.ok;process.stdout.write(`${JSON.stringify({event:'quota',...report})}\n`);return;
+  }
+  if (navigationSmoke) {
+    if (!identity || !organise) throw new Error('Navigation services unavailable');
+    const { probeSavedNavigation } = await import('./smoke-probe');
+    const report = await probeSavedNavigation(contents, {
+      identity,
+      seedFile: process.env.INQUELLO_SMOKE_SEED ?? null,
+      restartRuntime: async () => { await stopRuntime(); await startRuntime(); },
+    });
+    navigationOk = report.ok;
+    process.stdout.write(`${JSON.stringify({ event: 'saved-navigation', ...report })}\n`);
+    const window = BrowserWindow.fromWebContents(contents);
+    const minimum = window?.getMinimumSize();
+    const layout = await probeShellLayout(contents, {
+      identity, organise, seedFile: process.env.INQUELLO_SMOKE_SEED ?? null,
+      resize: (width, height) => {
+        if (width === SHELL_LAYOUT.windowMinWidth) window?.setMinimumSize(0, 0);
+        window?.setContentSize(width, height);
+        if (width === WINDOW_WIDTH && height === WINDOW_HEIGHT && minimum) window?.setMinimumSize(minimum[0]!, minimum[1]!);
+      },
+      restore: { width: WINDOW_WIDTH, height: WINDOW_HEIGHT },
+    });
+    shellLayoutOk = layout.ok;
+    process.stdout.write(`${JSON.stringify({ event: 'shell-layout', ...layout })}\n`);
+    return;
+  }
+  const { privileges, design } = await probeRenderer(contents, blocked, schemaStamp.runtimeVersion);
+  privilegesOk = privileges.ok;
+  designOk = design.ok;
+  process.stdout.write(`${JSON.stringify({ event: 'renderer-privileges', ...privileges })}\n`);
+  process.stdout.write(`${JSON.stringify({ event: 'design', ...design })}\n`);
+  if (!privileges.ok) logger.error(`renderer privilege probe failed: ${privileges.failures.join('; ')}`);
+  if (!design.ok) logger.error(`design probe failed: ${design.failures.join('; ')}`);
+  if (!identity) throw new Error('identity was not wired');
+  const report = await probeIdentity(contents, identity);
+  identityOk = report.ok;
+  process.stdout.write(`${JSON.stringify({ event: 'identity', ...report })}\n`);
+  if (!report.ok) logger.error(`identity probe failed: ${report.failures.join('; ')}`);
+  if (!dataService || !roots || !organise || !smokeRecover) throw new Error('local data was not wired');
+  const data = await probeData(contents, { service: dataService, roots, identity, organise, seedFile: process.env.INQUELLO_SMOKE_SEED ?? null, recover: smokeRecover, codexHome: runtime?.handshake?.codexHome ?? null, tempBase: os.tmpdir() });
+  dataOk = data.ok;
+  process.stdout.write(`${JSON.stringify({ event: 'data', ...data })}\n`);
+  if (!data.ok) logger.error(`data probe failed: ${data.failures.join('; ')}`);
+  if (!providers) throw new Error('providers were not wired');
+  const providerReport = await probeProviders(contents, {
+    providers,
+    identity,
+    data: dataService,
+    roots,
+    runtimePid: () => runtime?.pid,
+    stderrLogPath: path.join(app.getPath('logs'), 'app-server-stderr.log'),
+    mainLog: () => recordedLogger?.messages() ?? [],
+    tempBase: os.tmpdir(),
+  });
+  providersOk = providerReport.ok;
+  process.stdout.write(`${JSON.stringify({ event: 'providers', ...providerReport })}\n`);
+  if (!providerReport.ok) logger.error(`providers probe failed: ${providerReport.failures.join('; ')}`);
+  if (!organise) throw new Error('organise was not wired');
+  const organiseReport = await probeOrganise(contents, {
+    identity,
+    organise,
+    seedFile: process.env.INQUELLO_SMOKE_SEED ?? null,
+    runtimeRequest: <T,>(method: string, params?: unknown) => (runtime ? runtime.request<T>(method, params) : Promise.reject(new Error('the runtime is not running'))),
+  });
+  organiseOk = organiseReport.ok;
+  process.stdout.write(`${JSON.stringify({ event: 'organise', ...organiseReport })}\n`);
+  if (!organiseReport.ok) logger.error(`organise probe failed: ${organiseReport.failures.join('; ')}`);
+  const statesReport = await probeStates(contents, {
+    identity,
+    organise,
+    seedFile: process.env.INQUELLO_SMOKE_SEED ?? null,
+    runtimeRequest: <T,>(method: string, params?: unknown) => (runtime ? runtime.request<T>(method, params) : Promise.reject(new Error('the runtime is not running'))),
+  });
+  statesOk = statesReport.ok;
+  process.stdout.write(`${JSON.stringify({ event: 'states', ...statesReport })}\n`);
+  if (!statesReport.ok) logger.error(`states probe failed: ${statesReport.failures.join('; ')}`);
+  const window = BrowserWindow.fromWebContents(contents);
+  const nativeMinimum = window?.getMinimumSize();
+  const layoutReport = await probeShellLayout(contents, {
+    identity,
+    organise,
+    seedFile: process.env.INQUELLO_SMOKE_SEED ?? null,
+    // Smoke-only: the probe sizes the real window's content area to each layout width.
+    resize: (width, height) => {
+      // Test the exact CSS minimum, independently of Windows' native frame/DPI
+      // rounding (125% scaling rounds the normal minimum viewport up by 2 px).
+      // Restore the original native constraint with the normal window size.
+      if (width === SHELL_LAYOUT.windowMinWidth) window?.setMinimumSize(0, 0);
+      window?.setContentSize(width, height);
+      if (width === WINDOW_WIDTH && height === WINDOW_HEIGHT && nativeMinimum) window?.setMinimumSize(nativeMinimum[0]!, nativeMinimum[1]!);
+    },
+    restore: { width: WINDOW_WIDTH, height: WINDOW_HEIGHT },
+  });
+  shellLayoutOk = layoutReport.ok;
+  process.stdout.write(`${JSON.stringify({ event: 'shell-layout', ...layoutReport })}\n`);
+  if (!layoutReport.ok) logger.error(`shell-layout probe failed: ${layoutReport.failures.join('; ')}`);
+  const composerReport = await probeComposer(contents, { identity, organise, seedFile: process.env.INQUELLO_SMOKE_SEED ?? null });
+  composerOk = composerReport.ok;
+  process.stdout.write(`${JSON.stringify({ event: 'composer', ...composerReport })}\n`);
+  if (!composerReport.ok) logger.error(`composer probe failed: ${composerReport.failures.join('; ')}`);
+  const startReport = await probeStartSurface(contents, {identity, organise, seedFile: process.env.INQUELLO_SMOKE_SEED ?? null});
+  startSurfaceOk = startReport.ok;
+  process.stdout.write(`${JSON.stringify({event:'start-surface', ...startReport})}\n`);
+  if (!policy) throw new Error('policy was not wired');
+  const policyReport = await probePolicy(contents, { identity, organise, policy, seedFile: process.env.INQUELLO_SMOKE_SEED ?? null });
+  policyOk = policyReport.ok;
+  process.stdout.write(`${JSON.stringify({ event: 'policy', ...policyReport })}\n`);
+  if (!policyReport.ok) logger.error(`policy probe failed: ${policyReport.failures.join('; ')}`);
+  const toolBoundsReport = await probeToolBounds(contents, { identity, organise, policy, seedFile: process.env.INQUELLO_SMOKE_SEED ?? null, userDataDir: app.getPath('userData') });
+  toolBoundsOk = toolBoundsReport.ok;
+  process.stdout.write(`${JSON.stringify({ event: 'tool-bounds', ...toolBoundsReport })}\n`);
+  if (!toolBoundsReport.ok) logger.error(`tool-bounds probe failed: ${toolBoundsReport.failures.join('; ')}`);
+  const permissionsReport = await probePermissions(contents, { identity, organise, policy, seedFile: process.env.INQUELLO_SMOKE_SEED ?? null });
+  permissionsOk = permissionsReport.ok;
+  process.stdout.write(`${JSON.stringify({ event: 'permissions', ...permissionsReport })}\n`);
+  if (!permissionsReport.ok) logger.error(`permissions probe failed: ${permissionsReport.failures.join('; ')}`);
+  if (!capabilities) throw new Error('capabilities was not wired');
+  const capabilitiesReport = await probeCapabilities(contents, {identity, organise, capabilities, seedFile: process.env.INQUELLO_SMOKE_SEED ?? null});
+  capabilitiesOk = capabilitiesReport.ok;
+  process.stdout.write(`${JSON.stringify({event: 'capabilities', ...capabilitiesReport})}\n`);
+  if (!routes) throw new Error('processing routes not wired');
+  const routesReport = await probeRoutes(contents, { identity, organise, routes, seedFile: process.env.INQUELLO_SMOKE_SEED ?? null });
+  routesOk = routesReport.ok;
+  process.stdout.write(`${JSON.stringify({ event: 'routes', ...routesReport })}\n`);
+  const environmentsReport = await probeEnvironments(contents, {identity, organise, routes, policy, seedFile: process.env.INQUELLO_SMOKE_SEED ?? null, usageChanged, runtimeRequest: <T,>(method: string, params?: unknown) => runtime ? runtime.request<T>(method, params) : Promise.reject(new Error('Runtime unavailable'))});
+  environmentsOk = environmentsReport.ok;
+  process.stdout.write(`${JSON.stringify({event: 'environments', ...environmentsReport})}\n`);
+  if (!capabilitiesReport.ok) logger.error(`capabilities probe failed: ${capabilitiesReport.failures.join('; ')}`);
+}
+
+function exitCodeFor(exit: ExitInfo | undefined): number {
+  if (!smoke) return 0;
+  if (onboardingSmoke) return handshakeOk && onboardingOk && exit?.exitCode === 0 && !exit.killed ? 0 : 1;
+  if (toolsManagementSmoke) return handshakeOk && toolsManagementOk && exit?.exitCode === 0 && !exit.killed ? 0 : 1;
+  if (visualSmoke) return handshakeOk && visualOk && exit?.exitCode === 0 && !exit.killed ? 0 : 1;
+  if (quotaSmoke) return handshakeOk && quotaOk && exit?.exitCode === 0 && !exit.killed ? 0 : 1;
+  if (navigationSmoke) return handshakeOk && navigationOk && shellLayoutOk && exit?.exitCode === 0 && !exit.killed ? 0 : 1;
+  return handshakeOk && privilegesOk && designOk && identityOk && dataOk && providersOk && organiseOk && statesOk && shellLayoutOk && composerOk && startSurfaceOk && policyOk && toolBoundsOk && permissionsOk && capabilitiesOk && routesOk && environmentsOk && exit !== undefined && exit.exitCode === 0 && !exit.killed ? 0 : 1;
+}
+
+app.on('before-quit', (event) => {
+  if (quitting) return;
+  quitting = true;
+  event.preventDefault();
+  const stopping = runtime ? runtime.stop() : Promise.resolve(undefined);
+  void stopping
+    .catch((error: unknown) => {
+      logger.error(`runtime stop failed: ${(error as Error).message}`);
+      return undefined;
+    })
+    .then((exit) => {
+      try {
+        if (smoke || developmentProfile) {
+          process.stdout.write(`${JSON.stringify({ event: 'runtime-exit', state: runtime?.state ?? 'stopped', exit })}\n`);
+        } else if (exit) {
+          logger.info(`app-server exited (code ${exit.exitCode}, signal ${exit.signal}, killed ${exit.killed})`);
+        }
+        mainWindow?.destroy();
+      } catch (error) {
+        logger.warn(`cleanup after runtime stop failed: ${(error as Error).message}`);
+      } finally {
+        app.exit(exitCodeFor(exit));
+      }
+    });
+});
+
+app.on('window-all-closed', () => app.quit());
+
+void app.whenReady().then(async () => {
+  applySessionPolicy(session.defaultSession, policyOptions);
+  handleAppProtocol(protocol, path.join(app.getAppPath(), 'dist', 'renderer'), logger);
+  const userData = app.getPath('userData');
+  roots = governedRoots(userData, app.getPath('logs'));
+  if(developmentProfile){
+    const runtimeRelative=path.relative(developmentProfile.profile,roots['runtime-home']);
+    if(!runtimeRelative||runtimeRelative.startsWith('..')||path.isAbsolute(runtimeRelative))throw new Error('Owned development runtime root mismatch');
+    if(fs.realpathSync(userData)!==developmentProfile.profile)throw new Error('Owned development profile mismatch');
+    process.stdout.write(`${JSON.stringify({event:'owned-dev-profile',runId:developmentProfile.runId,resumed:developmentProfile.resumed,userData,runtimeHome:roots['runtime-home']})}\n`);
+  }
+  if (smoke) {
+    // The smoke run starts signed out, with an empty runtime home and no export journal.
+    fs.rmSync(identityDir(userData), { recursive: true, force: true });
+    fs.rmSync(roots['runtime-home'], { recursive: true, force: true, maxRetries: 3 });
+    fs.rmSync(path.join(userData, JOURNAL_DIR), { recursive: true, force: true });
+    // No working store from an earlier run: the organise probe starts empty.
+    fs.rmSync(path.dirname(workingStorePath(userData)), { recursive: true, force: true });
+    // No Claude API key from an earlier run.
+    fs.rmSync(providersDir(userData), { recursive: true, force: true });
+    // No Task folders from an earlier run.
+    fs.rmSync(taskFoldersRoot(userData), { recursive: true, force: true });
+    // The providers probe checks that an inherited provider key never reaches the runtime.
+    if (!onboardingSmoke && !Object.keys(process.env).some((name) => isProviderCredentialVar(name))) {
+      process.env.OPENAI_API_KEY = `sk-inherited-smoke-${randomUUID()}`;
+    }
+  }
+  identity = createIdentity({
+    env: process.env,
+    safeStorage,
+    platform: process.platform,
+    userDataDir: app.getPath('userData'),
+    logger,
+    // The smoke run plays the browser's part headlessly; the app always uses the system browser.
+    opener: (transport) => (onboardingFixture && transport ? onboardingFixture.opener(transport) : smoke && transport ? headlessOpener(transport) : openSystemBrowser),
+    recordSecrets: smoke,
+  });
+  const identitySession = identity.session;
+  const onboardingConfig = identity.config.kind === 'configured' ? identity.config.config : null;
+  const onboardingService = new OnboardingService({
+    identity: identitySession,
+    onAuthorityChanged: () => taskSessionChanged(false),
+    client: onboardingConfig && identity.transport ? new OnboardingClient(onboardingConfig.serviceUrl,identity.transport) : null,
+    store: new OnboardingStore({dir:path.join(identityDir(app.getPath('userData')),'onboarding'),scope:JSON.stringify([onboardingConfig?.serviceUrl,onboardingConfig?.issuerUrl]),safeStorage,platform:process.platform}),
+  });
+  const sharedAuthority=identity.service;
+  const providerConsent = new ProviderConsentService({
+    identity:identitySession,service:sharedAuthority,
+    store:new ConsentStore({dir:path.join(identityDir(app.getPath('userData')),'provider-consents'),
+      scope:JSON.stringify([onboardingConfig?.serviceUrl,onboardingConfig?.issuerUrl]),safeStorage,platform:process.platform}),
+    onChanged:()=>{for(const window of BrowserWindow.getAllWindows()){
+      window.webContents.send('inquello:tasks-progress-changed');
+      window.webContents.send('inquello:routes-changed',{authority:false});
+    }},
+  });
+  const taskBootstrapOptions={env:process.env,packaged:app.isPackaged,userData,runtime:{
+    ready:()=>runtime?.state==='ready'&&runtimeConfigurationVerified,instance:()=>runtime,
+    request:<T,>(method:string,params?:unknown)=>runtime?runtime.request<T>(method,params):Promise.reject(new Error('Runtime unavailable')),
+  },identity:identitySession,currentSession:()=>sharedAuthority?identitySession.withAccess(access=>sharedAuthority.session(access)):Promise.resolve(null)};
+  const syntheticSmokeSession=(quotaSmoke||visualSmoke)?smokeTaskSession({...taskBootstrapOptions,enabled:true,allowQuotaRoute:quotaSmoke,seedFile:process.env.INQUELLO_SMOKE_SEED??'',diagnostic:(stage,kind)=>logger.info(`smoke fixture proof: ${stage}/${kind}`)}):null;
+  armSmokeTaskSession=syntheticSmokeSession?.arm;
+  const trustedTaskBootstrap=syntheticSmokeSession?.bootstrap??taskBootstrap(taskBootstrapOptions);
+  const organiseService = new OrganiseService({
+    runtime: {
+      ready: () => runtime?.state === 'ready' && runtimeConfigurationVerified,
+      instance: () => runtime,
+      request: <T,>(method: string, params?: unknown) => (runtime ? runtime.request<T>(method, params) : Promise.reject(new Error('the runtime is not running'))),
+    },
+    identity: identitySession,
+    service: identity.service,
+    logger,
+    recoverSession:workspaceId=>trustedTaskBootstrap(workspaceId,{recoveryOnly:true}),
+  });
+  organise = organiseService;
+  const policyRuntime = {
+    ready: () => runtime?.state === 'ready' && runtimeConfigurationVerified,
+    instance: () => runtime,
+    request: <T,>(method: string, params?: unknown): Promise<T> => {
+      const pending = runtime ? runtime.request<T>(method, params) : Promise.reject<T>(new Error('the runtime is not running'));
+      notifySettledWork(method, params, pending, {usageChanged, environmentChanged});
+      return pending;
+    },
+  };
+  permissionMediator = new PermissionMediator({ runtime: policyRuntime, logger, newId: randomUUID, automatedReview: (taskId, requestId) => routes ? routes.review(taskId, requestId) : Promise.resolve(null) });
+  const policyService = new PolicyService({
+    runtime: policyRuntime,
+    identity: identitySession,
+    organise: organiseService,
+    service: identity.service,
+    logger,
+    taskFolders: taskFoldersRoot(userData),
+    sandboxProbeTarget: path.dirname(workingStorePath(userData)),
+    permissions: permissionMediator,
+  });
+  policy = policyService;
+  capabilities = new CapabilityService({runtime: policyRuntime, policy: policyService, runtimeVersion: schemaStamp.runtimeVersion, openBrowser: openSystemBrowser});
+  /** Rebinds the runtime's principal after a sign-in change. */
+  const afterIdentityChange = async <T,>(result: T): Promise<T> => {
+    await organiseService.syncPrincipal().catch((error: unknown) => logger.warn(`organise: principal not rebound (${(error as Error).message})`));
+    return result;
+  };
+  providers = createProviders({
+    safeStorage,
+    platform: process.platform,
+    userDataDir: userData,
+    runtime: {
+      ready: () => runtime?.state === 'ready' && runtimeConfigurationVerified,
+      request: <T,>(method: string, params?: unknown) => (runtime ? runtime.request<T>(method, params) : Promise.reject(new Error('the runtime is not running'))),
+    },
+    openBrowser: openSystemBrowser,
+    devConfig: loadProviderDevConfig(process.env, !app.isPackaged),
+    logger,
+    recordSecrets: smoke,
+  });
+  const providerService = providers;
+  routes = new RouteService({
+    runtime: { ...policyRuntime, privateRouteAuth: (params) => runtime ? runtime.privateRouteAuth(params) : Promise.reject(new Error('Runtime unavailable')), stop: async () => { await runtime?.stop(); } },
+    identity: identitySession, syncPrincipal: () => organiseService.syncPrincipal(), providers: providerService, freshPolicy: (taskId) => policyService.reviewPolicy(taskId), applicableDataTier: taskId => tasks?.applicableDataTier(taskId) ?? Promise.resolve('unknown'),
+    ...((visualSmoke||quotaSmoke)&&syntheticSmokeSession?{syntheticFixtureBinding:(route:import('./routes/types').RouteView)=>syntheticSmokeSession.verifyRoute(route)}:{}),
+    taskBinding:async taskId=>{const result=await routes!.forTask(taskId);return result.ok&&!result.value.staleConfiguration&&result.value.selected&&result.value.configurationRevision!==null&&result.value.disclosureBindings?.every(ref=>ref.active)?{routeId:result.value.selected.routeId,configurationRevision:result.value.configurationRevision,disclosureBindings:result.value.disclosureBindings}:null;},
+    onChanged: (taskId) => { if(taskId)tasks?.invalidateTask(taskId);else environmentChanged(); for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:routes-changed',{authority:true,...(taskId?{taskId}:{})}); },
+    onCatalogChanged: () => { for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:routes-changed',{authority:false}); },
+    onBindingChanged: (binding,taskIds) => { tasks?.invalidateBinding(binding.routeId,binding.configurationRevision,taskIds);for(const window of BrowserWindow.getAllWindows())window.webContents.send('inquello:routes-changed',{authority:true,binding:{routeId:binding.routeId,configurationRevision:binding.configurationRevision}}); },
+  });
+  tasks = new TaskService({runtime: policyRuntime, identity: identitySession, bootstrap: trustedTaskBootstrap, syncPrincipal: () => organiseService.syncPrincipal(), prepareRoutes: () => routes!.list(), taskBinding:async taskId=>{const result=await routes!.forTask(taskId);return result.ok&&!result.value.staleConfiguration&&result.value.selected&&result.value.configurationRevision!==null&&result.value.disclosureBindings?.every(ref=>ref.active)?{routeId:result.value.selected.routeId,configurationRevision:result.value.configurationRevision,disclosureBindings:result.value.disclosureBindings}:null;}, freshPolicy: workspaceId => policyService.startPolicy(workspaceId), askPermission: (taskId, command) => policyService.askRuntimePermission(taskId, command), routeApproval:(workspaceId,routeId)=>sharedAuthority?identitySession.withAccess(access=>sharedAuthority.routeApproval(access,workspaceId,routeId)):Promise.resolve(null),routeCheck:(workspaceId,request)=>sharedAuthority?identitySession.withAccess(access=>sharedAuthority.routeEligibilityCheck(access,workspaceId,request)):Promise.resolve(null),onAuthorityUnavailable:()=>{taskSessionChanged();usageChanged(true);}, ...((quotaSmoke||visualSmoke)?{authorityDiagnostic:(stage:string,scope:string)=>logger.info(`smoke Task authority: ${stage}/${scope} monotonic_ms=${Math.floor(performance.now()/10)*10}`)}:{}), onProgressChanged: () => { for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:tasks-progress-changed'); }, onAccepted: () => usageChanged()});
+  usage = new UsageService({runtime: policyRuntime, identity: identitySession, policy: policyService, onChanged: usageChanged});
+  environments = new EnvironmentService({runtime: policyRuntime, identity: identitySession, policy: policyService, routes});
+  providerService.setRouteInvalidator((id) => routes!.invalidate(id));
+  const policyLoad = loadShippedPolicy();
+  if (!policyLoad.ok) logger.error(`local data policy did not load; local data actions are blocked: ${policyLoad.error}`);
+  const dataOptions: DataServiceOptions = {
+    ...(process.platform === 'win32' ? { taskStorage: wslDataStorage(taskFoldersRoot(userData), () => identitySession.principalId()) } : {}),
+    authority:createDataAuthority({identity:identitySession,service:sharedAuthority,storeName:path.basename(workingStorePath(userData)),binary:()=>resolveAppServerBinary({env:process.env,isPackaged:app.isPackaged,resourcesPath:process.resourcesPath,appPath:app.getAppPath()}).path,env:()=>runtimeEnv(roots!['runtime-home'],workingStorePath(userData))}),
+    load: policyLoad,
+    roots,
+    journal: new ExportJournal(userData),
+    runtime: {
+      // Export also stops/restarts the runtime. It must wait until this
+      // controlled session ends; policy/inventory reads remain available.
+      stop: async () => {
+        if (paidQualificationRequested) throw new Error('Local-data mutation/export requires ending and reconciling the controlled fictional session');
+        await stopRuntime();
+      },
+      start: startRuntime,
+      activeTasks: () => tasks?.activeTasks() ?? 0,
+      canQuiesceUncertainActivity: () => tasks?.canQuiesceUncertainActivity() ?? false,
+    },
+    identity: {
+      principalId:()=>identitySession.principalId(),
+      principal: async () => {
+        const state = identitySession.snapshot().identity;
+        return state.state === 'signed-in' ? { displayName: state.displayName, issuerLabel: state.issuerLabel } : null;
+      },
+      holdsSession: () => identitySession.holdsSession(),
+      signOut: async () => { const settled = beginSettingsTransition(); try { return { ok: (await identitySession.signOut()).ok }; } finally { settled(); } },
+      forgetLocally: () => { const settled = beginSettingsTransition(); try { return identitySession.forgetLocally(); } finally { settled(); } },
+    },
+    providers: {
+      forgetClaudeKey: () => providerService.forgetClaudeKey(),
+      holdsClaudeKey: () => providerService.holdsClaudeKey(),
+    },
+    // The smoke run plays the user's part in the save dialog with a fresh temp folder.
+    chooseExportDestination: smoke
+      ? async () => path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'inquello-smoke-export-')), 'export')
+      : chooseExportDestination,
+    chooseImportSource: smoke ? async () => null : chooseImportSource,
+    clearBrowserProfile: async () => {
+      await session.defaultSession.clearStorageData();
+      await session.defaultSession.clearCache();
+    },
+    appVersion: app.getVersion(),
+    runtimeVersion: schemaStamp.runtimeVersion,
+    logger,
+  };
+  const service = new DataService(dataOptions);
+  if (smoke) smokeRecover = async (targetRoots, source) => new DataService({
+    ...dataOptions,
+    roots: targetRoots,
+    taskStorage: undefined,
+    journal: new ExportJournal(targetRoots['user-data']),
+    chooseImportSource: async () => source,
+    // This separate, empty recovery profile has no running app-server or guest
+    // Tasks. Native inspection and live service receipt validation still run.
+    runtime: { stop: async () => {}, start: async () => {}, activeTasks: () => 0 },
+  }).importData();
+  dataService = service;
+  registerOperations(
+    ipcMain,
+    createOperations({
+      onboarding: onboardingService,
+      providerConsent,
+      capabilities,
+      routes,
+      environments,
+      usage,
+      tasks,
+      runtimeState: () => runtime?.state ?? 'stopped',
+      runtimeVersion: schemaStamp.runtimeVersion,
+      identity: {
+        getStatus: () => identitySession.getStatus(),
+        signIn: async () => { const settled = beginSettingsTransition(); try { taskSessionChanged(true); permissionMediator?.declineAll(); await routes?.quiesce(); if (capabilities && !(await capabilities.quiesce())) await stopRuntime(); const result = await afterIdentityChange(await identitySession.signIn()); capabilities?.resume(); routes?.resume(); return result; } finally { settled(); } },
+        signOut: async () => { const settled = beginSettingsTransition(); try { taskSessionChanged(true); permissionMediator?.declineAll(); await routes?.quiesce(); const result = await signOutWithCapabilities({capabilities, stopRuntime, signOut: () => identitySession.signOut(), afterIdentityChange}); routes?.resume(); return result; } finally { settled(); } },
+      },
+      data: {
+        getPolicy: () => service.getPolicy(),
+        exportData: () => service.exportData(),
+        importData: () => service.importData(),
+        deleteData: (categories) => service.deleteData(categories),
+        deletableCategories: () => service.deletableCategories(),
+      },
+      provider: {
+        getStatus: () => Promise.resolve(providerService.snapshot()),
+        refreshStatus:()=>providerService.getStatus(),
+        setClaudeKey: (key) => providerService.setClaudeKey(key),
+        verifyClaudeKey: () => providerService.verifyClaudeKey(),
+        removeClaudeKey: () => providerService.removeClaudeKey(),
+        codexLogin: (request) => providerService.codexLogin(request),
+        codexLogout: () => providerLogoutWithCapabilities({capabilities, stopRuntime, logout: () => providerService.codexLogout(), getStatus: () => providerService.getStatus()}),
+      },
+      organise: {
+        recoverNavigation: workspaceId => organiseService.recoverNavigation(workspaceId),
+        search: input => organiseService.search(input),
+        reopen: input => organiseService.reopen(input),
+        setNavigation: input => organiseService.setNavigation(input),
+        getWorkspaces: () => organiseService.getWorkspaces(),
+        getTree: (workspaceId) => organiseService.getTree(workspaceId),
+        createEngagement: (input) => organiseService.createEngagement(input),
+        updateEngagement: (input) => organiseService.updateEngagement(input),
+        createFolder: (input) => organiseService.createFolder(input),
+        createTask: (input) => organiseService.createTask(input),
+        renameTask: (input) => organiseService.renameTask(input),
+        moveTask: (input) => organiseService.moveTask(input),
+        listStates: (taskId) => organiseService.listStates(taskId),
+        recordTaskState: (input) => organiseService.recordTaskState(input),
+      },
+      policy: {
+        settings: () => policyService.settings(),
+        inspectTask: (taskId) => policyService.inspectTask(taskId),
+        forTask: (taskId) => policyService.forTask(taskId),
+        setBroadMode: (input) => policyService.setBroadMode(input),
+        pendingPermissions: (taskId) => policyService.pendingPermissions(taskId),
+        decidePermission: (input) => policyService.decidePermission(input),
+        permissionSettings: () => policyService.permissionSettings(),
+        setUserRules: (input) => policyService.setUserRules(input),
+      },
+    }),
+    { trustedWebContentsIds, logger },
+  );
+  mainWindow = createWindow();
+  try {
+    await startRuntime();
+  } catch (error) {
+    logger.error(`app-server runtime did not start: ${(error as Error).message}`);
+    if (smoke) app.quit();
+    return;
+  }
+  if(developmentProfile)process.stdout.write(`${JSON.stringify({event:'owned-dev-ready',runId:developmentProfile.runId})}\n`);
+  if (smoke) {
+    try {
+      await runSmokeProbe(mainWindow.webContents);
+    } catch (error) {
+      logger.error(`renderer privilege probe did not run: ${(error as Error).message}`);
+    }
+    app.quit();
+  }
+});
+
+import {ProviderConsentService} from './providers/consent-service';
+import {ConsentStore} from './providers/consent-store';

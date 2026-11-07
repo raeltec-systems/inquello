@@ -1,0 +1,528 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "InquelloCapabilityContractEntry": {
+      "description": "A Capability Contract entry from the compiled capability register.",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        },
+        "limits": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "enabled",
+        "id",
+        "limits"
+      ],
+      "type": "object"
+    },
+    "InquelloCommandRule": {
+      "description": "One command rule: a literal command prefix and its decision.",
+      "properties": {
+        "decision": {
+          "description": "`allow`, `prompt` or `forbid` (a person's own rules: `prompt` or `forbid`).",
+          "type": "string"
+        },
+        "note": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "prefix": {
+          "description": "The literal command words, in order.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "decision",
+        "prefix"
+      ],
+      "type": "object"
+    },
+    "InquelloCommandRuleView": {
+      "description": "A rule with its source.",
+      "properties": {
+        "rule": {
+          "$ref": "#/definitions/InquelloCommandRule"
+        },
+        "source": {
+          "$ref": "#/definitions/InquelloRuleSource"
+        }
+      },
+      "required": [
+        "rule",
+        "source"
+      ],
+      "type": "object"
+    },
+    "InquelloDeviceRequirements": {
+      "description": "The device layer as `configRequirements/read` reports it.",
+      "properties": {
+        "approvals": {
+          "description": "Allowed approval behaviours, or null when not configured.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "configured": {
+          "description": "False when no requirement this policy reads is configured.",
+          "type": "boolean"
+        },
+        "sandboxModes": {
+          "description": "Allowed sandbox levels, or null when not configured.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "configured"
+      ],
+      "type": "object"
+    },
+    "InquelloPermissionReviewer": {
+      "description": "The automatic permission reviewer: a Workspace switch, off by default, usable only once a processing route exists.",
+      "properties": {
+        "enabled": {
+          "description": "The Workspace switch.",
+          "type": "boolean"
+        },
+        "label": {
+          "type": "string"
+        },
+        "runtimeSetting": {
+          "description": "The runtime's inherited reviewer setting this maps to: `user` unless active.",
+          "type": "string"
+        },
+        "state": {
+          "description": "`off`, `not_available` or `active`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "enabled",
+        "label",
+        "runtimeSetting",
+        "state"
+      ],
+      "type": "object"
+    },
+    "InquelloPolicySetting": {
+      "description": "One effective setting.",
+      "properties": {
+        "name": {
+          "description": "`sandbox`, `approval`, `network`, `mcp_tools`, `extensions`, `full_access` or `no_prompt`.",
+          "type": "string"
+        },
+        "restricted": {
+          "description": "Whether a rule narrows the setting below its most permissive value.",
+          "type": "boolean"
+        },
+        "source": {
+          "$ref": "#/definitions/InquelloPolicySource"
+        },
+        "value": {
+          "description": "`read_only`/`workspace_write`/`full_access` for `sandbox` (the ceiling); `on_request`/`untrusted` for `approval`; `allowed`/`denied` for `network`, `mcp_tools` and `extensions`; `permitted`/`not_permitted` for the broad modes.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "restricted",
+        "source",
+        "value"
+      ],
+      "type": "object"
+    },
+    "InquelloPolicySource": {
+      "description": "The rule that governs a setting.",
+      "properties": {
+        "kind": {
+          "description": "`workspace_policy`, `device_requirements`, `user_config` or `inquello_default`.",
+          "type": "string"
+        },
+        "revision": {
+          "description": "The Workspace policy revision, for `workspace_policy`.",
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "InquelloRuleSource": {
+      "description": "Where a command decision comes from.",
+      "properties": {
+        "behaviour": {
+          "description": "The asking behaviour, for `approval_behaviour`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "description": "`workspace_policy`, `user_rule` or `approval_behaviour`.",
+          "type": "string"
+        },
+        "label": {
+          "description": "The source in words, for example \"Workspace policy, revision 4\" or \"your rule\".",
+          "type": "string"
+        },
+        "revision": {
+          "description": "The policy revision (Workspace) or rules version (user rule).",
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "label"
+      ],
+      "type": "object"
+    },
+    "InquelloRuntimeProfile": {
+      "description": "A Task's tool profile in the runtime's own form (Story 1.19).",
+      "properties": {
+        "networkAllowlist": {
+          "description": "The network allowlist through the runtime's proxy; null when unrestricted.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "permissionProfile": {
+          "description": "The `[permissions.<id>]` table, when bounded."
+        },
+        "permissionProfileId": {
+          "description": "The permissions profile id `inquello/tools/exec` applies, when bounded.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "readableRoots": {
+          "description": "Absolute folders the profile reads (beyond the runtime's minimal system set); empty when unbounded.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "sandbox": {
+          "description": "`permission-profile` (bounded: the named permissions profile below) or `danger-full-access` (a permitted Full access mode).",
+          "type": "string"
+        },
+        "writableRoots": {
+          "description": "Absolute folders the profile writes; empty when unbounded.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "readableRoots",
+        "sandbox",
+        "writableRoots"
+      ],
+      "type": "object"
+    },
+    "InquelloTaskBroadMode": {
+      "description": "A Task's broader execution mode under the current policy.",
+      "properties": {
+        "effectiveMode": {
+          "description": "The mode the Task runs in: `standard` when suspended.",
+          "type": "string"
+        },
+        "governing": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/InquelloPolicySource"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The rule that suspends the recorded mode, when suspended."
+        },
+        "label": {
+          "description": "Always \"Broader execution mode\".",
+          "type": "string"
+        },
+        "reach": {
+          "description": "The reach statement of the recorded mode.",
+          "type": "string"
+        },
+        "recorded": {
+          "description": "The recorded mode: `standard`, `no_prompt` or `full_access`.",
+          "type": "string"
+        },
+        "revision": {
+          "description": "The Task's broad-mode revision: 0 before the first record.",
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "status": {
+          "description": "`standard`, `active` or `suspended` (recorded but no longer permitted).",
+          "type": "string"
+        },
+        "taskId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "effectiveMode",
+        "label",
+        "reach",
+        "recorded",
+        "revision",
+        "status",
+        "taskId"
+      ],
+      "type": "object"
+    },
+    "InquelloTaskPolicy": {
+      "properties": {
+        "broadMode": {
+          "$ref": "#/definitions/InquelloTaskBroadMode"
+        },
+        "reach": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/InquelloToolReach"
+            }
+          ],
+          "description": "Story 1.19: what the Task's tools can reach, without device paths."
+        },
+        "runtimeProfile": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/InquelloRuntimeProfile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Story 1.19: the tool profile in the runtime's own form; present when the params name the Task folder."
+        },
+        "threadSettings": {
+          "$ref": "#/definitions/InquelloThreadSettings"
+        }
+      },
+      "required": [
+        "broadMode",
+        "reach",
+        "threadSettings"
+      ],
+      "type": "object"
+    },
+    "InquelloThreadSettings": {
+      "description": "The thread settings a run of the Task gets, derived only from the effective policy and the Task's broad mode. Values use the runtime's own names.",
+      "properties": {
+        "approvalPolicy": {
+          "description": "`untrusted`, `on-request` or `never`.",
+          "type": "string"
+        },
+        "mode": {
+          "type": "string"
+        },
+        "networkAccess": {
+          "type": "boolean"
+        },
+        "sandbox": {
+          "description": "`read-only`, `workspace-write` or `danger-full-access`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "approvalPolicy",
+        "mode",
+        "networkAccess",
+        "sandbox"
+      ],
+      "type": "object"
+    },
+    "InquelloToolBoundary": {
+      "description": "One permitted location of a bounded tool profile (Story 1.19).",
+      "properties": {
+        "access": {
+          "description": "`read` or `write`.",
+          "type": "string"
+        },
+        "kind": {
+          "description": "`working_folder`, `output_folder` or `system`.",
+          "type": "string"
+        },
+        "label": {
+          "description": "The boundary's name in a denial, for example \"working folder (read/write)\", \"output folder\" or \"system (read-only)\".",
+          "type": "string"
+        }
+      },
+      "required": [
+        "access",
+        "kind",
+        "label"
+      ],
+      "type": "object"
+    },
+    "InquelloToolReach": {
+      "description": "What a Task's tools can reach (Story 1.19), with no device path.",
+      "properties": {
+        "boundaries": {
+          "description": "The permitted locations of a bounded profile; empty when unbounded.",
+          "items": {
+            "$ref": "#/definitions/InquelloToolBoundary"
+          },
+          "type": "array"
+        },
+        "bounded": {
+          "description": "False only for a permitted Full access broad mode: no filesystem or network limits.",
+          "type": "boolean"
+        },
+        "domains": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "network": {
+          "description": "`listed` (only `domains`; none when empty) or `unrestricted`.",
+          "type": "string"
+        },
+        "networkSource": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/InquelloPolicySource"
+            }
+          ],
+          "description": "The rule that governs the network reach."
+        }
+      },
+      "required": [
+        "boundaries",
+        "bounded",
+        "domains",
+        "network",
+        "networkSource"
+      ],
+      "type": "object"
+    }
+  },
+  "properties": {
+    "authorizationEpoch": {
+      "format": "uint64",
+      "minimum": 0.0,
+      "type": "integer"
+    },
+    "capabilities": {
+      "description": "Capability Contract entries.",
+      "items": {
+        "$ref": "#/definitions/InquelloCapabilityContractEntry"
+      },
+      "type": "array"
+    },
+    "commandRules": {
+      "description": "Story 1.20: the Workspace command rules, each with its source.",
+      "items": {
+        "$ref": "#/definitions/InquelloCommandRuleView"
+      },
+      "type": "array"
+    },
+    "device": {
+      "$ref": "#/definitions/InquelloDeviceRequirements"
+    },
+    "environment": {
+      "description": "Always `local_device` in V1.",
+      "type": "string"
+    },
+    "policyRevision": {
+      "format": "uint64",
+      "minimum": 0.0,
+      "type": "integer"
+    },
+    "reach": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/InquelloToolReach"
+        }
+      ],
+      "description": "Story 1.19: what a standard Task's tools in this Workspace can reach."
+    },
+    "reviewer": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/InquelloPermissionReviewer"
+        }
+      ],
+      "description": "Story 1.20: the automatic permission reviewer's state."
+    },
+    "settings": {
+      "description": "Every setting, in a fixed order.",
+      "items": {
+        "$ref": "#/definitions/InquelloPolicySetting"
+      },
+      "type": "array"
+    },
+    "task": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/InquelloTaskPolicy"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Present when the params name a Task."
+    },
+    "workspaceId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "authorizationEpoch",
+    "capabilities",
+    "commandRules",
+    "device",
+    "environment",
+    "policyRevision",
+    "reach",
+    "reviewer",
+    "settings",
+    "workspaceId"
+  ],
+  "title": "InquelloPolicyEffectiveResponse",
+  "type": "object"
+}

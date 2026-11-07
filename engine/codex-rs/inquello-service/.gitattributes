@@ -1,0 +1,2 @@
+# The migration checksum covers line endings; keep them LF on every platform (core.autocrlf=true on Windows).
+migrations/*.sql text eol=lf

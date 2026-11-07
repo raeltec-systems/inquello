@@ -1,0 +1,56 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "InquelloCommandRule": {
+      "description": "One command rule: a literal command prefix and its decision.",
+      "properties": {
+        "decision": {
+          "description": "`allow`, `prompt` or `forbid` (a person's own rules: `prompt` or `forbid`).",
+          "type": "string"
+        },
+        "note": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "prefix": {
+          "description": "The literal command words, in order.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "decision",
+        "prefix"
+      ],
+      "type": "object"
+    }
+  },
+  "description": "Replaces the person's own rules: `prompt` or `forbid` only (`user_rule_cannot_allow` otherwise).",
+  "properties": {
+    "expectedRevision": {
+      "format": "uint64",
+      "minimum": 0.0,
+      "type": "integer"
+    },
+    "operationId": {
+      "type": "string"
+    },
+    "rules": {
+      "items": {
+        "$ref": "#/definitions/InquelloCommandRule"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "expectedRevision",
+    "operationId",
+    "rules"
+  ],
+  "title": "InquelloUserRulesSetParams",
+  "type": "object"
+}

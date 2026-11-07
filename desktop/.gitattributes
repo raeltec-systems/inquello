@@ -1,0 +1,3 @@
+# Generated protocol files are written with LF; keep the working copy byte-identical
+# to generator output so a fresh `pnpm generate:protocol` produces no diff.
+src/protocol/** text eol=lf

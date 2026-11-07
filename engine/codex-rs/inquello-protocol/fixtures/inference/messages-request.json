@@ -1,0 +1,54 @@
+{
+  "binding": {
+    "schema_version": 1,
+    "principal_id": "00000000-0000-4000-8000-000000000001",
+    "task_id": "00000000-0000-4000-8000-000000000002",
+    "run_id": "00000000-0000-4000-8000-000000000003",
+    "turn_id": "00000000-0000-4000-8000-000000000004",
+    "attempt_id": "00000000-0000-4000-8000-000000000005",
+    "route_id": "claude-api-key",
+    "model": "claude-sonnet-5-5",
+    "api_version": "2026-10-21",
+    "account_ref": "00000000-0000-4000-8000-000000000006",
+    "authority_basis": "synthetic-fixture-only",
+    "authority_epoch": 1,
+    "policy_revision": 2,
+    "route_revision": 1,
+    "credential_generation": 1
+  },
+  "messages": [
+    {
+      "message_id": "user-1",
+      "role": "user",
+      "origin": "user_input",
+      "blocks": [
+        {
+          "kind": "text",
+          "text": "Synthetic fixture: say hello."
+        }
+      ]
+    }
+  ],
+  "tools": [
+    {
+      "name": "read_fixture",
+      "description": "Read synthetic fixture only",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "additionalProperties": false
+      }
+    }
+  ],
+  "max_output_tokens": 128,
+  "completed_tool_call_ids": [],
+  "effects_reconciled": true,
+  "settings": {}
+}

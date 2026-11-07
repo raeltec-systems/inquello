@@ -1,0 +1,23 @@
+{
+  "result": {
+    "ok": true,
+    "status": {
+      "identity": {
+        "state": "signed-out"
+      },
+      "sharedService": "unavailable",
+      "credentialStorage": "memory-only",
+      "privateWork": "local"
+    }
+  },
+  "calls": [
+    "capabilities",
+    "session",
+    "sessionCommand",
+    "refresh"
+  ],
+  "serverRevoked": false,
+  "vaultCleared": true,
+  "revocationCalls": 0,
+  "refreshStillAccepted": true
+}

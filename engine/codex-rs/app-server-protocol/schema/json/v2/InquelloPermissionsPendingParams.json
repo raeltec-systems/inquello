@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "description": "The person's pending requests, of one Task when named.",
+  "properties": {
+    "taskId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "title": "InquelloPermissionsPendingParams",
+  "type": "object"
+}

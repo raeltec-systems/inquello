@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "properties": {
+    "principalId": {
+      "description": "The principal now bound to this connection, if any.",
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "title": "InquelloSetPrincipalResponse",
+  "type": "object"
+}

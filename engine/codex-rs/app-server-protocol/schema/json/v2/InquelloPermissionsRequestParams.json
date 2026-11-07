@@ -1,0 +1,74 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "InquelloWorkspaceExecutionPolicy": {
+      "description": "The Workspace execution policy as the desktop main process fetched it from the shared service (`GET /v1/workspaces/{id}/execution-policy`).",
+      "properties": {
+        "authorizationEpoch": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "execution": {
+          "description": "The policy's `execution` section in its canonical snake_case form, or null when the policy has none (the conservative Inquello default applies). Validated again here; an invalid section is `invalid`."
+        },
+        "policyRevision": {
+          "format": "uint64",
+          "minimum": 0.0,
+          "type": "integer"
+        },
+        "workspaceId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "authorizationEpoch",
+        "policyRevision",
+        "workspaceId"
+      ],
+      "type": "object"
+    }
+  },
+  "description": "Records a pending request for permission to run one command for a Task. The decision record is computed here from the Task's rules and policy. A forbidden command is refused (`command_forbidden`) and no request exists.",
+  "properties": {
+    "command": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "operationId": {
+      "type": "string"
+    },
+    "origin": {
+      "description": "`tools_exec` or `runtime`.",
+      "type": "string"
+    },
+    "requestId": {
+      "type": "string"
+    },
+    "taskId": {
+      "type": "string"
+    },
+    "ttlMs": {
+      "description": "How long the request waits for a decision.",
+      "format": "uint64",
+      "minimum": 0.0,
+      "type": "integer"
+    },
+    "workspacePolicy": {
+      "$ref": "#/definitions/InquelloWorkspaceExecutionPolicy"
+    }
+  },
+  "required": [
+    "command",
+    "operationId",
+    "origin",
+    "requestId",
+    "taskId",
+    "ttlMs",
+    "workspacePolicy"
+  ],
+  "title": "InquelloPermissionsRequestParams",
+  "type": "object"
+}

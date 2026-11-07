@@ -1,0 +1,390 @@
+{
+  "report_kind": "authoring-status-only",
+  "suite": "inquello-current-route-negative-authorization-v1",
+  "eligible": false,
+  "reason": "cargo unavailable; no native artifact tested",
+  "implementation_digest": null,
+  "tested_artifact_digest": null,
+  "results": [
+    {
+      "route_id": "codex-responses",
+      "scenario": "cross-workspace",
+      "status": "not-run",
+      "source_status": "executable-fixture-source",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "synthetic retained child; not native real-data eligibility",
+      "execution_status": "not-run",
+      "test_selector": "responses_allowed",
+      "service_coupling_selector": "coupled_responses_allowed"
+    },
+    {
+      "route_id": "codex-responses",
+      "scenario": "peer-private",
+      "status": "not-run",
+      "source_status": "executable-fixture-source",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "synthetic retained child; not native real-data eligibility",
+      "execution_status": "not-run",
+      "test_selector": "responses_allowed",
+      "service_coupling_selector": "coupled_responses_allowed"
+    },
+    {
+      "route_id": "codex-responses",
+      "scenario": "foreign-thread",
+      "status": "not-run",
+      "source_status": "executable-fixture-source",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "synthetic retained child; not native real-data eligibility",
+      "execution_status": "not-run",
+      "test_selector": "responses_allowed",
+      "service_coupling_selector": "coupled_responses_allowed"
+    },
+    {
+      "route_id": "codex-responses",
+      "scenario": "foreign-tool",
+      "status": "not-run",
+      "source_status": "executable-fixture-source",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "synthetic retained child; not native real-data eligibility",
+      "execution_status": "not-run",
+      "test_selector": "responses_allowed",
+      "service_coupling_selector": "coupled_responses_allowed"
+    },
+    {
+      "route_id": "codex-responses",
+      "scenario": "revoked-before-dispatch",
+      "status": "not-run",
+      "source_status": "executable-fixture-source",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "synthetic retained child; not native real-data eligibility",
+      "execution_status": "not-run",
+      "test_selector": "responses_deny_before_dispatch",
+      "service_coupling_selector": "coupled_responses_deny_before_dispatch"
+    },
+    {
+      "route_id": "codex-responses",
+      "scenario": "revoked-during-model",
+      "status": "not-run",
+      "source_status": "executable-fixture-source",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "synthetic retained child; not native real-data eligibility",
+      "execution_status": "not-run",
+      "test_selector": "responses_revoke_model",
+      "service_coupling_selector": "coupled_responses_revoke_model"
+    },
+    {
+      "route_id": "codex-responses",
+      "scenario": "revoked-during-tool",
+      "status": "not-run",
+      "source_status": "executable-fixture-source",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "synthetic retained child; not native real-data eligibility",
+      "execution_status": "not-run",
+      "test_selector": "responses_revoke_running_tool",
+      "service_coupling_selector": "coupled_responses_revoke_running_tool"
+    },
+    {
+      "route_id": "codex-responses",
+      "scenario": "revoked-during-permission",
+      "status": "not-run",
+      "source_status": "executable-fixture-source",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "synthetic retained child; not native real-data eligibility",
+      "execution_status": "not-run",
+      "test_selector": "responses_revoke_pending_permission",
+      "service_coupling_selector": "coupled_responses_revoke_pending_permission"
+    },
+    {
+      "route_id": "codex-responses",
+      "scenario": "late-output",
+      "status": "not-run",
+      "source_status": "executable-fixture-source",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "synthetic retained child; not native real-data eligibility",
+      "execution_status": "not-run",
+      "test_selector": "responses_revoke_model",
+      "service_coupling_selector": "coupled_responses_revoke_model"
+    },
+    {
+      "route_id": "codex-responses",
+      "scenario": "authority-unavailable",
+      "status": "not-run",
+      "source_status": "executable-fixture-source",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "synthetic retained child; not native real-data eligibility",
+      "execution_status": "not-run",
+      "test_selector": "responses_deny_before_dispatch",
+      "service_coupling_selector": "coupled_responses_deny_before_dispatch"
+    },
+    {
+      "route_id": "codex-responses",
+      "scenario": "retained-output",
+      "status": "not-run",
+      "source_status": "executable-fixture-source",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "synthetic retained child; not native real-data eligibility",
+      "execution_status": "not-run",
+      "test_selector": "responses_revoke_model",
+      "service_coupling_selector": "coupled_responses_revoke_model"
+    },
+    {
+      "route_id": "codex-responses",
+      "scenario": "reopen",
+      "status": "not-run",
+      "source_status": "executable-fixture-source",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "synthetic retained child; not native real-data eligibility",
+      "execution_status": "not-run",
+      "test_selector": "responses_allowed",
+      "service_coupling_selector": "coupled_responses_allowed"
+    },
+    {
+      "route_id": "codex-responses",
+      "scenario": "export",
+      "status": "not-run",
+      "source_status": "component-source-and-owner-plan; native-electron-e2e-unimplemented",
+      "source": "desktop/test/data-operations.test.ts; desktop/test/data-recovery.test.ts; app-server/tests/INQUELLO-AUTHORIZATION-FIXTURES.md",
+      "scope": "synthetic retained child; not native real-data eligibility",
+      "execution_status": "not-run",
+      "owner_plan": "INQUELLO-AUTHORIZATION-FIXTURES.md: Owner-run Electron export/recovery placement"
+    },
+    {
+      "route_id": "codex-responses",
+      "scenario": "recovery",
+      "status": "not-run",
+      "source_status": "component-source-and-owner-plan; native-electron-e2e-unimplemented",
+      "source": "desktop/test/data-operations.test.ts; desktop/test/data-recovery.test.ts; app-server/tests/INQUELLO-AUTHORIZATION-FIXTURES.md",
+      "scope": "synthetic retained child; not native real-data eligibility",
+      "execution_status": "not-run",
+      "owner_plan": "INQUELLO-AUTHORIZATION-FIXTURES.md: Owner-run Electron export/recovery placement"
+    },
+    {
+      "route_id": "codex-responses",
+      "scenario": "authorized-procurement",
+      "status": "not-run",
+      "source_status": "fixture-source; actual-provider-usefulness-owner-gated",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "fictional fixture text is not actual provider usefulness",
+      "execution_status": "not-run",
+      "test_selector": "responses_allowed",
+      "service_coupling_selector": "coupled_responses_allowed"
+    },
+    {
+      "route_id": "codex-responses",
+      "scenario": "authorized-export",
+      "status": "not-run",
+      "source_status": "component-source-and-owner-plan; native-electron-e2e-unimplemented",
+      "source": "desktop/test/data-operations.test.ts; desktop/test/data-recovery.test.ts; app-server/tests/INQUELLO-AUTHORIZATION-FIXTURES.md",
+      "scope": "synthetic retained child; not native real-data eligibility",
+      "execution_status": "not-run",
+      "owner_plan": "INQUELLO-AUTHORIZATION-FIXTURES.md: Owner-run Electron export/recovery placement"
+    },
+    {
+      "route_id": "codex-responses",
+      "scenario": "authorized-recovery",
+      "status": "not-run",
+      "source_status": "component-source-and-owner-plan; native-electron-e2e-unimplemented",
+      "source": "desktop/test/data-operations.test.ts; desktop/test/data-recovery.test.ts; app-server/tests/INQUELLO-AUTHORIZATION-FIXTURES.md",
+      "scope": "synthetic retained child; not native real-data eligibility",
+      "execution_status": "not-run",
+      "owner_plan": "INQUELLO-AUTHORIZATION-FIXTURES.md: Owner-run Electron export/recovery placement"
+    },
+    {
+      "route_id": "claude-api-key",
+      "scenario": "cross-workspace",
+      "status": "not-run",
+      "source_status": "executable-fixture-source",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "synthetic retained child; not native real-data eligibility",
+      "execution_status": "not-run",
+      "test_selector": "messages_allowed",
+      "service_coupling_selector": "coupled_messages_allowed"
+    },
+    {
+      "route_id": "claude-api-key",
+      "scenario": "peer-private",
+      "status": "not-run",
+      "source_status": "executable-fixture-source",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "synthetic retained child; not native real-data eligibility",
+      "execution_status": "not-run",
+      "test_selector": "messages_allowed",
+      "service_coupling_selector": "coupled_messages_allowed"
+    },
+    {
+      "route_id": "claude-api-key",
+      "scenario": "foreign-thread",
+      "status": "not-run",
+      "source_status": "executable-fixture-source",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "synthetic retained child; not native real-data eligibility",
+      "execution_status": "not-run",
+      "test_selector": "messages_allowed",
+      "service_coupling_selector": "coupled_messages_allowed"
+    },
+    {
+      "route_id": "claude-api-key",
+      "scenario": "foreign-tool",
+      "status": "not-run",
+      "source_status": "executable-fixture-source",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "synthetic retained child; not native real-data eligibility",
+      "execution_status": "not-run",
+      "test_selector": "messages_allowed",
+      "service_coupling_selector": "coupled_messages_allowed"
+    },
+    {
+      "route_id": "claude-api-key",
+      "scenario": "revoked-before-dispatch",
+      "status": "not-run",
+      "source_status": "executable-fixture-source",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "synthetic retained child; not native real-data eligibility",
+      "execution_status": "not-run",
+      "test_selector": "messages_deny_before_dispatch",
+      "service_coupling_selector": "coupled_messages_deny_before_dispatch"
+    },
+    {
+      "route_id": "claude-api-key",
+      "scenario": "revoked-during-model",
+      "status": "not-run",
+      "source_status": "executable-fixture-source",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "synthetic retained child; not native real-data eligibility",
+      "execution_status": "not-run",
+      "test_selector": "messages_revoke_model",
+      "service_coupling_selector": "coupled_messages_revoke_model"
+    },
+    {
+      "route_id": "claude-api-key",
+      "scenario": "revoked-during-tool",
+      "status": "not-run",
+      "source_status": "executable-fixture-source",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "synthetic retained child; not native real-data eligibility",
+      "execution_status": "not-run",
+      "test_selector": "messages_revoke_running_tool",
+      "service_coupling_selector": "coupled_messages_revoke_running_tool"
+    },
+    {
+      "route_id": "claude-api-key",
+      "scenario": "revoked-during-permission",
+      "status": "not-run",
+      "source_status": "executable-fixture-source",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "synthetic retained child; not native real-data eligibility",
+      "execution_status": "not-run",
+      "test_selector": "messages_revoke_pending_permission",
+      "service_coupling_selector": "coupled_messages_revoke_pending_permission"
+    },
+    {
+      "route_id": "claude-api-key",
+      "scenario": "late-output",
+      "status": "not-run",
+      "source_status": "executable-fixture-source",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "synthetic retained child; not native real-data eligibility",
+      "execution_status": "not-run",
+      "test_selector": "messages_revoke_model",
+      "service_coupling_selector": "coupled_messages_revoke_model"
+    },
+    {
+      "route_id": "claude-api-key",
+      "scenario": "authority-unavailable",
+      "status": "not-run",
+      "source_status": "executable-fixture-source",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "synthetic retained child; not native real-data eligibility",
+      "execution_status": "not-run",
+      "test_selector": "messages_deny_before_dispatch",
+      "service_coupling_selector": "coupled_messages_deny_before_dispatch"
+    },
+    {
+      "route_id": "claude-api-key",
+      "scenario": "retained-output",
+      "status": "not-run",
+      "source_status": "executable-fixture-source",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "synthetic retained child; not native real-data eligibility",
+      "execution_status": "not-run",
+      "test_selector": "messages_revoke_model",
+      "service_coupling_selector": "coupled_messages_revoke_model"
+    },
+    {
+      "route_id": "claude-api-key",
+      "scenario": "reopen",
+      "status": "not-run",
+      "source_status": "executable-fixture-source",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "synthetic retained child; not native real-data eligibility",
+      "execution_status": "not-run",
+      "test_selector": "messages_allowed",
+      "service_coupling_selector": "coupled_messages_allowed"
+    },
+    {
+      "route_id": "claude-api-key",
+      "scenario": "export",
+      "status": "not-run",
+      "source_status": "component-source-and-owner-plan; native-electron-e2e-unimplemented",
+      "source": "desktop/test/data-operations.test.ts; desktop/test/data-recovery.test.ts; app-server/tests/INQUELLO-AUTHORIZATION-FIXTURES.md",
+      "scope": "synthetic retained child; not native real-data eligibility",
+      "execution_status": "not-run",
+      "owner_plan": "INQUELLO-AUTHORIZATION-FIXTURES.md: Owner-run Electron export/recovery placement"
+    },
+    {
+      "route_id": "claude-api-key",
+      "scenario": "recovery",
+      "status": "not-run",
+      "source_status": "component-source-and-owner-plan; native-electron-e2e-unimplemented",
+      "source": "desktop/test/data-operations.test.ts; desktop/test/data-recovery.test.ts; app-server/tests/INQUELLO-AUTHORIZATION-FIXTURES.md",
+      "scope": "synthetic retained child; not native real-data eligibility",
+      "execution_status": "not-run",
+      "owner_plan": "INQUELLO-AUTHORIZATION-FIXTURES.md: Owner-run Electron export/recovery placement"
+    },
+    {
+      "route_id": "claude-api-key",
+      "scenario": "authorized-procurement",
+      "status": "not-run",
+      "source_status": "fixture-source; actual-provider-usefulness-owner-gated",
+      "source": "app-server/tests/inquello_authorization_runtime.rs + common/inquello_authorization_driver.rs",
+      "scope": "fictional fixture text is not actual provider usefulness",
+      "execution_status": "not-run",
+      "test_selector": "messages_allowed",
+      "service_coupling_selector": "coupled_messages_allowed"
+    },
+    {
+      "route_id": "claude-api-key",
+      "scenario": "authorized-export",
+      "status": "not-run",
+      "source_status": "component-source-and-owner-plan; native-electron-e2e-unimplemented",
+      "source": "desktop/test/data-operations.test.ts; desktop/test/data-recovery.test.ts; app-server/tests/INQUELLO-AUTHORIZATION-FIXTURES.md",
+      "scope": "synthetic retained child; not native real-data eligibility",
+      "execution_status": "not-run",
+      "owner_plan": "INQUELLO-AUTHORIZATION-FIXTURES.md: Owner-run Electron export/recovery placement"
+    },
+    {
+      "route_id": "claude-api-key",
+      "scenario": "authorized-recovery",
+      "status": "not-run",
+      "source_status": "component-source-and-owner-plan; native-electron-e2e-unimplemented",
+      "source": "desktop/test/data-operations.test.ts; desktop/test/data-recovery.test.ts; app-server/tests/INQUELLO-AUTHORIZATION-FIXTURES.md",
+      "scope": "synthetic retained child; not native real-data eligibility",
+      "execution_status": "not-run",
+      "owner_plan": "INQUELLO-AUTHORIZATION-FIXTURES.md: Owner-run Electron export/recovery placement"
+    }
+  ],
+  "counts": {
+    "passed": 0,
+    "failed": 0,
+    "skipped": 0,
+    "not_run": 34
+  },
+  "limitations": [
+    "This report cannot be ingested as reviewed compiled evidence",
+    "Fixture provider output is not actual model usefulness",
+    "No organizational approval; no Windows support proof",
+    "Disabled future routes are excluded, not counted as denials",
+    "Per-scenario source_status distinguishes fixture source, component source and unimplemented owner-run E2E",
+    "Service-backed synthetic gate uses cfg(test) hardcoded proof; native real-data compiled-proof positive path is not exercised"
+  ]
+}

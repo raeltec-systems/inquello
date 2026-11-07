@@ -1,0 +1,174 @@
+// @vitest-environment jsdom
+import {act,cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
+import {afterEach,it,expect,vi} from 'vitest';
+import {useState} from 'react';
+import {TaskLifecycle,TaskActivityLabel,interruptionSummary} from '../src/renderer/Shell/TaskLifecycle';
+import {TaskProgress} from '../src/renderer/Shell/TaskProgress';
+import type {ProgressSnapshot} from '../src/renderer/Shell/tasks-bridge';
+const base:ProgressSnapshot={version:1,taskId:'task-1',workspaceId:'workspace-1',runId:'run-1',threadId:'thread-1',turnId:'turn-1',runtimeId:'runtime-1',sessionGeneration:1,status:'running',historyIncomplete:false,items:[],plan:[],results:[],artifact:'absent',questions:[]};
+const receipt=(kind='steer',status='admitted')=>({operationId:'op-1',taskId:'task-1',runId:'run-1',threadId:'thread-1',turnId:'turn-1',runtimeId:'runtime-1',kind,status});
+function fixture(snapshot:ProgressSnapshot=base){let next=snapshot;const listeners=new Set<()=>void>(),invalidators=new Set<()=>void>();const api={progress:vi.fn(async()=>({ok:true,value:next})),steer:vi.fn(async()=>({ok:true,value:receipt()})),stop:vi.fn(async()=>({ok:true,value:receipt('stop','interrupted')})),resume:vi.fn(async()=>({ok:true,value:receipt('resume')})),onProgressChanged:(f:()=>void)=>{listeners.add(f);return()=>listeners.delete(f);},onSessionChanged:(f:()=>void)=>{invalidators.add(f);return()=>invalidators.delete(f);}};Object.assign(globalThis,{inquello:{tasks:api,routes:{pendingModel:async()=>({ok:true,value:{operation:null}}),catalog:async()=>{throw new Error('No model catalog in lifecycle-only fixture');}}}});function Controls(){const [value,onChange]=useState('Exclude cancelled invoices');return <TaskLifecycle taskId="task-1" workspaceId="workspace-1" operationIds={()=>'op-1'} draft={{taskId:'task-1',value,onChange}}/>;}return{api,Controls,update:async(v:ProgressSnapshot)=>{next=v;await act(async()=>{listeners.forEach(f=>f());await new Promise(r=>setTimeout(r,300));});},invalidate:async()=>act(async()=>invalidators.forEach(f=>f()))};}
+afterEach(()=>{cleanup();delete (globalThis as {inquello?:unknown}).inquello;});
+it('uses ordinary Composer guidance and clears only after admission',async()=>{const x=fixture();render(<x.Controls/>);await screen.findByRole('button',{name:'Stop'});const input=screen.getByRole('textbox');input.focus();fireEvent.click(screen.getByRole('button',{name:'Send'}));await waitFor(()=>expect(x.api.steer).toHaveBeenCalledWith({operationId:'op-1',taskId:'task-1',workspaceId:'workspace-1',request:'Exclude cancelled invoices'}));await waitFor(()=>expect((input as HTMLTextAreaElement).value).toBe(''));expect(document.activeElement).toBe(input);expect(screen.getByText(/Revisions will appear/)).toBeTruthy();});
+it('Escape does not stop work and wrong-ended turn preserves the draft',async()=>{const x=fixture();x.api.steer.mockResolvedValue({ok:false,code:'refused',reason:'Turn ended. Draft preserved.'} as never);render(<x.Controls/>);await screen.findByRole('button',{name:'Stop'});fireEvent.keyDown(screen.getByRole('textbox'),{key:'Escape'});expect(x.api.stop).not.toHaveBeenCalled();fireEvent.click(screen.getByRole('button',{name:'Send'}));await screen.findByText('Turn ended. Draft preserved.');expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('Exclude cancelled invoices');});
+it('shows stopping until confirmation and preserves three completed and two pending steps',async()=>{const plan=Array.from({length:5},(_,i)=>({id:`s${i}`,revision:1,text:`Step ${i}`,status:i<3?'done' as const:'pending' as const,evidenceIds:[]}));const x=fixture({...base,plan});let resolve!:(v:unknown)=>void;x.api.stop.mockImplementation(()=>new Promise(r=>{resolve=r as typeof resolve;}));render(<x.Controls/>);const stop=await screen.findByRole('button',{name:'Stop'});stop.focus();fireEvent.click(stop);await screen.findByText('Stopping… awaiting confirmed interruption.');expect(screen.queryByText(/3 steps completed/)).toBeNull();await act(async()=>resolve({ok:true,value:receipt('stop','interrupted')}));await x.update({...base,status:'cancelled',plan});expect(screen.getByText('Work interrupted. 3 steps completed; 2 remain.')).toBeTruthy();expect(document.activeElement).toBe(stop);expect(screen.getByRole('button',{name:'Resume'})).toBeTruthy();expect(x.api.resume).not.toHaveBeenCalled();expect(interruptionSummary({...base,status:'cancelled',plan,historyIncomplete:true})).toContain('not fully known');});
+it('restart uncertainty requires explicit Resume and does not discard typed continuation',async()=>{const x=fixture({...base,status:'uncertain',turnId:null});render(<x.Controls/>);const resume=await screen.findByRole('button',{name:'Resume'});expect(x.api.resume).not.toHaveBeenCalled();fireEvent.click(resume);await waitFor(()=>expect(x.api.resume).toHaveBeenCalledWith({operationId:'op-1',taskId:'task-1',workspaceId:'workspace-1',request:'Exclude cancelled invoices'}));});
+it('background question labels update without stealing focus and clear on invalidation',async()=>{const x=fixture();render(<><input aria-label="Other task draft"/><TaskActivityLabel taskId="task-1" workspaceId="workspace-1"/></>);await screen.findByText('Running');const input=screen.getByLabelText('Other task draft');input.focus();await x.update({...base,questions:[{requestId:1,threadId:'thread-1',turnId:'turn-1',itemId:'q',questions:[]}]});expect(screen.getByText('Waiting for your answer')).toBeTruthy();expect(document.activeElement).toBe(input);await x.invalidate();expect(screen.queryByText('Waiting for your answer')).toBeNull();});
+it('separates current findings from withdrawn historical versions without inherited review',async()=>{const result={id:'duplicate',kind:'observation' as const,text:'Vendor A invoice 10 repeated',checks:'unchecked' as const,checkScope:null,evidenceIds:[],basis:null,revision:2,state:'current' as const};fixture({...base,results:[result],resultHistory:[{...result,revision:1,state:'withdrawn',text:'Invoice 10 repeated across vendors',changeReason:'Duplicate key now includes vendor'}]});render(<TaskProgress taskId="task-1" workspaceId="workspace-1"/>);await screen.findByText('Current results');expect(screen.getByRole('region',{name:'Historical results'})).toBeTruthy();expect(screen.getByText('Withdrawn · Revision 1')).toBeTruthy();expect(screen.getByText('Revision reason: Duplicate key now includes vendor')).toBeTruthy();});
+it('lost acknowledgement is resolved by progress without another click or duplicate dispatch',async()=>{const x=fixture();x.api.steer.mockResolvedValue({ok:false,code:'uncertain',reason:'Reconciling this operation.'} as never);render(<x.Controls/>);await screen.findByRole('button',{name:'Stop'});fireEvent.click(screen.getByRole('button',{name:'Send'}));await screen.findByText('Reconciling this operation.');expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('Exclude cancelled invoices');await x.update({...base,lifecycle:receipt() as never});await screen.findByText('Guidance received. Revisions will appear as the agent completes them.');expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('');expect(x.api.steer).toHaveBeenCalledTimes(1);});
+it('a new draft typed while guidance is pending is not cleared by admission',async()=>{const x=fixture();let resolve!:(v:unknown)=>void;x.api.steer.mockImplementation(()=>new Promise(r=>{resolve=r as typeof resolve;}));render(<x.Controls/>);await screen.findByRole('button',{name:'Stop'});fireEvent.click(screen.getByRole('button',{name:'Send'}));fireEvent.change(screen.getByRole('textbox'),{target:{value:'Now match vendor plus invoice'}});await act(async()=>resolve({ok:true,value:receipt()}));expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('Now match vendor plus invoice');});
+it('keeps Stop available while a corrective instruction is pending',async()=>{const x=fixture();let resolve!:(v:unknown)=>void;x.api.steer.mockImplementation(()=>new Promise(r=>resolve=r as typeof resolve));render(<x.Controls/>);await screen.findByRole('button',{name:'Stop'});fireEvent.click(screen.getByRole('button',{name:'Send'}));await screen.findByText('Sending guidance…');fireEvent.click(screen.getByRole('button',{name:'Stop'}));await waitFor(()=>expect(x.api.stop).toHaveBeenCalledTimes(1));await act(async()=>resolve({ok:true,value:receipt()}));});
+it('settles the submitted draft after navigation from trusted Task operation state',async()=>{const x=fixture({...base,lifecycleOperations:[{operationId:'prior-op',kind:'steer',request:'Exclude cancelled invoices',status:'admitted'}]});render(<x.Controls/>);await waitFor(()=>expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe(''));expect(x.api.steer).not.toHaveBeenCalled();fireEvent.change(screen.getByRole('textbox'),{target:{value:'New correction'}});await x.update({...base,lifecycleOperations:[{operationId:'prior-op',kind:'steer',request:'Exclude cancelled invoices',status:'admitted'}]});expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('New correction');});
+it('coalesces selected Task controls and progress into one full read',async()=>{const x=fixture();render(<><x.Controls/><TaskProgress taskId="task-1" workspaceId="workspace-1"/></>);await screen.findByRole('button',{name:'Stop'});expect(x.api.progress).toHaveBeenCalledTimes(1);});
+it('uses lightweight activity reads for navigation and reacquires after session invalidation',async()=>{const x=fixture();const activity=vi.fn(async()=>({ok:true,value:base}));Object.assign(x.api,{activity});render(<TaskActivityLabel taskId="task-1" workspaceId="workspace-1"/>);await screen.findByText('Running');expect(activity).toHaveBeenCalledTimes(1);expect(x.api.progress).not.toHaveBeenCalled();await x.invalidate();await screen.findByText('Status unavailable');await screen.findByText('Running');expect(activity).toHaveBeenCalledTimes(2);});
+it('keeps independently authorized Stop reachable when complete history cannot be projected',async()=>{const x=fixture();x.api.progress.mockRejectedValue(new Error('History exceeds canonical read bound'));const activity=vi.fn(async()=>({ok:true,value:base}));Object.assign(x.api,{activity});render(<x.Controls/>);const stop=await screen.findByRole('button',{name:'Stop'});fireEvent.click(stop);await waitFor(()=>expect(x.api.stop).toHaveBeenCalledTimes(1));expect(activity).toHaveBeenCalledTimes(1);});
+it.each(['interrupted','completed','rejected','unresolved'] as const)('presents observed %s terminal receipts instead of stale reconciliation copy',async status=>{const x=fixture();x.api.stop.mockResolvedValue({ok:false,code:'uncertain',reason:'Still reconciling Stop'} as never);render(<x.Controls/>);fireEvent.click(await screen.findByRole('button',{name:'Stop'}));await screen.findByText('Still reconciling Stop');await x.update({...base,lifecycleOperations:[{operationId:'op-1',kind:'stop',request:null,status}]});expect(screen.queryByText('Still reconciling Stop')).toBeNull();expect(screen.getByText(status==='interrupted'?/Interruption confirmed/:status==='completed'?/work finished before/:status==='rejected'?/instruction was not admitted/:/prior instruction outcome/)).toBeTruthy();});
+it('retries rejected settlement without reapplying the draft change, including remount',async()=>{const x=fixture();const settleLifecycle=vi.fn().mockResolvedValueOnce({ok:false,reason:'Transient authority failure'}).mockResolvedValue({ok:true,value:{settled:true}});Object.assign(x.api,{settleLifecycle});const {unmount}=render(<x.Controls/>);const send=await screen.findByRole('button',{name:'Send'});await waitFor(()=>expect(send.getAttribute('aria-disabled')).not.toBe('true'));fireEvent.click(send);await waitFor(()=>expect(settleLifecycle).toHaveBeenCalledTimes(1));await waitFor(()=>expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe(''));unmount();await x.update({...base,lifecycleOperations:[{operationId:'op-1',kind:'steer',request:'Exclude cancelled invoices',status:'admitted'}]});render(<x.Controls/>);await waitFor(()=>expect(settleLifecycle).toHaveBeenCalledTimes(2));expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('Exclude cancelled invoices');await x.update({...base,lifecycleOperations:[{operationId:'op-1',kind:'steer',request:'Exclude cancelled invoices',status:'admitted'}]});expect(settleLifecycle).toHaveBeenCalledTimes(2);expect(x.api.steer).toHaveBeenCalledTimes(1);});
+it('reserves selected observation capacity while navigation requests are stalled',async()=>{const x=fixture();const releases:Array<()=>void>=[];const activity=vi.fn((_input:unknown)=>new Promise(resolve=>releases.push(()=>resolve({ok:false,reason:'unavailable'}))));Object.assign(x.api,{activity});const rows=Array.from({length:20},(_,i)=><TaskActivityLabel key={i} taskId={`other-${i}`} workspaceId="workspace-1"/>);const {rerender}=render(<>{rows}</>);await waitFor(()=>expect(activity).toHaveBeenCalledTimes(3));rerender(<>{rows}<x.Controls/></>);await screen.findByRole('button',{name:'Stop'});expect(x.api.progress).toHaveBeenCalledTimes(1);await x.update({...base,questions:[{requestId:1,threadId:'thread-1',turnId:'turn-1',itemId:'q',questions:[]}]});expect(x.api.progress).toHaveBeenCalledTimes(2);expect(activity).toHaveBeenCalledTimes(3);await act(async()=>releases.forEach(release=>release()));});
+it('retrieves bounded replacement pages with exact history reasons and resets on revision change',async()=>{const result={id:'one',kind:'observation' as const,text:'First current finding',checks:'unchecked' as const,checkScope:null,evidenceIds:[],basis:null,revision:2,state:'current' as const};const resultPage={snapshotId:'snapshot-1',currentOffset:0,currentTotal:65,currentNextOffset:1,historyOffset:0,historyTotal:129,historyNextOffset:1};const first={...base,results:[result],resultHistory:[{...result,revision:1,state:'superseded' as const,text:'First historical finding',changeReason:'Extended period',supersededReason:'Excluded cancelled',sourceTurnId:'turn-0'}],resultPage};const x=fixture(first);const original=x.api.progress.getMockImplementation()!;x.api.progress.mockImplementation(async(...args:unknown[])=>{const input=args[0] as {resultPage?:{currentOffset:number;historyOffset:number}};if(!input?.resultPage)return original();const history=input.resultPage.historyOffset!==129;return{ok:true,value:{...first,results:history?[]:[{...result,id:'last',text:'Last current finding'}],resultHistory:history?[{...first.resultHistory[0]!,id:'old-last',text:'Last historical finding'}]:[],resultPage:{...resultPage,currentOffset:history?65:1,historyOffset:history?1:129,currentNextOffset:history?null:2,historyNextOffset:history?2:null}}};});render(<TaskProgress taskId="task-1" workspaceId="workspace-1"/>);await screen.findByText('First current finding');fireEvent.click(screen.getByRole('button',{name:'Next current results'}));await screen.findByText('Last current finding');expect(screen.queryByText('First current finding')).toBeNull();fireEvent.click(screen.getByRole('button',{name:'Next historical results'}));await screen.findByText('Last historical finding');expect(screen.queryByText('First historical finding')).toBeNull();expect(screen.getByText('Revision reason: Extended period')).toBeTruthy();expect(screen.getByText('Superseded because: Excluded cancelled')).toBeTruthy();await x.update({...first,resultPage:{...resultPage,snapshotId:'snapshot-2'}});await screen.findByText('First current finding');expect(screen.queryByText('Last current finding')).toBeNull();await x.invalidate();expect(screen.queryByText('First current finding')).toBeNull();expect(screen.queryByText('Last historical finding')).toBeNull();});
+it('promotes the same stalled navigation Task into reserved full-read capacity without losing its request fence',async()=>{const x=fixture();const releases:Array<(v:unknown)=>void>=[];const activity=vi.fn(()=>new Promise(resolve=>releases.push(resolve)));let finish!:(v:unknown)=>void;x.api.progress.mockImplementation(()=>new Promise(resolve=>finish=resolve as typeof finish));Object.assign(x.api,{activity});const navigation=<><TaskActivityLabel taskId="task-1" workspaceId="workspace-1"/><TaskActivityLabel taskId="other-1" workspaceId="workspace-1"/><TaskActivityLabel taskId="other-2" workspaceId="workspace-1"/></>;const {rerender}=render(navigation);await waitFor(()=>expect(activity).toHaveBeenCalledTimes(3));rerender(<>{navigation}<x.Controls/></>);await waitFor(()=>expect(x.api.progress).toHaveBeenCalledTimes(1));await act(async()=>releases[0]!({ok:true,value:{...base,status:'completed'}}));await x.update(base);expect(x.api.progress).toHaveBeenCalledTimes(1);expect(screen.queryByText('Finished — review not recorded')).toBeNull();await act(async()=>finish({ok:true,value:base}));await screen.findByRole('button',{name:'Stop'});expect(screen.getByText('Running')).toBeTruthy();await act(async()=>releases.slice(1).forEach(release=>release({ok:false,reason:'unavailable'})));});
+it('clears private full-read content immediately while the fallback authority read is stalled',async()=>{const finding={id:'private',kind:'observation' as const,text:'Protected finding',checks:'unchecked' as const,checkScope:null,evidenceIds:[],basis:null};const x=fixture({...base,results:[finding]});let finish!:(v:unknown)=>void;const activity=vi.fn(()=>new Promise(resolve=>finish=resolve));Object.assign(x.api,{activity});render(<TaskProgress taskId="task-1" workspaceId="workspace-1"/>);await screen.findByText('Protected finding');x.api.progress.mockRejectedValue(new Error('disclosure refused'));await x.update(base);expect(activity).toHaveBeenCalledTimes(1);expect(screen.queryByText('Protected finding')).toBeNull();await act(async()=>finish({ok:true,value:base}));expect(screen.queryByText('Protected finding')).toBeNull();});
+it('shows selected current and historical page evidence under the same snapshot and clears it on invalidation',async()=>{const finding={id:'first',kind:'observation' as const,text:'First finding',checks:'unchecked' as const,checkScope:null,evidenceIds:[],basis:null,revision:2,state:'current' as const};const meta={snapshotId:'evidence-snapshot',currentOffset:0,currentTotal:2,currentNextOffset:1,historyOffset:0,historyTotal:2,historyNextOffset:1};const first={...base,results:[finding],resultHistory:[{...finding,revision:1,state:'superseded' as const}],resultPage:meta};const x=fixture(first);const original=x.api.progress.getMockImplementation()!;x.api.progress.mockImplementation(async(...args:unknown[])=>{const query=(args[0] as {resultPage?:{currentOffset:number;historyOffset:number}})?.resultPage;if(!query)return original();const historical=query.currentOffset===2,id=historical?'history-evidence':'current-evidence';return{ok:true,value:{...first,items:[{id,kind:'command',status:'completed',text:historical?'Retained first-turn evidence':'Current revised evidence'}],results:historical?[]:[{...finding,id:'second',evidenceIds:[id]}],resultHistory:historical?[{...finding,id:'second',revision:1,state:'superseded',evidenceIds:[id]}]:[],resultPage:{...meta,currentOffset:query.currentOffset,historyOffset:query.historyOffset,currentNextOffset:null,historyNextOffset:null}}};});render(<TaskProgress taskId="task-1" workspaceId="workspace-1"/>);fireEvent.click(await screen.findByRole('button',{name:'Next current results'}));await screen.findByText('Current revised evidence');expect(screen.getByRole('region',{name:'Evidence for current result page'})).toBeTruthy();fireEvent.click(screen.getByRole('button',{name:'Next historical results'}));await screen.findByText('Retained first-turn evidence');expect(screen.getByRole('region',{name:'Evidence for historical result page'})).toBeTruthy();expect(screen.getAllByText(/Command and tool content is untrusted source data/)).toHaveLength(2);await x.invalidate();expect(screen.queryByText('Current revised evidence')).toBeNull();expect(screen.queryByText('Retained first-turn evidence')).toBeNull();});
+
+it.each(['click','Enter'] as const)('explicit completed follow-up uses ordinary Send (%s), not steering or automatic Resume',async trigger=>{
+ const x=fixture({...base,status:'completed'});render(<x.Controls/>);
+ const send=screen.getByRole('button',{name:'Send'});
+ await waitFor(()=>expect(send.getAttribute('aria-disabled')).not.toBe('true'));
+ expect(screen.queryByRole('button',{name:'Resume'})).toBeNull();
+ expect(x.api.resume).not.toHaveBeenCalled();
+ expect(screen.queryByRole('button',{name:'Stop'})).toBeNull();
+ expect(screen.queryByText('Work is not running.')).toBeNull();
+ const input=screen.getByRole('textbox');
+ if(trigger==='click')fireEvent.click(send);else fireEvent.keyDown(input,{key:'Enter'});
+ await waitFor(()=>expect(x.api.resume).toHaveBeenCalledWith({operationId:'op-1',taskId:'task-1',workspaceId:'workspace-1',request:'Exclude cancelled invoices'}));
+ expect(x.api.resume).toHaveBeenCalledTimes(1);expect(x.api.steer).not.toHaveBeenCalled();
+ await waitFor(()=>expect((input as HTMLTextAreaElement).value).toBe(''));
+ expect(screen.getByText('Continuing this Task with its retained history.')).toBeTruthy();
+});
+it('completed work never submits an empty follow-up or restarts while merely observed',async()=>{
+ const x=fixture({...base,status:'completed'});render(<x.Controls/>);
+ await waitFor(()=>expect(screen.getByRole('button',{name:'Send'}).getAttribute('aria-disabled')).not.toBe('true'));
+ const input=screen.getByRole('textbox');fireEvent.change(input,{target:{value:' \n\t'}});
+ expect(screen.getByRole('button',{name:'Send'}).getAttribute('aria-disabled')).toBe('true');
+ fireEvent.click(screen.getByRole('button',{name:'Send'}));fireEvent.keyDown(input,{key:'Enter'});
+ expect(x.api.resume).not.toHaveBeenCalled();expect(x.api.steer).not.toHaveBeenCalled();
+});
+it('completed follow-up coalesces Send while pending and preserves a subsequently edited draft',async()=>{
+ const x=fixture({...base,status:'completed'});let release!:(value:unknown)=>void;
+ x.api.resume.mockImplementation(()=>new Promise(r=>release=r as typeof release));render(<x.Controls/>);
+ const send=screen.getByRole('button',{name:'Send'});
+ await waitFor(()=>expect(send.getAttribute('aria-disabled')).not.toBe('true'));
+ const input=screen.getByRole('textbox');fireEvent.click(send);fireEvent.keyDown(input,{key:'Enter'});
+ await waitFor(()=>expect(x.api.resume).toHaveBeenCalledTimes(1));
+ expect((input as HTMLTextAreaElement).value).toBe('Exclude cancelled invoices');
+ fireEvent.change(input,{target:{value:'A second, unsent follow-up'}});
+ await act(async()=>release({ok:true,value:receipt('resume')}));
+ expect((input as HTMLTextAreaElement).value).toBe('A second, unsent follow-up');
+ expect(x.api.resume).toHaveBeenCalledTimes(1);
+});
+it('refused completed follow-up retains its draft without falling back to another turn',async()=>{
+ const x=fixture({...base,status:'completed'});
+ x.api.resume.mockResolvedValue({ok:false,code:'refused',reason:'Current route authority unavailable.'} as never);render(<x.Controls/>);
+ await waitFor(()=>expect(screen.getByRole('button',{name:'Send'}).getAttribute('aria-disabled')).not.toBe('true'));
+ fireEvent.click(screen.getByRole('button',{name:'Send'}));
+ await screen.findByText('Current route authority unavailable.');
+ expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('Exclude cancelled invoices');
+ expect(x.api.resume).toHaveBeenCalledTimes(1);expect(x.api.steer).not.toHaveBeenCalled();
+});
+it('completed follow-up is disabled after retained authority observation is invalidated',async()=>{
+ const x=fixture({...base,status:'completed'});render(<x.Controls/>);
+ await waitFor(()=>expect(screen.getByRole('button',{name:'Send'}).getAttribute('aria-disabled')).not.toBe('true'));
+ await x.invalidate();
+ expect(screen.getByRole('button',{name:'Send'}).getAttribute('aria-disabled')).toBe('true');
+ fireEvent.click(screen.getByRole('button',{name:'Send'}));
+ expect(x.api.resume).not.toHaveBeenCalled();
+});
+
+it('retains the focused Stop while interruption is pending even if completion arrives first',async()=>{
+ const x=fixture();let release!:(value:unknown)=>void;
+ x.api.stop.mockImplementation(()=>new Promise(resolve=>{release=resolve as typeof release;}));
+ render(<x.Controls/>);const stop=await screen.findByRole('button',{name:'Stop'});stop.focus();fireEvent.click(stop);
+ await x.update({...base,status:'completed'});
+ expect(screen.getByRole('button',{name:'Stop'})).toBe(stop);expect(document.activeElement).toBe(stop);
+ expect(stop.getAttribute('aria-disabled')).toBe('true');
+ await act(async()=>release({ok:true,value:receipt('stop','completed')}));
+ await waitFor(()=>expect(screen.queryByRole('button',{name:'Stop'})).toBeNull());
+ expect(screen.queryByText('Work is not running.')).toBeNull();
+});
+
+it('offers deliberate resend after a running-to-completed race without replaying the preserved draft',async()=>{
+ const x=fixture();x.api.steer.mockResolvedValue({ok:false,code:'refused',reason:'That turn has ended. Your instruction is preserved; no new turn was started.'} as never);
+ render(<x.Controls/>);await screen.findByRole('button',{name:'Stop'});fireEvent.click(screen.getByRole('button',{name:'Send'}));
+ await screen.findByText(/That turn has ended/);expect(x.api.resume).not.toHaveBeenCalled();
+ await x.update({...base,status:'completed'});await screen.findByText(/Press Send again to start a follow-up/);
+ expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('Exclude cancelled invoices');expect(x.api.resume).not.toHaveBeenCalled();
+ expect(document.querySelector('[data-task-controls="task-1"]')?.getAttribute('data-task-controls-status')).toBe('completed');
+ fireEvent.click(screen.getByRole('button',{name:'Send'}));await waitFor(()=>expect(x.api.resume).toHaveBeenCalledTimes(1));expect(x.api.steer).toHaveBeenCalledTimes(1);
+});
+
+it('keeps a visible display explanation and read-only refresh beside independently authorized Stop',async()=>{
+ const x=fixture(); x.api.progress.mockRejectedValue(new Error('history_unavailable'));
+ const activity=vi.fn(async()=>({ok:true,value:base}));Object.assign(x.api,{activity});
+ render(<><x.Controls/><TaskProgress taskId="task-1" workspaceId="workspace-1"/></>);
+ const notice=await screen.findByText(/Some conversation content is unavailable/);
+ expect(notice.closest('details')).toBeNull();
+ expect(document.querySelector('.iq-execution-details')).toBeNull();
+ const stop=await screen.findByRole('button',{name:'Stop'});
+ expect(stop.getAttribute('aria-disabled')).not.toBe('true');
+ expect(document.body.textContent).not.toContain('history_unavailable');
+ const reads=x.api.progress.mock.calls.length;
+ fireEvent.click(screen.getByRole('button',{name:'Refresh conversation'}));
+ await waitFor(()=>expect(x.api.progress.mock.calls.length).toBeGreaterThan(reads));
+ await screen.findByText(/Some conversation content is unavailable/);
+ expect(x.api.stop).not.toHaveBeenCalled();expect(x.api.steer).not.toHaveBeenCalled();expect(x.api.resume).not.toHaveBeenCalled();
+ fireEvent.click(await screen.findByRole('button',{name:'Stop'}));
+ await waitFor(()=>expect(x.api.stop).toHaveBeenCalledTimes(1));
+});
+it('does not retain protected content or offer Stop when both history and current status refuse',async()=>{
+ const x=fixture();x.api.progress.mockRejectedValue(new Error('history_unavailable'));
+ const activity=vi.fn(async()=>({ok:false,reason:'Access unavailable'}));Object.assign(x.api,{activity});
+ render(<><x.Controls/><TaskProgress taskId="task-1" workspaceId="workspace-1"/></>);
+ await waitFor(()=>expect(activity).toHaveBeenCalled());
+ await screen.findByText(/Conversation history is unavailable. Refresh to check again./);
+ expect(screen.queryByRole('button',{name:'Stop'})).toBeNull();
+ expect(x.api.stop).not.toHaveBeenCalled();expect(x.api.resume).not.toHaveBeenCalled();
+ expect(document.body.textContent).not.toContain('history_unavailable');
+});
+
+it('session invalidation cannot republish late fallback status or hide the unavailable notice',async()=>{
+ const x=fixture();x.api.progress.mockRejectedValue(new Error('history_unavailable'));
+ let release!:(value:unknown)=>void;
+ const activity=vi.fn(()=>new Promise(resolve=>{release=resolve;}));Object.assign(x.api,{activity});
+ render(<><x.Controls/><TaskProgress taskId="task-1" workspaceId="workspace-1"/></>);
+ await waitFor(()=>expect(activity).toHaveBeenCalledTimes(1));
+ await x.invalidate();
+ await act(async()=>release({ok:true,value:base}));
+ expect(screen.queryByRole('button',{name:'Stop'})).toBeNull();
+ expect(screen.getByText(/Conversation history is unavailable. Refresh to check again./).closest('details')).toBeNull();
+ expect(x.api.stop).not.toHaveBeenCalled();expect(x.api.steer).not.toHaveBeenCalled();expect(x.api.resume).not.toHaveBeenCalled();
+});
+
+it.each(['completed','cancelled'] as const)('only explicit admitted continuation requests follow-latest (%s)',async status=>{
+ const x=fixture({...base,status}),admitted=vi.fn(),requested=vi.fn(()=>admitted);
+ render(<TaskLifecycle taskId="task-1" workspaceId="workspace-1" operationIds={()=>'op-1'} draft={{taskId:'task-1',value:'Continue',onChange:()=>{}}} onContinuationRequested={requested}/>);
+ const name=status==='completed'?'Send':'Resume';const button=await screen.findByRole('button',{name});
+ await waitFor(()=>expect(button.getAttribute('aria-disabled')).not.toBe('true'));
+ expect(requested).not.toHaveBeenCalled();fireEvent.click(button);await waitFor(()=>expect(admitted).toHaveBeenCalledTimes(1));expect(requested).toHaveBeenCalledTimes(1);
+});
+it('refused continuation never rearms conversation follow',async()=>{
+ const x=fixture({...base,status:'completed'});x.api.resume.mockResolvedValue({ok:false,code:'refused',reason:'Unavailable'} as never);
+ const admitted=vi.fn(),requested=vi.fn(()=>admitted);
+ render(<TaskLifecycle taskId="task-1" workspaceId="workspace-1" draft={{taskId:'task-1',value:'Continue',onChange:()=>{}}} onContinuationRequested={requested}/>);
+ const send=screen.getByRole('button',{name:'Send'});await waitFor(()=>expect(send.getAttribute('aria-disabled')).not.toBe('true'));fireEvent.click(send);await screen.findByText('Unavailable');expect(requested).toHaveBeenCalledTimes(1);expect(admitted).not.toHaveBeenCalled();
+});
+
+it('blocks Send during a held model choice while leaving independently authorized Stop available',async()=>{
+ const {modelCatalog,taskRouteView}=await import('./model-fixtures');const tid='11111111-1111-4111-8111-111111111111',wid='22222222-2222-4222-8222-222222222222';
+ const route={routeId:'codex-responses',provider:'OpenAI',configurable:true,configuration:{routeId:'codex-responses',deployment:'openai-api',model:'gpt-6.1-terra',apiVersion:'responses-v1',accountRef:'account',region:null},endpoint:'https://api.openai.com/v1/responses',revision:3,credentialPresent:true,adapterSupported:true,verification:'verified_for_synthetic',enabled:true,gate:null,limits:[],evidence:['synthetic fixture'],executionFlow:'Local sandbox',inferenceFlow:'Cloud inference',connectorFlow:'Unavailable'};
+ const catalog=modelCatalog([route]),binding=catalog.bindings[0]!;const x=fixture({...base,taskId:tid,workspaceId:wid,status:'completed'});let release!:(value:unknown)=>void;
+ let recover!:(value:unknown)=>void;const journal=vi.fn().mockImplementationOnce(()=>new Promise(r=>recover=r)).mockResolvedValue({ok:true,value:{operation:null}});
+ const routes={catalog:vi.fn(async()=>({ok:true,value:catalog})),pendingModel:journal,forTask:vi.fn(async()=>({ok:true,value:taskRouteView({taskId:tid,workspaceId:wid,revision:1,selected:null,configurationRevision:null,staleConfiguration:false})})),resolve:vi.fn(()=>new Promise(r=>release=r)),selectModel:vi.fn(async()=>({ok:true,value:taskRouteView({taskId:tid,workspaceId:wid,revision:2,selected:route,configurationRevision:3,staleConfiguration:false})}))};Object.assign((globalThis as any).inquello,{routes});
+ render(<TaskLifecycle taskId={tid} workspaceId={wid} operationIds={()=>'op-1'} draft={{taskId:tid,value:'Keep this draft',onChange:()=>{}}}/>);await waitFor(()=>expect(journal).toHaveBeenCalledTimes(1));await waitFor(()=>expect(x.api.progress).toHaveBeenCalled());expect(screen.getByRole('button',{name:'Send'}).getAttribute('aria-disabled')).toBe('true');expect(screen.getByText('Checking model…')).toBeTruthy();fireEvent.click(screen.getByRole('button',{name:'Send'}));expect(x.api.resume).not.toHaveBeenCalled();await act(async()=>recover({ok:true,value:{operation:null}}));await waitFor(()=>expect(routes.forTask).toHaveBeenCalled());await waitFor(()=>expect(screen.getByRole('button',{name:'Send'}).getAttribute('aria-disabled')).not.toBe('true'));fireEvent.click(screen.getByRole('button',{name:'Choose model'}));fireEvent.click(await screen.findByRole('menuitemradio',{name:'GPT-6.1 Terra'}));await waitFor(()=>expect(routes.resolve).toHaveBeenCalledTimes(1));
+ fireEvent.click(screen.getByRole('button',{name:'Send'}));fireEvent.keyDown(screen.getByRole('textbox'),{key:'Enter'});expect(x.api.resume).not.toHaveBeenCalled();expect(x.api.steer).not.toHaveBeenCalled();expect(screen.getByRole('button',{name:'Send'}).getAttribute('aria-disabled')).toBe('true');
+ await x.update({...base,taskId:tid,workspaceId:wid,status:'running'});fireEvent.click(await screen.findByRole('button',{name:'Stop'}));await waitFor(()=>expect(x.api.stop).toHaveBeenCalledTimes(1));await act(async()=>release({ok:true,value:binding}));expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('Keep this draft');
+});
