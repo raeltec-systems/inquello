@@ -97,36 +97,36 @@ export function Providers({focusTarget,workspaceId=null}:{focusTarget?:ProviderF
     if (!bridge) return false;
     setBusy(action);
     setNotice(null);
-    let call: Promise<unknown>;
-    switch (action) {
-      case 'claude-store': {
-        const key = claudeKey.trim();
-        // The field is cleared as the key leaves it, whatever main answers.
-        setClaudeKey('');
-        call = bridge.setClaudeKey(key);
-        break;
-      }
-      case 'claude-verify':
-        call = bridge.verifyClaudeKey();
-        break;
-      case 'claude-remove':
-        call = bridge.removeClaudeKey();
-        break;
-      case 'codex-api-key': {
-        const apiKey = codexKey.trim();
-        setCodexKey('');
-        call = bridge.codexLogin({ type: 'apiKey', apiKey });
-        break;
-      }
-      case 'codex-chatgpt':
-        if(!chatgptQualified){setBusy(null);return false;}
-        call = bridge.codexLogin({ type: 'chatgpt' });
-        break;
-      case 'codex-logout':
-        call = bridge.codexLogout();
-        break;
-    }
     try {
+      let call: Promise<unknown>;
+      switch (action) {
+        case 'claude-store': {
+          const key = claudeKey.trim();
+          // The field is cleared as the key leaves it, whatever main answers.
+          setClaudeKey('');
+          call = bridge.setClaudeKey(key);
+          break;
+        }
+        case 'claude-verify':
+          call = bridge.verifyClaudeKey();
+          break;
+        case 'claude-remove':
+          call = bridge.removeClaudeKey();
+          break;
+        case 'codex-api-key': {
+          const apiKey = codexKey.trim();
+          setCodexKey('');
+          call = bridge.codexLogin({ type: 'apiKey', apiKey });
+          break;
+        }
+        case 'codex-chatgpt':
+          if(!chatgptQualified){setBusy(null);return false;}
+          call = bridge.codexLogin({ type: 'chatgpt' });
+          break;
+        case 'codex-logout':
+          call = bridge.codexLogout();
+          break;
+      }
       const result = parseProviderAction(await call);
       if (result?.status) setStatus(result.status);
       if (!result) setNotice('The request did not complete.');
