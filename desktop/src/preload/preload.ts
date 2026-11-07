@@ -10,9 +10,9 @@
  * passed to `data.export` or `data.import` must reach main to be rejected as
  * an invalid payload (main shows every folder dialog itself).
  *
- * Of the `provider` operations only `setClaudeKey` and `codexLogin` forward
- * the renderer's arguments: the key (or login choice) the user entered, which
- * main validates. Nothing main returns ever holds a key.
+ * Provider key/login and consent operations forward all arguments so main
+ * validates their exact payload shape and binds the signed-in principal.
+ * Nothing main returns ever holds a key.
  *
  * The `organise` operations (Story 1.14) forward the renderer's arguments so
  * main's validators judge them; main binds the signed-in principal itself.
@@ -30,6 +30,20 @@
  */
 import { contextBridge, ipcRenderer } from 'electron';
 
+const ONBOARDING_GET_STATE_CHANNEL = 'inquello:op:onboarding.getState';
+const ONBOARDING_SAVE_DRAFT_CHANNEL = 'inquello:op:onboarding.saveDraft';
+const ONBOARDING_MEMBERS_CHANNEL = 'inquello:op:onboarding.members';
+const ONBOARDING_CREATE_WORKSPACE_CHANNEL = 'inquello:op:onboarding.createWorkspace';
+const ONBOARDING_ACCEPT_INVITATION_CHANNEL = 'inquello:op:onboarding.acceptInvitation';
+const ONBOARDING_INVITE_CHANNEL = 'inquello:op:onboarding.invite';
+const ONBOARDING_CHANGE_ROLES_CHANNEL = 'inquello:op:onboarding.changeRoles';
+const ONBOARDING_REMOVE_MEMBER_CHANNEL = 'inquello:op:onboarding.removeMember';
+const ONBOARDING_REVOKE_INVITATION_CHANNEL = 'inquello:op:onboarding.revokeInvitation';
+const ONBOARDING_RECONCILE_CHANNEL = 'inquello:op:onboarding.reconcile';
+const ONBOARDING_RETRY_CHANNEL = 'inquello:op:onboarding.retry';
+const ONBOARDING_DISCARD_PENDING_CHANNEL = 'inquello:op:onboarding.discardPending';
+const IDENTITY_REAUTHENTICATE_CHANNEL = 'inquello:op:identity.reauthenticate';
+
 const GET_STATUS_CHANNEL = 'inquello:op:runtime.getStatus';
 const IDENTITY_STATUS_CHANNEL = 'inquello:op:identity.getStatus';
 const IDENTITY_SIGN_IN_CHANNEL = 'inquello:op:identity.signIn';
@@ -39,13 +53,19 @@ const DATA_EXPORT_CHANNEL = 'inquello:op:data.export';
 const DATA_IMPORT_CHANNEL = 'inquello:op:data.import';
 const DATA_DELETE_CHANNEL = 'inquello:op:data.delete';
 const PROVIDER_STATUS_CHANNEL = 'inquello:op:provider.getStatus';
+const PROVIDER_REFRESH_STATUS_CHANNEL = 'inquello:op:provider.refreshStatus';
 const PROVIDER_SET_CLAUDE_KEY_CHANNEL = 'inquello:op:provider.setClaudeKey';
 const PROVIDER_VERIFY_CLAUDE_KEY_CHANNEL = 'inquello:op:provider.verifyClaudeKey';
 const PROVIDER_REMOVE_CLAUDE_KEY_CHANNEL = 'inquello:op:provider.removeClaudeKey';
 const PROVIDER_CODEX_LOGIN_CHANNEL = 'inquello:op:provider.codexLogin';
 const PROVIDER_CODEX_LOGOUT_CHANNEL = 'inquello:op:provider.codexLogout';
+const PROVIDER_CONSENT_CHANNEL = 'inquello:op:provider.consent';
+const PROVIDER_CHANGE_CONSENT_CHANNEL = 'inquello:op:provider.changeConsent';
+const PROVIDER_RECONCILE_CONSENT_CHANNEL = 'inquello:op:provider.reconcileConsent';
+const PROVIDER_RETRY_CONSENT_CHANNEL = 'inquello:op:provider.retryConsent';
 const ORGANISE_WORKSPACES_CHANNEL = 'inquello:op:organise.getWorkspaces';
 const ORGANISE_TREE_CHANNEL = 'inquello:op:organise.getTree';
+const ORGANISE_RECOVERY_CHANNEL = 'inquello:op:organise.recoverNavigation';
 const ORGANISE_SEARCH_CHANNEL = 'inquello:op:organise.search';
 const ORGANISE_REOPEN_CHANNEL = 'inquello:op:organise.reopen';
 const ORGANISE_NAVIGATION_CHANNEL = 'inquello:op:organise.setNavigation';
@@ -59,6 +79,7 @@ const ORGANISE_MOVE_TASK_CHANNEL = 'inquello:op:organise.moveTask';
 const STATE_LIST_CHANNEL = 'inquello:op:state.list';
 const STATE_RECORD_TASK_STATE_CHANNEL = 'inquello:op:state.recordTaskState';
 const POLICY_SETTINGS_CHANNEL = 'inquello:op:policy.getSettings';
+const POLICY_SETTINGS_CHANGED_CHANNEL = 'inquello:policy-settings-changed';
 const POLICY_FOR_TASK_CHANNEL = 'inquello:op:policy.forTask';
 const POLICY_SET_BROAD_MODE_CHANNEL = 'inquello:op:policy.setBroadMode';
 const PERMISSIONS_PENDING_CHANNEL = 'inquello:op:permissions.pending';
@@ -71,7 +92,11 @@ const CAPABILITIES_INVENTORY_CHANNEL = 'inquello:op:capabilities.getInventory';
 const CAPABILITIES_MANAGE_CHANNEL = 'inquello:op:capabilities.manage';
 
 const ROUTES_LIST_CHANNEL = 'inquello:op:routes.list';
-const ROUTES_CONFIGURE_CHANNEL = 'inquello:op:routes.configure';
+const ROUTES_CATALOG_CHANNEL = 'inquello:op:routes.catalog';
+const ROUTES_RESOLVE_CHANNEL = 'inquello:op:routes.resolve';
+const ROUTES_BINDING_STATE_CHANNEL = 'inquello:op:routes.bindingState';
+const ROUTES_SELECT_MODEL_CHANNEL = 'inquello:op:routes.selectModel';
+const ROUTES_PENDING_MODEL_CHANNEL = 'inquello:op:routes.pendingModel';
 const ROUTES_TASK_CHANNEL = 'inquello:op:routes.forTask';
 const ROUTES_SELECT_CHANNEL = 'inquello:op:routes.select';
 const ROUTES_CHANGED_CHANNEL = 'inquello:routes-changed';
@@ -96,6 +121,20 @@ const TASKS_PREFLIGHT_CHANNEL = 'inquello:op:tasks.preflight';
 const TASKS_START_CHANNEL = 'inquello:op:tasks.start';
 const TASKS_RECONCILE_CHANNEL = 'inquello:op:tasks.reconcile';
 const api = Object.freeze({
+  onboarding: Object.freeze({
+    getState: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ONBOARDING_GET_STATE_CHANNEL, ...args),
+    saveDraft: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ONBOARDING_SAVE_DRAFT_CHANNEL, ...args),
+    members: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ONBOARDING_MEMBERS_CHANNEL, ...args),
+    createWorkspace: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ONBOARDING_CREATE_WORKSPACE_CHANNEL, ...args),
+    acceptInvitation: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ONBOARDING_ACCEPT_INVITATION_CHANNEL, ...args),
+    invite: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ONBOARDING_INVITE_CHANNEL, ...args),
+    changeRoles: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ONBOARDING_CHANGE_ROLES_CHANNEL, ...args),
+    removeMember: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ONBOARDING_REMOVE_MEMBER_CHANNEL, ...args),
+    revokeInvitation: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ONBOARDING_REVOKE_INVITATION_CHANNEL, ...args),
+    reconcile: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ONBOARDING_RECONCILE_CHANNEL, ...args),
+    retry: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ONBOARDING_RETRY_CHANNEL, ...args),
+    discardPending: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ONBOARDING_DISCARD_PENDING_CHANNEL, ...args),
+  }),
   tasks: Object.freeze({
     inbox: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(TASKS_INBOX_CHANNEL, ...args),
     steer: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(TASKS_STEER_CHANNEL, ...args),
@@ -141,12 +180,16 @@ const api = Object.freeze({
   }),
   routes: Object.freeze({
     list: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ROUTES_LIST_CHANNEL, ...args),
-    configure: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ROUTES_CONFIGURE_CHANNEL, ...args),
+    catalog: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ROUTES_CATALOG_CHANNEL, ...args),
+    resolve: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ROUTES_RESOLVE_CHANNEL, ...args),
+    bindingState: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ROUTES_BINDING_STATE_CHANNEL, ...args),
+    selectModel: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ROUTES_SELECT_MODEL_CHANNEL, ...args),
+    pendingModel: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ROUTES_PENDING_MODEL_CHANNEL, ...args),
     forTask: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ROUTES_TASK_CHANNEL, ...args),
     select: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ROUTES_SELECT_CHANNEL, ...args),
-    onChanged: (listener: () => void): (() => void) => {
+    onChanged: (listener: (change?:{authority:boolean;taskId?:string;binding?:{routeId:string;configurationRevision:number}}) => void): (() => void) => {
       if (typeof listener !== 'function') throw new Error('expected a listener');
-      const handler = () => listener(); ipcRenderer.on(ROUTES_CHANGED_CHANNEL, handler);
+      const handler = (_event:unknown,raw:unknown) => {const r=raw&&typeof raw==='object'?raw as Record<string,unknown>:null;listener(r&&typeof r.authority==='boolean'?{authority:r.authority,...(typeof r.taskId==='string'?{taskId:r.taskId}:{}),...(r.binding&&typeof r.binding==='object'&&['codex-responses','claude-api-key'].includes(String((r.binding as Record<string,unknown>).routeId))&&Number.isSafeInteger((r.binding as Record<string,unknown>).configurationRevision)?{binding:{routeId:String((r.binding as Record<string,unknown>).routeId),configurationRevision:Number((r.binding as Record<string,unknown>).configurationRevision)}}:{})}:{authority:true});}; ipcRenderer.on(ROUTES_CHANGED_CHANNEL, handler);
       return () => ipcRenderer.removeListener(ROUTES_CHANGED_CHANNEL, handler);
     },
   }),
@@ -165,6 +208,7 @@ const api = Object.freeze({
     getStatus: (): Promise<unknown> => ipcRenderer.invoke(GET_STATUS_CHANNEL),
   }),
   identity: Object.freeze({
+    reauthenticate: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(IDENTITY_REAUTHENTICATE_CHANNEL, ...args),
     /** Resolves with `{ identity, sharedService, credentialStorage, privateWork }`. Never a credential. */
     getStatus: (): Promise<unknown> => ipcRenderer.invoke(IDENTITY_STATUS_CHANNEL),
     /** Signs in through the system browser; resolves with `{ ok, reason?, status }`. */
@@ -183,8 +227,13 @@ const api = Object.freeze({
     delete: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(DATA_DELETE_CHANNEL, ...args),
   }),
   provider: Object.freeze({
+    consent: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(PROVIDER_CONSENT_CHANNEL, ...args),
+    changeConsent: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(PROVIDER_CHANGE_CONSENT_CHANNEL, ...args),
+    reconcileConsent: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(PROVIDER_RECONCILE_CONSENT_CHANNEL, ...args),
+    retryConsent: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(PROVIDER_RETRY_CONSENT_CHANNEL, ...args),
     /** Resolves with `{ claude, codex, routes }`: states and storage kinds only, never a key. */
     getStatus: (): Promise<unknown> => ipcRenderer.invoke(PROVIDER_STATUS_CHANNEL),
+    refreshStatus:():Promise<unknown>=>ipcRenderer.invoke(PROVIDER_REFRESH_STATUS_CHANNEL),
     /** Hands the entered Claude API key to main once; resolves with `{ ok, reason?, status }`. */
     setClaudeKey: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(PROVIDER_SET_CLAUDE_KEY_CHANNEL, ...args),
     /** Runs the free key check against Anthropic's model list; resolves with `{ ok, reason?, status }`. */
@@ -197,6 +246,7 @@ const api = Object.freeze({
     codexLogout: (): Promise<unknown> => ipcRenderer.invoke(PROVIDER_CODEX_LOGOUT_CHANNEL),
   }),
   organise: Object.freeze({
+    recoverNavigation: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ORGANISE_RECOVERY_CHANNEL, ...args),
     search: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ORGANISE_SEARCH_CHANNEL, ...args),
     reopen: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ORGANISE_REOPEN_CHANNEL, ...args),
     setNavigation: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ORGANISE_NAVIGATION_CHANNEL, ...args),
@@ -224,6 +274,12 @@ const api = Object.freeze({
     recordTaskState: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(STATE_RECORD_TASK_STATE_CHANNEL, ...args),
   }),
   policy: Object.freeze({
+    onSettingsChanged: (listener: (settled: boolean) => void): (() => void) => {
+      if (typeof listener !== 'function') throw new Error('expected a listener');
+      const handler = (_event: unknown, settled: unknown) => listener(settled === true);
+      ipcRenderer.on(POLICY_SETTINGS_CHANGED_CHANNEL, handler);
+      return () => ipcRenderer.removeListener(POLICY_SETTINGS_CHANGED_CHANNEL, handler);
+    },
     /** Resolves with each Workspace's effective policy on this device and the Capability Contract. Takes no arguments. */
     getSettings: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(POLICY_SETTINGS_CHANNEL, ...args),
     /** `{ taskId }`; resolves with `{ ok, value }` (the Task's policy and broader mode) or `{ ok: false, reason }`. */

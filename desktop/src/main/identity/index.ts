@@ -1,9 +1,10 @@
 /**
  * Wires the identity session from the environment: the dev config named by
- * `INQUELLO_SERVICE_CONFIG`, HTTPS clients that trust only its CA, the vault
+ * `INQUELLO_SERVICE_CONFIG`, independent service/issuer HTTPS trust, the vault
  * under `<userData>/identity`, and the browser opener main chooses.
  */
 import path from 'node:path';
+import { getCACertificates } from 'node:tls';
 
 import type { Logger } from '../runtime/logger';
 import type { BrowserOpener } from './browser';
@@ -47,13 +48,16 @@ export function createIdentity(options: IdentityWiringOptions): IdentityWiring {
   if (config.kind === 'invalid') options.logger.error(`identity: ${config.reason}`);
   const vault = new CredentialVault({ safeStorage: options.safeStorage, platform: options.platform, dir: identityDir(options.userDataDir) });
   const transport = config.kind === 'configured' ? httpsTransport(config.config.ca) : null;
+  const issuerTransport = config.kind === 'configured'
+    ? httpsTransport(config.config.issuerCa === null ? [...getCACertificates('default'), ...getCACertificates('system')] : (config.config.issuerCa ?? config.config.ca))
+    : null;
   const service = config.kind === 'configured' && transport ? new SharedServiceClient(config.config.serviceUrl, transport) : null;
   const session = new IdentitySession({
     config,
     vault,
     service: service ?? undefined,
-    issuer: config.kind === 'configured' && transport ? new IssuerClient(config.config.issuerUrl, transport) : undefined,
-    openBrowser: options.opener(transport),
+    issuer: config.kind === 'configured' && transport ? new IssuerClient(config.config.issuerUrl, issuerTransport!) : undefined,
+    openBrowser: options.opener(issuerTransport),
     logger: options.logger,
     recordSecrets: options.recordSecrets,
   });

@@ -1,0 +1,316 @@
+{
+  "qualification": "Story 1.16 approved shell follow-up; synthetic local evidence only",
+  "date": "2026-11-02",
+  "baselineCommit": "34706d5bf65da344b010ad11d4bd625cf2cfd3d7",
+  "engineTree": "4846abe8470db3c1ae45e26d71ad05980a41b348",
+  "runtimeVersion": "0.165.0",
+  "runtimeSha256": "776feb1dda35d4beb32852254f02129eb7f585d0f74d67dafae812ea74050e1c",
+  "cliSha256": "978f153b6b86554ac03d0cbaa4d011653d472df5e50a63c4466e9fd3816f0256",
+  "topologySha256": "0c09a27dd4d20d17cbd2b9230e21ef37691d422f5894cb254576eb1a1392cac8",
+  "nativeBuilds": {
+    "base": "passed offline, 7m39s",
+    "fixture": "passed locked/offline, 8m00s",
+    "topology": "passed locked/offline, 13.12s"
+  },
+  "desktopBuild": "passed after final probe changes: main and renderer types, 21-category policy check, Vite",
+  "focusedTests": {
+    "files": 13,
+    "passed": 289,
+    "failed": 0,
+    "includes": "Full spec suite, startup boundary tests and existing composer interactions"
+  },
+  "afterFinalProbeChangeTests": {
+    "files": 4,
+    "passed": 81,
+    "failed": 0,
+    "suites": [
+      "shell-layout",
+      "conversation-follow",
+      "composer",
+      "smoke-startup"
+    ]
+  },
+  "startupObservation": {
+    "acceptedWithin20s": true,
+    "acceptedWithin60s": true,
+    "elapsedMs": 18120.30000001192
+  },
+  "visualConversation": {
+    "ok": true,
+    "pixelAccepted": true,
+    "failures": [],
+    "captureCount": 15,
+    "syntheticState": {
+      "calls": 4,
+      "invalidCalls": 0,
+      "heldCancelled": true,
+      "heldTimedOut": false,
+      "contextMatches": [
+        true,
+        true,
+        true,
+        true
+      ]
+    },
+    "liveProviderCalls": 0,
+    "launcherExitCode": 0,
+    "cleanupErrors": []
+  },
+  "composerGeometry": [
+    {
+      "event": "visual-composer-geometry",
+      "stage": "expanded-home",
+      "viewportWidth": 1920,
+      "viewportHeight": 1200,
+      "inputWidth": 588.4000244140625,
+      "inputHeight": 22,
+      "composerWidth": 960,
+      "composerHeight": 64,
+      "oneComposer": true,
+      "noPageOverflow": true,
+      "inside": true,
+      "inline": true,
+      "usable": true
+    },
+    {
+      "event": "visual-composer-geometry",
+      "stage": "minimum-home",
+      "viewportWidth": 544,
+      "viewportHeight": 900,
+      "inputWidth": 414.3999938964844,
+      "inputHeight": 65,
+      "composerWidth": 448,
+      "composerHeight": 132.60000610351562,
+      "oneComposer": true,
+      "noPageOverflow": true,
+      "inside": true,
+      "inline": false,
+      "usable": true
+    },
+    {
+      "event": "visual-composer-geometry",
+      "stage": "saved-task-900x700",
+      "viewportWidth": 900,
+      "viewportHeight": 700,
+      "inputWidth": 514.4000244140625,
+      "inputHeight": 22,
+      "composerWidth": 548,
+      "composerHeight": 89.5999984741211,
+      "oneComposer": true,
+      "noPageOverflow": true,
+      "inside": true,
+      "inline": false,
+      "usable": true
+    }
+  ],
+  "readerPrecondition": {
+    "event": "visual-reader-precondition",
+    "viewportWidth": 900,
+    "viewportHeight": 700,
+    "threadHeight": 430,
+    "overflow": 328,
+    "conversationTarget": 204.60001373291016,
+    "scrollTop": 204.8000030517578
+  },
+  "readerJump": {
+    "event": "visual-reader-jump",
+    "ok": true,
+    "phase": "jumped",
+    "viewportWidth": 900,
+    "viewportHeight": 700,
+    "threadHeight": 430,
+    "overflow": 328,
+    "conversationTarget": 204.60001373291016,
+    "initialTop": 204.8000030517578,
+    "readerTop": 0
+  },
+  "geometryCssPixels": {
+    "expandedNavigation": 320,
+    "rail": 64,
+    "minimumHomeWidth": 544,
+    "narrowConversationWidth": 700,
+    "readerWidth": 900,
+    "readerHeight": 700,
+    "largeWidth": 1920,
+    "largeHeight": 1200,
+    "nativeDpiScale": 1.25
+  },
+  "runtimeExit": {
+    "exitCode": 0,
+    "killed": false,
+    "stderrKinds": [
+      "[inquello] progress-read gate: BeforeCache/snapshot",
+      "[inquello] saved-read seal: VersionChanged"
+    ]
+  },
+  "earlierFollowupAttempts": [
+    {
+      "root": ".tmp/inquello-seeded-smoke-DoNxjW",
+      "ok": false,
+      "pixelAccepted": false,
+      "stage": "Minimum-width home overflowed or lost its draft",
+      "localSyntheticCalls": 0,
+      "nativeExitCode": 0,
+      "cleanupErrors": []
+    },
+    {
+      "root": ".tmp/inquello-seeded-smoke-9pcTWq",
+      "ok": true,
+      "pixelAccepted": false,
+      "stage": "Functional journey passed; pixel audit rejected collapsed narrow composer",
+      "startupElapsedMs": 28296.1,
+      "acceptedWithin20s": false,
+      "acceptedWithin60s": true,
+      "localSyntheticCalls": 4,
+      "nativeExitCode": 0,
+      "cleanupErrors": []
+    },
+    {
+      "root": ".tmp/inquello-seeded-smoke-DWpe0q",
+      "ok": false,
+      "pixelAccepted": false,
+      "stage": "Completed conversation follow-up did not render",
+      "observation": "Button clicked; dispatching snapshot; no second transport call or positive follow-up answer witness before original deadline",
+      "startupElapsedMs": 22225.5,
+      "acceptedWithin20s": false,
+      "acceptedWithin60s": true,
+      "localSyntheticCalls": 1,
+      "nativeExitCode": 0,
+      "cleanupErrors": []
+    },
+    {
+      "root": ".tmp/inquello-seeded-smoke-pI17NR",
+      "ok": false,
+      "pixelAccepted": false,
+      "stage": "Reader scroll-up preservation or explicit Jump control failed",
+      "observation": "Follow-up and native Stop passed; original reader probe lacked explicit settled conversation-target precondition",
+      "startupElapsedMs": 20001.3,
+      "acceptedWithin20s": false,
+      "acceptedWithin60s": true,
+      "localSyntheticCalls": 3,
+      "nativeExitCode": 0,
+      "cleanupErrors": []
+    }
+  ],
+  "localEvidenceRoot": ".tmp/inquello-seeded-smoke-sjqVr9/visual",
+  "inspectablePixels": {
+    "01-home-synthetic.png": "home.png",
+    "01c-account-workspace-synthetic.png": "organization-menu.png",
+    "04a-readable-composer-narrow-synthetic.png": "readable-composer-900x700.png",
+    "06-resumed-conversation-synthetic.png": "resumed.png"
+  },
+  "captures": [
+    {
+      "name": "01-home-synthetic",
+      "file": "01-home-synthetic.png",
+      "width": 2400,
+      "height": 1500,
+      "sha256": "e949a4f1f47aa1f203a420d8014d27d884a193979ba7833988dff164beecd43a"
+    },
+    {
+      "name": "01b-home-collapsed-synthetic",
+      "file": "01b-home-collapsed-synthetic.png",
+      "width": 2400,
+      "height": 1500,
+      "sha256": "0180e2df45b809a2242bc9101bc71c3b019eecfc1feb2b679cc828ca63e06f96"
+    },
+    {
+      "name": "01c-account-workspace-synthetic",
+      "file": "01c-account-workspace-synthetic.png",
+      "width": 2400,
+      "height": 1500,
+      "sha256": "90a9423646a141d9c39b323d0a4e710a2ae9a63bc09af2963376f7b3a581f4ea"
+    },
+    {
+      "name": "01d-multiline-unsent-synthetic",
+      "file": "01d-multiline-unsent-synthetic.png",
+      "width": 2400,
+      "height": 1500,
+      "sha256": "5d8338a3968b4ac1bd8aa6aae51e787bbf9eb871ba64eb88b96b30e066c92e53"
+    },
+    {
+      "name": "02-completed-conversation-synthetic",
+      "file": "02-completed-conversation-synthetic.png",
+      "width": 2400,
+      "height": 1500,
+      "sha256": "4e9492fdc21bf6d9b32cede767c90fa889bf0ea3eabdb2a7580525f414ea9844"
+    },
+    {
+      "name": "02b-narrow-conversation-synthetic",
+      "file": "02b-narrow-conversation-synthetic.png",
+      "width": 875,
+      "height": 1125,
+      "sha256": "b5616fe239eff92d7cb27998bf9bb281b09f0363ff1f08864d47d3731a3b7ee3"
+    },
+    {
+      "name": "03-followup-conversation-synthetic",
+      "file": "03-followup-conversation-synthetic.png",
+      "width": 2400,
+      "height": 1500,
+      "sha256": "f003159c5933af684cd1992f046c1e335e5d676c18ff7acd9e7882a502896b83"
+    },
+    {
+      "name": "03b-live-streaming-conversation-synthetic",
+      "file": "03b-live-streaming-conversation-synthetic.png",
+      "width": 2400,
+      "height": 1500,
+      "sha256": "30524aa58421a07fe1669d8af0335f2ecace2e1358cf095705b94d4b94a32f5b"
+    },
+    {
+      "name": "04-interrupted-conversation-synthetic",
+      "file": "04-interrupted-conversation-synthetic.png",
+      "width": 2400,
+      "height": 1500,
+      "sha256": "9b7eecfedbdd3d467936172b0665e43b921624c5d0445a1824b403e3ea7a32c0"
+    },
+    {
+      "name": "04a-readable-composer-narrow-synthetic",
+      "file": "04a-readable-composer-narrow-synthetic.png",
+      "width": 1125,
+      "height": 875,
+      "sha256": "52885e60b05a17b91d174280ce53615c9954901568e349216363170da3fdd901"
+    },
+    {
+      "name": "04b-reader-jump-narrow-synthetic",
+      "file": "04b-reader-jump-narrow-synthetic.png",
+      "width": 1125,
+      "height": 875,
+      "sha256": "52885e60b05a17b91d174280ce53615c9954901568e349216363170da3fdd901"
+    },
+    {
+      "name": "05-reopened-conversation-synthetic",
+      "file": "05-reopened-conversation-synthetic.png",
+      "width": 2400,
+      "height": 1500,
+      "sha256": "1e8f805728d6ba30f06668261f369c178a95a469b163594b9ee6baa22280d6c2"
+    },
+    {
+      "name": "06-resumed-conversation-synthetic",
+      "file": "06-resumed-conversation-synthetic.png",
+      "width": 2400,
+      "height": 1500,
+      "sha256": "eb26fae81908efd559c4e8523253117999f3398090c1d1d75de542861bd38c1d"
+    },
+    {
+      "name": "07-task-details-synthetic",
+      "file": "07-task-details-synthetic.png",
+      "width": 2400,
+      "height": 1500,
+      "sha256": "d1831ab8e43d1e805a0b7cef21b428a48356ee528fb1e8486580c8bcc447c807"
+    },
+    {
+      "name": "08-settings-processing-routes",
+      "file": "08-settings-processing-routes.png",
+      "width": 2400,
+      "height": 1500,
+      "sha256": "a5c73ad83c18cce81a84eabadcb5659f56898132883cacd778def1cf753dd297"
+    }
+  ],
+  "limits": [
+    "Earlier startup performance misses and failed probes retained; final passing sample is not a latency guarantee",
+    "900x600 reader fallback did not run in final sample; actual 900x700 conversation target was sufficient",
+    "Not live-provider or Epic acceptance",
+    "Interrupted uncommitted assistant fragments may disappear after Stop",
+    "No model-form replacement, Auth0/account change, real pilot reset or mutation replay"
+  ]
+}

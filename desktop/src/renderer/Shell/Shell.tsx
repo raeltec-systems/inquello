@@ -1,8 +1,15 @@
+import {ConversationModelPicker} from './ConversationModelPicker';
+import {TaskPolicy} from './TaskPolicy';
+import {providerSettingsHash} from '../provider-settings';
+import {smokeStartTrace} from './smoke-start-trace';
 import {Search} from './Search';
 import {Inbox,useInbox,type InputRequest,type QuestionSelection} from './Inbox';
 import {reopenView,type ReopenView} from '../../main/organise/navigation';
 import {taskValue,tasksBridge,parseProgress} from './tasks-bridge';
+import {SavedWorkDialog} from './Search';
+import {TaskDetails} from './TaskView';
 import {TaskLifecycle} from './TaskLifecycle';
+import {useConversationFollow} from './use-conversation-follow';
 /**
  * The desktop Shell (Story 1.14): Sidebar, Header and the open Task.
  *
@@ -47,7 +54,7 @@ import {TaskLifecycle} from './TaskLifecycle';
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 
 import { identityBridge, parseIdentityStatus } from '../bridge';
-import { SegmentedControl,Button,Badge } from '../primitives';
+import { SegmentedControl,Button } from '../primitives';
 import { ArtifactArea, type ShellArtifact } from './ArtifactArea';
 import { Composer } from './Composer';
 import { StartView } from './StartView';
@@ -56,7 +63,8 @@ import { createDraftStore, useDraftBinding, type DraftBinding, type DraftStore }
 import { Header } from './Header';
 import { PermissionRequests } from './PermissionRequests';
 import { EscapeStack, isNewThreadShortcut, isTextEntry } from './keyboard';
-import { artifactFits, layoutMode, THREAD_MIN_WIDTH } from './layout';
+import { artifactFits, layoutMode, THREAD_MIN_WIDTH, workWidth } from './layout';
+import {clampSidebarWidth,readSidebarWidth,saveSidebarWidth,MAX_SIDEBAR_WIDTH} from './sidebar-width';
 import {
   newOperationId,
   organiseBridge,
@@ -84,6 +92,9 @@ export const UNTITLED_TASK = 'Untitled thread';
 const blankToNull = (value: string): string | null => (value.trim() === '' ? null : value.trim());
 
 export interface ShellProps {
+  onWorkspaceChanged?:(workspaceId:string|null)=>void;
+  /** The open conversation, for Settings > Usage; null when none is open. */
+  onConversationChanged?:(conversation:{taskId:string;title:string}|null)=>void;
   active?: boolean;
   onShowSpecimen: () => void;
   /** Tests inject a deterministic ID source. */
@@ -118,20 +129,27 @@ async function readPerson(): Promise<PersonView | null> {
 /** The principal the identity status names, as a draft-ownership key; null when unknown. */
 const ownerKey = (person: PersonView | null): string | null => (person ? `${person.name}\n${person.detail}` : null);
 
-export function Shell({ active = true, onShowSpecimen, operationIds = newOperationId, artifact = null, renderComposer, drafts }: ShellProps): ReactElement {
+export function Shell({ active = true, onWorkspaceChanged, onConversationChanged, onShowSpecimen, operationIds = newOperationId, artifact = null, renderComposer, drafts }: ShellProps): ReactElement {
   const bridge = organiseBridge();
   const [state, setState] = useState<WorkspacesState | null>(null);
   const [workspaceId, setWorkspaceIdState] = useState<string | null>(null);
+  useEffect(()=>{onWorkspaceChanged?.(state?.signedIn?workspaceId:null);},[workspaceId,state?.signedIn,onWorkspaceChanged]);
   // The periodic reload reads the current choice without re-creating itself.
   const chosenWorkspace = useRef<string | null>(null);
   const setWorkspaceId = (id: string | null) => {
+    recoveryRead.current++;setRecoveringNavigation(false);setNotice(null);
     setSavedHit(null);setOpenedEngagement(null);setSelectedQuestion(null);setSavedSurface(null);
     chosenWorkspace.current = id;
     setWorkspaceIdState(id);
   };
   const [tree, setTree] = useState<WorkspaceTree | null>(null);
   const [openTaskId, setOpenTaskId] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [noticeState,setNoticeState]=useState<{text:string;kind:'navigation-unavailable'|'info'}|null>(null);
+  const notice=noticeState?.text??null;
+  const setNotice=useCallback((text:string|null)=>setNoticeState(text===null?null:{text,kind:'info'}),[]);
+  const setNavigationNotice=useCallback((text:string)=>setNoticeState({text,kind:'navigation-unavailable'}),[]);
+  const [recoveringNavigation,setRecoveringNavigation]=useState(false);
+  const recoveryRead=useRef(0);
   const [savedSurface,setSavedSurface]=useState<'search'|'inbox'|null>(null);
   const [savedHit,setSavedHit]=useState<(ReopenView&{generation:number})|null>(null);
   const [openedEngagement,setOpenedEngagement]=useState<string|null>(null);
@@ -154,12 +172,18 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
   const [statesNotice, setStatesNotice] = useState<string | null>(null);
   const [taskPolicy, setTaskPolicy] = useState<TaskPolicyItem | null>(null);
   const [policyNotice, setPolicyNotice] = useState<string | null>(null);
+  const [conversationPermissions,setConversationPermissions]=useState<string|null>(null);
+  const permissionsFor = useRef<string | null>(null);
+  permissionsFor.current = conversationPermissions;
+  const policyRead = useRef(0);
   const openTask = useRef<string | null>(null);
   openTask.current = openTaskId;
   const [person, setPerson] = useState<PersonView | null>(null);
 
   // ---- layout (Story 1.16) ----
   const [width, setWidth] = useState(viewportWidth);
+  const [preferredSidebarWidth,setPreferredSidebarWidth]=useState(readSidebarWidth);
+  const resizeSidebar=(value:number)=>{const next=clampSidebarWidth(value);setPreferredSidebarWidth(next);saveSidebarWidth(next);};
   const [userCollapsed, setUserCollapsed] = useState(false);
   const [overlayOpen, setOverlayOpen] = useState(false);
   const [view, setView] = useState<WorkView>('conversation');
@@ -172,7 +196,9 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
   const draftStore = drafts ?? ownDrafts;
 
   const openArtifact = artifact && artifact.artifactId !== dismissedArtifact ? artifact : null;
-  const mode = layoutMode(width, openArtifact !== null);
+  const sidebarMaximum=Math.min(MAX_SIDEBAR_WIDTH,Math.max(280,width-workWidth(openArtifact!==null)));
+  const sidebarWidth=clampSidebarWidth(preferredSidebarWidth,sidebarMaximum);
+  const mode = layoutMode(width, openArtifact !== null,sidebarWidth);
   const presentation = mode === 'full' && !userCollapsed ? 'sidebar' : 'rail';
   const showOverlay = presentation === 'rail' && mode !== 'full' && overlayOpen;
   const workView: WorkView = mode === 'single' && openArtifact ? view : 'conversation';
@@ -276,26 +302,34 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
 
   /** Reads one Task's effective policy and execution mode, recomputed by main on each read. */
   const loadPolicy = useCallback(async (taskId: string | null) => {
+    const generation = ++policyRead.current;
     const api = policyBridge();
     if (!api || !taskId) {
       setTaskPolicy(null);
       setPolicyNotice(null);
       return;
     }
-    let result: Outcome<TaskPolicyItem>;
-    try {
-      result = parseOutcome(await api.forTask({ taskId }), parseTaskPolicy);
-    } catch {
-      result = { ok: false, code: 'failed', reason: 'The request did not complete.' };
-    }
-    if (openTask.current !== taskId) return;
-    if (result.ok) {
-      setTaskPolicy(result.value);
-      setPolicyNotice(null);
-    } else {
-      setTaskPolicy(null);
-      setPolicyNotice(`The policy could not be read. ${result.reason}`);
-    }
+    const current = () => openTask.current === taskId && generation === policyRead.current;
+    const read = async (inspectionOnly: boolean): Promise<boolean> => {
+      let result: Outcome<TaskPolicyItem>;
+      try {
+        result = parseOutcome(await api.forTask(inspectionOnly ? { taskId, inspectionOnly: true } : { taskId }), parseTaskPolicy);
+      } catch {
+        result = { ok: false, code: 'failed', reason: 'The request did not complete.' };
+      }
+      if (!current()) return false;
+      if (result.ok) {
+        setTaskPolicy(result.value);
+        setPolicyNotice(null);
+      } else {
+        setTaskPolicy(null);
+        setPolicyNotice('The policy could not be read. ' + result.reason);
+      }
+      return result.ok;
+    };
+    // Show current policy promptly. Storage preparation is separate and cannot
+    // delay the policy's governing rules; unchecked reach is not shown as ready.
+    if (await read(true) && current() && permissionsFor.current === taskId) await read(false);
   }, []);
 
   /** Sets the open Task's execution mode under one fresh operation ID; resolves with a refusal reason. */
@@ -304,6 +338,7 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
       const api = policyBridge();
       const taskId = openTask.current;
       if (!api || !taskId || !taskPolicy || taskPolicy.taskId !== taskId) return 'The policy is not loaded.';
+      const generation = ++policyRead.current;
       let result: Outcome<TaskPolicyItem>;
       try {
         result = parseOutcome(
@@ -313,7 +348,7 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
       } catch {
         result = { ok: false, code: 'failed', reason: 'The request did not complete.' };
       }
-      if (openTask.current !== taskId) return null;
+      if (openTask.current !== taskId || generation !== policyRead.current) return null;
       if (result.ok) {
         setTaskPolicy(result.value);
         return null;
@@ -329,26 +364,32 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
     void loadPolicy(openTaskId);
   }, [openTaskId, loadStates, loadPolicy]);
 
+  const treeTraceRead=useRef(0);
   const loadTree = useCallback(
     async (id: string | null, refreshInspection = true) => {
       if (!bridge || !id) {
         setTree(null);
         return;
       }
-      const generation = authorityGeneration.current;
+      const generation = authorityGeneration.current,read=++treeTraceRead.current;
+      smokeStartTrace('tree-start',{selected:!!openTask.current},read);
       const result = parseOutcome(await bridge.getTree({ workspaceId: id }), parseTree);
+      smokeStartTrace('tree-result',{ok:result.ok,scopeCurrent:generation===authorityGeneration.current,workspaceAllowed:chosenWorkspace.current===id&&authorizedWorkspaces.current.includes(id),selected:!!openTask.current,hasTasks:result.ok&&result.value.tasks.length>0,taskPresent:result.ok&&result.value.tasks.some(item=>item.taskId===openTask.current),selectedUnavailable:result.ok&&(result.value.unavailableTasks??[]).some(item=>item.taskId===openTask.current)},read);
       if (generation !== authorityGeneration.current) return;
       if (chosenWorkspace.current !== id || !authorizedWorkspaces.current.includes(id)) return;
+      // An earlier successful inventory cannot erase a newer accepted Task or
+      // restore data after a newer refusal. Refusals always remain fail-closed.
+      if (result.ok && read !== treeTraceRead.current) return;
       if (result.ok) {
         // A Task that is gone (deleted) takes its draft with it.
         const unavailable=new Set((result.value.unavailableTasks??[]).map(item=>item.taskId));
         draftStore.retain(result.value.workspaceId, [...result.value.tasks.map((item) => item.taskId),...unavailable]);
         setAcceptedTasks(previous=>Object.fromEntries(Object.entries(previous).filter(([taskId])=>!unavailable.has(taskId))));
-        if(openTask.current&&unavailable.has(openTask.current)){setOpenTaskId(null);openTask.current=null;setStates(null);setTaskPolicy(null);setNotice('This Task is currently unavailable. Your draft is kept.');}
+        if(openTask.current&&unavailable.has(openTask.current)){setOpenTaskId(null);openTask.current=null;setStates(null);setTaskPolicy(null);setNavigationNotice('This Task is currently unavailable. Your draft is kept.');}
         setTree(result.value);
       } else {
         setTree(null); setAcceptedTasks({}); setStates(null); setTaskPolicy(null);
-        setOpenTaskId(null); openTask.current=null; setNotice(result.reason);
+        setOpenTaskId(null); openTask.current=null; setNavigationNotice(result.reason);
       }
       if (openTask.current && refreshInspection) await Promise.all([loadStates(openTask.current), loadPolicy(openTask.current)]);
     },
@@ -356,6 +397,7 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
   );
 
   const suppressPrivateContent = useCallback(() => {
+    recoveryRead.current++;setRecoveringNavigation(false);
     authorityGeneration.current++; authorizedWorkspaces.current=[];
     setState(null); setPerson(null); setTree(null); setAcceptedTasks({});
     setStates(null); setTaskPolicy(null); setOpenTaskId(null); openTask.current=null;
@@ -371,7 +413,7 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
       if (read!==workspaceRead.current || generation!==authorityGeneration.current) return;
       if (!next) {
         suppressPrivateContent();
-        setNotice('Your Workspaces could not be read.');
+        setNavigationNotice('Your Workspaces could not be read.');
         return;
       }
       // Drafts belong to one signed-in principal: none signed in, or a different one, clears them all.
@@ -400,13 +442,14 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
         setStartLocation(null); setShowStart(false); setPendingStart(false);
       }
       const chosen = current && ids.includes(current) ? current : (ids[0] ?? null);
+      if(current!==chosen){recoveryRead.current++;setRecoveringNavigation(false);setNotice(null);}
       chosenWorkspace.current = chosen;
       setWorkspaceIdState(chosen);
       await loadTree(chosen);
     } catch {
       if (read!==workspaceRead.current || generation!==authorityGeneration.current) return;
       suppressPrivateContent();
-      setNotice('Your Workspaces could not be read.');
+      setNavigationNotice('Your Workspaces could not be read.');
     }
   }, [bridge, loadTree, draftStore, suppressPrivateContent]);
 
@@ -433,6 +476,7 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
   useEffect(() => {
     const api = (globalThis as {inquello?:{tasks?:{onSessionChanged?:(listener:(identityChanged:boolean)=>void)=>()=>void}}}).inquello?.tasks;
     return api?.onSessionChanged?.((identityChanged) => {
+      recoveryRead.current++;setRecoveringNavigation(false);setNotice(null);
       authorityGeneration.current++; authorizedWorkspaces.current=[];
       setAcceptedTasks({}); setTree(null); setOpenTaskId(null); setState(null); setStates(null); setTaskPolicy(null);
       if (identityChanged) { draftStore.clear(); setPendingStart(false); setStartLocation(null); setShowStart(false); setState(null); setPerson(null); }
@@ -441,8 +485,30 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
     });
   }, [load, draftStore]);
 
+  /** Explicit recovery only. Clear old work first; no mutation or draft is replayed. */
+  const refreshWorkspace = async () => {
+    const id=chosenWorkspace.current;
+    if(!id||!bridge?.recoverNavigation||recoveringNavigation||noticeState?.kind!=='navigation-unavailable')return;
+    const read=++recoveryRead.current,nav=++navigationRead.current;
+    const generation=++authorityGeneration.current;
+    setRecoveringNavigation(true);setTree(null);setAcceptedTasks({});setStates(null);setTaskPolicy(null);
+    setOpenTaskId(null);openTask.current=null;setSavedHit(null);setOpenedEngagement(null);setSelectedQuestion(null);setSavedSurface(null);
+    setNavigationNotice('Checking current Workspace access. No work will be restarted.');
+    const current=()=>read===recoveryRead.current&&nav===navigationRead.current&&generation===authorityGeneration.current&&id===chosenWorkspace.current;
+    try{
+      const result=await bridge.recoverNavigation({workspaceId:id});
+      if(!current())return;
+      const accepted=parseOutcome(result,value=>typeof value==='object'&&value!==null&&(value as {accepted?:unknown}).accepted===true?{accepted:true}:null);
+      if(!accepted.ok){setNavigationNotice('Workspace access could not be restored. Refresh cannot restore revoked permissions; no work was restarted.');return;}
+      setNotice(null);
+      await load(); // A new authorized read, never reuse an old response or mutation.
+    }catch{if(current())setNavigationNotice('Workspace access is unavailable. Refresh cannot restore revoked permissions; no work was restarted.');}
+    finally{if(read===recoveryRead.current)setRecoveringNavigation(false);}
+  };
+
   /** Every foreground destination invalidates all older awaited navigation. */
   const selectDestination = () => {
+    recoveryRead.current++;setRecoveringNavigation(false);setNotice(null);
     navigationRead.current++;
     setSavedHit(null);setSelectedQuestion(null);setOpenedEngagement(null);
     return navigationRead.current;
@@ -489,7 +555,7 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
       acceptSaved(value);
       if(question)setSelectedQuestion({requestId:question.requestId,turnId:question.turnId,itemId:question.itemId,visit:navigationRead.current});
       return navigationRead.current;
-    }catch{if(read===navigationRead.current&&generation===authorityGeneration.current&&workspace===chosenWorkspace.current){setOpenTaskId(null);setNotice('This Task is unavailable. No cached work was opened.');}}
+    }catch{if(read===navigationRead.current&&generation===authorityGeneration.current&&workspace===chosenWorkspace.current){setOpenTaskId(null);setNavigationNotice('This Task is unavailable. No cached work was opened.');}}
   };
 
 
@@ -574,7 +640,7 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
     // Archive in their saving state after the navigation write has completed.
     return mutate(()=>bridge.setNavigation!({operationId,workspaceId:task.workspaceId,taskId:task.taskId,expectedRevision,pinned,archived}),parseTask,false);
   };
-  const reconnect = (destination:string) => {onShowSpecimen();setTimeout(()=>{const target=document.getElementById(destination)??document.querySelector<HTMLElement>(`[data-provider-action="${destination}"]`);target?.focus();target?.scrollIntoView?.({block:'center'});},100);};
+  const reconnect = (destination:string) => {globalThis.location.hash=providerSettingsHash(destination);};
   const signIn = async () => {
     const identity = identityBridge();
     if (!identity) return;
@@ -618,6 +684,7 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
     const entry=acceptedTasks[id];
     return authorizedWorkspace && entry?.workspaceId===workspaceId ? entry.binding : undefined;
   };
+  useEffect(()=>{smokeStartTrace('shell-committed',{foreground:active,selected:!!openTaskId,taskPresent:!!task,receiptPresent:!!(openTaskId&&acceptedFor(openTaskId)),showStart});},[active,openTaskId,task,acceptedTasks,showStart,authorizedWorkspace]);
   const engagement = useMemo(() => (task?.engagementId ? (tree?.engagements.find((item) => item.engagementId === task.engagementId) ?? null) : null), [tree, task]);
   const workspace = state?.workspaces.find((item) => item.workspaceId === workspaceId) ?? null;
 
@@ -625,19 +692,37 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
   // The draft follows the Task actually shown; a Task that vanished falls back to the no-Task draft.
   const draft = useDraftBinding(task?.taskId ?? null, draftStore, task?.workspaceId ?? null);
   const startDraft = useDraftBinding(null, draftStore);
-  const composer = !state?.signedIn || showStart ? null : renderComposer ? renderComposer(draft) : task?.runtimeThreadId || (task&&acceptedFor(task.taskId)) ? <TaskLifecycle key={`${runtimeEpoch}:${task!.taskId}`} taskId={task!.taskId} workspaceId={task!.workspaceId} draft={draft} operationIds={operationIds}/> : <Composer draft={draft} />;
+  const conversationFollow=useConversationFollow(state?.signedIn&&!showStart&&task?JSON.stringify([ownerKey(person),task.workspaceId,task.taskId,runtimeEpoch]):null,!active||workView==='artifact'||!!savedHit?.hit||!!selectedQuestion||!!savedSurface);
+  // Initial home is the real memory-only draft surface, never a persisted Task.
+  // Do this once per owner/workspace and never replace a pending or visited draft.
+  const initializedHome = useRef<string | null>(null);
+  useEffect(() => {
+    if (!active || !authorizedWorkspace || !currentTree || !workspaceId) return;
+    const scope = JSON.stringify([ownerKey(person), workspaceId]);
+    if (initializedHome.current === scope) return;
+    initializedHome.current = scope;
+    if (openTaskId || openedEngagement || startLocation || pendingStart || savedSurface) return;
+    setStartLocation({workspaceId, engagementId:null, folderId:null});
+    setShowStart(true);
+  }, [active, authorizedWorkspace, currentTree, workspaceId, person, openTaskId, openedEngagement, startLocation, pendingStart, savedSurface]);
+  const [conversationOptions,setConversationOptions]=useState<string|null>(null);
+  useEffect(()=>{permissionsFor.current=null;setConversationOptions(null);setConversationPermissions(null);},[active,showStart,task?.taskId,task?.workspaceId,runtimeEpoch,ownerKey(person)]);
+  const composer = !state?.signedIn || showStart ? null : renderComposer ? renderComposer(draft) : task?.runtimeThreadId || (task&&acceptedFor(task.taskId)) ? <TaskLifecycle key={`${runtimeEpoch}:${task!.taskId}`} taskId={task!.taskId} workspaceId={task!.workspaceId} draft={draft} operationIds={operationIds} onContinuationRequested={conversationFollow.continuation}/> : <Composer draft={draft} routeBeforeField routeLabel={task?<ConversationModelPicker key={`${runtimeEpoch}:${task.taskId}`} taskId={task.taskId} workspaceId={task.workspaceId} selected={null}/>:undefined} />;
+  const conversationTitle=state?.signedIn&&!showStart&&task?task.title:null;
+  useEffect(()=>{onConversationChanged?.(conversationTitle!==null&&task?{taskId:task.taskId,title:conversationTitle}:null);},[task?.taskId,conversationTitle,onConversationChanged]);
 
   return (
     <div
       ref={shellRef}
       className={`iq-shell iq-shell--${mode} iq-shell--nav-${presentation}`}
       data-shell
+      data-new-chat={state?.signedIn && !task && !openTaskId && !openedEngagement && !showStart ? true : undefined}
       data-layout-mode={mode}
       data-nav-presentation={presentation}
       data-artifact-open={openArtifact ? 'true' : 'false'}
       data-artifact-fits={artifactFits(width) ? 'true' : 'false'}
       data-work-view={workView}
-      style={{ '--iq-thread-min-width': `${THREAD_MIN_WIDTH}px` } as CSSProperties}
+      style={{ '--iq-thread-min-width': `${THREAD_MIN_WIDTH}px`, '--sidebar-width':`${sidebarWidth}px` } as CSSProperties}
     >
       <Sidebar
         state={state}
@@ -652,6 +737,11 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
         onCreateFolder={createFolder}
         onSignIn={() => void signIn()}
         onShowSpecimen={onShowSpecimen}
+        onSignOut={()=>{globalThis.location.hash='#settings-signout';}}
+        sidebarWidth={sidebarWidth} sidebarMaximum={sidebarMaximum} onResizeSidebar={resizeSidebar}
+        onSearch={()=>openSavedSurface('search')}
+        onInbox={()=>openSavedSurface('inbox')}
+        inboxCount={inbox && !inbox.unavailable ? inbox.items.length : null}
         newOperationId={operationIds}
         busy={creatingTask}
         presentation={presentation}
@@ -661,12 +751,7 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
         person={person}
       />
       <div className="iq-shell-main">
-        <nav className="iq-saved-toolbar" aria-label="Saved work">
-          <Button variant="ghost" onPress={()=>openSavedSurface('search')}>Search saved work · Ctrl/Cmd+K</Button>
-          <Button variant="ghost" onPress={()=>openSavedSurface('inbox')}>Inbox</Button>
-          {inbox&&!inbox.unavailable?<Badge count={inbox.items.length} label="requests for input"/>:<span>Attention unavailable</span>}
-        </nav>
-        <Header task={task} engagement={engagement} workspace={workspace} />
+        <Header task={task} engagement={engagement} workspace={workspace} onOptions={()=>setConversationOptions(task?.taskId??null)} onPermissions={()=>{const id=task?.taskId??null;permissionsFor.current=id;setConversationPermissions(id);setTaskPolicy(null);setPolicyNotice(null);void loadPolicy(id);}} />
         <div className={`iq-work${openArtifact ? ' iq-work--artifact' : ''}`} data-work>
           {mode === 'single' && openArtifact ? (
             <div className="iq-work-switch" data-work-switch>
@@ -681,18 +766,23 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
               />
             </div>
           ) : null}
-          <main className="iq-thread" aria-label="Task work" hidden={workView === 'artifact'} data-thread>
-            <div className="iq-shell-content">
+          <main ref={conversationFollow.threadRef} className="iq-thread" tabIndex={0} aria-label="Conversation" hidden={workView === 'artifact'} data-thread>
+            <div ref={conversationFollow.contentRef} className="iq-shell-content">
               {notice ? (
-                <p className="iq-shell-notice" role="status" data-shell-notice>
-                  {notice}
-                </p>
+                <div className="iq-shell-notice" data-shell-notice>
+                  <p role="status">{notice}</p>
+                  {noticeState?.kind==='navigation-unavailable' && workspaceId && bridge?.recoverNavigation && <>
+                    <Button size="sm" onPress={()=>void refreshWorkspace()} pending={recoveringNavigation} pendingText="Checking Workspace access">Refresh workspace</Button>
+                    <p>Rechecks your current access. Revoked permissions remain denied; no Task or command is restarted.</p>
+                  </>}
+                </div>
               ) : null}
               {state?.signedIn && startLocation ? <StartView
                 key={`${ownerKey(person)}:${startLocation.workspaceId}`}
                 {...startLocation} onPendingChange={setPendingStart} runtimeEpoch={runtimeEpoch} draft={startDraft} active={showStart && active} operationIds={operationIds}
                 onAccepted={(accepted) => {
                   const origin=startLocation;
+                  smokeStartTrace('shell-accepted',{workspaceAllowed:authorizedWorkspaces.current.includes(origin.workspaceId),foreground:activeStart.current.active&&activeStart.current.location===origin&&chosenWorkspace.current===origin.workspaceId});
                   if (!authorizedWorkspaces.current.includes(origin.workspaceId)) return;
                   setAcceptedTasks(previous => ({...previous,[accepted.taskId]:{workspaceId:origin.workspaceId,binding:accepted}}));
                   // Async acknowledgement may outlive this Start's foreground visit.
@@ -724,8 +814,8 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
                 />
               ) : !showStart && openTaskId && acceptedFor(openTaskId) ? <AcceptedRequest accepted={acceptedFor(openTaskId)!}/> : !showStart ? (
                 <div className="iq-thread-placeholder" data-thread-placeholder="none">
-                  <p className="iq-thread-placeholder-title">No Task open.</p>
-                  <p className="iq-thread-placeholder-body">Choose a Task in the Sidebar, or start one with New thread.</p>
+                  <p className="iq-thread-placeholder-title">What should we work on?</p>
+                  <p className="iq-thread-placeholder-body">Start a new chat, or pick up a recent conversation.</p>
                 </div>
               ) : null}
             </div>
@@ -751,10 +841,13 @@ export function Shell({ active = true, onShowSpecimen, operationIds = newOperati
             />
           ) : null}
           <div className="iq-composer-slot" data-composer-slot={composer ? 'filled' : 'empty'}>
+            {conversationFollow.away&&<Button size="sm" onPress={conversationFollow.jump}>Jump to latest</Button>}
             {composer}
           </div>
         </div>
       </div>
+      {active&&task&&conversationPermissions===task.taskId&&<SavedWorkDialog label="Conversation permissions" onClose={()=>{policyRead.current++;permissionsFor.current=null;setConversationPermissions(null);}}><TaskPolicy compact policy={taskPolicy?.taskId===task.taskId?taskPolicy:null} notice={policyNotice} onSetMode={policyBridge()?setMode:undefined}/></SavedWorkDialog>}
+      {active&&task&&<SavedWorkDialog key={`${ownerKey(person)}:${runtimeEpoch}:${task.workspaceId}:${task.taskId}`} open={conversationOptions===task.taskId} label="Conversation options" onClose={()=>setConversationOptions(null)}><TaskDetails task={task} engagements={tree?.engagements??[]} folders={tree?.folders??[]} onNavigation={setNavigation} onRename={renameTask} onMove={moveTask} newOperationId={operationIds}/></SavedWorkDialog>}
       {active&&savedSurface==='search'&&<Search key={`${workspaceId}:${runtimeEpoch}:${authorityGeneration.current}`} workspaceId={authorizedWorkspace?workspaceId:null} onClose={()=>setSavedSurface(null)} onOpen={acceptSaved} onEngagement={e=>{if(e.workspaceId===chosenWorkspace.current&&authorizedWorkspaces.current.includes(e.workspaceId)){selectDestination();openTask.current=null;setTree(previous=>previous?{...previous,engagements:[...previous.engagements.filter(row=>row.engagementId!==e.engagementId),e]}:previous);setOpenTaskId(null);setSavedHit(null);setShowStart(false);setOpenedEngagement(e.engagementId);}}}/>}
       {active&&savedSurface==='inbox'&&<Inbox key={`${workspaceId}:${runtimeEpoch}:${authorityGeneration.current}`} view={authorizedWorkspace?inbox:null} tasks={currentTree?.tasks??[]} onClose={()=>setSavedSurface(null)} onOpen={(task,question)=>{void openTaskFromNav(task,question);}}/>}
       <div className="iq-visually-hidden" role="status" aria-live="polite" aria-atomic="true" data-shell-announcer data-announce-count={announcement.count}>

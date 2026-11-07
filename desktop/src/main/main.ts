@@ -1,12 +1,17 @@
+import {ownedDevProfile,DEV_PROFILE_ENV,DEV_RUN_ENV} from './dev-profile';
+import {ownedOnboardingFixture,ONBOARDING_FIXTURE_ENV,ONBOARDING_RUN_ENV} from './onboarding-smoke';
+import {probeOnboarding} from './onboarding-smoke-probe';
 import { configureDesktopStorage } from './runtime/desktop-storage';
+import { smokeCatalogArgs } from './runtime/smoke-catalog';
 import { wslDataStorage } from './runtime/wsl-data';
 import { ensurePrivateDirectory } from './runtime/private-paths';
 import {createDataAuthority} from './data/authority';
 import { taskBootstrap } from './tasks/bootstrap';
+import { smokeTaskSession } from './tasks/smoke-session';
 import { TaskService } from './tasks/service';
 import { notifySettledWork } from './usage/notifications';
 import { UsageService } from './usage/service';
-import { probeEnvironments } from './smoke-probe';
+import { probeEnvironments, probeQuota, probeVisualConversation } from './smoke-probe';
 import { EnvironmentService } from './environments/service';
 import { RouteService } from './routes/service';
 import { signOutWithCapabilities, providerLogoutWithCapabilities } from './capabilities/lifecycle';
@@ -119,7 +124,7 @@ import { CapabilityService } from './capabilities/service';
  * `tool-bounds`, `--smoke` runs the permissions probe and prints a
  * `permissions` line, which the run also requires to pass.
  */
-import { RuntimeLifecycle } from './runtime/lifecycle';
+import { RuntimeLifecycle, controlledPaidLaunchRequested } from './runtime/lifecycle';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -129,6 +134,9 @@ import { app, BrowserWindow, dialog, ipcMain, protocol, safeStorage, session, ty
 
 import schemaStamp from '../protocol/schema-stamp.json';
 import { DataService, ExportJournal, governedRoots, JOURNAL_DIR, loadShippedPolicy, type GovernedRoots, type DataServiceOptions, type ImportActionResult } from './data';
+import { OnboardingClient } from './onboarding/client';
+import { OnboardingStore } from './onboarding/store';
+import { OnboardingService } from './onboarding/service';
 import { createIdentity, headlessOpener, identityDir, SERVICE_CONFIG_ENV, type IdentityWiring } from './identity';
 import { openSystemBrowser } from './identity/browser';
 import { AppServerRuntime, consoleLogger, isProviderCredentialVar, recordingConsoleLogger, resolveAppServerBinary, runtimeChildEnv, writeRuntimeConfig, RUNTIME_OWNED_CONFIG_ARGS, verifyRuntimeOwnedConfig, type ExitInfo } from './runtime';
@@ -147,8 +155,19 @@ import { EscalationGate, PermissionMediator, PolicyService, taskFoldersRoot } fr
 import { createProviders, loadProviderDevConfig, PROVIDER_DEV_CONFIG_ENV, providersDir, type ProviderService } from './providers';
 import { probeStartSurface, probeRoutes, probeCapabilities, probeComposer, probeData, probeIdentity, probeOrganise, probePermissions, probePolicy, probeProviders, probeRenderer, probeShellLayout, probeStates, probeToolBounds, SHELL_LAYOUT } from './smoke-probe';
 
+const paidQualificationRequested = controlledPaidLaunchRequested(Object.keys(process.env), process.argv);
+const developmentProfile=ownedDevProfile({packaged:app.isPackaged,paid:paidQualificationRequested,argv:process.argv,env:process.env});
+const onboardingFixture=ownedOnboardingFixture({packaged:app.isPackaged,argv:process.argv,env:process.env});
+const onboardingSmoke=onboardingFixture!==null;
+let onboardingOk=false;
+const toolsManagementSmoke = !app.isPackaged && process.argv.includes('--smoke-tools-management');
+let toolsManagementOk = false;
 const navigationSmoke = !app.isPackaged && process.argv.includes('--smoke-navigation');
-const smoke = process.argv.includes('--smoke') || navigationSmoke;
+const quotaSmoke = !app.isPackaged && process.argv.includes('--smoke-quota');
+const visualSmoke = !app.isPackaged && process.argv.includes('--smoke-visual');
+const smoke = process.argv.includes('--smoke') || navigationSmoke || quotaSmoke || visualSmoke || onboardingSmoke || toolsManagementSmoke;
+let visualOk = false;
+let quotaOk = false;
 let navigationOk = false;
 // The smoke run keeps what main logs, so the providers probe can scan it for a leaked key.
 const recordedLogger = smoke ? recordingConsoleLogger() : undefined;
@@ -181,15 +200,35 @@ let routes: RouteService | undefined;
 let environments: EnvironmentService | undefined;
 let usage: UsageService | undefined;
 let tasks: TaskService | undefined;
+let armSmokeTaskSession: ((workspaceId:string)=>Promise<void>) | undefined;
+function notifySettingsChanged(settled: boolean): void {
+  for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:policy-settings-changed', settled);
+}
+function settingsChanged(): void {
+  notifySettingsChanged(policy?.invalidateSettings() ?? true);
+}
+/** Tokens belong to a single transition; nested runtime/identity work cannot settle its peer. */
+function beginSettingsTransition(): () => void {
+  const owner = policy;
+  const token = owner?.beginSettingsTransition();
+  notifySettingsChanged(false);
+  let finished = false;
+  return () => {
+    if (finished) return;
+    finished = true;
+    notifySettingsChanged(owner && token !== undefined ? owner.endSettingsTransition(token) : true);
+  };
+}
 function taskSessionChanged(identityChanged = false): void {
   tasks?.invalidate();
   for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:tasks-session-changed', identityChanged);
 }
 function usageChanged(privateScope = false): void {
-  usage?.invalidate();
+  if(privateScope)usage?.invalidate();else usage?.observationsChanged();
   for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:usage-changed', privateScope);
 }
 function environmentChanged(privateScope = true): void {
+  if (privateScope) settingsChanged();
   if (privateScope) tasks?.invalidate();
   usageChanged(privateScope);
   environments?.invalidate();
@@ -209,11 +248,13 @@ const blocked: Array<{ kind: BlockedKind; url: string }> = [];
 const policyOptions: PolicyOptions = { logger, onBlocked: (kind, url) => blocked.push({ kind, url }) };
 let quitting = false;
 
+if(developmentProfile)app.setPath('userData',developmentProfile.profile);
+
 if (smoke) {
   // Keep the smoke run's Electron profile, and with it the runtime home, out of
   // the user's real ones. Each run gets a fresh directory because Chromium
   // and runtime descendants may still hold a prior disposable profile open.
-  app.setPath('userData', path.join(process.platform === 'win32' ? 'D:\\Inquello\\tmp' : os.tmpdir(), `inquello-smoke-${randomUUID()}`));
+  app.setPath('userData', onboardingFixture?.profile ?? path.join(process.platform === 'win32' ? 'D:\\Inquello\\tmp' : os.tmpdir(), `inquello-smoke-${randomUUID()}`));
 }
 
 if (process.platform === 'win32') configureDesktopStorage(app, app.getPath('userData'));
@@ -240,15 +281,19 @@ function createWindow(): BrowserWindow {
     useContentSize: true,
     minWidth: SHELL_LAYOUT.windowMinWidth,
     minHeight: WINDOW_MIN_HEIGHT,
-    show: !smoke,
+    show: !smoke || onboardingSmoke,
     title: 'Inquello',
-    webPreferences: secureWebPreferences(path.join(__dirname, '..', 'preload', 'preload.js')),
+    webPreferences: {
+      ...secureWebPreferences(path.join(__dirname, '..', 'preload', 'preload.js')),
+      // Only the unpackaged synthetic capture run needs hidden-window animation frames.
+      ...((visualSmoke || onboardingSmoke) ? { backgroundThrottling: false } : {}),
+    },
   });
   const id = window.webContents.id;
   trustedWebContentsIds.add(id);
   window.webContents.once('destroyed', () => trustedWebContentsIds.delete(id));
   // The smoke run's earlier probes read the design specimen; the app opens on the Shell.
-  void window.loadURL(smoke ? `${APP_ENTRY_URL}#specimen` : APP_ENTRY_URL);
+  void window.loadURL(onboardingSmoke ? `${APP_ENTRY_URL}#onboarding` : smoke ? `${APP_ENTRY_URL}#specimen` : APP_ENTRY_URL);
   return window;
 }
 
@@ -258,10 +303,13 @@ function workingStorePath(userData: string): string {
 }
 
 function runtimeEnv(runtimeHome: string, workingStore: string): NodeJS.ProcessEnv {
-  return runtimeChildEnv(process.env, { serviceConfigEnv: SERVICE_CONFIG_ENV, codexHome: runtimeHome, workingStore, blocked: [PROVIDER_DEV_CONFIG_ENV, 'INQUELLO_SMOKE_SEED'] });
+  return runtimeChildEnv(process.env, { serviceConfigEnv: SERVICE_CONFIG_ENV, codexHome: runtimeHome, workingStore, blocked: [DEV_PROFILE_ENV,DEV_RUN_ENV,ONBOARDING_FIXTURE_ENV, ONBOARDING_RUN_ENV, PROVIDER_DEV_CONFIG_ENV, 'INQUELLO_SMOKE_SEED', 'INQUELLO_QUOTA_FIXTURE', 'INQUELLO_VISUAL_FIXTURE'] });
 }
 
 const runtimeLifecycle = new RuntimeLifecycle();
+// Trusted launch opt-in only. Native independently validates the complete
+// envelope/classification. No runtime restart grants another paid allowance.
+let paidQualificationRuntimeStarted = false;
 
 /** Runtime start/stop never overlap, including the initial asynchronous handshake. */
 function startRuntime(): Promise<void> {
@@ -270,6 +318,12 @@ function startRuntime(): Promise<void> {
 
 /** Starts a new runtime child; local-data recovery calls this only after copying is complete. */
 async function startRuntimeNow(): Promise<void> {
+  if (paidQualificationRequested) {
+    if (paidQualificationRuntimeStarted) throw new Error('The controlled fictional session cannot restart; reconcile consumed budget with the owner first');
+    paidQualificationRuntimeStarted = true;
+  }
+  const settled = beginSettingsTransition();
+  try {
   taskSessionChanged();
   runtimeConfigurationVerified = false;
   environmentChanged();
@@ -294,14 +348,14 @@ async function startRuntimeNow(): Promise<void> {
   runtime = new AppServerRuntime({
     command: binary.path,
     commandArgsPrefix: smoke && !app.isPackaged
-      ? [...RUNTIME_OWNED_CONFIG_ARGS, '--disable-plugin-startup-tasks-for-tests']
+      ? [...RUNTIME_OWNED_CONFIG_ARGS, ...smokeCatalogArgs(smoke, app.isPackaged, app.getAppPath()), '--disable-plugin-startup-tasks-for-tests']
       : RUNTIME_OWNED_CONFIG_ARGS,
     env: runtimeEnv(runtimeHome, workingStore),
     clientInfo: { name: 'inquello_desktop', title: 'Inquello', version: app.getVersion() },
     schemaStamp,
     stderrLogPath: path.join(app.getPath('logs'), 'app-server-stderr.log'),
     logger,
-    onNotification: ({ method, params }) => { tasks?.notification(method, params); providers?.codex.handleNotification(method, params); if (method === 'account/updated') void routes?.invalidate('codex-responses'); capabilities?.handleNotification(method, params); if (['app/list/updated','skills/changed','mcpServer/startupStatus/updated','mcpServerStatus','mcpServer/oauthLogin/completed','account/updated'].includes(method)) for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:capabilities-changed'); },
+    onNotification: ({ method, params }) => { tasks?.notification(method, params); providers?.codex.handleNotification(method, params); if (method === 'account/updated') void routes?.invalidate('codex-responses'); capabilities?.handleNotification(method, params); if (method === 'account/updated') settingsChanged(); if (['app/list/updated','skills/changed','mcpServer/startupStatus/updated','mcpServerStatus','mcpServer/oauthLogin/completed','account/updated'].includes(method)) for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:capabilities-changed'); },
     onServerRequest: (method, params, id) => method === 'inquello/context/authorize' ? organise?.authorizeContext(params) ?? {available:false,snapshot:null,serviceEngagementIds:[]} : method === 'item/tool/requestUserInput' ? tasks?.question(id, params) ?? {answers:{}} : method === 'inquello/tasks/authority' ? tasks?.authority(params) ?? {workspacePolicy:null} : escalations.answer(method, params),
   });
   runtime.on('state', ({ state, error }) => {
@@ -331,6 +385,7 @@ async function startRuntimeNow(): Promise<void> {
   handshakeOk = true;
   // A new runtime process has no principal bound yet.
   await organise?.syncPrincipal().catch((error: unknown) => logger.warn(`organise: principal not bound after start (${(error as Error).message})`));
+  } finally { settled(); }
 }
 
 function stopRuntime(): Promise<void> {
@@ -338,6 +393,8 @@ function stopRuntime(): Promise<void> {
 }
 
 async function stopRuntimeNow(): Promise<void> {
+  const settled = beginSettingsTransition();
+  try {
   taskSessionChanged();
   permissionMediator?.declineAll();
   await routes?.quiesce();
@@ -350,6 +407,7 @@ async function stopRuntimeNow(): Promise<void> {
   tasks?.runtimeStopped(current);
   capabilities?.clearConnectionTracking();
   logger.info(`app-server stopped (code ${exit.exitCode}, signal ${exit.signal}, killed ${exit.killed})`);
+  } finally { settled(); }
 }
 
 function exportStamp(): string {
@@ -374,6 +432,45 @@ async function chooseImportSource(): Promise<string | null> {
 }
 
 async function runSmokeProbe(contents: WebContents): Promise<void> {
+  if(onboardingFixture){
+    if(!identity)throw new Error('Onboarding identity unavailable');
+    const report=await probeOnboarding(contents,{fixture:onboardingFixture,identity});
+    onboardingOk=report.ok;process.stdout.write(`${JSON.stringify({event:'onboarding',...report})}\n`);return;
+  }
+  if (toolsManagementSmoke) {
+    if (!identity || !organise || !capabilities || !runtime) throw new Error('Tools management services unavailable');
+    const {probeToolsManagement}=await import('./smoke-probe');
+    const report=await probeToolsManagement(contents,{identity,organise,capabilities,seedFile:process.env.INQUELLO_SMOKE_SEED??null,
+      runtimeHome:governedRoots(app.getPath('userData'),app.getPath('logs'))['runtime-home'],
+      restartRuntime:async()=>{await stopRuntime();await startRuntime();},
+      runtimeRequest:<T,>(method:string,params?:unknown)=>runtime!.request<T>(method,params)});
+    toolsManagementOk=report.ok;process.stdout.write(JSON.stringify({event:'tools-management',...report})+'\n');return;
+  }
+  if (visualSmoke) {
+    if (!identity || !organise || !policy || !runtime) throw new Error('Visual smoke services unavailable');
+    const visualWindow=BrowserWindow.fromWebContents(contents);
+    if(!visualWindow)throw new Error('Owned visual window unavailable');
+    const visualSize=visualWindow.getContentSize();
+    const visualMinimum=visualWindow.getMinimumSize();
+    const report=await probeVisualConversation(contents,{identity,organise,policy,seedFile:process.env.INQUELLO_SMOKE_SEED??null,
+      resize:(width,height)=>{
+        // Match the layout probe: Windows' 125% frame rounding otherwise adds
+        // two CSS pixels at the minimum. Test the exact viewport, then restore.
+        if(width===SHELL_LAYOUT.windowMinWidth)visualWindow.setMinimumSize(0,0);
+        visualWindow.setContentSize(width,height);
+        if(width!==SHELL_LAYOUT.windowMinWidth)visualWindow.setMinimumSize(visualMinimum[0]!,visualMinimum[1]!);
+      },restore:{width:visualSize[0]!,height:visualSize[1]!},
+      isolatedRoot:app.getPath('userData'),fixtureFile:process.env.INQUELLO_VISUAL_FIXTURE??'',armSyntheticSession:async workspaceId=>{if(!armSmokeTaskSession)throw new Error('Synthetic session unavailable');await armSmokeTaskSession(workspaceId);},
+      runtimeRequest:<T,>(method:string,params?:unknown)=>runtime!.request<T>(method,params)});
+    visualOk=report.ok;process.stdout.write(`${JSON.stringify({event:'visual-conversation',...report})}\n`);return;
+  }
+  if (quotaSmoke) {
+    if (!identity || !organise || !routes || !policy || !runtime) throw new Error('Quota smoke services unavailable');
+    const report=await probeQuota(contents,{identity,organise,routes,policy,seedFile:process.env.INQUELLO_SMOKE_SEED??null,
+      isolatedRoot:app.getPath('userData'),fixtureFile:process.env.INQUELLO_QUOTA_FIXTURE??'',usageChanged,armSyntheticSession:async workspaceId=>{if(!armSmokeTaskSession)throw new Error('Synthetic session unavailable');await armSmokeTaskSession(workspaceId);},
+      runtimeRequest:<T,>(method:string,params?:unknown)=>runtime!.request<T>(method,params)});
+    quotaOk=report.ok;process.stdout.write(`${JSON.stringify({event:'quota',...report})}\n`);return;
+  }
   if (navigationSmoke) {
     if (!identity || !organise) throw new Error('Navigation services unavailable');
     const { probeSavedNavigation } = await import('./smoke-probe');
@@ -505,6 +602,10 @@ async function runSmokeProbe(contents: WebContents): Promise<void> {
 
 function exitCodeFor(exit: ExitInfo | undefined): number {
   if (!smoke) return 0;
+  if (onboardingSmoke) return handshakeOk && onboardingOk && exit?.exitCode === 0 && !exit.killed ? 0 : 1;
+  if (toolsManagementSmoke) return handshakeOk && toolsManagementOk && exit?.exitCode === 0 && !exit.killed ? 0 : 1;
+  if (visualSmoke) return handshakeOk && visualOk && exit?.exitCode === 0 && !exit.killed ? 0 : 1;
+  if (quotaSmoke) return handshakeOk && quotaOk && exit?.exitCode === 0 && !exit.killed ? 0 : 1;
   if (navigationSmoke) return handshakeOk && navigationOk && shellLayoutOk && exit?.exitCode === 0 && !exit.killed ? 0 : 1;
   return handshakeOk && privilegesOk && designOk && identityOk && dataOk && providersOk && organiseOk && statesOk && shellLayoutOk && composerOk && startSurfaceOk && policyOk && toolBoundsOk && permissionsOk && capabilitiesOk && routesOk && environmentsOk && exit !== undefined && exit.exitCode === 0 && !exit.killed ? 0 : 1;
 }
@@ -521,7 +622,7 @@ app.on('before-quit', (event) => {
     })
     .then((exit) => {
       try {
-        if (smoke) {
+        if (smoke || developmentProfile) {
           process.stdout.write(`${JSON.stringify({ event: 'runtime-exit', state: runtime?.state ?? 'stopped', exit })}\n`);
         } else if (exit) {
           logger.info(`app-server exited (code ${exit.exitCode}, signal ${exit.signal}, killed ${exit.killed})`);
@@ -542,6 +643,12 @@ void app.whenReady().then(async () => {
   handleAppProtocol(protocol, path.join(app.getAppPath(), 'dist', 'renderer'), logger);
   const userData = app.getPath('userData');
   roots = governedRoots(userData, app.getPath('logs'));
+  if(developmentProfile){
+    const runtimeRelative=path.relative(developmentProfile.profile,roots['runtime-home']);
+    if(!runtimeRelative||runtimeRelative.startsWith('..')||path.isAbsolute(runtimeRelative))throw new Error('Owned development runtime root mismatch');
+    if(fs.realpathSync(userData)!==developmentProfile.profile)throw new Error('Owned development profile mismatch');
+    process.stdout.write(`${JSON.stringify({event:'owned-dev-profile',runId:developmentProfile.runId,resumed:developmentProfile.resumed,userData,runtimeHome:roots['runtime-home']})}\n`);
+  }
   if (smoke) {
     // The smoke run starts signed out, with an empty runtime home and no export journal.
     fs.rmSync(identityDir(userData), { recursive: true, force: true });
@@ -554,7 +661,7 @@ void app.whenReady().then(async () => {
     // No Task folders from an earlier run.
     fs.rmSync(taskFoldersRoot(userData), { recursive: true, force: true });
     // The providers probe checks that an inherited provider key never reaches the runtime.
-    if (!Object.keys(process.env).some((name) => isProviderCredentialVar(name))) {
+    if (!onboardingSmoke && !Object.keys(process.env).some((name) => isProviderCredentialVar(name))) {
       process.env.OPENAI_API_KEY = `sk-inherited-smoke-${randomUUID()}`;
     }
   }
@@ -565,11 +672,34 @@ void app.whenReady().then(async () => {
     userDataDir: app.getPath('userData'),
     logger,
     // The smoke run plays the browser's part headlessly; the app always uses the system browser.
-    opener: (transport) => (smoke && transport ? headlessOpener(transport) : openSystemBrowser),
+    opener: (transport) => (onboardingFixture && transport ? onboardingFixture.opener(transport) : smoke && transport ? headlessOpener(transport) : openSystemBrowser),
     recordSecrets: smoke,
   });
   const identitySession = identity.session;
+  const onboardingConfig = identity.config.kind === 'configured' ? identity.config.config : null;
+  const onboardingService = new OnboardingService({
+    identity: identitySession,
+    onAuthorityChanged: () => taskSessionChanged(false),
+    client: onboardingConfig && identity.transport ? new OnboardingClient(onboardingConfig.serviceUrl,identity.transport) : null,
+    store: new OnboardingStore({dir:path.join(identityDir(app.getPath('userData')),'onboarding'),scope:JSON.stringify([onboardingConfig?.serviceUrl,onboardingConfig?.issuerUrl]),safeStorage,platform:process.platform}),
+  });
   const sharedAuthority=identity.service;
+  const providerConsent = new ProviderConsentService({
+    identity:identitySession,service:sharedAuthority,
+    store:new ConsentStore({dir:path.join(identityDir(app.getPath('userData')),'provider-consents'),
+      scope:JSON.stringify([onboardingConfig?.serviceUrl,onboardingConfig?.issuerUrl]),safeStorage,platform:process.platform}),
+    onChanged:()=>{for(const window of BrowserWindow.getAllWindows()){
+      window.webContents.send('inquello:tasks-progress-changed');
+      window.webContents.send('inquello:routes-changed',{authority:false});
+    }},
+  });
+  const taskBootstrapOptions={env:process.env,packaged:app.isPackaged,userData,runtime:{
+    ready:()=>runtime?.state==='ready'&&runtimeConfigurationVerified,instance:()=>runtime,
+    request:<T,>(method:string,params?:unknown)=>runtime?runtime.request<T>(method,params):Promise.reject(new Error('Runtime unavailable')),
+  },identity:identitySession,currentSession:()=>sharedAuthority?identitySession.withAccess(access=>sharedAuthority.session(access)):Promise.resolve(null)};
+  const syntheticSmokeSession=(quotaSmoke||visualSmoke)?smokeTaskSession({...taskBootstrapOptions,enabled:true,allowQuotaRoute:quotaSmoke,seedFile:process.env.INQUELLO_SMOKE_SEED??'',diagnostic:(stage,kind)=>logger.info(`smoke fixture proof: ${stage}/${kind}`)}):null;
+  armSmokeTaskSession=syntheticSmokeSession?.arm;
+  const trustedTaskBootstrap=syntheticSmokeSession?.bootstrap??taskBootstrap(taskBootstrapOptions);
   const organiseService = new OrganiseService({
     runtime: {
       ready: () => runtime?.state === 'ready' && runtimeConfigurationVerified,
@@ -579,6 +709,7 @@ void app.whenReady().then(async () => {
     identity: identitySession,
     service: identity.service,
     logger,
+    recoverSession:workspaceId=>trustedTaskBootstrap(workspaceId,{recoveryOnly:true}),
   });
   organise = organiseService;
   const policyRuntime = {
@@ -625,9 +756,13 @@ void app.whenReady().then(async () => {
   routes = new RouteService({
     runtime: { ...policyRuntime, privateRouteAuth: (params) => runtime ? runtime.privateRouteAuth(params) : Promise.reject(new Error('Runtime unavailable')), stop: async () => { await runtime?.stop(); } },
     identity: identitySession, syncPrincipal: () => organiseService.syncPrincipal(), providers: providerService, freshPolicy: (taskId) => policyService.reviewPolicy(taskId), applicableDataTier: taskId => tasks?.applicableDataTier(taskId) ?? Promise.resolve('unknown'),
-    onChanged: () => { environmentChanged(); for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:routes-changed'); },
+    ...((visualSmoke||quotaSmoke)&&syntheticSmokeSession?{syntheticFixtureBinding:(route:import('./routes/types').RouteView)=>syntheticSmokeSession.verifyRoute(route)}:{}),
+    taskBinding:async taskId=>{const result=await routes!.forTask(taskId);return result.ok&&!result.value.staleConfiguration&&result.value.selected&&result.value.configurationRevision!==null&&result.value.disclosureBindings?.every(ref=>ref.active)?{routeId:result.value.selected.routeId,configurationRevision:result.value.configurationRevision,disclosureBindings:result.value.disclosureBindings}:null;},
+    onChanged: (taskId) => { if(taskId)tasks?.invalidateTask(taskId);else environmentChanged(); for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:routes-changed',{authority:true,...(taskId?{taskId}:{})}); },
+    onCatalogChanged: () => { for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:routes-changed',{authority:false}); },
+    onBindingChanged: (binding,taskIds) => { tasks?.invalidateBinding(binding.routeId,binding.configurationRevision,taskIds);for(const window of BrowserWindow.getAllWindows())window.webContents.send('inquello:routes-changed',{authority:true,binding:{routeId:binding.routeId,configurationRevision:binding.configurationRevision}}); },
   });
-  tasks = new TaskService({runtime: policyRuntime, identity: identitySession, bootstrap: taskBootstrap({env: process.env, packaged: app.isPackaged, userData, runtime: policyRuntime, identity: identitySession,currentSession:()=>sharedAuthority?identitySession.withAccess(access=>sharedAuthority.session(access)):Promise.resolve(null)}), syncPrincipal: () => organiseService.syncPrincipal(), prepareRoutes: () => routes!.list(), freshPolicy: workspaceId => policyService.startPolicy(workspaceId), askPermission: (taskId, command) => policyService.askRuntimePermission(taskId, command), routeApproval:(workspaceId,routeId)=>sharedAuthority?identitySession.withAccess(access=>sharedAuthority.routeApproval(access,workspaceId,routeId)):Promise.resolve(null),routeCheck:(workspaceId,request)=>sharedAuthority?identitySession.withAccess(access=>sharedAuthority.routeEligibilityCheck(access,workspaceId,request)):Promise.resolve(null),onAuthorityUnavailable:()=>{taskSessionChanged();usageChanged(true);}, onProgressChanged: () => { for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:tasks-progress-changed'); }, onAccepted: () => usageChanged()});
+  tasks = new TaskService({runtime: policyRuntime, identity: identitySession, bootstrap: trustedTaskBootstrap, syncPrincipal: () => organiseService.syncPrincipal(), prepareRoutes: () => routes!.list(), taskBinding:async taskId=>{const result=await routes!.forTask(taskId);return result.ok&&!result.value.staleConfiguration&&result.value.selected&&result.value.configurationRevision!==null&&result.value.disclosureBindings?.every(ref=>ref.active)?{routeId:result.value.selected.routeId,configurationRevision:result.value.configurationRevision,disclosureBindings:result.value.disclosureBindings}:null;}, freshPolicy: workspaceId => policyService.startPolicy(workspaceId), askPermission: (taskId, command) => policyService.askRuntimePermission(taskId, command), routeApproval:(workspaceId,routeId)=>sharedAuthority?identitySession.withAccess(access=>sharedAuthority.routeApproval(access,workspaceId,routeId)):Promise.resolve(null),routeCheck:(workspaceId,request)=>sharedAuthority?identitySession.withAccess(access=>sharedAuthority.routeEligibilityCheck(access,workspaceId,request)):Promise.resolve(null),onAuthorityUnavailable:()=>{taskSessionChanged();usageChanged(true);}, ...((quotaSmoke||visualSmoke)?{authorityDiagnostic:(stage:string,scope:string)=>logger.info(`smoke Task authority: ${stage}/${scope} monotonic_ms=${Math.floor(performance.now()/10)*10}`)}:{}), onProgressChanged: () => { for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:tasks-progress-changed'); }, onAccepted: () => usageChanged()});
   usage = new UsageService({runtime: policyRuntime, identity: identitySession, policy: policyService, onChanged: usageChanged});
   environments = new EnvironmentService({runtime: policyRuntime, identity: identitySession, policy: policyService, routes});
   providerService.setRouteInvalidator((id) => routes!.invalidate(id));
@@ -640,7 +775,12 @@ void app.whenReady().then(async () => {
     roots,
     journal: new ExportJournal(userData),
     runtime: {
-      stop: stopRuntime,
+      // Export also stops/restarts the runtime. It must wait until this
+      // controlled session ends; policy/inventory reads remain available.
+      stop: async () => {
+        if (paidQualificationRequested) throw new Error('Local-data mutation/export requires ending and reconciling the controlled fictional session');
+        await stopRuntime();
+      },
       start: startRuntime,
       activeTasks: () => tasks?.activeTasks() ?? 0,
       canQuiesceUncertainActivity: () => tasks?.canQuiesceUncertainActivity() ?? false,
@@ -652,8 +792,8 @@ void app.whenReady().then(async () => {
         return state.state === 'signed-in' ? { displayName: state.displayName, issuerLabel: state.issuerLabel } : null;
       },
       holdsSession: () => identitySession.holdsSession(),
-      signOut: async () => ({ ok: (await identitySession.signOut()).ok }),
-      forgetLocally: () => identitySession.forgetLocally(),
+      signOut: async () => { const settled = beginSettingsTransition(); try { return { ok: (await identitySession.signOut()).ok }; } finally { settled(); } },
+      forgetLocally: () => { const settled = beginSettingsTransition(); try { return identitySession.forgetLocally(); } finally { settled(); } },
     },
     providers: {
       forgetClaudeKey: () => providerService.forgetClaudeKey(),
@@ -687,6 +827,8 @@ void app.whenReady().then(async () => {
   registerOperations(
     ipcMain,
     createOperations({
+      onboarding: onboardingService,
+      providerConsent,
       capabilities,
       routes,
       environments,
@@ -696,8 +838,8 @@ void app.whenReady().then(async () => {
       runtimeVersion: schemaStamp.runtimeVersion,
       identity: {
         getStatus: () => identitySession.getStatus(),
-        signIn: async () => { taskSessionChanged(true); permissionMediator?.declineAll(); await routes?.quiesce(); if (capabilities && !(await capabilities.quiesce())) await stopRuntime(); const result = await afterIdentityChange(await identitySession.signIn()); capabilities?.resume(); routes?.resume(); return result; },
-        signOut: async () => { taskSessionChanged(true); permissionMediator?.declineAll(); await routes?.quiesce(); const result = await signOutWithCapabilities({capabilities, stopRuntime, signOut: () => identitySession.signOut(), afterIdentityChange}); routes?.resume(); return result; },
+        signIn: async () => { const settled = beginSettingsTransition(); try { taskSessionChanged(true); permissionMediator?.declineAll(); await routes?.quiesce(); if (capabilities && !(await capabilities.quiesce())) await stopRuntime(); const result = await afterIdentityChange(await identitySession.signIn()); capabilities?.resume(); routes?.resume(); return result; } finally { settled(); } },
+        signOut: async () => { const settled = beginSettingsTransition(); try { taskSessionChanged(true); permissionMediator?.declineAll(); await routes?.quiesce(); const result = await signOutWithCapabilities({capabilities, stopRuntime, signOut: () => identitySession.signOut(), afterIdentityChange}); routes?.resume(); return result; } finally { settled(); } },
       },
       data: {
         getPolicy: () => service.getPolicy(),
@@ -707,7 +849,8 @@ void app.whenReady().then(async () => {
         deletableCategories: () => service.deletableCategories(),
       },
       provider: {
-        getStatus: () => providerService.getStatus(),
+        getStatus: () => Promise.resolve(providerService.snapshot()),
+        refreshStatus:()=>providerService.getStatus(),
         setClaudeKey: (key) => providerService.setClaudeKey(key),
         verifyClaudeKey: () => providerService.verifyClaudeKey(),
         removeClaudeKey: () => providerService.removeClaudeKey(),
@@ -715,6 +858,7 @@ void app.whenReady().then(async () => {
         codexLogout: () => providerLogoutWithCapabilities({capabilities, stopRuntime, logout: () => providerService.codexLogout(), getStatus: () => providerService.getStatus()}),
       },
       organise: {
+        recoverNavigation: workspaceId => organiseService.recoverNavigation(workspaceId),
         search: input => organiseService.search(input),
         reopen: input => organiseService.reopen(input),
         setNavigation: input => organiseService.setNavigation(input),
@@ -731,6 +875,7 @@ void app.whenReady().then(async () => {
       },
       policy: {
         settings: () => policyService.settings(),
+        inspectTask: (taskId) => policyService.inspectTask(taskId),
         forTask: (taskId) => policyService.forTask(taskId),
         setBroadMode: (input) => policyService.setBroadMode(input),
         pendingPermissions: (taskId) => policyService.pendingPermissions(taskId),
@@ -749,6 +894,7 @@ void app.whenReady().then(async () => {
     if (smoke) app.quit();
     return;
   }
+  if(developmentProfile)process.stdout.write(`${JSON.stringify({event:'owned-dev-ready',runId:developmentProfile.runId})}\n`);
   if (smoke) {
     try {
       await runSmokeProbe(mainWindow.webContents);
@@ -758,3 +904,6 @@ void app.whenReady().then(async () => {
     app.quit();
   }
 });
+
+import {ProviderConsentService} from './providers/consent-service';
+import {ConsentStore} from './providers/consent-store';

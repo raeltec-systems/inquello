@@ -4,6 +4,37 @@ use crate::{OperationId, Revision, StoreError};
 use std::future::Future;
 
 pub trait RouteStore: Send + Sync {
+    fn tasks_for_model_binding(
+        &self,
+        principal_id: PrincipalId,
+        route_id: RouteId,
+        revision: Revision,
+    ) -> impl Future<Output = Result<Vec<TaskId>, StoreError>> + Send;
+    fn list_model_bindings(
+        &self,
+        principal_id: PrincipalId,
+    ) -> impl Future<Output = Result<Vec<ModelBinding>, StoreError>> + Send;
+    fn load_model_binding(
+        &self,
+        principal_id: PrincipalId,
+        binding_id: &str,
+    ) -> impl Future<Output = Result<Option<ModelBinding>, StoreError>> + Send;
+    fn load_configuration_binding(
+        &self,
+        principal_id: PrincipalId,
+        route_id: RouteId,
+        revision: Revision,
+    ) -> impl Future<Output = Result<Option<ModelBinding>, StoreError>> + Send;
+    fn find_model_binding_receipt(
+        &self,
+        operation_id: &OperationId,
+        command: &str,
+    ) -> impl Future<Output = Result<Option<ModelBindingReceipt>, StoreError>> + Send;
+    fn commit_model_binding_state(
+        &self,
+        receipt: ModelBindingReceipt,
+        state: ModelBindingState,
+    ) -> impl Future<Output = Result<(), StoreError>> + Send;
     fn load_route_task(
         &self,
         task_id: TaskId,
@@ -21,8 +52,9 @@ pub trait RouteStore: Send + Sync {
         &self,
         operation_id: &OperationId,
     ) -> impl Future<Output = Result<Option<RouteReceipt>, StoreError>> + Send;
-    /// Under one write lock, validate current creator, exact candidate revision,
-    /// operation uniqueness and Task-route revision; commit record+receipt.
+    /// Under one write lock, validate current creator, the exact active model
+    /// binding and candidate revision, operation uniqueness and expected
+    /// Task-route revision; commit record+receipt atomically.
     fn commit_task_route(
         &self,
         change: RouteChange,

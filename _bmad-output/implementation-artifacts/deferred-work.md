@@ -155,3 +155,10 @@
 - source_spec: `spec-1-29-steer-stop-and-recover-the-same-private-task.md`
   summary: Verify genuine Electron IPC pre-registration rejection while Task controls remain mounted.
   evidence: R3-B10, medium impact unverified/low likelihood. Main failures normally return typed outcomes and session invalidation unmounts controls; a real transport reproduction is needed before changing recovery authority or risking replay.
+
+
+## Found on Linux native gate runs (2026-11-04)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-21-discover-tools-and-connections.md`
+  summary: OAuth cancel leaves the MCP sign-in callback port answering-but-hanging (`oauth_cancel_rpc_selects_exact_attempt_and_prevents_late_token_persistence` fails on Linux).
+  evidence: Cancel works (status `cancelled`, `oauthLogin/completed` with `success:false`, no credential written). The test then re-sends the callback after cancellation; that request never completes (`timeout(...)` elapses), even 3 s after cancel and with a fresh connection. Instrumentation showed the callback thread exits after the first (in-flight) callback and `CallbackServerGuard` is dropped with `Arc::strong_count == 1`, so tiny_http's `Server::drop` should run and close the listener; yet the port still accepts and never answers. Adding `Connection: close` to the callback responses did not change the result (reverted). Next step: check whether the listening socket is still open after the guard drop (for example `ss -ltnp` during the test) and whether tiny_http 0.12's self-connect wake in `Server::drop` reaches the accept thread for this bind; then fix in `rmcp-client/src/perform_oauth_login.rs`. Windows runs never executed this test, so the platform difference is unconfirmed.

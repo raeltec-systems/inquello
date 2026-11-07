@@ -43,6 +43,7 @@
 
 use crate::error_code::INTERNAL_ERROR_CODE;
 use crate::error_code::INVALID_REQUEST_ERROR_CODE;
+use crate::inquello_program::Resolutions;
 use crate::outgoing_message::ConnectionId;
 use codex_app_server_protocol::AskForApproval;
 use codex_app_server_protocol::ClientResponsePayload;
@@ -115,6 +116,8 @@ use codex_app_server_protocol::InquelloWorkspaceTreeParams;
 use codex_app_server_protocol::InquelloWorkspaceTreeResponse;
 use codex_app_server_protocol::JSONRPCErrorError;
 use codex_app_server_protocol::SandboxMode;
+#[cfg(windows)]
+use codex_utils_absolute_path::AbsolutePathBuf;
 use inquello_adapters::SqliteWorkingStore;
 use inquello_adapters::SystemClock;
 use inquello_domain::Clock;
@@ -170,6 +173,7 @@ pub fn take_inquello_working_store_env() {
     // SAFETY: app-server calls this synchronously at process startup, before spawning threads.
     unsafe { std::env::remove_var(INQUELLO_WORKING_STORE_ENV_VAR) };
     let _ = TAKEN_WORKING_STORE.set(path);
+    take_paid_session_env();
 }
 
 /// The configured store path: the value taken at startup or, for hosts that did
@@ -216,11 +220,11 @@ impl Drop for BootstrapTransition<'_> {
         state.transitions = state
             .transitions
             .checked_sub(1)
-            .expect("balanced identity transition");
+            .unwrap_or_else(|| panic!("balanced identity transition"));
         state.generation = state
             .generation
             .checked_add(1)
-            .expect("bootstrap generation exhausted");
+            .unwrap_or_else(|| panic!("bootstrap generation exhausted"));
     }
 }
 
@@ -249,6 +253,9 @@ pub(crate) struct InquelloRequestProcessor {
     agent_writable_roots: Vec<PathBuf>,
     store: tokio::sync::OnceCell<SqliteWorkingStore>,
     principals: Mutex<HashMap<ConnectionId, PrincipalId>>,
+    /// The PATH the runtime gives a command it runs (its shell environment
+    /// policy), used to resolve a command's program before rules match.
+    exec_search_path: Option<std::ffi::OsString>,
 }
 
 impl InquelloRequestProcessor {
@@ -280,6 +287,22 @@ impl InquelloRequestProcessor {
             agent_writable_roots,
             store: tokio::sync::OnceCell::new(),
             principals: Mutex::new(HashMap::new()),
+            exec_search_path: std::env::var_os("PATH"),
+        }
+    }
+
+    /// The PATH the runtime's shell environment policy gives the commands it
+    /// runs; command rules resolve a bare program name through it.
+    pub(crate) fn with_exec_search_path(mut self, path: Option<std::ffi::OsString>) -> Self {
+        self.exec_search_path = path;
+        self
+    }
+
+    /// How the runtime would find a command's program run in `cwd`.
+    pub(crate) fn exec_lookup<'a>(&'a self, cwd: Option<&'a std::path::Path>) -> ExecLookup<'a> {
+        ExecLookup {
+            cwd,
+            search_path: self.exec_search_path.as_deref(),
         }
     }
 
@@ -299,7 +322,7 @@ impl InquelloRequestProcessor {
         state.generation = state
             .generation
             .checked_add(1)
-            .expect("bootstrap generation exhausted");
+            .unwrap_or_else(|| panic!("bootstrap generation exhausted"));
         Ok(state.generation)
     }
 
@@ -316,11 +339,11 @@ impl InquelloRequestProcessor {
         state.generation = state
             .generation
             .checked_add(1)
-            .expect("bootstrap generation exhausted");
+            .unwrap_or_else(|| panic!("bootstrap generation exhausted"));
         state.transitions = state
             .transitions
             .checked_add(1)
-            .expect("identity transition count exhausted");
+            .unwrap_or_else(|| panic!("identity transition count exhausted"));
         state.closed |= close;
         BootstrapTransition {
             states: &self.task_bootstrap_generations,
@@ -408,10 +431,38 @@ impl InquelloRequestProcessor {
                 "the Inquello working store is not configured",
             ));
         };
-        self.store
+        if let Some(profile) = paid_profile_config()? {
+            let metadata = std::fs::symlink_metadata(path).map_err(|_| {
+                poison_paid_session();
+                paid_refusal()
+            })?;
+            let canonical = std::fs::canonicalize(path).map_err(|_| {
+                poison_paid_session();
+                paid_refusal()
+            })?;
+            if !metadata.is_file()
+                || metadata.file_type().is_symlink()
+                || !canonical.starts_with(&profile.root)
+            {
+                poison_paid_session();
+                return Err(paid_refusal());
+            }
+        }
+        let store = self
+            .store
             .get_or_try_init(|| open_store(path, &self.agent_writable_roots))
             .await
-            .cloned()
+            .cloned()?;
+        if let Some(profile) = paid_profile_config()? {
+            let info = inquello_domain::get_store_info(&store)
+                .await
+                .map_err(domain_error)?;
+            if info.is_none_or(|info| info.store_id.to_string() != profile.store_id) {
+                poison_paid_session();
+                return Err(paid_refusal());
+            }
+        }
+        Ok(store)
     }
 
     async fn context(
@@ -826,6 +877,10 @@ impl InquelloRequestProcessor {
 impl InquelloRequestProcessor {
     // ---- Effective policy and broader modes (Story 1.18) -------------------------
 
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "Keep the authority snapshot and local SQLite check/commit atomic with invalidation; provider and service network waits occur outside this guarded region."
+    )]
     pub(crate) async fn policy_effective(
         &self,
         connection_id: ConnectionId,
@@ -924,6 +979,10 @@ impl InquelloRequestProcessor {
         ))
     }
 
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "Keep the authority snapshot and local SQLite check/commit atomic with invalidation; provider and service network waits occur outside this guarded region."
+    )]
     pub(crate) async fn broad_mode_set(
         &self,
         connection_id: ConnectionId,
@@ -1029,6 +1088,30 @@ impl InquelloRequestProcessor {
                 params.command.clone()
             }
         };
+        // The command runs in the Task's working folder; its program is
+        // resolved from there before rules match. A bounded profile on
+        // Windows runs it in the Task's Linux guest, so it is resolved there.
+        let run_folder = TaskId::parse(&params.task_id)
+            .ok()
+            .and_then(|task_id| task_folder(&params.task_folder, task_id).ok())
+            .map(|folder| folder.root().to_path_buf());
+        let host = self.exec_lookup(run_folder.as_deref());
+        let guest_scope = run_folder
+            .as_deref()
+            .and_then(std::path::Path::parent)
+            .and_then(|parent| {
+                crate::inquello_wsl::scope_key(parent, &actor.principal_id.to_string()).ok()
+            });
+        let placement = match guest_scope {
+            Some(scope) if cfg!(windows) => ExecPlacement::BoundedGuest {
+                host,
+                guest: crate::inquello_wsl::GuestTarget::Connect {
+                    scope,
+                    task_id: params.task_id.clone(),
+                },
+            },
+            _ => ExecPlacement::Host(host),
+        };
         let evaluated = evaluate_task_command(
             &store,
             actor,
@@ -1037,6 +1120,7 @@ impl InquelloRequestProcessor {
             &user,
             &params.task_id,
             &command,
+            placement,
         )
         .await?;
         if params.sandbox_probe_target.is_none() {
@@ -1178,41 +1262,275 @@ impl InquelloRequestProcessor {
 /// runtime's matcher.
 const RULE_MARK: &str = "inquello-rule:";
 
+/// Where the runtime would look for a command's program: the working folder
+/// it runs in and the PATH its shell environment policy gives it. `None`
+/// means unknown, and a program that needs it stays unresolved.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct ExecLookup<'a> {
+    pub(crate) cwd: Option<&'a std::path::Path>,
+    pub(crate) search_path: Option<&'a std::ffi::OsStr>,
+}
+
+/// Resolves a program word the way the runtime's spawn does (`execvp`): a
+/// word holding `/` is a path (relative to `cwd`), a bare word is looked up
+/// along PATH (empty or relative entries against `cwd`), the first
+/// executable regular file wins. The result is canonical: symlinks followed.
+/// On Windows, only ordinary fully-qualified drive paths to existing `.exe`
+/// files are resolved. No PATH/PATHEXT search or shell expansion is attempted.
+/// Bounded commands still resolve inside the Linux guest (see [`ExecPlacement`]).
+/// Unsupported or missing programs remain unresolved.
+pub(crate) fn resolve_program(program: &str, lookup: ExecLookup<'_>) -> Option<PathBuf> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        use std::path::Path;
+        let executable = |path: &Path| {
+            std::fs::metadata(path)
+                .is_ok_and(|meta| meta.is_file() && meta.permissions().mode() & 0o111 != 0)
+        };
+        let anchored = |path: &Path| -> Option<PathBuf> {
+            if path.is_absolute() {
+                Some(path.to_path_buf())
+            } else {
+                lookup.cwd.map(|cwd| cwd.join(path))
+            }
+        };
+        if program.is_empty() || program.contains('\0') {
+            return None;
+        }
+        let found = if program.contains('/') {
+            anchored(Path::new(program)).filter(|path| executable(path))
+        } else {
+            std::env::split_paths(lookup.search_path?)
+                .filter_map(|dir| {
+                    if dir.as_os_str().is_empty() {
+                        lookup.cwd.map(Path::to_path_buf)
+                    } else {
+                        anchored(&dir)
+                    }
+                })
+                .map(|dir| dir.join(program))
+                .find(|path| executable(path))
+        }?;
+        std::fs::canonicalize(found)
+            .ok()
+            .filter(|path| executable(path))
+    }
+    #[cfg(windows)]
+    {
+        use std::path::Component;
+        use std::path::Path;
+        use std::path::Prefix;
+
+        let _ = lookup;
+        let ordinary_exe = |path: &Path| {
+            let Some(text) = path.to_str() else {
+                return false;
+            };
+            let mut components = path.components();
+            matches!(components.next(), Some(Component::Prefix(prefix)) if matches!(prefix.kind(), Prefix::Disk(_)))
+                && matches!(components.next(), Some(Component::RootDir))
+                && !text.contains('\0')
+                && !text.get(2..).is_some_and(|tail| tail.contains(':'))
+                && path
+                    .extension()
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case("exe"))
+        };
+        let path = Path::new(program);
+        if !ordinary_exe(path) {
+            return None;
+        }
+        let canonical = AbsolutePathBuf::from_absolute_path_checked(path)
+            .ok()?
+            .canonicalize()
+            .ok()?
+            .into_path_buf();
+        (ordinary_exe(&canonical) && canonical.is_file()).then_some(canonical)
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = (program, lookup);
+        None
+    }
+}
+
+/// Resolution on this host (see `crate::inquello_program`).
+impl crate::inquello_program::ProgramResolver for ExecLookup<'_> {
+    fn resolve_all<'a>(
+        &'a self,
+        words: &'a [String],
+    ) -> impl std::future::Future<Output = Resolutions> + Send + 'a {
+        std::future::ready(host_resolutions(words, *self))
+    }
+}
+
+fn host_resolutions(words: &[String], lookup: ExecLookup<'_>) -> Resolutions {
+    let mut resolutions = Resolutions::default();
+    for word in words {
+        resolutions.insert(
+            word,
+            resolve_program(word, lookup).and_then(|path| path.to_str().map(str::to_string)),
+        );
+    }
+    resolutions
+}
+
+/// The program words a command's rules need resolved: `argv[0]` and each
+/// rule's first word.
+pub(crate) fn program_words(command: &[String], rules: &[SourcedRule]) -> Vec<String> {
+    let mut words: Vec<String> = Vec::new();
+    for word in command.first().into_iter().chain(
+        rules
+            .iter()
+            .filter_map(|sourced| sourced.rule.prefix.first()),
+    ) {
+        if !words.contains(word) {
+            words.push(word.clone());
+        }
+    }
+    words
+}
+
+/// Where a command will run, so its program is resolved in that environment
+/// (owner decision 2026-11-05, Stories 1.20 and 1.21).
+pub(crate) enum ExecPlacement<'a> {
+    /// On this host.
+    Host(ExecLookup<'a>),
+    /// `inquello/tools/exec`: inside the Task's Linux guest when the Task's
+    /// profile is bounded on Windows, otherwise on this host.
+    BoundedGuest {
+        host: ExecLookup<'a>,
+        guest: crate::inquello_wsl::GuestTarget,
+    },
+    /// A private Task's model command on Windows: always inside its guest.
+    Guest(crate::inquello_wsl::GuestTarget),
+}
+
+impl ExecPlacement<'_> {
+    async fn resolve(
+        &self,
+        words: &[String],
+        policy: &EffectivePolicy,
+        status: BroadModeStatus,
+    ) -> Resolutions {
+        use crate::inquello_program::RESOLUTION_BUDGET;
+        use crate::inquello_program::resolve_within;
+        match self {
+            Self::Host(lookup) => resolve_within(lookup, words, RESOLUTION_BUDGET).await,
+            Self::BoundedGuest { host, guest } => {
+                if cfg!(windows) && execution_policy::tool_reach(policy, status).bounded {
+                    guest.resolve(words).await
+                } else {
+                    resolve_within(host, words, RESOLUTION_BUDGET).await
+                }
+            }
+            Self::Guest(guest) => guest.resolve(words).await,
+        }
+    }
+}
+
+/// Which rules match one command, and whether its program resolved.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct RuleMatches {
+    pub(crate) matched: Vec<bool>,
+    pub(crate) resolution: execution_policy::ProgramResolution,
+}
+
 /// Which of `rules` match `command` under the runtime's own exec-policy
 /// prefix matching (`codex-execpolicy`, reached through the requirements
 /// form `codex-config` exposes). Each rule becomes one prefix rule whose
 /// justification carries its index. The matcher's decision is not used:
 /// Inquello combines the matches itself (forbid over prompt over allow), so
 /// every rule is given to the matcher as `prompt`.
+///
+/// Security fix 2026-11-05: rules match the program, not only its spelling.
+/// `argv[0]` is resolved through `lookup` to its canonical executable, and
+/// a rule's first word is resolved the same way and accepted in either form.
+/// A prompt or forbid rule matches any form of the command: the literal
+/// `argv[0]`, the resolved path, or either one's file name (for bare-name
+/// rules). An allow rule matches only the resolved program, so a link or
+/// another path cannot borrow an allow; an unresolved program matches no
+/// allow rule and is reported as unresolved.
+#[cfg(test)]
 pub(crate) fn matched_rules(
     command: &[String],
     rules: &[SourcedRule],
-) -> Result<Vec<bool>, JSONRPCErrorError> {
+    lookup: ExecLookup<'_>,
+) -> Result<RuleMatches, JSONRPCErrorError> {
+    let resolutions = host_resolutions(&program_words(command, rules), lookup);
+    matched_resolved_rules(command, rules, &resolutions)
+}
+
+/// [`matched_rules`] with every program word already resolved where the
+/// command runs (`resolutions` covers [`program_words`]).
+pub(crate) fn matched_resolved_rules(
+    command: &[String],
+    rules: &[SourcedRule],
+    resolutions: &Resolutions,
+) -> Result<RuleMatches, JSONRPCErrorError> {
+    let resolved = command.first().and_then(|program| resolutions.get(program));
+    let resolution = if resolved.is_some() {
+        execution_policy::ProgramResolution::Resolved
+    } else {
+        execution_policy::ProgramResolution::Unresolved
+    };
     let mut matched = vec![false; rules.len()];
     if rules.is_empty() || command.is_empty() {
-        return Ok(matched);
+        return Ok(RuleMatches {
+            matched,
+            resolution,
+        });
+    }
+    let resolved_text = resolved.map(str::to_string);
+    let file_name = |word: &str| {
+        std::path::Path::new(word)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .map(str::to_string)
+    };
+    // The forms of argv[0] that restrictive rules see; the first (when
+    // present) is the resolved program, the only form allow rules see.
+    let mut heads: Vec<String> = Vec::new();
+    for head in [
+        resolved_text.clone(),
+        Some(command[0].clone()),
+        file_name(&command[0]),
+        resolved_text.as_deref().and_then(file_name),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if !heads.contains(&head) {
+            heads.push(head);
+        }
     }
     let requirements = codex_config::RequirementsExecPolicyToml {
         prefix_rules: rules
             .iter()
             .enumerate()
-            .map(
-                |(index, sourced)| codex_config::RequirementsExecPolicyPrefixRuleToml {
-                    pattern: sourced
-                        .rule
-                        .prefix
-                        .iter()
-                        .map(
-                            |token| codex_config::RequirementsExecPolicyPatternTokenToml {
-                                token: Some(token.clone()),
-                                any_of: None,
-                            },
-                        )
-                        .collect(),
+            .map(|(index, sourced)| {
+                let token = |token: &String| codex_config::RequirementsExecPolicyPatternTokenToml {
+                    token: Some(token.clone()),
+                    any_of: None,
+                };
+                let mut pattern: Vec<_> = sourced.rule.prefix.iter().map(token).collect();
+                if let Some(first) = sourced.rule.prefix.first()
+                    && let Some(alias) = resolutions
+                        .get(first)
+                        .map(str::to_string)
+                        .filter(|alias| alias != first)
+                {
+                    pattern[0] = codex_config::RequirementsExecPolicyPatternTokenToml {
+                        token: None,
+                        any_of: Some(vec![first.clone(), alias]),
+                    };
+                }
+                codex_config::RequirementsExecPolicyPrefixRuleToml {
+                    pattern,
                     decision: Some(codex_config::RequirementsExecPolicyDecisionToml::Prompt),
                     justification: Some(format!("{RULE_MARK}{index}")),
-                },
-            )
+                }
+            })
             .collect(),
     };
     let policy = requirements.to_policy().map_err(|error| {
@@ -1222,19 +1540,28 @@ pub(crate) fn matched_rules(
             "the command rules could not be applied",
         )
     })?;
-    for found in policy.matches_for_command(command, None) {
-        let value = serde_json::to_value(&found).unwrap_or_default();
-        let index = value["prefixRuleMatch"]["justification"]
-            .as_str()
-            .and_then(|justification| justification.strip_prefix(RULE_MARK))
-            .and_then(|index| index.parse::<usize>().ok());
-        if let Some(index) = index
-            && let Some(slot) = matched.get_mut(index)
-        {
-            *slot = true;
+    for (position, head) in heads.iter().enumerate() {
+        let identity = position == 0 && resolved_text.is_some();
+        let mut form = command.to_vec();
+        form[0] = head.clone();
+        for found in policy.matches_for_command(&form, None) {
+            let value = serde_json::to_value(&found).unwrap_or_default();
+            let index = value["prefixRuleMatch"]["justification"]
+                .as_str()
+                .and_then(|justification| justification.strip_prefix(RULE_MARK))
+                .and_then(|index| index.parse::<usize>().ok());
+            if let Some(index) = index
+                && let Some(slot) = matched.get_mut(index)
+                && (identity || rules[index].rule.decision != RuleDecision::Allow)
+            {
+                *slot = true;
+            }
         }
     }
-    Ok(matched)
+    Ok(RuleMatches {
+        matched,
+        resolution,
+    })
 }
 
 /// One command evaluated for a Task, with the inputs it came from.
@@ -1246,7 +1573,12 @@ pub(crate) struct TaskEvaluation {
 }
 
 /// Evaluates `command` for the caller's Task under the Workspace layer, the
-/// device and user layers and the person's own rules.
+/// device and user layers and the person's own rules, with its program
+/// resolved where the runtime will run it (`placement`).
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Each input is an independent authority layer or the run location; bundling them would hide which caller supplies which."
+)]
 async fn evaluate_task_command(
     store: &SqliteWorkingStore,
     actor: Actor,
@@ -1255,6 +1587,7 @@ async fn evaluate_task_command(
     user: &UserConfig,
     task_id: &str,
     command: &[String],
+    placement: ExecPlacement<'_>,
 ) -> Result<TaskEvaluation, JSONRPCErrorError> {
     let policy = execution_policy::effective_policy(layer, device, user);
     let broad = execution_policy::task_broad_mode(store, actor, task_id)
@@ -1268,8 +1601,18 @@ async fn evaluate_task_command(
         .await
         .map_err(domain_error)?;
     let rules = execution_policy::effective_rules(&policy, &own.rules, own.revision);
-    let matched = matched_rules(command, &rules)?;
-    let evaluation = execution_policy::evaluate_command(command, &rules, &matched, &policy, status);
+    let resolutions = placement
+        .resolve(&program_words(command, &rules), &policy, status)
+        .await;
+    let matches = matched_resolved_rules(command, &rules, &resolutions)?;
+    let evaluation = execution_policy::evaluate_resolved_command(
+        command,
+        &rules,
+        &matches.matched,
+        &policy,
+        status,
+        matches.resolution,
+    );
     Ok(TaskEvaluation {
         policy,
         broad,
@@ -1296,6 +1639,10 @@ impl InquelloRequestProcessor {
         ))
     }
 
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "Keep the authority snapshot and local SQLite check/commit atomic with invalidation; provider and service network waits occur outside this guarded region."
+    )]
     pub(crate) async fn user_rules_set(
         &self,
         connection_id: ConnectionId,
@@ -1364,6 +1711,9 @@ impl InquelloRequestProcessor {
             &user,
             &params.task_id,
             &params.command,
+            // A request names no working folder: a relative program stays
+            // unresolved here and is resolved again where it runs.
+            ExecPlacement::Host(self.exec_lookup(None)),
         )
         .await?;
         if evaluated.evaluation.decision == RuleDecision::Forbid {
@@ -1988,6 +2338,12 @@ async fn open_store(
     let info = inquello_domain::get_store_info(&store)
         .await
         .map_err(domain_error)?;
+    if paid_profile_requested() && info.is_none() {
+        return Err(refusal(
+            "qualification_refused",
+            "Paid qualification cannot initialize or reset a store",
+        ));
+    }
     if info.is_none() {
         inquello_domain::initialize_store(
             &store,
@@ -2217,4 +2573,293 @@ pub(crate) fn saved_timeout_error() -> JSONRPCErrorError {
         "search_unavailable",
         "Saved inspection timed out or was cancelled; try again",
     )
+}
+
+// Controlled one-process fictional qualification only. This is not an account
+// budget or a reusable permission. Restart requires fresh owner reconciliation.
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PaidSessionProfile {
+    root: PathBuf,
+    store_id: String,
+    principal_id: String,
+    workspace_id: String,
+    account_ref: String,
+}
+static PAID_SESSION_PROFILE: OnceLock<Result<Option<PaidSessionProfile>, ()>> = OnceLock::new();
+static PAID_SESSION_STATE: OnceLock<Mutex<PaidSessionState>> = OnceLock::new();
+#[derive(Default)]
+struct PaidSessionState {
+    scope: Option<String>,
+    runs: std::collections::HashSet<String>,
+    poisoned: bool,
+}
+impl PaidSessionState {
+    fn check(&mut self, scope: &str, run: &str, reserve: bool) -> Result<(), ()> {
+        if self.poisoned || self.scope.as_deref().is_some_and(|old| old != scope) {
+            self.poisoned = true;
+            return Err(());
+        }
+        if reserve {
+            if self.runs.len() >= 2 || !self.runs.insert(run.to_owned()) {
+                return Err(());
+            }
+            self.scope.get_or_insert_with(|| scope.to_owned());
+        }
+        Ok(())
+    }
+}
+fn paid_env_aliases_valid(keys: &[std::ffi::OsString]) -> bool {
+    keys.is_empty()
+        || (keys.len() == 1
+            && keys[0].as_os_str() == std::ffi::OsStr::new("INQUELLO_FICTIONAL_PAID_SESSION"))
+}
+fn take_paid_session_env() {
+    const KEY: &str = "INQUELLO_FICTIONAL_PAID_SESSION";
+    let aliases: Vec<_> = std::env::vars_os()
+        .map(|(key, _)| key)
+        .filter(|key| key.to_string_lossy().eq_ignore_ascii_case(KEY))
+        .collect();
+    let invalid_alias = !paid_env_aliases_valid(&aliases);
+    let value = std::env::var_os(KEY);
+    if !aliases.is_empty() {
+        codex_core::inquello_inference::restrict_to_paid_qualification();
+    }
+    // SAFETY: called only by the pre-thread startup environment capture.
+    for key in &aliases {
+        unsafe { std::env::remove_var(key) };
+    }
+    let parsed = if invalid_alias {
+        Err(())
+    } else {
+        match value {
+            None => Ok(None),
+            Some(value) => value.to_str().ok_or(()).and_then(|value| {
+                if !cfg!(all(feature = "inference-fixtures", debug_assertions))
+                    || value.len() > 4096
+                {
+                    return Err(());
+                }
+                let mut profile: PaidSessionProfile =
+                    serde_json::from_str(value).map_err(|_| ())?;
+                if !profile.root.is_absolute()
+                    || uuid::Uuid::parse_str(&profile.store_id).is_err()
+                    || uuid::Uuid::parse_str(&profile.principal_id).is_err()
+                    || profile.workspace_id.is_empty()
+                    || profile.account_ref.is_empty()
+                {
+                    return Err(());
+                }
+                profile.root = std::fs::canonicalize(&profile.root).map_err(|_| ())?;
+                Ok(Some(profile))
+            }),
+        }
+    };
+    let _ = PAID_SESSION_PROFILE.set(parsed);
+}
+fn paid_refusal() -> JSONRPCErrorError {
+    refusal(
+        "qualification_refused",
+        "Controlled fictional qualification ended or constraints changed; no dispatch, retry, reset or renewed allowance",
+    )
+}
+fn paid_profile_config() -> Result<Option<&'static PaidSessionProfile>, JSONRPCErrorError> {
+    match PAID_SESSION_PROFILE.get() {
+        None | Some(Ok(None)) => Ok(None),
+        Some(Ok(Some(profile))) => Ok(Some(profile)),
+        Some(Err(())) => Err(paid_refusal()),
+    }
+}
+pub(crate) fn paid_profile_requested() -> bool {
+    matches!(
+        PAID_SESSION_PROFILE.get(),
+        Some(Ok(Some(_))) | Some(Err(()))
+    )
+}
+fn poison_paid_session() {
+    if let Ok(mut state) = PAID_SESSION_STATE.get_or_init(Default::default).lock() {
+        state.poisoned = true;
+    }
+}
+pub(crate) fn paid_profile_rpc_allowed(method: &str) -> bool {
+    let armed = PAID_SESSION_STATE.get().is_some_and(|state| {
+        state
+            .lock()
+            .map_or(true, |state| state.scope.is_some() || state.poisoned)
+    });
+    paid_profile_method_allowed(paid_profile_requested(), armed, method)
+}
+fn paid_profile_method_allowed(requested: bool, armed: bool, method: &str) -> bool {
+    if !requested {
+        return true;
+    }
+    // Keep setup/auth, reads and safe shutdown available. Never expose a second
+    // raw runtime/model/tool dispatch path in the qualification process.
+    if method.starts_with("inquello/fixture/")
+        || method.starts_with("inquello/tools/")
+        || method.starts_with("inquello/reviewer/")
+        || method.starts_with("inquello/permissions/review")
+    {
+        return false;
+    }
+    if method.starts_with("inquello/") && !armed {
+        return true;
+    }
+    if matches!(
+        method,
+        "initialize"
+            | "account/login/start"
+            | "account/login/cancel"
+            | "account/logout"
+            | "account/read"
+            | "account/rateLimits/read"
+            | "model/list"
+            | "config/read"
+            | "configRequirements/read"
+            | "skills/list"
+            | "thread/read"
+            | "thread/list"
+            | "turn/interrupt"
+            | "inquello/session/setPrincipal"
+            | "inquello/session/clearPrincipal"
+            | "inquello/routes/privateAuth"
+            | "inquello/models/catalog"
+            | "inquello/routes/invalidate"
+            | "inquello/tasks/bootstrap"
+            | "inquello/tasks/start"
+            | "inquello/tasks/resume"
+            | "inquello/tasks/stop"
+            | "inquello/tasks/preflight"
+            | "inquello/tasks/reconcile"
+            | "inquello/tasks/lifecycleReconcile"
+            | "inquello/tasks/forThread"
+            | "inquello/tasks/progress"
+            | "inquello/workspace/list"
+            | "inquello/workspace/tree"
+            | "inquello/workspace/search"
+            | "inquello/task/reopen"
+            | "inquello/policy/effective"
+            | "inquello/permissions/pending"
+    ) {
+        return true;
+    }
+    // Closed, read-only suffixes on the existing typed Inquello method set.
+    method.starts_with("inquello/")
+        && (method.ends_with("/read") || method.ends_with("/list") || method.ends_with("/status"))
+}
+#[cfg(test)]
+mod paid_session_counter_tests {
+    use super::PaidSessionState;
+    #[test]
+    fn launch_environment_rejects_ambiguous_aliases_without_reading_credentials() {
+        assert!(super::paid_env_aliases_valid(&[]));
+        assert!(super::paid_env_aliases_valid(&[
+            "INQUELLO_FICTIONAL_PAID_SESSION".into()
+        ]));
+        assert!(!super::paid_env_aliases_valid(&[
+            "inquello_fictional_paid_session".into()
+        ]));
+        assert!(!super::paid_env_aliases_valid(&[
+            "INQUELLO_FICTIONAL_PAID_SESSION".into(),
+            "inquello_fictional_paid_session".into()
+        ]));
+    }
+    #[test]
+    fn method_gate_keeps_safe_lifecycle_and_usage_reads_without_alternate_dispatch() {
+        for method in [
+            "inquello/tasks/resume",
+            "inquello/tasks/stop",
+            "inquello/tasks/lifecycleReconcile",
+            "inquello/tasks/reconcile",
+            "inquello/tasks/progress",
+            "inquello/tasks/forThread",
+            "inquello/usage/read",
+            "inquello/routes/list",
+            "inquello/models/catalog",
+            "inquello/routes/invalidate",
+            "inquello/session/setPrincipal",
+            "inquello/tasks/bootstrap",
+            "inquello/policy/effective",
+            "account/login/start",
+            "account/login/cancel",
+            "account/logout",
+            "account/read",
+            "inquello/permissions/pending",
+            "thread/read",
+        ] {
+            assert!(
+                super::paid_profile_method_allowed(true, true, method),
+                "{method}"
+            );
+        }
+        for method in [
+            "turn/start",
+            "thread/start",
+            "thread/resume",
+            "thread/compact/start",
+            "inquello/fixture/messagesTurn",
+            "inquello/fixture/taskTransport",
+            "inquello/permissions/review",
+            "inquello/tools/exec",
+        ] {
+            for armed in [false, true] {
+                assert!(
+                    !super::paid_profile_method_allowed(true, armed, method),
+                    "{method}"
+                );
+                assert!(
+                    super::paid_profile_method_allowed(false, armed, method),
+                    "{method}"
+                );
+            }
+        }
+        for method in [
+            "inquello/task/create",
+            "inquello/routes/configure",
+            "inquello/models/resolve",
+            "inquello/models/select",
+            "inquello/models/binding/state",
+            "inquello/usage/set",
+        ] {
+            assert!(!super::paid_profile_method_allowed(true, true, method));
+            assert!(super::paid_profile_method_allowed(true, false, method));
+        }
+    }
+    #[test]
+    #[expect(
+        clippy::needless_collect,
+        reason = "Spawn every competing reservation before joining any worker so this test actually exercises concurrent admission."
+    )]
+    fn concurrent_reservations_cannot_exceed_two() {
+        let state = std::sync::Arc::new(std::sync::Mutex::new(PaidSessionState::default()));
+        let handles: Vec<_> = (0..16)
+            .map(|n| {
+                let state = state.clone();
+                std::thread::spawn(move || {
+                    state
+                        .lock()
+                        .unwrap()
+                        .check("scope", &format!("run-{n}"), true)
+                        .is_ok()
+                })
+            })
+            .collect();
+        let accepted = handles
+            .into_iter()
+            .map(|h| usize::from(h.join().unwrap()))
+            .sum::<usize>();
+        assert_eq!(accepted, 2);
+        assert_eq!(state.lock().unwrap().runs.len(), 2);
+    }
+    #[test]
+    fn two_total_reservations_never_refund_and_cannot_rearm() {
+        let mut state = PaidSessionState::default();
+        assert!(state.check("scope", "run-1", true).is_ok());
+        assert!(state.check("scope", "run-1", true).is_err());
+        assert!(state.check("scope", "run-2", true).is_ok());
+        assert!(state.check("scope", "run-3", true).is_err());
+        assert_eq!(state.runs.len(), 2);
+        assert!(state.check("replacement-runtime", "run-4", false).is_err());
+        assert!(state.check("scope", "run-4", true).is_err());
+    }
 }

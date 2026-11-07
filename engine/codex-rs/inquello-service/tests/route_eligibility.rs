@@ -103,7 +103,7 @@ async fn revoke_fixture_is_revisioned_idempotent_and_cannot_replay_changed_body(
     // Explicit historical fixture insertion, NOT an approved compiled route.
     // It exercises withdrawal/receipt ordering only and cannot pass a fresh check.
     let identity = json!({"route_id":"codex-responses", "deployment":"openai-api", "endpoint":"https://api.openai.com/v1/responses",
-        "model":"fixture", "api_version":"fixture", "configuration_digest":"a".repeat(64), "implementation_digest":"b".repeat(64),
+        "model":"fixture", "schema_version":2, "api_version":"fixture", "adapter_configuration_digest":"a".repeat(64), "implementation_digest":"b".repeat(64),
         "runtime_version":"fixture", "contract_version":"1", "platform":"fixture"});
     let approval = OrganizationRouteApproval {
         workspace_id: created.workspace_id.to_string(),

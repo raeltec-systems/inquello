@@ -22,7 +22,7 @@ export const CALLBACK_PATH = '/callback';
 export const DEFAULT_CALLBACK_TIMEOUT_MS = 5 * 60 * 1000;
 const MAX_CODE_LENGTH = 2048;
 
-export type LoopbackFailure = 'timeout' | 'denied' | 'issuer-mismatch' | 'malformed' | 'closed';
+export type LoopbackFailure = 'timeout' | 'denied' | 'issuer-mismatch' | 'malformed' | 'closed' | 'port-occupied';
 
 export class LoopbackError extends Error {
   override name = 'LoopbackError';
@@ -49,6 +49,7 @@ export interface LoopbackOptions {
   /** When the callback carries `iss`, it must equal this issuer. */
   issuer: string;
   timeoutMs?: number;
+  port?: number;
 }
 
 const PAGE_HEADERS = {
@@ -72,6 +73,7 @@ function single(params: URLSearchParams, name: string): string | null | undefine
 
 export async function startLoopbackListener(options: LoopbackOptions): Promise<LoopbackListener> {
   const timeoutMs = options.timeoutMs ?? DEFAULT_CALLBACK_TIMEOUT_MS;
+  if (options.port !== undefined && (!Number.isInteger(options.port) || options.port < 1024 || options.port > 65535)) throw new Error('invalid callback port');
   let settled = false;
   let resolveCallback!: (value: LoopbackCallback) => void;
   let rejectCallback!: (error: LoopbackError) => void;
@@ -134,9 +136,12 @@ export async function startLoopbackListener(options: LoopbackOptions): Promise<L
   });
 
   await new Promise<void>((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(0, '127.0.0.1', () => {
-      server.off('error', reject);
+    const bindError = (error: NodeJS.ErrnoException) => {
+      reject(options.port !== undefined && error.code === 'EADDRINUSE' ? new LoopbackError('port-occupied') : error);
+    };
+    server.once('error', bindError);
+    server.listen(options.port ?? 0, '127.0.0.1', () => {
+      server.off('error', bindError);
       resolve();
     });
   });

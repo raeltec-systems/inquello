@@ -2289,3 +2289,508 @@ async fn inference_tools_changes_follow_full_specs_across_turns() {
         );
     }
 }
+
+#[test]
+fn host_output_limit_reaches_http_and_websocket_bodies_without_changing_defaults() {
+    let client = test_model_client(SessionSource::Cli);
+    let metadata = test_responses_metadata_for_client(
+        &client,
+        None,
+        format!("{}:0", client.state.thread_id),
+        None,
+        TestCodexResponsesRequestKind::Turn,
+    );
+    let build = |limit| {
+        client
+            .build_responses_request(
+                &Prompt {
+                    max_output_tokens: limit,
+                    ..Default::default()
+                },
+                &test_model_info(),
+                None,
+                codex_protocol::config_types::ReasoningSummary::None,
+                None,
+                &metadata,
+                false,
+            )
+            .expect("build request")
+    };
+    for limit in [None, Some(4096)] {
+        let request = build(limit);
+        let http = serde_json::to_value(&request).expect("HTTP body");
+        let ws = serde_json::to_value(codex_api::ResponsesWsRequest::ResponseCreate(
+            codex_api::ResponseCreateWsRequest::from(&request),
+        ))
+        .expect("WebSocket body");
+        for body in [http, ws] {
+            assert_eq!(
+                body.get("max_output_tokens")
+                    .and_then(serde_json::Value::as_u64),
+                limit.map(u64::from)
+            );
+            if limit.is_none() {
+                assert!(body.get("max_output_tokens").is_none());
+            }
+        }
+    }
+    let bounded = build(Some(4096));
+    let same = build(Some(4096));
+    assert_eq!(
+        super::responses_request_properties_mismatch(&bounded, &same),
+        None
+    );
+    for changed in [build(None), build(Some(2048))] {
+        assert_eq!(
+            super::responses_request_properties_mismatch(&bounded, &changed),
+            Some("max_output_tokens_changed")
+        );
+    }
+}
+
+#[test]
+fn controlled_paid_body_refuses_unbounded_or_nontext_requests() {
+    let client = test_model_client(SessionSource::Cli);
+    let mut model = test_model_info();
+    model.slug = "gpt-6.1-terra".into();
+    let metadata = test_responses_metadata_for_client(
+        &client,
+        None,
+        format!("{}:0", client.state.thread_id),
+        None,
+        TestCodexResponsesRequestKind::Turn,
+    );
+    let prompt = Prompt {
+        input: vec![
+            serde_json::from_value(serde_json::json!({
+                "type":"message", "role":"user",
+                "content":[{"type":"input_text","text":"Fictional R01 only."}]
+            }))
+            .expect("message"),
+        ],
+        max_output_tokens: Some(1024),
+        paid_qualification: true,
+        ..Default::default()
+    };
+    let request = client
+        .build_responses_request(
+            &prompt,
+            &model,
+            None,
+            codex_protocol::config_types::ReasoningSummary::None,
+            None,
+            &metadata,
+            false,
+        )
+        .expect("request");
+    assert!(super::validate_paid_request(&request).is_ok());
+    let mut with_reasoning = request.clone();
+    with_reasoning.input.insert(
+        0,
+        ResponseItem::Reasoning {
+            id: None,
+            summary: vec![],
+            content: None,
+            encrypted_content: Some("bounded-prior-generated-reasoning".into()),
+            internal_chat_message_metadata_passthrough: None,
+        },
+    );
+    assert!(super::validate_paid_request(&with_reasoning).is_ok());
+    let wire = serde_json::to_value(&with_reasoning).expect("reasoning wire");
+    assert_eq!(
+        wire["input"][0]["encrypted_content"],
+        "bounded-prior-generated-reasoning"
+    );
+    let mut exact = request.clone();
+    exact.input = vec![
+        serde_json::from_value(serde_json::json!({
+            "type":"message", "role":"user", "content":[{"type":"input_text","text":""}]
+        }))
+        .expect("empty message"),
+    ];
+    let overhead = serde_json::to_vec(&exact).unwrap().len();
+    if let ResponseItem::Message { content, .. } = &mut exact.input[0] {
+        content[0] = ContentItem::InputText {
+            text: "x".repeat(32768 - overhead),
+        };
+    }
+    assert_eq!(serde_json::to_vec(&exact).unwrap().len(), 32768);
+    assert!(super::validate_paid_request(&exact).is_ok());
+    if let ResponseItem::Message { content, .. } = &mut exact.input[0]
+        && let ContentItem::InputText { text } = &mut content[0]
+    {
+        text.push('x');
+    }
+    assert_eq!(serde_json::to_vec(&exact).unwrap().len(), 32769);
+    assert!(super::validate_paid_request(&exact).is_err());
+    let mut image = request.clone();
+    if let ResponseItem::Message { content, .. } = &mut image.input[0] {
+        content.push(ContentItem::InputImage {
+            image: codex_protocol::models::ImageReference::Inline {
+                image_url: "https://example.invalid/fictional.png".into(),
+            },
+            detail: None,
+        });
+    }
+    assert!(super::validate_paid_request(&image).is_err());
+    let mut changed = request.clone();
+    changed.max_output_tokens = None;
+    assert!(super::validate_paid_request(&changed).is_err());
+    changed = request.clone();
+    changed.model = "different-model".into();
+    assert!(super::validate_paid_request(&changed).is_err());
+    changed = request.clone();
+    changed.tool_choice = "auto".into();
+    assert!(super::validate_paid_request(&changed).is_err());
+    changed = request.clone();
+    changed.parallel_tool_calls = true;
+    assert!(super::validate_paid_request(&changed).is_err());
+    changed = request.clone();
+    changed.input = vec![
+        serde_json::from_value(serde_json::json!({
+            "type":"message", "role":"user",
+            "content":[{"type":"input_text","text":"x".repeat(32769)}]
+        }))
+        .expect("large message"),
+    ];
+    assert!(super::validate_paid_request(&changed).is_err());
+    changed = request.clone();
+    changed.input = vec![
+        serde_json::from_value(serde_json::json!({
+            "type":"function_call", "name":"exec_command", "call_id":"call-test",
+            "arguments":"{}"
+        }))
+        .expect("tool call"),
+    ];
+    assert!(super::validate_paid_request(&changed).is_err());
+    changed = request.clone();
+    changed.service_tier = Some("priority".into());
+    assert!(super::validate_paid_request(&changed).is_err());
+
+    changed = request.clone();
+    changed.access_programs = Some(codex_protocol::turn_input::CyberAccessProgram::Standard.into());
+    assert!(super::validate_paid_request(&changed).is_err());
+
+    changed = request.clone();
+    changed.tools = Some(codex_api::ResponsesApiTools::from(std::sync::Arc::<
+        serde_json::value::RawValue,
+    >::from(
+        serde_json::value::RawValue::from_string("[]".into()).expect("empty tools"),
+    )));
+    assert!(super::validate_paid_request(&changed).is_ok());
+    changed.tools = Some(codex_api::ResponsesApiTools::from(std::sync::Arc::<
+        serde_json::value::RawValue,
+    >::from(
+        serde_json::value::RawValue::from_string(
+            serde_json::json!([{
+                "type": "function", "name": "fictional_forbidden_tool",
+                "description": "Offline fixture only",
+                "parameters": {"type": "object", "properties": {}}
+            }])
+            .to_string(),
+        )
+        .expect("nonempty tools"),
+    )));
+    assert!(super::validate_paid_request(&changed).is_err());
+
+    changed = request;
+    let short_item: ResponseItem = serde_json::from_value(serde_json::json!({
+        "type": "message", "role": "user",
+        "content": [{"type": "input_text", "text": "R01"}]
+    }))
+    .expect("short cardinality fixture");
+    changed.input = vec![short_item.clone(); 64];
+    assert!(serde_json::to_vec(&changed).unwrap().len() < 32768);
+    assert!(super::validate_paid_request(&changed).is_ok());
+    changed.input.push(short_item);
+    // Isolate the item-count guard: this invalid 65-item body is still below the byte cap.
+    assert!(serde_json::to_vec(&changed).unwrap().len() < 32768);
+    assert!(super::validate_paid_request(&changed).is_err());
+}
+
+#[tokio::test]
+async fn controlled_cached_api_key_refuses_identity_or_revision_changes_without_refresh() {
+    use codex_api::AuthProvider;
+    let expected = CodexAuth::from_api_key("fictional-offline-key");
+    let manager =
+        codex_login::test_support::auth_manager_from_optional_auth(Some(expected.clone()));
+    let revision = *manager.auth_change_receiver().borrow();
+    let accepted = super::PaidCachedApiKeyAuth {
+        manager: manager.clone(),
+        expected: expected.clone(),
+        revision,
+    };
+    assert!(accepted.resolve_auth_headers().await.is_ok());
+    assert!(
+        !accepted
+            .refresh_after_unauthorized(http::HeaderMap::new())
+            .await
+    );
+    let stale_revision = super::PaidCachedApiKeyAuth {
+        manager,
+        expected: expected.clone(),
+        revision: revision.wrapping_add(1),
+    };
+    assert!(stale_revision.resolve_auth_headers().await.is_err());
+    for (case, current) in [
+        ("missing cached identity", None),
+        (
+            "different key with the same auth mode and revision",
+            Some(CodexAuth::from_api_key("different-fictional-key")),
+        ),
+        (
+            "different auth mode",
+            Some(CodexAuth::create_dummy_chatgpt_auth_for_testing()),
+        ),
+    ] {
+        let manager = codex_login::test_support::auth_manager_from_optional_auth(current);
+        let revision = *manager.auth_change_receiver().borrow();
+        let changed = super::PaidCachedApiKeyAuth {
+            manager,
+            expected: expected.clone(),
+            revision,
+        };
+        assert!(changed.resolve_auth_headers().await.is_err(), "{case}");
+        assert!(
+            !changed
+                .refresh_after_unauthorized(http::HeaderMap::new())
+                .await
+        );
+    }
+}
+
+/// Executes only fabricated transport operations: no socket or credential access.
+/// Zero is one initial request, not a default or unlimited retry budget.
+#[tokio::test]
+async fn controlled_zero_transport_retries_counts_one_initial_attempt_for_every_failure() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    for case in 0..7 {
+        let sends = AtomicUsize::new(0);
+        let result: std::result::Result<(), codex_client::TransportError> =
+            codex_client::run_with_retry(
+                codex_client::RetryPolicy {
+                    max_attempts: 0,
+                    base_delay: std::time::Duration::ZERO,
+                    // Even accidentally enabled retry categories cannot override zero.
+                    retry_on: codex_client::RetryOn {
+                        retry_429: true,
+                        retry_5xx: true,
+                        retry_transport: true,
+                    },
+                },
+                || {
+                    codex_client::Request::new(
+                        http::Method::POST,
+                        "https://example.invalid/offline".into(),
+                    )
+                },
+                |_, attempt| {
+                    sends.fetch_add(1, Ordering::SeqCst);
+                    assert_eq!(attempt, 0);
+                    let error = match case {
+                        0..=3 => codex_client::TransportError::Http {
+                            status: http::StatusCode::from_u16([401, 429, 500, 503][case]).unwrap(),
+                            url: None,
+                            headers: None,
+                            body: None,
+                            retry_after: None,
+                        },
+                        4 => codex_client::TransportError::Timeout,
+                        5 => codex_client::TransportError::Connection(
+                            codex_client::RouteAwareRequestError::Timeout,
+                        ),
+                        _ => codex_client::TransportError::Network(
+                            "fictional failed connection".into(),
+                        ),
+                    };
+                    std::future::ready(Err(error))
+                },
+            )
+            .await;
+        assert!(result.is_err());
+        assert_eq!(sends.load(Ordering::SeqCst), 1, "failure case {case}");
+    }
+}
+
+#[tokio::test]
+async fn inquello_private_http_rejects_redirects_without_resending() {
+    use codex_client::HttpTransport;
+    use codex_login::default_client::ClientRedirectPolicy;
+    for status in [301, 302, 303, 307, 308] {
+        for private in [false, true] {
+            let origin = MockServer::start().await;
+            let destination = MockServer::start().await;
+            Mock::given(method("POST"))
+                .respond_with(
+                    ResponseTemplate::new(status)
+                        .insert_header("location", format!("{}/responses", destination.uri())),
+                )
+                .mount(&origin)
+                .await;
+            Mock::given(path("/responses"))
+                .respond_with(ResponseTemplate::new(200))
+                .mount(&destination)
+                .await;
+            let client = test_model_client(SessionSource::Exec);
+            if private {
+                crate::inquello_inference::mark_task_thread(&client.state.thread_id.to_string())
+                    .unwrap();
+            }
+            let mut setup = client
+                .current_client_setup(super::ClientRouting::ConfiguredProvider)
+                .await
+                .unwrap();
+            setup.api_provider.base_url = origin.uri();
+            assert!(
+                !setup
+                    .api_provider
+                    .headers
+                    .contains_key(codex_model_provider::ACCOUNT_ROUTING_HEADER)
+            );
+            let transport = client
+                .build_api_transport(
+                    &setup.api_provider,
+                    "/responses",
+                    ClientRedirectPolicy::Default,
+                )
+                .unwrap();
+            let result = transport
+                .execute(
+                    setup
+                        .api_provider
+                        .build_request(http::Method::POST, "/responses")
+                        .with_json(&json!({"input": "fictional redirect contract"})),
+                )
+                .await;
+            if private {
+                assert!(
+                    matches!(result, Err(TransportError::Http { status: actual, .. })
+                    if actual.as_u16() == status)
+                );
+            } else {
+                assert_eq!(result.unwrap().status, http::StatusCode::OK);
+            }
+            assert_eq!(origin.received_requests().await.unwrap().len(), 1);
+            assert_eq!(
+                destination.received_requests().await.unwrap().len(),
+                usize::from(!private)
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn inquello_private_http_unauthorized_never_refreshes_or_resends() {
+    let origin = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/responses"))
+        .respond_with(ResponseTemplate::new(401).set_body_string("synthetic unauthorized"))
+        .mount(&origin)
+        .await;
+    let attempts = Arc::new(AtomicUsize::new(0));
+    let mut info = create_oss_provider_with_base_url(&origin.uri(), WireApi::Responses);
+    info.request_max_retries = Some(0);
+    info.stream_max_retries = Some(0);
+    let mut client = test_model_client(SessionSource::Exec);
+    Arc::get_mut(&mut client.state).unwrap().provider = Arc::new(TestRecoveryProvider {
+        inner: create_model_provider(info, None),
+        should_fail: false,
+        attempts: Arc::clone(&attempts),
+    });
+    crate::inquello_inference::mark_task_thread(&client.state.thread_id.to_string()).unwrap();
+    assert!(!crate::inquello_inference::is_paid_task_thread(
+        &client.state.thread_id.to_string()
+    ));
+    let metadata = test_responses_metadata_for_client(
+        &client,
+        None,
+        format!("{}:0", client.state.thread_id),
+        None,
+        TestCodexResponsesRequestKind::Turn,
+    );
+    let result = super::ResponsesHttpExecutor::new(&client)
+        .stream_responses_http(
+            &Arc::new(std::sync::OnceLock::new()),
+            None,
+            None,
+            &Prompt::default(),
+            &test_model_info(),
+            &test_session_telemetry(),
+            None,
+            codex_protocol::config_types::ReasoningSummary::None,
+            None,
+            &metadata,
+            &InferenceTraceContext::disabled(),
+        )
+        .await;
+    match result {
+        Err(error) => assert!(matches!(
+            error.details(),
+            CodexErrorDetails::UnexpectedStatus(response)
+                if response.status == http::StatusCode::UNAUTHORIZED
+                    && response.body.is_empty()
+                    && response.url.is_none()
+                    && response.user_message.as_deref().is_some_and(|message| message.contains("reconnect the provider"))
+        )),
+        Ok(_) => panic!("private unauthorized response must be terminal"),
+    }
+    assert_eq!(origin.received_requests().await.unwrap().len(), 1);
+    assert_eq!(attempts.load(Ordering::Relaxed), 0);
+}
+
+#[tokio::test]
+async fn inquello_private_websocket_unauthorized_is_auth_without_refresh_or_http_fallback() {
+    let origin = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/responses"))
+        .respond_with(ResponseTemplate::new(401).set_body_string("PRIVATE_PROVIDER_SENTINEL"))
+        .mount(&origin)
+        .await;
+    let attempts = Arc::new(AtomicUsize::new(0));
+    let mut info = create_oss_provider_with_base_url(&origin.uri(), WireApi::Responses);
+    info.supports_websockets = true;
+    info.request_max_retries = Some(0);
+    info.stream_max_retries = Some(0);
+    let mut client = test_model_client(SessionSource::Exec);
+    Arc::get_mut(&mut client.state).unwrap().provider = Arc::new(TestRecoveryProvider {
+        inner: create_model_provider(info, None),
+        should_fail: false,
+        attempts: Arc::clone(&attempts),
+    });
+    crate::inquello_inference::mark_task_thread(&client.state.thread_id.to_string()).unwrap();
+    let metadata = test_responses_metadata_for_client(
+        &client,
+        None,
+        format!("{}:0", client.state.thread_id),
+        None,
+        TestCodexResponsesRequestKind::Turn,
+    );
+    let mut session = client.new_session();
+    let result = session
+        .stream_responses_websocket(
+            &Prompt::default(),
+            &test_model_info(),
+            &test_session_telemetry(),
+            None,
+            codex_protocol::config_types::ReasoningSummary::None,
+            None,
+            &metadata,
+            false,
+            None,
+            &InferenceTraceContext::disabled(),
+        )
+        .await;
+    match result {
+        Err(error) => {
+            assert!(
+                matches!(error.details(), CodexErrorDetails::UnexpectedStatus(response) if response.status == http::StatusCode::UNAUTHORIZED && response.body.is_empty() && response.url.is_none())
+            );
+            assert!(!error.to_string().contains("PRIVATE_PROVIDER_SENTINEL"));
+        }
+        Ok(_) => panic!("private websocket authentication must refuse, not fall back"),
+    }
+    let requests = origin.received_requests().await.unwrap();
+    assert_eq!(requests.len(), 1);
+    assert_eq!(requests[0].method.as_str(), "GET");
+    assert_eq!(attempts.load(Ordering::Relaxed), 0);
+}

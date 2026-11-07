@@ -18,7 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { COMPOSER_EMPTY_REASON, COMPOSER_ROUTE_REASON, evaluateComposer, type ComposerProbeRead } from '../src/main/smoke-probe';
 import { App } from '../src/renderer/App';
-import { COMPOSER_LABEL, COMPOSER_LABEL_NO_TASK, isComposingEnter, SEND_EMPTY_REASON, SEND_ROUTE_REASON, sendReason } from '../src/renderer/Shell/Composer';
+import { Composer, COMPOSER_LABEL, COMPOSER_LABEL_NO_TASK, isComposingEnter, SEND_EMPTY_REASON, SEND_ROUTE_REASON, sendReason } from '../src/renderer/Shell/Composer';
 import { createDraftStore, NO_TASK_DRAFT, type DraftStore } from '../src/renderer/Shell/drafts';
 import { WINDOW_MIN_WIDTH } from '../src/renderer/Shell/layout';
 import type { TaskItem } from '../src/renderer/Shell/organise-bridge';
@@ -91,7 +91,7 @@ function setWidth(width: number) {
 }
 
 const nav = () => screen.getByRole('navigation', { name: 'Workspace navigation' });
-const input = () => document.querySelector<HTMLTextAreaElement>('[data-composer-input]')!;
+const input = () => [...document.querySelectorAll<HTMLTextAreaElement>('[data-composer-input]')].find(element=>!element.closest('[hidden]'))!;
 const send = () => screen.getByRole('button', { name: 'Send' });
 const describedText = (element: HTMLElement) =>
   (element.getAttribute('aria-describedby') ?? '')
@@ -272,9 +272,10 @@ describe('Composer', () => {
     expect(isComposingEnter({ key: 'Enter', keyCode: 13, nativeEvent: { isComposing: false } })).toBe(false);
   });
 
-  it('Empty: Send is unavailable and says to type a request first', async () => {
+  it('Empty retained Task: Send is unavailable and says to type a request first', async () => {
     const user = userEvent.setup();
     await renderShell();
+    await openTask('Bank confirmations');
     expect(send().getAttribute('aria-disabled')).toBe('true');
     expect(describedText(send())).toBe(`${SEND_EMPTY_REASON} ${SEND_ROUTE_REASON}`);
     expect(screen.getByText(`${SEND_EMPTY_REASON} ${SEND_ROUTE_REASON}`)).toBeTruthy();
@@ -318,9 +319,9 @@ describe('Composer', () => {
 
   it('Later inputs: no attach, Method, scope, environment or reasoning control, and no file chip', async () => {
     await renderShell();
-    const composer = document.querySelector<HTMLElement>('[data-composer]')!;
+    const composer = input().closest<HTMLElement>('[data-composer]')!;
     const controls = [...composer.querySelectorAll<HTMLElement>('button, input, select, textarea, [role="button"], [role="combobox"], [role="listbox"]')];
-    expect(controls).toEqual([input(), send()]);
+    expect(controls[0]).toBe(input());expect(controls.at(-1)).toBe(send());expect(controls.slice(1,-1).every(control=>control.closest('.iq-conversation-model'))).toBe(true);
     expect(composer.querySelector('.iq-file-chip, [data-file-chip]')).toBeNull();
     expect(composer.textContent).not.toMatch(/attach|method|scope|environment|reasoning|thorough/i);
   });
@@ -334,8 +335,8 @@ describe('Composer', () => {
     await openTask('Cash count');
     await user.type(input(), 'Stays');
     main.tasks.splice(0, 1);
-    // Any change re-reads the tree; New thread is one.
-    await user.click(within(nav()).getByRole('button', { name: 'New thread' }));
+    // Any change re-reads the tree; New chat is one.
+    await user.click(within(nav()).getByRole('button', { name: 'New chat' }));
     await waitFor(() => expect(store.get(uuid(1))).toBe(''));
     expect(store.get(uuid(2))).toBe('Stays');
   });
@@ -372,7 +373,7 @@ describe('App: drafts across Settings', () => {
     act(() => {
       globalThis.location.hash = hash;
     });
-    await waitFor(() => expect(document.querySelector(hash === '#specimen' ? '[data-account]' : '[data-shell]')).not.toBeNull());
+    await waitFor(() => expect(document.querySelector(hash === '#settings' ? '[data-account]' : '[data-shell]')).not.toBeNull());
   };
 
   it('a visit to Settings keeps the drafts', async () => {
@@ -382,7 +383,7 @@ describe('App: drafts across Settings', () => {
     await waitReady();
     await openTask('Bank confirmations');
     await user.type(input(), 'Across settings');
-    await go('#specimen');
+    await go('#settings');
     await go('#shell');
     await waitReady();
     await openTask('Bank confirmations');
@@ -396,7 +397,7 @@ describe('App: drafts across Settings', () => {
     await waitReady();
     await openTask('Bank confirmations');
     await user.type(input(), 'Private text');
-    await go('#specimen');
+    await go('#settings');
     const account = document.querySelector<HTMLElement>('[data-account]')!;
     await waitFor(() => expect(account.dataset.identityState).toBe('signed-in'));
     await user.click(within(account).getByRole('button', { name: 'Sign out' }));
@@ -460,4 +461,29 @@ describe('composer smoke evaluation (pure)', () => {
     expect(evaluateComposer({ configured: false, signedOutShell: { shellOpened: true, signedOutShown: true, composerShown: false } }).ok).toBe(true);
     expect(evaluateComposer({ configured: false, signedOutShell: { shellOpened: true, signedOutShown: true, composerShown: true } }).ok).toBe(false);
   });
+});
+
+
+it('grows multiline drafts to a bounded height without changing their text or sending',()=>{
+ const descriptor=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'scrollHeight');
+ Object.defineProperty(HTMLTextAreaElement.prototype,'scrollHeight',{configurable:true,get:()=>260});
+ try {
+  const value='First line\nSecond line\nThird line';const send=vi.fn();const view=render(<Composer draft={{taskId:null,value,onChange:vi.fn()}} onSend={send}/>);
+  const input=screen.getByRole('textbox') as HTMLTextAreaElement;
+  expect(input.value).toBe(value);expect(input.style.height).toBe('192px');expect(input.style.overflowY).toBe('auto');expect(send).not.toHaveBeenCalled();view.unmount();
+ } finally {if(descriptor)Object.defineProperty(HTMLTextAreaElement.prototype,'scrollHeight',descriptor);else delete (HTMLTextAreaElement.prototype as unknown as Record<string,unknown>).scrollHeight;}
+});
+
+
+it('resizes when a retained draft becomes visible or narrower, and disconnects its observer',()=>{
+ const original=globalThis.ResizeObserver;const descriptor=Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'scrollHeight');let height=30;let notify!:(entries:Array<{contentRect:{width:number}}>)=>void;const disconnect=vi.fn();
+ Object.defineProperty(HTMLTextAreaElement.prototype,'scrollHeight',{configurable:true,get:()=>height});
+ globalThis.ResizeObserver=class {constructor(callback:ResizeObserverCallback){notify=callback as unknown as typeof notify;} observe(){} unobserve(){} disconnect=disconnect;} as unknown as typeof ResizeObserver;
+ try {
+  const send=vi.fn();const view=render(<Composer draft={{taskId:null,value:'Fictional draft\nwith two lines',onChange:vi.fn()}} onSend={send}/>);const input=screen.getByRole('textbox') as HTMLTextAreaElement;
+  expect(input.style.height).toBe('30px');height=140;act(()=>notify([{contentRect:{width:400}}]));expect(input.style.height).toBe('140px');
+  height=180;act(()=>notify([{contentRect:{width:400}}]));expect(input.style.height).toBe('140px');
+  act(()=>notify([{contentRect:{width:300}}]));expect(input.style.height).toBe('180px');expect(send).not.toHaveBeenCalled();
+  view.unmount();expect(disconnect).toHaveBeenCalledOnce();
+ } finally {globalThis.ResizeObserver=original;if(descriptor)Object.defineProperty(HTMLTextAreaElement.prototype,'scrollHeight',descriptor);else delete (HTMLTextAreaElement.prototype as unknown as Record<string,unknown>).scrollHeight;}
 });

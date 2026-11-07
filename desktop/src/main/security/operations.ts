@@ -1,3 +1,6 @@
+import {consentInput,type ProviderConsentService,type ConsentInput} from '../providers/consent-service';
+import type { OnboardingService } from '../onboarding/service';
+import { payload as onboardingPayload, createInput, acceptInput, teamInput, inviteInput, changeInput, removeInput, revokeInput, draftInput } from '../onboarding/contracts';
 import {searchPayload,reopenPayload,navigationPayload,type SearchInput,type SearchView,type ReopenInput,type ReopenView,type NavigationInput} from '../organise';
 import type { TaskService } from '../tasks/service';
 import { taskPreflightPayload, taskStartPayload, taskReconcilePayload, taskProgressPayload, taskActivityPayload, taskAnswerPayload, taskSteerPayload, taskStopPayload, taskResumePayload } from '../tasks/validators';
@@ -5,7 +8,7 @@ import type { UsageService } from '../usage/service';
 import { usageReadPayload, usageSetPayload } from '../usage/validators';
 import type { EnvironmentService } from '../environments/service';
 import type { RouteService } from '../routes/service';
-import { configureRoutePayload, taskRoutePayload, selectRoutePayload } from '../routes/validators';
+import { taskRoutePayload, selectRoutePayload, resolveModelPayload, bindingStatePayload, selectModelPayload, pendingModelPayload } from '../routes/validators';
 import { capabilityPayload, inventoryPayload, type CapabilityInput, type CapabilityInventory, type CapabilityResult } from '../capabilities/types';
 /**
  * Named renderer operations (AD-5).
@@ -66,6 +69,19 @@ import { describeSender, isTrustedSender, type InvokeEventLike } from './sender'
 
 /** Every operation the preload exposes, in `<namespace>.<name>` form. */
 export const OPERATION_NAMES = [
+  'onboarding.getState',
+  'onboarding.saveDraft',
+  'onboarding.members',
+  'onboarding.createWorkspace',
+  'onboarding.acceptInvitation',
+  'onboarding.invite',
+  'onboarding.changeRoles',
+  'onboarding.removeMember',
+  'onboarding.revokeInvitation',
+  'onboarding.reconcile',
+  'onboarding.retry',
+  'onboarding.discardPending',
+  'identity.reauthenticate',
   'tasks.preflight',
   'tasks.start',
   'tasks.reconcile',
@@ -81,7 +97,11 @@ export const OPERATION_NAMES = [
   'usage.set',
   'environments.forTask',
   'routes.list',
-  'routes.configure',
+  'routes.catalog',
+  'routes.resolve',
+  'routes.bindingState',
+  'routes.selectModel',
+  'routes.pendingModel',
   'routes.forTask',
   'routes.select',
   'capabilities.getInventory',
@@ -95,13 +115,19 @@ export const OPERATION_NAMES = [
   'data.import',
   'data.delete',
   'provider.getStatus',
+  'provider.refreshStatus',
   'provider.setClaudeKey',
   'provider.verifyClaudeKey',
   'provider.removeClaudeKey',
   'provider.codexLogin',
   'provider.codexLogout',
+  'provider.consent',
+  'provider.changeConsent',
+  'provider.reconcileConsent',
+  'provider.retryConsent',
   'organise.getWorkspaces',
   'organise.getTree',
+  'organise.recoverNavigation',
   'organise.search',
   'organise.reopen',
   'organise.setNavigation',
@@ -264,6 +290,7 @@ export interface DataOperations {
 /** The provider service as the operations see it (main-owned; see `providers/index.ts`). */
 export interface ProviderOperations {
   getStatus(): Promise<ProviderStatus>;
+  refreshStatus():Promise<ProviderStatus>;
   setClaudeKey(key: string): Promise<ProviderActionResult>;
   verifyClaudeKey(): Promise<ProviderActionResult>;
   removeClaudeKey(): Promise<ProviderActionResult>;
@@ -273,6 +300,7 @@ export interface ProviderOperations {
 
 /** Private Workspace organisation as the operations see it (main-owned; see `organise/service.ts`). */
 export interface OrganiseOperations {
+  recoverNavigation?(workspaceId:string):Promise<OrganiseResult<{accepted:true}>>;
   search(input:SearchInput):Promise<OrganiseResult<SearchView>>;
   reopen(input:ReopenInput):Promise<OrganiseResult<ReopenView>>;
   setNavigation(input:NavigationInput):Promise<OrganiseResult<TaskView>>;
@@ -292,6 +320,7 @@ export interface OrganiseOperations {
 
 /** The effective managed policy as the operations see it (main-owned; see `policy/service.ts`). */
 export interface PolicyOperations {
+  inspectTask(taskId: string): Promise<PolicyResult<TaskPolicyView>>;
   /** Story 1.18 S07: each Workspace's effective policy and the Capability Contract. */
   settings(): Promise<SettingsPolicyView>;
   /** Story 1.18: a Task's effective policy and broader mode, for its creator only. */
@@ -309,10 +338,12 @@ export interface PolicyOperations {
 }
 
 export interface OperationDeps {
+  providerConsent?: ProviderConsentService;
+  onboarding?: OnboardingService;
   tasks?: Pick<TaskService, 'preflight' | 'start' | 'reconcile' | 'progress' | 'activity' | 'inbox' | 'settleLifecycle' | 'answer' | 'steer' | 'stop' | 'resume'>;
   usage?: Pick<UsageService, 'forTask' | 'set'>;
   environments?: Pick<EnvironmentService, 'forTask'>;
-  routes?: Pick<RouteService, 'list' | 'configure' | 'forTask' | 'select'>;
+  routes?: Pick<RouteService, 'list' | 'catalog' | 'resolve' | 'bindingState' | 'selectModel' | 'pendingModel' | 'forTask' | 'select'>;
   capabilities?: {getInventory(workspaceId: string): Promise<CapabilityInventory>; manage(input: CapabilityInput): Promise<CapabilityResult>};
   runtimeState: () => RuntimeState;
   runtimeVersion: string;
@@ -379,6 +410,7 @@ export function createOperations(deps: OperationDeps): Operation[] {
     validate: noPayload,
     handle: async () => toRendererProviderStatus(await deps.provider.getStatus()),
   };
+  const providerRefresh:Operation<undefined,ProviderStatusView>={name:'provider.refreshStatus',validate:noPayload,handle:async()=>toRendererProviderStatus(await deps.provider.refreshStatus())};
   const setClaudeKey: Operation<string, ProviderActionView> = {
     name: 'provider.setClaudeKey',
     validate: credentialPayload,
@@ -466,10 +498,10 @@ export function createOperations(deps: OperationDeps): Operation[] {
     validate: noPayload,
     handle: () => deps.policy.settings(),
   };
-  const policyForTask: Operation<{ taskId: string }, PolicyResult<TaskPolicyView>> = {
+  const policyForTask: Operation<{ taskId: string; inspectionOnly?: true }, PolicyResult<TaskPolicyView>> = {
     name: 'policy.forTask',
     validate: taskPolicyPayload,
-    handle: ({ taskId }) => deps.policy.forTask(taskId),
+    handle: ({ taskId, inspectionOnly }) => inspectionOnly ? deps.policy.inspectTask(taskId) : deps.policy.forTask(taskId),
   };
   const policySetBroadMode: Operation<SetBroadModeInput, PolicyResult<TaskPolicyView>> = {
     name: 'policy.setBroadMode',
@@ -518,11 +550,35 @@ export function createOperations(deps: OperationDeps): Operation[] {
     { name: 'usage.set', validate: usageSetPayload, handle: input => { if (!deps.usage) throw new Error('Usage unavailable'); return deps.usage.set(input as Parameters<UsageService['set']>[0]); } },
     { name: 'environments.forTask', validate: taskRoutePayload, handle: (input) => { if (!deps.environments) throw new Error('Environment information unavailable'); return deps.environments.forTask((input as {taskId:string}).taskId); } },
     { name: 'routes.list', validate: noPayload, handle: () => routes().list() },
-    { name: 'routes.configure', validate: configureRoutePayload, handle: (input) => routes().configure(input as Parameters<RouteService['configure']>[0]) },
+    { name: 'routes.catalog', validate: noPayload, handle: () => routes().catalog() },
+    { name: 'routes.resolve', validate: resolveModelPayload, handle: input => routes().resolve(input as Parameters<RouteService['resolve']>[0]) },
+    { name: 'routes.bindingState', validate: bindingStatePayload, handle: input => routes().bindingState(input as Parameters<RouteService['bindingState']>[0]) },
+    { name: 'routes.selectModel', validate: selectModelPayload, handle: input => routes().selectModel(input as Parameters<RouteService['selectModel']>[0]) },
+    { name: 'routes.pendingModel', validate: pendingModelPayload, handle: input => routes().pendingModel((input as {taskId:string|null}).taskId) },
     { name: 'routes.forTask', validate: taskRoutePayload, handle: (input) => routes().forTask((input as {taskId:string}).taskId) },
     { name: 'routes.select', validate: selectRoutePayload, handle: (input) => routes().select(input as Parameters<RouteService['select']>[0]) },
   ];
+  const onboarding = () => {if(!deps.onboarding)throw new Error('Onboarding unavailable');return deps.onboarding;};
+  const onboardingOps: Operation[] = [{name:'onboarding.getState',validate:noPayload,handle:()=>onboarding().getState()},
+{name:'onboarding.saveDraft',validate:onboardingPayload(draftInput),handle:input=>onboarding().saveDraft(input as Parameters<OnboardingService['saveDraft']>[0])},
+{name:'onboarding.members',validate:onboardingPayload(teamInput),handle:input=>onboarding().members(input as Parameters<OnboardingService['members']>[0])},
+{name:'onboarding.createWorkspace',validate:onboardingPayload(createInput),handle:input=>onboarding().createWorkspace(input as Parameters<OnboardingService['createWorkspace']>[0])},
+{name:'onboarding.acceptInvitation',validate:onboardingPayload(acceptInput),handle:input=>onboarding().acceptInvitation(input as Parameters<OnboardingService['acceptInvitation']>[0])},
+{name:'onboarding.invite',validate:onboardingPayload(inviteInput),handle:input=>onboarding().invite(input as Parameters<OnboardingService['invite']>[0])},
+{name:'onboarding.changeRoles',validate:onboardingPayload(changeInput),handle:input=>onboarding().changeRoles(input as Parameters<OnboardingService['changeRoles']>[0])},
+{name:'onboarding.removeMember',validate:onboardingPayload(removeInput),handle:input=>onboarding().removeMember(input as Parameters<OnboardingService['removeMember']>[0])},
+{name:'onboarding.revokeInvitation',validate:onboardingPayload(revokeInput),handle:input=>onboarding().revokeInvitation(input as Parameters<OnboardingService['revokeInvitation']>[0])},
+{name:'onboarding.reconcile',validate:noPayload,handle:()=>onboarding().reconcile()},
+{name:'onboarding.retry',validate:noPayload,handle:()=>onboarding().retry()},
+{name:'onboarding.discardPending',validate:noPayload,handle:()=>onboarding().discardPending()},
+    {name:'identity.reauthenticate',validate:noPayload,handle:async()=>{
+      const signedOut=await deps.identity.signOut();
+      if(!signedOut.ok || signedOut.status.identity.state!=='signed-out') return toRendererResult(signedOut);
+      return toRendererResult(await deps.identity.signIn());
+    }},
+  ];
   return [
+    ...onboardingOps,
     ...routeOps, capabilityInventory, capabilityManage,
     getStatus,
     identityStatus,
@@ -533,13 +589,19 @@ export function createOperations(deps: OperationDeps): Operation[] {
     dataImport,
     dataDelete,
     providerStatus,
+    providerRefresh,
     setClaudeKey,
     verifyClaudeKey,
     removeClaudeKey,
     codexLogin,
     codexLogout,
+    {name:'provider.consent',validate:treePayload,handle:({workspaceId}:{workspaceId:string})=>deps.providerConsent?.get(workspaceId)??Promise.resolve({ok:false,reason:'Provider permissions are unavailable.'})},
+    {name:'provider.changeConsent',validate:onboardingPayload(consentInput),handle:(input:ConsentInput)=>deps.providerConsent?.change(input)??Promise.resolve({ok:false,reason:'Provider permissions are unavailable.'})},
+    {name:'provider.reconcileConsent',validate:treePayload,handle:({workspaceId}:{workspaceId:string})=>deps.providerConsent?.reconcile(workspaceId)??Promise.resolve({ok:false,reason:'Provider permissions are unavailable.'})},
+    {name:'provider.retryConsent',validate:treePayload,handle:({workspaceId}:{workspaceId:string})=>deps.providerConsent?.reconcile(workspaceId,true)??Promise.resolve({ok:false,reason:'Provider permissions are unavailable.'})},
     organiseWorkspaces,
     organiseTree,
+    {name:'organise.recoverNavigation',validate:treePayload,handle:({workspaceId}:{workspaceId:string})=>deps.organise.recoverNavigation?.(workspaceId)??Promise.resolve({ok:false,code:'failed',reason:'Current Workspace authority is unavailable. Refresh cannot restore revoked access.'})},
     {name:'organise.search',validate:searchPayload,handle:input=>deps.organise.search(input as SearchInput)},
     {name:'organise.reopen',validate:reopenPayload,handle:input=>deps.organise.reopen(input as ReopenInput)},
     {name:'organise.setNavigation',validate:navigationPayload,handle:input=>deps.organise.setNavigation(input as NavigationInput)},

@@ -114,6 +114,13 @@ describe('denial translation', () => {
     expect(readOnly.map((denial) => denial.boundary)).toEqual(['working folder (read-only)', 'output folder (read-only)']);
   });
 
+  it('preserves an unquoted absolute device path on a different Windows drive', () => {
+    const external = process.platform === 'win32' ? 'Z:\\outside-task\\private.txt' : '/outside-task/private.txt';
+    const result = translateDenials({ exitCode: 1, stdout: '', stderr: `cat: ${external}: No such file or directory\n` }, { ...context, exists: candidate => candidate === external });
+    expect(result.map(denial => denial.boundary)).toEqual([PERMITTED]);
+    expect(JSON.stringify(result)).not.toContain(external);
+  });
+
   it('reports nothing the sandbox did not cause, and nothing for an unbounded run', () => {
     // A file genuinely missing, inside or outside: not a denial.
     expect(run('cat: output/missing.txt: No such file or directory\n')).toEqual([]);

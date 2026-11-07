@@ -1,8 +1,8 @@
 /**
  * HTTPS clients for the shared service and the OIDC issuer, used only by main.
  *
- * Every request goes over `https:` and trusts only the CA from the dev config,
- * passed as the per-request `ca` option with `rejectUnauthorized: true`. This
+ * Every request goes over `https:` with caller-selected pinned/service or
+ * explicit issuer public trust and `rejectUnauthorized: true`. This
  * module never touches the system trust store or `NODE_TLS_REJECT_UNAUTHORIZED`
  * and never skips verification.
  *
@@ -17,6 +17,7 @@
  * Messages carry no request or response content: values may be credentials.
  */
 import https from 'node:https';
+import {parseProviderConsentView,parseProviderConsentReceipt,nullable,type ProviderConsentView,type ProviderConsentCommand,type ProviderConsentReceipt} from './wire';
 import {parseExportProvenanceReceipt,type ExportProvenanceReceipt} from './wire';
 import {parseWorkspaceAccess,type WorkspaceAccess} from './wire';
 import {parseRouteApprovalView,parseRouteEligibilityCheckResponse,type RouteApprovalView,type RouteEligibilityCheckRequest,type RouteEligibilityCheckResponse} from './wire';
@@ -106,7 +107,7 @@ export interface HttpResponse {
 export type HttpsTransport = (request: HttpRequest) => Promise<HttpResponse>;
 
 /** The real transport: `node:https` with the configured CA as the only trust anchor. */
-export function httpsTransport(ca: string, timeoutMs = REQUEST_TIMEOUT_MS): HttpsTransport {
+export function httpsTransport(ca: string | string[] | undefined, timeoutMs = REQUEST_TIMEOUT_MS): HttpsTransport {
   return (request) =>
     new Promise<HttpResponse>((resolve, reject) => {
       const url = new URL(request.url);
@@ -176,6 +177,9 @@ function json(text: string): unknown {
 
 /** The shared service's `/v1` API. */
 export interface SharedService {
+  providerConsent?(accessCredential:string,workspaceId:string):Promise<ProviderConsentView>;
+  setProviderConsent?(accessCredential:string,request:ProviderConsentCommand):Promise<CommandResponse>;
+  providerConsentReceipt?(accessCredential:string,workspaceId:string,operationId:string):Promise<ProviderConsentReceipt|null>;
   createExportReceipt(accessCredential:string,request:{command_epoch:string;operation_id:string;manifest_digest:string;workspace_ids:string[]}):Promise<ExportProvenanceReceipt>;
   validateExportReceipt(accessCredential:string,receiptId:string,digest:string):Promise<ExportProvenanceReceipt>;
   workspaceAccess(accessCredential:string,workspaceId:string,action:'read'|'export'):Promise<WorkspaceAccess>;
@@ -201,6 +205,9 @@ export interface SharedService {
 }
 
 export class SharedServiceClient implements SharedService {
+  providerConsent(accessCredential:string,workspaceId:string):Promise<ProviderConsentView>{return this.call('GET',`/v1/workspaces/${encodeURIComponent(workspaceId)}/provider-consents/openai-api`,parseProviderConsentView,{bearer:accessCredential});}
+  setProviderConsent(accessCredential:string,request:ProviderConsentCommand):Promise<CommandResponse>{return this.call('POST',`/v1/workspaces/${encodeURIComponent(request.workspace_id)}/provider-consents/openai-api`,parseCommandResponse,{body:request,bearer:accessCredential});}
+  providerConsentReceipt(accessCredential:string,workspaceId:string,operationId:string):Promise<ProviderConsentReceipt|null>{return this.call('GET',`/v1/workspaces/${encodeURIComponent(workspaceId)}/provider-consent-receipts/${encodeURIComponent(operationId)}`,nullable(parseProviderConsentReceipt),{bearer:accessCredential});}
   createExportReceipt(accessCredential:string,request:{command_epoch:string;operation_id:string;manifest_digest:string;workspace_ids:string[]}):Promise<ExportProvenanceReceipt>{return this.call('POST','/v1/local-data/export-receipts',parseExportProvenanceReceipt,{body:request,bearer:accessCredential});}
   validateExportReceipt(accessCredential:string,receiptId:string,digest:string):Promise<ExportProvenanceReceipt>{return this.call('POST',`/v1/local-data/export-receipts/${encodeURIComponent(receiptId)}/validate`,parseExportProvenanceReceipt,{body:{manifest_digest:digest},bearer:accessCredential});}
   workspaceAccess(accessCredential:string,workspaceId:string,action:'read'|'export'):Promise<WorkspaceAccess>{return this.call('POST',`/v1/workspaces/${encodeURIComponent(workspaceId)}/access-checks`,parseWorkspaceAccess,{body:{action},bearer:accessCredential});}
@@ -328,7 +335,7 @@ function endpointOn(issuer: string, value: unknown): string | null {
   if (typeof value !== 'string') return null;
   try {
     const url = new URL(value);
-    return url.protocol === 'https:' && url.origin === new URL(issuer).origin && !url.hash ? url.toString() : null;
+    return url.protocol === 'https:' && url.origin === new URL(issuer).origin && !url.username && !url.password && !url.hash ? url.toString() : null;
   } catch {
     return null;
   }
@@ -343,7 +350,7 @@ export class IssuerClient implements Issuer {
   async discover(): Promise<IssuerEndpoints> {
     let response: HttpResponse;
     try {
-      response = await this.transport({ url: `${this.issuerUrl}/.well-known/openid-configuration`, method: 'GET' });
+      response = await this.transport({ url: `${this.issuerUrl.replace(/\/$/, '')}/.well-known/openid-configuration`, method: 'GET' });
     } catch {
       throw new IssuerError('transport');
     }

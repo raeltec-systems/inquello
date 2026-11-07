@@ -1,58 +1,48 @@
-/** Explicit, private route selection. This UI never upgrades evidence or starts a turn. */
-import { useEffect, useRef, useState, type FormEvent, type ReactElement } from 'react';
-import { Button, TextField } from './primitives';
-import { parseRoutes, parseTaskRoute, record, type ConfigureRouteInput, type RouteView, type TaskRouteView } from '../main/routes/types';
-interface Bridge { list():Promise<unknown>;configure(input:ConfigureRouteInput):Promise<unknown>;forTask(input:{taskId:string}):Promise<unknown>;select(input:unknown):Promise<unknown>;onChanged?(listener:()=>void):()=>void }
+import {rememberTaskModel} from './Shell/model-authority';
+/** Name-only model selection. Main retains ambiguous owner-bound commands. */
+import {useEffect,useRef,useState,type ReactElement} from 'react';
+import {Button} from './primitives';
+import {tasksBridge} from './Shell/tasks-bridge';
+import {parseModelCatalog,parseModelBinding,parseTaskRoute,parsePendingModelOperation,savedModelReason,record,type ModelCatalog,type ModelBinding,type PendingModelOperation,type BindingStateInput,type ResolveModelInput,type SelectModelInput,type TaskRouteView} from '../main/routes/types';
+interface Bridge {catalog():Promise<unknown>;pendingModel(input:{taskId:string|null}):Promise<unknown>;resolve(input:ResolveModelInput):Promise<unknown>;bindingState(input:BindingStateInput):Promise<unknown>;forTask(input:{taskId:string}):Promise<unknown>;selectModel(input:SelectModelInput):Promise<unknown>;onChanged?(listener:()=>void):()=>void}
 const bridge=():Bridge|null=>(globalThis as {inquello?:{routes?:Bridge}}).inquello?.routes??null;
-const evidence:Record<RouteView['verification'],string>={not_verified:'Not verified',verified_for_synthetic:'Verified for synthetic',verified_for_real_data:'Verified for real data'};
-function values(value:unknown):unknown { const r=record(value);if(r.ok!==true)throw new Error(typeof r.reason==='string'?r.reason:'Processing routes unavailable');return r.value; }
-function RouteFacts({route}:{route:RouteView}):ReactElement {
-  const c=route.configuration;
-  return <><p>{evidence[route.verification]} — {route.enabled?'Configured capability available; each protected use is checked separately':'Not enabled'}</p><p>{route.gate}</p>
-    <dl className="specimen-policy-settings"><dt>Route ID</dt><dd>{route.routeId}</dd><dt>Provider</dt><dd>{route.provider}</dd><dt>Deployment / endpoint</dt><dd>{c?.deployment??'Not configured'} / {route.endpoint??'Not configured'}</dd><dt>Exact model / API version</dt><dd>{c?.model??'Not configured'} / {c?.apiVersion??'Not configured'}</dd><dt>Account reference (not a credential)</dt><dd>{c?.accountRef??'Not configured'}</dd><dt>Region</dt><dd>{c?.region??'Unknown'}</dd><dt>Credential</dt><dd>{route.credentialPresent?'Present — not evidence of eligibility':'Unavailable'}</dd><dt>Adapter support</dt><dd>{route.adapterSupported?'Implemented — evidence is separate':'Unavailable'}</dd></dl>
-    <ul>{route.limits.map((limit,i)=><li key={i}>{limit}</li>)}</ul><p>Evidence: {route.evidence.join('; ')||'No passing evidence recorded'}</p>
-    <p>Real data requires both complete reviewed negative-authorization evidence for this exact build and route, and current organization approval for this Workspace and data policy. A provider login, administrator role or tool permission cannot supply either. Ask your service operator to review the missing requirement; no alternate route is selected.</p>
-    <p>Execution: {route.executionFlow}</p><p>Inference: {route.inferenceFlow}</p><p>Connectors: {route.connectorFlow}</p></>;
-}
-function Configure({route,disabled,save}:{route:RouteView;disabled:boolean;save:(v:ConfigureRouteInput)=>Promise<void>}):ReactElement {
-  const claude=route.routeId==='claude-api-key';const [model,setModel]=useState(route.configuration?.model??(claude?'claude-sonnet-5-5':''));
-  const [api,setApi]=useState(route.configuration?.apiVersion??(claude?'2026-10-21':''));const [deployment,setDeployment]=useState(route.configuration?.deployment??(claude?'anthropic-direct':'openai-api'));const [region,setRegion]=useState(route.configuration?.region??'');
-  // A draft owns its loaded revision. Background refresh is not consent to overwrite it.
-  const [draftRevision,setDraftRevision]=useState(route.revision);
-  const changed=route.revision!==draftRevision;
-  const reconcile=()=>{
-    setModel(route.configuration?.model??(claude?'claude-sonnet-5-5':''));
-    setApi(route.configuration?.apiVersion??(claude?'2026-10-21':''));
-    setDeployment(route.configuration?.deployment??(claude?'anthropic-direct':'openai-api'));
-    setRegion(route.configuration?.region??'');setDraftRevision(route.revision);op.current=null;
-  };
-  const op=useRef<{key:string;id:string}|null>(null);
-  const submit=(e:FormEvent)=>{e.preventDefault();if(disabled||changed)return;const key=JSON.stringify([draftRevision,model,api,deployment,region]);if(op.current?.key!==key)op.current={key,id:crypto.randomUUID()};void save({operationId:op.current.id,expectedRevision:draftRevision,routeId:claude?'claude-api-key':'codex-responses',deployment,model,apiVersion:api,region:region.trim()||null});};
-  return <form onSubmit={submit} aria-label={`Configure ${route.provider} route`}>
-    {changed&&<><p role="status">This configuration changed since this draft was loaded. Your draft still belongs to revision {draftRevision}; reload the current configuration before saving.</p><Button onPress={reconcile} disabledReason={disabled?'Refresh route status first':undefined}>Reload current configuration and discard draft</Button></>}
-    {!claude&&<label>Deployment<select aria-label="Codex deployment" value={deployment} onChange={e=>setDeployment(e.target.value)} disabled={disabled}><option value="openai-api">OpenAI API</option><option value="chatgpt-codex">ChatGPT Codex</option></select></label>}
-    <TextField label="Exact model identifier" value={model} onChange={setModel} readOnly={claude} disabledReason={disabled?'Refresh route status before editing':undefined}/>
-    <TextField label="Exact API version" value={api} onChange={setApi} readOnly={claude} disabledReason={disabled?'Refresh route status before editing':undefined}/>
-    <TextField label="Region (leave blank when unknown)" value={region} onChange={setRegion} disabledReason={disabled?'Refresh route status before editing':undefined}/>
-    <Button type="submit" disabledReason={disabled?'Refresh route status before saving':changed?'Reload current configuration before saving':!model||!api?'Supply exact model and API identifiers':undefined}>{`Save ${route.provider} route configuration`}</Button><p>Saving configuration does not verify a credential, enable a route or select it for a Task.</p>
-  </form>;
-}
+function value(raw:unknown):unknown {const result=record(raw);if(result.ok!==true){const error=new Error(typeof result.reason==='string'?result.reason:'Model information is unavailable.');Object.assign(error,{definitive:result.code==='conflict'||result.code==='refused'});throw error;}return result.value;}
 export function ProcessingRoutes({taskId,onReconnect}:{taskId?:string;onReconnect?:(destination:string)=>void}):ReactElement {
-  const [rows,setRows]=useState<RouteView[]>([]),[task,setTask]=useState<TaskRouteView|null>(null),[notice,setNotice]=useState<string|null>(null),[busy,setBusy]=useState(false),[current,setCurrent]=useState(false);
-  const generation=useRef(0),scope=useRef(taskId);scope.current=taskId;const reload=useRef<()=>void>(()=>{});
-  useEffect(()=>{let live=true;const api=bridge();setRows([]);setTask(null);setCurrent(false);setBusy(false);setNotice(null);
-    const load=async(invalidate=false)=>{const n=++generation.current;setCurrent(false);if(invalidate&&taskId){setTask(null);setRows([]);}if(!api){setTask(null);setRows([]);setNotice('Processing routes unavailable');return;}try{const catalog=values(await api.list());const next=parseRoutes({routes:catalog});const chosen=taskId?parseTaskRoute(values(await api.forTask({taskId}))):null;if(!live||n!==generation.current)return;if(chosen&&chosen.taskId!==taskId)throw new Error('Wrong Task route');setRows(next);setTask(chosen);setCurrent(true);setNotice(null);}catch(e){if(live&&n===generation.current){setTask(null);setRows([]);setNotice('Processing routes unavailable. Refresh to review the current route.');}}};
-    reload.current=()=>{void load();};void load();const unsubscribe=api?.onChanged?.(()=>{void load(true);});const timer=setInterval(()=>void load(),30000);
-    return()=>{live=false;generation.current++;clearInterval(timer);unsubscribe?.();};
-  },[taskId]);
-  const mutate=async(fn:(api:Bridge)=>Promise<unknown>)=>{const api=bridge(),selected=scope.current;if(!api||busy||!current)return;setBusy(true);setCurrent(false);try{values(await fn(api));if(scope.current===selected){setNotice(null);reload.current();}}catch(e){if(scope.current===selected)setNotice((e as Error).message);}finally{if(scope.current===selected)setBusy(false);}};
-  return <section className="specimen-policy-workspace" aria-label="Processing routes" data-processing-routes>
-    <h3>{taskId?'This Task’s processing route':'Processing routes'}</h3><p>Automated permission review requires verified route evidence and a trusted Task data tier. Unknown data tier uses permitted human handling.</p><p>No implicit default or provider fallback. Failures stay on the selected route. Real-data use is not enabled.</p>
-    <Button onPress={()=>reload.current()} pending={busy}>Refresh processing routes</Button>{!current&&<p>Route status is stale or unavailable; refresh before changing it.</p>}{notice&&<p role="status">{notice}</p>}
-    {taskId&&<><p>{!current?'Inference information unavailable':task?.staleConfiguration?'Inference information stale — refresh and review the processing route':task?.selected?`Selected: ${task.selected.provider} (${task.selected.routeId})`:'No processing route explicitly selected'}</p>{task?.staleConfiguration&&<p>Configuration changed. Explicitly select the current candidate again.</p>}{current&&!task?.staleConfiguration&&task?.selected&&<><RouteFacts route={task.selected}/>{onReconnect&&!task.selected.credentialPresent&&<Button onPress={()=>onReconnect(task.selected!.routeId==='claude-api-key'?'provider-claude-key':task.selected!.configuration?.deployment==='chatgpt-codex'?'codex-chatgpt':'provider-codex-key')}>Reconnect selected provider</Button>}</>}<p>Switching cancels the old local attempt and clears continuation authority. This does not guarantee remote rollback or reversed billing.</p></>}
-    {rows.map(route=><article key={route.routeId} data-processing-route={route.routeId}><h4>{route.provider} — {route.routeId}</h4><RouteFacts route={route}/>
-      {taskId?route.configurable&&<Button disabledReason={busy||!current?'Refresh current route status first':!route.configuration?'Configure this route in Settings first':!task?'Task route unavailable':undefined} onPress={()=>void mutate(api=>api.select({operationId:crypto.randomUUID(),expectedRevision:task!.revision,taskId,routeId:route.routeId,configurationRevision:route.revision}))}>{`Select ${route.provider} route for this Task`}</Button>:route.configurable&&<Configure route={route} disabled={busy||!current} save={async input=>mutate(api=>api.configure(input))}/>}
-      {!route.configurable&&<p>{route.gate??route.limits.join('; ')}</p>}
-    </article>)}
-  </section>;
+ const [catalog,setCatalog]=useState<ModelCatalog|null>(null),[task,setTask]=useState<TaskRouteView|null>(null),[choice,setChoice]=useState(''),[notice,setNotice]=useState<string|null>(null),[busy,setBusy]=useState(false),[current,setCurrent]=useState(false);
+ const epoch=useRef(0),scopeVersion=useRef(0),reload=useRef<()=>void>(()=>{}),pending=useRef<PendingModelOperation|null>(null);
+ useEffect(()=>{let live=true;scopeVersion.current++;const api=bridge();setCatalog(null);setTask(null);setChoice('');setCurrent(false);setBusy(false);pending.current=null;
+  const load=async()=>{const generation=++epoch.current;try{
+   if(!api)throw new Error();const restored=parsePendingModelOperation(record(value(await api.pendingModel({taskId:taskId??null}))).operation);
+   if(!live||generation!==epoch.current)return;
+   if(restored){if(restored.kind==='select'?restored.input.taskId!==taskId:taskId!==undefined)throw new Error();pending.current=restored;setChoice(restored.kind==='resolve'?restored.input.choiceId:restored.kind==='select'?restored.input.bindingId:'');setNotice('An earlier model operation is unconfirmed. Retry that same operation before making another choice.');}
+   const next=parseModelCatalog(value(await api.catalog()));const saved=taskId?parseTaskRoute(value(await api.forTask({taskId}))):null;
+   if(!live||generation!==epoch.current)return;if(saved&&saved.taskId!==taskId)throw new Error();if(saved)rememberTaskModel(saved);setCatalog(next);setTask(saved);setCurrent(true);if(!pending.current)setNotice(null);
+  }catch{if(live&&generation===epoch.current){setCurrent(false);setNotice('Model information is unavailable. Your choice and any unconfirmed operation are retained. Refresh to try again.');}}};
+  reload.current=()=>void load();void load();const off=api?.onChanged?.(()=>void load());
+  const session=tasksBridge()?.onSessionChanged?.(identityChanged=>{scopeVersion.current++;epoch.current++;setCurrent(false);setBusy(false);if(identityChanged){setCatalog(null);setTask(null);setChoice('');pending.current=null;setBusy(false);setNotice(null);}});
+  return()=>{live=false;epoch.current++;scopeVersion.current++;off?.();session?.();};
+ },[taskId]);
+ const perform=async(command:PendingModelOperation)=>{const api=bridge();if(!api||busy)return;const version=scopeVersion.current;pending.current=command;setBusy(true);setNotice(null);
+  try{const result=value(await (command.kind==='state'?api.bindingState(command.input):command.kind==='select'?api.selectModel(command.input):api.resolve(command.input)));if(version!==scopeVersion.current)return;
+   if(command.kind==='select'){const saved=parseTaskRoute(result);rememberTaskModel(saved);setTask(saved);}else parseModelBinding(result);pending.current=null;reload.current();
+  }catch(error){if(version===scopeVersion.current){const definitive=(error as {definitive?:boolean}).definitive===true;if(definitive){pending.current=null;setCurrent(false);}setNotice(`${(error as Error).message} ${definitive?'Refresh models and choose again.':'Retry checks the same saved operation.'}`);}}
+  finally{if(version===scopeVersion.current)setBusy(false);}
+ };
+ const save=()=>{if(pending.current){void perform(pending.current);return;}if(!catalog||!current||!choice)return;void perform(taskId?{kind:'select',input:{operationId:crypto.randomUUID(),taskId,expectedRevision:task?.revision??0,bindingId:choice}}:{kind:'resolve',input:{operationId:crypto.randomUUID(),catalogVersion:catalog.catalogVersion,choiceId:choice}});};
+ const changeState=(binding:ModelBinding,state:'active'|'revoked')=>{if(pending.current){if(pending.current.kind==='state'&&pending.current.input.bindingId===binding.bindingId&&pending.current.input.state===state)void perform(pending.current);else setNotice('Retry the unconfirmed model operation before making another change.');return;}if(current)void perform({kind:'state',input:{operationId:crypto.randomUUID(),bindingId:binding.bindingId,expectedRevision:binding.stateRevision,state}});};
+ const selected=task?.selected;
+ const binding=task?.configurationRevision===null?undefined:catalog?.bindings.find(b=>b.routeId===selected?.routeId&&b.configurationRevision===task?.configurationRevision);
+ const choices=taskId?catalog?.bindings.filter(b=>b.state==='active').map(b=>({id:b.bindingId,label:`${b.provider} · ${b.name}`,reason:b.reason})):catalog?.choices.map(c=>({id:c.choiceId,label:`${c.provider} · ${c.name}`,reason:null}));
+ const savedReason=savedModelReason(selected??null,task?.staleConfiguration,task?.disclosureBindings?.some(ref=>!ref.active));
+ return <section className="specimen-policy-workspace" aria-label="Models" data-processing-routes>
+  <h3>{taskId?'Conversation model':'Choose a model'}</h3>
+  {taskId&&<><p><strong>{selected?.configuration?.model??'No model selected'}</strong></p>{selected&&<p>{task?.staleConfiguration?binding?.reason??'This saved model is unavailable. Revalidate it in Settings or choose another model.':savedReason}</p>}{selected&&!selected.credentialPresent&&onReconnect&&<Button onPress={()=>onReconnect(selected.routeId==='claude-api-key'?'provider-claude-key':selected.configuration?.deployment==='chatgpt-codex'?'codex-chatgpt':'provider-codex-key')}>{`Connect ${selected.provider}`}</Button>}</>}
+  {!taskId&&<p>Connect an account in <a href="#settings-providers">AI connections</a>, then choose a supported model by name. Account access and qualification are checked separately.</p>}
+  <label>Model<select aria-label="Model" value={choice} disabled={busy||pending.current!==null} onChange={e=>setChoice(e.target.value)}><option value="">Choose a model</option>{choices?.map(c=><option key={c.id} value={c.id}>{c.label}{c.reason?' · unavailable':''}</option>)}</select></label>
+  <Button onPress={save} pending={busy} disabledReason={pending.current?undefined:!current?'Refresh model information first':!choice?'Choose a model first':taskId&&!task?'Conversation information unavailable':undefined}>{pending.current?'Retry same model operation':taskId?'Change conversation model':'Save model'}</Button>
+  <Button variant="quiet" onPress={()=>reload.current()} disabledReason={busy?'Wait for the model operation':undefined}>Refresh models</Button>
+  {taskId&&<p>Finish or stop pending work before changing this conversation’s model.</p>}
+  {!taskId&&catalog?.bindings.map(b=><div key={b.bindingId}><p><strong>{b.name}</strong> · {b.provider}</p><p>{b.reason??(b.qualification==='synthetic-only'?'Qualified for fictional work only.':b.qualification==='requires-fresh-policy'?'Model qualification verified. Current workspace approval and account access are checked before use.':'Current availability must be checked before use.')} Account access: {b.accountAccess}.</p>{b.state==='legacy-superseded'&&<Button onPress={()=>changeState(b,'active')} disabledReason={busy||!current?'Refresh model information first':undefined}>{`Revalidate saved ${b.name}`}</Button>}{b.state!=='revoked'&&<Button variant="quiet" onPress={()=>changeState(b,'revoked')} disabledReason={busy||!current?'Refresh model information first':undefined}>{`Revoke ${b.name}`}</Button>}</div>)}
+  {notice&&<p role="status">{notice}</p>}
+ </section>;
 }

@@ -685,3 +685,119 @@ describe('local data deletion support (Story 1.12)', () => {
     expect(fs.existsSync(path.join(w.dir, SESSION_FILE))).toBe(false);
   });
 });
+
+
+describe('bounded fresh execution-policy reads', () => {
+  const workspace = '11111111-1111-4111-8111-111111111111';
+  const policy = { workspace_id: workspace, authorization_epoch: '1', policy_revision: '1', execution: null };
+  const gate = () => { let release!: () => void; const promise = new Promise<void>(resolve => { release = resolve; }); return {promise, release}; };
+
+  it('allows four GETs, bounds the waiting queue, and recovers every permit', async () => {
+    const w = world(), session = w.make(); await session.signIn(); const held = gate(); let active=0, peak=0;
+    const read = vi.spyOn(w.service, 'executionPolicy').mockImplementation(async () => { active++; peak=Math.max(peak,active); await held.promise; active--; return policy; });
+    const reads = Array.from({length:37}, () => session.readExecutionPolicy(workspace));
+    await waitFor(() => read.mock.calls.length === 4); expect(await reads[36]).toBeNull(); expect(peak).toBe(4);
+    held.release(); expect((await Promise.all(reads)).filter(Boolean)).toHaveLength(36); expect(peak).toBe(4);
+    expect(await session.readExecutionPolicy(workspace)).toEqual(policy); expect(read).toHaveBeenCalledTimes(37);
+  });
+
+  it('releases permits after endpoint errors without retrying a denial', async () => {
+    const w = world(), session = w.make(); await session.signIn();
+    const read = vi.spyOn(w.service, 'executionPolicy').mockRejectedValue(new ServiceError('denied',true,403));
+    const results = await Promise.allSettled(Array.from({length:36},()=>session.readExecutionPolicy(workspace)));
+    expect(results.every(r=>r.status==='rejected')).toBe(true); expect(read).toHaveBeenCalledTimes(36);
+    read.mockResolvedValue(policy); expect(await session.readExecutionPolicy(workspace)).toEqual(policy);
+  });
+
+  it('serializes one expiry rotation across concurrent fresh GETs', async () => {
+    let now=Date.now(); const w=world('gnome_libsecret',{now:()=>now}), session=w.make(); await session.signIn(); now+=15*60_000;
+    const read=vi.spyOn(w.service,'executionPolicy').mockResolvedValue(policy);
+    expect(await Promise.all(Array.from({length:4},()=>session.readExecutionPolicy(workspace)))).toEqual(Array(4).fill(policy));
+    expect(w.service.calls.filter(c=>c==='refresh')).toHaveLength(1);
+    expect(read.mock.calls.every(([access])=>access===w.service.current()!.access)).toBe(true);
+  });
+
+  it('coalesces concurrent old-token 401s into one rotation, not four', async () => {
+    const w=world(), session=w.make(); await session.signIn(); const old=w.service.current()!.access, held=gate();
+    const read=vi.spyOn(w.service,'executionPolicy').mockImplementation(async access=>{if(access===old){await held.promise;throw new ServiceError('unauthenticated',true,401);}return policy;});
+    const reads=Array.from({length:4},()=>session.readExecutionPolicy(workspace));await waitFor(()=>read.mock.calls.length===4);held.release();
+    expect(await Promise.all(reads)).toEqual(Array(4).fill(policy));expect(w.service.calls.filter(c=>c==='refresh')).toHaveLength(1);expect(read).toHaveBeenCalledTimes(8);
+  });
+
+  it('uses an already rotated token after a late 401 and stops after a second 401', async () => {
+    const w=world(), session=w.make();await session.signIn();const old=w.service.current()!.access,held=gate();
+    const read=vi.spyOn(w.service,'executionPolicy').mockImplementation(async access=>{if(access===old)await held.promise;throw new ServiceError('unauthenticated',true,401);});
+    const pending=session.readExecutionPolicy(workspace);const rejected=expect(pending).rejects.toBeInstanceOf(ServiceError);await waitFor(()=>read.mock.calls.length===1);
+    expect(await session.refreshNow()).toBe(true);held.release();await rejected;
+    expect(w.service.calls.filter(c=>c==='refresh')).toHaveLength(1);expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(['dependency','lost','reuse'] as const)('does not dispatch a near-expiry read after %s refresh failure', async outcome=>{
+    let now=Date.now();const w=world('gnome_libsecret',{now:()=>now}),session=w.make();await session.signIn();now+=15*60_000;w.service.refreshOutcome=outcome;
+    const read=vi.spyOn(w.service,'executionPolicy').mockResolvedValue(policy);
+    expect(await session.readExecutionPolicy(workspace)).toBeNull();expect(read).not.toHaveBeenCalled();
+    expect(w.service.calls.filter(c=>c==='refresh')).toHaveLength(1);
+  });
+
+  it('suppresses queued reads and late success after logout, including same-principal sign-in', async () => {
+    const w=world(),session=w.make();await session.signIn();const principal=session.principalId(),held=gate();
+    const read=vi.spyOn(w.service,'executionPolicy').mockImplementation(async()=>{await held.promise;return policy;});
+    const pending=Array.from({length:8},()=>session.readExecutionPolicy(workspace));await waitFor(()=>read.mock.calls.length===4);
+    expect((await session.signOut()).ok).toBe(true);
+    // The default fake mints a different principal per login. Model a new
+    // session for the same principal explicitly, including its service view.
+    const bootstrap=w.service.bootstrap.bind(w.service);vi.spyOn(w.service,'bootstrap').mockImplementation(async request=>{const credentials=await bootstrap(request);w.service.current()!.principalId=principal!;return{...credentials,principal_id:principal!};});
+    await session.signIn();expect(session.principalId()).toBe(principal);
+    held.release();expect(await Promise.all(pending)).toEqual(Array(8).fill(null));expect(read).toHaveBeenCalledTimes(4);
+    expect(await session.readExecutionPolicy(workspace)).toEqual(policy);
+  });
+
+  it('does not publish a late failure into a replacement session', async () => {
+    const w=world(),session=w.make();await session.signIn();const held=gate();
+    const read=vi.spyOn(w.service,'executionPolicy').mockImplementation(async()=>{await held.promise;throw new ServiceError('transport',true);});
+    const pending=session.readExecutionPolicy(workspace);await waitFor(()=>read.mock.calls.length===1);session.forgetLocally();await session.signIn();
+    expect(session.snapshot().sharedService).toBe('available');held.release();expect(await pending).toBeNull();expect(session.snapshot().sharedService).toBe('available');
+  });
+
+  it('leaves general request and explicit refresh serialization unchanged', async () => {
+    const w=world(),session=w.make();await session.signIn();const held=gate(),entered:string[]=[];
+    const first=session.withAccess(async()=>{entered.push('first');await held.promise;return 1;});
+    const second=session.withAccess(async()=>{entered.push('second');return 2;});await waitFor(()=>entered.length===1);expect(entered).toEqual(['first']);held.release();
+    expect(await Promise.all([first,second])).toEqual([1,2]);expect(entered).toEqual(['first','second']);
+  });
+});
+
+
+describe('concurrent policy availability ordering', () => {
+  const workspace='11111111-1111-4111-8111-111111111111';
+  const policy={workspace_id:workspace,authorization_epoch:'1',policy_revision:'1',execution:null};
+  it.each(['policy','serialized'] as const)('does not overwrite a later %s failure with an old GET success',async source=>{
+    const w=world(),session=w.make();await session.signIn();let release!:()=>void;const gate=new Promise<void>(r=>{release=r;});
+    const read=vi.spyOn(w.service,'executionPolicy').mockImplementationOnce(async()=>{await gate;return policy;}).mockRejectedValue(new ServiceError('transport',true));
+    const old=session.readExecutionPolicy(workspace);await waitFor(()=>read.mock.calls.length===1);
+    const failed=source==='policy'?session.readExecutionPolicy(workspace):session.withAccess(async()=>{throw new ServiceError('transport',true);});
+    await expect(failed).rejects.toBeInstanceOf(ServiceError);expect(session.snapshot().sharedService).toBe('unavailable');release();expect(await old).toEqual(policy);expect(session.snapshot().sharedService).toBe('unavailable');
+    read.mockResolvedValue(policy);expect(await session.readExecutionPolicy(workspace)).toEqual(policy);expect(session.snapshot().sharedService).toBe('available');
+  });
+});
+
+
+describe('policy retry lifecycle races',()=>{
+  const workspace='11111111-1111-4111-8111-111111111111';
+  it('does not refresh or retry when logout supersedes a queued 401 retry',async()=>{
+    const w=world(),session=w.make();await session.signIn();let rejectRead!:()=>void,releaseBlock!:()=>void;
+    const response=new Promise<void>(resolve=>{rejectRead=resolve;}),block=new Promise<void>(resolve=>{releaseBlock=resolve;});
+    const read=vi.spyOn(w.service,'executionPolicy').mockImplementation(async()=>{await response;throw new ServiceError('unauthenticated',true,401);});
+    const pending=session.readExecutionPolicy(workspace);await waitFor(()=>read.mock.calls.length===1);let blocking=false;
+    const mutation=session.withAccess(async()=>{blocking=true;await block;return true;});await waitFor(()=>blocking);
+    rejectRead();await new Promise<void>(resolve=>setImmediate(resolve));const logout=session.signOut();releaseBlock();
+    expect(await pending).toBeNull();expect(await mutation).toBe(true);expect((await logout).ok).toBe(true);
+    expect(read).toHaveBeenCalledTimes(1);expect(w.service.calls.filter(c=>c==='refresh')).toHaveLength(0);
+  });
+  it('keeps a rotated policy credential memory-only when vault persistence fails',async()=>{
+    let now=Date.now();const w=world('gnome_libsecret',{now:()=>now});const vault=new CredentialVault({safeStorage:fakeSafeStorage('gnome_libsecret'),platform:'linux',dir:w.dir});const session=w.make({vault});await session.signIn();
+    vi.spyOn(vault,'save').mockImplementation(()=>{throw new Error('fixture vault failure');});now+=15*60_000;
+    const policy={workspace_id:workspace,authorization_epoch:'1',policy_revision:'1',execution:null};vi.spyOn(w.service,'executionPolicy').mockResolvedValue(policy);
+    expect(await session.readExecutionPolicy(workspace)).toEqual(policy);expect(session.snapshot().credentialStorage).toBe('memory-only');expect(fs.existsSync(path.join(w.dir,SESSION_FILE))).toBe(false);
+  });
+});

@@ -6,8 +6,15 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
-pub const AUTHORIZATION_SUITE: &str = "inquello-current-route-negative-authorization-v3";
+pub const AUTHORIZATION_SUITE: &str = "inquello-current-route-negative-authorization-v5";
+pub const ROUTE_EVIDENCE_SCHEMA_VERSION: u32 = 2;
+/// UTF-8 byte bound shared by compiled real-route scopes and service approvals.
+pub const MAX_PROCESSING_SCOPE_BYTES: usize = 256;
 pub const REQUIRED_AUTHORIZATION_SCENARIOS: &[&str] = &[
+    "real-session-production-admission",
+    "real-session-withdrawal",
+    "credential-slot-independent-proof",
+    "responses-standard-completion",
     "cross-workspace",
     "peer-private",
     "foreign-thread",
@@ -54,17 +61,26 @@ pub const REQUIRED_AUTHORIZATION_SCENARIOS: &[&str] = &[
     "search-retained-route-mismatch",
     "search-bounded-plain-compressed",
     "search-inventory-request-bounded",
+    "owner-consent-grant-revoke",
+    "owner-consent-compatible-qualification",
+    "owner-consent-material-change",
+    "owner-consent-late-revocation-output",
+    "owner-consent-lost-ack-cas",
+    "owner-role-transition-protection",
+    "owner-consent-legacy-no-fallback",
+    "owner-consent-credential-separation",
 ];
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RouteEvidenceIdentity {
+    pub schema_version: u32,
     pub route_id: String,
     pub deployment: String,
     pub endpoint: String,
     pub model: String,
     pub api_version: String,
-    pub configuration_digest: String,
+    pub adapter_configuration_digest: String,
     pub implementation_digest: String,
     pub runtime_version: String,
     pub contract_version: String,
@@ -72,15 +88,17 @@ pub struct RouteEvidenceIdentity {
 }
 impl RouteEvidenceIdentity {
     pub fn matches_configuration(&self, configuration: &RouteConfiguration) -> bool {
-        self.route_id == configuration.route_id().as_str()
+        self.schema_version == ROUTE_EVIDENCE_SCHEMA_VERSION
+            && self.route_id == configuration.route_id().as_str()
             && self.deployment == configuration.deployment()
             && self.endpoint == configuration.endpoint()
             && self.model == configuration.model()
             && self.api_version == configuration.api_version()
-            && self.configuration_digest == configuration_digest(configuration)
+            && self.adapter_configuration_digest == adapter_configuration_digest(configuration)
     }
     pub fn valid(&self) -> bool {
-        super::RouteId::parse(&self.route_id).is_some()
+        self.schema_version == ROUTE_EVIDENCE_SCHEMA_VERSION
+            && super::RouteId::parse(&self.route_id).is_some()
             && [
                 &self.deployment,
                 &self.endpoint,
@@ -92,21 +110,26 @@ impl RouteEvidenceIdentity {
             ]
             .into_iter()
             .all(|s| !s.trim().is_empty() && s.len() <= 512)
-            && [&self.configuration_digest, &self.implementation_digest]
-                .into_iter()
-                .all(|s| sha256_digest(s))
+            && [
+                &self.adapter_configuration_digest,
+                &self.implementation_digest,
+            ]
+            .into_iter()
+            .all(|s| sha256_digest(s))
     }
 }
-/// Versioned canonical input includes account binding and explicit unknown region.
-pub fn configuration_digest(configuration: &RouteConfiguration) -> String {
+/// Reviewed adapter/build evidence is independent of each user's credential slot.
+/// Version 2 keeps the exact provider deployment, endpoint, model, API and region.
+/// Current credential ownership/generation and immutable configuration remain
+/// separately checked by the native admission and disclosure fences.
+pub fn adapter_configuration_digest(configuration: &RouteConfiguration) -> String {
     let fields = (
-        "inquello-route-configuration-v1",
+        "inquello-route-adapter-configuration-v2",
         configuration.route_id().as_str(),
         configuration.deployment(),
         configuration.endpoint(),
         configuration.model(),
         configuration.api_version(),
-        configuration.account_ref(),
         configuration.region(),
     );
     let bytes = serde_json::to_vec(&fields).unwrap_or_default();
@@ -322,6 +345,26 @@ fn protected_eligibility(
     }
     result.verification = RouteVerification::VerifiedForRealData;
     result.evidence.push(proof.report_digest.clone());
+    if !current_route_authority_matches(configuration, identity, expected, authority) {
+        result.gate =
+            Some("Current organization approval is missing, stale, revoked or outside its scope");
+    } else if !adapter || !credentials {
+        result.gate = Some("Selected route credential or supported adapter is unavailable");
+    } else {
+        result.enabled = true;
+        result.gate = None;
+    }
+    result
+}
+
+/// Checks only current operation authority. This never establishes compiled
+/// capability eligibility; callers must first obtain reviewed build evidence.
+pub fn current_route_authority_matches(
+    configuration: &RouteConfiguration,
+    identity: &RouteEvidenceIdentity,
+    expected: &ProtectedRouteUse,
+    authority: &CurrentRouteAuthority,
+) -> bool {
     let approval = &authority.approval;
     let valid_ids = [
         &expected.principal_id,
@@ -332,40 +375,31 @@ fn protected_eligibility(
     ]
     .into_iter()
     .all(|id| uuid::Uuid::parse_str(id).is_ok());
-    if !valid_ids
-        || &authority.binding != expected
-        || approval.revoked
-        || approval.workspace_id != expected.workspace_id
-        || approval.route_id != identity.route_id
-        || approval.processing_scope != expected.processing_scope
-        || expected.processing_scope.trim().is_empty()
-        || approval.data_policy_digest != expected.data_policy_digest
-        || !sha256_digest(&expected.data_policy_digest)
-        || approval.policy_revision != expected.policy_revision
-        || approval.revision != expected.approval_revision
-        || approval.revision == 0
-        || approval.policy_revision == 0
-        || expected.authorization_epoch == 0
-        || expected.principal_revision == 0
-        || expected.session_revision == 0
-        || expected.generation == 0
-        || approval.issuer.trim().is_empty()
-        || approval.operator_reference.trim().is_empty()
-        || authority.checked_at < approval.valid_from
-        || authority.checked_at >= approval.expires_at
-        || authority.checked_at >= approval.review_at
-        || approval.valid_from >= approval.review_at
-        || approval.review_at > approval.expires_at
-    {
-        result.gate =
-            Some("Current organization approval is missing, stale, revoked or outside its scope");
-    } else if !adapter || !credentials {
-        result.gate = Some("Selected route credential or supported adapter is unavailable");
-    } else {
-        result.enabled = true;
-        result.gate = None;
-    }
-    result
+    identity.matches_configuration(configuration)
+        && !(!valid_ids
+            || &authority.binding != expected
+            || approval.revoked
+            || approval.workspace_id != expected.workspace_id
+            || approval.route_id != identity.route_id
+            || approval.processing_scope != expected.processing_scope
+            || expected.processing_scope.trim().is_empty()
+            || approval.data_policy_digest != expected.data_policy_digest
+            || !sha256_digest(&expected.data_policy_digest)
+            || approval.policy_revision != expected.policy_revision
+            || approval.revision != expected.approval_revision
+            || approval.revision == 0
+            || approval.policy_revision == 0
+            || expected.authorization_epoch == 0
+            || expected.principal_revision == 0
+            || expected.session_revision == 0
+            || expected.generation == 0
+            || approval.issuer.trim().is_empty()
+            || approval.operator_reference.trim().is_empty()
+            || authority.checked_at < approval.valid_from
+            || authority.checked_at >= approval.expires_at
+            || authority.checked_at >= approval.review_at
+            || approval.valid_from >= approval.review_at
+            || approval.review_at > approval.expires_at)
 }
 
 #[cfg(test)]
@@ -392,12 +426,13 @@ mod tests {
             processing_scope: "fixture-scope".into(),
             data_policy_digest: "e".repeat(64),
             identity: RouteEvidenceIdentity {
+                schema_version: ROUTE_EVIDENCE_SCHEMA_VERSION,
                 route_id: "codex-responses".into(),
                 deployment: config.deployment().into(),
                 endpoint: config.endpoint().into(),
                 model: config.model().into(),
                 api_version: config.api_version().into(),
-                configuration_digest: configuration_digest(&config),
+                adapter_configuration_digest: adapter_configuration_digest(&config),
                 implementation_digest: "b".repeat(64),
                 runtime_version: "fixture-runtime".into(),
                 contract_version: "fixture-contract".into(),
@@ -453,15 +488,35 @@ mod tests {
         (config, proof, binding, authority)
     }
     fn register(proof: &NegativeAuthorizationEvidence) -> CapabilityRegister {
-        CapabilityRegister::from_json(&serde_json::json!({"schema_version":1,"entries":[{
+        CapabilityRegister::from_json(&serde_json::json!({"schema_version":2,"entries":[{
             "id":"processing.codex-responses","owner":"fixture","supply":"fixture",
-            "versions":{"fixture":"1"},"limits":["fixture only"],"identity":"fixture",
-            "formats":["text"],"processing_scope":"fixture-scope","eligibility":"real-data-eligible",
+            "versions":{"model":proof.identity.model,"api":proof.identity.api_version,"deployment":proof.identity.deployment,"endpoint":proof.identity.endpoint},"limits":["fixture only"],"identity":"fixture",
+            "formats":["text"],"processing_scope":"fixture-scope","ceiling":"real-data-eligible",
             "evidence":[{"kind":"synthetic","status":"passed","reference":"fixture"},
                 {"kind":"negative-authorization","status":"passed","reference":"fixture"}],
             "negative_authorization":proof
         }]}).to_string()).unwrap()
     }
+    #[test]
+    fn v4_or_missing_owner_consent_cases_cannot_qualify_v5() {
+        let (_, proof, _, _) = fixture();
+        assert!(proof.complete());
+        let mut old = proof.clone();
+        old.suite = "inquello-current-route-negative-authorization-v4".into();
+        assert!(!old.complete());
+        let required: Vec<_> = REQUIRED_AUTHORIZATION_SCENARIOS
+            .iter()
+            .filter(|id| id.starts_with("owner-"))
+            .collect();
+        assert_eq!(required.len(), 8);
+        for id in required {
+            let mut missing = proof.clone();
+            missing.scenarios.remove(*id);
+            missing.passed -= 1;
+            assert!(!missing.complete(), "missing consent witness: {id}");
+        }
+    }
+
     #[test]
     fn final_read_requires_fresh_same_task_authority_after_approval_boundary() {
         let (config, proof, mut binding, mut authority) = fixture();
@@ -503,6 +558,27 @@ mod tests {
             "Workspace-only authority cannot replace exact Task identity"
         );
     }
+    #[test]
+    fn old_credential_bound_evidence_cannot_gain_adapter_build_semantics() {
+        let (configuration, proof, _, _) = fixture();
+        let mut old = serde_json::to_value(&proof.identity).unwrap();
+        old.as_object_mut().unwrap().remove("schema_version");
+        let digest = old
+            .as_object_mut()
+            .unwrap()
+            .remove("adapter_configuration_digest")
+            .unwrap();
+        old["configuration_digest"] = digest;
+        assert!(serde_json::from_value::<RouteEvidenceIdentity>(old).is_err());
+        let mut wrong_version = proof.identity.clone();
+        wrong_version.schema_version = 1;
+        assert!(!wrong_version.valid());
+        assert!(!wrong_version.matches_configuration(&configuration));
+        let mut old_suite = proof;
+        old_suite.suite = "inquello-current-route-negative-authorization-v3".into();
+        assert!(!old_suite.complete());
+    }
+
     #[test]
     fn prior_lifecycle_proof_cannot_enable_saved_search_or_reopen() {
         let (_, mut proof, _, _) = fixture();
@@ -565,8 +641,9 @@ mod tests {
         for mut input in [config.input(), config.input()] {
             input.account_ref = uuid::Uuid::new_v4().to_string();
             let changed = RouteConfiguration::parse(input.clone()).unwrap();
+            assert_ne!(changed.account_ref(), config.account_ref());
             assert!(
-                !protected_eligibility(
+                protected_eligibility(
                     &changed,
                     true,
                     true,
@@ -575,7 +652,8 @@ mod tests {
                     Some(&authority),
                     Some(&register)
                 )
-                .enabled
+                .enabled,
+                "reviewed adapter proof is reusable across credential slots"
             );
             input = config.input();
             input.region = Some("fixture-other-region".into());
@@ -608,7 +686,11 @@ mod tests {
         let serialized = serde_json::to_value(&proof.identity).unwrap();
         for key in serialized.as_object().unwrap().keys() {
             let mut altered = serialized.clone();
-            altered[key] = serde_json::json!("different");
+            altered[key] = if key == "schema_version" {
+                serde_json::json!(1)
+            } else {
+                serde_json::json!("different")
+            };
             let identity = serde_json::from_value(altered).unwrap();
             assert!(!check(&identity, Some(&authority)), "identity field {key}");
         }

@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import {afterEach,describe,expect,it,vi} from 'vitest';
 import {Search} from '../src/renderer/Shell/Search';
 import {Inbox,attentionCounts} from '../src/renderer/Shell/Inbox';
-import {TaskView} from '../src/renderer/Shell/TaskView';
+import {TaskDetails} from '../src/renderer/Shell/TaskView';
 const workspace='11111111-1111-4111-8111-111111111111',taskId='22222222-2222-4222-8222-222222222222';
 const task={taskId,workspaceId:workspace,title:'Procurement January–June',runtimeThreadId:null,engagementId:null,folderId:null,sourceRefs:[],artifactRefs:[],visibility:'private' as const,revision:1,pinned:false,archived:true};
 const hit={turnId:'older-turn',itemId:'invoice-104',text:'INV-104 is a potential duplicate. <script>not instructions</script>',truncated:false};
@@ -17,7 +17,7 @@ describe('S05 saved-work interactions',()=>{
  it('retains query on failure and clears cached snippets on revoked activation',async()=>{const x=api();x.reopen.mockResolvedValue({ok:false,reason:'revoked'} as never);render(<Search workspaceId={workspace} onClose={vi.fn()} onOpen={vi.fn()} onEngagement={vi.fn()}/>);const user=userEvent.setup();await user.type(screen.getByLabelText('Search this Workspace'),'INV-104');await user.click(screen.getByRole('button',{name:'Search',exact:true}));await user.click(await screen.findByRole('button',{name:'Procurement January–June · Archived'}));expect(screen.queryByText(hit.text)).toBeNull();expect(screen.getByLabelText('Search this Workspace')).toHaveProperty('value','INV-104');expect(screen.getByText(/No cached snippet was opened/)).toBeTruthy();});
  it('discards a response after query or session changes',async()=>{const x=api();let resolve!:(v:unknown)=>void;x.search.mockImplementation(()=>new Promise(r=>{resolve=r;}) as never);render(<Search workspaceId={workspace} onClose={vi.fn()} onOpen={vi.fn()} onEngagement={vi.fn()}/>);const user=userEvent.setup();await user.type(screen.getByLabelText('Search this Workspace'),'INV-104');await user.click(screen.getByRole('button',{name:'Search',exact:true}));await user.type(screen.getByLabelText('Search this Workspace'),' changed');act(()=>x.invalidate());await act(async()=>resolve(ok(result)));expect(screen.queryByText(hit.text)).toBeNull();});
  it('Escape returns focus to the opener and keyboard trapping does not start work',async()=>{const button=document.createElement('button');document.body.append(button);button.focus();const close=vi.fn();const {unmount}=render(<Search workspaceId={null} onClose={close} onOpen={vi.fn()} onEngagement={vi.fn()}/>);expect(screen.getByText(/No Workspace is available or selected/)).toBeTruthy();await userEvent.setup().keyboard('{Escape}');expect(close).toHaveBeenCalled();unmount();expect(document.activeElement).toBe(button);button.remove();});
- it('keeps pin/archive operation identity and original revision after uncertain failure',async()=>{const nav=vi.fn().mockResolvedValueOnce({ok:false,code:'runtime-unavailable',reason:'Try again'}).mockResolvedValueOnce({ok:true,value:{...task,pinned:true,revision:2}});const props={task,engagements:[],folders:[],onRename:vi.fn(),onMove:vi.fn(),onNavigation:nav,newOperationId:()=> 'one-operation'};const {rerender}=render(<TaskView {...props}/>);const user=userEvent.setup();await user.click(screen.getByRole('button',{name:'Organise Task'}));await user.click(screen.getByRole('menuitem',{name:'Pin'}));expect(await screen.findByRole('button',{name:'Retry navigation change'})).toBeTruthy();rerender(<TaskView {...props} task={{...task,revision:2}}/>);await user.click(screen.getByRole('button',{name:'Retry navigation change'}));expect(nav.mock.calls.map(call=>[call[2],call[3],call[4]])).toEqual([[true,'one-operation',1],[true,'one-operation',1]]);});
+ it('keeps pin/archive operation identity and original revision after uncertain failure',async()=>{const nav=vi.fn().mockResolvedValueOnce({ok:false,code:'runtime-unavailable',reason:'Try again'}).mockResolvedValueOnce({ok:true,value:{...task,pinned:true,revision:2}});const props={task,engagements:[],folders:[],onRename:vi.fn(),onMove:vi.fn(),onNavigation:nav,newOperationId:()=> 'one-operation'};const {rerender}=render(<TaskDetails {...props}/>);const user=userEvent.setup();await user.click(screen.getByRole('button',{name:'Organise conversation'}));await user.click(screen.getByRole('menuitem',{name:'Pin'}));expect(await screen.findByRole('button',{name:'Retry navigation change'})).toBeTruthy();rerender(<TaskDetails {...props} task={{...task,revision:2}}/>);await user.click(screen.getByRole('button',{name:'Retry navigation change'}));expect(nav.mock.calls.map(call=>[call[2],call[3],call[4]])).toEqual([[true,'one-operation',1],[true,'one-operation',1]]);});
 });
 describe('Inbox current questions and category semantics',()=>{
  const request={taskId,workspaceId:workspace,requestId:'request',turnId:'turn',itemId:'vendor-question',question:'Which vendor evidence?'};
@@ -54,11 +54,11 @@ describe('review-loop navigation and modal regressions',()=>{
  it.each([false,true])('ignores a late prior-Task navigation completion (success=%s)',async success=>{
   let resolve!:(v:unknown)=>void;const nav=vi.fn(()=>new Promise(r=>{resolve=r;}));
   const props={task,engagements:[],folders:[],onRename:vi.fn(),onMove:vi.fn(),onNavigation:nav as never,newOperationId:()=> 'origin-operation'};
-  const {rerender}=render(<TaskView {...props}/>);const user=userEvent.setup();await user.click(screen.getByRole('button',{name:'Organise Task'}));await user.click(screen.getByRole('menuitem',{name:'Pin'}));
-  rerender(<TaskView {...props} task={{...task,taskId:'different-task',title:'New selected Task'}}/>);
+  const {rerender}=render(<TaskDetails {...props}/>);const user=userEvent.setup();await user.click(screen.getByRole('button',{name:'Organise conversation'}));await user.click(screen.getByRole('menuitem',{name:'Pin'}));
+  rerender(<TaskDetails {...props} task={{...task,taskId:'different-task',title:'New selected Task'}}/>);
   await act(async()=>resolve(success?ok({...task,pinned:true}):{ok:false,code:'conflict',reason:'Old Task conflict'}));
   expect(screen.queryByText('Old Task conflict')).toBeNull();expect(screen.queryByRole('button',{name:'Retry navigation change'})).toBeNull();expect(screen.queryByText('Navigation preference saved.')).toBeNull();
-  expect(screen.getByLabelText('Task title')).toHaveProperty('value','New selected Task');
+  expect(screen.getByLabelText('Conversation title')).toHaveProperty('value','New selected Task');
  });
 });
 

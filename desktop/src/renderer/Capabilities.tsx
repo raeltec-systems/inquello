@@ -19,7 +19,7 @@ import { ProcessingRoutes } from './ProcessingRoutes';
  * text comes from main. Values render through StatusChip's custom label path,
  * so nothing here is ever green or reads as approved.
  */
-import { useCallback, useEffect, useState, type ReactElement } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 
 import { parseSettingsPolicy, policyBridge, type CapabilityItem, type PolicyItem, type SettingsPolicyItem } from './policy-bridge';
 import { StatusChip } from './primitives';
@@ -78,32 +78,58 @@ export function CapabilityContract({ capabilities }: { capabilities: readonly Ca
   );
 }
 
-export function Capabilities(): ReactElement {
+export function Capabilities({ workspaceId, showProcessingRoutes = true }: { workspaceId?: string | null; showProcessingRoutes?: boolean } = {}): ReactElement {
   const bridge = policyBridge();
   const [view, setView] = useState<SettingsPolicyItem | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    if (!bridge) return;
-    try {
-      const next = parseSettingsPolicy(await bridge.getSettings());
-      if (next) {
-        setView(next);
-        setNotice(null);
-      } else setNotice('The policy could not be read.');
-    } catch {
-      setNotice('The policy could not be read.');
-    }
-  }, [bridge]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!bridge) return;
+    let active = true, generation = 0, settled = true;
+    const load = async () => {
+      if (!active || !settled) return;
+      const request = ++generation;
+      try {
+        const next = parseSettingsPolicy(await bridge.getSettings());
+        if (!active || request !== generation || !settled) return;
+        setView(next); setLoading(false);
+        setNotice(next ? null : 'The policy could not be read.');
+      } catch {
+        if (active && request === generation) { setView(null); setLoading(false); setNotice('The policy could not be read.'); }
+      }
+    };
+    const changed = (ready: boolean) => {
+      if (!active) return;
+      ++generation;
+      settled = ready; setLoading(ready);
+      // Remove prior-principal policy and capability children before any new read.
+      setView(null);
+      setNotice(ready ? null : 'Account or runtime is changing. Current policy is unavailable.');
+      if (ready) void load();
+    };
+    const unsubscribe = bridge.onSettingsChanged?.(changed);
     void load();
     const timer = setInterval(() => void load(), REFRESH_MS);
-    return () => clearInterval(timer);
-  }, [bridge, load]);
+    return () => { active = false; ++generation; clearInterval(timer); unsubscribe?.(); };
+  }, [bridge]);
 
   const capabilities = view?.capabilities ?? FALLBACK_CAPABILITIES;
+  // Ordinary Settings is scoped to the selected Workspace; the specimen may show all.
+  const workspaces = (view?.workspaces ?? []).filter(workspace => workspaceId === undefined || workspace.workspaceId === workspaceId);
+  if (workspaceId !== undefined) return <>
+    {notice ? <p role="status">{notice}</p> : null}
+    {view?.reason ? <p role="status">{view.reason}</p> : null}
+    {!bridge ? <p role="status">Tools and connections are available in the desktop app only.</p> : !workspaceId ? <p role="status">Select a Workspace in chat to manage its tools and connections.</p> : loading ? <p role="status">Loading tools and connections for the selected Workspace.</p> : view && !workspaces.length ? <p role="status">The selected Workspace is unavailable. Return to chat and select an accessible Workspace.</p> : null}
+    {workspaces.map(workspace => <section key={workspace.workspaceId} aria-label={`Tools settings for ${workspace.name}`}>
+      <p>Workspace: <strong>{workspace.name}</strong></p>
+      <CapabilityInventory workspaceId={workspace.workspaceId} workspaceName={workspace.name} showHeading={false} />
+      <details><summary>Workspace policy and capability limits</summary>
+        {workspace.policy ? <PolicySettings policy={workspace.policy} /> : <p>{workspace.reason ?? 'The policy could not be read.'}</p>}
+        <CapabilityContract capabilities={capabilities} />
+      </details>
+    </section>)}
+  </>;
   return (
     <><div className="specimen-policy" data-policy-section="" data-policy-loaded={view ? 'true' : 'false'} data-signed-in={view ? String(view.signedIn) : 'unknown'}>
       <p className="specimen-account-note" data-policy-environment>
@@ -120,7 +146,7 @@ export function Capabilities(): ReactElement {
           {view.reason}
         </p>
       ) : null}
-      {(view?.workspaces ?? []).map((workspace) => (
+      {workspaces.map((workspace) => (
         <section key={workspace.workspaceId} className="specimen-policy-workspace" aria-label={`Policy for ${workspace.name}`} data-policy-workspace={workspace.workspaceId}>
           <h3 className="specimen-policy-heading">{workspace.name}</h3>
           {workspace.policy ? (
@@ -134,8 +160,8 @@ export function Capabilities(): ReactElement {
       ))}
       <CapabilityContract capabilities={capabilities} />
     </div>
-    <ProcessingRoutes />
-    {(view?.workspaces ?? []).map(workspace => <CapabilityInventory key={workspace.workspaceId} workspaceId={workspace.workspaceId} workspaceName={workspace.name} />)}
+    {showProcessingRoutes ? <ProcessingRoutes /> : null}
+    {workspaces.map(workspace => <CapabilityInventory key={workspace.workspaceId} workspaceId={workspace.workspaceId} workspaceName={workspace.name} />)}
     </>
   );
 }

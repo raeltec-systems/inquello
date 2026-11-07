@@ -31,6 +31,12 @@ use codex_protocol::openai_models::ModelPreset;
 use codex_protocol::protocol::SessionSource;
 use once_cell::sync::Lazy;
 
+/// Populate only tool definitions for cross-crate transport tests. This does not
+/// change authorization, private-task identity, output limits or paid-mode state.
+pub fn set_prompt_tools_for_test(prompt: &mut crate::Prompt, tools: Arc<[codex_tools::ToolSpec]>) {
+    prompt.tools = tools;
+}
+
 use crate::ThreadManager;
 use crate::config::Config;
 use crate::responses_metadata::CodexResponsesMetadata;

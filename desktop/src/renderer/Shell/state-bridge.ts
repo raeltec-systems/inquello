@@ -12,7 +12,7 @@
 export const STATE_DIMENSIONS = ['task', 'run', 'output', 'checks', 'review', 'approval_marker', 'delivery_marker'] as const;
 export type StateDimension = (typeof STATE_DIMENSIONS)[number];
 
-/** The heading of each dimension in the States section. */
+/** The heading of each dimension where a recorded state is shown. */
 export const DIMENSION_LABEL: Record<StateDimension, string> = {
   task: 'Task',
   run: 'Run',
@@ -37,8 +37,6 @@ export const STATE_TEXT: { [D in StateDimension]: Record<string, string> } = {
     uncertain: 'Delivery uncertain — local marker',
   },
 };
-
-export const NOT_RECORDED = 'Not recorded';
 
 /** Who recorded a state, in words. */
 export const ACTOR_TEXT = { human: 'a person', runtime: 'the runtime', system: 'Inquello on this device' } as const;

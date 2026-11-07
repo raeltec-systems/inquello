@@ -349,6 +349,30 @@ pub fn pid(output: &Path) -> u32 {
     }
     #[cfg(not(windows))]
     {
-        inner
+        // The Linux sandbox may run the shell in its own PID namespace, where `$$`
+        // is not a host PID. Resolve it through the host's view of that namespace.
+        let namespace = read(output.join("pid-namespace.txt")).unwrap();
+        let namespace = namespace.trim();
+        let in_namespace = |pid: u32| {
+            std::fs::read_link(format!("/proc/{pid}/ns/pid"))
+                .is_ok_and(|link| link.to_string_lossy() == namespace)
+        };
+        if in_namespace(inner) {
+            return inner;
+        }
+        std::fs::read_dir("/proc")
+            .unwrap()
+            .filter_map(|entry| entry.ok()?.file_name().to_str()?.parse::<u32>().ok())
+            .find(|pid| {
+                in_namespace(*pid)
+                    && std::fs::read_to_string(format!("/proc/{pid}/status")).is_ok_and(|status| {
+                        status
+                            .lines()
+                            .find_map(|line| line.strip_prefix("NSpid:"))
+                            .and_then(|ids| ids.split_whitespace().last())
+                            == Some(inner.to_string().as_str())
+                    })
+            })
+            .expect("host PID of the fixture shell in its sandbox PID namespace")
     }
 }

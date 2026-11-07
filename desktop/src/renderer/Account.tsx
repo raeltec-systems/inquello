@@ -9,7 +9,7 @@
  * Private work is always labelled local; a shared-service outage blocks shared
  * work only. Data attributes expose the rendered state to the smoke probe.
  *
- * `onIdentityChanged` runs after a sign-in or sign-out attempt; the App uses
+ * `onIdentityChanged` runs after a confirmed identity transition; the App uses
  * it to drop the Composer's in-memory drafts (Story 1.17).
  */
 import { useCallback, useEffect, useState, type ReactElement } from 'react';
@@ -45,11 +45,12 @@ function initials(name: string): string {
 }
 
 export interface AccountProps {
-  /** Called after a sign-in or sign-out attempt completes, whatever its outcome. */
+  /** Called only when an action confirms a change in signed-in identity. */
   onIdentityChanged?: () => void;
+  signOutOnly?: boolean;
 }
 
-export function Account({ onIdentityChanged }: AccountProps = {}): ReactElement {
+export function Account({ onIdentityChanged, signOutOnly=false }: AccountProps = {}): ReactElement {
   const bridge = identityBridge();
   const [status, setStatus] = useState<IdentityStatusView | null>(null);
   const [busy, setBusy] = useState<'sign-in' | 'sign-out' | null>(null);
@@ -80,12 +81,12 @@ export function Account({ onIdentityChanged }: AccountProps = {}): ReactElement 
     try {
       const result = parseIdentityAction(await (action === 'sign-in' ? bridge.signIn() : bridge.signOut()));
       if (result?.status) setStatus(result.status);
+      if (result?.status && ((action==='sign-out'&&result.status.identity.state==='signed-out'&&status?.identity.state!=='signed-out')||(action==='sign-in'&&result.status.identity.state==='signed-in'&&status?.identity.state!=='signed-in'))) onIdentityChanged?.();
       if (result && !result.ok) setNotice(result.reason ?? 'The request did not complete.');
     } catch {
       setNotice('The request did not complete.');
     } finally {
       setBusy(null);
-      onIdentityChanged?.();
     }
   };
 
@@ -109,6 +110,7 @@ export function Account({ onIdentityChanged }: AccountProps = {}): ReactElement 
         ? undefined
         : 'Not signed in.';
 
+  if(signOutOnly)return <section aria-label="Confirm sign out"><p>Signing out clears unsent drafts from this window. Saved private work stays on this device. Pending requests may already have taken effect: signing out does not roll them back. Reconcile uncertain outcomes after signing in again; do not submit a replacement blindly.</p><Button variant="primary" onPress={()=>void act('sign-out')} pending={busy==='sign-out'} disabledReason={busy==='sign-out'?undefined:signOutReason}>Sign out</Button>{notice&&<p role="status">{notice}</p>}</section>;
   return (
     <div
       className="specimen-account"
@@ -152,7 +154,9 @@ export function Account({ onIdentityChanged }: AccountProps = {}): ReactElement 
           <dd className="specimen-account-note">{status ? STORAGE_TEXT[status.credentialStorage] : 'Checking'}</dd>
         </div>
       </dl>
+      <p className="specimen-account-note">Signup and account recovery are handled by your identity provider, separately from inference-provider credentials.</p>
       <div className="specimen-account-actions">
+        <Button variant="quiet" onPress={() => {globalThis.location.hash='#onboarding';}}>Workspace setup and team</Button>
         <Button
           variant="primary"
           data-account-action="sign-in"

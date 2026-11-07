@@ -148,6 +148,10 @@ export function fakePolicy(calls: string[] = []): PolicyOperations {
       calls.push('settings');
       return { signedIn: false, environmentLabel: 'Local device', workspaces: [], capabilities: [], reason: signedOut.reason };
     },
+    inspectTask: async (taskId) => {
+      calls.push(`inspectTask:${JSON.stringify([taskId])}`);
+      return signedOut;
+    },
     forTask: async (taskId) => {
       calls.push(`forTask:${JSON.stringify([taskId])}`);
       return signedOut;

@@ -2,7 +2,7 @@
 // Native synthetic integration only. A zero-test target is a failure, never proof.
 const { spawnSync } = require('node:child_process');
 const path = require('node:path');
-const scenarios = ['steer', 'stop_resume', 'restart', 'revoke_before_resume', 'revoke_during_resume', 'missing_linkage', 'peer_private', 'cross_company', 'crash', 'unknown_turn', 'source_reference', 'steer_lost_ack', 'stop_pending_steer', 'warm_policy_change', 'progress_continuity', 'stop_provider_unavailable', 'progress_cache', 'stop_inflight_steer'];
+const scenarios = ['steer', 'stop_resume', 'restart', 'revoke_before_resume', 'revoke_during_resume', 'missing_linkage', 'peer_private', 'cross_company', 'crash', 'unknown_turn', 'source_reference', 'steer_lost_ack', 'stop_pending_steer', 'warm_policy_change', 'progress_continuity', 'stop_provider_unavailable', 'progress_cache', 'stop_inflight_steer', 'completed_followup'];
 const required = ['responses', 'messages'].flatMap(provider => scenarios.map(scenario => `${provider}_lifecycle_${scenario}`));
 function verifySelection(output) {
   const selected = new Set(output.split(/\r?\n/).filter(line => line.endsWith(': test')).map(line => line.slice(0, -6)));

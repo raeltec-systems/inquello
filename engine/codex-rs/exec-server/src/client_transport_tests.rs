@@ -832,3 +832,73 @@ async fn initial_noise_connection_refreshes_bundle_after_exhausting_initial_retr
     accepted_server.await??;
     Ok(())
 }
+
+#[cfg(windows)]
+#[tokio::test]
+async fn inquello_isolated_spawn_boundary_distinguishes_spawn_and_protocol_failure() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let directory = tempfile::tempdir().unwrap();
+    let spawned = AtomicUsize::new(0);
+    let missing = ExecServerClient::connect_isolated_stdio_tracked(
+        directory
+            .path()
+            .join("absent.exe")
+            .to_string_lossy()
+            .into_owned(),
+        vec![],
+        Default::default(),
+        directory.path().into(),
+        std::time::Duration::from_secs(2),
+        || {
+            spawned.fetch_add(1, Ordering::SeqCst);
+        },
+    )
+    .await;
+    assert!(matches!(missing, Err(ExecServerError::Spawn(_))));
+    assert_eq!(spawned.load(Ordering::SeqCst), 0);
+    let system = std::env::var("SystemRoot").unwrap();
+    let failed = ExecServerClient::connect_isolated_stdio_tracked(
+        format!("{system}\\System32\\cmd.exe"),
+        vec!["/d".into(), "/c".into(), "exit /b 7".into()],
+        std::collections::HashMap::from([("SystemRoot".into(), system)]),
+        directory.path().into(),
+        std::time::Duration::from_secs(2),
+        || {
+            spawned.fetch_add(1, Ordering::SeqCst);
+        },
+    )
+    .await;
+    assert!(failed.is_err());
+    assert!(!matches!(failed, Err(ExecServerError::Spawn(_))));
+    assert_eq!(spawned.load(Ordering::SeqCst), 1);
+}
+
+#[cfg(windows)]
+#[tokio::test]
+async fn inquello_isolated_spawn_boundary_survives_initialization_cancellation() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let directory = tempfile::tempdir().unwrap();
+    let system = std::env::var("SystemRoot").unwrap();
+    let spawned = AtomicBool::new(false);
+    let attempt = ExecServerClient::connect_isolated_stdio_tracked(
+        format!("{system}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"),
+        vec![
+            "-NoProfile".into(),
+            "-NonInteractive".into(),
+            "-Command".into(),
+            "Start-Sleep -Seconds 1".into(),
+        ],
+        std::collections::HashMap::from([("SystemRoot".into(), system)]),
+        directory.path().into(),
+        std::time::Duration::from_secs(5),
+        || {
+            spawned.store(true, Ordering::SeqCst);
+        },
+    );
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(20), attempt)
+            .await
+            .is_err()
+    );
+    assert!(spawned.load(Ordering::SeqCst));
+}

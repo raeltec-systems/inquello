@@ -12,3 +12,17 @@ export class RuntimeLifecycle {
     return result;
   }
 }
+
+// Pure startup guard: inspect environment names only, never credential values.
+// Called before main registers readiness/cleanup callbacks.
+export function controlledPaidLaunchRequested(environmentNames: readonly string[], argv: readonly string[]): boolean {
+  const key = 'INQUELLO_FICTIONAL_PAID_SESSION';
+  const matches = environmentNames.filter(name => name.toUpperCase() === key);
+  if (matches.length === 0) return false;
+  if (matches.length !== 1 || matches[0] !== key) throw new Error('Controlled fictional session environment name is ambiguous');
+  if (argv.some(arg => arg === '--smoke' || arg.startsWith('--smoke-'))
+      || environmentNames.some(name => /^INQUELLO_(?:SMOKE|QUOTA_FIXTURE|VISUAL_FIXTURE)(?:_|$)/i.test(name))) {
+    throw new Error('Controlled fictional session cannot run smoke or recovery fixtures');
+  }
+  return true;
+}

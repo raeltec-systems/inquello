@@ -334,7 +334,7 @@ const digest: Parser<string> = (value, path) => {
 };
 const integer: Parser<number> = (value, path) => typeof value === 'number' && Number.isSafeInteger(value) ? value : fail(path, 'expected safe integer');
 const generation: Parser<number> = (value, path) => { const number = integer(value, path); return number > 0 ? number : fail(path, 'expected current generation'); };
-export const parseRouteEvidenceIdentity = object({ route_id: oneOf(['codex-responses','claude-api-key']), deployment: str, endpoint: str, model: str, api_version: str, configuration_digest: digest, implementation_digest: digest, runtime_version: str, contract_version: str, platform: str });
+export const parseRouteEvidenceIdentity = object({ schema_version: (value:unknown,path:string) => value === 2 ? 2 as const : fail(path,'expected route evidence schema 2'), route_id: oneOf(['codex-responses','claude-api-key']), deployment: str, endpoint: str, model: str, api_version: str, adapter_configuration_digest: digest, implementation_digest: digest, runtime_version: str, contract_version: str, platform: str });
 export const parseOrganizationRouteApproval = object({ workspace_id: uuid, route_id: oneOf(['codex-responses','claude-api-key']), evidence_digest: digest, processing_scope: str, data_policy_digest: digest, issuer: str, operator_reference: str, valid_from: integer, expires_at: integer, review_at: integer, revision: decimal, policy_revision: decimal, revoked: (value: unknown, path: string) => typeof value === 'boolean' ? value : fail(path, 'expected boolean') });
 export const parseProtectedRouteUse = object({ action: oneOf(['read','derive','export','resume']), principal_id: uuid, session_id: uuid, task_id: uuid, workspace_id: uuid, operation_id: uuid, generation, principal_revision: decimal, session_revision: decimal, authorization_epoch: decimal, policy_revision: decimal, approval_revision: decimal, processing_scope: str, data_policy_digest: digest });
 export const parseCurrentRouteAuthority = object({ binding: parseProtectedRouteUse, approval: parseOrganizationRouteApproval, checked_at: integer });
@@ -349,3 +349,35 @@ export const parseWorkspaceAccess = object({decision:literal('allowed'),authoriz
 export type WorkspaceAccess = ReturnType<typeof parseWorkspaceAccess>;
 export const parseExportProvenanceReceipt = object({receipt_id:uuid,principal_id:uuid,manifest_digest:digest,workspace_ids:array(uuid)});
 export type ExportProvenanceReceipt = ReturnType<typeof parseExportProvenanceReceipt>;
+
+
+// Durable provider processing consent. Contract values are displayed CAS inputs,
+// never renderer authority. Bound all free text before it reaches the UI.
+const consentText:Parser<string>=(v,p)=>{const s=str(v,p);return s.length>0&&s.length<=4096?s:fail(p,'invalid consent text');};
+const consentDigest:Parser<string>=(v,p)=>{const s=str(v,p);return /^[0-9a-f]{64}$/.test(s)?s:fail(p,'invalid digest');};
+const consentBoolean:Parser<boolean>=(v,p)=>typeof v==='boolean'?v:fail(p,'expected boolean');
+export const parseProviderConsentView=object({
+  workspace_id:uuid,workspace_name:consentText,provider:literal('openai-api'),
+  contract_id:consentText,contract_version:u32,contract_digest:consentDigest,consent_text:consentText,
+  revision:decimal,state:oneOf(['not_allowed','allowed','revoked','changed'] as const),
+  can_manage:consentBoolean,authorization_epoch:decimal,policy_revision:decimal,
+});
+export type ProviderConsentView=ReturnType<typeof parseProviderConsentView>;
+export const parseProviderConsentCommand=object({
+  schema_version:u32,command_epoch:decimal,workspace_id:uuid,operation_id:uuid,
+  expected_revision:decimal,expected_contract_version:u32,expected_contract_digest:consentDigest,
+  action:oneOf(['allow','revoke'] as const),
+});
+export type ProviderConsentCommand=ReturnType<typeof parseProviderConsentCommand>;
+
+
+export const parseProviderConsentNotApplied=object({
+  status:literal('not_applied'),principal_id:uuid,provider:literal('openai-api'),
+  command:parseProviderConsentCommand,
+  reason:oneOf(['command_contract_changed','processing_terms_changed','revision_changed'] as const),
+  receipt_id:uuid,
+});
+export type ProviderConsentReceipt=CommandResponse|ReturnType<typeof parseProviderConsentNotApplied>;
+export const parseProviderConsentReceipt:Parser<ProviderConsentReceipt>=(value,p)=>
+  value!==null&&typeof value==='object'&&(value as Record<string,unknown>).status==='not_applied'
+    ?parseProviderConsentNotApplied(value,p):parseCommandResponse(value,p);

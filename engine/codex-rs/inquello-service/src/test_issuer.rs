@@ -126,6 +126,14 @@ impl TestIssuer {
         self.sign_with_header(&header, fixture)
     }
 
+    /// Synthetic negative-claim fixtures only; never production issuer proof.
+    pub fn sign_claims(&self, claims: &Value) -> String {
+        let mut header = Header::new(Algorithm::ES256);
+        header.kid = Some(self.kid.clone());
+        jsonwebtoken::encode(&header, claims, &self.encoding_key)
+            .unwrap_or_else(|_| panic!("sign synthetic claim fixture"))
+    }
+
     /// Signs with an explicit header (for example a wrong or missing `kid`).
     pub fn sign_with_header(&self, header: &Header, fixture: &TokenFixture) -> String {
         jsonwebtoken::encode(header, &fixture.claims(), &self.encoding_key)
@@ -150,6 +158,7 @@ pub struct TokenFixture {
     pub issued_at: DateTime<Utc>,
     pub expires_at: DateTime<Utc>,
     pub email: Option<String>,
+    pub email_verified: bool,
     pub name: Option<String>,
 }
 
@@ -172,6 +181,7 @@ impl TokenFixture {
             issued_at: now,
             expires_at: now + TimeDelta::minutes(5),
             email: Some(format!("{subject}@synthetic.invalid")),
+            email_verified: false,
             name: Some(format!("Synthetic {subject}")),
         }
     }
@@ -226,6 +236,7 @@ impl TokenFixture {
         }
         claims.insert("iat".to_string(), json!(self.issued_at.timestamp()));
         claims.insert("exp".to_string(), json!(self.expires_at.timestamp()));
+        claims.insert("email_verified".to_string(), json!(self.email_verified));
         if let Some(email) = &self.email {
             claims.insert("email".to_string(), json!(email));
         }

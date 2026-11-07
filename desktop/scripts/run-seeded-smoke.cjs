@@ -1,52 +1,173 @@
-/** Real Electron + synthetic HTTPS topology. No provider calls or installs.
- * Build the desktop and test-issuer topology first. The quota probe also needs
- * the debug inference-fixtures app-server (INQUELLO_APP_SERVER may select it).
- * The explicit fixture policy permits export by the synthetic administrator;
- * the shipped sample/production policy is never changed.
+/** Real Electron + synthetic HTTPS topologies. No live providers or installs.
+ * Normal journeys retain default-off policy. Quota runs separately with an
+ * explicit service-backed policy, native synthetic provenance and pinned TLS.
  */
-const fs = require('node:fs');
-const os = require('node:os');
-const path = require('node:path');
-const { spawn } = require('node:child_process');
-const readline = require('node:readline');
-const desktop = path.resolve(__dirname, '..');
-const root = path.dirname(desktop);
-const suffix = process.platform === 'win32' ? '.exe' : '';
-const navigationOnly = process.argv.includes('--navigation');
-if (process.platform === 'win32' && !/^D:[\\/]/i.test(os.tmpdir())) throw new Error('Set TEMP and TMP to D: before this smoke run');
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'inquello-seeded-smoke-'));
-const seed = path.join(dir, 'seed.json');
-const config = path.join(dir, 'config.json');
-const policyFile = path.join(dir, 'fictional-policy.json');
-const policy = JSON.parse(fs.readFileSync(path.join(root, 'engine/codex-rs/inquello-protocol/fixtures/workspace/policy.json'), 'utf8'));
-policy.roles.find(role => role.id === 'audit_lead').actions.push('export');
-fs.writeFileSync(policyFile, JSON.stringify(policy));
-const topology = spawn(process.env.INQUELLO_DEV_TOPOLOGY_BIN ?? path.join(root, `engine/codex-rs/target/debug/inquello-dev-topology${suffix}`),
-  ['--exit-on-stdin-eof', '--seed-workspace', 'Synthetic recovery audit', '--seed-out', seed, '--seed-policy', policyFile],
-  { env: process.env, stdio: ['pipe', 'pipe', 'inherit'], windowsHide: true });
-let launched = false;
-const startup = setTimeout(() => { topology.kill(); process.exitCode = 1; }, 60_000);
-topology.on('error', error => { clearTimeout(startup); console.error(error.message); process.exitCode = 1; });
-topology.on('exit', code => { if (!launched) { clearTimeout(startup); console.error(`Topology exited before smoke: ${code}`); process.exitCode = 1; } });
-readline.createInterface({ input: topology.stdout }).once('line', line => {
-  clearTimeout(startup);
-  launched = true;
-  fs.writeFileSync(config, line);
-  const output = path.join(dir, 'smoke.stdout.log');
-  const out = fs.openSync(output, 'w');
-  const err = fs.openSync(path.join(dir, 'smoke.stderr.log'), 'w');
-  console.log(`Smoke logs: ${dir}`);
-  const electron = spawn(path.join(desktop, `node_modules/electron/dist/electron${suffix}`), ['.', navigationOnly ? '--smoke-navigation' : '--smoke'],
-    { cwd: desktop, env: { ...process.env, INQUELLO_SERVICE_CONFIG: config, INQUELLO_SMOKE_SEED: seed }, stdio: ['ignore', out, err], windowsHide: true });
-  const deadline = setTimeout(() => electron.kill(), 600_000);
-  electron.on('error', error => { console.error(error.message); topology.stdin.end(); process.exitCode = 1; });
-  electron.on('exit', code => {
-    clearTimeout(deadline);
-    fs.closeSync(out); fs.closeSync(err); topology.stdin.end();
-    const reports = fs.readFileSync(output, 'utf8').split(/\r?\n/).flatMap(line => { try { return [JSON.parse(line)]; } catch { return []; } });
-    const required = navigationOnly ? ['saved-navigation', 'shell-layout'] : ['renderer-privileges', 'design', 'identity', 'data', 'providers', 'organise', 'states', 'shell-layout', 'composer', 'start-surface', 'policy', 'tool-bounds', 'permissions', 'capabilities', 'routes', 'environments'];
-    const missing = required.filter(event => !reports.some(report => report.event === event && report.ok === true));
-    console.log(JSON.stringify({ exitCode: code, required: required.length, missingOrFailed: missing }));
-    process.exitCode = code === 0 && missing.length === 0 && reports.some(report => report.event === 'handshake' && report.versionCheck === 'passed') ? 0 : 1;
+const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
+const {spawn,execFileSync}=require('node:child_process');
+const {X509Certificate,randomUUID,createHash}=require('node:crypto');
+const {createOwnedProcessGuard}=require('./smoke-processes.cjs');
+const {settleSmokePhase}=require('./smoke-phase.cjs');
+const https=require('node:https'),readline=require('node:readline');
+const desktop=path.resolve(__dirname,'..'),root=path.dirname(desktop);
+if(process.env.INQUELLO_TEST_DATABASE_URL&&process.env.INQUELLO_DEV_DATABASE_URL)throw new Error('Ambiguous database configuration: explicitly clear the unused database variable before synthetic smoke.');
+const suffix=process.platform==='win32'?'.exe':'';
+const onboardingOnly=process.argv.includes('--onboarding');
+if(onboardingOnly && process.argv.slice(2).some(arg=>arg!=='--onboarding'))throw new Error('Onboarding is an exclusive owned smoke phase');
+const navigationOnly=process.argv.includes('--navigation');
+const toolsOnly=process.argv.includes('--tools-only');
+if(toolsOnly&&process.argv.slice(2).some(arg=>arg!=='--tools-only'))throw new Error('Tools management is an exclusive owned smoke phase');
+const isolatedPhase=toolsOnly?'tools':onboardingOnly?'onboarding':process.argv.includes('--visual-only')?'visual':process.argv.includes('--quota-only')?'quota':null;
+if((navigationOnly&&isolatedPhase)||(process.argv.includes('--visual-only')&&process.argv.includes('--quota-only')))throw new Error('Choose one isolated smoke phase');
+const base=onboardingOnly&&process.platform==='win32'?'D:\\Inquello\\tmp':os.tmpdir();fs.mkdirSync(base,{recursive:true});
+const dir=fs.realpathSync(fs.mkdtempSync(path.join(base,'inquello-seeded-smoke-')));
+const normalRequired=navigationOnly?['saved-navigation','shell-layout']:['renderer-privileges','design','identity','data','providers','organise','states','shell-layout','composer','start-surface','policy','tool-bounds','permissions','capabilities','routes','environments'];
+const required=isolatedPhase?[isolatedPhase==='onboarding'?'onboarding':isolatedPhase==='visual'?'visual-conversation':isolatedPhase==='tools'?'tools-management':'quota']:navigationOnly?normalRequired:[...normalRequired,'quota','visual-conversation','tools-management'];
+console.log(`Smoke logs: ${dir}`);
+function ownedExit(child,ms){return new Promise(resolve=>{
+  if(child.exitCode!==null||child.signalCode!==null||child.pid===undefined)return resolve(true);
+  const done=value=>{clearTimeout(timer);child.removeListener('exit',exit);resolve(value);};
+  const exit=()=>done(true),timer=setTimeout(()=>done(false),ms);child.once('exit',exit);
+});}
+async function stopTopology(child){if(!child)return;child.stdin?.end();if(!(await ownedExit(child,10000))){child.kill();if(!(await ownedExit(child,5000)))throw new Error('Owned topology failed to stop');}}
+async function localTls(folder,visual=false){
+  const tlsDir=path.join(folder,'tls');fs.mkdirSync(tlsDir);
+  // Same fresh scoped certificate pattern as test/providers-units.test.ts; no global trust.
+  const run=(...args)=>{try{execFileSync('openssl',args,{cwd:tlsDir,stdio:'pipe',timeout:10000});}catch{throw new Error('Synthetic TLS creation failed');}};
+  run('req','-x509','-newkey','ec','-pkeyopt','ec_paramgen_curve:prime256v1','-nodes','-keyout','ca.key','-out','ca.pem','-days','1','-subj','/CN=Inquello test CA','-addext','basicConstraints=critical,CA:TRUE','-addext','keyUsage=critical,keyCertSign');
+  run('req','-newkey','ec','-pkeyopt','ec_paramgen_curve:prime256v1','-nodes','-keyout','server.key','-out','server.csr','-subj','/CN=127.0.0.1');
+  fs.writeFileSync(path.join(tlsDir,'ext.cnf'),'subjectAltName=IP:127.0.0.1\nbasicConstraints=CA:FALSE\n');
+  run('x509','-req','-in','server.csr','-CA','ca.pem','-CAkey','ca.key','-CAcreateserial','-out','server.pem','-days','1','-extfile','ext.cnf');
+  const prefix='Synthetic visual QA response - generated by the local test fixture, not a live model.';
+  const requests=[
+    'Synthetic UI journey: prepare a fictional audit brief. No customer records or live model are involved.',
+    'Synthetic UI follow-up: add a fictional scope note to the same conversation.',
+    'Synthetic UI interruption: draft a fictional checklist, then wait for my review.',
+  ];
+  const answers=[
+    prefix+' The fictional audit brief is ready. No customer data was used.',
+    prefix+' The fictional scope note was added using the retained conversation.',
+    prefix+' A fictional checklist is being drafted; this response is deliberately held for Stop.',
+    prefix+' The interrupted fictional checklist has now been completed after explicit Resume.',
+  ];
+  const event=(type,data)=>`event: ${type}
+data: ${JSON.stringify(data)}
+
+`;
+  const bRequest='Synthetic UI model B: start a separate fictional conversation with Sol. No customer data.';
+  const bAnswer=prefix+' This is the independent fictional Sol conversation.';
+  const stream=(index,complete,b=false)=>{
+    const id='resp_visual_fixture_'+(b?'b':index),item='msg_visual_fixture_'+(b?'b':index),text=b?bAnswer:answers[index-1];
+    const message={type:'message',role:'assistant',id:item,content:[{type:'output_text',text}]};
+    return event('response.created',{type:'response.created',response:{id}})+
+      event('response.output_item.added',{type:'response.output_item.added',item:{...message,content:[]}})+
+      event('response.output_text.delta',{type:'response.output_text.delta',delta:text})+
+      (complete?event('response.output_item.done',{type:'response.output_item.done',item:message})+
+        event('response.completed',{type:'response.completed',response:{id,usage:{input_tokens:20,output_tokens:48,total_tokens:68}}}):'');
+  };
+  const stateFile=path.join(folder,'synthetic-journey-state.json');
+  let calls=0,bCalls=0,totalCalls=0,invalidCalls=0,heldCancelled=false,heldTimedOut=false;
+  const contextMatches=[];
+  const record=()=>{if(visual)fs.writeFileSync(stateFile,JSON.stringify({calls,bCalls,totalCalls,invalidCalls,heldCancelled,heldTimedOut,contextMatches}));};
+  record();
+  const server=https.createServer({key:fs.readFileSync(path.join(tlsDir,'server.key')),cert:fs.readFileSync(path.join(tlsDir,'server.pem'))},(request,response)=>{
+    ++totalCalls;record();
+    if(!visual||totalCalls>5||request.method!=='POST'||request.url!=='/v1/responses'){if(visual)invalidCalls++;request.resume();response.writeHead(503);response.end();record();return;}
+    let bytes=0,body='';request.setEncoding('utf8');
+    request.on('data',chunk=>{bytes+=Buffer.byteLength(chunk);if(bytes>131072){invalidCalls++;record();request.destroy();return;}body+=chunk;});
+    request.on('end',()=>{
+      let valid=false,b=false,index=0;
+      try{const parsed=JSON.parse(body);const retained=JSON.stringify(parsed.input);b=retained.includes(bRequest);if(b){bCalls++;valid=bCalls===1&&parsed.model==='gpt-6.1-sol'&&Array.isArray(parsed.input)&&requests.every(text=>!retained.includes(text))&&answers.every(text=>!retained.includes(text));}else{index=++calls;valid=index<=4&&parsed.model===(index<=2?'gpt-6.1-terra':'gpt-6.1-sol')&&Array.isArray(parsed.input)&&!retained.includes(bRequest)&&!retained.includes(bAnswer)&&requests.slice(0,Math.min(index,3)).every(text=>retained.includes(text));}}catch{}
+      if(!b)contextMatches.push(valid);body='';record();
+      if(!valid||(!b&&index===4&&!heldCancelled)){invalidCalls++;record();response.writeHead(503);response.end();return;}
+      response.writeHead(200,{'content-type':'text/event-stream'});
+      if(b||index!==3){response.end(stream(index,true,b));return;}
+      response.write(stream(index,false));
+      // Deliberately incomplete SSE: only native cancellation should close it.
+      const timer=setTimeout(()=>{heldTimedOut=true;record();response.destroy();},30000);
+      response.once('close',()=>{clearTimeout(timer);heldCancelled=!heldTimedOut;record();});
+    });
+    request.on('error',()=>{/* The owned native Stop may cancel an in-flight request. */});
   });
-});
+  try{await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Owned TLS fixture listen timed out')),5000);server.once('error',()=>{clearTimeout(timer);reject(new Error('Owned TLS fixture unavailable'));});server.listen(0,'127.0.0.1',()=>{clearTimeout(timer);resolve();});});}
+  catch(error){server.closeAllConnections();server.close();throw error;}
+  const file=path.join(folder,visual?'visual-transport.json':'quota-transport.json');
+  fs.writeFileSync(file,JSON.stringify({endpoint:`https://127.0.0.1:${server.address().port}/${visual?'v1/responses':'v1/messages'}`,certificate:Array.from(new X509Certificate(fs.readFileSync(path.join(tlsDir,'ca.pem'))).raw),...(visual?{answer:answers[0],answers,requests,bRequest,bAnswer,stateFile,captureDir:path.join(folder,'captures')}: {})}));
+  return{file,calls:()=>totalCalls,invalidCalls:()=>invalidCalls,journeyValid:()=>calls===4&&bCalls===1&&totalCalls===5&&invalidCalls===0&&heldCancelled&&!heldTimedOut&&contextMatches.length===4&&contextMatches.every(Boolean),close:()=>new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Owned TLS fixture close timed out')),5000);server.close(error=>{clearTimeout(timer);error?reject(new Error('Owned TLS fixture close failed')):resolve();});server.closeAllConnections();})};
+}
+async function launch(phase){
+  const quota=phase==='quota',visual=phase==='visual',onboarding=phase==='onboarding',tools=phase==='tools';
+  const folder=phase==='normal'?dir:path.join(dir,phase);if(phase!=='normal')fs.mkdirSync(folder);
+  const seed=path.join(folder,'seed.json'),config=path.join(folder,'config.json');
+  const policyFile=path.join(folder,'fictional-policy.json');
+  if(!onboarding){
+  const policy=JSON.parse(fs.readFileSync(path.join(root,'engine/codex-rs/inquello-protocol/fixtures/workspace/policy.json'),'utf8'));
+  policy.roles.find(role=>role.id==='audit_lead').actions.push('export');
+  if(tools)policy.execution={sandbox:'workspace_write',approvals:['on_request'],network:'allowed',allowed_domains:['127.0.0.1'],mcp_tools:'allowed',extensions:'denied',allow_local_mcp_servers:false};
+  if(quota)policy.execution={automatic_permission_review:true,command_rules:[{prefix:['/usr/bin/true'],decision:'prompt'}]};
+fs.writeFileSync(policyFile,JSON.stringify(policy));
+  }
+  let topology,tls,electron,electronGuard,out,err;
+  let cleanRuntimeExit=false,stage='fixture-setup';
+  const result=await settleSmokePhase(async()=>{
+    if(quota||visual)tls=await localTls(folder,visual);
+    stage='topology-readiness';
+    topology=spawn(process.env.INQUELLO_DEV_TOPOLOGY_BIN??path.join(root,`engine/codex-rs/target/debug/inquello-dev-topology${suffix}`),(onboarding?['--exit-on-stdin-eof','--onboarding']:['--exit-on-stdin-eof','--seed-workspace',tools?'Synthetic tools setup':quota?'Synthetic quota audit':visual?'Mupeta & Partners':'Synthetic recovery audit','--seed-out',seed,'--seed-policy',policyFile]),{env:process.env,stdio:['pipe','pipe','inherit'],windowsHide:true});
+    const lines=readline.createInterface({input:topology.stdout});
+    const line=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Synthetic topology readiness timed out')),60000);lines.once('line',text=>{clearTimeout(timer);resolve(text);});topology.once('error',()=>{clearTimeout(timer);reject(new Error('Synthetic topology unavailable'));});topology.once('exit',()=>{clearTimeout(timer);reject(new Error('Synthetic topology exited before readiness'));});});
+    fs.writeFileSync(config,line);
+    const output=path.join(folder,'smoke.stdout.log');out=fs.openSync(output,'w');err=fs.openSync(path.join(folder,'smoke.stderr.log'),'w');
+    const env={...process.env,INQUELLO_SERVICE_CONFIG:config,...(onboarding?{}:{INQUELLO_SMOKE_SEED:seed})};
+    if(onboarding){
+      // Main verifies this exact owned root/config/hash/run before using fixed hints.
+      if(['INQUELLO_SMOKE_SEED','INQUELLO_QUOTA_FIXTURE','INQUELLO_VISUAL_FIXTURE','INQUELLO_FICTIONAL_AUDIT_SESSION'].some(key=>key in env))throw new Error('Foreign fixture environment refused');
+      const runId=randomUUID(),profileRoot=path.join(folder,'profile');fs.mkdirSync(profileRoot);
+      const raw=JSON.parse(line),marker=path.join(folder,'.inquello-onboarding-fixture');
+      fs.writeFileSync(marker,JSON.stringify({runId,profileRoot:fs.realpathSync(profileRoot),configSha256:createHash('sha256').update(fs.readFileSync(config)).digest('hex'),issuerUrl:raw.issuer_url,serviceUrl:raw.service_url}));
+      env.INQUELLO_ONBOARDING_FIXTURE=marker;env.INQUELLO_ONBOARDING_RUN=runId;
+    }
+    delete env.INQUELLO_QUOTA_FIXTURE;delete env.INQUELLO_VISUAL_FIXTURE;if(quota)env.INQUELLO_QUOTA_FIXTURE=tls.file;if(visual)env.INQUELLO_VISUAL_FIXTURE=tls.file;
+    // The quota and visual journeys need the debug inference-fixtures app-server;
+    // every other phase keeps the default (or explicitly inherited) runtime.
+    delete env.INQUELLO_FIXTURE_APP_SERVER_BIN;if((quota||visual)&&process.env.INQUELLO_FIXTURE_APP_SERVER_BIN)env.INQUELLO_APP_SERVER=process.env.INQUELLO_FIXTURE_APP_SERVER_BIN;
+    stage='electron-journey';
+    const electronBinary=path.join(desktop,`node_modules/electron/dist/electron${suffix}`);
+    electron=spawn(electronBinary,['.',tools?'--smoke-tools-management':onboarding?'--smoke-onboarding':quota?'--smoke-quota':visual?'--smoke-visual':navigationOnly?'--smoke-navigation':'--smoke'],{cwd:desktop,env,stdio:['ignore',out,err],windowsHide:true,detached:process.platform!=='win32'});
+    electronGuard=createOwnedProcessGuard(electron,{executable:electronBinary});
+    const code=await new Promise((resolve,reject)=>{const deadline=setTimeout(()=>{reject(new Error('Owned Electron smoke deadline exceeded'));},600000);electron.once('error',()=>{clearTimeout(deadline);reject(new Error('Owned Electron smoke unavailable'));});electron.once('exit',code=>{clearTimeout(deadline);resolve(code);});});
+    fs.closeSync(out);out=undefined;fs.closeSync(err);err=undefined;
+    stage='phase-report';
+    const reports=fs.readFileSync(output,'utf8').split(/\r?\n/).flatMap(line=>{try{return[JSON.parse(line)];}catch{return[];}});
+    // Assertion failure may exit 1 after a verified clean runtime shutdown.
+    cleanRuntimeExit=reports.some(report=>report.event==='runtime-exit'&&report.state==='stopped'&&report.exit?.exitCode===0&&report.exit.killed===false);
+    const expected=tools?['tools-management']:onboarding?['onboarding']:quota?['quota']:visual?['visual-conversation']:normalRequired;
+    const missing=expected.filter(event=>!reports.some(report=>report.event===event&&report.ok===true));
+    const zeroFixtureCalls=!quota||tls.calls()===0;
+    const visualFixtureCalls=!visual||(tls.journeyValid());
+    const ok=code===0&&missing.length===0&&zeroFixtureCalls&&visualFixtureCalls&&reports.some(report=>report.event==='handshake'&&report.versionCheck==='passed');
+    console.log(JSON.stringify({phase,exitCode:code,required:expected.length,missingOrFailed:missing,zeroFixtureCalls,...(visual?{localSyntheticCalls:tls.calls(),invalidFixtureCalls:tls.invalidCalls()}: {})}));
+    return{ok,missing,events:reports.filter(report=>report.ok===true).map(report=>report.event)};
+  },async()=>{
+    const errors=[];
+    try{if(electronGuard)await electronGuard.stop(cleanRuntimeExit);else if(electron?.pid!==undefined)errors.push('electron-tree-unresolved');}catch{errors.push('electron-tree-unresolved');}
+    try{if(out!==undefined)fs.closeSync(out);}catch{errors.push('stdout-close');}
+    try{if(err!==undefined)fs.closeSync(err);}catch{errors.push('stderr-close');}
+    try{await stopTopology(topology);}catch{errors.push('topology-stop');}
+    try{await tls?.close();}catch{errors.push('tls-stop');}
+    return errors;
+  },()=>stage);
+  console.log(JSON.stringify({phase,phaseResult:result}));
+  return result;
+}
+(async()=>{
+  if(isolatedPhase){const result=await launch(isolatedPhase);console.log(JSON.stringify({ok:result.ok,isolatedPhase,required:required.length,missingOrFailed:result.missing,cleanupErrors:result.cleanupErrors,primaryFailure:result.primaryFailure}));process.exitCode=result.ok?0:1;return;}
+  const normal=await launch('normal');
+  // Continue assertion failures, but never launch another phase over unresolved owned resources.
+  const skipped={ok:false,missing:[],events:[],cleanupErrors:[],primaryFailure:'previous-phase-cleanup-unresolved'};
+  const quota=navigationOnly?null:normal.cleanupErrors.length?skipped:await launch('quota');
+  const visual=navigationOnly?null:normal.cleanupErrors.length||quota.cleanupErrors.length?skipped:await launch('visual');
+  const tools=navigationOnly?null:normal.cleanupErrors.length||quota.cleanupErrors.length||visual.cleanupErrors.length?skipped:await launch('tools');
+  const observed=[...normal.events,...(quota?.events??[]),...(visual?.events??[]),...(tools?.events??[])];
+  const missing=required.filter(event=>!observed.includes(event));
+  const ok=normal.ok&&(navigationOnly||(quota?.ok===true&&visual?.ok===true&&tools?.ok===true))&&missing.length===0;
+  console.log(JSON.stringify({ok,required:required.length,missingOrFailed:missing,phases:{normal,quota,visual,tools}}));process.exitCode=ok?0:1;
+})().catch(()=>{console.error('Synthetic smoke launcher failed; inspect isolated reports.');process.exitCode=1;});

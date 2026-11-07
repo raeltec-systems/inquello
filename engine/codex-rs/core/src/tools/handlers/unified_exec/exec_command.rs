@@ -124,6 +124,16 @@ impl ToolExecutor<ToolInvocation> for ExecCommandHandler {
         ToolName::plain("exec_command")
     }
 
+    fn exposure(&self) -> codex_tools::ToolExposure {
+        if self.private_task {
+            // Private Tasks authorize this exact one-shot function, not the
+            // generic Code Mode wrapper. Keep it visible even for Lite models.
+            codex_tools::ToolExposure::DirectModelOnly
+        } else {
+            codex_tools::ToolExposure::Direct
+        }
+    }
+
     fn spec(&self) -> ToolSpec {
         let spec = create_exec_command_tool_with_environment_id(
             CommandToolOptions {
@@ -641,6 +651,19 @@ mod private_command_tests {
             include_environment_id: false,
             include_windows_shell_guidance: false,
         });
+        assert_eq!(
+            handler.exposure(),
+            codex_tools::ToolExposure::DirectModelOnly
+        );
+        assert!(!handler.exposure().is_available_in_code_mode());
+        assert_eq!(
+            ExecCommandHandler::default().exposure(),
+            codex_tools::ToolExposure::Direct
+        );
+        assert_eq!(
+            ExecCommandHandler::one_shot(handler.options).exposure(),
+            codex_tools::ToolExposure::Direct
+        );
         let ToolSpec::Function(spec) = handler.spec() else {
             panic!("private command must advertise a function schema");
         };

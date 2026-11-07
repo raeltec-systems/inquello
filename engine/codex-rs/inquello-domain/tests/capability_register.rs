@@ -26,7 +26,7 @@ fn register_json(eligibility: &str, evidence: &[(&str, &str)]) -> String {
         .collect();
     let json = format!(
         r#"{{
-  "schema_version": 1,
+  "schema_version": 2,
   "entries": [{{
     "id": "test.capability",
     "owner": "test owner",
@@ -36,7 +36,7 @@ fn register_json(eligibility: &str, evidence: &[(&str, &str)]) -> String {
     "identity": "none",
     "formats": ["text"],
     "processing_scope": "local",
-    "eligibility": "{eligibility}",
+    "ceiling": "{eligibility}",
     "evidence": [{}]
   }}]
 }}"#,
@@ -46,6 +46,8 @@ fn register_json(eligibility: &str, evidence: &[(&str, &str)]) -> String {
         serde_json::from_str(&json).unwrap_or_else(|error| panic!("fixture register: {error}"));
     if eligibility == "real-data-eligible" {
         // Strict domain fixture only: never shipped evidence or executed suite evidence.
+        value["entries"][0]["id"] = Value::from("processing.codex-responses");
+        value["entries"][0]["versions"] = serde_json::json!({"model":"fixture-model", "api":"fixture-api", "deployment":"openai-api", "endpoint":"https://api.openai.com/v1/responses"});
         value["entries"][0]["negative_authorization"] = serde_json::json!({
             "suite": inquello_domain::routes::AUTHORIZATION_SUITE,
             "tested_artifact_digest": "c".repeat(64),
@@ -53,7 +55,7 @@ fn register_json(eligibility: &str, evidence: &[(&str, &str)]) -> String {
             "identity": {
                 "route_id": "codex-responses", "deployment": "openai-api",
                 "endpoint": "https://api.openai.com/v1/responses", "model": "fixture-model",
-                "api_version": "fixture-api", "configuration_digest": "a".repeat(64),
+                "schema_version":2, "api_version": "fixture-api", "adapter_configuration_digest": "a".repeat(64),
                 "implementation_digest": "b".repeat(64), "runtime_version": "fixture-runtime",
                 "contract_version": "fixture-contract", "platform": "fixture-platform"
             },
@@ -82,7 +84,14 @@ fn load(
 fn assert_invalid_entry(result: Result<CapabilityRegister, CapabilityError>, needle: &str) {
     match result {
         Err(CapabilityError::InvalidEntry { id, reason }) => {
-            assert_eq!(id, "test.capability");
+            assert!(
+                [
+                    "test.capability",
+                    "processing.codex-responses",
+                    "processing.claude-api-key"
+                ]
+                .contains(&id.as_str())
+            );
             assert!(
                 reason.contains(needle),
                 "reason {reason:?} should mention {needle:?}"
@@ -123,16 +132,18 @@ fn failed_evidence_rejects_the_register_naming_the_entry() {
 
 #[test]
 fn missing_or_pending_evidence_cannot_support_enablement() {
-    assert_invalid_entry(load("synthetic-only", &[]), "synthetic evidence");
-    assert_invalid_entry(
-        load("synthetic-only", &[("synthetic", "pending")]),
-        "synthetic evidence",
-    );
-    // A record documents limits; it never supports eligibility on its own.
-    assert_invalid_entry(
-        load("synthetic-only", &[("record", "passed")]),
-        "synthetic evidence",
-    );
+    for evidence in [
+        vec![],
+        vec![("synthetic", "pending")],
+        vec![("record", "passed")],
+    ] {
+        assert_eq!(
+            load("synthetic-only", &evidence)
+                .unwrap()
+                .enablement("test.capability"),
+            Enablement::Disabled
+        );
+    }
     // A declared-disabled entry without evidence is valid and disabled.
     let register = load("disabled", &[]).unwrap();
     assert_eq!(register.enablement("test.capability"), Enablement::Disabled);
@@ -140,27 +151,28 @@ fn missing_or_pending_evidence_cannot_support_enablement() {
 
 #[test]
 fn real_data_claim_needs_passing_negative_authorization() {
-    assert_invalid_entry(
-        load("real-data-eligible", &[("synthetic", "passed")]),
-        "negative-authorization",
-    );
-    assert_invalid_entry(
+    for evidence in [
+        vec![("synthetic", "passed")],
+        vec![
+            ("synthetic", "passed"),
+            ("negative-authorization", "pending"),
+        ],
+    ] {
+        assert_eq!(
+            load("real-data-eligible", &evidence)
+                .unwrap()
+                .enablement("processing.codex-responses"),
+            Enablement::SyntheticOnly
+        );
+    }
+    assert_eq!(
         load(
             "real-data-eligible",
-            &[
-                ("synthetic", "passed"),
-                ("negative-authorization", "pending"),
-            ],
-        ),
-        "negative-authorization",
-    );
-    // Negative authorization alone, without synthetic evidence, is not enough either.
-    assert_invalid_entry(
-        load(
-            "real-data-eligible",
-            &[("negative-authorization", "passed")],
-        ),
-        "synthetic evidence",
+            &[("negative-authorization", "passed")]
+        )
+        .unwrap()
+        .enablement("processing.codex-responses"),
+        Enablement::Disabled
     );
     let register = load(
         "real-data-eligible",
@@ -171,7 +183,7 @@ fn real_data_claim_needs_passing_negative_authorization() {
     )
     .unwrap();
     assert_eq!(
-        register.enablement("test.capability"),
+        register.enablement("processing.codex-responses"),
         Enablement::RealDataEligible
     );
 }
@@ -199,8 +211,8 @@ fn unknown_fields_are_rejected() {
         Err(CapabilityError::Parse(_))
     ));
     let json = register_json("disabled", &[]).replace(
-        r#""schema_version": 1,"#,
-        r#""schema_version": 1, "enable_all": true,"#,
+        r#""schema_version": 2,"#,
+        r#""schema_version": 2, "enable_all": true,"#,
     );
     assert!(matches!(
         CapabilityRegister::from_json(&json),
@@ -232,8 +244,88 @@ fn duplicate_ids_and_empty_fields_are_rejected() {
     assert_invalid_entry(CapabilityRegister::from_json(&json), "owner");
 }
 
+/// Qualification may transition only with a complete, exact, digest-bound reviewed
+/// report. This independently checks committed evidence, not enablement() itself.
+fn expected_embedded_terra_enablement(register: &CapabilityRegister) -> Enablement {
+    use inquello_domain::capability::EvidenceStatus;
+    use inquello_domain::routes::{RouteConfiguration, RouteConfigurationInput};
+    use sha2::{Digest, Sha256};
+    let entry = register
+        .entry("processing.codex-responses")
+        .unwrap_or_else(|| panic!("reviewed Terra capability is missing"));
+    assert_eq!(entry.ceiling, Enablement::RealDataEligible);
+    let Some(proof) = entry.negative_authorization.as_ref() else {
+        return Enablement::SyntheticOnly;
+    };
+    assert!(
+        proof.complete(),
+        "committed authorization evidence must be complete"
+    );
+    let configuration = RouteConfiguration::parse(RouteConfigurationInput {
+        route_id: "codex-responses".into(),
+        deployment: "openai-api".into(),
+        model: "gpt-6.1-terra".into(),
+        api_version: "responses-v1".into(),
+        account_ref: "00000000-0000-4000-8000-000000000001".into(),
+        region: None,
+    })
+    .unwrap_or_else(|error| panic!("supported Terra configuration is invalid: {error}"));
+    assert!(proof.identity.matches_configuration(&configuration));
+    assert_eq!(proof.processing_scope, entry.processing_scope);
+    let policy = std::fs::read(repo_root().join("desktop/data-policy.json"))
+        .unwrap_or_else(|error| panic!("current data policy could not be read: {error}"));
+    assert_eq!(
+        proof.data_policy_digest,
+        format!("{:x}", Sha256::digest(policy))
+    );
+    assert!(
+        entry.evidence.iter().any(|reference| {
+            reference.kind == EvidenceKind::NegativeAuthorization
+                && reference.status == EvidenceStatus::Passed
+                && std::fs::read(
+                    repo_root().join(
+                        reference
+                            .reference
+                            .split('#')
+                            .next()
+                            .unwrap_or_else(|| panic!("authorization evidence reference is empty")),
+                    ),
+                )
+                .is_ok_and(|bytes| format!("{:x}", Sha256::digest(bytes)) == proof.report_digest)
+        }),
+        "passing negative-authorization reference must name the exact report bytes"
+    );
+    Enablement::RealDataEligible
+}
+
 #[test]
-fn seed_register_enables_only_synthetic_entries() {
+fn real_route_scopes_fit_the_service_approval_contract_before_qualification() {
+    use inquello_domain::routes::{MAX_PROCESSING_SCOPE_BYTES, RouteId};
+    let register = CapabilityRegister::load_embedded().unwrap();
+    for route in RouteId::ALL {
+        let Some(entry) = register.entry(route.capability_id()) else {
+            continue;
+        };
+        if entry.ceiling == Enablement::RealDataEligible {
+            let scope = &entry.processing_scope;
+            assert!(
+                !scope.trim().is_empty(),
+                "real route scope must be explicit"
+            );
+            assert!(!scope.chars().any(char::is_control));
+            assert!(
+                scope.len() <= MAX_PROCESSING_SCOPE_BYTES,
+                "{} scope is {} UTF-8 bytes, exceeding the service approval bound {}",
+                entry.id,
+                scope.len(),
+                MAX_PROCESSING_SCOPE_BYTES
+            );
+        }
+    }
+}
+
+#[test]
+fn embedded_register_allows_only_the_reviewed_terra_qualification_transition() {
     let register = CapabilityRegister::load_embedded().unwrap();
     let enabled: Vec<(&str, Enablement)> = register
         .entries()
@@ -245,13 +337,18 @@ fn seed_register_enables_only_synthetic_entries() {
         vec![
             (SEED_ID, Enablement::SyntheticOnly),
             ("execution_sandbox", Enablement::SyntheticOnly),
+            (
+                "processing.codex-responses",
+                expected_embedded_terra_enablement(&register)
+            ),
         ]
     );
     assert_eq!(enablement(SEED_ID), Enablement::SyntheticOnly);
     assert!(
         register
             .entries()
-            .all(|entry| !entry.enablement().allows_real_data())
+            .all(|entry| entry.id == "processing.codex-responses"
+                || !entry.enablement().allows_real_data())
     );
 
     let seed = register.entry(SEED_ID).unwrap();
@@ -419,7 +516,7 @@ fn cross_check_fails_on_an_unknown_rule_with_a_real_data_eligible_capability() {
     )
     .unwrap();
     let problem = cross_check(&policy, &eligible).unwrap_err();
-    assert!(problem.contains("test.capability"), "{problem}");
+    assert!(problem.contains("processing.codex-responses"), "{problem}");
 
     // Synthetic-only capabilities never trip it, and neither does a disabled category.
     let synthetic = load("synthetic-only", &[("synthetic", "passed")]).unwrap();
@@ -439,7 +536,7 @@ fn cross_check_fails_on_an_unknown_rule_with_a_real_data_eligible_capability() {
 #[test]
 fn an_unreadable_data_policy_blocks() {
     assert_eq!(
-        data_policy_blockers(&serde_json::json!({ "schema_version": 1 })),
+        data_policy_blockers(&serde_json::json!({ "schema_version": 2 })),
         vec!["the data-policy register has no category list".to_string()]
     );
 }
@@ -451,7 +548,7 @@ fn prompt_inspection_and_specialist_cyber_access_are_registered_not_enabled() {
     let register = CapabilityRegister::load_embedded().unwrap();
     for id in ["prompt_inspection", "specialist_cyber_access"] {
         let entry = register.entry(id).unwrap();
-        assert_eq!(entry.eligibility, Enablement::Disabled);
+        assert_eq!(entry.ceiling, Enablement::Disabled);
         assert_eq!(entry.enablement(), Enablement::Disabled);
         assert_eq!(enablement(id), Enablement::Disabled);
         assert!(entry.evidence.is_empty());
@@ -515,8 +612,221 @@ fn unbound_negative_reference_no_longer_enables_real_data() {
         .as_object_mut()
         .unwrap()
         .remove("negative_authorization");
+    assert_eq!(
+        CapabilityRegister::from_json(&value.to_string())
+            .unwrap()
+            .enablement("processing.codex-responses"),
+        Enablement::SyntheticOnly
+    );
+}
+
+#[test]
+fn reviewed_ceiling_is_pending_until_complete_exact_evidence_and_never_overrides_it() {
+    let full: Value = serde_json::from_str(&register_json(
+        "real-data-eligible",
+        &[
+            ("synthetic", "passed"),
+            ("negative-authorization", "passed"),
+        ],
+    ))
+    .unwrap();
+    let mut pending = full.clone();
+    pending["entries"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("negative_authorization");
+    let register = CapabilityRegister::from_json(&pending.to_string()).unwrap();
+    assert_eq!(
+        register
+            .entry("processing.codex-responses")
+            .unwrap()
+            .ceiling,
+        Enablement::RealDataEligible
+    );
+    assert_eq!(
+        register.enablement("processing.codex-responses"),
+        Enablement::SyntheticOnly
+    );
+    assert_eq!(
+        CapabilityRegister::from_json(&full.to_string())
+            .unwrap()
+            .enablement("processing.codex-responses"),
+        Enablement::RealDataEligible
+    );
+    let mut incomplete = full.clone();
+    incomplete["entries"][0]["negative_authorization"]["scenarios"]["real-session-production-admission"] =
+        Value::from("not-run");
+    assert_eq!(
+        CapabilityRegister::from_json(&incomplete.to_string())
+            .unwrap()
+            .enablement("processing.codex-responses"),
+        Enablement::SyntheticOnly
+    );
+    let mut capped = full.clone();
+    capped["entries"][0]["ceiling"] = Value::from("synthetic-only");
+    assert_eq!(
+        CapabilityRegister::from_json(&capped.to_string())
+            .unwrap()
+            .enablement("processing.codex-responses"),
+        Enablement::SyntheticOnly
+    );
+    for (field, value) in [
+        ("model", Value::from("gpt-6.1-luna")),
+        ("schema_version", Value::from(1)),
+    ] {
+        let mut mismatched = full.clone();
+        mismatched["entries"][0]["negative_authorization"]["identity"][field] = value;
+        let result = CapabilityRegister::from_json(&mismatched.to_string());
+        if field == "model" {
+            assert_invalid_entry(result, "complete exact-build proof does not match");
+        } else {
+            assert_eq!(
+                result.unwrap().enablement("processing.codex-responses"),
+                Enablement::SyntheticOnly
+            );
+        }
+    }
+    let mut old = full;
+    old["schema_version"] = Value::from(1);
+    assert!(matches!(
+        CapabilityRegister::from_json(&old.to_string()),
+        Err(CapabilityError::UnsupportedSchemaVersion {
+            found: 1,
+            expected: 2
+        })
+    ));
+}
+
+#[test]
+fn reviewed_build_proof_cannot_promote_a_different_adapter_or_scope() {
+    let original: Value = serde_json::from_str(&register_json(
+        "real-data-eligible",
+        &[
+            ("synthetic", "passed"),
+            ("negative-authorization", "passed"),
+        ],
+    ))
+    .unwrap();
+    let mut wrong_route = original.clone();
+    wrong_route["entries"][0]["id"] = Value::from("processing.claude-api-key");
     assert_invalid_entry(
-        CapabilityRegister::from_json(&value.to_string()),
+        CapabilityRegister::from_json(&wrong_route.to_string()),
         "exact-build",
     );
+    for field in ["model", "api", "deployment", "endpoint"] {
+        let mut changed = original.clone();
+        changed["entries"][0]["versions"][field] = Value::from("different");
+        assert_invalid_entry(
+            CapabilityRegister::from_json(&changed.to_string()),
+            "exact-build",
+        );
+    }
+    let mut changed = original;
+    changed["entries"][0]["processing_scope"] = Value::from("different");
+    assert_invalid_entry(
+        CapabilityRegister::from_json(&changed.to_string()),
+        "exact-build",
+    );
+}
+
+#[test]
+fn terra_qualification_is_exact_and_never_replaces_current_authority() {
+    use inquello_domain::routes::{
+        DataTier, RouteConfiguration, RouteConfigurationInput, RouteVerification, route_eligibility,
+    };
+    let register = CapabilityRegister::load_embedded().unwrap();
+    let entry = register.entry("processing.codex-responses").unwrap();
+    let expected = expected_embedded_terra_enablement(&register);
+    assert_eq!(entry.enablement(), expected);
+    assert_eq!(
+        register.enablement("processing.claude-api-key"),
+        Enablement::Disabled
+    );
+    let input = RouteConfigurationInput {
+        route_id: "codex-responses".into(),
+        deployment: "openai-api".into(),
+        model: "gpt-6.1-terra".into(),
+        api_version: "responses-v1".into(),
+        account_ref: "00000000-0000-4000-8000-000000000001".into(),
+        region: None,
+    };
+    let configuration = RouteConfiguration::parse(input.clone()).unwrap();
+    let allowed = route_eligibility(Some(&configuration), true, true, DataTier::Synthetic);
+    assert!(allowed.enabled);
+    assert_eq!(
+        allowed.verification,
+        if expected == Enablement::RealDataEligible {
+            RouteVerification::VerifiedForRealData
+        } else {
+            RouteVerification::VerifiedForSynthetic
+        }
+    );
+    for (credential, adapter, tier) in [
+        (false, true, DataTier::Synthetic),
+        (true, false, DataTier::Synthetic),
+        (true, true, DataTier::Real),
+    ] {
+        assert!(!route_eligibility(Some(&configuration), credential, adapter, tier).enabled);
+    }
+    for (model, api, deployment) in [
+        ("gpt-6.1-luna", "responses-v1", "openai-api"),
+        ("gpt-6.1-terra", "responses-v2", "openai-api"),
+        ("gpt-6.1-terra", "responses-v1", "chatgpt-codex"),
+    ] {
+        let mut other = input.clone();
+        other.model = model.into();
+        other.api_version = api.into();
+        other.deployment = deployment.into();
+        let other = RouteConfiguration::parse(other).unwrap();
+        let denied = route_eligibility(Some(&other), true, true, DataTier::Synthetic);
+        assert!(!denied.enabled);
+        assert_eq!(denied.verification, RouteVerification::NotVerified);
+    }
+    assert!(!route_eligibility(None, true, true, DataTier::Synthetic).enabled);
+}
+
+#[test]
+fn terra_evidence_records_executed_fixture_cases_not_live_provider_proof() {
+    let path = repo_root().join(
+        "_bmad-output/implementation-artifacts/validation/terra-responses-synthetic-20261101.json",
+    );
+    let evidence: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    assert_eq!(evidence["tests"]["passed"], 31);
+    assert_eq!(evidence["tests"]["failed"], 0);
+    assert_eq!(evidence["tests"]["ignored"], 0);
+    assert_eq!(evidence["tests"]["selectorPassed"], 2);
+    let cases = evidence["tests"]["cases"].as_array().unwrap();
+    assert_eq!(cases.len(), 31);
+    let unique: std::collections::BTreeSet<_> = cases.iter().map(|v| v.as_str().unwrap()).collect();
+    assert_eq!(unique.len(), 31);
+    assert!(unique.iter().all(|name| name.starts_with("responses_")));
+    assert!(unique.contains("responses_lifecycle_warm_policy_change"));
+    assert!(unique.contains("responses_lifecycle_completed_followup"));
+    assert_eq!(evidence["transport"]["liveProvider"], false);
+    assert_eq!(evidence["transport"]["realCredentials"], false);
+    assert_eq!(evidence["transport"]["pinnedLoopback"], true);
+    assert_eq!(evidence["model"], "gpt-6.1-terra");
+    assert_eq!(evidence["deployment"], "openai-api");
+    assert_eq!(evidence["api"], "responses-v1");
+}
+
+#[test]
+fn terra_route_does_not_accept_caller_supplied_endpoint_or_eligibility() {
+    use inquello_domain::routes::RouteConfigurationInput;
+    let value = serde_json::json!({
+        "route_id": "codex-responses", "deployment": "openai-api",
+        "model": "gpt-6.1-terra", "api_version": "responses-v1",
+        "account_ref": "00000000-0000-4000-8000-000000000001", "region": null
+    });
+    for (field, injected) in [
+        (
+            "endpoint",
+            Value::from("https://untrusted.invalid/v1/responses"),
+        ),
+        ("eligibility", Value::from("real-data-eligible")),
+    ] {
+        let mut other = value.clone();
+        other[field] = injected;
+        assert!(serde_json::from_value::<RouteConfigurationInput>(other).is_err());
+    }
 }

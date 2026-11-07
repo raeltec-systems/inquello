@@ -369,12 +369,12 @@ impl CommandExecRequestProcessor {
                 .await
         }
         .await;
-        if result.is_err() {
-            if let Some(observer) = usage.take() {
-                observer
-                    .finish(inquello_domain::usage::AttemptStatus::Uncertain)
-                    .await;
-            }
+        if result.is_err()
+            && let Some(observer) = usage.take()
+        {
+            observer
+                .finish(inquello_domain::usage::AttemptStatus::Uncertain)
+                .await;
         }
         result
     }

@@ -511,6 +511,42 @@
       },
       "deletion": "Delete Local runtime ownership only after the runtime is stopped; deleting it makes earlier unfinished work unverifiable for resume",
       "recovery": "Content-free OS locking and device-local nonce only. Not exported or restored. Confirmed Task history remains in Private work organisation; a missing or changed nonce never proves a previous runtime ended."
+    },
+    {
+      "id": "provider-consent-journal",
+      "label": "Workspace provider permission journal",
+      "location": {"root": "user-data", "globs": ["identity/provider-consents/**"]},
+      "enabled": true,
+      "credentials": false,
+      "owner": "The signed-in workspace owner, on this device",
+      "rule_owner": "Organisation data-policy owner (OQ-2)",
+      "retention": "until-owner-deletes",
+      "access": "main-process-only",
+      "export": {"mode": "excluded", "reason": "Principal/workspace-bound encrypted operation envelopes must not become portable authority or be replayed on another installation"},
+      "deletion": "Not individually deletable. Reconcile unresolved permission changes in AI connections. Removing an entire profile cannot revoke workspace consent: an already submitted server operation may still complete.",
+      "recovery": "Not exported or imported. Restart retains the same operation ID and checks its server receipt before a deliberate exact retry. Signout does not discard pending requests; a missing receipt is not proof of nonexecution."
+    },
+    {
+      "id": "onboarding-drafts",
+      "label": "Workspace onboarding drafts",
+      "location": {
+        "root": "user-data",
+        "globs": [
+          "identity/onboarding/**"
+        ]
+      },
+      "enabled": true,
+      "credentials": false,
+      "owner": "The signed-in creator, on this device",
+      "rule_owner": "Organisation data-policy owner (OQ-2)",
+      "retention": "until-owner-deletes",
+      "access": "main-process-only",
+      "export": {
+        "mode": "excluded",
+        "reason": "Principal-bound encrypted invitation email drafts and exact pending mutation envelopes must not be copied or replayed on another installation"
+      },
+      "deletion": "Delete Workspace onboarding drafts in Local data. Reconcile pending requests first: deleting local drafts never reverses committed server memberships or Workspaces, and server receipts remain authoritative.",
+      "recovery": "Not exported or recoverable after deletion. Sign in again and refresh current Workspaces and invitations. Until deletion, restart reads the principal-bound pending receipt before any deliberate same-envelope retry; never silently replays mutations."
     }
   ]
 }

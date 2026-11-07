@@ -16,7 +16,7 @@ import type { IdentityStatusView } from '../src/renderer/bridge';
 
 const signedOut: IdentityStatusView = { identity: { state: 'signed-out' }, sharedService: 'available', credentialStorage: 'os-backed', privateWork: 'local' };
 const signedIn: IdentityStatusView = {
-  identity: { state: 'signed-in', displayName: 'Synthetic Developer', issuerLabel: 'Synthetic test issuer' },
+  identity: { state: 'signed-in', displayName: 'Chanda Mwansa', issuerLabel: 'Synthetic test issuer' },
   sharedService: 'available',
   credentialStorage: 'os-backed',
   privateWork: 'local',
@@ -42,10 +42,20 @@ const block = () => document.querySelector<HTMLElement>('[data-account]')!;
 const button = (name: string) => screen.getByRole('button', { name });
 
 describe('Account block', () => {
+  it.each(['refused','throws'])('preserves owner drafts when sign-out %s', async outcome => {
+    const changed=vi.fn();
+    installBridge(signedIn,{signOut:async()=>{if(outcome==='throws')throw new Error('unavailable');return{ok:false,status:signedIn,reason:'Sign-out was refused.'};}});
+    render(<Account onIdentityChanged={changed}/>);
+    await screen.findByText('Chanda Mwansa');
+    await userEvent.click(button('Sign out'));
+    await screen.findByRole('status');
+    expect(block().dataset.identityState).toBe('signed-in');
+    expect(changed).not.toHaveBeenCalled();
+  });
   it('shows identity, shared service and private work as separate states', async () => {
     installBridge(signedIn);
     render(<Account />);
-    await screen.findByText('Synthetic Developer');
+    await screen.findByText('Chanda Mwansa');
     expect(block().dataset).toMatchObject({ identityState: 'signed-in', sharedService: 'available', credentialStorage: 'os-backed', privateWork: 'local' });
     const rows = within(block()).getAllByRole('term').map((term) => term.textContent);
     expect(rows).toEqual(['Inquello identity', 'Shared service', 'Private work', 'Sign-in storage']);
@@ -63,7 +73,7 @@ describe('Account block', () => {
     render(<Account />);
     await screen.findByText('Signed out');
     await userEvent.click(button('Sign in'));
-    await screen.findByText('Synthetic Developer');
+    await screen.findByText('Chanda Mwansa');
     expect(bridge.signIn).toHaveBeenCalledTimes(1);
     expect(bridge.signIn).toHaveBeenCalledWith();
   });
@@ -109,7 +119,7 @@ describe('Account block', () => {
   it('ignores fields outside the published status and renders without the bridge', async () => {
     installBridge({ ...signedIn, accessCredential: 'iqa_LEAK' } as unknown as IdentityStatusView);
     render(<Account />);
-    await screen.findByText('Synthetic Developer');
+    await screen.findByText('Chanda Mwansa');
     expect(block().outerHTML).not.toContain('LEAK');
     cleanup();
     delete (globalThis as { inquello?: unknown }).inquello;

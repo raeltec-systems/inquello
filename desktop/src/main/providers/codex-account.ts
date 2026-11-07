@@ -93,6 +93,10 @@ export class CodexAccount {
     return status;
   }
 
+  /** Main calls only after an accepted cached native private-credential handoff.
+   * This establishes credential presence, never account identity, access or qualification. */
+  confirmPrivateBinding():void {if(!this.options.runtime.ready())return;this.account??={type:'other'};this.known=true;this.readFailed=false;}
+
   /** Re-reads `account/read` from the runtime, then returns the status. */
   async refresh(): Promise<CodexRouteStatus> {
     if (!this.options.runtime.ready()) {

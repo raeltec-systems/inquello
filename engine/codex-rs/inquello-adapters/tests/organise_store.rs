@@ -670,3 +670,29 @@ async fn saved_request_fence_observes_other_connections_and_releases_queue_lease
         "new request observes the new stable state"
     );
 }
+
+#[tokio::test]
+async fn saved_concurrent_empty_reads_do_not_invalidate_each_other() {
+    let fixture = fixture();
+    let store = open(&fixture).await;
+    let mut first = store.saved_read_fence().await.unwrap();
+    let mut second = store.saved_read_fence().await.unwrap();
+    let lease = store.seal_saved_read(&mut first).await.unwrap();
+    let pending = store.seal_saved_read(&mut second);
+    tokio::pin!(pending);
+    // Poll the competing seal while the first read owns the writer lease.
+    // It must wait, not disclose early or convert another read into a mutation.
+    tokio::select! {
+        biased;
+        result = &mut pending => panic!("second seal completed before lease release: {}", result.is_ok()),
+        () = tokio::task::yield_now() => {}
+    }
+    drop(lease);
+    let second_lease = tokio::time::timeout(std::time::Duration::from_secs(10), pending)
+        .await
+        .expect("released queue lease must unblock another reader")
+        .expect("read-only queue leases must not alter data_version");
+    drop(second_lease);
+    let mut fresh = store.saved_read_fence().await.unwrap();
+    assert!(store.seal_saved_read(&mut fresh).await.is_ok());
+}

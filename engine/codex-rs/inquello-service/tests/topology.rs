@@ -22,6 +22,7 @@ use inquello_service::ConfigError;
 use inquello_service::StartError;
 use inquello_service::test_provider::ProviderSettings;
 use inquello_service::test_provider::RunningProvider;
+use inquello_service::test_provider::start_onboarding_provider;
 use inquello_service::test_provider::start_provider;
 use inquello_service::test_tls::TestCertificateAuthority;
 use pretty_assertions::assert_eq;
@@ -235,23 +236,33 @@ fn query_of(location: &str) -> HashMap<String, String> {
 
 impl ProviderHarness {
     async fn start() -> Self {
+        Self::start_mode(false).await
+    }
+
+    async fn start_mode(onboarding: bool) -> Self {
         let ca = TestCertificateAuthority::new("provider test CA");
         let tls = ca.loopback_server_tls();
-        let provider = start_provider(
-            "127.0.0.1:0".parse().expect("address"),
-            &tls,
-            ProviderSettings {
-                client_id: CLIENT_ID.to_string(),
-                redirect_uris: vec![LOOPBACK_REGISTRATION.to_string()],
-                subject: "synthetic-provider-subject".to_string(),
-                email: Some("provider@synthetic.invalid".to_string()),
-                name: Some("Provider Subject".to_string()),
-                code_lifetime: TimeDelta::minutes(1),
-                id_token_lifetime: TimeDelta::minutes(5),
-            },
-            Arc::new(ManualClock::new()),
-        )
-        .await
+        let settings = ProviderSettings {
+            client_id: CLIENT_ID.to_string(),
+            redirect_uris: vec![LOOPBACK_REGISTRATION.to_string()],
+            subject: if onboarding {
+                "synthetic-developer"
+            } else {
+                "synthetic-provider-subject"
+            }
+            .to_string(),
+            email: Some("provider@synthetic.invalid".to_string()),
+            name: Some("Provider Subject".to_string()),
+            code_lifetime: TimeDelta::minutes(1),
+            id_token_lifetime: TimeDelta::minutes(5),
+        };
+        let bind = "127.0.0.1:0".parse().expect("address");
+        let clock = Arc::new(ManualClock::new());
+        let provider = if onboarding {
+            start_onboarding_provider(bind, &tls, settings, clock).await
+        } else {
+            start_provider(bind, &tls, settings, clock).await
+        }
         .expect("provider starts");
         let issuer_config = provider.issuer_config();
         let client = trusting(&ca);
@@ -323,18 +334,30 @@ impl ProviderHarness {
 
     /// Runs `/authorize` for `transaction` and returns the code.
     async fn code(&self, transaction: &LoginTransaction, challenge: &str, state: &str) -> String {
-        let (status, location) = self
-            .authorize(&[
-                ("response_type", "code"),
-                ("client_id", CLIENT_ID),
-                ("redirect_uri", &transaction.redirect_uri),
-                ("scope", "openid profile email"),
-                ("state", state),
-                ("nonce", &transaction.nonce),
-                ("code_challenge", challenge),
-                ("code_challenge_method", "S256"),
-            ])
-            .await;
+        self.code_for(transaction, challenge, state, None).await
+    }
+
+    async fn code_for(
+        &self,
+        transaction: &LoginTransaction,
+        challenge: &str,
+        state: &str,
+        hint: Option<&str>,
+    ) -> String {
+        let mut params = vec![
+            ("response_type", "code"),
+            ("client_id", CLIENT_ID),
+            ("redirect_uri", transaction.redirect_uri.as_str()),
+            ("scope", "openid profile email"),
+            ("state", state),
+            ("nonce", transaction.nonce.as_str()),
+            ("code_challenge", challenge),
+            ("code_challenge_method", "S256"),
+        ];
+        if let Some(hint) = hint {
+            params.push(("login_hint", hint));
+        }
+        let (status, location) = self.authorize(&params).await;
         assert_eq!(status, StatusCode::FOUND);
         let location = location.expect("redirect");
         assert!(
@@ -893,4 +916,320 @@ fn drop_stale_removes_abandoned_run_databases_but_never_a_live_run() {
     }
     stop_topology(second);
     stop_topology(live);
+}
+
+// Story 1.31: explicit fixture mode, never a production identity shortcut.
+fn signed_fixture_claims(token: &str) -> Value {
+    let payload = token.split('.').nth(1).expect("JWT payload");
+    serde_json::from_slice(&URL_SAFE_NO_PAD.decode(payload).expect("base64 claims"))
+        .expect("claims")
+}
+
+async fn exchange_fixture(
+    p: &ProviderHarness,
+    transaction: &LoginTransaction,
+    code: &str,
+    verifier: &str,
+) -> (StatusCode, Value) {
+    p.token(&[
+        ("grant_type", "authorization_code"),
+        ("code", code),
+        ("redirect_uri", &transaction.redirect_uri),
+        ("client_id", CLIENT_ID),
+        ("code_verifier", verifier),
+    ])
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn default_provider_stays_one_subject_unverified_even_with_login_hint() {
+    let p = ProviderHarness::start().await;
+    let transaction = p.transaction("http://127.0.0.1:41301/callback").await;
+    let (verifier, challenge) = pkce();
+    p.h.remember(&verifier);
+    let code = p
+        .code_for(&transaction, &challenge, "default", Some("elias"))
+        .await;
+    let (status, body) = exchange_fixture(&p, &transaction, &code, &verifier).await;
+    assert_eq!(status, StatusCode::OK);
+    let token = body["id_token"].as_str().expect("token");
+    p.h.remember(token);
+    p.h.remember(body["access_token"].as_str().expect("access"));
+    let claims = signed_fixture_claims(token);
+    assert_eq!(claims["sub"], "synthetic-provider-subject");
+    assert_eq!(claims["email_verified"], false);
+    let credentials: SessionCredentials = p.h.bootstrap(&transaction, token).await.ok();
+    p.h.get(
+        "/v1/invitations",
+        Some(credentials.access_credential.expose()),
+    )
+    .await
+    .assert_error(ErrorKind::Denied);
+    p.finish().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn onboarding_interleaved_codes_bind_fixed_identity_and_verified_claims_without_membership() {
+    let p = ProviderHarness::start_mode(true).await;
+    let ada = p.transaction("http://127.0.0.1:41302/callback").await;
+    let elias = p.transaction("http://127.0.0.1:41303/callback").await;
+    let (va, ca) = pkce();
+    let (ve, ce) = pkce();
+    p.h.remember(&va);
+    p.h.remember(&ve);
+    let ac = p.code_for(&ada, &ca, "ada-state", Some("chanda")).await;
+    let ec = p.code_for(&elias, &ce, "elias-state", Some("elias")).await;
+    // Redeem in reverse order; no global currently-selected subject exists.
+    let mut principals = Vec::new();
+    for (tx, code, verifier, subject, email) in [
+        (
+            &elias,
+            &ec,
+            &ve,
+            "synthetic-colleague",
+            "elias.ndlovu@mupeta.invalid",
+        ),
+        (
+            &ada,
+            &ac,
+            &va,
+            "synthetic-developer",
+            "chanda.mwansa@mupeta.invalid",
+        ),
+    ] {
+        let (status, body) = exchange_fixture(&p, tx, code, verifier).await;
+        assert_eq!(status, StatusCode::OK);
+        let token = body["id_token"].as_str().expect("token");
+        p.h.remember(token);
+        p.h.remember(body["access_token"].as_str().expect("access"));
+        let claims = signed_fixture_claims(token);
+        assert_eq!(claims["sub"], subject);
+        assert_eq!(claims["email"], email);
+        assert_eq!(claims["email_verified"], true);
+        assert_eq!(claims["nonce"], tx.nonce);
+        // Normal service bootstrap verifies signed issuer/nonce/PKCE flow result.
+        let credentials: SessionCredentials = p.h.bootstrap(tx, token).await.ok();
+        let view: inquello_protocol::session::SessionView =
+            p.h.get("/v1/session", Some(credentials.access_credential.expose()))
+                .await
+                .ok();
+        assert_eq!(view.subject, subject);
+        principals.push(view.principal.principal_id);
+        let invitations: Value =
+            p.h.get(
+                "/v1/invitations",
+                Some(credentials.access_credential.expose()),
+            )
+            .await
+            .ok();
+        assert_eq!(invitations["invitations"], json!([]));
+        let (status, _) = exchange_fixture(&p, tx, code, verifier).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+    }
+    assert_ne!(principals[0], principals[1]);
+    let memberships: i64 = sqlx::query_scalar("SELECT count(*) FROM memberships")
+        .fetch_one(&p.h.pool)
+        .await
+        .expect("count memberships");
+    let workspaces: i64 = sqlx::query_scalar("SELECT count(*) FROM workspaces")
+        .fetch_one(&p.h.pool)
+        .await
+        .expect("count workspaces");
+    assert_eq!(memberships, 0);
+    assert_eq!(workspaces, 0);
+    p.finish().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn onboarding_unknown_missing_hints_and_cross_code_profiles_are_rejected() {
+    let p = ProviderHarness::start_mode(true).await;
+    let tx = p.transaction("http://127.0.0.1:41304/callback").await;
+    let (verifier, challenge) = pkce();
+    p.h.remember(&verifier);
+    for hint in [
+        None,
+        Some(""),
+        Some("arbitrary-subject"),
+        Some("Ada"),
+        Some("chanda.mwansa@mupeta.invalid"),
+    ] {
+        let mut params = vec![
+            ("response_type", "code"),
+            ("client_id", CLIENT_ID),
+            ("redirect_uri", tx.redirect_uri.as_str()),
+            ("scope", "openid"),
+            ("state", "s"),
+            ("nonce", tx.nonce.as_str()),
+            ("code_challenge", challenge.as_str()),
+            ("code_challenge_method", "S256"),
+        ];
+        if let Some(hint) = hint {
+            params.push(("login_hint", hint));
+        }
+        let (status, location) = p.authorize(&params).await;
+        assert_eq!(status, StatusCode::FOUND);
+        let query = query_of(&location.expect("registered redirect"));
+        assert_eq!(
+            query.get("error").map(String::as_str),
+            Some("invalid_request")
+        );
+        assert!(!query.contains_key("code"));
+    }
+    let code = p.code_for(&tx, &challenge, "bound", Some("chanda")).await;
+    let (status, body) = p
+        .token(&[
+            ("grant_type", "authorization_code"),
+            ("code", &code),
+            ("redirect_uri", &tx.redirect_uri),
+            ("client_id", CLIENT_ID),
+            ("code_verifier", &verifier),
+            ("login_hint", "elias"),
+        ])
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(body.get("id_token").is_none());
+    let (status, _) = exchange_fixture(&p, &tx, &code, &verifier).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST); // rejected override consumed code
+    let (other_verifier, other_challenge) = pkce();
+    p.h.remember(&other_verifier);
+    let code = p
+        .code_for(&tx, &other_challenge, "other-profile", Some("elias"))
+        .await;
+    let (status, body) = exchange_fixture(&p, &tx, &code, &verifier).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(body.get("id_token").is_none());
+    let code = p
+        .code_for(&tx, &challenge, "wrong-redirect", Some("chanda"))
+        .await;
+    let (status, body) = p
+        .token(&[
+            ("grant_type", "authorization_code"),
+            ("code", &code),
+            ("redirect_uri", "http://127.0.0.1:41305/callback"),
+            ("client_id", CLIENT_ID),
+            ("code_verifier", &verifier),
+        ])
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(body.get("id_token").is_none());
+    p.finish().await;
+}
+
+#[test]
+fn onboarding_topology_refuses_every_seed_and_foreign_mode_before_startup() {
+    let binary = env!("CARGO_BIN_EXE_inquello-dev-topology");
+    for conflicting in [
+        vec!["--seed-workspace", "No seed"],
+        vec!["--seed-out", "unused.json"],
+        vec!["--seed-policy", "unused.json"],
+        vec!["--seed-execution", "unused.json"],
+        vec!["--smoke"],
+        vec!["--visual-only"],
+        vec!["--quota-only"],
+        vec!["--provider-fixture", "unused.json"],
+        vec!["--smoke-visual"],
+        vec!["--smoke-quota"],
+        vec!["--navigation"],
+        vec!["--service-bind", "0.0.0.0:0"],
+        vec!["--issuer-bind", "0.0.0.0:0"],
+    ] {
+        let output = Command::new(binary)
+            .arg("--onboarding")
+            .args(&conflicting)
+            .env_remove("INQUELLO_DEV_DATABASE_URL")
+            .env_remove("INQUELLO_TEST_DATABASE_URL")
+            .output()
+            .expect("invalid mode exits before database setup");
+        assert_eq!(output.status.code(), Some(2));
+        assert!(output.stdout.is_empty());
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn onboarding_provider_rejects_non_synthetic_profile_before_binding() {
+    let ca = TestCertificateAuthority::new("fixture gate CA");
+    let tls = ca.loopback_server_tls();
+    for (bind, client, subject, redirect) in [
+        (
+            "0.0.0.0:0",
+            CLIENT_ID,
+            "synthetic-developer",
+            LOOPBACK_REGISTRATION,
+        ),
+        (
+            "127.0.0.1:0",
+            "ordinary-client",
+            "synthetic-developer",
+            LOOPBACK_REGISTRATION,
+        ),
+        (
+            "127.0.0.1:0",
+            CLIENT_ID,
+            "arbitrary-subject",
+            LOOPBACK_REGISTRATION,
+        ),
+        (
+            "127.0.0.1:0",
+            CLIENT_ID,
+            "synthetic-developer",
+            "http://localhost/callback",
+        ),
+    ] {
+        let settings = ProviderSettings {
+            client_id: client.into(),
+            subject: subject.into(),
+            redirect_uris: vec![redirect.into()],
+            email: None,
+            name: None,
+            code_lifetime: TimeDelta::minutes(1),
+            id_token_lifetime: TimeDelta::minutes(5),
+        };
+        assert!(
+            start_onboarding_provider(
+                bind.parse().expect("bind"),
+                &tls,
+                settings,
+                Arc::new(ManualClock::new())
+            )
+            .await
+            .is_err()
+        );
+    }
+}
+
+#[test]
+fn onboarding_binary_starts_an_empty_owned_database_and_cleans_up() {
+    let _serial = topology_lock();
+    let lease_name = format!("inquello-onboarding-test-{}", Uuid::new_v4().simple());
+    let (child, config) = spawn_topology_named(&["--onboarding"], Some(&lease_name));
+    assert_eq!(config["client_id"], CLIENT_ID);
+    let runtime = tokio::runtime::Runtime::new().expect("runtime");
+    let names = runtime.block_on(run_database_names(Some(&lease_name)));
+    assert_eq!(names.len(), 1);
+    runtime.block_on(async {
+        let url = std::env::var(support::DATABASE_ENV).expect("test database URL");
+        let options: sqlx::postgres::PgConnectOptions = url.parse().expect("database URL");
+        let pool = inquello_service::postgres::connect(&inquello_service::DatabaseConfig {
+            connect: options.database(&names[0]),
+            max_connections: 1,
+            acquire_timeout: Duration::from_secs(5),
+        })
+        .await
+        .expect("owned run database");
+        for table in ["workspaces", "memberships"] {
+            let count: i64 =
+                sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT count(*) FROM {table}")))
+                    .fetch_one(&pool)
+                    .await
+                    .expect("count initial fixture state");
+            assert_eq!(count, 0);
+        }
+        pool.close().await;
+    });
+    stop_topology(child);
+    assert!(
+        runtime
+            .block_on(run_database_names(Some(&lease_name)))
+            .is_empty()
+    );
 }

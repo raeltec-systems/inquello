@@ -64,6 +64,9 @@ export type MenuEntry = MenuAction | MenuCheckbox | MenuRadioGroup;
 export interface MenuProps {
   /** Visible trigger text and its accessible name. */
   label: string;
+  /** Optional visual trigger; label remains its accessible name. */
+  triggerContent?: ReactNode;
+  showChevron?: boolean;
   /** Muted heading at the top of the list; also names the menu. */
   heading?: string;
   items: readonly MenuEntry[];
@@ -125,7 +128,7 @@ function Row({ id, role, label, description, disabledReason, checked, checkColum
   );
 }
 
-export function Menu({ label, heading, items, triggerVariant = 'secondary', defaultOpen = false, className }: MenuProps): ReactElement {
+export function Menu({ label, triggerContent, showChevron=true, heading, items, triggerVariant = 'secondary', defaultOpen = false, className }: MenuProps): ReactElement {
   const baseId = useId();
   const triggerId = `${baseId}trigger`;
   const menuId = `${baseId}menu`;
@@ -252,6 +255,7 @@ export function Menu({ label, heading, items, triggerVariant = 'secondary', defa
         id={triggerId}
         type="button"
         className={`iq-button iq-button--${triggerVariant} iq-button--md iq-menu-trigger`}
+        aria-label={label}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
@@ -264,8 +268,8 @@ export function Menu({ label, heading, items, triggerVariant = 'secondary', defa
           setOpen(true);
         }}
       >
-        <span className="iq-button-label">{label}</span>
-        <Icon name="chevron-down" size={DENSE_ICON_SIZE} />
+        <span className="iq-button-label">{triggerContent ?? label}</span>
+        {showChevron&&<Icon name="chevron-down" size={DENSE_ICON_SIZE} />}
       </button>
       {open ? (
         <div

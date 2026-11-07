@@ -8,6 +8,493 @@ use inquello_domain::{DomainError, Revision};
 use tempfile::TempDir;
 use uuid::Uuid;
 
+#[tokio::test]
+#[expect(
+    clippy::disallowed_methods,
+    reason = "isolated legacy-schema migration fixture"
+)]
+async fn migration_preserves_legacy_bytes_receipts_foreign_keys_and_requires_exact_revalidation() {
+    use sqlx::{Connection, Row};
+    let dir = ok(TempDir::new());
+    let path = dir.path().join("working.sqlite");
+    let mut db =
+        ok(sqlx::SqliteConnection::connect(&format!("sqlite:{}?mode=rwc", path.display())).await);
+    // Build the exact historical schema, without opening/migrating a user profile.
+    for sql in [
+        include_str!("../migrations/0001_store_info_and_receipts.sql"),
+        include_str!("../migrations/0002_engagements_folders_tasks.sql"),
+        include_str!("../migrations/0003_task_states.sql"),
+        include_str!("../migrations/0004_task_broad_modes.sql"),
+        include_str!("../migrations/0005_command_rules_and_permissions.sql"),
+        include_str!("../migrations/0006_processing_routes.sql"),
+        include_str!("../migrations/0007_automated_permission_review.sql"),
+        include_str!("../migrations/0008_task_usage.sql"),
+        include_str!("../migrations/0009_task_runs.sql"),
+        include_str!("../migrations/0010_task_data_provenance.sql"),
+        include_str!("../migrations/0011_task_metadata_provenance.sql"),
+        include_str!("../migrations/0012_task_lifecycle.sql"),
+        include_str!("../migrations/0013_task_runtime_leases.sql"),
+        include_str!("../migrations/0014_task_navigation.sql"),
+        include_str!("../migrations/0015_local_tool_metadata_provenance.sql"),
+    ] {
+        ok(sqlx::raw_sql(sql).execute(&mut db).await);
+    }
+    let principal = actor(1).principal_id.to_string();
+    let task_id = Uuid::new_v4().to_string();
+    ok(sqlx::query("INSERT INTO tasks(task_id,workspace_id,creator_principal_id,engagement_id,folder_id,title,source_refs,artifact_refs,visibility,revision,created_at_ms,updated_at_ms) VALUES(?, ?, ?, NULL,NULL,'Fictional legacy task','[]','[]','private',1,17,17)")
+        .bind(&task_id).bind("5d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e").bind(&principal).execute(&mut db).await);
+    let original = format!(
+        " {} ",
+        serde_json::to_string(&configuration(RouteId::CodexResponses)).unwrap()
+    );
+    for revision in [1i64, 2] {
+        ok(sqlx::query(
+            "INSERT INTO processing_route_candidates VALUES(?,'codex-responses',?,?,17)",
+        )
+        .bind(&principal)
+        .bind(revision)
+        .bind(&original)
+        .execute(&mut db)
+        .await);
+    }
+    ok(
+        sqlx::query("INSERT INTO task_processing_routes VALUES(?,1,?,'codex-responses',1,19)")
+            .bind(&task_id)
+            .bind(&principal)
+            .execute(&mut db)
+            .await,
+    );
+    let request = " { \"legacy\" : true } ";
+    ok(sqlx::query("INSERT INTO processing_route_receipts VALUES('legacy-op',?,'set_task_route',?,0,1,?,'applied',23)").bind(&principal).bind(&task_id).bind(request).execute(&mut db).await);
+    let before = ok(sqlx::query("SELECT * FROM processing_route_receipts")
+        .fetch_one(&mut db)
+        .await);
+    let mut tx = ok(db.begin().await);
+    ok(
+        sqlx::raw_sql(include_str!("../migrations/0016_model_bindings.sql"))
+            .execute(&mut *tx)
+            .await,
+    );
+    ok(tx.commit().await);
+    let after = ok(sqlx::query("SELECT * FROM processing_route_receipts")
+        .fetch_one(&mut db)
+        .await);
+    for key in [
+        "operation_id",
+        "principal_id",
+        "command",
+        "scope_id",
+        "request",
+        "status",
+    ] {
+        assert_eq!(before.get::<String, _>(key), after.get::<String, _>(key));
+    }
+    for key in ["expected_revision", "resulting_revision", "recorded_at_ms"] {
+        assert_eq!(before.get::<i64, _>(key), after.get::<i64, _>(key));
+    }
+    let configurations = ok(sqlx::query_scalar::<_, String>(
+        "SELECT configuration FROM processing_route_candidates ORDER BY revision",
+    )
+    .fetch_all(&mut db)
+    .await);
+    assert_eq!(configurations, vec![original.clone(), original]);
+    let states = ok(sqlx::query_scalar::<_, String>(
+        "SELECT state FROM processing_model_bindings ORDER BY configuration_revision",
+    )
+    .fetch_all(&mut db)
+    .await);
+    assert_eq!(states, ["legacy-superseded", "active"]);
+    assert!(
+        ok(sqlx::query("PRAGMA foreign_key_check")
+            .fetch_all(&mut db)
+            .await)
+        .is_empty()
+    );
+    assert_eq!(
+        ok(sqlx::query_scalar::<_, i64>(
+            "SELECT configuration_revision FROM task_processing_routes"
+        )
+        .fetch_one(&mut db)
+        .await),
+        1
+    );
+}
+
+#[tokio::test]
+async fn same_provider_old_binding_can_start_after_b_and_pending_switch_is_denied() {
+    use inquello_domain::tasks::{
+        NativeTaskDataTier, StartTaskIntent, TaskLifecycleIntent, TaskLifecycleKind,
+        TaskLifecycleStore, TaskRunStatus, TaskRunStore,
+    };
+    use inquello_domain::usage::{Choices, SetUsageSettings, UsageStore, set_task_usage_settings};
+    let dir = ok(TempDir::new());
+    let store = open(&dir).await;
+    let owner = actor(1);
+    let version = "a".repeat(64);
+    let choice_a = "b".repeat(64);
+    let choice_b = "c".repeat(64);
+    let mut a = configure("resolve-a", 0, RouteId::CodexResponses);
+    a.configuration.model = "gpt-6.1-terra".into();
+    let resolved =
+        ok(
+            resolve_model_binding(&store, &SystemClock, owner, a.clone(), &version, &choice_a)
+                .await,
+        );
+    assert_eq!(resolved.receipt.command, RESOLVE_MODEL_BINDING_COMMAND);
+    assert!(
+        ok(
+            resolve_model_binding(&store, &SystemClock, owner, a.clone(), &version, &choice_a)
+                .await
+        )
+        .replayed
+    );
+    assert!(matches!(
+        resolve_model_binding(&store, &SystemClock, owner, a.clone(), &version, &choice_b).await,
+        Err(DomainError::OperationConflict { .. })
+    ));
+    assert!(matches!(
+        configure_route(&store, &SystemClock, owner, a).await,
+        Err(DomainError::OperationConflict { .. })
+    ));
+    let mut b = configure("resolve-b", 1, RouteId::CodexResponses);
+    b.configuration.model = "gpt-6.1-sol".into();
+    ok(resolve_model_binding(&store, &SystemClock, owner, b, &version, &choice_b).await);
+    let run = ok(store
+        .reserve_task_run(
+            owner.principal_id,
+            StartTaskIntent {
+                operation_id: "start-a-after-b".into(),
+                workspace_id: "5d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e".into(),
+                engagement_id: None,
+                folder_id: None,
+                request: "Fictional A request".into(),
+                route_id: "codex-responses".into(),
+                configuration_revision: 1,
+                choices: Choices::default(),
+            },
+            "fixture-runtime",
+            1,
+            NativeTaskDataTier::Synthetic,
+        )
+        .await);
+    let task = ok(store
+        .load_task(ok(inquello_domain::organise::TaskId::parse(&run.task_id)))
+        .await)
+    .unwrap();
+    assert_eq!(
+        ok(task_route(&store, owner, &run.task_id).await)
+            .current
+            .unwrap()
+            .configuration
+            .model(),
+        "gpt-6.1-terra"
+    );
+    assert!(
+        set_task_route(
+            &store,
+            &SystemClock,
+            owner,
+            select("pending-switch", 1, &task, RouteId::CodexResponses, 2)
+        )
+        .await
+        .is_err()
+    );
+    assert!(
+        ok(store
+            .find_route_receipt(&ok(inquello_domain::OperationId::parse("pending-switch")))
+            .await)
+        .is_none()
+    );
+    ok(store
+        .bind_task_thread(
+            owner.principal_id,
+            &run.operation_id,
+            "fixture-runtime",
+            "fixture-thread",
+        )
+        .await);
+    ok(store
+        .claim_task_dispatch(owner.principal_id, &run.operation_id, "fixture-runtime")
+        .await);
+    ok(store
+        .mark_task_run(
+            owner.principal_id,
+            &run.operation_id,
+            TaskRunStatus::Completed,
+            Some("fixture-turn"),
+        )
+        .await);
+    let executed = ok(store
+        .find_task_run(owner.principal_id, &run.operation_id)
+        .await)
+    .unwrap();
+    let switched = ok(set_task_route(
+        &store,
+        &SystemClock,
+        owner,
+        select("explicit-switch", 1, &task, RouteId::CodexResponses, 2),
+    )
+    .await);
+    assert_eq!(switched.record.revision, Revision::new(2));
+    let current = ok(store
+        .find_task_run(owner.principal_id, &run.operation_id)
+        .await)
+    .unwrap();
+    assert_eq!(current.configuration_revision, 2);
+    let settings = ok(set_task_usage_settings(
+        &store,
+        owner,
+        SetUsageSettings {
+            operation_id: "confirm-compatible-settings".into(),
+            task_id: run.task_id.clone(),
+            expected_revision: 1,
+            route_revision: 2,
+            choices: Choices::default(),
+        },
+        &["default".into()],
+        &["default".into()],
+    )
+    .await);
+    assert_eq!(settings.revision, 2);
+    assert_eq!(settings.route_revision, 2);
+    assert_eq!(
+        ok(store.read_usage(owner.principal_id, task.task_id).await).settings,
+        Some(settings)
+    );
+    let selected = ok(store
+        .find_task_run(owner.principal_id, &run.operation_id)
+        .await)
+    .unwrap();
+    let intent = TaskLifecycleIntent {
+        operation_id: "resume-switched".into(),
+        kind: TaskLifecycleKind::Resume,
+        guidance: Some("Fictional completed-run follow-up".into()),
+        expected: selected,
+        runtime_id: "continued-runtime".into(),
+    };
+    ok(store
+        .reserve_task_lifecycle_fenced(owner.principal_id, intent, |_| async { Ok(()) })
+        .await);
+    let continued = ok(store
+        .claim_task_lifecycle_fenced(owner.principal_id, "resume-switched", |_| async { Ok(()) })
+        .await);
+    assert_eq!(continued.binding.configuration_revision, 2);
+    assert_ne!(continued.binding.run_id, executed.run_id);
+    assert_eq!(continued.binding.thread_id, executed.thread_id);
+    let history = ok(store
+        .prior_task_runs(owner.principal_id, &run.task_id)
+        .await);
+    assert_eq!(
+        history.iter().find(|b| b.run_id == executed.run_id),
+        Some(&executed)
+    );
+    ok(store
+        .mark_task_run(
+            owner.principal_id,
+            &run.operation_id,
+            TaskRunStatus::Completed,
+            Some("continued-turn"),
+        )
+        .await);
+    let executed_settings = ok(store
+        .find_task_run(owner.principal_id, &run.operation_id)
+        .await)
+    .unwrap();
+    let high = Choices {
+        reasoning: "high".into(),
+        speed: "default".into(),
+    };
+    ok(set_task_usage_settings(
+        &store,
+        owner,
+        SetUsageSettings {
+            operation_id: "future-settings-only".into(),
+            task_id: run.task_id.clone(),
+            expected_revision: 2,
+            route_revision: 2,
+            choices: high.clone(),
+        },
+        &["default".into(), "high".into()],
+        &["default".into()],
+    )
+    .await);
+    let staged = ok(store
+        .find_task_run(owner.principal_id, &run.operation_id)
+        .await)
+    .unwrap();
+    assert_eq!(staged.choices, high);
+    let history = ok(store
+        .prior_task_runs(owner.principal_id, &run.task_id)
+        .await);
+    assert_eq!(
+        history
+            .iter()
+            .find(|b| b.run_id == executed_settings.run_id),
+        Some(&executed_settings)
+    );
+    ok(store
+        .reserve_task_lifecycle_fenced(
+            owner.principal_id,
+            TaskLifecycleIntent {
+                operation_id: "resume-new-settings".into(),
+                kind: TaskLifecycleKind::Resume,
+                guidance: Some("Fictional completed-run follow-up".into()),
+                expected: staged,
+                runtime_id: "third-runtime".into(),
+            },
+            |_| async { Ok(()) },
+        )
+        .await);
+    let next = ok(store
+        .claim_task_lifecycle_fenced(owner.principal_id, "resume-new-settings", |_| async {
+            Ok(())
+        })
+        .await);
+    assert_eq!(next.binding.choices, high);
+    assert_eq!(next.binding.thread_id, executed.thread_id);
+    assert_eq!(
+        ok(store
+            .prior_task_runs(owner.principal_id, &run.task_id)
+            .await),
+        history
+    );
+    assert_eq!(
+        ok(store
+            .tasks_for_model_binding(
+                owner.principal_id,
+                RouteId::CodexResponses,
+                Revision::new(1)
+            )
+            .await),
+        vec![task.task_id]
+    );
+    let refs = ok(store
+        .task_model_disclosure_bindings(owner.principal_id, task.task_id)
+        .await);
+    assert_eq!(
+        refs,
+        vec![
+            (RouteId::CodexResponses, Revision::new(1), true),
+            (RouteId::CodexResponses, Revision::new(2), true)
+        ]
+    );
+    assert!(
+        ok(store
+            .task_model_disclosure_bindings(actor(2).principal_id, task.task_id)
+            .await)
+        .is_empty()
+    );
+    let binding = ok(store.list_model_bindings(owner.principal_id).await)
+        .into_iter()
+        .find(|b| b.candidate.revision == Revision::new(1))
+        .unwrap();
+    ok(change_model_binding_state(
+        &store,
+        &SystemClock,
+        owner,
+        "revoke-executed-history",
+        &binding.binding_id,
+        Revision::new(1),
+        ModelBindingState::Revoked,
+    )
+    .await);
+    assert!(
+        !ok(store
+            .task_model_disclosure_bindings(owner.principal_id, task.task_id)
+            .await)[0]
+            .2
+    );
+}
+
+#[tokio::test]
+#[expect(
+    clippy::disallowed_methods,
+    reason = "isolated legacy binding-state fixture only"
+)]
+async fn deliberate_legacy_revalidation_keeps_the_same_exact_configuration_without_credential_grants()
+ {
+    use sqlx::Connection;
+    let dir = ok(TempDir::new());
+    let store = open(&dir).await;
+    let owner = actor(1);
+    let task = task(&store, owner).await;
+    ok(configure_route(
+        &store,
+        &SystemClock,
+        owner,
+        configure("legacy-a", 0, RouteId::CodexResponses),
+    )
+    .await);
+    ok(set_task_route(
+        &store,
+        &SystemClock,
+        owner,
+        select("legacy-select", 0, &task, RouteId::CodexResponses, 1),
+    )
+    .await);
+    let original = ok(task_route(&store, owner, &task.task_id.to_string()).await)
+        .current
+        .unwrap();
+    let binding = ok(store
+        .load_configuration_binding(
+            owner.principal_id,
+            RouteId::CodexResponses,
+            Revision::new(1),
+        )
+        .await)
+    .unwrap();
+    let mut fixture = ok(sqlx::SqliteConnection::connect(&format!(
+        "sqlite:{}",
+        dir.path().join("working.sqlite").display()
+    ))
+    .await);
+    ok(sqlx::query(
+        "UPDATE processing_model_bindings SET state='legacy-superseded' WHERE binding_id=?",
+    )
+    .bind(&binding.binding_id)
+    .execute(&mut fixture)
+    .await);
+    assert!(ok(task_route(&store, owner, &task.task_id.to_string()).await).stale_configuration);
+    assert!(
+        set_task_route(
+            &store,
+            &SystemClock,
+            owner,
+            select(
+                "no-implicit-revalidation",
+                1,
+                &task,
+                RouteId::CodexResponses,
+                1
+            )
+        )
+        .await
+        .is_err()
+    );
+    let validated = ok(change_model_binding_state(
+        &store,
+        &SystemClock,
+        owner,
+        "explicit-exact-revalidation",
+        &binding.binding_id,
+        Revision::new(1),
+        ModelBindingState::Active,
+    )
+    .await);
+    assert_eq!(
+        validated.binding.candidate.configuration,
+        original.configuration
+    );
+    let selected = ok(task_route(&store, owner, &task.task_id.to_string()).await);
+    assert_eq!(selected.current, Some(original));
+    assert!(!selected.stale_configuration);
+    assert!(
+        !selected
+            .eligibility(false, true, DataTier::Synthetic)
+            .enabled
+    );
+}
+
 fn ok<T, E: std::fmt::Debug>(value: Result<T, E>) -> T {
     value.unwrap_or_else(|error| panic!("unexpected error: {error:?}"))
 }
@@ -160,7 +647,7 @@ async fn other_principal_is_unknown_even_with_real_operation_id() {
 }
 
 #[tokio::test]
-async fn candidate_replacement_stales_selection_and_requires_explicit_reselection() {
+async fn creating_binding_b_preserves_a_and_explicit_switch_increments_selection() {
     let dir = ok(TempDir::new());
     let store = open(&dir).await;
     let owner = actor(1);
@@ -183,26 +670,162 @@ async fn candidate_replacement_stales_selection_and_requires_explicit_reselectio
     replacement.configuration.account_ref = "33333333-3333-4333-8333-333333333333".into();
     ok(configure_route(&store, &SystemClock, owner, replacement).await);
     let stale = ok(task_route(&store, owner, &task.task_id.to_string()).await);
-    assert!(stale.stale_configuration);
+    assert!(!stale.stale_configuration);
     assert_eq!(stale.current, Some(selected.record));
-    assert!(matches!(
-        set_task_route(
-            &store,
-            &SystemClock,
-            owner,
-            select("stale", 1, &task, RouteId::ClaudeApiKey, 1)
-        )
-        .await,
-        Err(DomainError::RevisionConflict { .. })
-    ));
     ok(set_task_route(
         &store,
         &SystemClock,
         owner,
-        select("reselect", 1, &task, RouteId::ClaudeApiKey, 2),
+        select("stale", 1, &task, RouteId::ClaudeApiKey, 1),
+    )
+    .await);
+    ok(set_task_route(
+        &store,
+        &SystemClock,
+        owner,
+        select("reselect", 2, &task, RouteId::ClaudeApiKey, 2),
     )
     .await);
     assert!(!ok(task_route(&store, owner, &task.task_id.to_string()).await).stale_configuration);
+}
+
+#[tokio::test]
+async fn binding_revoke_is_scoped_cas_owned_and_receipted_across_commands() {
+    let dir = ok(TempDir::new());
+    let store = open(&dir).await;
+    let owner = actor(1);
+    let a = task(&store, owner).await;
+    let b = task(&store, owner).await;
+    ok(configure_route(
+        &store,
+        &SystemClock,
+        owner,
+        configure("model-a", 0, RouteId::CodexResponses),
+    )
+    .await);
+    let mut model_b = configure("model-b", 1, RouteId::CodexResponses);
+    model_b.configuration.model = "fixture-second-model".into();
+    ok(configure_route(&store, &SystemClock, owner, model_b).await);
+    ok(set_task_route(
+        &store,
+        &SystemClock,
+        owner,
+        select("a-choice", 0, &a, RouteId::CodexResponses, 1),
+    )
+    .await);
+    ok(set_task_route(
+        &store,
+        &SystemClock,
+        owner,
+        select("b-choice", 0, &b, RouteId::CodexResponses, 2),
+    )
+    .await);
+    let binding = ok(store
+        .load_configuration_binding(
+            owner.principal_id,
+            RouteId::CodexResponses,
+            Revision::new(1),
+        )
+        .await)
+    .unwrap();
+    assert_eq!(
+        change_model_binding_state(
+            &store,
+            &SystemClock,
+            actor(2),
+            "revoke",
+            &binding.binding_id,
+            Revision::new(1),
+            ModelBindingState::Revoked
+        )
+        .await,
+        Err(DomainError::NotFound)
+    );
+    assert!(matches!(
+        change_model_binding_state(
+            &store,
+            &SystemClock,
+            owner,
+            "revoke",
+            &binding.binding_id,
+            Revision::ZERO,
+            ModelBindingState::Revoked
+        )
+        .await,
+        Err(DomainError::RevisionConflict { .. })
+    ));
+    let result = ok(change_model_binding_state(
+        &store,
+        &SystemClock,
+        owner,
+        "revoke",
+        &binding.binding_id,
+        Revision::new(1),
+        ModelBindingState::Revoked,
+    )
+    .await);
+    assert_eq!(result.binding.revision, Revision::new(2));
+    assert!(
+        ok(change_model_binding_state(
+            &store,
+            &SystemClock,
+            owner,
+            "revoke",
+            &binding.binding_id,
+            Revision::new(1),
+            ModelBindingState::Revoked
+        )
+        .await)
+        .replayed
+    );
+    assert!(ok(task_route(&store, owner, &a.task_id.to_string()).await).stale_configuration);
+    assert!(!ok(task_route(&store, owner, &b.task_id.to_string()).await).stale_configuration);
+    assert!(
+        set_task_route(
+            &store,
+            &SystemClock,
+            owner,
+            select("revoked-select", 1, &a, RouteId::CodexResponses, 1)
+        )
+        .await
+        .is_err()
+    );
+    assert!(
+        change_model_binding_state(
+            &store,
+            &SystemClock,
+            owner,
+            "reactivate",
+            &binding.binding_id,
+            Revision::new(2),
+            ModelBindingState::Active
+        )
+        .await
+        .is_err()
+    );
+    assert!(matches!(
+        configure_route(
+            &store,
+            &SystemClock,
+            owner,
+            configure("revoke", 2, RouteId::CodexResponses)
+        )
+        .await,
+        Err(DomainError::OperationConflict { .. })
+    ));
+    assert!(matches!(
+        change_model_binding_state(
+            &store,
+            &SystemClock,
+            owner,
+            "model-b",
+            &binding.binding_id,
+            Revision::new(2),
+            ModelBindingState::Revoked
+        )
+        .await,
+        Err(DomainError::OperationConflict { .. })
+    ));
 }
 
 #[tokio::test]
@@ -369,6 +992,19 @@ async fn selecting_one_task_leaves_other_task_route_and_revision_unchanged() {
     assert_eq!(
         ok(task_route(&store, owner, &first.task_id.to_string()).await).revision,
         Revision::new(2)
+    );
+    assert_eq!(
+        ok(store
+            .tasks_for_model_binding(owner.principal_id, RouteId::ClaudeApiKey, Revision::new(1))
+            .await),
+        vec![second.task_id],
+        "a never-executed old selection is not a retained disclosure dependency"
+    );
+    assert_eq!(
+        ok(store
+            .task_model_disclosure_bindings(owner.principal_id, first.task_id)
+            .await),
+        vec![(RouteId::CodexResponses, Revision::new(1), true)]
     );
 }
 

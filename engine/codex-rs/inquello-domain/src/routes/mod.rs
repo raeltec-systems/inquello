@@ -13,3 +13,5 @@ pub use ports::*;
 
 mod authorization;
 pub use authorization::*;
+mod processing_contract;
+pub use processing_contract::*;

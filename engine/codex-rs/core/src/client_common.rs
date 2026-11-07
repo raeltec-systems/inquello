@@ -38,6 +38,10 @@ pub struct Prompt {
     /// Whether the Responses API should strictly validate `output_schema`.
     pub output_schema_strict: bool,
 
+    /// Host-bound output ceiling; absent for unrelated upstream requests.
+    pub(crate) max_output_tokens: Option<u32>,
+    pub(crate) paid_qualification: bool,
+
     pub(crate) cyber_access_program: Option<codex_protocol::turn_input::CyberAccessProgram>,
 }
 
@@ -50,6 +54,8 @@ impl Default for Prompt {
             base_instructions: BaseInstructions::default(),
             output_schema: None,
             output_schema_strict: true,
+            max_output_tokens: None,
+            paid_qualification: false,
             cyber_access_program: None,
         }
     }

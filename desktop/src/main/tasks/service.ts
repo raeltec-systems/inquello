@@ -1,3 +1,4 @@
+import {parseModelDisclosureBindings} from '../routes/types';
 import {savedTaskView} from '../organise/navigation';
 import {parseLifecycle,type LifecycleInput,type LifecycleKind,type LifecycleReceipt} from './types';
 import {parseRouteEligibilityCheckRequest,type RouteEligibilityCheckRequest,type RouteApprovalView,type RouteEligibilityCheckResponse} from '../identity/wire';
@@ -8,19 +9,33 @@ import type {InquelloWorkspaceExecutionPolicy} from '../../protocol/generated/v2
 import {uuid,object} from '../usage/types';
 import type {EscalationRoute} from '../policy/tools';
 import {inquelloRefusal} from '../policy/permissions';
+import {RpcResponseError} from '../runtime';
 import {parseCandidate,parseStarted,type TaskCandidateInput,type TaskCandidateView,type StartTaskInput,type StartedTaskView,type TasksResult} from './types';
-export interface TaskServiceOptions {runtime:OrganiseRuntime;identity:Pick<OrganiseIdentity,'principalId'>;syncPrincipal():Promise<void>;bootstrap?(workspaceId:string):Promise<void>;prepareRoutes():Promise<{ok:boolean}>;freshPolicy(workspaceId:string):Promise<InquelloWorkspaceExecutionPolicy|null>;routeApproval?(workspaceId:string,routeId:string):Promise<RouteApprovalView|null>;routeCheck?(workspaceId:string,request:RouteEligibilityCheckRequest):Promise<RouteEligibilityCheckResponse|null>;onAuthorityUnavailable?():void;onAccepted?():void;onProgressChanged?():void;askPermission?(taskId:string,command:readonly string[]):Promise<'allowed'|'denied'|'expired'>}
+export interface TaskServiceOptions {runtime:OrganiseRuntime;identity:Pick<OrganiseIdentity,'principalId'>;syncPrincipal():Promise<void>;bootstrap?(workspaceId:string):Promise<void>;prepareRoutes():Promise<{ok:boolean}>;taskBinding(taskId:string):Promise<{routeId:string;configurationRevision:number;disclosureBindings:{routeId:string;configurationRevision:number;active:boolean}[]}|null>;freshPolicy(workspaceId:string):Promise<InquelloWorkspaceExecutionPolicy|null>;routeApproval?(workspaceId:string,routeId:string):Promise<RouteApprovalView|null>;routeCheck?(workspaceId:string,request:RouteEligibilityCheckRequest):Promise<RouteEligibilityCheckResponse|null>;onAuthorityUnavailable?():void;authorityDiagnostic?:(stage:'start-input'|'start-sync'|'start-routes'|'start-bootstrap'|'start-policy'|'start-native'|'start-result'|'start-error'|'input'|'scope-before'|'policy-read'|'policy-null'|'scope-after'|'route-discovery'|'route-check'|'progress-scope'|'progress-sync'|'progress-bootstrap'|'progress-pre-policy'|'progress-reconcile'|'progress-native'|'progress-parse'|'progress-binding'|'progress-post-policy'|'progress-superseded'|'progress-page'|'progress-publish'|'progress-kind-stale_snapshot'|'progress-kind-session_changed'|'progress-kind-classification_unknown'|'progress-kind-authority_unknown'|'progress-kind-stale'|'progress-kind-not_found'|'progress-kind-transport-fence'|'progress-kind-other'|'progress-recheck-denied',scope:'current'|'changed')=>void;onAccepted?():void;onProgressChanged?():void;askPermission?(taskId:string,command:readonly string[]):Promise<'allowed'|'denied'|'expired'>}
 export const INBOX_OBSERVATION_TIMEOUT_MS=10_000;
 const unavailable='The local runtime, signed-in identity or Workspace policy is unavailable. Your request is preserved.';
 const changed='Your identity, runtime or authority changed. Your draft is preserved; reconcile the existing request before submitting again.';
+/** A finished native turn's measured duration: `durationMs`, else `completedAt - startedAt` (Unix seconds). Null when unknown; never estimated. */
+export function nativeTurnDurationMs(turn:unknown):number|null {
+ if(!turn||typeof turn!=='object')return null;
+ const t=turn as {durationMs?:unknown;startedAt?:unknown;completedAt?:unknown};
+ if(typeof t.durationMs==='number'&&Number.isSafeInteger(t.durationMs)&&t.durationMs>=0)return t.durationMs;
+ if(typeof t.startedAt==='number'&&typeof t.completedAt==='number'&&Number.isSafeInteger(t.startedAt)&&Number.isSafeInteger(t.completedAt)&&t.startedAt>0&&t.completedAt>=t.startedAt)return (t.completedAt-t.startedAt)*1000;
+ return null;
+}
 export class TaskService {
  private epoch=0;
+ private readonly taskEpochs=new Map<string,number>();
+ private bindingGeneration=0;
+ private readonly bindingEpochs=new Map<string,number>();
  private readonly lifecycleOperations=new Map<string,{input:LifecycleInput;kind:LifecycleKind;scope:ReturnType<TaskService['scope']>;receipt?:LifecycleReceipt;binding?:ProgressSnapshot;promise?:Promise<TasksResult<LifecycleReceipt>>;dispatched:boolean;settled?:boolean}>();
  private readonly lifecycleTasks=new Map<string,string>();
  private readonly incarnations=new Map<string,string>();
  private incarnation(value:Pick<ProgressSnapshot,"runId"|"runtimeId"|"threadId"|"turnId">){return JSON.stringify([value.runId,value.runtimeId,value.threadId,value.turnId]);}
  private readonly activeTurns=new Map<string,string|null>();
  private readonly completedTurns=new Set<string>();
+ /** Native turn/completed durations, keyed by [threadId, turnId]; a bounded number per turn, never native bodies. */
+ private readonly turnDurations=new Map<string,number>();
 
  private readonly active=new Map<string,string>();
  private readonly pending=new Set<string>();
@@ -29,7 +44,7 @@ export class TaskService {
  private completionSequence=0;
  private readonly completedThreads=new Map<string,number>();
  private readonly operationSequences=new Map<string,number>();
- private clearActivity(){this.active.clear();this.incarnations.clear();this.activeTurns.clear();this.completedTurns.clear();this.pending.clear();this.completedThreads.clear();this.operationSequences.clear();this.completionSequence=0;this.activityUncertain=false;}
+ private clearActivity(){this.active.clear();this.incarnations.clear();this.activeTurns.clear();this.completedTurns.clear();this.turnDurations.clear();this.pending.clear();this.completedThreads.clear();this.operationSequences.clear();this.completionSequence=0;this.activityUncertain=false;}
  private syncActivity(){const instance=this.options.runtime.instance();if(instance!=null&&instance!==this.activeRuntime&&this.options.runtime.ready()){this.clearActivity();this.activeRuntime=instance;}}
  activeTasks(){this.syncActivity();return this.active.size+this.pending.size;}
  /** Only permits attempting native shutdown; this is not proof of quiescence. */
@@ -51,8 +66,15 @@ export class TaskService {
  private readonly operationWorkspaces=new Map<string,string>();
  constructor(private readonly options:TaskServiceOptions){this.activeRuntime=options.runtime.instance();}
  invalidate(notify=true){if(this.active.size+this.pending.size>0)this.activityUncertain=true;this.epoch++;this.incarnations.clear();this.activeTurns.clear();this.trustedThreads.clear();this.clearQuestions();this.historyIncomplete=false;if(notify)this.options.onProgressChanged?.();}
- private scope(){this.syncActivity();return{principal:this.options.identity.principalId(),runtime:this.options.runtime.instance(),epoch:this.epoch};}
- private current(s:ReturnType<TaskService['scope']>){return !!s.principal&&s.principal===this.options.identity.principalId()&&s.runtime===this.options.runtime.instance()&&s.epoch===this.epoch&&this.options.runtime.ready();}
+ invalidateTask(taskId:string){this.taskEpochs.set(taskId,(this.taskEpochs.get(taskId)??0)+1);this.trustedThreads.delete(taskId);for(const [key,question]of this.questions)if(question.binding?.taskId===taskId)this.dropQuestion(key);this.options.onProgressChanged?.();}
+ invalidateBinding(routeId:string,configurationRevision:number,taskIds:string[]){const key=JSON.stringify([routeId,configurationRevision]);this.bindingEpochs.set(key,++this.bindingGeneration);for(const taskId of taskIds)this.invalidateTask(taskId);for(const [id,question]of this.questions)if(question.scope.bindingKeys.includes(key))this.dropQuestion(id);for(const [id,thread]of this.trustedThreads)if(thread.scope.bindingKeys.includes(key))this.trustedThreads.delete(id);}
+ private scope(taskId?:string,bindingKey?:string){this.syncActivity();return{principal:this.options.identity.principalId(),runtime:this.options.runtime.instance(),epoch:this.epoch,taskId,taskEpoch:taskId?this.taskEpochs.get(taskId)??0:0,bindingKey,bindingKeys:bindingKey?[bindingKey]:[],bindingEpoch:this.bindingGeneration};}
+ private current(s:ReturnType<TaskService['scope']>){return !!s.principal&&s.principal===this.options.identity.principalId()&&s.runtime===this.options.runtime.instance()&&s.epoch===this.epoch&&(!s.taskId||s.taskEpoch===(this.taskEpochs.get(s.taskId)??0))&&s.bindingKeys.every(key=>(this.bindingEpochs.get(key)??0)<=s.bindingEpoch)&&this.options.runtime.ready();}
+ private async bindTaskScope(scope:ReturnType<TaskService['scope']>,taskId:string){
+  try{const binding=await this.options.taskBinding(taskId);if(!binding||!this.current(scope))throw new Error();const refs=parseModelDisclosureBindings(binding.disclosureBindings,binding.routeId,binding.configurationRevision);if(refs.some(ref=>!ref.active))throw new Error();scope.bindingKey=JSON.stringify([binding.routeId,binding.configurationRevision]);scope.bindingKeys=refs.map(ref=>JSON.stringify([ref.routeId,ref.configurationRevision]));if(!this.current(scope))throw new Error();}
+  catch{throw Object.assign(new Error('Task model authority unavailable'),{taskBinding:true});}
+ }
+
  private failure(error:unknown,dispatch:boolean):{ok:false;reason:string;code:'refused'|'uncertain'}{
   const refusal=inquelloRefusal(error),kind=String(refusal?.kind??'');
   const reasons:Record<string,string>={
@@ -62,7 +84,9 @@ export class TaskService {
    classification_unknown:'This identity and Workspace do not have an authorized private data environment. Your draft is preserved.',
    authority_unknown:'Current Workspace membership and policy could not be verified. Your draft is preserved.',
    credential_unavailable:'The selected route credential is unavailable. No alternative provider was selected.',
-   route_unavailable:'The selected route lacks current authorization evidence. No alternative provider was selected.',
+   route_unavailable:'This model is not currently available for this Workspace. Check its availability in Settings; your draft is preserved.',
+   organization_approval_required:'Your organization has not enabled this provider and model for this Workspace. Ask your administrator to confirm approval; your draft is preserved.',
+   organization_approval_stale:'Organization approval for this model changed or expired. Ask your administrator to confirm current Workspace approval; your draft is preserved.',
    capabilities_unavailable:'Supported settings for this exact model are unavailable. Refresh before choosing again.',
    unsupported_settings:'The selected reasoning or speed is not supported by this configuration. Reconfirm compatible choices.',
    settings_unavailable:'Current Task reasoning and speed settings could not be verified.',
@@ -89,9 +113,9 @@ export class TaskService {
   const promise=Promise.resolve().then(()=>{if(!this.current(scope))throw new Error();return this.options.bootstrap?.(workspaceId);}).then(()=>{if(!this.current(scope))throw new Error();}).finally(()=>{if(this.bootstraps.get(key)===promise)this.bootstraps.delete(key);});
   this.bootstraps.set(key,promise);return promise;
  }
- private async prepare(input:TaskCandidateInput,s:ReturnType<TaskService['scope']>){if(!this.current(s))throw new Error();await this.options.syncPrincipal();if(!this.current(s))throw new Error();const routes=await this.options.prepareRoutes();if(!routes.ok||!this.current(s))throw new Error();await this.bootstrap(input.workspaceId);if(!this.current(s))throw new Error();const policy=await this.options.freshPolicy(input.workspaceId);if(!policy||!this.current(s))throw new Error();return policy;}
- async preflight(input:TaskCandidateInput):Promise<TasksResult<TaskCandidateView>>{const s=this.scope();try{const workspacePolicy=await this.prepare(input,s);const value=parseCandidate(await this.options.runtime.request('inquello/tasks/preflight',{...input,workspacePolicy}),input.workspaceId);if(!this.current(s))return{ok:false,reason:changed};if(value.routeId!==input.routeId||value.configurationRevision!==input.configurationRevision)return{ok:false,reason:'The route configuration changed. Refresh and explicitly reconfirm it.'};return{ok:true,value};}catch(e){return this.failure(e,false);}}
- async start(input:StartTaskInput):Promise<TasksResult<StartedTaskView>>{const s=this.scope();this.operationWorkspaces.set(input.operationId,input.workspaceId);let dispatched=false;try{const workspacePolicy=await this.prepare(input,s);dispatched=true;if(!this.operationSequences.has(input.operationId))this.operationSequences.set(input.operationId,this.completionSequence);this.pending.add(input.operationId);const value=parseStarted(await this.options.runtime.request('inquello/tasks/start',{...input,workspacePolicy}));if(!this.current(s)){this.activityUncertain=true;return{ok:false,reason:changed,code:'uncertain'};}if(value.operationId!==input.operationId||value.request!==input.request)throw new Error();this.registerAccepted(value,s);return{ok:true,value};}catch(e){const failure=this.failure(e,dispatched);if(failure.code==='refused')this.pending.delete(input.operationId);else this.activityUncertain=true;return failure;}}
+ private async prepare(input:TaskCandidateInput,s:ReturnType<TaskService['scope']>,report?:(stage:'start-sync'|'start-routes'|'start-bootstrap'|'start-policy')=>void){if(!this.current(s))throw new Error();report?.('start-sync');await this.options.syncPrincipal();if(!this.current(s))throw new Error();report?.('start-routes');const routes=await this.options.prepareRoutes();if(!routes.ok||!this.current(s))throw new Error();report?.('start-bootstrap');await this.bootstrap(input.workspaceId);if(!this.current(s))throw new Error();report?.('start-policy');const policy=await this.options.freshPolicy(input.workspaceId);if(!policy||!this.current(s))throw new Error();return policy;}
+ async preflight(input:TaskCandidateInput):Promise<TasksResult<TaskCandidateView>>{const s=this.scope(undefined,JSON.stringify([input.routeId,input.configurationRevision]));try{const workspacePolicy=await this.prepare(input,s);const value=parseCandidate(await this.options.runtime.request('inquello/tasks/preflight',{...input,workspacePolicy}),input.workspaceId);if(!this.current(s))return{ok:false,reason:changed};if(value.routeId!==input.routeId||value.configurationRevision!==input.configurationRevision)return{ok:false,reason:'The route configuration changed. Refresh and explicitly reconfirm it.'};return{ok:true,value};}catch(e){return this.failure(e,false);}}
+ async start(input:StartTaskInput):Promise<TasksResult<StartedTaskView>>{const s=this.scope(undefined,JSON.stringify([input.routeId,input.configurationRevision]));const report=(stage:'start-input'|'start-sync'|'start-routes'|'start-bootstrap'|'start-policy'|'start-native'|'start-result'|'start-error')=>{try{this.options.authorityDiagnostic?.(stage,this.current(s)?'current':'changed');}catch{/* Diagnostics cannot change execution. */}};report('start-input');this.operationWorkspaces.set(input.operationId,input.workspaceId);let dispatched=false;try{const workspacePolicy=await this.prepare(input,s,report);dispatched=true;if(!this.operationSequences.has(input.operationId))this.operationSequences.set(input.operationId,this.completionSequence);this.pending.add(input.operationId);report('start-native');const value=parseStarted(await this.options.runtime.request('inquello/tasks/start',{...input,workspacePolicy}));report('start-result');if(!this.current(s)){this.activityUncertain=true;return{ok:false,reason:changed,code:'uncertain'};}if(value.operationId!==input.operationId||value.request!==input.request)throw new Error();this.registerAccepted(value,s);return{ok:true,value};}catch(e){report('start-error');const failure=this.failure(e,dispatched);if(failure.code==='refused')this.pending.delete(input.operationId);else this.activityUncertain=true;return failure;}}
 
  private lifecycleOpen(receipt:LifecycleReceipt|undefined){return !receipt||['reserved','dispatching','uncertain'].includes(receipt.status);}
  private async lifecycleReceipt(entry:{input:LifecycleInput;kind:LifecycleKind;scope:ReturnType<TaskService['scope']>;receipt?:LifecycleReceipt;binding?:ProgressSnapshot;dispatched:boolean},raw:unknown,policy:InquelloWorkspaceExecutionPolicy):Promise<LifecycleReceipt>{
@@ -105,7 +129,7 @@ export class TaskService {
   if(changedReceipt)this.options.onProgressChanged?.();return value;
  }
  private async reconcileLifecycle(entry:{input:LifecycleInput;kind:LifecycleKind;scope:ReturnType<TaskService['scope']>;receipt?:LifecycleReceipt;binding?:ProgressSnapshot;dispatched:boolean}):Promise<TasksResult<LifecycleReceipt>>{
-  try{const scope=this.scope();if(!scope.principal||scope.principal!==entry.scope.principal||!this.current(scope))throw new Error();await this.options.syncPrincipal();await this.bootstrap(entry.input.workspaceId);if(!this.current(scope))throw new Error();entry.scope=scope;const policy=await this.options.freshPolicy(entry.input.workspaceId);if(!policy||!this.current(entry.scope))throw new Error();return{ok:true,value:await this.lifecycleReceipt(entry,await this.options.runtime.request('inquello/tasks/lifecycleReconcile',{operationId:entry.input.operationId}),policy)};}catch{this.activityUncertain=true;return{ok:false,code:'uncertain',reason:'The operation outcome is not yet confirmed. Retained work and your draft are preserved; no command was repeated.'};}
+  try{const scope=this.scope(entry.input.taskId);if(!scope.principal||scope.principal!==entry.scope.principal||!this.current(scope))throw new Error();await this.options.syncPrincipal();await this.bootstrap(entry.input.workspaceId);if(!this.current(scope))throw new Error();entry.scope=scope;await this.bindTaskScope(entry.scope,entry.input.taskId);const policy=await this.options.freshPolicy(entry.input.workspaceId);if(!policy||!this.current(entry.scope))throw new Error();return{ok:true,value:await this.lifecycleReceipt(entry,await this.options.runtime.request('inquello/tasks/lifecycleReconcile',{operationId:entry.input.operationId}),policy)};}catch{this.activityUncertain=true;return{ok:false,code:'uncertain',reason:'The operation outcome is not yet confirmed. Retained work and your draft are preserved; no command was repeated.'};}
  }
  async settleLifecycle(input:Omit<LifecycleInput,'request'>):Promise<TasksResult<{settled:boolean}>> {
   const entry=this.lifecycleOperations.get(input.operationId),scope=this.scope();
@@ -123,14 +147,15 @@ export class TaskService {
   // may ask native to prove an uncertain prior run is no longer live.
   if(prior&&kind!=='stop'&&!(kind==='resume'&&!prior.promise)){return this.reconcileLifecycle(prior).then(()=>({ok:false as const,code:'refused' as const,reason:'The previous operation is being reconciled. This new instruction was not submitted; your draft is preserved.'}));}
   if(this.lifecycleOperations.size>=256){for(const [id,old]of this.lifecycleOperations){if(old.settled&&!old.promise&&!this.lifecycleOpen(old.receipt)){this.lifecycleOperations.delete(id);if(this.lifecycleTasks.get(old.input.taskId)===id)this.lifecycleTasks.delete(old.input.taskId);if(this.lifecycleOperations.size<256)break;}}if(this.lifecycleOperations.size>=256)return Promise.resolve({ok:false,code:'refused',reason:'Outstanding operations must be confirmed before more work is admitted. Your draft is preserved.'});}
-  const entry:{input:LifecycleInput;kind:LifecycleKind;scope:ReturnType<TaskService['scope']>;receipt?:LifecycleReceipt;binding?:ProgressSnapshot;promise?:Promise<TasksResult<LifecycleReceipt>>;dispatched:boolean}={input:{...input},kind,scope:this.scope(),dispatched:false};
+  const entry:{input:LifecycleInput;kind:LifecycleKind;scope:ReturnType<TaskService['scope']>;receipt?:LifecycleReceipt;binding?:ProgressSnapshot;promise?:Promise<TasksResult<LifecycleReceipt>>;dispatched:boolean}={input:{...input},kind,scope:this.scope(input.taskId),dispatched:false};
   this.lifecycleOperations.set(input.operationId,entry);this.lifecycleTasks.set(input.taskId,input.operationId);
   const execute=async():Promise<TasksResult<LifecycleReceipt>>=>{try{
-   if(!this.current(entry.scope))throw new Error();await this.options.syncPrincipal();if(!this.current(entry.scope))throw new Error();if(kind!=='stop'){const routes=await this.options.prepareRoutes();if(!routes.ok||!this.current(entry.scope))throw new Error();}
-   const snapshot=await (kind==='stop'?this.readProgress(input,true,false):this.activity(input));if(!snapshot.ok||!this.current(entry.scope))throw new Error();
+   if(!this.current(entry.scope))throw new Error();await this.options.syncPrincipal();if(!this.current(entry.scope))throw new Error();await this.bindTaskScope(entry.scope,input.taskId);if(kind!=='stop'){const routes=await this.options.prepareRoutes();if(!routes.ok||!this.current(entry.scope))throw new Error();}
+   const snapshot=await (kind==='stop'?this.readProgress(input,true,false,'stop'):this.activity(input));if(!snapshot.ok||!this.current(entry.scope))throw new Error();
    const before=snapshot.value;entry.binding=before;
    if(kind!=='resume'&&(!['active','running'].includes(before.status)||before.turnId===null))return{ok:false,code:'refused',reason:'That turn has ended. Your instruction is preserved; no new turn was started.'};
-   if(kind==='resume'&&!['cancelled','uncertain','failed'].includes(before.status))return{ok:false,code:'refused',reason:'Only interrupted retained work can be resumed. No replacement Task was created.'};
+   if(kind==='resume'&&!['completed','cancelled','uncertain','failed'].includes(before.status))return{ok:false,code:'refused',reason:'Only completed or interrupted retained work can be continued. No replacement Task was created.'};
+   if(kind==='resume'&&before.status==='completed'&&!input.request?.trim())return{ok:false,code:'refused',reason:'Type a follow-up to continue this completed conversation. No new turn was started.'};
    const policy=await this.options.freshPolicy(input.workspaceId);if(!policy||!this.current(entry.scope))throw new Error();entry.dispatched=true;if(kind==='resume')this.pending.add(input.operationId);
    const raw=await this.options.runtime.request(`inquello/tasks/${kind}`,{operationId:input.operationId,taskId:input.taskId,workspacePolicy:policy,expectedRunId:before.runId,expectedRuntimeId:before.runtimeId,expectedTurnId:before.turnId,request:input.request});
    return{ok:true,value:await this.lifecycleReceipt(entry,raw,policy)};
@@ -139,21 +164,23 @@ export class TaskService {
   entry.promise=execute();return entry.promise;
  }
  async authority(params:unknown):Promise<{workspacePolicy:InquelloWorkspaceExecutionPolicy|null;routeApproval?:RouteApprovalView;routeAuthority?:RouteEligibilityCheckResponse['authority']}> {
-  const s=this.scope();try{
+  const s=this.scope();let stage:Parameters<NonNullable<TaskServiceOptions['authorityDiagnostic']>>[0]='input';
+  const report=()=>{try{this.options.authorityDiagnostic?.(stage,this.current(s)?'current':'changed');}catch{/* Diagnostics never authorize work. */}};
+  try{
    const r=object(params);if(Object.keys(r).some(k=>!['workspaceId','routeDiscovery','routeCheck'].includes(k))||(r.routeDiscovery!==undefined&&r.routeCheck!==undefined))return{workspacePolicy:null};
-   const workspaceId=uuid(r.workspaceId);if(!this.current(s))return{workspacePolicy:null};
-   const policy=await this.options.freshPolicy(workspaceId);if(!policy||!this.current(s))throw new Error();
-   if(r.routeDiscovery!==undefined){const discovery=object(r.routeDiscovery);if(Object.keys(discovery).join(',')!=='route_id'||!['codex-responses','claude-api-key'].includes(String(discovery.route_id)))throw new Error();const view=await this.options.routeApproval?.(workspaceId,String(discovery.route_id));if(!view||!this.current(s)||view.authorization_epoch!==String(policy.authorizationEpoch)||view.policy_revision!==String(policy.policyRevision))throw new Error();return{workspacePolicy:policy,routeApproval:view};}
-   if(r.routeCheck!==undefined){const request=parseRouteEligibilityCheckRequest(r.routeCheck,'routeCheck');if(request.binding.workspace_id!==workspaceId||request.binding.principal_id!==s.principal||request.binding.authorization_epoch!==String(policy.authorizationEpoch)||request.binding.policy_revision!==String(policy.policyRevision))throw new Error();const response=await this.options.routeCheck?.(workspaceId,request);if(!response||!this.current(s)||JSON.stringify(response.authority.binding)!==JSON.stringify(request.binding))throw new Error();return{workspacePolicy:policy,routeAuthority:response.authority};}
+   const workspaceId=uuid(r.workspaceId);stage='scope-before';if(!this.current(s)){report();return{workspacePolicy:null};}
+   stage='policy-read';const policy=await this.options.freshPolicy(workspaceId);stage=!policy?'policy-null':'scope-after';if(!policy||!this.current(s))throw new Error();
+   if(r.routeDiscovery!==undefined){stage='route-discovery';const discovery=object(r.routeDiscovery);if(Object.keys(discovery).join(',')!=='route_id'||!['codex-responses','claude-api-key'].includes(String(discovery.route_id)))throw new Error();const view=await this.options.routeApproval?.(workspaceId,String(discovery.route_id));if(!view||!this.current(s)||view.authorization_epoch!==String(policy.authorizationEpoch)||view.policy_revision!==String(policy.policyRevision))throw new Error();return{workspacePolicy:policy,routeApproval:view};}
+   if(r.routeCheck!==undefined){stage='route-check';const request=parseRouteEligibilityCheckRequest(r.routeCheck,'routeCheck');if(request.binding.workspace_id!==workspaceId||request.binding.principal_id!==s.principal||request.binding.authorization_epoch!==String(policy.authorizationEpoch)||request.binding.policy_revision!==String(policy.policyRevision))throw new Error();const response=await this.options.routeCheck?.(workspaceId,request);if(!response||!this.current(s)||JSON.stringify(response.authority.binding)!==JSON.stringify(request.binding))throw new Error();return{workspacePolicy:policy,routeAuthority:response.authority};}
    return{workspacePolicy:policy};
-  }catch{if(this.current(s)){this.invalidate();this.options.onAuthorityUnavailable?.();}return{workspacePolicy:null};}
+  }catch{report();if(this.current(s)){this.invalidate();this.options.onAuthorityUnavailable?.();}return{workspacePolicy:null};}
  }
  async applicableDataTier(taskId:string):Promise<'synthetic'|'real'|'unknown'>{const binding=this.trustedThreads.get(taskId);if(!binding||!this.current(binding.scope))return 'unknown';try{const r=object(await this.options.runtime.request('inquello/tasks/forThread',{threadId:binding.threadId}));return r.taskId===taskId&&r.threadId===binding.threadId&&this.current(binding.scope)&&(r.dataTier==='synthetic'||r.dataTier==='real')?r.dataTier:'unknown';}catch{return 'unknown';}}
- async permissionRoute(threadId:string|null):Promise<EscalationRoute|null>{const s=this.scope();if(!threadId||!this.current(s)||!this.options.askPermission)return null;try{await this.options.syncPrincipal();if(!this.current(s))return null;const r=object(await this.options.runtime.request('inquello/tasks/forThread',{threadId}));const taskId=uuid(r.taskId);if(r.threadId!==threadId||!this.current(s))return null;this.trustedThreads.set(taskId,{threadId,workspaceId:typeof r.workspaceId==='string'?r.workspaceId:undefined,scope:s});return{ask:async command=>{if(!this.current(s))return 'denied';const answer=await this.options.askPermission!(taskId,command);return this.current(s)?answer:'denied';}};}catch{return null;}}
- async reconcile(operationId:string):Promise<TasksResult<StartedTaskView>>{const s=this.scope();try{if(!this.current(s))return{ok:false,reason:unavailable};await this.options.syncPrincipal();if(!this.current(s))return{ok:false,reason:changed};const workspace=this.operationWorkspaces.get(operationId);if(workspace){await this.bootstrap(workspace);if(!this.current(s))return{ok:false,reason:changed};}const value=parseStarted(await this.options.runtime.request('inquello/tasks/reconcile',{operationId}));if(!this.current(s))return{ok:false,reason:changed};if(value.operationId!==operationId)throw new Error();this.registerAccepted(value,s);return{ok:true,value};}catch(e){return this.failure(e,true);}}
+ async permissionRoute(threadId:string|null):Promise<EscalationRoute|null>{const s=this.scope();if(!threadId||!this.current(s)||!this.options.askPermission)return null;try{await this.options.syncPrincipal();if(!this.current(s))return null;const r=object(await this.options.runtime.request('inquello/tasks/forThread',{threadId}));const taskId=uuid(r.taskId);if(r.threadId!==threadId||!this.current(s))return null;await this.bindTaskScope(s,taskId);s.taskId=taskId;s.taskEpoch=this.taskEpochs.get(taskId)??0;this.trustedThreads.set(taskId,{threadId,workspaceId:typeof r.workspaceId==='string'?r.workspaceId:undefined,scope:s});return{ask:async command=>{if(!this.current(s))return 'denied';const answer=await this.options.askPermission!(taskId,command);return this.current(s)?answer:'denied';}};}catch{return null;}}
+ async reconcile(operationId:string):Promise<TasksResult<StartedTaskView>>{const s=this.scope();try{if(!this.current(s))return{ok:false,reason:unavailable};await this.options.syncPrincipal();if(!this.current(s))return{ok:false,reason:changed};const workspace=this.operationWorkspaces.get(operationId);if(workspace){await this.bootstrap(workspace);if(!this.current(s))return{ok:false,reason:changed};}const value=parseStarted(await this.options.runtime.request('inquello/tasks/reconcile',{operationId}));if(!this.current(s))return{ok:false,reason:changed};if(value.operationId!==operationId)throw new Error();await this.bindTaskScope(s,value.taskId);this.registerAccepted(value,s);return{ok:true,value};}catch(e){return this.failure(e,true);}}
  /** Notifications are invalidation hints only. No native body reaches the renderer. */
  notification(method:string,params:unknown):void {
-  if(method==='turn/completed'){try{const r=object(params);if(typeof r.threadId==='string'){const turn=r.turn&&typeof r.turn==='object'?(r.turn as {id?:unknown}).id:r.turnId;if(typeof turn==='string'){this.completedTurns.add(JSON.stringify([r.threadId,turn]));if(this.completedTurns.size>256)this.completedTurns.delete(this.completedTurns.values().next().value!);}if(!this.activeTurns.has(r.threadId)||this.activeTurns.get(r.threadId)===turn)this.completed(r.threadId);}}catch{}}
+  if(method==='turn/completed'){try{const r=object(params);if(typeof r.threadId==='string'){const turn=r.turn&&typeof r.turn==='object'?(r.turn as {id?:unknown}).id:r.turnId;if(typeof turn==='string'){const key=JSON.stringify([r.threadId,turn]);this.completedTurns.add(key);if(this.completedTurns.size>256)this.completedTurns.delete(this.completedTurns.values().next().value!);const ms=nativeTurnDurationMs(r.turn);if(ms!==null){this.turnDurations.delete(key);this.turnDurations.set(key,ms);if(this.turnDurations.size>256)this.turnDurations.delete(this.turnDurations.keys().next().value!);}}if(!this.activeTurns.has(r.threadId)||this.activeTurns.get(r.threadId)===turn)this.completed(r.threadId);}}catch{}}
   if(method==='serverRequest/resolved'){try{const r=object(params);for(const [key,q] of this.questions)if(q.view.threadId===r.threadId&&q.view.requestId===r.requestId)this.dropQuestion(key);}catch{/* malformed notification reveals nothing */}}
   if(['turn/completed','turn/started','item/started','item/completed','item/agentMessage/delta','item/commandExecution/outputDelta','turn/plan/updated','serverRequest/resolved'].includes(method))this.options.onProgressChanged?.();
  }
@@ -208,39 +235,66 @@ export class TaskService {
  private readonly observations=new Map<string,Promise<TasksResult<ProgressSnapshot>>>();
  activity(input:ProgressInput){return this.observe(input,true);}
  progress(input:ProgressInput){return this.observe(input,false);}
- private observe(input:ProgressInput,activityOnly:boolean):Promise<TasksResult<ProgressSnapshot>> {
-  const key=JSON.stringify([this.scope(),input,activityOnly,this.lifecycleTasks.get(input.taskId),this.incarnations.get(input.taskId)]);const existing=this.observations.get(key);if(existing)return existing;
-  const promise=this.readProgress(input,activityOnly).finally(()=>{if(this.observations.get(key)===promise)this.observations.delete(key);});this.observations.set(key,promise);return promise;
+ private observe(input:ProgressInput,activityOnly:boolean,purpose:'ordinary'|'pending-question'='ordinary'):Promise<TasksResult<ProgressSnapshot>> {
+  const key=JSON.stringify([this.scope(),input,activityOnly,purpose,this.lifecycleTasks.get(input.taskId),this.incarnations.get(input.taskId)]);const existing=this.observations.get(key);if(existing)return existing;
+  const promise=this.readProgress(input,activityOnly,true,purpose).finally(()=>{if(this.observations.get(key)===promise)this.observations.delete(key);});this.observations.set(key,promise);return promise;
  }
- private async readProgress(input:ProgressInput,activityOnly=false,reconcileOperations=true):Promise<TasksResult<ProgressSnapshot>> {
-  const s=this.scope(),lifecycleAtRead=this.lifecycleTasks.get(input.taskId),incarnationAtRead=this.incarnations.get(input.taskId);const superseded=()=>lifecycleAtRead!==this.lifecycleTasks.get(input.taskId)||incarnationAtRead!==this.incarnations.get(input.taskId);let authorityFailure=false,identityFailure=true;let policyBefore:InquelloWorkspaceExecutionPolicy|null=null;try{
-   if(!this.current(s))throw new Error();await this.options.syncPrincipal();if(!this.current(s))throw new Error();await this.bootstrap(input.workspaceId);if(!this.current(s))throw new Error();identityFailure=false;
-   authorityFailure=true;const policy=await this.options.freshPolicy(input.workspaceId);if(!policy||!this.current(s))throw new Error();policyBefore=policy;authorityFailure=false;
+ private async readProgress(input:ProgressInput,activityOnly=false,reconcileOperations=true,purpose:'ordinary'|'stop'|'pending-question'='ordinary'):Promise<TasksResult<ProgressSnapshot>> {
+  const s=this.scope(input.taskId),lifecycleAtRead=this.lifecycleTasks.get(input.taskId),incarnationAtRead=this.incarnations.get(input.taskId);const superseded=()=>lifecycleAtRead!==this.lifecycleTasks.get(input.taskId)||incarnationAtRead!==this.incarnations.get(input.taskId);let authorityFailure=false,identityFailure=true;let policyBefore:InquelloWorkspaceExecutionPolicy|null=null;
+  let stage:Parameters<NonNullable<TaskServiceOptions['authorityDiagnostic']>>[0]='progress-scope';
+  const report=(value:Parameters<NonNullable<TaskServiceOptions['authorityDiagnostic']>>[0])=>{try{this.options.authorityDiagnostic?.(value,this.current(s)?'current':'changed');}catch{/* Diagnostics never authorize work. */}};
+  try{
+   if(!this.current(s))throw new Error();stage='progress-sync';await this.options.syncPrincipal();if(!this.current(s))throw new Error();
+   // Cold saved-progress reads need credential rehydration. Stop and hydration
+   // of an already-native pending question must not discover/connect providers;
+   // exact Task/model, native authority and both policy fences still apply.
+   if(purpose==='ordinary'){const routes=await this.options.prepareRoutes();if(!routes.ok||!this.current(s))throw new Error();}
+   identityFailure=false;await this.bindTaskScope(s,input.taskId);stage='progress-bootstrap';await this.bootstrap(input.workspaceId);if(!this.current(s))throw new Error();identityFailure=false;
+   stage='progress-pre-policy';authorityFailure=true;const policy=await this.options.freshPolicy(input.workspaceId);if(!policy||!this.current(s))throw new Error();policyBefore=policy;authorityFailure=false;
    const operations=[...this.lifecycleOperations.values()].filter(entry=>entry.input.taskId===input.taskId&&entry.input.workspaceId===input.workspaceId&&entry.scope.principal===s.principal);
-   for(const entry of operations)if(reconcileOperations&&entry.dispatched&&!entry.promise&&this.lifecycleOpen(entry.receipt))await this.reconcileLifecycle(entry);
+   stage='progress-reconcile';for(const entry of operations)if(reconcileOperations&&entry.dispatched&&!entry.promise&&this.lifecycleOpen(entry.receipt))await this.reconcileLifecycle(entry);
    const pending=operations.at(-1);if(!this.current(s))throw new Error();
-   const value=parseProgress(await this.options.runtime.request('inquello/tasks/progress',{taskId:input.taskId,workspacePolicy:policy,...(activityOnly?{activityOnly:true}:input.resultPage?{resultPage:input.resultPage}:{})}));
-   if(!this.current(s)||value.taskId!==input.taskId||value.workspaceId!==input.workspaceId||lifecycleAtRead!==this.lifecycleTasks.get(input.taskId))throw new Error();
-   authorityFailure=true;const after=await this.options.freshPolicy(input.workspaceId);if(!after||!this.current(s)||JSON.stringify(after)!==JSON.stringify(policy))throw new Error();authorityFailure=false;if(superseded())throw new Error();
-   if(input.resultPage&&(!value.resultPage||input.resultPage.snapshotId!==undefined&&value.resultPage.snapshotId!==input.resultPage.snapshotId||value.resultPage.currentOffset!==(input.resultPage.currentOffset??0)||value.resultPage.historyOffset!==(input.resultPage.historyOffset??0)))throw new Error();
-   this.incarnations.set(value.taskId,this.incarnation(value));
+   const request={taskId:input.taskId,workspacePolicy:policy,...(activityOnly?{activityOnly:true}:input.resultPage?{resultPage:{...input.resultPage}}:{})};
+   stage='progress-native';let raw:unknown;
+   try{raw=await this.options.runtime.request('inquello/tasks/progress',request);}
+   catch(error){
+    // A changed observation is not revoked authority. Like saved-work reads,
+    // retry this read once rather than serialize a status-only fallback ahead
+    // of the next history read. Never replay an effect or retry a stale page.
+    if(input.resultPage||!(error instanceof RpcResponseError)||error.method!=='inquello/tasks/progress'||error.rpcCode!==-32600||inquelloRefusal(error)?.kind!=='stale_snapshot'||!this.current(s)||superseded())throw error;
+    stage='progress-pre-policy';authorityFailure=true;const retryPolicy=await this.options.freshPolicy(input.workspaceId);if(!retryPolicy||!this.current(s)||superseded()||JSON.stringify(retryPolicy)!==JSON.stringify(policy))throw new Error();authorityFailure=false;
+    stage='progress-native';raw=await this.options.runtime.request('inquello/tasks/progress',request);
+   }
+   stage='progress-parse';const value=parseProgress(raw);
+   stage='progress-binding';if(!this.current(s)||value.taskId!==input.taskId||value.workspaceId!==input.workspaceId||lifecycleAtRead!==this.lifecycleTasks.get(input.taskId))throw new Error();
+   stage='progress-post-policy';authorityFailure=true;const after=await this.options.freshPolicy(input.workspaceId);if(!after||!this.current(s)||JSON.stringify(after)!==JSON.stringify(policy))throw new Error();authorityFailure=false;stage='progress-superseded';if(superseded())throw new Error();
+   stage='progress-page';if(input.resultPage&&(!value.resultPage||input.resultPage.snapshotId!==undefined&&value.resultPage.snapshotId!==input.resultPage.snapshotId||value.resultPage.currentOffset!==(input.resultPage.currentOffset??0)||value.resultPage.historyOffset!==(input.resultPage.historyOffset??0)))throw new Error();
+   stage='progress-publish';this.incarnations.set(value.taskId,this.incarnation(value));
    for(const [key,q] of this.questions){if(q.binding?.taskId!==input.taskId)continue;if(!this.current(q.scope)||q.binding.workspaceId!==value.workspaceId||q.binding.runId!==value.runId||q.binding.runtimeId!==value.runtimeId||q.view.threadId!==value.threadId||q.view.turnId!==value.turnId||terminalProgress(value.status))this.dropQuestion(key);}
    value.questions=[...this.questions.values()].filter(q=>q.binding?.taskId===value.taskId&&this.current(q.scope)).map(q=>q.view);
    if(terminalProgress(value.status))this.completed(value.threadId);
+   if(value.status==='completed'&&value.turnId!==null){const ms=this.turnDurations.get(JSON.stringify([value.threadId,value.turnId]));if(ms!==undefined)value.turnDurationMs=ms;}
    if(!terminalProgress(value.status)){this.activeTurns.set(value.threadId,value.turnId);if(pending?.kind==='resume'&&pending.receipt?.runId===value.runId){this.pending.delete(pending.input.operationId);this.active.set(value.threadId,pending.input.operationId);}}
    if(pending?.receipt&&this.current(pending.scope))value.lifecycle={...pending.receipt};
    value.lifecycleOperations=operations.filter(entry=>!entry.settled).map(entry=>({operationId:entry.input.operationId,kind:entry.kind,request:entry.input.request,status:entry.receipt?.status??'dispatching'}));
    value.sessionGeneration=s.epoch;value.historyIncomplete ||=this.historyIncomplete;
    return{ok:true,value};
   }catch(error){
+   report(stage);
+   const diagnosticKind=inquelloRefusal(error)?.kind;
+   report((error as {rpcCode?:unknown}|null)?.rpcCode===-32001?'progress-kind-transport-fence':diagnosticKind==='stale_snapshot'?'progress-kind-stale_snapshot':diagnosticKind==='session_changed'?'progress-kind-session_changed':diagnosticKind==='classification_unknown'?'progress-kind-classification_unknown':diagnosticKind==='authority_unknown'?'progress-kind-authority_unknown':diagnosticKind==='stale'?'progress-kind-stale':diagnosticKind==='not_found'?'progress-kind-not_found':'progress-kind-other');
    // A failed/malformed hydration still waited: establish current Workspace
    // authority before treating it as Task-local and retaining other questions.
    if(!authorityFailure&&policyBefore&&this.current(s)){
     try{const fresh=await this.options.freshPolicy(input.workspaceId);authorityFailure=!fresh||JSON.stringify(fresh)!==JSON.stringify(policyBefore);}catch{authorityFailure=true;}
    }
-   if(superseded())return{ok:false,code:'refused',reason:'A newer Task run is being observed.'};
+   if(authorityFailure)report('progress-recheck-denied');
+   if(superseded()){report('progress-superseded');return{ok:false,code:'refused',reason:'A newer Task run is being observed.'};}
    if(this.current(s)&&!authorityFailure&&inquelloRefusal(error)?.kind==='stale_snapshot')return{ok:false,code:'refused',reason:'The result snapshot changed. Read the current authorized result pages.'};
-   if(!this.current(s)){if(s.epoch===this.epoch)this.invalidate(false);}else{const kind=inquelloRefusal(error)?.kind;if(identityFailure||kind==='session_changed'||kind==='classification_unknown')this.invalidate(false);else this.suppress(input.taskId,input.workspaceId,authorityFailure||kind==='authority_unknown'||kind==='stale');}this.activityUncertain=true;this.options.onAuthorityUnavailable?.();return{ok:false,reason:'Current Task progress or Workspace authority is unavailable. Previously shown progress and pending answers have been cleared.',code:'refused'};}
+   const taskBindingFailure=(error as {taskBinding?:unknown})?.taskBinding===true;const scopedChange=s.epoch===this.epoch&&s.principal===this.options.identity.principalId()&&s.runtime===this.options.runtime.instance()&&!!(s.taskId||s.bindingKey)&&(taskBindingFailure||!this.current(s));if(!this.current(s)){if(s.epoch===this.epoch){if(s.taskId)this.invalidateTask(s.taskId);else this.invalidate(false);}}else{const kind=inquelloRefusal(error)?.kind;if(identityFailure||kind==='session_changed'||kind==='classification_unknown')this.invalidate(false);else this.suppress(input.taskId,input.workspaceId,authorityFailure||kind==='authority_unknown'||kind==='stale');}this.activityUncertain=true;// A Task-local absence (for example a conversation whose model is chosen but which has not
+   // started, so it has no runtime binding yet) is not an authority change once the same
+   // Workspace authority has been re-read: clear only this Task, never the open session.
+   const taskLocal=this.current(s)&&!identityFailure&&!authorityFailure&&policyBefore!==null&&inquelloRefusal(error)?.kind==='not_found';if(!scopedChange&&!taskLocal)this.options.onAuthorityUnavailable?.();return{ok:false,reason:'Current Task progress or Workspace authority is unavailable. Previously shown progress and pending answers have been cleared.',code:'refused'};}
  }
  async question(id:NativeRequestId,params:unknown):Promise<unknown> {
   const s=this.scope();let key:string|undefined;
@@ -254,8 +308,8 @@ export class TaskService {
    await this.options.syncPrincipal();if(!this.current(s)||this.questions.get(key)!==pending){this.dropQuestion(key);return{answers:{}};}
    const b=object(await this.options.runtime.request('inquello/tasks/forThread',{threadId:view.threadId}));
    if(!this.current(s)||this.questions.get(key)!==pending||b.threadId!==view.threadId||b.turnId!==view.turnId||terminalProgress(String(b.status)))throw new Error();
-   pending.binding={taskId:uuid(b.taskId),workspaceId:uuid(b.workspaceId),runId:progressId(b.runId),runtimeId:progressId(b.runtimeId)};
-   const snapshot=await this.progress(pending.binding);if(!snapshot.ok||this.questions.get(key)!==pending)throw new Error();
+   pending.binding={taskId:uuid(b.taskId),workspaceId:uuid(b.workspaceId),runId:progressId(b.runId),runtimeId:progressId(b.runtimeId)};s.taskId=pending.binding.taskId;s.taskEpoch=this.taskEpochs.get(s.taskId)??0;await this.bindTaskScope(s,s.taskId);if(this.questions.get(key)!==pending)throw new Error();
+   const snapshot=await this.observe(pending.binding,false,'pending-question');if(!snapshot.ok||this.questions.get(key)!==pending)throw new Error();
    this.options.onProgressChanged?.();return await answer;
   }catch{if(key)this.dropQuestion(key);return{answers:{}};}
  }

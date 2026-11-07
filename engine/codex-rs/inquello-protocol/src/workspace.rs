@@ -248,6 +248,8 @@ pub enum WorkspaceCommand {
     },
     /// `expected_revision` is the invite's revision.
     RevokeInvite { invite_id: Uuid },
+    /// Email is an invitation target, never an account-link key.
+    IssueEmailInvite { email: String, roles: Vec<String> },
     /// Replace a member's role bindings. `expected_revision` is the membership's
     /// revision. Increments the Workspace authorization epoch.
     ChangeRoles {
@@ -277,6 +279,7 @@ impl WorkspaceCommand {
     pub const fn name(&self) -> &'static str {
         match self {
             WorkspaceCommand::IssueInvite { .. } => "issue_invite",
+            WorkspaceCommand::IssueEmailInvite { .. } => "issue_email_invite",
             WorkspaceCommand::RevokeInvite { .. } => "revoke_invite",
             WorkspaceCommand::ChangeRoles { .. } => "change_roles",
             WorkspaceCommand::RemoveMember { .. } => "remove_member",

@@ -161,7 +161,8 @@ describe('state payloads', () => {
 });
 
 describe('states smoke evaluation', () => {
-  const dimension = (name: string, value: string, text: string) => ({ dimension: name, value, text });
+  // Owner amendment 2026-11-04: the Task never ran a native turn, so its
+  // conversation shows no end-of-turn line, no state rows and no "Not recorded".
   const passing: StatesProbeRead = {
     configured: true,
     seedRead: true,
@@ -172,22 +173,11 @@ describe('states smoke evaluation', () => {
     view: {
       shellOpened: true,
       opened: true,
-      shown: true,
-      dimensions: [
-        dimension('task', 'running', 'RunningVersion 2, recorded by Inquello on this devicePlanned (Version 1, recorded by Inquello on this device)'),
-        dimension('run', 'execution_finished', 'Execution finishedVersion 1, recorded by Inquello on this device'),
-        ...['output', 'checks', 'review', 'approval_marker', 'delivery_marker'].map((name) => dimension(name, 'not-recorded', 'Not recorded')),
-      ],
-      runChip: {
-        text: 'Execution finished',
-        className: 'iq-status-chip iq-status-chip--other',
-        color: 'rgb(31, 41, 55)',
-        background: 'rgb(255, 255, 255)',
-        border: 'rgb(156, 163, 175)',
-        acceptedColor: 'rgb(22, 101, 52)',
-        acceptedBackground: 'rgb(220, 252, 231)',
-        acceptedBorder: 'rgb(134, 239, 172)',
-      },
+      settled: true,
+      finishedLine: null,
+      stateRows: [],
+      notRecorded: false,
+      chips: [],
       acceptedChips: 0,
       acceptanceText: false,
       toasts: [],
@@ -202,14 +192,18 @@ describe('states smoke evaluation', () => {
   });
 
   it.each<[string, Partial<StatesProbeRead>]>([
-    ['the run chip is accepted', { view: { ...passing.view!, runChip: { ...passing.view!.runChip!, className: 'iq-status-chip iq-status-chip--accepted', color: 'rgb(22, 101, 52)' } } }],
-    ['the run chip is green', { view: { ...passing.view!, runChip: { ...passing.view!.runChip!, background: 'rgb(200, 250, 200)' } } }],
+    ['a Task that never ran shows a finished line', { view: { ...passing.view!, finishedLine: 'Finished' } }],
+    ['a "Not recorded" placeholder is shown', { view: { ...passing.view!, notRecorded: true } }],
+    ['a state row is listed with nothing recorded', { view: { ...passing.view!, stateRows: ['checks'] } }],
+    ['the conversation shows a green chip', { view: { ...passing.view!, chips: [{ className: 'iq-status-chip iq-status-chip--other', color: 'rgb(31, 41, 55)', background: 'rgb(200, 250, 200)', border: 'rgb(156, 163, 175)' }] } }],
+    ['the conversation shows an accepted chip', { view: { ...passing.view!, chips: [{ className: 'iq-status-chip iq-status-chip--accepted', color: 'rgb(31, 41, 55)', background: 'rgb(255, 255, 255)', border: 'rgb(156, 163, 175)' }] } }],
     ['an accepted chip is shown', { view: { ...passing.view!, acceptedChips: 1 } }],
     ['the shell claims acceptance', { view: { ...passing.view!, acceptanceText: true } }],
+    ['the conversation never settled', { view: { ...passing.view!, settled: false } }],
     ['review recorded through the renderer', { record: { ...passing.record!, reviewWrite: 'accepted' } }],
     ['review reached the runtime', { runtimeReviewRefusal: null }],
     ['another principal saw the states', { otherPrincipalRefusal: null }],
-    ['checks shows a value', { view: { ...passing.view!, dimensions: passing.view!.dimensions.map((row) => (row.dimension === 'checks' ? { ...row, value: 'complete', text: 'Checks complete' } : row)) } }],
+    ['main lists a checks record', { listed: { ...passing.listed!, others: 1 } }],
   ])('fails when %s', (_label, change) => {
     expect(evaluateStates({ ...passing, ...change }).ok).toBe(false);
   });

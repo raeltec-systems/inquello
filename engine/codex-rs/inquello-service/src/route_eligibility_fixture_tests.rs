@@ -1,5 +1,6 @@
-//! Unit-test-only proof substitution. Never compiled into service binaries and
-//! never evidence of actual model behavior or a reviewed production route.
+//! Owned PostgreSQL tests, never compiled into service binaries. Most exercise
+//! an explicit artificial-proof seam; the compiled Terra contract test instead
+//! uses production apply() and the genuine embedded lookup. Neither runs a model.
 #![allow(clippy::expect_used, reason = "isolated test assertions")]
 use super::*;
 use crate::route_test_support::Harness;
@@ -25,12 +26,13 @@ fn derivation_fixture_policy() -> String {
 }
 fn identity() -> RouteEvidenceIdentity {
     RouteEvidenceIdentity {
+        schema_version: inquello_domain::routes::ROUTE_EVIDENCE_SCHEMA_VERSION,
         route_id: "codex-responses".into(),
         deployment: "openai-api".into(),
         endpoint: "https://api.openai.com/v1/responses".into(),
         model: "fixture-only".into(),
         api_version: "responses-v1".into(),
-        configuration_digest: "a".repeat(64),
+        adapter_configuration_digest: "a".repeat(64),
         implementation_digest: "b".repeat(64),
         runtime_version: "unit-fixture".into(),
         contract_version: "1".into(),
@@ -365,7 +367,7 @@ fn retained_proof(
         || id.implementation_digest != "b".repeat(64)
         || id.runtime_version != "unit-fixture"
         || id.platform != "unit-fixture"
-        || !sha256_digest(&id.configuration_digest)
+        || !sha256_digest(&id.adapter_configuration_digest)
     {
         return None;
     }
@@ -377,7 +379,7 @@ fn retained_proof(
 #[cfg(all(feature = "retained-fixtures", debug_assertions, target_os = "linux"))]
 async fn coupled_retained(route: &'static str, scenario: &'static str) {
     use inquello_domain::routes::{
-        RouteConfiguration, RouteConfigurationInput, configuration_digest,
+        RouteConfiguration, RouteConfigurationInput, adapter_configuration_digest,
     };
     let h = Harness::start().await;
     let ws = crate::admin::create_workspace(
@@ -434,7 +436,7 @@ async fn coupled_retained(route: &'static str, scenario: &'static str) {
     id.endpoint = configuration.endpoint().into();
     id.deployment = configuration.deployment().into();
     id.api_version = configuration.api_version().into();
-    id.configuration_digest = configuration_digest(&configuration);
+    id.adapter_configuration_digest = adapter_configuration_digest(&configuration);
     let proof = retained_proof(&id, &"c".repeat(64)).unwrap();
     let approval = OrganizationRouteApproval {
         workspace_id: ws.workspace_id.to_string(),
@@ -534,7 +536,7 @@ async fn coupled_retained(route: &'static str, scenario: &'static str) {
         .is_err(),
         "shipping checker never uses fixture proof"
     );
-    let policy = json!({"workspaceId":ws.workspace_id,"policyRevision":1,"authorizationEpoch":request.binding.authorization_epoch,"execution":{"command_rules":[{"prefix":["/bin/sh"],"decision":"prompt"}]}});
+    let policy = json!({"workspaceId":ws.workspace_id,"policyRevision":1,"authorizationEpoch":request.binding.authorization_epoch,"execution":{"command_rules":[{"prefix":[retained_driver::fixture_shell()],"decision":"prompt"}]}});
     let access = alice.access_credential.expose().to_string();
     let callback_policy = policy.clone();
     let workspace = ws.workspace_id;
@@ -673,4 +675,220 @@ async fn coupled_responses_deny_before_dispatch() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn coupled_messages_deny_before_dispatch() {
     coupled_retained("claude-api-key", "deny-before-dispatch").await;
+}
+
+/// Uses the shipping compiled lookup, not the artificial proof seam above.
+/// Before reviewed attachment the same request must fail closed; after attachment
+/// it must commit an exact approval in this newly owned fictional database.
+#[tokio::test]
+async fn compiled_terra_approval_matches_scope_policy_identity_and_is_atomic() {
+    use inquello_domain::capability::{CapabilityRegister, Enablement};
+    use inquello_domain::routes::{
+        MAX_PROCESSING_SCOPE_BYTES, RouteConfiguration, RouteConfigurationInput,
+        adapter_configuration_digest,
+    };
+    let register = CapabilityRegister::load_embedded().unwrap();
+    let entry = register.entry("processing.codex-responses").unwrap();
+    let configuration = RouteConfiguration::parse(RouteConfigurationInput {
+        route_id: "codex-responses".into(),
+        deployment: "openai-api".into(),
+        model: "gpt-6.1-terra".into(),
+        api_version: "responses-v1".into(),
+        account_ref: "00000000-0000-4000-8000-000000000001".into(),
+        region: None,
+    })
+    .unwrap();
+    let (selected_identity, report_digest, data_policy, qualified) =
+        if let Some(proof) = &entry.negative_authorization {
+            assert!(proof.complete());
+            assert!(proof.identity.matches_configuration(&configuration));
+            assert_eq!(proof.processing_scope, entry.processing_scope);
+            use sha2::{Digest, Sha256};
+            assert_eq!(
+                proof.data_policy_digest,
+                format!(
+                    "{:x}",
+                    Sha256::digest(include_bytes!("../../../../desktop/data-policy.json"))
+                )
+            );
+            assert_eq!(entry.enablement(), Enablement::RealDataEligible);
+            assert_eq!(
+                compiled_route_evidence(&proof.identity, &proof.report_digest),
+                Some(proof.clone())
+            );
+            (
+                proof.identity.clone(),
+                proof.report_digest.clone(),
+                proof.data_policy_digest.clone(),
+                true,
+            )
+        } else {
+            assert_eq!(entry.enablement(), Enablement::SyntheticOnly);
+            // This is explicitly an unreviewed build identity, not manufactured
+            // production evidence. No compiled proof may resolve it.
+            let mut unreviewed = identity();
+            unreviewed.model = configuration.model().into();
+            unreviewed.adapter_configuration_digest = adapter_configuration_digest(&configuration);
+            assert!(unreviewed.matches_configuration(&configuration));
+            assert!(compiled_route_evidence(&unreviewed, &"c".repeat(64)).is_none());
+            (unreviewed, "c".repeat(64), "e".repeat(64), false)
+        };
+    let h = Harness::start().await;
+    let ws = crate::admin::create_workspace(
+        &h.pool,
+        crate::admin::CreateWorkspace {
+            name: "Owned compiled route contract".into(),
+            kind: "internal_company".into(),
+            policy: derivation_fixture_policy(),
+            first_admin_issuer: h.issuer.issuer().into(),
+            first_admin_subject: "compiled-contract-only".into(),
+            invite_lifetime: Duration::from_secs(3600),
+            operator: "compiled-contract-only".into(),
+        },
+        h.now(),
+    )
+    .await
+    .unwrap();
+    let approval = OrganizationRouteApproval {
+        workspace_id: ws.workspace_id.to_string(),
+        route_id: "codex-responses".into(),
+        evidence_digest: report_digest,
+        processing_scope: entry.processing_scope.clone(),
+        data_policy_digest: data_policy,
+        issuer: "owned-fictional-issuer".into(),
+        operator_reference: "owned-compiled-contract".into(),
+        valid_from: h.now().timestamp() - 1,
+        review_at: h.now().timestamp() + 1800,
+        expires_at: h.now().timestamp() + 3600,
+        revision: 1,
+        policy_revision: 1,
+        revoked: false,
+    };
+    assert!(valid_approval(&approval, h.now().timestamp()));
+    let command = RouteApprovalCommand {
+        workspace_id: ws.workspace_id,
+        operation_id: Uuid::new_v4(),
+        command_epoch: h.command_epoch().await.parse().unwrap(),
+        expected_revision: 0,
+        operator: "compiled-contract-only".into(),
+        payload: RouteApprovalChange::Approve {
+            identity: Box::new(selected_identity),
+            approval: Box::new(approval),
+        },
+    };
+    let epoch_before: i64 =
+        sqlx::query_scalar("SELECT authorization_epoch FROM workspaces WHERE workspace_id=$1")
+            .bind(ws.workspace_id)
+            .fetch_one(&h.pool)
+            .await
+            .unwrap();
+    for variant in 0..5 {
+        let mut wrong = command.clone();
+        wrong.operation_id = Uuid::new_v4();
+        let RouteApprovalChange::Approve { identity, approval } = &mut wrong.payload else {
+            panic!("approval fixture must remain an approval");
+        };
+        match variant {
+            0 => approval.processing_scope = "x".repeat(MAX_PROCESSING_SCOPE_BYTES + 1),
+            1 => approval.processing_scope = "different bounded scope".into(),
+            2 => approval.data_policy_digest = "0".repeat(64),
+            3 => identity.model = "unsupported-model".into(),
+            4 => approval.evidence_digest = "0".repeat(64),
+            _ => unreachable!(),
+        }
+        assert!(matches!(
+            apply(&h.pool, wrong, h.now()).await,
+            Err(AdminError::RouteNotAvailable(reason))
+                if reason == "complete compiled exact-route evidence and valid scoped approval required"
+        ));
+    }
+    for (table, query) in [
+        (
+            "route_approvals",
+            "SELECT count(*) FROM route_approvals WHERE workspace_id=$1",
+        ),
+        (
+            "route_approval_receipts",
+            "SELECT count(*) FROM route_approval_receipts WHERE workspace_id=$1",
+        ),
+        (
+            "route_approval_history",
+            "SELECT count(*) FROM route_approval_history WHERE workspace_id=$1",
+        ),
+    ] {
+        let count: i64 = sqlx::query_scalar(query)
+            .bind(ws.workspace_id)
+            .fetch_one(&h.pool)
+            .await
+            .unwrap();
+        assert_eq!(
+            count, 0,
+            "negative approval commands must not write {table}"
+        );
+    }
+    let epoch_after: i64 =
+        sqlx::query_scalar("SELECT authorization_epoch FROM workspaces WHERE workspace_id=$1")
+            .bind(ws.workspace_id)
+            .fetch_one(&h.pool)
+            .await
+            .unwrap();
+    assert_eq!(epoch_after, epoch_before);
+    assert_eq!(
+        h.command_epoch().await.parse::<u64>().unwrap(),
+        command.command_epoch
+    );
+    if qualified {
+        let outcome = apply(&h.pool, command.clone(), h.now()).await.unwrap();
+        assert_eq!(outcome.workspace_id, ws.workspace_id);
+        assert_eq!(outcome.route_id, "codex-responses");
+        assert_eq!(outcome.revision, "1");
+        assert_eq!(
+            apply(&h.pool, command.clone(), h.now())
+                .await
+                .unwrap()
+                .receipt_id,
+            outcome.receipt_id
+        );
+        let row =
+            sqlx::query("SELECT identity, approval FROM route_approvals WHERE workspace_id=$1")
+                .bind(ws.workspace_id)
+                .fetch_one(&h.pool)
+                .await
+                .unwrap();
+        let saved_identity: Json<RouteEvidenceIdentity> = row.get("identity");
+        let saved_approval: Json<OrganizationRouteApproval> = row.get("approval");
+        let RouteApprovalChange::Approve { identity, approval } = command.payload else {
+            panic!("approval fixture must remain an approval");
+        };
+        assert_eq!(saved_identity.0, *identity);
+        assert_eq!(saved_approval.0, *approval);
+    } else {
+        assert!(matches!(
+            apply(&h.pool, command, h.now()).await,
+            Err(AdminError::RouteNotAvailable(reason))
+                if reason == "complete compiled exact-route evidence and valid scoped approval required"
+        ));
+    }
+    let expected = i64::from(qualified);
+    for (table, query) in [
+        (
+            "route_approvals",
+            "SELECT count(*) FROM route_approvals WHERE workspace_id=$1",
+        ),
+        (
+            "route_approval_receipts",
+            "SELECT count(*) FROM route_approval_receipts WHERE workspace_id=$1",
+        ),
+        (
+            "route_approval_history",
+            "SELECT count(*) FROM route_approval_history WHERE workspace_id=$1",
+        ),
+    ] {
+        let count: i64 = sqlx::query_scalar(query)
+            .bind(ws.workspace_id)
+            .fetch_one(&h.pool)
+            .await
+            .unwrap();
+        assert_eq!(count, expected, "rejected commands must not write {table}");
+    }
 }

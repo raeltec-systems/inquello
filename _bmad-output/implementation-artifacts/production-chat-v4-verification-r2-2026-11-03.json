@@ -1,0 +1,2017 @@
+{
+  "schema": "inquello-composed-authorization-verification-v4",
+  "suite": "inquello-current-route-negative-authorization-v4",
+  "generatedAt": "2026-11-03T06:19:10.624Z",
+  "reviewStatus": "review-required; NOT attached capability evidence or organization approval",
+  "platform": "x86_64-pc-windows-msvc",
+  "sourceProvenance": {
+    "head": "916852ffae54f68c3e8a665fd78bc69bb4fdbd5f",
+    "engineTree": "76159dd5be110602bceca52dc341e13d3ed208b2",
+    "recorded": "2026-11-03T05:37:05.064Z",
+    "modifiedFiles": [
+      {
+        "path": "desktop/scripts/run-auth0-pilot.cjs",
+        "sha256": "01a464f20e40f8562885a90870380971a20455af556bd75362ec3e99a88527fd"
+      },
+      {
+        "path": "desktop/scripts/run-seeded-smoke.cjs",
+        "sha256": "4d2d28a4aaf825c2a18e7c3691fb6162ed1d32011f8aaf8d5bae30f86d9787b3"
+      },
+      {
+        "path": "desktop/src/main/identity/wire.ts",
+        "sha256": "e5d1e14702c9ef1a1b1ea8fcbe42b85acb435dbe77784b0b196f858c7a4cbf24"
+      },
+      {
+        "path": "desktop/src/main/main.ts",
+        "sha256": "51d9141fadb823a62aa49eca2023ba429d8fc6a0eeec3ebd7d6ea4ab5eabc11a"
+      },
+      {
+        "path": "desktop/src/main/providers/codex-account.ts",
+        "sha256": "fa09851bfc52aba1a79cc7f3d570c5797caf8c60607a875519f1b5edc3ae188b"
+      },
+      {
+        "path": "desktop/src/main/routes/service.ts",
+        "sha256": "2d4e4fba03b8e98055e5d24921dfc64a8a79c546a2d1f403bb6300bb57bd13aa"
+      },
+      {
+        "path": "desktop/src/main/routes/types.ts",
+        "sha256": "4a8265ab6ff1ebff415cbf5a33b04635fad211efb2da8ae1b36dc99f1dcbbefa"
+      },
+      {
+        "path": "desktop/src/main/routes/validators.ts",
+        "sha256": "ce7c3049258af1870c265eb447e1498f2705b9d7acd2e9b9cf6aec4e07c15c1f"
+      },
+      {
+        "path": "desktop/src/main/security/operations.ts",
+        "sha256": "f2173d647a5de7c7267e94646072decf73ce342a44d9248438e1d611281db964"
+      },
+      {
+        "path": "desktop/src/main/smoke-probe.ts",
+        "sha256": "443230b0dbcde1adfe4a8f91a88e6167065d3855bbf57fa25605d9855572f509"
+      },
+      {
+        "path": "desktop/src/main/tasks/service.ts",
+        "sha256": "7e2c3efffee3a6af0fd46c724cba666a1567365b698123abb9b1b0fbed5266d9"
+      },
+      {
+        "path": "desktop/src/main/tasks/smoke-session.ts",
+        "sha256": "269830c4595845f94ad2a5ee99ef42d1e2302e28a9e2d79c9407b1d030cc0281"
+      },
+      {
+        "path": "desktop/src/preload/preload.ts",
+        "sha256": "883221c9b2c4bd24974de2df9ac711321de8fc02b05c8b9ebf8dd811862eba29"
+      },
+      {
+        "path": "desktop/src/protocol/schema-stamp.json",
+        "sha256": "e53823c8788fa507e6aa9c38b30c7d5be1626aafb9bc2862676e44d887a13470"
+      },
+      {
+        "path": "desktop/src/renderer/ProcessingRoutes.tsx",
+        "sha256": "ce39b4701de94ec70df696acb45b984b48c73ed74f42b7470d4d1e370361a5c4"
+      },
+      {
+        "path": "desktop/src/renderer/Providers.tsx",
+        "sha256": "1acac57a41e312d3454fd8403cb704bcf0fec8493281e14998d5db44acb6cd9f"
+      },
+      {
+        "path": "desktop/src/renderer/Settings.tsx",
+        "sha256": "6d037be81440e8cba822989602da17825b1c1fe73258bc2437a0e07540e33bbc"
+      },
+      {
+        "path": "desktop/src/renderer/Shell/Composer.tsx",
+        "sha256": "1245656021050b648b9cd100ee2406866308871b5c57c5d41dd355bfd3b0f411"
+      },
+      {
+        "path": "desktop/src/renderer/Shell/Sidebar.tsx",
+        "sha256": "6bba0bc950f8b26846e2aaece5cd8d1d5a3528493861f0647c5f1aba68edf586"
+      },
+      {
+        "path": "desktop/src/renderer/Shell/StartView.tsx",
+        "sha256": "0a3f3f24ffe2c3d69fdd2af4696817af946a244fdfc28fb15ded5383a8ac7ff8"
+      },
+      {
+        "path": "desktop/src/renderer/Shell/TaskEnvironment.tsx",
+        "sha256": "ebd8658c047c54bf472e7742d1efc5d5eb4a4b9e85319f21a15a20bab5fde68a"
+      },
+      {
+        "path": "desktop/src/renderer/Shell/TaskLifecycle.tsx",
+        "sha256": "f771d34f0ae46d744284365aaace7bf3248903d2773c00f76c9afee2a2bc9fcf"
+      },
+      {
+        "path": "desktop/src/renderer/Shell/TaskRouteLabel.tsx",
+        "sha256": "c81ee1a8f94d96b273f1655e6c99c7ddbe24d48c20e053c139609f4fc2f20bab"
+      },
+      {
+        "path": "desktop/src/renderer/Shell/TaskUsage.tsx",
+        "sha256": "324b44bad11032b8d8c00ddba8d94f79eb9adac9428936c13e0665c9467105ba"
+      },
+      {
+        "path": "desktop/src/renderer/Shell/model-authority.ts",
+        "sha256": "f85fe9d204901d194837e2abdabc07545a7fe59bb06a8c28b366f46761ea97ff"
+      },
+      {
+        "path": "desktop/src/renderer/Shell/task-observation.ts",
+        "sha256": "541f39ce042b7aa6bbe17437f83bb6d0e68df42fba1bf5e74eca88458769a337"
+      },
+      {
+        "path": "desktop/src/renderer/bridge.ts",
+        "sha256": "5ca45a69bf567fdbcbfa634ee6374036b529fbafe51577a3736b68fd374b253e"
+      },
+      {
+        "path": "desktop/test/account-navigation-review.test.tsx",
+        "sha256": "f5e92631bb923dbd19b281572145058e9e260c9cddd0268123fd2f74f2694db3"
+      },
+      {
+        "path": "desktop/test/auth0-pilot-runner.test.ts",
+        "sha256": "353c0035e9c5fdece6a09faae6342fdddfaf69d232609adde350e135954957c8"
+      },
+      {
+        "path": "desktop/test/authorization-negative-suite.test.ts",
+        "sha256": "fe2922152a3993a3e698348b8254c2091f72836bdc8cb8abd99b9c1d7b53a320"
+      },
+      {
+        "path": "desktop/test/composer-route-label.test.tsx",
+        "sha256": "718d15e9ed5238f673510a9658dab61d297ae7f598227885cb0b132b0aba07b4"
+      },
+      {
+        "path": "desktop/test/data-authority-fences.test.ts",
+        "sha256": "632afd6dadb4fab5aa5eb1202f0664f9431b4b79be6b4960070147f0065a2a07"
+      },
+      {
+        "path": "desktop/test/environments-shell.test.tsx",
+        "sha256": "642ac6f72b07df146d70deb18f2f0cd651db27d0ff6f4143c335cc5815220470"
+      },
+      {
+        "path": "desktop/test/environments-units.test.ts",
+        "sha256": "9978645dc7a823ddb97e3559efc2d925cc01d270aee4e826b8f677d03ed52517"
+      },
+      {
+        "path": "desktop/test/model-authority-observation.test.tsx",
+        "sha256": "94985eabd36f7ff26e833d52e76ccae565159cb867705c9218761ffc2f361203"
+      },
+      {
+        "path": "desktop/test/model-fixtures.ts",
+        "sha256": "d6cf35c9c95ae86049b988bdbf17c04a576f2b625b29cd60de67f969c6c54122"
+      },
+      {
+        "path": "desktop/test/organise-shell.test.tsx",
+        "sha256": "a2b85252437e804b8f39b47733e077c5b042fbdf312904cc1b28c4d126485f1d"
+      },
+      {
+        "path": "desktop/test/providers-block.test.tsx",
+        "sha256": "567635e09e4f854e73abd4fda935559b99f1fb05b9f0739986536b45fed27e5d"
+      },
+      {
+        "path": "desktop/test/routes-shell.test.tsx",
+        "sha256": "6f9f35b616cfb7284b96e4a473abc0e2d4b61f5ccef0505dcae896596be74c8d"
+      },
+      {
+        "path": "desktop/test/routes-synthetic-fixture.test.ts",
+        "sha256": "9445e96d2af63e98a986fdd6d802e092e21678e0f2978011ea7f52a41ea9928a"
+      },
+      {
+        "path": "desktop/test/routes-units.test.ts",
+        "sha256": "cb25bd1f70110940167f244b0bbd9fca974631f5bc39460b98ced39ace9187d9"
+      },
+      {
+        "path": "desktop/test/rpc.test.ts",
+        "sha256": "470dfce1a94590d05b7581d330bb749df6b7650201ddf3840119d20f97ca50dc"
+      },
+      {
+        "path": "desktop/test/saved-work.test.ts",
+        "sha256": "81cc6b577e4b64ba3c8aa8adbf0ea9ae4732ee5590557da42e2754b36c70d1e5"
+      },
+      {
+        "path": "desktop/test/security.test.ts",
+        "sha256": "786e5b0c4dd8aad59a8c23c3fe1da26c59177a161605d94a24b3da148ecd0df7"
+      },
+      {
+        "path": "desktop/test/settings-route.test.tsx",
+        "sha256": "bcbde3ecb04826c618a0e6bc7473e6828618fd4a74dc8cac750c745cf217f1f7"
+      },
+      {
+        "path": "desktop/test/sidebar-followup.test.tsx",
+        "sha256": "aa09d24b6c338db363c02bbf84a64702264c1ac914f37b957d31575b015df47e"
+      },
+      {
+        "path": "desktop/test/smoke-task-session.test.ts",
+        "sha256": "533b428afb92d0c18589849b1de7101e6376eead905eea51737ae189b83f1149"
+      },
+      {
+        "path": "desktop/test/tasks-lifecycle.test.ts",
+        "sha256": "43c7acbefa5069e225f2f550c0dbca6305e656f9d13b36b77d16b69e2222846f"
+      },
+      {
+        "path": "desktop/test/tasks-progress.test.ts",
+        "sha256": "04f359eb21810085885d84526665ae3b012330396f70c23ffd1e6de14119652e"
+      },
+      {
+        "path": "desktop/test/tasks-route-authority.test.ts",
+        "sha256": "0000a01732faf7b6215d542acd4cd45dcd6a8e4b1b4868979af649269a458dfa"
+      },
+      {
+        "path": "desktop/test/tasks-service.test.ts",
+        "sha256": "8e948eebe5b10a04419acafadd585d83f8ee514f78e23abe6c473ba938085de6"
+      },
+      {
+        "path": "desktop/test/tasks-start.test.tsx",
+        "sha256": "3ff6bae4e3a254fb3cc60e9a9a5be0d364fb4b209f58d5840f67edacd4c88309"
+      },
+      {
+        "path": "desktop/test/tree-read-order-shell.test.tsx",
+        "sha256": "89b359ce03c8a9ccf0c14498da4fe4510ca9151ede37d239608ce441e9466063"
+      },
+      {
+        "path": "desktop/test/usage-shell.test.tsx",
+        "sha256": "bccbd0b4ffd9097feb647b2d476b8c5d73bfefea7f5c8180388083d6a19b33c6"
+      }
+    ],
+    "untrackedEngineDesktop": [],
+    "sourceDeltaSha256": "e2babe0b559147f0562522c107822ae6499b02d085633631faa30ef9cd53b0c3",
+    "note": "Actual committed engine and exact measured Desktop delta after genuine protocol generation."
+  },
+  "buildIdentities": {
+    "default": {
+      "buildOutput": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\build\\codex-app-server-e3f69316c7f82ce7\\output",
+      "buildOutputCopy": "D:/Projects/inquello/.tmp/production-chat-scope-r2-final-20261103/default/build-output.txt",
+      "buildOutputSha256": "8481517d033cad54eacd4fda83041730130ca43d4e98d5011adbe3191e526b17",
+      "features": "default",
+      "identity": [
+        "cargo:rustc-env=INQUELLO_BEHAVIOR_DIGEST=88a129e2ae2995e9bdd1fa4182d3ebda18608030a73eb1b49d4e1d7e57217fa5",
+        "cargo:rustc-env=INQUELLO_BUILD_PLATFORM=x86_64-pc-windows-msvc",
+        "cargo:rustc-env=INQUELLO_DATA_POLICY_DIGEST=b053b2694a39ddbc85ec01fc7303980ee6d9187132b83e00ff34f4f9710b2a21"
+      ]
+    },
+    "recorded": "2026-11-03T06:00:45.056Z",
+    "note": "Distinct measured default and fixture configurations; exact immutable binary hashes separately recorded.",
+    "fixture": {
+      "buildOutput": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\build\\codex-app-server-4c6a1485fab16ba4\\output",
+      "buildOutputCopy": "D:/Projects/inquello/.tmp/production-chat-scope-r2-final-20261103/fixture/build-output.txt",
+      "buildOutputSha256": "cf789f54318a9d20fae82a817a7c4b99b9771a9f74d78380e0fae0cf025192eb",
+      "features": "default,inference-fixtures",
+      "identity": [
+        "cargo:rustc-env=INQUELLO_BEHAVIOR_DIGEST=e496de194c94c6cff561a5fafd0931acd4f83462036efe79e1143c8494adcc3d",
+        "cargo:rustc-env=INQUELLO_BUILD_PLATFORM=x86_64-pc-windows-msvc",
+        "cargo:rustc-env=INQUELLO_DATA_POLICY_DIGEST=b053b2694a39ddbc85ec01fc7303980ee6d9187132b83e00ff34f4f9710b2a21"
+      ]
+    }
+  },
+  "routeIdentity": {
+    "schema_version": 2,
+    "route_id": "codex-responses",
+    "deployment": "openai-api",
+    "endpoint": "https://api.openai.com/v1/responses",
+    "model": "gpt-6.1-terra",
+    "api_version": "responses-v1",
+    "adapter_configuration_digest": "dd24d75f25112720ade3a1243dd05bb6f25a9d92b101851d01cdbd028b08053a",
+    "implementation_digest": "88a129e2ae2995e9bdd1fa4182d3ebda18608030a73eb1b49d4e1d7e57217fa5",
+    "runtime_version": "0.165.0",
+    "contract_version": "inquello-v1-authorization-v2",
+    "platform": "x86_64-pc-windows-msvc"
+  },
+  "testedDefaultArtifact": {
+    "path": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-20261103\\default\\codex-app-server.exe",
+    "sha256": "3ea41d69ff88c177808fba4e61f9f6217d0da8d3ea0925f3ee1d6cd0512c8ca1"
+  },
+  "processingScope": "OpenAI API Responses processing for exact supported Terra configuration; requires reviewed build evidence, fresh per-operation workspace approval, current credential ownership and creator-private Task authority.",
+  "dataPolicyDigest": "b053b2694a39ddbc85ec01fc7303980ee6d9187132b83e00ff34f4f9710b2a21",
+  "generatorSha256": "51dd85b94c7817021b755f0a1bda2f0796c9ec0e69e043bd8f655a8950d74f78",
+  "artifacts": [
+    {
+      "path": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-20261103\\default\\codex-app-server.exe",
+      "sha256": "3ea41d69ff88c177808fba4e61f9f6217d0da8d3ea0925f3ee1d6cd0512c8ca1"
+    },
+    {
+      "path": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-20261103\\default\\codex.exe",
+      "sha256": "0d0a032276c228d57b02ef0d437016353c29512553cdd9e3765f8e60f122d1fe"
+    },
+    {
+      "path": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-20261103\\default\\inquello-service.exe",
+      "sha256": "cd7747c17de1e58a826bd288dc7185691bcd3ecda2d8941b1bb5d6ff1ae4b6ce"
+    },
+    {
+      "path": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-20261103\\fixture\\authorization-runtime.exe",
+      "sha256": "2463a7af44b5ed84c666409ca79d101176058139e8596d78649ff441335b8036"
+    },
+    {
+      "path": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-20261103\\fixture\\build-output.txt",
+      "sha256": "cf789f54318a9d20fae82a817a7c4b99b9771a9f74d78380e0fae0cf025192eb"
+    },
+    {
+      "path": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-20261103\\fixture\\codex-app-server.exe",
+      "sha256": "a98bca4680d8d2bb9ee60c1f17e3c799c496f3efee7eeb39a8c15c8dbd862750"
+    }
+  ],
+  "gates": [
+    {
+      "name": "default-build",
+      "binaries": [],
+      "exit": 0,
+      "logSha256": "86109361e614eebd3fda80b4cc038f00b31cdd9c09cb7510284fe6e6375c8166",
+      "finished": "2026-11-03T05:36:56.7525506Z",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-default-build.log",
+      "rustTestSummaries": [],
+      "command": "Gate 'default-build' {cargo build --offline -j1 --config profile.dev.package.codex-core.debug=0 -p codex-cli -p codex-app-server -p inquello-service}",
+      "features": "default"
+    },
+    {
+      "name": "generate-protocol",
+      "binaries": [],
+      "exit": 0,
+      "logSha256": "2372e5b8a1f5596db9445f710a0b038014e118b26ea592da80e10070e73112ce",
+      "finished": "2026-11-03T05:37:04.3659610Z",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-generate-protocol.log",
+      "rustTestSummaries": [],
+      "command": "Gate 'generate-protocol' {Push-Location D:\\Projects\\inquello\\desktop; pnpm run generate:protocol; $code=$LASTEXITCODE; Pop-Location; $global:LASTEXITCODE=$code}",
+      "features": "default"
+    },
+    {
+      "name": "fmt",
+      "binaries": [],
+      "exit": 0,
+      "logSha256": "a49c515f002a7399518ebf02e88d3ec7cbc9815c6666b5a6178fe3947c8096ab",
+      "finished": "2026-11-03T05:37:33.8341377Z",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-fmt.log",
+      "rustTestSummaries": [],
+      "command": "Gate 'fmt' {cargo fmt --all -- --check}",
+      "features": "default"
+    },
+    {
+      "name": "clippy",
+      "binaries": [],
+      "exit": 0,
+      "logSha256": "ea29fc8584ce566480a894bf505c594a1542eb65397707be48a1b186d389f20b",
+      "finished": "2026-11-03T05:40:24.5709235Z",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-clippy.log",
+      "rustTestSummaries": [],
+      "command": "Gate 'clippy' {cargo clippy --offline -j1 --config profile.dev.package.codex-core.debug=0 -p codex-core -p inquello-domain -p inquello-adapters -p inquello-service -p codex-app-server-protocol -p codex-app-server --features inquello-service/test-issuer --all-targets -- -D warnings}",
+      "features": "default; inquello-service/test-issuer; all affected targets"
+    },
+    {
+      "name": "domain",
+      "binaries": [
+        {
+          "copy": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-20261103\\test-binaries\\domain\\inquello_domain-f15dd6f4e12cce86.exe",
+          "sha256": "BA8DB1D4371E25D24F159F9021C47BBE84A59DA30ABCBC3648C32CAB6D1F623D",
+          "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\inquello_domain-f15dd6f4e12cce86.exe"
+        },
+        {
+          "copy": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-20261103\\test-binaries\\domain\\capability_register-148e26bd10644aab.exe",
+          "sha256": "351E702179B187334877BB8233F0873012CFB6BBFD8595E88FFDD3873D267866",
+          "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\capability_register-148e26bd10644aab.exe"
+        },
+        {
+          "copy": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-20261103\\test-binaries\\domain\\dependency_direction-5a2c91585f563bfa.exe",
+          "sha256": "20D52F057520378491E44EB6F396924F26F15E3BEF43947EBC8A9B84EEC2648C",
+          "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\dependency_direction-5a2c91585f563bfa.exe"
+        },
+        {
+          "copy": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-20261103\\test-binaries\\domain\\inventory_map-47c42787c805f1b1.exe",
+          "sha256": "D77088D0935E394C8EE94E05300E7B28A43AB260DF78ED2BDF078CC685494F02",
+          "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\inventory_map-47c42787c805f1b1.exe"
+        }
+      ],
+      "exit": 0,
+      "logSha256": "dfa1bfb066824418d649dbf02e5ae5ab497ffd8fc1ba1535b947ccbffa85d399",
+      "finished": "2026-11-03T05:40:38.8067765Z",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-domain.log",
+      "rustTestSummaries": [
+        {
+          "passed": 133,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 24,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 11,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "command": "Gate 'domain' {cargo test --offline -j1 -p inquello-domain}",
+      "features": "default"
+    },
+    {
+      "name": "adapters",
+      "binaries": [
+        {
+          "copy": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-20261103\\test-binaries\\adapters\\inquello_adapters-5e90e3cb5c5f0d5f.exe",
+          "sha256": "C999BF106B9EE3B9C61E2BFE9DC15E09112730712802EB0DF4471738305AB572",
+          "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\inquello_adapters-5e90e3cb5c5f0d5f.exe"
+        },
+        {
+          "copy": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-20261103\\test-binaries\\adapters\\broad_modes-ac3123b9332f639f.exe",
+          "sha256": "2CE51469720BA4DDE1CF344D175FE838CF932196735B0959E287DE8470C0717F",
+          "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\broad_modes-ac3123b9332f639f.exe"
+        },
+        {
+          "copy": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-20261103\\test-binaries\\adapters\\concurrent_operations-1730a2170b20c1be.exe",
+          "sha256": "75B74A5B2C8EBE68CB6031E5EEECDDD2AEB288C466709383949AC88A14A781DC",
+          "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\concurrent_operations-1730a2170b20c1be.exe"
+        },
+        {
+          "copy": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-20261103\\test-binaries\\adapters\\organise_store-63af6578df0b08d8.exe",
+          "sha256": "C8FB3D4A34B3E465DC5F52C1A9A1E757F000DCAB1BF5DDEE41078121655530A2",
+          "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\organise_store-63af6578df0b08d8.exe"
+        },
+        {
+          "copy": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-20261103\\test-binaries\\adapters\\permissions-6237da9400fb89dc.exe",
+          "sha256": "B8FA72E32CEAE6578E93773BAF1E259CE8DE2363FFD3CA2B16B7F77EF7D1633A",
+          "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\permissions-6237da9400fb89dc.exe"
+        },
+        {
+          "copy": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-20261103\\test-binaries\\adapters\\processing_routes-b0ec06c0e4cef564.exe",
+          "sha256": "5B913366EE41E127DD5B66C790A514F19BE452CB8ED7DD645FC1598F5051D2CB",
+          "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\processing_routes-b0ec06c0e4cef564.exe"
+        },
+        {
+          "copy": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-20261103\\test-binaries\\adapters\\task_runs-3218151f3d847e00.exe",
+          "sha256": "7202514C5740F387792254E3871159060CCE74074239FD294C7147183EC8ED11",
+          "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\task_runs-3218151f3d847e00.exe"
+        },
+        {
+          "copy": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-20261103\\test-binaries\\adapters\\task_states-ec5f123bcb10690a.exe",
+          "sha256": "8F669C3E5E2B4FCF00813E92D22B2141A3C83F81C3587C5104FD944580EB56E6",
+          "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\task_states-ec5f123bcb10690a.exe"
+        },
+        {
+          "copy": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-20261103\\test-binaries\\adapters\\task_usage-bfdfeb874ea462bb.exe",
+          "sha256": "56D7AF8788C529BCF8587DA0FD732EE9781AAB7FBBF5CED97B3E07E19A54E729",
+          "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\task_usage-bfdfeb874ea462bb.exe"
+        },
+        {
+          "copy": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-20261103\\test-binaries\\adapters\\working_store-0aa53b3d53ce5ecb.exe",
+          "sha256": "A090C6D2FCA2160569B998F42473EBE7AD37A1243E9EC46AE131B5DEED4F215F",
+          "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\working_store-0aa53b3d53ce5ecb.exe"
+        }
+      ],
+      "exit": 0,
+      "logSha256": "0271528fe9392bef8e812e382473f26a7226713959b130fc5d7b0e64cbab785e",
+      "finished": "2026-11-03T05:41:58.5739983Z",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-adapters.log",
+      "rustTestSummaries": [
+        {
+          "passed": 17,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 24,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 12,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 13,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 24,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 13,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "command": "Gate 'adapters' {cargo test --offline -j1 -p inquello-adapters}",
+      "features": "default"
+    },
+    {
+      "name": "service",
+      "binaries": [
+        {
+          "copy": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-20261103\\test-binaries\\service\\inquello_service-5203c67e279119d0.exe",
+          "sha256": "66AAB2FB0FB8AA6B30792B159CECFC5AF1170BEAA421AF5B606873719839D951",
+          "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\inquello_service-5203c67e279119d0.exe"
+        },
+        {
+          "copy": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-20261103\\test-binaries\\service\\inquello_service-2d757cfcbf4a240f.exe",
+          "sha256": "988490F0D2D83CEC0538B4B2FCFF916A3692EE73DEA8F00471269F6293512CBA",
+          "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\inquello_service-2d757cfcbf4a240f.exe"
+        },
+        {
+          "copy": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-20261103\\test-binaries\\service\\onboarding-e514014837abb467.exe",
+          "sha256": "FCA770F776F7F02B2CCF5988F2D56F0B80CDC584AD06710F45B3D0D48FE4E808",
+          "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\onboarding-e514014837abb467.exe"
+        },
+        {
+          "copy": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-20261103\\test-binaries\\service\\serve-d9dabd1220aa9c5b.exe",
+          "sha256": "2600AEC680026157C132FE667226F9D0F869D6E89F140F4DAA9B06A983402803",
+          "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\serve-d9dabd1220aa9c5b.exe"
+        }
+      ],
+      "exit": 0,
+      "logSha256": "ccaa8b0fc1398f3a59925d3298c21e39679bc6f26309f3c2704eecce15e40367",
+      "finished": "2026-11-03T05:42:20.4576489Z",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-service.log",
+      "rustTestSummaries": [
+        {
+          "passed": 10,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "command": "Gate 'service' {cargo test --offline -j1 -p inquello-service}",
+      "features": "default"
+    },
+    {
+      "name": "service-transactions",
+      "binaries": [
+        {
+          "copy": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-20261103\\test-binaries\\service-transactions\\inquello_service-debdcae211e1cd02.exe",
+          "sha256": "0E0FB6FFFC41789275B1E448882EAE5988163BBBA8F8421C691B00DF73831066",
+          "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\inquello_service-debdcae211e1cd02.exe"
+        }
+      ],
+      "exit": 0,
+      "logSha256": "516bbb49056fa4054dc4bb315935925c5a0cf19a95a2239a21bf4d50bb329cc1",
+      "finished": "2026-11-03T05:42:27.5327367Z",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-service-transactions.log",
+      "rustTestSummaries": [
+        {
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "command": "Gate 'service-transactions' {cargo test --offline -j1 -p inquello-service --features test-issuer --lib route_eligibility -- --test-threads=1}",
+      "features": "default,test-issuer"
+    },
+    {
+      "name": "service-integration",
+      "binaries": [
+        {
+          "copy": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-20261103\\test-binaries\\service-integration\\route_eligibility-b96ac18219e54e14.exe",
+          "sha256": "FE10E13F7198D6BC011957A567271E9881B2F2DAA3AD4510297B041B35CE010E",
+          "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\route_eligibility-b96ac18219e54e14.exe"
+        }
+      ],
+      "exit": 0,
+      "logSha256": "6c1eafc9b0f8db8085028d94b565d8b61bf63fb8e3ab2293da4f22a637ec3d04",
+      "finished": "2026-11-03T05:42:54.8763203Z",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-service-integration.log",
+      "rustTestSummaries": [
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "command": "Gate 'service-integration' {cargo test --offline -j1 -p inquello-service --features test-issuer --test route_eligibility -- --test-threads=1}",
+      "features": "default,test-issuer"
+    },
+    {
+      "name": "core",
+      "binaries": [
+        {
+          "copy": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-20261103\\test-binaries\\core\\codex_core-849b3373e1b2073a.exe",
+          "sha256": "95449F90CB8A71F1BBB7FF03A9EA726CB4ABFA4C891B5352D1B478397B81BE1E",
+          "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\codex_core-849b3373e1b2073a.exe"
+        }
+      ],
+      "exit": 0,
+      "logSha256": "201941f39fb5b2eb56e531a09c4bbbf62271b8f1ebae5fdd77b0d48e8acf9f9b",
+      "finished": "2026-11-03T05:47:15.5637131Z",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-core.log",
+      "rustTestSummaries": [
+        {
+          "passed": 26,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "command": "Gate 'core' {cargo test --offline -j1 --config profile.dev.package.codex-core.debug=0 -p codex-core --lib inquello_inference -- --test-threads=1}",
+      "features": "default"
+    },
+    {
+      "name": "core-private",
+      "binaries": [
+        {
+          "copy": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-20261103\\test-binaries\\core\\codex_core-849b3373e1b2073a.exe",
+          "sha256": "95449F90CB8A71F1BBB7FF03A9EA726CB4ABFA4C891B5352D1B478397B81BE1E",
+          "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\codex_core-849b3373e1b2073a.exe"
+        }
+      ],
+      "exit": 0,
+      "logSha256": "2067d2cc975a2c8974f97a4e86d9bee4c99db3e1a98494123421ce72ffbf3eb4",
+      "finished": "2026-11-03T05:47:16.9848811Z",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-core-private.log",
+      "rustTestSummaries": [
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "command": "Gate 'core-private' {& $coreExe inquello_private --test-threads=1}",
+      "features": "default"
+    },
+    {
+      "name": "core-retry-controls",
+      "binaries": [
+        {
+          "copy": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-20261103\\test-binaries\\core\\codex_core-849b3373e1b2073a.exe",
+          "sha256": "95449F90CB8A71F1BBB7FF03A9EA726CB4ABFA4C891B5352D1B478397B81BE1E",
+          "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\codex_core-849b3373e1b2073a.exe"
+        }
+      ],
+      "exit": 0,
+      "logSha256": "bbbe9b27d1dbbcce7644315979655243ba90d1056b6226e7eeafa98b3758d0c3",
+      "finished": "2026-11-03T05:47:18.7096930Z",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-core-retry-controls.log",
+      "rustTestSummaries": [
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "command": "Gate 'core-retry-controls' {& $coreExe responses_retry::tests --test-threads=1}",
+      "features": "default"
+    },
+    {
+      "name": "core-auth-control",
+      "binaries": [
+        {
+          "copy": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-20261103\\test-binaries\\core\\codex_core-849b3373e1b2073a.exe",
+          "sha256": "95449F90CB8A71F1BBB7FF03A9EA726CB4ABFA4C891B5352D1B478397B81BE1E",
+          "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\codex_core-849b3373e1b2073a.exe"
+        }
+      ],
+      "exit": 0,
+      "logSha256": "b8f436b84f15d0d30d1069fd066b021f83a14e0c39659ffe4780581673d0fcd0",
+      "finished": "2026-11-03T05:47:19.8513223Z",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-core-auth-control.log",
+      "rustTestSummaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "command": "Gate 'core-auth-control' {& $coreExe provider_owned_auth_recovery_is_bounded_and_preserves_unauthorized_failures --test-threads=1}",
+      "features": "default"
+    },
+    {
+      "name": "core-paid-boundary-control",
+      "binaries": [
+        {
+          "copy": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-20261103\\test-binaries\\core\\codex_core-849b3373e1b2073a.exe",
+          "sha256": "95449F90CB8A71F1BBB7FF03A9EA726CB4ABFA4C891B5352D1B478397B81BE1E",
+          "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\codex_core-849b3373e1b2073a.exe"
+        }
+      ],
+      "exit": 0,
+      "logSha256": "769d5fe651e766aad83c350d5ec1076921581ff91d4feead39a3d0abdf1a2b08",
+      "finished": "2026-11-03T05:47:20.9929622Z",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-core-paid-boundary-control.log",
+      "rustTestSummaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "command": "Gate 'core-paid-boundary-control' {& $coreExe controlled_paid_body_refuses_unbounded_or_nontext_requests --test-threads=1}",
+      "features": "default"
+    },
+    {
+      "name": "core-source-boundary",
+      "binaries": [
+        {
+          "copy": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-20261103\\test-binaries\\core-source-boundary\\all-4777421d63f85d4c.exe",
+          "sha256": "8F6F483D86BB4BF7F8E0E1C75952E041EA9DC253270A17E17E34959BDC59D83E",
+          "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\all-4777421d63f85d4c.exe"
+        }
+      ],
+      "exit": 0,
+      "logSha256": "0f88b66e2a1feb109ed38ea53436d4e7ab20a3882dc29aae9fe245c71789a95e",
+      "finished": "2026-11-03T05:47:27.2646437Z",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-core-source-boundary.log",
+      "rustTestSummaries": [
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "command": "Gate 'core-source-boundary' {cargo test --offline -j1 --config profile.dev.package.codex-core.debug=0 -p codex-core --test all bound_responses_ -- --test-threads=1}",
+      "features": "default"
+    },
+    {
+      "name": "bounded-rollout",
+      "binaries": [
+        {
+          "copy": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-20261103\\test-binaries\\bounded-rollout\\codex_rollout-e43f3b5b2bd26cd3.exe",
+          "sha256": "FCD635686C4B90EAFAA2DA5EC5E1EAB33260076FB223C1E2A4DC7A23EDC2379A",
+          "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\codex_rollout-e43f3b5b2bd26cd3.exe"
+        }
+      ],
+      "exit": 0,
+      "logSha256": "fffef0f4b3d41ee32e598d958c3c1200d214d8324bc516aa135287e05bdfafb7",
+      "finished": "2026-11-03T05:47:32.9257266Z",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-bounded-rollout.log",
+      "rustTestSummaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "command": "Gate 'bounded-rollout' {cargo test --offline -j1 -p codex-rollout --lib saved_bounds_tests -- --test-threads=1}",
+      "features": "default"
+    },
+    {
+      "name": "native-lib",
+      "binaries": [
+        {
+          "copy": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-20261103\\test-binaries\\native-lib\\codex_app_server-f02eafa0ea1a0c52.exe",
+          "sha256": "077555E45DE88495B60CEA6CBB027DA292EF11DED5A6143B6E68FD084A235E78",
+          "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\codex_app_server-f02eafa0ea1a0c52.exe"
+        }
+      ],
+      "exit": 0,
+      "logSha256": "109a3bcc4a68429cf97ce23b18a15d96ff4c1439b688316deb6a48d969c03f01",
+      "finished": "2026-11-03T05:53:43.9474515Z",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-native-lib.log",
+      "rustTestSummaries": [
+        {
+          "passed": 151,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "command": "Gate 'native-lib' {cargo test --offline -j1 --config profile.dev.package.codex-core.debug=0 -p codex-app-server --lib inquello_ -- --test-threads=1}",
+      "features": "default"
+    },
+    {
+      "name": "native-bin-fingerprint",
+      "binaries": [
+        {
+          "copy": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-20261103\\test-binaries\\native-bin-fingerprint\\codex_app_server-efcde93d596a8f3f.exe",
+          "sha256": "F2ED819933A7E0D5D7E5C6CE966CC561BCBD1F21B488B32407090ABC5ABC23A6",
+          "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\codex_app_server-efcde93d596a8f3f.exe"
+        },
+        {
+          "copy": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-20261103\\test-binaries\\native-bin-fingerprint\\inquello_behavior_fingerprint-f62ee1bd294212d9.exe",
+          "sha256": "FDE903B4DE2BF5D69C892A872DD00499EEEE23E18AB35FD92DFE173E6823595E",
+          "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\inquello_behavior_fingerprint-f62ee1bd294212d9.exe"
+        }
+      ],
+      "exit": 0,
+      "logSha256": "32bbf3d98b443da0f38746875cc83ea3f2cb36b5b3bbf6e84b48f4de56d036bc",
+      "finished": "2026-11-03T05:55:42.1515742Z",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-native-bin-fingerprint.log",
+      "rustTestSummaries": [
+        {
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "command": "Gate 'native-bin-fingerprint' {cargo test --offline -j1 --config profile.dev.package.codex-core.debug=0 -p codex-app-server --bin codex-app-server --test inquello_behavior_fingerprint -- --test-threads=1}",
+      "features": "default"
+    },
+    {
+      "name": "fixture-build",
+      "binaries": [],
+      "exit": 0,
+      "logSha256": "c8284b1bcac313cdfb339f73004b47ef123fcf6a750d44854fcd8c8fc02bfb26",
+      "finished": "2026-11-03T06:00:44.6822077Z",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-fixture-build.log",
+      "rustTestSummaries": [],
+      "command": "Gate 'fixture-build' {cargo build --locked --offline -j1 --config profile.dev.package.codex-core.debug=0 -p codex-app-server --bin codex-app-server --features inference-fixtures}",
+      "features": "default,inference-fixtures"
+    },
+    {
+      "name": "fixture-test-build",
+      "binaries": [
+        {
+          "copy": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-20261103\\test-binaries\\fixture-test-build\\inquello_authorization_runtime-0b8276b468138333.exe",
+          "sha256": "2463A7AF44B5ED84C666409CA79D101176058139E8596D78649FF441335B8036",
+          "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\inquello_authorization_runtime-0b8276b468138333.exe"
+        }
+      ],
+      "exit": 0,
+      "logSha256": "8e93ad1dc08fa77e24b729546c26c0174c9556c4854146c4eb50aad109559d33",
+      "finished": "2026-11-03T06:06:09.9889321Z",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-fixture-test-build.log",
+      "rustTestSummaries": [],
+      "command": "Gate 'fixture-test-build' {cargo test --offline -j1 --config profile.dev.package.codex-core.debug=0 -p codex-app-server --test inquello_authorization_runtime --features inference-fixtures --no-run}",
+      "features": "default,inference-fixtures"
+    },
+    {
+      "name": "fixture-budgets",
+      "binaries": [],
+      "exit": 0,
+      "logSha256": "3fb28496246b093654fa3f7946b6ac02c5e710e27a79706ef284430b163759ae",
+      "finished": "2026-11-03T06:06:13.1646472Z",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-fixture-budgets.log",
+      "rustTestSummaries": [
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "command": "Gate 'fixture-budgets' {& $test fixture_ --test-threads=1}",
+      "features": "default,inference-fixtures"
+    },
+    {
+      "name": "responses-full",
+      "binaries": [],
+      "exit": 0,
+      "logSha256": "a96c764e74003232f95f36ada8628a8e3b770377b2f84545e46b4aa59e646363",
+      "finished": "2026-11-03T06:17:42.9174024Z",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-responses-full.log",
+      "rustTestSummaries": [
+        {
+          "passed": 33,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "command": "Gate 'responses-full' {& $test responses_ --test-threads=1}",
+      "features": "default,inference-fixtures"
+    },
+    {
+      "finished": "2026-11-03T02:18:14.9417209Z",
+      "name": "desktop-main-types",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-desktop-final-2-main-types.log",
+      "exit": 0,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rustTestSummaries": [],
+      "command": "Gate 'main-types' {pnpm exec tsc -p tsconfig.build.json --noEmit}",
+      "features": "Desktop test/build; default native integration artifact from prior protocol build"
+    },
+    {
+      "finished": "2026-11-03T02:18:18.2811992Z",
+      "name": "desktop-renderer-types",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-desktop-final-2-renderer-types.log",
+      "exit": 0,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "rustTestSummaries": [],
+      "command": "Gate 'renderer-types' {pnpm exec tsc -p tsconfig.renderer.json --noEmit}",
+      "features": "Desktop test/build; default native integration artifact from prior protocol build"
+    },
+    {
+      "finished": "2026-11-03T02:18:26.5098003Z",
+      "name": "desktop-build",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-desktop-final-2-build.log",
+      "exit": 0,
+      "logSha256": "22c5fda6140651a9f0400b763ce2e90a694a9b265e258710ed1a257f5b0e79ee",
+      "rustTestSummaries": [],
+      "command": "Gate 'build' {pnpm run build}",
+      "features": "Desktop test/build; default native integration artifact from prior protocol build"
+    },
+    {
+      "finished": "2026-11-03T02:28:54.2116195Z",
+      "name": "desktop-vitest",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-desktop-final-2-vitest.log",
+      "exit": 0,
+      "logSha256": "3a24672e48a3da77ef97fef5c5dd274ae5596cdf7fe40c559ac4adf57626c920",
+      "rustTestSummaries": [],
+      "command": "Gate 'vitest' {pnpm exec vitest run --configLoader runner}",
+      "features": "Desktop test/build; default native integration artifact from prior protocol build"
+    }
+  ],
+  "witnesses": {
+    "B-allowed": {
+      "gate": "responses-full",
+      "test": "responses_allowed",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-responses-full.log",
+      "logSha256": "a96c764e74003232f95f36ada8628a8e3b770377b2f84545e46b4aa59e646363",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "synthetic Responses transport/minimal fixture metadata; actual retained runtime"
+    },
+    "B-bundled-tool": {
+      "gate": "responses-full",
+      "test": "responses_bundled_catalog_allowed_tool_effect",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-responses-full.log",
+      "logSha256": "a96c764e74003232f95f36ada8628a8e3b770377b2f84545e46b4aa59e646363",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "trusted unchanged bundled Terra metadata; synthetic Responses transport; actual retained runtime"
+    },
+    "B-bundled-text": {
+      "gate": "responses-full",
+      "test": "responses_bundled_catalog_text_completed_followup",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-responses-full.log",
+      "logSha256": "a96c764e74003232f95f36ada8628a8e3b770377b2f84545e46b4aa59e646363",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "trusted unchanged bundled Terra metadata; synthetic Responses transport; actual retained runtime"
+    },
+    "B-private": {
+      "gate": "responses-full",
+      "test": "responses_search_reopen_private_denials",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-responses-full.log",
+      "logSha256": "a96c764e74003232f95f36ada8628a8e3b770377b2f84545e46b4aa59e646363",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "synthetic Responses transport/minimal fixture metadata; actual retained runtime"
+    },
+    "B-deny": {
+      "gate": "responses-full",
+      "test": "responses_deny_before_dispatch",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-responses-full.log",
+      "logSha256": "a96c764e74003232f95f36ada8628a8e3b770377b2f84545e46b4aa59e646363",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "synthetic Responses transport/minimal fixture metadata; actual retained runtime"
+    },
+    "B-revoke-model": {
+      "gate": "responses-full",
+      "test": "responses_revoke_model",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-responses-full.log",
+      "logSha256": "a96c764e74003232f95f36ada8628a8e3b770377b2f84545e46b4aa59e646363",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "synthetic Responses transport/minimal fixture metadata; actual retained runtime"
+    },
+    "B-revoke-tool": {
+      "gate": "responses-full",
+      "test": "responses_revoke_running_tool",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-responses-full.log",
+      "logSha256": "a96c764e74003232f95f36ada8628a8e3b770377b2f84545e46b4aa59e646363",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "synthetic Responses transport/minimal fixture metadata; actual retained runtime"
+    },
+    "B-revoke-permission": {
+      "gate": "responses-full",
+      "test": "responses_revoke_pending_permission",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-responses-full.log",
+      "logSha256": "a96c764e74003232f95f36ada8628a8e3b770377b2f84545e46b4aa59e646363",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "synthetic Responses transport/minimal fixture metadata; actual retained runtime"
+    },
+    "B-stop-unavailable": {
+      "gate": "responses-full",
+      "test": "responses_lifecycle_stop_provider_unavailable",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-responses-full.log",
+      "logSha256": "a96c764e74003232f95f36ada8628a8e3b770377b2f84545e46b4aa59e646363",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "synthetic Responses transport/minimal fixture metadata; actual retained runtime"
+    },
+    "B-stop-resume": {
+      "gate": "responses-full",
+      "test": "responses_lifecycle_stop_resume",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-responses-full.log",
+      "logSha256": "a96c764e74003232f95f36ada8628a8e3b770377b2f84545e46b4aa59e646363",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "synthetic Responses transport/minimal fixture metadata; actual retained runtime"
+    },
+    "B-followup": {
+      "gate": "responses-full",
+      "test": "responses_lifecycle_completed_followup",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-responses-full.log",
+      "logSha256": "a96c764e74003232f95f36ada8628a8e3b770377b2f84545e46b4aa59e646363",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "synthetic Responses transport/minimal fixture metadata; actual retained runtime"
+    },
+    "B-before-resume": {
+      "gate": "responses-full",
+      "test": "responses_lifecycle_revoke_before_resume",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-responses-full.log",
+      "logSha256": "a96c764e74003232f95f36ada8628a8e3b770377b2f84545e46b4aa59e646363",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "synthetic Responses transport/minimal fixture metadata; actual retained runtime"
+    },
+    "B-during-resume": {
+      "gate": "responses-full",
+      "test": "responses_lifecycle_revoke_during_resume",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-responses-full.log",
+      "logSha256": "a96c764e74003232f95f36ada8628a8e3b770377b2f84545e46b4aa59e646363",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "synthetic Responses transport/minimal fixture metadata; actual retained runtime"
+    },
+    "B-missing": {
+      "gate": "responses-full",
+      "test": "responses_lifecycle_missing_linkage",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-responses-full.log",
+      "logSha256": "a96c764e74003232f95f36ada8628a8e3b770377b2f84545e46b4aa59e646363",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "synthetic Responses transport/minimal fixture metadata; actual retained runtime"
+    },
+    "B-peer": {
+      "gate": "responses-full",
+      "test": "responses_lifecycle_peer_private",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-responses-full.log",
+      "logSha256": "a96c764e74003232f95f36ada8628a8e3b770377b2f84545e46b4aa59e646363",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "synthetic Responses transport/minimal fixture metadata; actual retained runtime"
+    },
+    "B-company": {
+      "gate": "responses-full",
+      "test": "responses_lifecycle_cross_company",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-responses-full.log",
+      "logSha256": "a96c764e74003232f95f36ada8628a8e3b770377b2f84545e46b4aa59e646363",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "synthetic Responses transport/minimal fixture metadata; actual retained runtime"
+    },
+    "B-restart": {
+      "gate": "responses-full",
+      "test": "responses_lifecycle_restart",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-responses-full.log",
+      "logSha256": "a96c764e74003232f95f36ada8628a8e3b770377b2f84545e46b4aa59e646363",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "synthetic Responses transport/minimal fixture metadata; actual retained runtime"
+    },
+    "B-crash": {
+      "gate": "responses-full",
+      "test": "responses_lifecycle_crash",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-responses-full.log",
+      "logSha256": "a96c764e74003232f95f36ada8628a8e3b770377b2f84545e46b4aa59e646363",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "synthetic Responses transport/minimal fixture metadata; actual retained runtime"
+    },
+    "B-lost-ack": {
+      "gate": "responses-full",
+      "test": "responses_lifecycle_steer_lost_ack",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-responses-full.log",
+      "logSha256": "a96c764e74003232f95f36ada8628a8e3b770377b2f84545e46b4aa59e646363",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "synthetic Responses transport/minimal fixture metadata; actual retained runtime"
+    },
+    "B-stop-pending": {
+      "gate": "responses-full",
+      "test": "responses_lifecycle_stop_pending_steer",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-responses-full.log",
+      "logSha256": "a96c764e74003232f95f36ada8628a8e3b770377b2f84545e46b4aa59e646363",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "synthetic Responses transport/minimal fixture metadata; actual retained runtime"
+    },
+    "B-stop-inflight": {
+      "gate": "responses-full",
+      "test": "responses_lifecycle_stop_inflight_steer",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-responses-full.log",
+      "logSha256": "a96c764e74003232f95f36ada8628a8e3b770377b2f84545e46b4aa59e646363",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "synthetic Responses transport/minimal fixture metadata; actual retained runtime"
+    },
+    "B-steer": {
+      "gate": "responses-full",
+      "test": "responses_lifecycle_steer",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-responses-full.log",
+      "logSha256": "a96c764e74003232f95f36ada8628a8e3b770377b2f84545e46b4aa59e646363",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "synthetic Responses transport/minimal fixture metadata; actual retained runtime"
+    },
+    "B-progress": {
+      "gate": "responses-full",
+      "test": "responses_lifecycle_progress_continuity",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-responses-full.log",
+      "logSha256": "a96c764e74003232f95f36ada8628a8e3b770377b2f84545e46b4aa59e646363",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "synthetic Responses transport/minimal fixture metadata; actual retained runtime"
+    },
+    "B-final-await": {
+      "gate": "responses-full",
+      "test": "responses_search_final_await_contributors",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-responses-full.log",
+      "logSha256": "a96c764e74003232f95f36ada8628a8e3b770377b2f84545e46b4aa59e646363",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "synthetic Responses transport/minimal fixture metadata; actual retained runtime"
+    },
+    "B-zero-match": {
+      "gate": "responses-full",
+      "test": "responses_search_zero_to_match_final_await",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-responses-full.log",
+      "logSha256": "a96c764e74003232f95f36ada8628a8e3b770377b2f84545e46b4aa59e646363",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "synthetic Responses transport/minimal fixture metadata; actual retained runtime"
+    },
+    "B-legacy": {
+      "gate": "responses-full",
+      "test": "responses_search_paginated_and_legacy_old_turn",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-responses-full.log",
+      "logSha256": "a96c764e74003232f95f36ada8628a8e3b770377b2f84545e46b4aa59e646363",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "synthetic Responses transport/minimal fixture metadata; actual retained runtime"
+    },
+    "B-cursor": {
+      "gate": "responses-full",
+      "test": "responses_search_next_cursor_scope_snapshot",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-responses-full.log",
+      "logSha256": "a96c764e74003232f95f36ada8628a8e3b770377b2f84545e46b4aa59e646363",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "synthetic Responses transport/minimal fixture metadata; actual retained runtime"
+    },
+    "B-route-mismatch": {
+      "gate": "responses-full",
+      "test": "responses_search_retained_route_mismatch",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-responses-full.log",
+      "logSha256": "a96c764e74003232f95f36ada8628a8e3b770377b2f84545e46b4aa59e646363",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "synthetic Responses transport/minimal fixture metadata; actual retained runtime"
+    },
+    "A-admission": {
+      "gate": "native-lib",
+      "test": "request_processors::inquello_processor::tasks_bridge::bootstrap_order_tests::inquello_real_session_current_approval_all_protected_actions_default_features",
+      "source": "engine/codex-rs/app-server/src/request_processors/inquello_tasks.rs",
+      "sourceSha256": "0322348f9f45916062831544842936f63c8c1c278658243f2efb5d0145b4e4a6",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-native-lib.log",
+      "logSha256": "109a3bcc4a68429cf97ce23b18a15d96ff4c1439b688316deb6a48d969c03f01"
+    },
+    "A-withdrawal": {
+      "gate": "native-lib",
+      "test": "request_processors::inquello_processor::tasks_bridge::bootstrap_order_tests::inquello_real_session_withdrawal_and_late_authority_default_features",
+      "source": "engine/codex-rs/app-server/src/request_processors/inquello_tasks.rs",
+      "sourceSha256": "0322348f9f45916062831544842936f63c8c1c278658243f2efb5d0145b4e4a6",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-native-lib.log",
+      "logSha256": "109a3bcc4a68429cf97ce23b18a15d96ff4c1439b688316deb6a48d969c03f01"
+    },
+    "C-inventory": {
+      "gate": "native-bin-fingerprint",
+      "test": "inspection_composition_tests::terra_native_inventory_preserves_exact_proof_and_refuses_unknown_evidence",
+      "source": "engine/codex-rs/app-server/src/main_inspection_tests.rs",
+      "sourceSha256": "7886bb3197798b20f44d2534f3066840af4d1058db536cdfacfb6094c201d869",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-native-bin-fingerprint.log",
+      "logSha256": "32bbf3d98b443da0f38746875cc83ea3f2cb36b5b3bbf6e84b48f4de56d036bc"
+    },
+    "E-approval": {
+      "gate": "service-transactions",
+      "test": "route_eligibility::transaction_tests::passing_fixture_approval_is_current_scoped_and_revocable",
+      "source": "engine/codex-rs/inquello-service/src/route_eligibility_fixture_tests.rs",
+      "sourceSha256": "1d540e4a899c479622447cef416f885d77c80bea2761f114ce3053ac1747c4f3",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-service-transactions.log",
+      "logSha256": "516bbb49056fa4054dc4bb315935925c5a0cf19a95a2239a21bf4d50bb329cc1"
+    },
+    "E-receipt": {
+      "gate": "service-integration",
+      "test": "export_receipt_survives_local_journal_loss_but_never_owner_change_or_revocation",
+      "source": "engine/codex-rs/inquello-service/tests/route_eligibility.rs",
+      "sourceSha256": "d22021353c20290d019274d2415e1ad27c0a855dcc534c63cb75939aa942ef7e",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-service-integration.log",
+      "logSha256": "6c1eafc9b0f8db8085028d94b565d8b61bf63fb8e3ab2293da4f22a637ec3d04"
+    },
+    "F-identity": {
+      "gate": "domain",
+      "test": "routes::authorization::tests::exact_identity_conjunction_and_current_operation_binding",
+      "source": "engine/codex-rs/inquello-domain/src/routes/authorization.rs",
+      "sourceSha256": "14cc427e3c4b66fd5bb81583c6bb8e6d4e1bff5058667ab99cbd05b2b5eacc36",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-domain.log",
+      "logSha256": "dfa1bfb066824418d649dbf02e5ae5ab497ffd8fc1ba1535b947ccbffa85d399"
+    },
+    "F-oldproof": {
+      "gate": "domain",
+      "test": "routes::authorization::tests::old_credential_bound_evidence_cannot_gain_adapter_build_semantics",
+      "source": "engine/codex-rs/inquello-domain/src/routes/authorization.rs",
+      "sourceSha256": "14cc427e3c4b66fd5bb81583c6bb8e6d4e1bff5058667ab99cbd05b2b5eacc36",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-domain.log",
+      "logSha256": "dfa1bfb066824418d649dbf02e5ae5ab497ffd8fc1ba1535b947ccbffa85d399"
+    },
+    "F-completion": {
+      "gate": "core",
+      "test": "inquello_inference::tests::public_responses_completed_without_codex_extension_finishes_text_only_turn",
+      "source": "engine/codex-rs/core/src/inquello_inference.rs",
+      "sourceSha256": "077cd641c36ae9f0ac7dd7dd96bfd6629d7df81ab4f992482976d246edd1fd54",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-core.log",
+      "logSha256": "201941f39fb5b2eb56e531a09c4bbbf62271b8f1ebae5fdd77b0d48e8acf9f9b"
+    },
+    "F-bounded": {
+      "gate": "bounded-rollout",
+      "test": "seekable_reader::saved_bounds_tests::saved_reads_bound_plain_and_compressed_before_parsing",
+      "source": "engine/codex-rs/rollout/src/seekable_reader.rs",
+      "sourceSha256": "51c56dc3490bdecdabbf4c8c94c8e94bfdecb6dd7fb31062d357939b3af4f392",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-bounded-rollout.log",
+      "logSha256": "fffef0f4b3d41ee32e598d958c3c1200d214d8324bc516aa135287e05bdfafb7"
+    },
+    "R2-scope-domain": {
+      "gate": "domain",
+      "test": "real_route_scopes_fit_the_service_approval_contract_before_qualification",
+      "source": "engine/codex-rs/inquello-domain/tests/capability_register.rs",
+      "sourceSha256": "793e83624533b38e924ff0b395c0350b404392a9d5ddbbf8735d99bc9368a348",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-domain.log",
+      "logSha256": "dfa1bfb066824418d649dbf02e5ae5ab497ffd8fc1ba1535b947ccbffa85d399"
+    },
+    "R2-scope-service": {
+      "gate": "service",
+      "test": "route_eligibility::tests::compiled_real_route_scopes_pass_actual_approval_validation",
+      "source": "engine/codex-rs/inquello-service/src/route_eligibility.rs",
+      "sourceSha256": "3eab8220361317b794d5a25673096d3cd4233a0f9bd855ac8e7153fd635a14d6",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-service.log",
+      "logSha256": "ccaa8b0fc1398f3a59925d3298c21e39679bc6f26309f3c2704eecce15e40367"
+    },
+    "R2-compiled-approval": {
+      "gate": "service-transactions",
+      "test": "route_eligibility::transaction_tests::compiled_terra_approval_matches_scope_policy_identity_and_is_atomic",
+      "source": "engine/codex-rs/inquello-service/src/route_eligibility_fixture_tests.rs",
+      "sourceSha256": "1d540e4a899c479622447cef416f885d77c80bea2761f114ce3053ac1747c4f3",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-service-transactions.log",
+      "logSha256": "516bbb49056fa4054dc4bb315935925c5a0cf19a95a2239a21bf4d50bb329cc1",
+      "scope": "Production apply and genuine compiled lookup, owned PostgreSQL; current missing-proof phase refuses exact request without writes. Positive phase required after reviewed r2 attachment, not claimed here."
+    },
+    "R2-private-retry": {
+      "gate": "core-private",
+      "test": "responses_retry::tests::inquello_private_errors_never_enter_unbounded_retry_or_transport_fallback",
+      "source": "engine/codex-rs/core/src/responses_retry_tests.rs",
+      "sourceSha256": "a4f4a2cf1043b1a0016ffbe5af52e2fdd46f18b6d637ccfb755935d707e0ed11",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-core-private.log",
+      "logSha256": "2067d2cc975a2c8974f97a4e86d9bee4c99db3e1a98494123421ce72ffbf3eb4"
+    },
+    "R2-private-redirect": {
+      "gate": "core-private",
+      "test": "client::tests::inquello_private_http_rejects_redirects_without_resending",
+      "source": "engine/codex-rs/core/src/client_tests.rs",
+      "sourceSha256": "3c95fd5347d474e9690411ae33f3522f3d300fbc45e4c09f88bda5c7e8d537f7",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-core-private.log",
+      "logSha256": "2067d2cc975a2c8974f97a4e86d9bee4c99db3e1a98494123421ce72ffbf3eb4"
+    },
+    "R2-private-auth": {
+      "gate": "core-private",
+      "test": "client::tests::inquello_private_http_unauthorized_never_refreshes_or_resends",
+      "source": "engine/codex-rs/core/src/client_tests.rs",
+      "sourceSha256": "3c95fd5347d474e9690411ae33f3522f3d300fbc45e4c09f88bda5c7e8d537f7",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-core-private.log",
+      "logSha256": "2067d2cc975a2c8974f97a4e86d9bee4c99db3e1a98494123421ce72ffbf3eb4"
+    },
+    "R2-source-suite::client_websockets::bound_responses_http_transmits_source_boundary_and_continuation::empty_host_base": {
+      "gate": "core-source-boundary",
+      "test": "suite::client_websockets::bound_responses_http_transmits_source_boundary_and_continuation::empty_host_base",
+      "source": "engine/codex-rs/core/tests/suite/client_websockets.rs",
+      "sourceSha256": "9e3632b16b10adcee95bbbc7e015d354a08e28277bab457230e4f12631dbeab2",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-core-source-boundary.log",
+      "logSha256": "0f88b66e2a1feb109ed38ea53436d4e7ab20a3882dc29aae9fe245c71789a95e",
+      "scope": "Actual loopback HTTP/WebSocket transport with code-only bound synthetic source, not live provider or organization authorization"
+    },
+    "R2-source-suite::client_websockets::bound_responses_http_transmits_source_boundary_and_continuation::nonempty_host_base": {
+      "gate": "core-source-boundary",
+      "test": "suite::client_websockets::bound_responses_http_transmits_source_boundary_and_continuation::nonempty_host_base",
+      "source": "engine/codex-rs/core/tests/suite/client_websockets.rs",
+      "sourceSha256": "9e3632b16b10adcee95bbbc7e015d354a08e28277bab457230e4f12631dbeab2",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-core-source-boundary.log",
+      "logSha256": "0f88b66e2a1feb109ed38ea53436d4e7ab20a3882dc29aae9fe245c71789a95e",
+      "scope": "Actual loopback HTTP/WebSocket transport with code-only bound synthetic source, not live provider or organization authorization"
+    },
+    "R2-source-suite::client_websockets::bound_responses_websocket_426_refuses_without_http_post": {
+      "gate": "core-source-boundary",
+      "test": "suite::client_websockets::bound_responses_websocket_426_refuses_without_http_post",
+      "source": "engine/codex-rs/core/tests/suite/client_websockets.rs",
+      "sourceSha256": "9e3632b16b10adcee95bbbc7e015d354a08e28277bab457230e4f12631dbeab2",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-core-source-boundary.log",
+      "logSha256": "0f88b66e2a1feb109ed38ea53436d4e7ab20a3882dc29aae9fe245c71789a95e",
+      "scope": "Actual loopback HTTP/WebSocket transport with code-only bound synthetic source, not live provider or organization authorization"
+    },
+    "R2-source-suite::client_websockets::bound_responses_websocket_transmits_source_boundary_and_continuation::empty_host_base": {
+      "gate": "core-source-boundary",
+      "test": "suite::client_websockets::bound_responses_websocket_transmits_source_boundary_and_continuation::empty_host_base",
+      "source": "engine/codex-rs/core/tests/suite/client_websockets.rs",
+      "sourceSha256": "9e3632b16b10adcee95bbbc7e015d354a08e28277bab457230e4f12631dbeab2",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-core-source-boundary.log",
+      "logSha256": "0f88b66e2a1feb109ed38ea53436d4e7ab20a3882dc29aae9fe245c71789a95e",
+      "scope": "Actual loopback HTTP/WebSocket transport with code-only bound synthetic source, not live provider or organization authorization"
+    },
+    "R2-source-suite::client_websockets::bound_responses_websocket_transmits_source_boundary_and_continuation::nonempty_host_base": {
+      "gate": "core-source-boundary",
+      "test": "suite::client_websockets::bound_responses_websocket_transmits_source_boundary_and_continuation::nonempty_host_base",
+      "source": "engine/codex-rs/core/tests/suite/client_websockets.rs",
+      "sourceSha256": "9e3632b16b10adcee95bbbc7e015d354a08e28277bab457230e4f12631dbeab2",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-scope-r2-final-core-source-boundary.log",
+      "logSha256": "0f88b66e2a1feb109ed38ea53436d4e7ab20a3882dc29aae9fe245c71789a95e",
+      "scope": "Actual loopback HTTP/WebSocket transport with code-only bound synthetic source, not live provider or organization authorization"
+    },
+    "D-bytes": {
+      "gate": "desktop-vitest",
+      "test": "exports, deletes and recovers exact bytes with independently bound service receipt checks",
+      "source": "desktop/test/data-authority-fences.test.ts",
+      "sourceSha256": "632afd6dadb4fab5aa5eb1202f0664f9431b4b79be6b4960070147f0065a2a07",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-desktop-final-2-vitest.log",
+      "logSha256": "3a24672e48a3da77ef97fef5c5dd274ae5596cdf7fe40c559ac4adf57626c920",
+      "executionEvidence": "All15 tests in this exact file executed and passed, none skipped",
+      "scope": "Actual DataAuthority/DataService filesystem bytes with parsed mock inspector/HTTPS wire responses; not cross-process E2E"
+    },
+    "D-export-withdrawal": {
+      "gate": "desktop-vitest",
+      "test": "withdrawal while export receipt is pending prevents publication without deleting source bytes",
+      "source": "desktop/test/data-authority-fences.test.ts",
+      "sourceSha256": "632afd6dadb4fab5aa5eb1202f0664f9431b4b79be6b4960070147f0065a2a07",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-desktop-final-2-vitest.log",
+      "logSha256": "3a24672e48a3da77ef97fef5c5dd274ae5596cdf7fe40c559ac4adf57626c920",
+      "executionEvidence": "All15 tests in this exact file executed and passed, none skipped",
+      "scope": "Actual DataAuthority/DataService filesystem bytes with parsed mock inspector/HTTPS wire responses; not cross-process E2E"
+    },
+    "D-recovery-withdrawal": {
+      "gate": "desktop-vitest",
+      "test": "withdrawal after recovery receipt wait cannot publish any restored family",
+      "source": "desktop/test/data-authority-fences.test.ts",
+      "sourceSha256": "632afd6dadb4fab5aa5eb1202f0664f9431b4b79be6b4960070147f0065a2a07",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-chat-desktop-final-2-vitest.log",
+      "logSha256": "3a24672e48a3da77ef97fef5c5dd274ae5596cdf7fe40c559ac4adf57626c920",
+      "executionEvidence": "All15 tests in this exact file executed and passed, none skipped",
+      "scope": "Actual DataAuthority/DataService filesystem bytes with parsed mock inspector/HTTPS wire responses; not cross-process E2E"
+    }
+  },
+  "cases": [
+    {
+      "name": "real-session-production-admission",
+      "status": "passed",
+      "witnessIds": [
+        "A-admission",
+        "E-approval"
+      ],
+      "scope": "Default-feature RealSession current authority for Read/Derive/Export/Resume; code-only proof dependency, no provider effect."
+    },
+    {
+      "name": "real-session-withdrawal",
+      "status": "passed",
+      "witnessIds": [
+        "A-withdrawal",
+        "E-approval"
+      ],
+      "scope": "Thirteen before/after-await authority and credential withdrawal cases across four protected actions."
+    },
+    {
+      "name": "credential-slot-independent-proof",
+      "status": "passed",
+      "witnessIds": [
+        "F-identity",
+        "F-oldproof",
+        "A-withdrawal"
+      ],
+      "scope": "Adapter proof independent of credential slot while current credential ownership remains separately required."
+    },
+    {
+      "name": "responses-standard-completion",
+      "status": "passed",
+      "witnessIds": [
+        "F-completion",
+        "B-bundled-text"
+      ],
+      "scope": "Standard Responses completed event and unchanged bundled Terra retained text follow-up, synthetic transport."
+    },
+    {
+      "name": "cross-workspace",
+      "status": "passed",
+      "witnessIds": [
+        "B-allowed",
+        "B-private"
+      ],
+      "scope": "Actual retained runtime foreign Task/Workspace/thread/tool requests refused under synthetic authority."
+    },
+    {
+      "name": "peer-private",
+      "status": "passed",
+      "witnessIds": [
+        "B-allowed",
+        "B-private"
+      ],
+      "scope": "Actual retained runtime foreign Task/Workspace/thread/tool requests refused under synthetic authority."
+    },
+    {
+      "name": "foreign-thread",
+      "status": "passed",
+      "witnessIds": [
+        "B-allowed",
+        "B-private"
+      ],
+      "scope": "Actual retained runtime foreign Task/Workspace/thread/tool requests refused under synthetic authority."
+    },
+    {
+      "name": "foreign-tool",
+      "status": "passed",
+      "witnessIds": [
+        "B-allowed",
+        "B-private"
+      ],
+      "scope": "Actual retained runtime foreign Task/Workspace/thread/tool requests refused under synthetic authority."
+    },
+    {
+      "name": "revoked-before-dispatch",
+      "status": "passed",
+      "witnessIds": [
+        "B-deny",
+        "A-withdrawal"
+      ],
+      "scope": "No provider request before denied admission; default RealSession corroboration."
+    },
+    {
+      "name": "revoked-during-model",
+      "status": "passed",
+      "witnessIds": [
+        "B-revoke-model",
+        "A-withdrawal"
+      ],
+      "scope": "Held model response after withdrawal cannot publish late output."
+    },
+    {
+      "name": "late-output",
+      "status": "passed",
+      "witnessIds": [
+        "B-revoke-model",
+        "A-withdrawal"
+      ],
+      "scope": "Held model response after withdrawal cannot publish late output."
+    },
+    {
+      "name": "revoked-during-tool",
+      "status": "passed",
+      "witnessIds": [
+        "B-revoke-tool"
+      ],
+      "scope": "Actual sandbox child/marker effect cancellation and late-effect refusal."
+    },
+    {
+      "name": "revoked-during-permission",
+      "status": "passed",
+      "witnessIds": [
+        "B-revoke-permission"
+      ],
+      "scope": "Pending permission withdrawal prevents command effect."
+    },
+    {
+      "name": "authority-unavailable",
+      "status": "passed",
+      "witnessIds": [
+        "B-stop-unavailable",
+        "A-withdrawal"
+      ],
+      "scope": "Independent Stop under provider unavailability; current authority failures remain fail-closed."
+    },
+    {
+      "name": "retained-output",
+      "status": "passed",
+      "witnessIds": [
+        "B-allowed",
+        "B-private",
+        "C-inventory"
+      ],
+      "scope": "Actual retained output/reopen with native store identity corroboration."
+    },
+    {
+      "name": "reopen",
+      "status": "passed",
+      "witnessIds": [
+        "B-allowed",
+        "B-private",
+        "C-inventory"
+      ],
+      "scope": "Actual retained output/reopen with native store identity corroboration."
+    },
+    {
+      "name": "export",
+      "status": "passed",
+      "witnessIds": [
+        "C-inventory",
+        "D-bytes",
+        "D-export-withdrawal",
+        "D-recovery-withdrawal",
+        "E-receipt"
+      ],
+      "scope": "Explicit component composition: native SQLite serialized inventory; parsed mock wire identity through real DataAuthority/DataService filesystem bytes and operation-bound receipts; separate actual PostgreSQL receipt gate. NOT cross-process RealSession/Electron/HTTPS end-to-end."
+    },
+    {
+      "name": "recovery",
+      "status": "passed",
+      "witnessIds": [
+        "C-inventory",
+        "D-bytes",
+        "D-export-withdrawal",
+        "D-recovery-withdrawal",
+        "E-receipt"
+      ],
+      "scope": "Explicit component composition: native SQLite serialized inventory; parsed mock wire identity through real DataAuthority/DataService filesystem bytes and operation-bound receipts; separate actual PostgreSQL receipt gate. NOT cross-process RealSession/Electron/HTTPS end-to-end."
+    },
+    {
+      "name": "authorized-export",
+      "status": "passed",
+      "witnessIds": [
+        "C-inventory",
+        "D-bytes",
+        "D-export-withdrawal",
+        "D-recovery-withdrawal",
+        "E-receipt"
+      ],
+      "scope": "Explicit component composition: native SQLite serialized inventory; parsed mock wire identity through real DataAuthority/DataService filesystem bytes and operation-bound receipts; separate actual PostgreSQL receipt gate. NOT cross-process RealSession/Electron/HTTPS end-to-end."
+    },
+    {
+      "name": "authorized-recovery",
+      "status": "passed",
+      "witnessIds": [
+        "C-inventory",
+        "D-bytes",
+        "D-export-withdrawal",
+        "D-recovery-withdrawal",
+        "E-receipt"
+      ],
+      "scope": "Explicit component composition: native SQLite serialized inventory; parsed mock wire identity through real DataAuthority/DataService filesystem bytes and operation-bound receipts; separate actual PostgreSQL receipt gate. NOT cross-process RealSession/Electron/HTTPS end-to-end."
+    },
+    {
+      "name": "authorized-procurement",
+      "status": "passed",
+      "witnessIds": [
+        "B-bundled-tool",
+        "A-admission"
+      ],
+      "scope": "Actual authorized sandbox marker, exact trusted bundled Terra tool inventory and tool-output continuation, with independent default RealSession admission. Synthetic provider, not paid production call."
+    },
+    {
+      "name": "resume",
+      "status": "passed",
+      "witnessIds": [
+        "B-stop-resume",
+        "B-followup",
+        "A-admission"
+      ],
+      "scope": "Actual retained run/turn continuation on same thread, no implicit effect replay."
+    },
+    {
+      "name": "authorized-resume",
+      "status": "passed",
+      "witnessIds": [
+        "B-stop-resume",
+        "B-followup",
+        "A-admission"
+      ],
+      "scope": "Actual retained run/turn continuation on same thread, no implicit effect replay."
+    },
+    {
+      "name": "revoked-before-resume",
+      "status": "passed",
+      "witnessIds": [
+        "B-before-resume",
+        "A-withdrawal"
+      ],
+      "scope": "Current authority denied before resume dispatch."
+    },
+    {
+      "name": "revoked-during-resume",
+      "status": "passed",
+      "witnessIds": [
+        "B-during-resume",
+        "A-withdrawal"
+      ],
+      "scope": "Withdrawal after resume boundary prevents late effects/output."
+    },
+    {
+      "name": "resume-missing-linkage",
+      "status": "passed",
+      "witnessIds": [
+        "B-missing"
+      ],
+      "scope": "Missing retained linkage refuses rather than creating replacement work."
+    },
+    {
+      "name": "resume-peer-private",
+      "status": "passed",
+      "witnessIds": [
+        "B-peer"
+      ],
+      "scope": "Foreign private retained work refuses."
+    },
+    {
+      "name": "resume-cross-company",
+      "status": "passed",
+      "witnessIds": [
+        "B-company"
+      ],
+      "scope": "Foreign organization continuation refuses."
+    },
+    {
+      "name": "resume-after-runtime-loss",
+      "status": "passed",
+      "witnessIds": [
+        "B-restart",
+        "B-crash"
+      ],
+      "scope": "Owned runtime restart/crash preserves uncertain retained effects without automatic replay."
+    },
+    {
+      "name": "lifecycle-lost-ack",
+      "status": "passed",
+      "witnessIds": [
+        "B-lost-ack"
+      ],
+      "scope": "Exact operation reconciliation does not duplicate effects."
+    },
+    {
+      "name": "stop-finish",
+      "status": "passed",
+      "witnessIds": [
+        "B-stop-pending",
+        "B-stop-inflight",
+        "B-steer",
+        "B-progress"
+      ],
+      "scope": "Actual retained lifecycle races with exact run/turn identity."
+    },
+    {
+      "name": "steer-finish",
+      "status": "passed",
+      "witnessIds": [
+        "B-stop-pending",
+        "B-stop-inflight",
+        "B-steer",
+        "B-progress"
+      ],
+      "scope": "Actual retained lifecycle races with exact run/turn identity."
+    },
+    {
+      "name": "search-private",
+      "status": "passed",
+      "witnessIds": [
+        "B-private",
+        "B-final-await",
+        "B-zero-match"
+      ],
+      "scope": "Retained actual-store search/reopen/Markdown scope and final contributor authority checks."
+    },
+    {
+      "name": "search-revoked-before-disclosure",
+      "status": "passed",
+      "witnessIds": [
+        "B-private",
+        "B-final-await",
+        "B-zero-match"
+      ],
+      "scope": "Retained actual-store search/reopen/Markdown scope and final contributor authority checks."
+    },
+    {
+      "name": "search-prior-lineage-revoked",
+      "status": "passed",
+      "witnessIds": [
+        "B-private",
+        "B-final-await",
+        "B-zero-match"
+      ],
+      "scope": "Retained actual-store search/reopen/Markdown scope and final contributor authority checks."
+    },
+    {
+      "name": "search-late-response",
+      "status": "passed",
+      "witnessIds": [
+        "B-private",
+        "B-final-await",
+        "B-zero-match"
+      ],
+      "scope": "Retained actual-store search/reopen/Markdown scope and final contributor authority checks."
+    },
+    {
+      "name": "exact-hit-reopen",
+      "status": "passed",
+      "witnessIds": [
+        "B-private",
+        "B-final-await",
+        "B-zero-match"
+      ],
+      "scope": "Retained actual-store search/reopen/Markdown scope and final contributor authority checks."
+    },
+    {
+      "name": "exact-hit-markdown",
+      "status": "passed",
+      "witnessIds": [
+        "B-private",
+        "B-final-await",
+        "B-zero-match"
+      ],
+      "scope": "Retained actual-store search/reopen/Markdown scope and final contributor authority checks."
+    },
+    {
+      "name": "cached-hit-revoked",
+      "status": "passed",
+      "witnessIds": [
+        "B-private",
+        "B-final-await",
+        "B-zero-match"
+      ],
+      "scope": "Retained actual-store search/reopen/Markdown scope and final contributor authority checks."
+    },
+    {
+      "name": "search-provider-independent",
+      "status": "passed",
+      "witnessIds": [
+        "B-private",
+        "B-final-await",
+        "B-zero-match"
+      ],
+      "scope": "Retained actual-store search/reopen/Markdown scope and final contributor authority checks."
+    },
+    {
+      "name": "search-legacy-old-turn",
+      "status": "passed",
+      "witnessIds": [
+        "B-legacy"
+      ],
+      "scope": "Exact old retained turn and paginated/legacy content, not substituted current turn."
+    },
+    {
+      "name": "search-paginated-old-turn",
+      "status": "passed",
+      "witnessIds": [
+        "B-legacy"
+      ],
+      "scope": "Exact old retained turn and paginated/legacy content, not substituted current turn."
+    },
+    {
+      "name": "search-legacy-markdown",
+      "status": "passed",
+      "witnessIds": [
+        "B-legacy"
+      ],
+      "scope": "Exact old retained turn and paginated/legacy content, not substituted current turn."
+    },
+    {
+      "name": "search-final-await-off-page",
+      "status": "passed",
+      "witnessIds": [
+        "B-final-await",
+        "B-zero-match"
+      ],
+      "scope": "Final awaited contributor set and late scope revocation."
+    },
+    {
+      "name": "search-final-await-history",
+      "status": "passed",
+      "witnessIds": [
+        "B-final-await",
+        "B-zero-match"
+      ],
+      "scope": "Final awaited contributor set and late scope revocation."
+    },
+    {
+      "name": "search-final-await-lineage",
+      "status": "passed",
+      "witnessIds": [
+        "B-final-await",
+        "B-zero-match"
+      ],
+      "scope": "Final awaited contributor set and late scope revocation."
+    },
+    {
+      "name": "search-next-cursor-scope-snapshot",
+      "status": "passed",
+      "witnessIds": [
+        "B-cursor"
+      ],
+      "scope": "Query/scope/snapshot-bound cursor refusal on change."
+    },
+    {
+      "name": "search-retained-route-mismatch",
+      "status": "passed",
+      "witnessIds": [
+        "B-route-mismatch"
+      ],
+      "scope": "Retained route mismatch refuses disclosure."
+    },
+    {
+      "name": "search-bounded-plain-compressed",
+      "status": "passed",
+      "witnessIds": [
+        "F-bounded"
+      ],
+      "scope": "Actual bounded plain/compressed reads before parsing on Windows; Unix FIFO test not executed."
+    },
+    {
+      "name": "search-inventory-request-bounded",
+      "status": "passed",
+      "witnessIds": [
+        "B-bundled-tool"
+      ],
+      "scope": "Driver saved_navigation_matrix creates51 actual draft Tasks, asserts50+1 pagination and exactly2 inventory/4 policy calls across candidate count."
+    }
+  ],
+  "counts": {
+    "requiredScenarios": 50,
+    "passed": 50,
+    "failed": 0,
+    "skipped": 0,
+    "desktopPassed": 2005,
+    "desktopSkipped": 22
+  },
+  "limitations": [
+    "Composed software-enforcement evidence, not a live paid OpenAI response or a grant of real organization processing authority.",
+    "Default-feature RealSession tests use private code-only synthetic proof dependency and actual authority callbacks; they do not execute each provider/tool/export effect.",
+    "Retained runtime effects use debug inference-fixtures and pinned loopback synthetic Responses streams. Only the two bundled-catalog tests use unchanged trusted bundled Terra metadata; other scenarios use minimal fixture metadata.",
+    "Export/recovery combines native SQLite serialized inventory, real Desktop authority/service owned-byte effects with parsed mock native/HTTPS responses, and separate actual PostgreSQL receipts. No integrated cross-process RealSession-to-Electron-to-HTTPS export/recovery E2E claim.",
+    "Unix-only pre-publication cancellation regression is not executable on this Windows host; its barrier-helper lint correction is mechanically equivalent. Actual retained Windows child/tool cancellation is separate evidence.",
+    "Desktop full suite has22 explicit platform/opt-in skips, not failures hidden as passes. Native Unix FIFO-specific regression is not executed on Windows; plain/compressed bounded reads are executed.",
+    "Desktop full integration suite ran before final native hash rematch; its exact default runtime provenance differs from final immutable native runtime. Final native gates/runtime suite are separately identified.",
+    "Prior setup45s failures, initial31/33 lifecycle failures, old10s idle probe expiry, paging1455 and launcher newline-parser failure remain historical observations. No fast-readiness/performance claim; final fixture admission155s is bounded composition only.",
+    "Actual user-controlled provider key/model access, current organization approval, reviewed exact-build evidence attachment, final ordinary Electron journey and real paid response remain separate gates. No secrets read or real organization approval mutated.",
+    "Messages route warm-policy baseline is separately unpassed; this report does not qualify a full two-provider suite."
+  ],
+  "historicalArtifacts": [
+    "_bmad-output/implementation-artifacts/production-chat-v4-verification-2026-11-03.json",
+    "_bmad-output/implementation-artifacts/production-chat-v4-review-2026-11-03.json",
+    ".tmp/production-chat-scope-r2-red.log",
+    ".tmp/production-chat-scope-r2-cheap-first-service-transactions.log",
+    ".tmp/production-chat-resume-checkpoint.md",
+    ".tmp/production-chat-v4-evidence-mapping.md",
+    ".tmp/production-chat-protocol-desktop-vitest.log",
+    ".tmp/production-chat-purpose-focused.log"
+  ],
+  "pendingGates": [
+    "Postattachment genuine compiled service approval positive and no-write negative execution",
+    "Independent report and manifest review",
+    "Capability evidence attachment and final genuine HEAD protocol gate",
+    "Matched ordinary Desktop/Electron journey",
+    "Separately authorized actual OpenAI response"
+  ]
+}

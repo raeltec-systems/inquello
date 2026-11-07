@@ -1,4 +1,4 @@
-import { ensurePrivateDirectory } from '../runtime/private-paths';
+import { ensurePrivateDirectory, ensurePrivateDirectoriesAsync } from '../runtime/private-paths';
 /**
  * Bounded tool runs (Story 1.19): the Task folder, the translation of the
  * runtime's own results into denials, and the escalation gate.
@@ -66,6 +66,13 @@ export function ensureTaskFolder(root: string, taskId: string): { working: strin
   return paths;
 }
 
+/** Same private Task folders, with asynchronous Windows ACL work for interactive reads. */
+export async function ensureTaskFolderAsync(root: string, taskId: string): Promise<{ working: string; output: string }> {
+  const paths = taskFolderPaths(root, taskId);
+  await ensurePrivateDirectoriesAsync([path.resolve(root), paths.working, paths.output]);
+  return paths;
+}
+
 // ---- denials ------------------------------------------------------------------
 
 /** One boundary of the runtime's tool reach. */
@@ -108,7 +115,7 @@ const REFUSED = ['Read-only file system', 'Operation not permitted', 'Permission
 const MISSING = ['No such file or directory', 'Directory nonexistent'] as const;
 type FileError = (typeof REFUSED)[number] | (typeof MISSING)[number];
 const FILE_ERROR = new RegExp(
-  String.raw`(?:'([^'\n]+)'|‘([^’\n]+)’|"([^"\n]+)"|([^\s:'"‘’]+))\s*:\s*(${[...REFUSED, ...MISSING].join('|')})`,
+  String.raw`(?:'([^'\n]+)'|‘([^’\n]+)’|"([^"\n]+)"|((?:[A-Za-z]:[\\/])?[^\s:'"‘’]+))\s*:\s*(${[...REFUSED, ...MISSING].join('|')})`,
   'g',
 );
 

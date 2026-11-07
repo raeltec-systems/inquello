@@ -283,6 +283,15 @@ impl ThreadHistoryBuilder {
         self.turns.into_iter().map(Turn::from).collect()
     }
 
+    /// Borrow only a genuinely active turn. Unlike presentation snapshots this
+    /// never falls back to the last finished turn, and does not clone payloads.
+    pub fn active_turn_items(&self) -> Option<(&str, &TurnStatus, &[ThreadItem])> {
+        self.current_turn
+            .as_ref()
+            .filter(|turn| matches!(turn.status, TurnStatus::InProgress))
+            .map(|turn| (turn.id.as_str(), &turn.status, turn.items.as_slice()))
+    }
+
     pub fn active_turn_snapshot(&self) -> Option<Turn> {
         self.active_turn_snapshot_with_items_view(TurnItemsView::Full)
     }
@@ -4112,6 +4121,49 @@ mod tests {
             builder.active_turn_snapshot_with_items_view(TurnItemsView::NotLoaded),
             builder.active_turn_metadata_snapshot().map(Turn::from)
         );
+    }
+
+    #[test]
+    fn borrowed_active_items_never_fall_back_to_a_finished_turn() {
+        let mut builder = ThreadHistoryBuilder::new();
+        assert!(builder.active_turn_items().is_none());
+        builder.handle_event(&EventMsg::TurnStarted(TurnStartedEvent {
+            turn_attribution: None,
+            turn_id: "live-turn".into(),
+            root_turn_id: None,
+            trace_id: None,
+            started_at: Some(100),
+            model_context_window: None,
+            collaboration_mode_kind: Default::default(),
+        }));
+        builder.handle_event(&EventMsg::UserMessage(UserMessageEvent {
+            message: "bounded consumers borrow before cloning".into(),
+            ..Default::default()
+        }));
+        let (id, status, items) = builder.active_turn_items().unwrap();
+        assert_eq!(id, "live-turn");
+        assert_eq!(status, &TurnStatus::InProgress);
+        assert_eq!(items.len(), 1);
+        builder.handle_event(&EventMsg::TurnComplete(TurnCompleteEvent {
+            root_turn_id: None,
+            turn_id: "live-turn".into(),
+            started_at: Some(100),
+            last_agent_message: None,
+            error: None,
+            completed_at: Some(102),
+            duration_ms: Some(2_000),
+            time_to_first_token_ms: None,
+        }));
+        assert!(
+            builder.active_turn_snapshot().is_some(),
+            "legacy presentation fallback remains unchanged"
+        );
+        assert!(
+            builder.active_turn_items().is_none(),
+            "finished history is not live execution"
+        );
+        builder.reset();
+        assert!(builder.active_turn_items().is_none());
     }
 
     #[test]

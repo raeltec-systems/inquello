@@ -9575,6 +9575,8 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "codex-app-server-protocol",
+ "codex-protocol",
+ "codex-rollout",
  "inquello-domain",
  "inquello-protocol",
  "jsonwebtoken",

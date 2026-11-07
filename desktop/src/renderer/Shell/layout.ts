@@ -1,9 +1,9 @@
 /**
  * The Shell's layout modes (Story 1.16), decided by window width alone.
  *
- * - **full**: the 264px Sidebar, a readable thread and (when open) the 380px
+ * - **full**: the default 320px navigation (64px rail plus 256px history), resizable within 280–424px, a readable thread and (when open) the 380px
  *   artifact area fit side by side.
- * - **rail**: the Sidebar does not fit, so navigation collapses to the 52px
+ * - **rail**: the Sidebar does not fit, so navigation collapses to the 64px
  *   rail; the thread (and the open artifact, when it still fits) keep their
  *   width.
  * - **single**: the thread and the 380px artifact area do not fit beside the
@@ -42,8 +42,8 @@ export function artifactFits(width: number): boolean {
 }
 
 /** The layout mode for a window content width; recalculated on every resize. */
-export function layoutMode(width: number, artifactOpen: boolean): LayoutMode {
-  if (width >= SIDEBAR_WIDTH + workWidth(artifactOpen)) return 'full';
+export function layoutMode(width: number, artifactOpen: boolean, sidebarWidth = SIDEBAR_WIDTH): LayoutMode {
+  if (width >= sidebarWidth + workWidth(artifactOpen)) return 'full';
   if (!artifactOpen || artifactFits(width)) return 'rail';
   return 'single';
 }

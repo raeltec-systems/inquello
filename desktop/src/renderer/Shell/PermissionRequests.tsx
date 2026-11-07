@@ -26,6 +26,13 @@ import { newOperationId } from './organise-bridge';
 
 export const NO_LONGER_PENDING = 'This request is no longer pending';
 const POLL_MS = 1_000;
+/**
+ * The longest one pending read may hold back the next. A slower read is left
+ * to finish on its own and a newer read is sent, so a stalled read cannot keep
+ * a "Permission to act" card hidden. Only a newer answer than the last shown
+ * one is ever applied.
+ */
+export const READ_BOUND_MS = 5_000;
 
 export interface PermissionRequestsProps {
   taskId: string;
@@ -35,6 +42,7 @@ export interface PermissionRequestsProps {
   announce: (text: string) => void;
   operationIds?: () => string;
   pollMs?: number;
+  readBoundMs?: number;
 }
 
 interface Outcome {
@@ -43,13 +51,16 @@ interface Outcome {
   text: string;
 }
 
-export function PermissionRequests({ taskId, reviewer = null, announce, operationIds = newOperationId, pollMs = POLL_MS }: PermissionRequestsProps): ReactElement | null {
+export function PermissionRequests({ taskId, reviewer = null, announce, operationIds = newOperationId, pollMs = POLL_MS, readBoundMs = READ_BOUND_MS }: PermissionRequestsProps): ReactElement | null {
   const [cards, setCards] = useState<PermissionCardItem[]>([]);
   const [outcomes, setOutcomes] = useState<Outcome[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const announced = useRef(new Set<string>());
   const generation = useRef(0);
-  const pendingRead = useRef<object | null>(null);
+  /** The newest read in flight and when it was sent. */
+  const pendingRead = useRef<{ token: object; sentAt: number } | null>(null);
+  const readSequence = useRef(0);
+  const appliedSequence = useRef(0);
   const decisionEpoch = useRef(0);
   const consumed = useRef(new Set<string>());
   const current = useRef(taskId);
@@ -57,8 +68,11 @@ export function PermissionRequests({ taskId, reviewer = null, announce, operatio
 
   const load = useCallback(async () => {
     const api = permissionBridge();
-    if (!api || pendingRead.current) return;
-    const token={};pendingRead.current=token;
+    if (!api) return;
+    // One read at a time, unless the one in flight has outlived its bound.
+    if (pendingRead.current && Date.now() - pendingRead.current.sentAt < readBoundMs) return;
+    const token={};pendingRead.current={token,sentAt:Date.now()};
+    const sequence=++readSequence.current;
     const gen=generation.current, epoch=decisionEpoch.current;
     let next: PermissionCardItem[] | null = null;
     try {
@@ -67,8 +81,11 @@ export function PermissionRequests({ taskId, reviewer = null, announce, operatio
     } catch {
       next = null;
     }
-    if(pendingRead.current===token)pendingRead.current=null;
+    if(pendingRead.current?.token===token)pendingRead.current=null;
     if (current.current !== taskId || gen!==generation.current || epoch!==decisionEpoch.current) return;
+    // An abandoned slower read never replaces a newer answer.
+    if (sequence <= appliedSequence.current) return;
+    appliedSequence.current = sequence;
     if (next===null) { generation.current++; setCards([]); setOutcomes([]); setBusy(null); announced.current.clear(); return; }
     const mine = next.filter((card) => card.taskId === taskId && !consumed.current.has(card.requestId));
     setCards(mine);
@@ -77,7 +94,7 @@ export function PermissionRequests({ taskId, reviewer = null, announce, operatio
       announced.current.add(card.requestId);
       announce(`Permission to act needed: ${card.primaryLabel}`);
     }
-  }, [taskId, announce]);
+  }, [taskId, announce, readBoundMs]);
 
   useEffect(() => {
     generation.current++;pendingRead.current=null;consumed.current.clear();

@@ -113,7 +113,7 @@ export function LocalData(): ReactElement {
         {(policy?.categories ?? []).map((category) => (
           <li key={category.id} className="specimen-local-data-category" data-local-data-category={category.id} data-enabled={String(category.enabled)}>
             <div className="specimen-local-data-head">
-              {category.enabled && category.location === 'files' ? (
+              {category.enabled && category.location === 'files' && category.id !== 'provider-consent-journal' ? (
                 <Checkbox
                   label={category.label}
                   checked={selected.includes(category.id)}

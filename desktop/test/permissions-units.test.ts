@@ -181,6 +181,69 @@ describe('the permission mediator', () => {
     mediator.declineAll();
     await expect(asked).resolves.toMatchObject({ outcome: 'denied' });
   });
+
+  it('never sends a pending read behind an in-flight automated review: it answers from the request it holds', async () => {
+    const runtime = fakeRuntime({
+      'inquello/permissions/request': () => ({ request: request(), receipt: {} }),
+      'inquello/permissions/pending': () => new Promise(() => undefined),
+    });
+    let settle!: (decision: 'allowed' | 'denied' | null) => void;
+    const mediator = new PermissionMediator({ runtime, logger: recordingLogger(), newId, setTimer: () => 0, clearTimer: () => undefined, now: () => 1, automatedReview: () => new Promise((resolve) => { settle = resolve; }) });
+    const asked = mediator.ask({ workspacePolicy: policy, taskId: TASK, command: ['git', 'push', 'origin', 'main'], origin: 'tools_exec' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(mediator.reviewingTask(TASK)).toBe(true);
+    const cards = await mediator.pending(TASK);
+    expect(cards.map((card) => [card.requestId, card.quote, card.label])).toEqual([[REQUEST, 'git push origin main', 'Permission to act']]);
+    expect(runtime.calls.filter((call) => call.method === 'inquello/permissions/pending')).toHaveLength(0);
+    // Another Task's read is not answered from this Task's request.
+    expect(mediator.reviewingTask('7a1b2c3d-4e5f-4a6b-8c7d-8e9f0a1b2c3d')).toBe(false);
+    // "Human decides" ends the review; the request stays pending with the person.
+    settle(null);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(mediator.reviewingTask(TASK)).toBe(false);
+    expect(mediator.waiting(REQUEST)).toBe(true);
+    mediator.declineAll();
+    await expect(asked).resolves.toMatchObject({ outcome: 'denied' });
+    expect(await mediator.pending(TASK).catch(() => 'no answer')).toEqual([]);
+  });
+
+  it('bounds a pending read the runtime does not answer, and keeps the runtime answer when it is prompt', async () => {
+    let answer: (() => unknown) | null = null;
+    const runtime = fakeRuntime({
+      'inquello/permissions/request': () => ({ request: request(), receipt: {} }),
+      'inquello/permissions/pending': () => (answer ? answer() : new Promise(() => undefined)),
+    });
+    const mediator = new PermissionMediator({ runtime, logger: recordingLogger(), newId, setTimer: () => 0, clearTimer: () => undefined, now: () => 1, pendingReadMs: 20 });
+    const asked = mediator.ask({ workspacePolicy: policy, taskId: TASK, command: ['git', 'push', 'origin', 'main'], origin: 'tools_exec' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const started = Date.now();
+    expect((await mediator.pending(TASK)).map((card) => card.requestId)).toEqual([REQUEST]);
+    expect(Date.now() - started).toBeLessThan(1_000);
+    // A prompt runtime answer is authoritative, including requests this host did not create.
+    answer = () => ({ requests: [request({ requestId: 'other', status: 'pending' }), request({ requestId: REQUEST, status: 'expired' })] });
+    expect((await mediator.pending(TASK)).map((card) => card.requestId)).toEqual(['other']);
+    mediator.declineAll();
+    await asked;
+    // With nothing held, a stalled runtime read shows no card rather than waiting.
+    answer = null;
+    expect(await mediator.pending(TASK)).toEqual([]);
+  });
+
+  it('does not answer from a held request after it expires', async () => {
+    let clock = 1;
+    const runtime = fakeRuntime({
+      'inquello/permissions/request': () => ({ request: request(), receipt: {} }),
+      'inquello/permissions/pending': () => new Promise(() => undefined),
+    });
+    const mediator = new PermissionMediator({ runtime, logger: recordingLogger(), newId, setTimer: () => 0, clearTimer: () => undefined, now: () => clock, automatedReview: () => new Promise(() => undefined) });
+    const asked = mediator.ask({ workspacePolicy: policy, taskId: TASK, command: ['git', 'push', 'origin', 'main'], origin: 'tools_exec' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(await mediator.pending(TASK)).toHaveLength(1);
+    clock = 600_001;
+    expect(await mediator.pending(TASK)).toEqual([]);
+    mediator.declineAll();
+    await asked;
+  });
 });
 
 describe('permission payloads', () => {

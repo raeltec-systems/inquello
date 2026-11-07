@@ -1626,6 +1626,28 @@ client_request_definitions! {
         serialization: None,
         response: v2::InquelloRoutesListResponse,
     },
+    InquelloModelsCatalog => "inquello/models/catalog" {
+        params: v2::InquelloModelsCatalogParams,
+        serialization: None,
+        response: v2::InquelloModelsCatalogResponse,
+    },
+    InquelloModelResolve => "inquello/models/resolve" {
+        params: v2::InquelloModelResolveParams,
+        serialization: None,
+        response: v2::InquelloModelBindingResponse,
+    },
+    InquelloModelBindingState => "inquello/models/binding/state" {
+        params: v2::InquelloModelBindingStateParams,
+        serialization: None,
+        manual_payload_conversion: manual,
+        response: v2::InquelloModelBindingResponse,
+    },
+    InquelloModelSelect => "inquello/models/select" {
+        params: v2::InquelloModelSelectParams,
+        serialization: None,
+        manual_payload_conversion: manual,
+        response: v2::InquelloTaskRouteResponse,
+    },
     InquelloRouteConfigure => "inquello/routes/configure" {
         params: v2::InquelloRouteConfigureParams,
         serialization: None,

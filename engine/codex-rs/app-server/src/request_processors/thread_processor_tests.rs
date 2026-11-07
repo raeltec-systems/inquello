@@ -1494,3 +1494,363 @@ mod thread_processor_behavior_tests {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod inquello_executor_retirement_tests {
+    use super::super::InquelloExecutorRetirements;
+    use codex_protocol::ThreadId;
+    use std::time::Duration;
+    use tokio_util::sync::CancellationToken;
+
+    #[tokio::test]
+    async fn proven_pre_spawn_validation_failure_releases_only_its_generation() {
+        use crate::inquello_wsl::{ModelSetupPhase, WslExecPlan};
+        let retirements = InquelloExecutorRetirements::default();
+        let thread = ThreadId::new();
+        let token = CancellationToken::new();
+        let mut first = retirements
+            .begin(
+                thread,
+                "scope".into(),
+                "task".into(),
+                &token,
+                Duration::from_secs(1),
+            )
+            .await
+            .unwrap();
+        first.setup_phase = ModelSetupPhase::NoOutstandingProcess;
+        let generation = first.generation;
+        // Invalid identity fails in the actual prepare function before any probe.
+        assert!(
+            WslExecPlan::prepare_model(
+                std::path::Path::new("invalid-task-id"),
+                "principal",
+                false,
+                vec![],
+                &mut first.setup_phase
+            )
+            .await
+            .is_err()
+        );
+        assert!(first.setup_phase == ModelSetupPhase::NoOutstandingProcess);
+        drop(first);
+        let successor = retirements
+            .begin(
+                thread,
+                "scope".into(),
+                "task".into(),
+                &token,
+                Duration::from_secs(1),
+            )
+            .await
+            .unwrap();
+        assert_ne!(generation, successor.generation);
+        successor.complete(true);
+    }
+
+    #[tokio::test]
+    async fn setup_cancellation_and_probe_outcomes_preserve_retirement_proof() {
+        use crate::inquello_wsl::ModelSetupPhase;
+        for (phase, can_resume) in [
+            (ModelSetupPhase::NoOutstandingProcess, true),
+            (ModelSetupPhase::UnconfirmedResourceAttempt, false),
+        ] {
+            let retirements = InquelloExecutorRetirements::default();
+            let thread = ThreadId::new();
+            let token = CancellationToken::new();
+            let mut first = retirements
+                .begin(
+                    thread,
+                    "scope".into(),
+                    "task".into(),
+                    &token,
+                    Duration::from_secs(1),
+                )
+                .await
+                .unwrap();
+            // Successful awaited probe followed by pure validation failure is
+            // clean; cancellation/timeout/nonzero during a probe is not.
+            first.setup_phase = phase;
+            drop(first);
+            let next = retirements
+                .begin(
+                    thread,
+                    "scope".into(),
+                    "task".into(),
+                    &token,
+                    Duration::from_secs(1),
+                )
+                .await;
+            assert_eq!(next.is_ok(), can_resume);
+            if let Ok(next) = next {
+                next.complete(true);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn captured_cleanup_blocks_successor_but_not_an_unrelated_task() {
+        let retirements = InquelloExecutorRetirements::default();
+        let thread = ThreadId::new();
+        let token = CancellationToken::new();
+        let first = retirements
+            .begin(
+                thread,
+                "scope".into(),
+                "task".into(),
+                &token,
+                Duration::from_secs(1),
+            )
+            .await
+            .unwrap();
+        let old_sender = first.sender.clone();
+        let mut next = Box::pin(retirements.begin(
+            thread,
+            "scope".into(),
+            "task".into(),
+            &token,
+            Duration::from_secs(1),
+        ));
+        assert!(
+            tokio::time::timeout(Duration::from_millis(10), &mut next)
+                .await
+                .is_err(),
+            "no successor connect before captured cleanup completes"
+        );
+        let unrelated = retirements
+            .begin(
+                ThreadId::new(),
+                "scope".into(),
+                "other-task".into(),
+                &token,
+                Duration::from_secs(1),
+            )
+            .await
+            .unwrap();
+        unrelated.complete(true);
+        first.complete(true);
+        let second = next.await.unwrap();
+        assert_ne!(
+            second.generation,
+            retirements
+                .entries
+                .lock()
+                .await
+                .values()
+                .find(|entry| entry.task == "other-task")
+                .unwrap()
+                .generation
+        );
+        assert_eq!(
+            retirements
+                .entries
+                .lock()
+                .await
+                .get(&thread)
+                .unwrap()
+                .generation,
+            second.generation
+        );
+        // An old sender can only change its old receiver, never the current map.
+        let _ = old_sender.send_replace(Some(false));
+        assert_eq!(
+            retirements
+                .entries
+                .lock()
+                .await
+                .get(&thread)
+                .unwrap()
+                .generation,
+            second.generation
+        );
+        second.complete(true);
+    }
+
+    #[tokio::test]
+    async fn timeout_and_revocation_retain_pending_cleanup_and_never_admit() {
+        let retirements = InquelloExecutorRetirements::default();
+        let thread = ThreadId::new();
+        let token = CancellationToken::new();
+        let first = retirements
+            .begin(
+                thread,
+                "scope".into(),
+                "task".into(),
+                &token,
+                Duration::from_secs(1),
+            )
+            .await
+            .unwrap();
+        let generation = first.generation;
+        assert!(
+            retirements
+                .begin(
+                    thread,
+                    "scope".into(),
+                    "task".into(),
+                    &token,
+                    Duration::ZERO
+                )
+                .await
+                .is_err()
+        );
+        assert_eq!(
+            retirements
+                .entries
+                .lock()
+                .await
+                .get(&thread)
+                .unwrap()
+                .generation,
+            generation
+        );
+        let revoked = CancellationToken::new();
+        let mut waiting = Box::pin(retirements.begin(
+            thread,
+            "scope".into(),
+            "task".into(),
+            &revoked,
+            Duration::from_secs(1),
+        ));
+        assert!(
+            tokio::time::timeout(Duration::from_millis(10), &mut waiting)
+                .await
+                .is_err()
+        );
+        revoked.cancel();
+        assert!(waiting.await.is_err());
+        assert_eq!(
+            retirements
+                .entries
+                .lock()
+                .await
+                .get(&thread)
+                .unwrap()
+                .generation,
+            generation
+        );
+        first.complete(true);
+        assert!(
+            retirements
+                .begin(
+                    thread,
+                    "scope".into(),
+                    "task".into(),
+                    &revoked,
+                    Duration::from_secs(1)
+                )
+                .await
+                .is_err(),
+            "late cleanup cannot revive revoked authority"
+        );
+        let recovered = retirements
+            .begin(
+                thread,
+                "scope".into(),
+                "task".into(),
+                &token,
+                Duration::from_secs(1),
+            )
+            .await
+            .unwrap();
+        assert_ne!(
+            recovered.generation, generation,
+            "later confirmed cleanup is usable by fresh authority"
+        );
+        recovered.complete(true);
+    }
+
+    #[tokio::test]
+    async fn wrong_identity_and_unconfirmed_or_abandoned_cleanup_fail_closed() {
+        for abandon in [false, true] {
+            let retirements = InquelloExecutorRetirements::default();
+            let thread = ThreadId::new();
+            let token = CancellationToken::new();
+            let first = retirements
+                .begin(
+                    thread,
+                    "owner-scope".into(),
+                    "task".into(),
+                    &token,
+                    Duration::from_secs(1),
+                )
+                .await
+                .unwrap();
+            for (scope, task) in [("foreign-owner", "task"), ("owner-scope", "foreign-task")] {
+                assert!(
+                    retirements
+                        .begin(thread, scope.into(), task.into(), &token, Duration::ZERO)
+                        .await
+                        .is_err()
+                );
+            }
+            if abandon {
+                drop(first);
+            } else {
+                first.complete(false);
+            }
+            assert!(
+                retirements
+                    .begin(
+                        thread,
+                        "owner-scope".into(),
+                        "task".into(),
+                        &token,
+                        Duration::from_secs(1)
+                    )
+                    .await
+                    .is_err()
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn two_successors_cannot_replace_the_same_completed_generation() {
+        let retirements = InquelloExecutorRetirements::default();
+        let thread = ThreadId::new();
+        let token = CancellationToken::new();
+        let first = retirements
+            .begin(
+                thread,
+                "scope".into(),
+                "task".into(),
+                &token,
+                Duration::from_secs(1),
+            )
+            .await
+            .unwrap();
+        let mut left = Box::pin(retirements.begin(
+            thread,
+            "scope".into(),
+            "task".into(),
+            &token,
+            Duration::from_secs(1),
+        ));
+        let mut right = Box::pin(retirements.begin(
+            thread,
+            "scope".into(),
+            "task".into(),
+            &token,
+            Duration::from_secs(1),
+        ));
+        assert!(
+            tokio::time::timeout(Duration::from_millis(10), &mut left)
+                .await
+                .is_err()
+        );
+        assert!(
+            tokio::time::timeout(Duration::from_millis(10), &mut right)
+                .await
+                .is_err()
+        );
+        first.complete(true);
+        let (left, right) = tokio::join!(left, right);
+        assert_eq!(usize::from(left.is_ok()) + usize::from(right.is_ok()), 1);
+        if let Ok(completion) = left {
+            completion.complete(true);
+        }
+        if let Ok(completion) = right {
+            completion.complete(true);
+        }
+    }
+}

@@ -146,6 +146,17 @@ fn reject_private_handoff_transport(
         || origin != crate::transport::ConnectionOrigin::Stdio)
 }
 
+#[cfg(all(feature = "inference-fixtures", debug_assertions))]
+fn fixture_status_transport_allowed(
+    initialized: bool,
+    transport: &AppServerTransport,
+    origin: crate::transport::ConnectionOrigin,
+) -> bool {
+    initialized
+        && matches!(transport, AppServerTransport::Stdio)
+        && origin == crate::transport::ConnectionOrigin::Stdio
+}
+
 fn reject_obsolete_request_fields(request: &JSONRPCRequest) -> Result<(), JSONRPCErrorError> {
     reject_removed_permission_profile(request)?;
     Ok(())
@@ -409,11 +420,10 @@ impl MessageProcessor {
                     outgoing.clone(),
                     thread_state_manager.clone(),
                 )),
-                Some({
-                    let time_provider =
-                        app_server_time_provider(outgoing.clone(), thread_state_manager.clone());
-                    time_provider
-                }),
+                Some(app_server_time_provider(
+                    outgoing.clone(),
+                    thread_state_manager.clone(),
+                )),
             );
             match code_mode_session_provider {
                 Some(provider) => manager.with_code_mode_session_provider(provider),
@@ -514,7 +524,15 @@ impl MessageProcessor {
                 )
                 .with_usage_sources(account_processor.clone(), catalog_processor.clone())
                 .with_task_outgoing(outgoing.clone())
-                .with_task_config(config_processor.clone()),
+                .with_task_config(config_processor.clone())
+                .with_exec_search_path(
+                    codex_core::exec_env::create_env(
+                        &config.permissions.shell_environment_policy,
+                        /*thread_id*/ None,
+                    )
+                    .remove("PATH")
+                    .map(std::ffi::OsString::from),
+                ),
         );
         outgoing.bind_private_authority(&inquello_processor);
         let initialize_processor = InitializeRequestProcessor::new(
@@ -693,6 +711,13 @@ impl MessageProcessor {
         transport: &AppServerTransport,
         session: Arc<ConnectionSessionState>,
     ) {
+        if !crate::request_processors::paid_profile_rpc_allowed(&request.method) {
+            self.outgoing.send_error(
+                ConnectionRequestId { connection_id, request_id: request.id },
+                invalid_request("Controlled fictional session forbids this mutation or alternate dispatch path"),
+            ).await;
+            return;
+        }
         // This branch does not exist in default or release binaries. Synthetic
         // loopback harness dispatches inference AND tools in this app-server process.
         #[cfg(all(feature = "inference-fixtures", debug_assertions))]
@@ -718,6 +743,66 @@ impl MessageProcessor {
                 }
                 Err(error) => self.outgoing.send_error(id, error).await,
             }
+            return;
+        }
+        #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+        if request.method == "inquello/fixture/taskTransportStatus" {
+            let id = ConnectionRequestId {
+                connection_id,
+                request_id: request.id,
+            };
+            if !fixture_status_transport_allowed(session.initialized(), transport, session.origin) {
+                self.outgoing
+                    .send_error(id, invalid_request("Fixture status requires private stdio"))
+                    .await;
+                return;
+            }
+            // Raw fixture methods precede ordinary dispatch registration. Bind the
+            // proof to its original authority through BOTH output queues.
+            self.outgoing
+                .register_request_context(crate::outgoing_message::RequestContext::new(
+                    id.clone(),
+                    "inquello/fixture/taskTransportStatus",
+                    tracing::Span::none(),
+                    None,
+                ))
+                .await;
+            let fence = self.outgoing.capture_private_fence(connection_id).await;
+            self.outgoing.fence_request(&id, fence.clone()).await;
+            // Fresh authority sends a server request back to main. Do not await it
+            // in the transport input loop: that same loop must receive its reply.
+            // Capture the ORIGINAL fence above, before scheduling, so replacement
+            // authority cannot revive an already admitted proof.
+            let processor = Arc::clone(self);
+            let pending =
+                QueuedInitializedRequest::new(Arc::clone(&session.rpc_gate), async move {
+                    match processor
+                        .inquello_processor
+                        .task_fixture_status(connection_id, request.params)
+                        .await
+                    {
+                        Ok(value) => {
+                            processor
+                                .outgoing
+                                .send_response_as_checked(
+                                    id,
+                                    ClientResponsePayload::InquelloFixture(value),
+                                    move || {
+                                        if fence.as_ref().is_some_and(|f| f.is_current()) {
+                                            Ok(())
+                                        } else {
+                                            Err(invalid_request("Fixture status authority changed"))
+                                        }
+                                    },
+                                )
+                                .await
+                        }
+                        Err(error) => processor.outgoing.send_error(id, error).await,
+                    }
+                });
+            tokio::spawn(async move {
+                pending.run().await;
+            });
             return;
         }
         #[cfg(all(feature = "inference-fixtures", debug_assertions))]
@@ -824,6 +909,21 @@ impl MessageProcessor {
         outbound_initialized: &AtomicBool,
         cancellation: tokio_util::sync::CancellationToken,
     ) {
+        if !paid_typed_request_allowed(
+            &request,
+            crate::request_processors::paid_profile_rpc_allowed,
+        ) {
+            self.outgoing
+                .send_error(
+                    ConnectionRequestId {
+                        connection_id,
+                        request_id: request.id().clone(),
+                    },
+                    invalid_request("Controlled fictional session forbids this mutation or alternate dispatch path"),
+                )
+                .await;
+            return;
+        }
         if reject_private_handoff_transport(request.method_name(), None, session.origin) {
             self.outgoing
                 .send_error(
@@ -1372,7 +1472,7 @@ impl MessageProcessor {
         } else {
             None
         };
-        let private_fence = self.outgoing.capture_private_fence(connection_id);
+        let private_fence = self.outgoing.capture_private_fence(connection_id).await;
         let private_thread = self
             .inquello_processor
             .guard_retained_request(connection_id, &codex_request)
@@ -2350,6 +2450,35 @@ impl MessageProcessor {
                         .routes_list(connection_id, params)
                         .await
                 }
+                ClientRequest::InquelloModelsCatalog { .. } => {
+                    let names = self.catalog_processor.inquello_cached_model_names().await?;
+                    self.inquello_processor
+                        .models_catalog(connection_id, names)
+                        .await
+                }
+                ClientRequest::InquelloModelResolve { params, .. } => {
+                    if let Some(response) = self
+                        .inquello_processor
+                        .model_resolve_replay(connection_id, &params)
+                        .await?
+                    {
+                        return Ok(Some(response));
+                    }
+                    let names = self.catalog_processor.inquello_cached_model_names().await?;
+                    self.inquello_processor
+                        .model_resolve(connection_id, params, names)
+                        .await
+                }
+                ClientRequest::InquelloModelBindingState { params, .. } => {
+                    self.inquello_processor
+                        .model_binding_state(connection_id, params)
+                        .await
+                }
+                ClientRequest::InquelloModelSelect { params, .. } => {
+                    self.inquello_processor
+                        .model_select(connection_id, params)
+                        .await
+                }
                 ClientRequest::InquelloRouteConfigure { params, .. } => {
                     self.inquello_processor
                         .route_configure(connection_id, params)
@@ -2517,30 +2646,37 @@ impl MessageProcessor {
         // Capture before the final fresh authority check, while the response is
         // still local. Never renew this fence once it enters either output queue.
         if private_thread.is_some() || private_scope.is_some() {
-            self.outgoing
-                .fence_request(
-                    &request_id,
-                    self.outgoing.capture_private_fence(connection_id),
-                )
-                .await;
+            let fence = self
+                .outgoing
+                .capture_private_fence(connection_id)
+                .await
+                .map(|fence| {
+                    if let Some((_, principal, Some(task))) = &private_scope {
+                        self.inquello_processor
+                            .scope_task_output_fence(fence, *principal, task)
+                    } else {
+                        fence
+                    }
+                });
+            self.outgoing.fence_request(&request_id, fence).await;
         }
         if let Some(thread) = private_thread {
             self.inquello_processor
                 .require_task_thread(connection_id, &thread)
                 .await?;
         }
-        if result.is_ok() {
-            if let Some(scope) = private_scope {
-                let check = self
-                    .inquello_processor
-                    .guard_private_scope_after(connection_id, &scope);
-                if saved_operation {
-                    tokio::time::timeout_at(saved_deadline, check)
-                        .await
-                        .map_err(|_| crate::request_processors::saved_timeout_error())??;
-                } else {
-                    check.await?;
-                }
+        if result.is_ok()
+            && let Some(scope) = private_scope
+        {
+            let check = self
+                .inquello_processor
+                .guard_private_scope_after(connection_id, &scope);
+            if saved_operation {
+                tokio::time::timeout_at(saved_deadline, check)
+                    .await
+                    .map_err(|_| crate::request_processors::saved_timeout_error())??;
+            } else {
+                check.await?;
             }
         }
         let _saved_queue_lease =
@@ -2615,6 +2751,10 @@ mod thread_lifecycle_tests;
 #[path = "message_processor_workspace_routing_tests.rs"]
 mod workspace_routing_tests;
 
+#[cfg(all(test, feature = "inference-fixtures", debug_assertions))]
+#[path = "message_processor_fixture_dispatch_tests.rs"]
+mod fixture_dispatch_tests;
+
 #[cfg(all(feature = "inference-fixtures", debug_assertions))]
 #[path = "inquello_fixture.rs"]
 mod inquello_fixture;
@@ -2623,6 +2763,45 @@ mod inquello_fixture;
 mod private_handoff_transport_tests {
     use super::*;
     use crate::transport::ConnectionOrigin;
+
+    #[test]
+    fn fixture_status_has_no_typed_protocol_fallback() {
+        // Default/release builds omit the raw debug branch. This proves ordinary
+        // protocol dispatch cannot expose the fixture method as a fallback.
+        let request = serde_json::json!({"id":1,"method":"inquello/fixture/taskTransportStatus",
+            "params":{"workspaceId":"5d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e",
+                "routeId":"claude-api-key","configurationRevision":1}});
+        assert!(serde_json::from_value::<ClientRequest>(request).is_err());
+    }
+
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    #[test]
+    fn fixture_status_requires_initialized_private_stdio_transport_and_origin() {
+        let websocket = AppServerTransport::WebSocket {
+            bind_address: "127.0.0.1:0".parse().unwrap(),
+        };
+        for initialized in [false, true] {
+            for transport in [
+                &AppServerTransport::Stdio,
+                &websocket,
+                &AppServerTransport::Off,
+            ] {
+                for origin in [
+                    ConnectionOrigin::Stdio,
+                    ConnectionOrigin::InProcess,
+                    ConnectionOrigin::WebSocket,
+                    ConnectionOrigin::RemoteControl,
+                ] {
+                    assert_eq!(
+                        fixture_status_transport_allowed(initialized, transport, origin),
+                        initialized
+                            && matches!(transport, AppServerTransport::Stdio)
+                            && origin == ConnectionOrigin::Stdio
+                    );
+                }
+            }
+        }
+    }
     #[test]
     fn bootstrap_and_credentials_require_both_private_stdio_transport_and_origin() {
         let websocket = AppServerTransport::WebSocket {
@@ -2658,5 +2837,38 @@ mod private_handoff_transport_tests {
             Some(&websocket),
             ConnectionOrigin::WebSocket
         ));
+    }
+}
+
+// Typed embedders must consult the same method policy as raw JSON transport.
+// Injecting the predicate keeps unit tests isolated from the one-way process latch.
+fn paid_typed_request_allowed(request: &ClientRequest, policy: impl FnOnce(&str) -> bool) -> bool {
+    policy(request.method_name())
+}
+
+#[cfg(test)]
+mod paid_typed_dispatch_tests {
+    use super::*;
+
+    #[test]
+    fn typed_request_consults_paid_method_policy_before_dispatch() {
+        let start: ClientRequest = serde_json::from_value(serde_json::json!({
+            "id": 17, "method": "thread/start", "params": {}
+        }))
+        .expect("typed thread start");
+        let called = std::cell::Cell::new(false);
+        assert!(!paid_typed_request_allowed(&start, |method| {
+            called.set(true);
+            assert_eq!(method, "thread/start");
+            false
+        }));
+        assert!(called.get());
+        // Ordinary process policy remains permissive; this helper does not
+        // unconditionally prohibit typed clients or mutate global test state.
+        assert!(paid_typed_request_allowed(&start, |_| true));
+        assert_eq!(
+            start.id(),
+            &codex_app_server_protocol::RequestId::Integer(17)
+        );
     }
 }

@@ -399,6 +399,7 @@ fn responses_request_properties_mismatch(
         input: _,
         tools: previous_tools,
         tool_choice: previous_tool_choice,
+        max_output_tokens: previous_max_output_tokens,
         parallel_tool_calls: previous_parallel_tool_calls,
         reasoning: previous_reasoning,
         store: previous_store,
@@ -416,6 +417,7 @@ fn responses_request_properties_mismatch(
         input: _,
         tools: current_tools,
         tool_choice: current_tool_choice,
+        max_output_tokens: current_max_output_tokens,
         parallel_tool_calls: current_parallel_tool_calls,
         reasoning: current_reasoning,
         store: current_store,
@@ -435,6 +437,8 @@ fn responses_request_properties_mismatch(
         "model_changed"
     } else if previous_tools != current_tools {
         "tools_changed"
+    } else if previous_max_output_tokens != current_max_output_tokens {
+        "max_output_tokens_changed"
     } else if previous_tool_choice != current_tool_choice {
         "tool_choice_changed"
     } else if previous_parallel_tool_calls != current_parallel_tool_calls {
@@ -766,6 +770,11 @@ impl ModelClient {
         mut extra_headers: ApiHeaderMap,
         api_provider_override: Option<ApiProvider>,
     ) -> Result<RealtimeWebrtcCallStart> {
+        if crate::inquello_inference::paid_process_only() {
+            return Err(CodexErr::Fatal(
+                "Realtime is disabled for the controlled fictional process".into(),
+            ));
+        }
         // Create the media call over HTTP first, then retain matching auth so realtime can attach
         // the server-side control WebSocket to the call id from that HTTP response.
         let client_setup = self
@@ -800,6 +809,11 @@ impl ModelClient {
         &self,
         mut extra_headers: ApiHeaderMap,
     ) -> Result<ApiHeaderMap> {
+        if crate::inquello_inference::paid_process_only() {
+            return Err(CodexErr::Fatal(
+                "Realtime is disabled for the controlled fictional process".into(),
+            ));
+        }
         let client_setup = self
             .current_client_setup(ClientRouting::ConfiguredProvider)
             .await?;
@@ -1117,7 +1131,13 @@ impl ModelClient {
             model: model_info.slug.clone(),
             input,
             tools,
-            tool_choice: "auto".to_string(),
+            tool_choice: if prompt.paid_qualification {
+                "none"
+            } else {
+                "auto"
+            }
+            .to_string(),
+            max_output_tokens: prompt.max_output_tokens,
             parallel_tool_calls: prompt.parallel_tool_calls && !model_info.use_responses_lite,
             reasoning: Some(reasoning),
             store: false,
@@ -1148,6 +1168,11 @@ impl ModelClient {
     ///
     /// WebSocket use is controlled by provider capability and session-scoped fallback state.
     pub fn responses_websocket_enabled(&self) -> bool {
+        if crate::inquello_inference::paid_process_only()
+            || crate::inquello_inference::is_paid_task_thread(&self.state.thread_id.to_string())
+        {
+            return false;
+        }
         if self.state.provider.info().wire_api == WireApi::Messages {
             return false;
         }
@@ -1165,6 +1190,59 @@ impl ModelClient {
     /// This centralizes setup used by both prewarm and normal request paths so they stay in
     /// lockstep when auth/provider resolution changes.
     async fn current_client_setup(&self, routing: ClientRouting) -> Result<CurrentClientSetup> {
+        if crate::inquello_inference::paid_process_only() {
+            let denied = || {
+                CodexErr::Fatal("Controlled fictional session requires unchanged cached API-key auth without refresh or overrides".into())
+            };
+            let manager = self.state.provider.auth_manager().ok_or_else(denied)?;
+            let revision = *manager.auth_change_receiver().borrow();
+            let owner = self.auth_owner_generation();
+            let auth = manager
+                .auth_cached()
+                .filter(|auth| auth.auth_mode() == codex_protocol::auth::AuthMode::ApiKey)
+                .ok_or_else(denied)?;
+            let info = self.state.provider.info();
+            let standard =
+                codex_model_provider_info::ModelProviderInfo::create_openai_provider(None);
+            if info.wire_api != WireApi::Responses
+                || !info.requires_openai_auth
+                || info.auth.is_some()
+                || info.gateway_oauth.is_some()
+                || info.aws.is_some()
+                || info.experimental_bearer_token.is_some()
+                || info.env_key.is_some()
+                || info.query_params.is_some()
+                || info.http_headers != standard.http_headers
+                || info.env_http_headers != standard.env_http_headers
+                || std::env::var_os("OPENAI_ORGANIZATION").is_some()
+                || std::env::var_os("OPENAI_PROJECT").is_some()
+            {
+                return Err(denied());
+            }
+            let api_provider =
+                info.to_api_provider(Some(codex_protocol::auth::AuthMode::ApiKey))?;
+            if api_provider.url_for_path("/responses") != "https://api.openai.com/v1/responses"
+                || api_provider.retry.max_attempts != 0
+                || *manager.auth_change_receiver().borrow() != revision
+                || self.auth_owner_generation() != owner
+            {
+                return Err(denied());
+            }
+            let api_auth = Arc::new(PaidCachedApiKeyAuth {
+                manager,
+                expected: auth.clone(),
+                revision,
+            });
+            return Ok(CurrentClientSetup {
+                auth: Some(auth),
+                auth_owner_generation: owner,
+                auth_revision: Some(revision),
+                api_provider,
+                redirect_policy: ClientRedirectPolicy::Reject,
+                api_auth,
+                agent_identity_telemetry: None,
+            });
+        }
         // Capture before resolving credentials so an account switch during setup cannot label
         // an old connection with the new owner's revision.
         let auth_owner_generation = self.auth_owner_generation();
@@ -1308,14 +1386,16 @@ impl ModelClient {
         endpoint: &str,
         redirect_policy: ClientRedirectPolicy,
     ) -> Result<ReqwestTransport> {
-        let redirect_policy = if api_provider
-            .headers
-            .contains_key(codex_model_provider::ACCOUNT_ROUTING_HEADER)
-        {
-            ClientRedirectPolicy::Reject
-        } else {
-            redirect_policy
-        };
+        let redirect_policy =
+            if crate::inquello_inference::is_task_thread(&self.state.thread_id.to_string())
+                || api_provider
+                    .headers
+                    .contains_key(codex_model_provider::ACCOUNT_ROUTING_HEADER)
+            {
+                ClientRedirectPolicy::Reject
+            } else {
+                redirect_policy
+            };
         let client = create_client_for_route(
             &self.http_client_factory,
             &api_provider.url_for_path(endpoint),
@@ -1823,6 +1903,17 @@ impl ResponsesHttpExecutor<'_> {
         responses_metadata: &CodexResponsesMetadata,
         inference_trace: &InferenceTraceContext,
     ) -> Result<ResponseStream> {
+        if !crate::inquello_inference::paid_dispatch_allowed(
+            crate::inquello_inference::paid_process_only(),
+            crate::inquello_inference::is_paid_task_thread(
+                &self.client.state.thread_id.to_string(),
+            ),
+            prompt.paid_qualification,
+        ) {
+            return Err(CodexErr::Fatal(
+                "Unbounded HTTP inference is disabled for the controlled fictional process".into(),
+            ));
+        }
         let auth_manager = self.client.state.provider.auth_manager();
         let mut auth_recovery = auth_manager
             .as_ref()
@@ -1870,6 +1961,21 @@ impl ResponsesHttpExecutor<'_> {
                 .client
                 .current_client_setup(ClientRouting::Workspace)
                 .await?;
+            let mut client_setup = client_setup;
+            if prompt.paid_qualification {
+                if client_setup.api_provider.url_for_path("/responses")
+                    != "https://api.openai.com/v1/responses"
+                    || client_setup.api_provider.retry.max_attempts != 0
+                    || client_setup.auth.as_ref().map(CodexAuth::auth_mode)
+                        != Some(codex_protocol::auth::AuthMode::ApiKey)
+                {
+                    return Err(CodexErr::Fatal("Controlled fictional endpoint, API-key auth or zero-retry transport changed".into()));
+                }
+                client_setup.api_provider.retry.retry_429 = false;
+                client_setup.api_provider.retry.retry_5xx = false;
+                client_setup.api_provider.retry.retry_transport = false;
+                client_setup.redirect_policy = ClientRedirectPolicy::Reject;
+            }
             if expected_auth_owner.is_some_and(|owner| {
                 Some(owner) != client_setup.auth_owner_generation
                     || Some(owner) != self.client.auth_owner_generation()
@@ -1976,6 +2082,9 @@ impl ResponsesHttpExecutor<'_> {
                 }
                 request.input = input;
             }
+            if prompt.paid_qualification {
+                validate_paid_request(&request)?;
+            }
             inference_trace_attempt.record_started(&request);
             let client = ApiResponsesClient::new(
                 transport,
@@ -2019,9 +2128,7 @@ impl ResponsesHttpExecutor<'_> {
                     if crate::inquello_inference::is_task_thread(
                         &self.client.state.thread_id.to_string(),
                     ) {
-                        return Err(CodexErr::Fatal(
-                            "Private Task credential changed; automatic retry is disabled".into(),
-                        ));
+                        return Err(crate::inquello_inference::private_auth_refusal());
                     }
                     pending_retry = PendingUnauthorizedRetry::from_recovery(
                         handle_unauthorized(
@@ -2168,9 +2275,7 @@ impl ModelClientSession {
                     if crate::inquello_inference::is_task_thread(
                         &self.client.state.thread_id.to_string(),
                     ) {
-                        return Err(CodexErr::Fatal(
-                            "Private Task credential changed; automatic retry is disabled".into(),
-                        ));
+                        return Err(crate::inquello_inference::private_auth_refusal());
                     }
                     pending_retry = PendingUnauthorizedRetry::from_recovery(
                         handle_unauthorized(
@@ -2483,6 +2588,16 @@ impl ModelClientSession {
         responses_metadata: &CodexResponsesMetadata,
         inference_trace: &InferenceTraceContext,
     ) -> Result<ResponseStream> {
+        if crate::inquello_inference::paid_process_only()
+            && !crate::inquello_inference::is_paid_task_thread(
+                &self.client.state.thread_id.to_string(),
+            )
+        {
+            return Err(CodexErr::Fatal(
+                "Unowned/background inference is disabled for the controlled fictional process"
+                    .into(),
+            ));
+        }
         let wire_api = self.client.state.provider.info().wire_api;
         match wire_api {
             WireApi::Messages => {
@@ -2490,7 +2605,7 @@ impl ModelClientSession {
                     &self.client.state.thread_id.to_string(),
                 )?
                 .ok_or_else(|| {
-                    CodexErr::Fatal(
+                    CodexErr::UnsupportedOperation(
                         "Messages requires a trusted current Task-route binding; no fallback"
                             .into(),
                     )
@@ -2516,7 +2631,7 @@ impl ModelClientSession {
                     || provider.query_params.is_some()
                     || provider.requires_openai_auth
                 {
-                    return Err(CodexErr::Fatal(
+                    return Err(CodexErr::UnsupportedOperation(
                         "Unsupported selected Messages settings, endpoint or model; no fallback"
                             .into(),
                     ));
@@ -2532,7 +2647,7 @@ impl ModelClientSession {
                         &self.client.state.thread_id.to_string(),
                     )
                 {
-                    return Err(CodexErr::Fatal("Private Task Responses attempt requires current authorization; no fallback".into()));
+                    return Err(CodexErr::UnsupportedOperation("Private Task Responses attempt requires current authorization; no fallback".into()));
                 }
                 let request = context
                     .as_ref()
@@ -2541,7 +2656,7 @@ impl ModelClientSession {
                             || context.binding.model != model_info.slug
                             || context.binding.api_version != "responses-v1"
                         {
-                            return Err(CodexErr::Fatal(
+                            return Err(CodexErr::UnsupportedOperation(
                                 "Selected Responses route/model changed; no fallback".into(),
                             ));
                         }
@@ -3329,3 +3444,86 @@ impl WebsocketTelemetry for ApiTelemetry {
 #[cfg(test)]
 #[path = "client_tests.rs"]
 mod tests;
+
+// Final HTTP payload bound, after request metadata and history transformations.
+// Prior generated reasoning is retained; tools and multimodal payloads are not.
+fn validate_paid_request(request: &ResponsesApiRequest) -> Result<()> {
+    let denied = || {
+        CodexErr::Fatal(
+            "Controlled fictional request exceeds its exact text/output/tool bounds".into(),
+        )
+    };
+    if request.model != "gpt-6.1-terra"
+        || request.max_output_tokens != Some(1024)
+        || request.tool_choice != "none"
+        || request.parallel_tool_calls
+        || request.service_tier.is_some()
+        || request.access_programs.is_some()
+        || request.input.len() > 64
+    {
+        return Err(denied());
+    }
+    let value = serde_json::to_value(request).map_err(|_| denied())?;
+    if value.get("tools").is_some_and(|tools| {
+        !tools.is_null() && tools.as_array().is_none_or(|tools| !tools.is_empty())
+    }) {
+        return Err(denied());
+    }
+    for item in value["input"].as_array().ok_or_else(denied)? {
+        match item["type"].as_str() {
+            Some("message") => {
+                if !matches!(
+                    item["role"].as_str(),
+                    Some("system" | "developer" | "user" | "assistant")
+                ) {
+                    return Err(denied());
+                }
+                for content in item["content"].as_array().ok_or_else(denied)? {
+                    if !matches!(
+                        content["type"].as_str(),
+                        Some("input_text" | "output_text" | "text")
+                    ) || !content["text"].is_string()
+                    {
+                        return Err(denied());
+                    }
+                }
+            }
+            Some("reasoning") => {}
+            _ => return Err(denied()),
+        }
+    }
+    if serde_json::to_vec(request).map_err(|_| denied())?.len() > 32 * 1024 {
+        return Err(denied());
+    }
+    Ok(())
+}
+
+// Header-only cached credential fence. Deliberately retains AuthProvider's
+// default no-refresh behavior; no OAuth, command, gateway or fallback route.
+struct PaidCachedApiKeyAuth {
+    manager: Arc<AuthManager>,
+    expected: CodexAuth,
+    revision: u64,
+}
+impl codex_api::AuthProvider for PaidCachedApiKeyAuth {
+    fn add_auth_headers(
+        &self,
+        headers: &mut ApiHeaderMap,
+    ) -> std::result::Result<(), codex_api::AuthError> {
+        let denied =
+            || codex_api::AuthError::Build("Controlled cached authentication changed".into());
+        let revision = *self.manager.auth_change_receiver().borrow();
+        let current = self.manager.auth_cached().ok_or_else(denied)?;
+        if revision != self.revision
+            // CodexAuth PartialEq intentionally compares auth modes, not API-key identity.
+            // Compare only cached in-memory values; never refresh or expose either key.
+            || current.api_key().is_none()
+            || current.api_key() != self.expected.api_key()
+            || current.auth_mode() != codex_protocol::auth::AuthMode::ApiKey
+            || *self.manager.auth_change_receiver().borrow() != revision
+        {
+            return Err(denied());
+        }
+        codex_model_provider::auth_provider_from_auth(&current).add_auth_headers(headers)
+    }
+}
