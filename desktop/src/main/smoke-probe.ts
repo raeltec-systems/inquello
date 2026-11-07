@@ -4403,8 +4403,20 @@ export async function probeToolsManagement(contents: WebContents, options: Organ
     requireCheck(await state(true),'add-native-and-durable');
     requireCheck(fixture.counts.initialize>0&&fixture.counts.toolsList>0&&fixture.counts.forbidden===0,'loopback-discovery-only');
     await capture('tools-01-added');
+    stage='inventory-presentation';
+    requireCheck(await ui(`const entry=row();return !!entry&&!!button(${JSON.stringify('Disable '+name)},entry)&&![...entry.querySelectorAll('button')].some(node=>node.textContent.trim()===${JSON.stringify('Enable '+name)});`),'single-applicable-enablement');
+    requireCheck(await ui(`
+      const entry=row(),details=entry?.querySelector('details'),summary=details?.querySelector('summary');
+      if(!details||details.open||!summary||details.querySelector('dl')?.checkVisibility()||!entry.querySelector('.iq-tool-permission')?.checkVisibility())return false;
+      summary.focus();return document.activeElement===summary;
+    `),'reference-details-collapsed');
+    await pressKey(contents,'Return');
+    requireCheck(await ui(`return !!(await wait(()=>{const details=row()?.querySelector('details');return details?.open&&details.querySelector('dl')?.checkVisibility()&&document.activeElement===details.querySelector('summary');},5000));`),'reference-details-keyboard-open');
+    await capture('tools-06-details-expanded');
+    await pressKey(contents,'Return');
+    requireCheck(await ui(`return !!(await wait(()=>{const details=row()?.querySelector('details');return details&&!details.open&&document.activeElement===details.querySelector('summary');},5000));`),'reference-details-keyboard-close');
     stage='disable';
-    requireCheck(await ui(`const disable=button(${JSON.stringify('Disable '+name)},row());if(!disable)return false;disable.click();return !!(await wait(()=>row()?.textContent.includes('Disabled by you')&&button(${JSON.stringify('Enable '+name)},row()),${POLICY_SETTLE_MS}));`),'disable-visible');
+    requireCheck(await ui(`const disable=button(${JSON.stringify('Disable '+name)},row());if(!disable)return false;disable.focus();disable.click();return !!(await wait(()=>document.activeElement===disable&&row()?.textContent.includes('Disabled by you')&&button(${JSON.stringify('Enable '+name)},row()),${POLICY_SETTLE_MS}));`),'disable-visible');
     requireCheck(await state(false),'disable-native-and-durable');
     stage='restart-and-reopen';
     await options.restartRuntime();
@@ -4412,7 +4424,7 @@ export async function probeToolsManagement(contents: WebContents, options: Organ
     requireCheck(await ui(`if(!(await openTools()))return false;return !!(await wait(()=>row()?.textContent.includes('Disabled by you')&&button(${JSON.stringify('Enable '+name)},row()),${POLICY_SETTLE_MS}));`),'disabled-reopened');
     await capture('tools-02-disabled-reopened');
     stage='enable';
-    requireCheck(await ui(`const enable=button(${JSON.stringify('Enable '+name)},row());if(!enable)return false;enable.click();return !!(await wait(()=>row()?.textContent.includes('Installed; Enabled;')&&button(${JSON.stringify('Disable '+name)},row()),${POLICY_SETTLE_MS}));`),'enable-visible');
+    requireCheck(await ui(`const enable=button(${JSON.stringify('Enable '+name)},row());if(!enable)return false;enable.focus();enable.click();return !!(await wait(()=>document.activeElement===enable&&row()?.textContent.includes('Installed; Enabled;')&&button(${JSON.stringify('Disable '+name)},row()),${POLICY_SETTLE_MS}));`),'enable-visible');
     requireCheck(await state(true),'enable-native-and-durable');
     stage='remove';
     requireCheck(await ui(`const remove=button(${JSON.stringify('Remove '+name)},row());if(!remove)return false;remove.click();return !!(await wait(()=>!row(),${POLICY_SETTLE_MS}));`),'remove-visible');
@@ -4452,6 +4464,13 @@ export async function probeToolsManagement(contents: WebContents, options: Organ
       await capture('tools-04-removed-zoomed');
       await ui(`qVisible('form[aria-label="Add MCP server"]')?.scrollIntoView({block:'start'});`);
       await capture('tools-05-zoomed-form');
+      requireCheck(await ui(`
+        const details=qVisible('.iq-tool-details'),summary=details?.querySelector('summary');if(!summary)return false;
+        summary.click();summary.scrollIntoView({block:'start'});
+        await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+        return details.open&&document.documentElement.scrollWidth<=document.documentElement.clientWidth;
+      `),'expanded-reference-details-200-percent');
+      await capture('tools-07-zoomed-details');
     } finally {contents.setZoomFactor(priorZoom);}
     requireCheck(fixture.counts.forbidden===0,'no-tool-invocations-or-auth');
   } catch {report.failures.push('Tools management failed at '+stage);try {if(options.seedFile)await capture('tools-failure');}catch {report.failures.push('Failure capture unavailable');}}

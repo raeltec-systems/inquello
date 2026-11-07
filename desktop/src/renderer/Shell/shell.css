@@ -1152,3 +1152,16 @@ a.iq-nav-row:hover {
 .iq-settings-panel .iq-tools-add select { min-width:0; max-width:100%; min-height:32px; font:inherit; color:var(--text-primary); background:var(--surface-app); border:1px solid var(--border-default); border-radius:var(--radius-md); padding:var(--space-1) var(--space-2); }
 .iq-settings-panel .iq-tools-add input { min-width:0; }
 @media(max-width:700px) { .iq-settings-panel .iq-tools-add { grid-template-columns:minmax(0,1fr); } }
+
+/* Keep current state and actions readable; reference metadata is available on demand. */
+.iq-settings-panel .iq-tool-entry { display:grid; gap:var(--space-2); padding-block:var(--space-4); }
+.iq-settings-panel .iq-tool-entry > :is(h4,h5,p,dl) { margin:0; }
+.iq-settings-panel .iq-tool-title { font:var(--type-ui); font-weight:600; }
+.iq-settings-panel .iq-tool-permission dt { color:var(--text-secondary); }
+.iq-settings-panel .iq-tool-actions { display:flex; flex-wrap:wrap; gap:var(--space-2); align-items:flex-start; }
+.iq-settings-panel .iq-tool-actions .iq-action { margin:0; }
+.iq-settings-panel .iq-tool-details > summary { cursor:pointer; font:var(--type-ui); color:var(--text-secondary); padding-block:var(--space-1); }
+.iq-settings-panel .iq-tool-details > summary:focus-visible { outline:2px solid var(--text-primary); outline-offset:3px; border-radius:var(--radius-sm); }
+.iq-settings-panel .iq-tool-details[open] > summary { color:var(--text-primary); }
+.iq-settings-panel .iq-tool-details > dl { margin:var(--space-2) 0 0; }
+@media(max-width:700px) { .iq-settings-panel .iq-tool-entry dl { grid-template-columns:1fr; } .iq-settings-panel .iq-tool-entry dd + dt { margin-top:var(--space-2); } }

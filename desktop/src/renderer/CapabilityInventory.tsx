@@ -1,9 +1,16 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactElement } from 'react';
-import { capabilitiesBridge, KINDS, parseInventory, type CapabilityAction, type CapabilityKind, type CapabilityRequest, type Inventory } from './capabilities-bridge';
+import { capabilitiesBridge, KINDS, parseInventory, type CapabilityAction, type CapabilityKind, type CapabilityRequest, type Inventory, type InventoryEntry } from './capabilities-bridge';
 import { Button, TextField } from './primitives';
 
 const HEADINGS: Record<CapabilityKind, string> = { built_in: 'Built-in tools', app: 'Apps', mcp_server: 'MCP servers', plugin: 'Plugins', skill: 'Skills' };
 const VERBS: Record<CapabilityAction, string> = { install: 'Install', uninstall: 'Uninstall', enable: 'Enable', disable: 'Disable', connect: 'Connect', cancel: 'Cancel sign-in for', remove: 'Remove' };
+// Present the useful member of a paired action using the last authoritative read.
+// Unknown state and sole runtime-provided actions are not inferred or replaced.
+function inventoryActions(entry: InventoryEntry): CapabilityAction[] {
+  if (entry.state_known === false || !entry.actions.includes('enable') || !entry.actions.includes('disable')) return entry.actions;
+  return entry.actions.filter(action => action !== (entry.enabled ? 'enable' : 'disable'));
+}
+
 export const LOCAL_MCP_CONFIRMATION = 'This program runs on this device outside the Task sandbox.';
 
 export function CapabilityInventory({ workspaceId, workspaceName, showHeading = true }: { workspaceId: string; workspaceName: string; showHeading?: boolean }): ReactElement {
@@ -132,14 +139,19 @@ export function CapabilityInventory({ workspaceId, workspaceName, showHeading = 
       </section>
       {KINDS.map(kind => <section key={kind} aria-label={HEADINGS[kind]} data-capability-kind={kind}>
         <GroupHeading>{HEADINGS[kind]}</GroupHeading>
-        <ul>{view.entries.filter(entry => entry.kind === kind).map(entry => <li key={entry.id} data-inventory-entry={entry.id}>
-          <EntryHeading>{entry.display_name}</EntryHeading>
-          <dl><dt>Source</dt><dd>{entry.source}</dd><dt>Version</dt><dd>{entry.version ?? 'Not reported by runtime'}</dd><dt>Dependencies</dt><dd>{entry.dependencies.length ? entry.dependencies.join('; ') : 'None reported'}</dd><dt>Effective permission</dt><dd>{entry.effective_permission}</dd></dl>
+        <ul>{view.entries.filter(entry => entry.kind === kind).map(entry => {
+          const actions = inventoryActions(entry);
+          return <li key={entry.id} data-inventory-entry={entry.id} className="iq-tool-entry">
+          <EntryHeading className="iq-tool-title">{entry.display_name}</EntryHeading>
+          <dl className="iq-tool-permission"><dt>Effective permission</dt><dd>{entry.effective_permission}</dd></dl>
           <p>{entry.state_known === false ? 'Installation state unavailable' : entry.installed ? 'Installed' : 'Available — not installed'}; {entry.state_known === false ? 'Enablement state unavailable' : entry.enabled ? 'Enabled' : 'Disabled'}; {entry.kind === 'built_in' ? current && entry.callable_now ? 'Callable now' : 'Not callable now' : current && entry.callable_now ? 'Runtime configuration ready' : 'Runtime configuration not ready'}.</p>
           {entry.reason_not_callable ? <p>{entry.reason_not_callable}</p> : null}
           {entry.next_action ? <p>{`Next action: ${entry.next_action}`}</p> : null}
-          {entry.actions.map(action => <Button key={action} pending={busy} disabledReason={!current && action !== 'cancel' ? 'Refresh a current runtime inventory before making changes.' : undefined} onPress={() => { const request={workspaceId,action,kind,id:entry.id}; if(entry.requires_local_confirmation && (action==='install'||action==='enable')) setPendingLocalPlugin({request,name:entry.display_name}); else void manage(request); }}>{`${VERBS[action]} ${entry.display_name}${kind === 'plugin' ? ' plugin' : ''}`}</Button>)}
-        </li>)}</ul>
+          <div className="iq-tool-actions">{actions.map(action => <Button key={(action === 'enable' || action === 'disable') && !(actions.includes('enable') && actions.includes('disable')) ? 'enablement' : action} pending={busy} disabledReason={!current && action !== 'cancel' ? 'Refresh a current runtime inventory before making changes.' : undefined} onPress={() => { const request={workspaceId,action,kind,id:entry.id}; if(entry.requires_local_confirmation && (action==='install'||action==='enable')) setPendingLocalPlugin({request,name:entry.display_name}); else void manage(request); }}>{`${VERBS[action]} ${entry.display_name}${kind === 'plugin' ? ' plugin' : ''}`}</Button>)}</div>
+          <details className="iq-tool-details"><summary>{`Details for ${entry.display_name}`}</summary>
+            <dl><dt>Source</dt><dd>{entry.source}</dd><dt>Version</dt><dd>{entry.version ?? 'Not reported by runtime'}</dd><dt>Dependencies</dt><dd>{entry.dependencies.length ? entry.dependencies.join('; ') : 'None reported'}</dd></dl>
+          </details>
+        </li>;})}</ul>
         {!view.entries.some(entry => entry.kind === kind) ? <p>None reported by runtime.</p> : null}
       </section>)}
     </> : null}
