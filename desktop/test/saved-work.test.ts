@@ -74,7 +74,7 @@ describe('strict saved Task projection',()=>{
 describe('bounded current Inbox observation',()=>{
  it('returns unavailable on a stalled observation and never schedules later work from it',async()=>{
   const x=attention();const pending=x.service.question('bounded-question',x.question);await new Promise(r=>setTimeout(r,0));
-  let resolve!:(v:unknown)=>void;x.request.mockImplementationOnce(()=>new Promise(r=>{resolve=r;}));
+  let resolve!:(v:unknown)=>void;x.request.mockImplementationOnce(()=>new Promise<never>(r=>{resolve=r as (v:unknown)=>void;}));
   vi.useFakeTimers();try{
    const observation=x.service.inbox({workspaceId:workspace});await vi.advanceTimersByTimeAsync(0);
    const count=x.request.mock.calls.length;await vi.advanceTimersByTimeAsync(INBOX_OBSERVATION_TIMEOUT_MS);
@@ -91,7 +91,7 @@ describe('bounded current Inbox observation',()=>{
  });
  it('stops scheduling after scope invalidation while a read is in flight',async()=>{
   const x=attention(),pending=x.service.question('scope-question',x.question);await new Promise(r=>setTimeout(r,0));let resolve!:(v:unknown)=>void;
-  x.request.mockImplementationOnce(()=>new Promise(r=>{resolve=r;}));const observation=x.service.inbox({workspaceId:workspace});await new Promise(r=>setTimeout(r,0));const count=x.request.mock.calls.length;
+  x.request.mockImplementationOnce(()=>new Promise<never>(r=>{resolve=r as (v:unknown)=>void;}));const observation=x.service.inbox({workspaceId:workspace});await new Promise(r=>setTimeout(r,0));const count=x.request.mock.calls.length;
   x.service.invalidate();resolve({task,hit:null});expect(await observation).toMatchObject({ok:false});expect(x.request.mock.calls.length).toBe(count);await pending;
  });
 });
@@ -99,7 +99,7 @@ describe('bounded current Inbox observation',()=>{
 it('withholds a same-ID replacement arriving during final Inbox authorization',async()=>{
  const x=attention(),first=x.service.question('reused',x.question);await new Promise(r=>setTimeout(r,0));
  const original=x.request.getMockImplementation()!;let reached!:(v?:unknown)=>void,release!:(v:unknown)=>void;
- const atFinal=new Promise(r=>{reached=r;});x.request.mockImplementation(async(method:string)=>{if(method==='inquello/workspace/tree'){reached();return new Promise(r=>{release=r;});}return original(method);});
+ const atFinal=new Promise(r=>{reached=r;});x.request.mockImplementation(async(method:string)=>{if(method==='inquello/workspace/tree'){reached();return new Promise<never>(r=>{release=r as (v:unknown)=>void;});}return original(method);});
  const observation=x.service.inbox({workspaceId:workspace});await atFinal;
  x.service.notification('serverRequest/resolved',{threadId:'thread',requestId:'reused'});await first;
  const second=x.service.question('reused',x.question);await new Promise(r=>setTimeout(r,0));release({workspaceId:workspace,tasks:[task]});

@@ -60,8 +60,8 @@ describe('onboarding durable main flow',()=>{
     const r=await s.createWorkspace({name:'Alder & Finch'});
     expect(r).toEqual({ok:true,value:{resourceId:W,revision:'1',authorizationEpoch:'2'}});
     expect(w.posts).toBe(1);
-    expect(spy.mock.calls[0][1].pending?.state).toBe('prepared');
-    expect(spy.mock.calls[1][1].pending?.state).toBe('uncertain');
+    expect(spy.mock.calls[0]![1].pending?.state).toBe('prepared');
+    expect(spy.mock.calls[1]![1].pending?.state).toBe('uncertain');
     expect(w.store.load(A).pending).toBeNull();
     expect(JSON.stringify(await s.getState())).not.toMatch(/MAIN-ONLY|command_epoch|envelope|receipt_id/);
   });
@@ -81,7 +81,7 @@ describe('onboarding durable main flow',()=>{
     await s.getState();expect(w.posts).toBe(1);
     w.postFailure=null;const before=w.requests.length;
     expect((await s.retry()).ok).toBe(true);
-    expect(w.requests[before].url).toContain('/receipts/');
+    expect(w.requests[before]!.url).toContain('/receipts/');
     expect(JSON.parse(w.requests.at(-1)!.body!)).toEqual(original);
     expect(w.posts).toBe(2);
   });

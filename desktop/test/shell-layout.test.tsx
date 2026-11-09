@@ -81,7 +81,7 @@ function fakeMain() {
       workspaces: [{ workspaceId: WORKSPACE, name: 'Synthetic Audit Co', source: 'service' }],
       engagementCreation: { enabled: true },
     })),
-    getTree: vi.fn(async () => ({
+    getTree: vi.fn(async (_input?: unknown) => ({
       ok: true,
       value: {
         workspaceId: WORKSPACE,
@@ -170,10 +170,10 @@ it('completes pin and archive without waiting for an unrelated sandbox inspectio
   await user.click(screen.getByRole('button',{name:'Conversation options'}));
   await user.click(screen.getByRole('menuitem',{name:'Rename or organise'}));
   await user.click(screen.getByRole('button', { name: 'Organise conversation' }));
-  await user.click(screen.getByRole('menuitem', { name: 'Pin', exact: true }));
+  await user.click(screen.getByRole('menuitem', { name: 'Pin' }));
   expect(await screen.findByText('Navigation preference saved.')).toBeTruthy();
   await user.click(screen.getByRole('button', { name: 'Organise conversation' }));
-  await user.click(screen.getByRole('menuitem', { name: 'Archive', exact: true }));
+  await user.click(screen.getByRole('menuitem', { name: 'Archive' }));
   expect(await screen.findByText(/Archived from navigation/)).toBeTruthy();
   expect(within(nav()).queryByRole('link', { name: 'Bank confirmations' })).toBeNull();
   expect(forTask).toHaveBeenCalledTimes(inspections);
@@ -644,7 +644,7 @@ describe('saved-work latest foreground destination',()=>{
   const {main}=await renderReady();let resolve!:(v:unknown)=>void;const original=(globalThis as any).inquello;
   Object.assign(globalThis,{inquello:{...original,organise:{...original.organise,reopen:vi.fn(()=>new Promise(r=>{resolve=r;})),search:vi.fn(async()=>({ok:true,value:{workspaceId:WORKSPACE,query:'FY26',items:[{kind:'engagement',engagementId:ENGAGEMENT,taskId:null,title:'FY26 audit',snippet:'FY26',turnId:null,itemId:null,archived:false}],nextCursor:null,unavailable:false,coverage:[]}}))}}});
   cleanup();render(<Shell onShowSpecimen={()=>{}} operationIds={()=>uuid(900)}/>);const user=userEvent.setup();await user.click(await screen.findByRole('link',{name:'Bank confirmations'}));
-  await user.click(screen.getByRole('button',{name:/Search saved work/}));await user.type(screen.getByLabelText('Search this Workspace'),'FY26');await user.click(screen.getByRole('button',{name:'Search',exact:true}));
+  await user.click(screen.getByRole('button',{name:/Search saved work/}));await user.type(screen.getByLabelText('Search this Workspace'),'FY26');await user.click(screen.getByRole('button',{name:'Search'}));
   await user.click(await within(screen.getByRole('dialog')).findByRole('button',{name:'FY26 audit'}));await screen.findByRole('region',{name:'Engagement details'});
   await act(async()=>resolve({ok:true,value:{task:main.tasks[0],hit:null}}));expect(screen.getByRole('region',{name:'Engagement details'})).toBeTruthy();expect(document.querySelector('[data-task-view]')).toBeNull();
  });

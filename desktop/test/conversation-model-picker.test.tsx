@@ -4,8 +4,9 @@ import {afterEach,expect,it,vi} from 'vitest';
 import {ConversationModelPicker} from '../src/renderer/Shell/ConversationModelPicker';
 import {Composer} from '../src/renderer/Shell/Composer';
 import {modelCatalog,taskRouteView} from './model-fixtures';
+import type {RouteView} from '../src/main/routes/types';
 const taskId='11111111-1111-4111-8111-111111111111',otherTask='22222222-2222-4222-8222-222222222222',workspaceId='33333333-3333-4333-8333-333333333333';
-const route={routeId:'codex-responses',provider:'OpenAI',configurable:true,configuration:{routeId:'codex-responses',deployment:'openai-api',model:'gpt-6.1-terra',apiVersion:'responses-v1',accountRef:'account',region:null},endpoint:'https://api.openai.com/v1/responses',revision:3,credentialPresent:true,adapterSupported:true,verification:'verified_for_synthetic',enabled:true,gate:null,limits:[],evidence:['synthetic fixture'],executionFlow:'Local sandbox',inferenceFlow:'Cloud inference',connectorFlow:'Unavailable'};
+const route:RouteView={routeId:'codex-responses',provider:'OpenAI',configurable:true,configuration:{routeId:'codex-responses',deployment:'openai-api',model:'gpt-6.1-terra',apiVersion:'responses-v1',accountRef:'account',region:null},endpoint:'https://api.openai.com/v1/responses',revision:3,credentialPresent:true,adapterSupported:true,verification:'verified_for_synthetic',enabled:true,gate:null,limits:[],evidence:['synthetic fixture'],executionFlow:'Local sandbox',inferenceFlow:'Cloud inference',connectorFlow:'Unavailable'};
 const catalog=modelCatalog([route]),binding=catalog.bindings[0]!;
 const task=(id=taskId,revision=1)=>taskRouteView({taskId:id,workspaceId,revision,selected:route,configurationRevision:3,staleConfiguration:false});
 const ok=(value:unknown)=>({ok:true,value});
@@ -15,7 +16,7 @@ function setup(){
  Object.assign(globalThis,{inquello:{routes:api,tasks:{onSessionChanged:(fn:typeof changed)=>{changed=fn;return()=>{};}}}});
  return {api,onResolved,invalidate:()=>changed?.(true)};
 }
-function View({id,onResolved,disabled=false}:{id?:string;onResolved?:(binding:typeof binding)=>void;disabled?:boolean}){
+function View({id,onResolved,disabled=false}:{id?:string;onResolved?:(resolved:typeof binding)=>void;disabled?:boolean}){
  return <Composer draft={{taskId:id??null,value:'Keep this draft',onChange:()=>{}}} routeLabel={<ConversationModelPicker workspaceId={workspaceId} taskId={id} selected={null} onResolved={onResolved} disabled={disabled}/>}/>;
 }
 async function choose(){fireEvent.click(screen.getByRole('button',{name:'Choose model'}));fireEvent.click(await screen.findByRole('menuitemradio',{name:'GPT-6.1 Terra'}));}
@@ -39,7 +40,7 @@ it('checks the current model and selecting it again is a no-op',async()=>{
  fireEvent.click(screen.getByRole('button',{name:'Choose model'}));const choice=screen.getByRole('menuitemradio',{name:'GPT-6.1 Terra'});expect(choice.getAttribute('aria-checked')).toBe('true');fireEvent.click(choice);expect(x.api.resolve).not.toHaveBeenCalled();expect(x.api.selectModel).not.toHaveBeenCalled();
 });
 it('does not select a new conversation when a prior resolve completes late',async()=>{
- const x=setup();let finish!:(v:unknown)=>void;x.api.resolve.mockImplementation(()=>new Promise(r=>{finish=r;}));x.api.forTask.mockImplementation(async input=>ok({...task(input.taskId),selected:null,configurationRevision:null,disclosureBindings:[]}));
+ const x=setup();let finish!:(v:ReturnType<typeof ok>)=>void;x.api.resolve.mockImplementation(()=>new Promise(r=>{finish=r;}));x.api.forTask.mockImplementation(async input=>ok({...task(input.taskId),selected:null,configurationRevision:null,disclosureBindings:[]}));
  const v=render(<View id={taskId}/>);await waitFor(()=>expect(x.api.forTask).toHaveBeenCalled());await choose();v.rerender(<View id={otherTask}/>);
  await act(async()=>finish(ok(binding)));expect(x.api.selectModel).not.toHaveBeenCalled();
 });
@@ -59,7 +60,7 @@ it('retains the exact select UUID after lost acknowledgement, without another re
  await waitFor(()=>expect(x.api.selectModel).toHaveBeenCalledTimes(2));expect(x.api.selectModel.mock.calls[1]![0]).toEqual(original);expect(x.api.resolve).toHaveBeenCalledTimes(1);
 });
 it('does not chain a select after identity loss',async()=>{
- const x=setup();let finish!:(v:unknown)=>void;x.api.resolve.mockImplementation(()=>new Promise(r=>{finish=r;}));x.api.forTask.mockResolvedValue(ok({...task(),selected:null,configurationRevision:null,disclosureBindings:[]}));
+ const x=setup();let finish!:(v:ReturnType<typeof ok>)=>void;x.api.resolve.mockImplementation(()=>new Promise(r=>{finish=r;}));x.api.forTask.mockResolvedValue(ok({...task(),selected:null,configurationRevision:null,disclosureBindings:[]}));
  render(<View id={taskId}/>);await waitFor(()=>expect(x.api.forTask).toHaveBeenCalled());await choose();act(()=>x.invalidate());await act(async()=>finish(ok(binding)));expect(x.api.selectModel).not.toHaveBeenCalled();
 });
 it('keeps model choice unavailable during active work without adding a queue',async()=>{
@@ -73,7 +74,7 @@ it('shows definitive active-work refusal without losing the draft or retrying',a
 });
 
 it('closes a hidden Start menu and never applies its late resolve or steals visible focus',async()=>{
- const x=setup();let finish!:(v:unknown)=>void;x.api.resolve.mockImplementation(()=>new Promise(r=>{finish=r;}));
+ const x=setup();let finish!:(v:ReturnType<typeof ok>)=>void;x.api.resolve.mockImplementation(()=>new Promise(r=>{finish=r;}));
  const view=(active:boolean)=><><input aria-label="Visible conversation"/><ConversationModelPicker active={active} workspaceId={workspaceId} selected={null} onResolved={x.onResolved}/></>;
  const v=render(view(true));await waitFor(()=>expect(x.api.catalog).toHaveBeenCalled());await choose();v.rerender(view(false));screen.getByRole('textbox',{name:'Visible conversation'}).focus();
  await act(async()=>finish(ok(binding)));expect(x.onResolved).not.toHaveBeenCalled();expect(screen.queryByRole('menu')).toBeNull();expect(screen.queryByRole('button',{name:'Choose model'})).toBeNull();expect(document.activeElement).toBe(screen.getByRole('textbox',{name:'Visible conversation'}));

@@ -3,7 +3,7 @@ import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react';
 import {afterEach,it,expect,vi} from 'vitest';
 import {SavedWorkDialog} from '../src/renderer/Shell/Search';
 import {TaskDetails} from '../src/renderer/Shell/TaskView';
-const task={taskId:'11111111-1111-4111-8111-111111111111',workspaceId:'22222222-2222-4222-8222-222222222222',title:'Private fictional title',engagementId:null,folderId:null,revision:1,visibility:'private' as const};
+const task={taskId:'11111111-1111-4111-8111-111111111111',workspaceId:'22222222-2222-4222-8222-222222222222',title:'Private fictional title',runtimeThreadId:null,sourceRefs:[],artifactRefs:[],engagementId:null,folderId:null,revision:1,visibility:'private' as const};
 afterEach(cleanup);
 it('preserves an ambiguous rename UUID and draft across closing and reopening the same authorized dialog',async()=>{
  const rename=vi.fn(async()=>({ok:false as const,code:'failed' as const,reason:'Rename outcome unknown'})),ids=vi.fn(()=> 'same-rename-operation');

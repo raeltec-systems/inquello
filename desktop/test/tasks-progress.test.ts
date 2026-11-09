@@ -13,7 +13,7 @@ const tick=()=>new Promise(resolve=>setTimeout(resolve,0));
 
 it('discards a native A reply waiting on final main authority while independent B still publishes',async()=>{
  const x=setup(),other='33333333-3333-4333-8333-333333333333';let release!:(value:unknown)=>void;let reads=0;
- const policy={workspaceId:workspace,authorizationEpoch:1};x.fresh.mockImplementation(async()=>++reads===2?new Promise(resolve=>{release=resolve;}):policy as never);
+ const policy={workspaceId:workspace,authorizationEpoch:1};x.fresh.mockImplementation(async()=>++reads===2?new Promise<never>(resolve=>{release=resolve as (value:unknown)=>void;}):policy as never);
  x.request.mockImplementation(async(_method:string,params?:unknown)=>({...snapshot(),taskId:(params as {taskId:string}).taskId}));
  const pending=x.service.progress(input);await vi.waitFor(()=>expect(release).toBeTypeOf('function'));
  x.service.invalidateBinding('codex-responses',1,[task]);
@@ -72,7 +72,7 @@ describe('Story 1.27 tool-source boundary',()=>{
 
 it.each([false,true])('fences an omitted dependent Task beyond a bounded revoke projection without invalidating B (history=%s)',async history=>{
  const other='33333333-3333-4333-8333-333333333333',x=setup(async id=>({routeId:'codex-responses',configurationRevision:history?2:id===task?1:2,...(history?{disclosureBindings:(id===task?[1,2]:[2]).map(configurationRevision=>({routeId:'codex-responses',configurationRevision,active:true}))}:{})}));let release!:(value:unknown)=>void;const reads=new Map<string,number>(),policy={workspaceId:workspace,authorizationEpoch:1};let taskRead=task;
- x.fresh.mockImplementation(async()=>{const count=(reads.get(taskRead)??0)+1;reads.set(taskRead,count);return taskRead===task&&count===2?new Promise(resolve=>{release=resolve;}):policy as never;});
+ x.fresh.mockImplementation(async()=>{const count=(reads.get(taskRead)??0)+1;reads.set(taskRead,count);return taskRead===task&&count===2?new Promise<never>(resolve=>{release=resolve as (value:unknown)=>void;}):policy as never;});
  x.request.mockImplementation(async(_method:string,params?:unknown)=>({...snapshot(),taskId:(params as {taskId:string}).taskId}));
  const a=x.service.progress(input);await vi.waitFor(()=>expect(release).toBeTypeOf('function'));x.service.invalidateBinding('codex-responses',1,[]);taskRead=other;
  expect(await x.service.progress({...input,taskId:other})).toMatchObject({ok:true});release(policy);expect(await a).toMatchObject({ok:false});expect(x.authorityUnavailable).not.toHaveBeenCalled();expect(await x.service.progress({...input,taskId:other})).toMatchObject({ok:true});

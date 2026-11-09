@@ -120,7 +120,7 @@ it('incomplete live display never authorizes Stop after fresh authority is revok
 it('discards an omitted A lifecycle reply after exact binding revoke without affecting B',async()=>{
  const other='55555555-5555-4555-8555-555555555555',policy={workspaceId:workspace},notified=vi.fn();let done!:(value:unknown)=>void;let afterNative=false;
  const request=vi.fn(async(method:string,params?:unknown)=>{if(method==='inquello/tasks/progress')return{...base,taskId:(params as {taskId:string}).taskId};if(method==='inquello/tasks/steer'){afterNative=true;return receipt();}return receipt();});
- const fresh=vi.fn(async()=>afterNative?new Promise(resolve=>{done=resolve;}):policy as never);
+ const fresh=vi.fn(async()=>afterNative?new Promise<never>(resolve=>{done=resolve as (value:unknown)=>void;}):policy as never);
  const service=new TaskService({runtime:{ready:()=>true,instance:()=>1,request:request as never},identity:{principalId:()=>task},syncPrincipal:async()=>{},prepareRoutes:async()=>({ok:true}),taskBinding:async id=>({routeId:'codex-responses',configurationRevision:id===task?1:2,disclosureBindings:[{routeId:'codex-responses',configurationRevision:id===task?1:2,active:true}]}),freshPolicy:fresh,onAuthorityUnavailable:notified});
  const pending=service.steer(input);await vi.waitFor(()=>expect(done).toBeTypeOf('function'));service.invalidateBinding('codex-responses',1,[]);afterNative=false;expect(await service.progress({...input,taskId:other})).toMatchObject({ok:true});done(policy);expect(await pending).toMatchObject({ok:false,code:'uncertain'});expect(await service.progress({...input,taskId:other})).toMatchObject({ok:true});expect(notified).not.toHaveBeenCalled();
 });

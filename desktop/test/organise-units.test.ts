@@ -2,7 +2,7 @@
  * Story 1.14, main process: the organise service with fake runtime, identity
  * and shared service; the operation payload validators; the runtime env.
  */
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, type Mock } from 'vitest';
 
 import { ServiceError } from '../src/main/identity/service-client';
 import type { CreateEngagementEnvelope } from '../src/main/identity/wire';
@@ -62,7 +62,7 @@ function refusal(method: string, kind: string, extra: Record<string, unknown> = 
 interface Harness {
   service: OrganiseService;
   calls: Array<{ method: string; params: unknown }>;
-  routes: { [K in keyof WorkspaceRoutes]: ReturnType<typeof vi.fn> };
+  routes: { [K in keyof WorkspaceRoutes]: Mock<WorkspaceRoutes[K]> };
   identity: { principal: string | null; shared: 'available' | 'unavailable' | 'not-configured' };
   runtime: { instance: object; ready: boolean };
   handlers: Map<string, (params: unknown) => unknown>;
@@ -345,7 +345,7 @@ describe('runtime env', () => {
 describe('ordered successful Workspace observations',()=>{
  it('a delayed allowed list cannot republish a Workspace removed by a newer successful list',async()=>{
   const h=harness();const allowed=await (h.routes.workspaces as unknown as WorkspaceRoutes['workspaces'])('fixture');let release!:(v:unknown)=>void;
-  h.routes.workspaces.mockImplementationOnce(()=>new Promise(resolve=>{release=resolve;}));
+  h.routes.workspaces.mockImplementationOnce(()=>new Promise<never>(resolve=>{release=resolve as (v:unknown)=>void;}));
   const old=h.service.getWorkspaces();
   h.routes.workspaces.mockResolvedValueOnce({...allowed,workspaces:[]});
   expect((await h.service.getWorkspaces()).workspaces).toEqual([]);

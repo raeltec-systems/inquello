@@ -105,8 +105,8 @@ async function measuredRequest<T>(method:string,params?:unknown):Promise<T> {
   const old=new Set(before.usage.attempts.map(row=>row.snapshot.attempt_id));
   const added=after.usage.attempts.filter(row=>!old.has(row.snapshot.attempt_id));
   expect(added.length).toBe(1);
-  if(bootstrap){expect(added[0].status).toBe('completed');bootstrapAttempts.add(added[0].snapshot.attempt_id);}
-  else targetAttempts.push({id:added[0].snapshot.attempt_id,expected:(p.command as string[])[2]==='exit 7'?'failed':'completed'});
+  if(bootstrap){expect(added[0]!.status).toBe('completed');bootstrapAttempts.add(added[0]!.snapshot.attempt_id);}
+  else targetAttempts.push({id:added[0]!.snapshot.attempt_id,expected:(p.command as string[])[2]==='exit 7'?'failed':'completed'});
   return response;
 }
 

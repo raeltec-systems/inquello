@@ -50,7 +50,7 @@ describe('Task choices and attributable history',()=>{
 
 it('refreshes compatible choices only for its affected conversation and keeps unrelated model creation harmless',async()=>{
  const view=facts();view.capabilities.reasoning=['default','high'];const h=setup(view);let change!:(event:{authority:boolean;taskId?:string})=>void;
- Object.assign((globalThis as {inquello:Record<string,unknown>}).inquello,{routes:{onChanged:(fn:typeof change)=>{change=fn;return()=>{};}}});
+ Object.assign((globalThis as unknown as {inquello:Record<string,unknown>}).inquello,{routes:{onChanged:(fn:typeof change)=>{change=fn;return()=>{};}}});
  render(<TaskUsage taskId={taskId} part="settings"/>);await screen.findByLabelText('Reasoning');await userEvent.selectOptions(screen.getByLabelText('Reasoning'),'high');
  act(()=>change({authority:false}));act(()=>change({authority:true,taskId:principal}));expect(h.forTask).toHaveBeenCalledTimes(1);expect(screen.getByLabelText('Reasoning')).toHaveProperty('value','high');
  const next=facts();next.capabilities.routeRevision=2;h.forTask.mockResolvedValue({ok:true,value:next});act(()=>change({authority:true,taskId}));await waitFor(()=>expect(h.forTask).toHaveBeenCalledTimes(2));await screen.findByLabelText('Reasoning');
@@ -59,7 +59,7 @@ it('refreshes compatible choices only for its affected conversation and keeps un
 
 it('binding invalidation preserves unrelated B capabilities while refreshing exact A with its draft intact',async()=>{
  const view=facts();view.capabilities.reasoning=['default','high'];const h=setup(view);let change!:(event:ModelAuthorityChange)=>void;
- rememberTaskModel({taskId,configurationRevision:2,selected:{routeId:'codex-responses'},disclosureBindings:[{routeId:'codex-responses',configurationRevision:2,active:true}]} as never);Object.assign((globalThis as {inquello:Record<string,unknown>}).inquello,{routes:{onChanged:(fn:typeof change)=>{change=fn;return()=>{};}}});
+ rememberTaskModel({taskId,configurationRevision:2,selected:{routeId:'codex-responses'},disclosureBindings:[{routeId:'codex-responses',configurationRevision:2,active:true}]} as never);Object.assign((globalThis as unknown as {inquello:Record<string,unknown>}).inquello,{routes:{onChanged:(fn:typeof change)=>{change=fn;return()=>{};}}});
  render(<TaskUsage taskId={taskId} part="settings"/>);const reasoning=await screen.findByLabelText('Reasoning');await userEvent.selectOptions(reasoning,'high');
  act(()=>change({authority:true,binding:{routeId:'codex-responses',configurationRevision:1}}));expect(h.forTask).toHaveBeenCalledTimes(1);expect(screen.getByLabelText('Reasoning')).toBe(reasoning);expect(reasoning).toHaveProperty('value','high');
  act(()=>change({authority:true,binding:{routeId:'codex-responses',configurationRevision:2}}));await waitFor(()=>expect(h.forTask).toHaveBeenCalledTimes(2));await screen.findByLabelText('Reasoning');expect(screen.getByLabelText('Reasoning')).toHaveProperty('value','high');

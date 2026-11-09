@@ -1,4 +1,5 @@
 /** Synthetic Windows backend: verifies cache scope and fresh authority, not OS isolation. */
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { PolicyService, PermissionMediator } from '../src/main/policy';
@@ -117,7 +118,7 @@ function cacheHarness() {
     organise:{syncPrincipal:async()=>undefined,getWorkspaces:async()=>({signedIn:true,sharedService:'available',workspaces:[{workspaceId:WORKSPACE,name:'Synthetic',source:'service'}],engagementCreation:{enabled:false,reason:'fixture'}})},
     service:{executionPolicy:async()=>{state.reads++;if(state.denied)throw new Error('Synthetic membership refusal');return {workspace_id:WORKSPACE,policy_revision:String(state.revision),authorization_epoch:'1',execution:null};}},
     logger:recordingLogger(),taskFolders:path.resolve('synthetic-cache-tasks'),sandboxProbeTarget:path.resolve('synthetic-cache-store'),
-    permissions:new PermissionMediator({runtime,logger:recordingLogger()}),
+    permissions:new PermissionMediator({runtime,logger:recordingLogger(),newId:randomUUID}),
   });
   return {policy,state};
 }

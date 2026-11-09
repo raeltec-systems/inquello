@@ -47,7 +47,7 @@ it.each(['enable','disable','connect','remove','cancel'] as const)('retains the 
  setup(inventory({actions:[action]}));await screen.findByText('Example connection');
  const row=screen.getByText('Example connection').closest('li')!;
  expect(within(row).getAllByRole('button')).toHaveLength(1);
- expect(within(row).getByRole('button',{name:`${action==='cancel'?'Cancel sign-in for':action[0].toUpperCase()+action.slice(1)} Example connection`})).toBeTruthy();
+ expect(within(row).getByRole('button',{name:`${action==='cancel'?'Cancel sign-in for':action[0]!.toUpperCase()+action.slice(1)} Example connection`})).toBeTruthy();
 });
 
 it('retains the focused enablement button across the authoritative reread, with no optimistic state change or repeated action',async()=>{

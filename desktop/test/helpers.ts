@@ -137,6 +137,9 @@ export function fakeOrganise(calls: string[] = []): OrganiseOperations {
     moveTask: record('moveTask'),
     listStates: record('listStates'),
     recordTaskState: record('recordTaskState'),
+    search: record('search'),
+    reopen: record('reopen'),
+    setNavigation: record('setNavigation'),
   };
 }
 

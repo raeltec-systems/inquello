@@ -26,7 +26,7 @@ it('moves focus to each ordinary Settings section without leaving it on the remo
  setup();await screen.findByRole('region',{name:'Provider session'});
  for(const [hash,title] of [['#settings-usage','Usage'],['#settings-account','Account'],['#settings-providers','AI connections'],['#settings-routes','Models'],['#settings-tools','Tools and connections']]){
   screen.getByRole('link',{name:title}).focus();
-  act(()=>{location.hash=hash;window.dispatchEvent(new HashChangeEvent('hashchange'));});
+  act(()=>{location.hash=hash!;window.dispatchEvent(new HashChangeEvent('hashchange'));});
   expect(document.activeElement).toBe(screen.getByRole('heading',{name:title,level:2}));
  }
 });
