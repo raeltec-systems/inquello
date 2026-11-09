@@ -62,7 +62,7 @@ Native `execution_policy/effective.rs` fixes `LocalDevice`; retain it.
 - [x] `desktop/src/main/{main.ts,security/operations.ts}`, `src/preload/preload.ts` — bounded read/notification; retain sender validation and invalidation.
 - [x] `desktop/src/main/policy/service.ts` — reuse local preflight in actual `runTool`; preserve policy/sandbox and post-wait checks.
 - [x] `desktop/src/renderer/Shell/{TaskEnvironment.tsx,TaskView.tsx,shell.css}` — distinct labelled facts, disabled gates and refresh; no inference-start control.
-- [ ] `engine/codex-rs/inquello-domain/register/{capabilities,inventory-map}.json`, `tests/capability_register.rs` — record disabled remote/cloud gates; no eligibility change.
+- [x] `engine/codex-rs/inquello-domain/register/{capabilities,inventory-map}.json`, `tests/capability_register.rs` — record disabled remote/cloud gates; no eligibility change.
 - [x] `desktop/test/{environments-units.test.ts,environments-shell.test.tsx,policy-units.test.ts,security.test.ts}` — test the matrix, actual preflight callers, no read probes, late responses and zero dispatch after runtime replacement.
 - [ ] `desktop/src/main/smoke-probe.ts`, `FORK-CUT.md`, story/tracker — environment smoke and truthful validation record.
 
@@ -121,6 +121,15 @@ Partial non-Git workspace; 1.21/1.22 native/generation gates remain separate. Re
 - `cargo test -j 4 -p inquello-domain --test capability_register` and `cargo fmt --all -- --check`: both **blocked, exit 127 (`cargo: command not found`)**.
 
 Owner follow-up: restore the matching complete native/toolchain/Git/schema and imported asset inputs, run the genuine inventory generator without eligibility changes, execute native capability/fmt gates, and run seeded isolated smoke plus actual Electron keyboard/minimum-width inspection. Keep this story in progress until those acceptance gates pass; authored tests and source inspection are not native acceptance evidence. Prior 1.21/1.22 gates remain independent.
+
+### Native register and generator gate — 2026-11-09
+
+Run on this Windows host at head `99800744e3` with the installed Rust 1.99.1 toolchain, offline and locked, from `engine/codex-rs`:
+
+- `cargo test --offline --locked -j4 -p inquello-domain --test capability_register --test inventory_map`: **passed**, 24/24 and 11/11, none ignored. This includes `remote_cloud_execution_remains_disabled` and `committed_map_matches_the_planning_documents` (99 items, 0 deferred-unmet), which is the genuine inventory generator comparison. The map was compared with the working-tree `epics.md`, which has uncommitted edits.
+- `cargo fmt --all -- --check`: **passed** (exit 0; nightly-only option warnings).
+
+No source, register or map file changed; the inventory map needs no `execution.remote-cloud` row, as the Implementation Notes explain. This closes the register task and supersedes the 2026-10-30 "blocked, exit 127" entries for these two commands. **Not run here:** full `pnpm test`, seeded `pnpm smoke` including the environment report, and actual Electron keyboard/minimum-width inspection. The smoke/validation-record task stays open and the story stays in-progress.
 
 ### Final review correction and presentation record
 
