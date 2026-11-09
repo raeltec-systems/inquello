@@ -5,16 +5,61 @@ import {afterEach,describe,expect,it,vi} from 'vitest';
 import {Shell} from '../src/renderer/Shell/Shell';
 const workspace='22222222-2222-4222-8222-222222222222';
 afterEach(()=>{cleanup();delete(globalThis as {inquello?:unknown}).inquello;});
-function setup(){
- const state={recovered:false,signedIn:true};let sessionChanged:((identity:boolean)=>void)|undefined;
+const permittedTask={taskId:'33333333-3333-4333-8333-333333333333',workspaceId:workspace,engagementId:null,folderId:null,title:'Permitted saved chat',runtimeThreadId:null,sourceRefs:[],artifactRefs:[],visibility:'private',pinned:false,archived:false,revision:1};
+const withheldTaskId='44444444-4444-4444-8444-444444444444';
+function setup(partial=false){
+ const state={recovered:false,signedIn:true,workspace};const sessionChanged=new Set<(identity:boolean)=>void>();
  const mutations={createTask:vi.fn(),renameTask:vi.fn(),moveTask:vi.fn(),createEngagement:vi.fn(),createFolder:vi.fn(),updateEngagement:vi.fn()};
- const getWorkspaces=vi.fn(async()=>({signedIn:state.signedIn,sharedService:'available',workspaces:state.signedIn?[{workspaceId:workspace,name:'Fictional Workspace',source:'service'}]:[],engagementCreation:{enabled:false,reason:'Not part of this test'}}));
- const getTree=vi.fn(async()=>state.recovered?{ok:true,value:{workspaceId:workspace,engagements:[],folders:[],tasks:[]}}:{ok:false,code:'failed',reason:'Private work is unavailable until current access is checked.'});
+ const execution={start:vi.fn(),resume:vi.fn(),turn:vi.fn()};
+ const getWorkspaces=vi.fn(async()=>({signedIn:state.signedIn,sharedService:'available',workspaces:state.signedIn?[{workspaceId:state.workspace,name:'Fictional Workspace',source:'service'}]:[],engagementCreation:{enabled:false,reason:'Not part of this test'}}));
+ const getTree=vi.fn(async():Promise<unknown>=>partial?{ok:true,value:{workspaceId:state.workspace,engagements:[],folders:[],tasks:state.workspace===workspace?[permittedTask,...(state.recovered?[{...permittedTask,taskId:withheldTaskId,title:'Freshly permitted saved chat'}]:[])]:[],unavailableTasks:!state.recovered&&state.workspace===workspace?[{taskId:withheldTaskId,reason:'current_authority_unavailable',title:'WITHHELD PRIVATE TITLE'}]:[]}}:state.recovered?{ok:true,value:{workspaceId:workspace,engagements:[],folders:[],tasks:[]}}:{ok:false,code:'failed',reason:'Private work is unavailable until current access is checked.'});
  const recoverNavigation=vi.fn(async(_input:{workspaceId:string}):Promise<unknown>=>{state.recovered=true;return{ok:true,value:{accepted:true}};});
- (globalThis as {inquello?:unknown}).inquello={organise:{...mutations,getWorkspaces,getTree,recoverNavigation},tasks:{onSessionChanged:(listener:(identity:boolean)=>void)=>{sessionChanged=listener;return()=>{};}},identity:{signIn:vi.fn()}};
+ (globalThis as {inquello?:unknown}).inquello={organise:{...mutations,getWorkspaces,getTree,recoverNavigation},tasks:{...execution,onSessionChanged:(listener:(identity:boolean)=>void)=>{sessionChanged.add(listener);return()=>{sessionChanged.delete(listener);};}},identity:{signIn:vi.fn()}};
  render(<Shell onShowSpecimen={()=>{}}/>);
- return{state,getTree,getWorkspaces,recoverNavigation,mutations,changed:()=>sessionChanged?.(true)};
+ return{state,getTree,getWorkspaces,recoverNavigation,mutations,execution,changed:(identity=true)=>{for(const listener of [...sessionChanged])listener(identity);}};
 }
+function expectNoExecution(h:ReturnType<typeof setup>){for(const operation of [...Object.values(h.mutations),...Object.values(h.execution)])expect(operation).not.toHaveBeenCalled();}
+describe('explicit recovery from a partial tree with no open Task',()=>{
+ it('keeps permitted rows and the unsent draft, then keyboard recovery reads fresh work without execution',async()=>{
+  const h=setup(true),user=userEvent.setup();
+  expect(await screen.findByRole('link',{name:permittedTask.title})).toBeTruthy();
+  expect(document.querySelector('[data-task-view]')).toBeNull();
+  const button=await screen.findByRole('button',{name:'Refresh workspace'});
+  expect(h.recoverNavigation).not.toHaveBeenCalled();expect(document.body.textContent).not.toContain('WITHHELD PRIVATE TITLE');
+  const draft=await screen.findByRole('textbox');await user.type(draft,'Unsent inspection draft');
+  button.focus();await user.keyboard('{Enter}');
+  expect(await screen.findByRole('link',{name:'Freshly permitted saved chat'})).toBeTruthy();
+  expect(h.recoverNavigation).toHaveBeenCalledExactlyOnceWith({workspaceId:workspace});
+  expect(screen.getByRole('textbox')).toHaveProperty('value','Unsent inspection draft');
+  expect(screen.queryByRole('button',{name:'Refresh workspace'})).toBeNull();expectNoExecution(h);
+ });
+ it('preserves refusal without claiming hidden work was restored or reading it again',async()=>{
+  const h=setup(true),user=userEvent.setup();const button=await screen.findByRole('button',{name:'Refresh workspace'});
+  h.recoverNavigation.mockResolvedValueOnce({ok:false,code:'failed',reason:'Refused'});const reads=h.getTree.mock.calls.length;
+  await user.click(button);await screen.findByText(/Workspace access could not be restored/);
+  expect(h.getTree).toHaveBeenCalledTimes(reads);expect(screen.queryByRole('link',{name:'Freshly permitted saved chat'})).toBeNull();
+  expect(document.body.textContent).not.toContain('WITHHELD PRIVATE TITLE');expectNoExecution(h);
+ });
+ it('suppresses repeated activation while the same explicit check is pending',async()=>{
+  const h=setup(true),user=userEvent.setup();const button=await screen.findByRole('button',{name:'Refresh workspace'});
+  let resolve!:(value:unknown)=>void;h.recoverNavigation.mockImplementationOnce(()=>new Promise(r=>{resolve=r;}));
+  await user.dblClick(button);expect(h.recoverNavigation).toHaveBeenCalledTimes(1);
+  expect(button.getAttribute('aria-busy')).toBe('true');expect(screen.getByText('Checking Workspace access')).toBeTruthy();
+  await user.click(button);expect(h.recoverNavigation).toHaveBeenCalledTimes(1);
+  await act(async()=>{h.state.recovered=true;resolve({ok:true,value:{accepted:true}});});
+  await screen.findByRole('link',{name:'Freshly permitted saved chat'});expectNoExecution(h);
+ });
+ it.each(['identity','workspace'] as const)('discards late partial-tree recovery after current %s changes',async change=>{
+  const h=setup(true),user=userEvent.setup();const button=await screen.findByRole('button',{name:'Refresh workspace'});
+  let resolve!:(value:unknown)=>void;h.recoverNavigation.mockImplementationOnce(()=>new Promise(r=>{resolve=r;}));
+  await user.click(button);await waitFor(()=>expect(h.recoverNavigation).toHaveBeenCalledTimes(1));
+  await act(async()=>{if(change==='identity')h.state.signedIn=false;else h.state.workspace='55555555-5555-4555-8555-555555555555';h.changed(change==='identity');});
+  await waitFor(()=>{if(change==='identity')expect(screen.getByText('Sign in to see your Workspaces and private Tasks.')).toBeTruthy();else expect(h.getTree).toHaveBeenCalledTimes(2);});
+  const reads=h.getTree.mock.calls.length;await act(async()=>resolve({ok:true,value:{accepted:true}}));
+  expect(h.getTree).toHaveBeenCalledTimes(reads);expect(screen.queryByRole('link',{name:'Freshly permitted saved chat'})).toBeNull();
+  expect(document.body.textContent).not.toContain('WITHHELD PRIVATE TITLE');expectNoExecution(h);
+ });
+});
 describe('explicit Refresh workspace action',()=>{
  it('does nothing automatically, then keyboard activation reauthorizes and reads without replaying mutations',async()=>{
   const h=setup(),user=userEvent.setup();const button=await screen.findByRole('button',{name:'Refresh workspace'});

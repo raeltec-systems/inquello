@@ -386,6 +386,7 @@ export function Shell({ active = true, onWorkspaceChanged, onConversationChanged
         draftStore.retain(result.value.workspaceId, [...result.value.tasks.map((item) => item.taskId),...unavailable]);
         setAcceptedTasks(previous=>Object.fromEntries(Object.entries(previous).filter(([taskId])=>!unavailable.has(taskId))));
         if(openTask.current&&unavailable.has(openTask.current)){setOpenTaskId(null);openTask.current=null;setStates(null);setTaskPolicy(null);setNavigationNotice('This Task is currently unavailable. Your draft is kept.');}
+        else if(!openTask.current&&unavailable.size>0)setNavigationNotice('Some saved work needs a current access check. Your drafts are kept.');
         setTree(result.value);
       } else {
         setTree(null); setAcceptedTasks({}); setStates(null); setTaskPolicy(null);
