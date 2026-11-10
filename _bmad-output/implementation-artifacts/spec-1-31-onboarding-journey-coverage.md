@@ -2,15 +2,16 @@
 title: 'Widen the synthetic two-person onboarding journey'
 type: 'feature'
 created: '2026-11-10'
-status: 'draft'
+status: 'in-progress'
 route: 'dispatch'
 review_loop_iteration: 0
+baseline_commit: 'b56bfc483a3c3942194238e2f18eccd3f85cb3e1'
 context:
   - '{project-root}/docs/verification.md'
   - '{project-root}/_bmad-output/implementation-artifacts/spec-1-31-customer-onboarding.md'
 ---
 
-<frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
+<frozen-after-approval reason="human-owned intent — approved by the owner 2026-11-10; do not modify unless human renegotiates">
 
 ## Intent
 
@@ -72,6 +73,8 @@ context:
 The interrupted request is a second invitation at the end of the first launch, so the existing seven stages run untouched. Trust for the relaunch comes from two independent facts: the sentinel proves this run created the profile under the gate, and the launcher-written marker proves the first launch ended cleanly and permits one relaunch. The lost-reply wrapper is test code in the owned-fixture module, reachable only from the main-process probe; killing Electron mid-request was rejected as not repeatable.
 
 ## Verification
+
+**Environment:** installed tools only, offline; no installs or downloads. In PowerShell, dot-source `.tmp/story121-env.ps1` from the repository root (test database URL and toolchain paths), set `COREPACK_ENABLE_NETWORK=0` and `ELECTRON_SKIP_BINARY_DOWNLOAD=1`, and remove from the process environment any variable whose name ends in `_TOKEN`, `_API_KEY` or `_SECRET` and names CLAUDE, ANTHROPIC, OPENAI, CODEX or CHATGPT before running the smoke commands; the onboarding gate refuses to start otherwise and the launcher then waits out a ten-minute deadline. Do not edit anything under `engine/`. Default native binaries are already built; do not rebuild them.
 
 **Commands (from `desktop/`):**
 - `pnpm exec tsc -p tsconfig.json --noEmit` and `pnpm exec tsc -p tsconfig.renderer.json --noEmit` -- expected: exit 0
