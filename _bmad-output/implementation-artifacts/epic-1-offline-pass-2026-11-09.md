@@ -15,7 +15,7 @@ One offline pass over the shared gates that Stories 1.21–1.30 each list, run o
 | --- | --- |
 | Native default-feature suites | **passed** (all gates below) |
 | Native `inference-fixtures` authorization runtime, 68 cases, both routes | **passed with one caveat**: 67/68 on the full run; the one failure passed twice on re-run |
-| Native `inference-fixtures` messages runtime | **not run** (Linux-only test file) |
+| Native `inference-fixtures` messages runtime (Linux-only) | **passed** on 2026-11-10 in the Linux guest: 13 of 13 (note 3) |
 | Desktop type checks, protocol regeneration, production build | **passed** |
 | Full desktop suite | **passed**: 2,270 passed, 0 failed, 21 skipped, 125 files (4 skipped) |
 | Seeded Electron smoke | **passed**: 19 of 19 required reports, none missing or failed |
@@ -42,7 +42,7 @@ One offline pass over the shared gates that Stories 1.21–1.30 each list, run o
 | Capability register and inventory generator | `-p inquello-domain --test capability_register --test inventory_map` | passed, 24/24 and 11/11 |
 | Fixtures build | `cargo build -p codex-app-server --features inference-fixtures` | passed |
 | Authorization runtime | `--features inference-fixtures --test inquello_authorization_runtime`, `INQUELLO_FIXTURE_APP_SERVER_BIN` set | 67/68, then the failed case 1/1 twice (note 2) |
-| Messages runtime | `--features inference-fixtures --test inquello_messages_runtime` | **0 tests: not run** (note 3) |
+| Messages runtime | `--features inference-fixtures --test inquello_messages_runtime` | 0 tests on Windows; **13/13 passed in the Linux guest** on 2026-11-10 (note 3) |
 | Default rebuild | `cargo build -p codex-cli -p codex-app-server -p inquello-service` | passed |
 
 ## Desktop gates (from `desktop`)
@@ -70,17 +70,17 @@ Binaries used for the smoke (SHA-256):
 
 1. **Disk floor, not code.** The Linux sandbox refuses to start with less than 32 GiB free on D:. While free space was 29.7–30 GiB, 16 desktop tests (five integration files) and 3 app-server library tests failed with "WSL storage needs at least 32 GiB free on D:" or the consequent "Local sandbox unavailable on this device". After space was freed, the same 19 tests passed with no code change. The first-run logs are retained.
 2. **`messages_allowed` failed once.** On the full authorization run it was the first case and failed with `setup-failed`; the runtime logged "Linux Task setup unavailable … Setup probe timed out". Re-run alone twice with the guest warm, it passed both times. Cold guest start is the likely cause but was not isolated. Recorded in `deferred-work.md` against Story 1.25, because a user's first Task after a restart could fail the same way and is not retried.
-3. **Messages runtime suite is Linux-only.** The test file is compiled only for Linux, so on Windows it reports zero tests. Stories 1.22, 1.25, 1.26 and 1.27 list it as a gate. Recorded in `deferred-work.md`.
+3. **Messages runtime suite is Linux-only; run separately in the guest.** On Windows the file compiles to zero tests. On 2026-11-10 it was run inside the `Inquello-Engine` guest from frozen source archive `c14ad8834d7c01b64c5996d7a16ba963729b5795b6e845013618c25f9a75329f` (commit `71e6456333`; engine and desktop identical to `f992919722`), offline and locked, and passed 13 of 13 in 102 s. Fixtures app-server SHA-256 `7e5f710738cc72ec5ff526c826bc88c1cbbae6196b4e19173a9b60f2d8eec527`; bubblewrap `cefe1de5cddae63912a82d0b4df9a038f594f6e804faa74b512a038a9b203d2b`. Two earlier attempts did not count: the first was refused by the isolation guard because the guest had just booted and its own initializer had not yet removed the ambient mounts (a bounded wait was added before the unchanged guard); the second failed 11 of 13 because the fixtures binary had been copied without bubblewrap beside it. Guest state changed: one new source tree and archive under `/opt/inquello/build/sources/`, build output in the existing `offline-20261105-1752` target, and a `fixture-<digest>` folder; the default-source marker was restored to its previous value; the installed runtime was not touched.
 4. **Harness errors, corrected.** The first authorization run omitted `INQUELLO_FIXTURE_APP_SERVER_BIN` and failed 64 cases at the driver's precondition; that run says nothing about the code and was repeated correctly.
 5. **Test typing regression, fixed.** The main type check had regressed to 55 errors in 22 test files. Fixed type-only in `f992919722`; no assertion changed.
 
 ## Not run in this pass
 
-- `inquello_messages_runtime` (Linux-only), and the guest-side exec-server and sandbox suites for the WSL backend.
+- The guest-side exec-server and sandbox suites for the WSL backend (`test-guest.sh`).
 - `cargo clippy` for `codex-core` and `codex-app-server` (only the four Inquello crates were linted).
 - `node scripts/run-navigation-native.cjs` and the populated native latency measurement (Story 1.30).
 - The stalled-authority-plus-concurrent-writer exercise (Story 1.25) and the Electron reproduction of R3-B10 (Story 1.29).
-- The onboarding smoke phase (`--onboarding`) and the two-person onboarding journey (Story 1.31).
+- The onboarding smoke phase was not part of the pass; it was run separately on 2026-11-10 and passed (11 checks, 7 captures; see the Story 1.31 spec). Its uncovered areas remain: keyboard and focus, other window sizes, restart and lost-response recovery, revocation, private-Task isolation.
 - Which four desktop files and 21 tests were skipped was not itemised; the reporter does not list them on a passing run.
 - Everything in pile C of the inventory: re-qualification, paid provider calls, owner acceptance.
 

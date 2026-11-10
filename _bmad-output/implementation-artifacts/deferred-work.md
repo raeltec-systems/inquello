@@ -172,3 +172,8 @@
   evidence: `engine/codex-rs/app-server/tests/inquello_messages_runtime.rs` is gated `#![cfg(all(feature = "inference-fixtures", target_os = "linux"))]`. On Windows it builds to zero tests and cargo reports "ok. 0 passed" (2026-11-09 offline pass, `stage2-fixture-messages-runtime.log`), which is not a pass. Stories 1.22, 1.25, 1.26 and 1.27 list this suite as a verification gate. It needs a Linux run, for example inside the `Inquello-Engine` WSL guest, with `INQUELLO_FIXTURE_APP_SERVER_BIN` set to a Linux fixtures build.
 
 ---
+- source_spec: spec-1-22-configure-initial-processing-routes-without-silent-fallback.md
+  summary: Resolved 2026-11-10 — `inquello_messages_runtime` now has a Linux run on the current tree (13 of 13 passed in the `Inquello-Engine` guest).
+  evidence: See note 3 of `epic-1-offline-pass-2026-11-09.md`. The entry above is kept for history. What remains is repeatability: there is no checked-in script for this run; it used the staging script plus a one-off driver under `.tmp/epic1-offline-pass-20261109/`.
+
+---

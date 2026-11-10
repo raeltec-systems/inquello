@@ -228,3 +228,9 @@ Still open or not run:
 - `private_pre_execution_late_fence_and_cancellation_complete_once_without_begin` was not selected by name; clippy on `codex-core` and `codex-app-server` was not run.
 - `inquello_messages_runtime` (Linux-only) was **not run**.
 - The third acceptance criterion still needs owner-authorized calls to a real model on both routes.
+
+## Linux Messages runtime suite — 2026-11-10
+
+`inquello_messages_runtime` (Linux-only, `inference-fixtures`) was run inside the `Inquello-Engine` guest and **passed: 13 of 13, none ignored**, in 102 s. Source: frozen archive `c14ad8834d7c…` of commit `71e6456333` (engine and desktop identical to `f992919722`), staged with `desktop/scripts/wsl/stage-source.py`; offline, locked, four jobs, installed Rust 1.99.1, the unchanged isolation guard from `build-guest.sh`. The fixtures app-server and the bubblewrap helper were built from that source and placed side by side, as the installed runtime keeps them. Synthetic transport only; no model call. This supersedes the "not run" entry for this suite in the record above. Details and the two earlier refused or mis-set-up attempts are in [epic-1-offline-pass-2026-11-09.md](epic-1-offline-pass-2026-11-09.md).
+
+Relevant to this story: `real_private_task_untrusted_procurement_output_cannot_authorize_followup` passed. Real-model resistance on both routes still needs owner-authorized provider calls.

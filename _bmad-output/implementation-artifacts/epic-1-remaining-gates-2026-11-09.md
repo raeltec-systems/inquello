@@ -45,7 +45,7 @@ Piles:
 | 1.23 | `execution.remote-cloud` missing from `register/inventory-map.json`; run the genuine inventory generator | Confirmed absent from the map, present in `capabilities.json`. Edits `engine/`. |
 | 1.25 | R5-B7: SQLite 5 s busy timeout under two authority fences of up to 15 s each | Accepted residual with a follow-up design; owner decision whether it blocks the epic. |
 | 1.31 | Bounded per-scope pending-journal recovery | Spec says "explicitly unfinished"; a single pending operation fails closed globally. |
-| 1.31 | Normal-operation two-person Electron onboarding journey script | No onboarding-named script in `desktop/scripts/`. |
+| 1.31 | Extend the two-person Electron onboarding journey | Corrected 2026-11-10: the journey exists as the `--onboarding` phase of `run-seeded-smoke.cjs` and passes (11 checks, 7 captures). Missing from it: real keyboard/focus, other window sizes, restart and lost-response recovery, revocation, private-Task isolation, Stop/Resume. |
 | 1.28, 1.30 | Stale documents: spec/support text, `inquello-authorization-evidence-not-run.json`, two register references still `pending` | Documentation only. Register edits are under `engine/`. |
 
 **Follow-up the same day (two of these rows were not real source work):**
@@ -71,7 +71,7 @@ Deferred and not proposed for this epic unless the owner says otherwise: 1.27 Re
 | --- | --- |
 | 1.21 tools | App-server/rmcp cancellation and plugin-install boundary tests; capabilities integration suite with a database URL; Settings navigation checks in the seeded smoke. |
 | 1.21 WSL | Guest exec-server and sandbox suites, bridge tests, and the 13-report smoke against the real `Inquello-Engine` guest on this host; in-guest program resolution has only run against a fake channel. |
-| 1.22 routes | Messages fixture runbook `engine/codex-rs/app-server/tests/INQUELLO-MESSAGES-FIXTURES.md`; `routes` smoke report. |
+| 1.22 routes | Messages fixture runbook `engine/codex-rs/app-server/tests/INQUELLO-MESSAGES-FIXTURES.md` (run in the Linux guest 2026-11-10: 13/13 passed); `routes` smoke report. |
 | 1.22 bindings | Commands live in `model-bindings-engineering.md` (not read for this inventory). |
 | 1.23 | `cargo test -p inquello-domain --test capability_register` after the inventory-map fix. |
 | 1.24 | `usage_limit_fixture_refuses_at_native_boundary_and_preserves_local_work`; quota-refusal-to-panel smoke path. |

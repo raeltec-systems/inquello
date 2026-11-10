@@ -151,6 +151,7 @@ Specific to this story, passed:
 
 Still open or not run:
 
-- The onboarding smoke phase (`--onboarding`) was not part of this pass, and the normal-operation two-person Electron journey is still unwritten and unrun.
+- Correction (2026-11-10): the previous wording here said the two-person Electron journey was "unwritten and unrun". That was wrong. The journey exists as the `--onboarding` phase of `desktop/scripts/run-seeded-smoke.cjs`, driven by `desktop/src/main/onboarding-smoke-probe.ts`, and passed twice on 2026-11-02 (see `story-1-31-electron-onboarding-validation.md`). It was not part of the consolidated pass; it was run separately on 2026-11-10 at `71e6456333` and passed: 11 of 11 checks, 7 captures, `synthetic: true`, `hostedAuth0Proven: false`, no cleanup errors, 44 s. Captures 06 and 07 were inspected: Elias sees no manager controls; Chanda sees Elias as Reviewer. What the journey still does not cover: real keyboard and focus order, other window sizes, restart and lost-response recovery, revocation, private-Task isolation and conversation Stop/Resume.
+- The onboarding gate refuses to start when the parent environment holds a provider-credential-shaped variable. The first 2026-11-10 attempt inherited one from the agent session and was refused with "Owned onboarding fixture unavailable"; Electron then stayed open until the launcher's ten-minute deadline instead of exiting. The gate behaved as designed; the slow failure is a harness wart.
 - Bounded per-scope pending-journal recovery remains unfinished source work.
 - Auth0 real-tenant pilot, production issuer, Resend delivery qualification and owner UI acceptance.

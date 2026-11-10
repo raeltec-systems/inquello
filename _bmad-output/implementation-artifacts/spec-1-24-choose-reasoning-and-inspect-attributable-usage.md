@@ -153,3 +153,9 @@ Specific to this story, passed:
 Still open or not run:
 
 - The named native child test `usage_limit_fixture_refuses_at_native_boundary_and_preserves_local_work` was not selected separately, so it is not confirmed as run.
+
+## Linux Messages runtime suite — 2026-11-10
+
+`inquello_messages_runtime` (Linux-only, `inference-fixtures`) was run inside the `Inquello-Engine` guest and **passed: 13 of 13, none ignored**, in 102 s. Source: frozen archive `c14ad8834d7c…` of commit `71e6456333` (engine and desktop identical to `f992919722`), staged with `desktop/scripts/wsl/stage-source.py`; offline, locked, four jobs, installed Rust 1.99.1, the unchanged isolation guard from `build-guest.sh`. The fixtures app-server and the bubblewrap helper were built from that source and placed side by side, as the installed runtime keeps them. Synthetic transport only; no model call. This supersedes the "not run" entry for this suite in the record above. Details and the two earlier refused or mis-set-up attempts are in [epic-1-offline-pass-2026-11-09.md](epic-1-offline-pass-2026-11-09.md).
+
+Relevant to this story: `usage_limit_fixture_refuses_at_native_boundary_and_preserves_local_work` passed, so the named native child test is now confirmed as run.
