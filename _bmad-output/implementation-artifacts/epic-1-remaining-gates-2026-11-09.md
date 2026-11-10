@@ -85,6 +85,8 @@ Deferred and not proposed for this epic unless the owner says otherwise: 1.27 Re
 
 Constraints: installed tools only, offline, at most four build jobs; D: has about 31 GB free, which is tight for a default build plus a fixtures build.
 
+**Result:** the consolidated pass was run on 2026-11-09/10 and is recorded in [epic-1-offline-pass-2026-11-09.md](epic-1-offline-pass-2026-11-09.md), including what it did not cover.
+
 ## Pile C — owner, paid call or qualified build
 
 | Gate | Stories |
