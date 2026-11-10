@@ -8,15 +8,15 @@ afterEach(()=>{cleanup();delete(globalThis as {inquello?:unknown}).inquello;});
 const permittedTask={taskId:'33333333-3333-4333-8333-333333333333',workspaceId:workspace,engagementId:null,folderId:null,title:'Permitted saved chat',runtimeThreadId:null,sourceRefs:[],artifactRefs:[],visibility:'private',pinned:false,archived:false,revision:1};
 const withheldTaskId='44444444-4444-4444-8444-444444444444';
 function setup(partial=false){
- const state={recovered:false,signedIn:true,workspace};const sessionChanged=new Set<(identity:boolean)=>void>();
+ const state={recovered:false,signedIn:true,workspace};const sessionChanged=new Set<(identity:boolean)=>void>(),usageChanged=new Set<(privateScope:boolean)=>void>();
  const mutations={createTask:vi.fn(),renameTask:vi.fn(),moveTask:vi.fn(),createEngagement:vi.fn(),createFolder:vi.fn(),updateEngagement:vi.fn()};
  const execution={start:vi.fn(),resume:vi.fn(),turn:vi.fn()};
  const getWorkspaces=vi.fn(async()=>({signedIn:state.signedIn,sharedService:'available',workspaces:state.signedIn?[{workspaceId:state.workspace,name:'Fictional Workspace',source:'service'}]:[],engagementCreation:{enabled:false,reason:'Not part of this test'}}));
  const getTree=vi.fn(async():Promise<unknown>=>partial?{ok:true,value:{workspaceId:state.workspace,engagements:[],folders:[],tasks:state.workspace===workspace?[permittedTask,...(state.recovered?[{...permittedTask,taskId:withheldTaskId,title:'Freshly permitted saved chat'}]:[])]:[],unavailableTasks:!state.recovered&&state.workspace===workspace?[{taskId:withheldTaskId,reason:'current_authority_unavailable',title:'WITHHELD PRIVATE TITLE'}]:[]}}:state.recovered?{ok:true,value:{workspaceId:workspace,engagements:[],folders:[],tasks:[]}}:{ok:false,code:'failed',reason:'Private work is unavailable until current access is checked.'});
  const recoverNavigation=vi.fn(async(_input:{workspaceId:string}):Promise<unknown>=>{state.recovered=true;return{ok:true,value:{accepted:true}};});
- (globalThis as {inquello?:unknown}).inquello={organise:{...mutations,getWorkspaces,getTree,recoverNavigation},tasks:{...execution,onSessionChanged:(listener:(identity:boolean)=>void)=>{sessionChanged.add(listener);return()=>{sessionChanged.delete(listener);};}},identity:{signIn:vi.fn()}};
+ (globalThis as {inquello?:unknown}).inquello={organise:{...mutations,getWorkspaces,getTree,recoverNavigation},tasks:{...execution,onSessionChanged:(listener:(identity:boolean)=>void)=>{sessionChanged.add(listener);return()=>{sessionChanged.delete(listener);};}},identity:{signIn:vi.fn()},usage:{onChanged:(listener:(privateScope:boolean)=>void)=>{usageChanged.add(listener);return()=>{usageChanged.delete(listener);};}}};
  render(<Shell onShowSpecimen={()=>{}}/>);
- return{state,getTree,getWorkspaces,recoverNavigation,mutations,execution,changed:(identity=true)=>{for(const listener of [...sessionChanged])listener(identity);}};
+ return{state,getTree,getWorkspaces,recoverNavigation,mutations,execution,changed:(identity=true)=>{for(const listener of [...sessionChanged])listener(identity);},reread:()=>{for(const listener of [...usageChanged])listener(true);}};
 }
 function expectNoExecution(h:ReturnType<typeof setup>){for(const operation of [...Object.values(h.mutations),...Object.values(h.execution)])expect(operation).not.toHaveBeenCalled();}
 describe('explicit recovery from a partial tree with no open Task',()=>{
@@ -57,6 +57,22 @@ describe('explicit recovery from a partial tree with no open Task',()=>{
   await waitFor(()=>{if(change==='identity')expect(screen.getByText('Sign in to see your Workspaces and private Tasks.')).toBeTruthy();else expect(h.getTree).toHaveBeenCalledTimes(2);});
   const reads=h.getTree.mock.calls.length;await act(async()=>resolve({ok:true,value:{accepted:true}}));
   expect(h.getTree).toHaveBeenCalledTimes(reads);expect(screen.queryByRole('link',{name:'Freshly permitted saved chat'})).toBeNull();
+  expect(document.body.textContent).not.toContain('WITHHELD PRIVATE TITLE');expectNoExecution(h);
+ });
+ it('withdraws the access-check notice when a later ordinary read returns every Task',async()=>{
+  const h=setup(true);await screen.findByRole('button',{name:'Refresh workspace'});
+  h.state.recovered=true;await act(async()=>{h.reread();});
+  expect(await screen.findByRole('link',{name:'Freshly permitted saved chat'})).toBeTruthy();
+  await waitFor(()=>expect(screen.queryByRole('button',{name:'Refresh workspace'})).toBeNull());
+  expect(screen.queryByText(/needs a current access check/)).toBeNull();expect(h.recoverNavigation).not.toHaveBeenCalled();expectNoExecution(h);
+ });
+ it('keeps a refused recovery visible when a later ordinary read is still partial',async()=>{
+  const h=setup(true),user=userEvent.setup();const button=await screen.findByRole('button',{name:'Refresh workspace'});
+  h.recoverNavigation.mockResolvedValueOnce({ok:false,code:'failed',reason:'Refused'});
+  await user.click(button);await screen.findByText(/Workspace access could not be restored/);
+  await act(async()=>{h.reread();});
+  expect(await screen.findByRole('link',{name:permittedTask.title})).toBeTruthy();
+  expect(screen.getByText(/Workspace access could not be restored/)).toBeTruthy();expect(screen.queryByText(/needs a current access check/)).toBeNull();
   expect(document.body.textContent).not.toContain('WITHHELD PRIVATE TITLE');expectNoExecution(h);
  });
 });

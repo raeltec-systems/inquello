@@ -87,6 +87,8 @@ import { parseTaskStates, stateBridge, type TaskStatesItem } from './state-bridg
 import { AcceptedRequest, TaskView, type MoveTarget } from './TaskView';
 
 const REFRESH_MS = 30_000;
+/** Shown for a successful tree that withholds some Tasks while none is open. */
+const PARTIAL_TREE_NOTICE = 'Some saved work needs a current access check. Your drafts are kept.';
 export const UNTITLED_TASK = 'Untitled thread';
 
 const blankToNull = (value: string): string | null => (value.trim() === '' ? null : value.trim());
@@ -386,7 +388,9 @@ export function Shell({ active = true, onWorkspaceChanged, onConversationChanged
         draftStore.retain(result.value.workspaceId, [...result.value.tasks.map((item) => item.taskId),...unavailable]);
         setAcceptedTasks(previous=>Object.fromEntries(Object.entries(previous).filter(([taskId])=>!unavailable.has(taskId))));
         if(openTask.current&&unavailable.has(openTask.current)){setOpenTaskId(null);openTask.current=null;setStates(null);setTaskPolicy(null);setNavigationNotice('This Task is currently unavailable. Your draft is kept.');}
-        else if(!openTask.current&&unavailable.size>0)setNavigationNotice('Some saved work needs a current access check. Your drafts are kept.');
+        // Periodic reads must not replace another notice (a refused recovery stays visible), and a later complete tree withdraws this one.
+        else if(!openTask.current&&unavailable.size>0)setNoticeState(previous=>previous&&previous.text!==PARTIAL_TREE_NOTICE?previous:{text:PARTIAL_TREE_NOTICE,kind:'navigation-unavailable'});
+        else if(unavailable.size===0)setNoticeState(previous=>previous?.text===PARTIAL_TREE_NOTICE?null:previous);
         setTree(result.value);
       } else {
         setTree(null); setAcceptedTasks({}); setStates(null); setTaskPolicy(null);

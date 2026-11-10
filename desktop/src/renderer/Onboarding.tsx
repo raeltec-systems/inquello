@@ -27,7 +27,7 @@ function MemberEditor({member,team,disabled,onChange,onRemove}:{member:Team['mem
  <Button size="sm" variant="quiet" onPress={onRemove} disabledReason={disabled}>Remove member</Button></li>;
 }
 export interface OnboardingProps {onBack:()=>void;onIdentityChanged?:()=>void}
-const PENDING_LABEL:Record<string,string>={createWorkspace:'your new Workspace',acceptInvitation:'your invitation acceptance',invite:'your invitation',changeRoles:'your role change',removeMember:'your member removal',revokeInvitation:'your invitation withdrawal'};
+const PENDING_LABEL:Record<NonNullable<OnboardingState['pending']>['kind'],string>={createWorkspace:'your new Workspace',acceptInvitation:'your invitation acceptance',invite:'your invitation',changeRoles:'your role change',removeMember:'your member removal',revokeInvitation:'your invitation withdrawal'};
 export function Onboarding({onBack,onIdentityChanged}:OnboardingProps):ReactElement{
  const api=onboardingBridge(),identity=identityBridge(),organise=organiseBridge();
  const [status,setStatus]=useState<IdentityStatusView|null>(null),[data,setData]=useState<OnboardingState|null>(null),[draft,setDraft]=useState<Draft>(EMPTY);
@@ -118,7 +118,7 @@ export function Onboarding({onBack,onIdentityChanged}:OnboardingProps):ReactElem
   </section>
   {signedIn&&<>
    {data?.discoveryReason&&<p className="iq-onboarding-notice" role="status">{data.discoveryReason}</p>}
-   {data?.pending&&<section className="iq-onboarding-card" aria-labelledby="pending-heading"><h2 id="pending-heading">Your last change needs checking</h2><p>Waiting to confirm: {PENDING_LABEL[data.pending.kind]??'your change'}. It was sent, but Inquello didn’t get a reply, so it may or may not have gone through. Nothing will be sent twice. If the service can’t be reached right now, wait a moment and check again; Inquello also checks when you reopen the app.</p>
+   {data?.pending&&<section className="iq-onboarding-card" aria-labelledby="pending-heading"><h2 id="pending-heading">Your last change needs checking</h2><p>Waiting to confirm: {PENDING_LABEL[data.pending.kind]}. It was sent, but Inquello didn’t get a reply, so it may or may not have gone through. It won’t be applied twice. If the service can’t be reached right now, wait a moment and check again; Inquello also checks when you reopen the app.</p>
     <div className="iq-onboarding-actions"><Button onPress={()=>void reconcile()} pending={busy==='reconcile'}>Check status</Button><Button variant="secondary" disabledReason={busy?'Wait for the current request.':undefined} onPress={()=>api&&setConfirm({title:'Send this change again?',detail:'Inquello first checks whether the original went through. Only if it didn’t, it sends the same change again, exactly as you entered it. It won’t create a second copy.',label:'Send again',run:()=>api.retry(),success:'Your change went through. Your access has been refreshed.'})}>Send it again</Button>
     <Button variant="quiet" disabledReason={data.pending.canDiscard?busy?'Wait for the current request.':undefined:'This change may still go through, so it can’t be discarded yet.'} onPress={()=>api&&setConfirm({title:'Discard this change?',detail:'This is possible because the service rejected it. Inquello checks once more first. What you typed is kept.',label:'Discard this change',run:()=>api.discardPending(),success:'Change discarded. What you typed is still here; review it before trying again.'})}>Discard this change</Button></div></section>}
    <div className="iq-onboarding-grid">

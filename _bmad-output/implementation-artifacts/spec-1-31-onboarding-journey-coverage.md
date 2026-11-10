@@ -95,10 +95,49 @@ context:
 - **Follow-up after completion (2026-11-10), owner-approved wording change.** The interrupted-request panel, its buttons, dialogs and reason strings were reworded in plain language (`Onboarding.tsx`, `onboarding/service.ts`); the probe's text checks and the renderer and smoke tests follow the new strings. Behaviour is unchanged. This supersedes defects 1 and 2 above in part: the panel now names the action in words and says what to do if the service is unreachable. Layout and styling defects stay deferred as design polish.
 - **Probe race fixed.** The interrupted leg checked the held-control reason once, immediately after the panel appeared; while the failed request was still settling the control briefly showed the busy reason, which failed one run. It now waits for the settled reason.
 - **Evidence for the follow-up.** Both type checks exit 0; `onboarding-smoke`, `onboarding-main` and `onboarding-renderer` tests 69 passed, 1 skipped; build exit 0; the two-launch journey passed 15 consecutive runs (sixteen checks each). Before that, a cluster of seven consecutive failures at the first screenshot over about eight minutes was observed and not explained; it is logged in `deferred-work.md`. Capture `11-interrupted-request` inspected with the new wording.
+- **Review pass 1 (2026-11-10).** Patches applied: reconcile-outcome renderer tests (VG1); partial-tree notice no longer replaces another notice and is withdrawn after a complete read, with two regression tests that fail on the old code (EC1, Story 1.30 fix); "It won't be applied twice." (EC3); typed action labels (EC9); explicit show and focus for the onboarding smoke window. Evidence: both type checks exit 0; ten focused suites 163 passed, 1 skipped; build exit 0; journey 6 of 6. The intermittent journey failures logged earlier are explained and fixed; the earlier `deferred-work.md` entry is superseded by a new one.
 
 ## Spec Change Log
 
 - 2026-11-10 — Implementation stopped before any code change: with only the reply dropped, `finish` refreshes and `getState` reconciles at once, so the approved "Lost reply" and "Relaunch recovery" rows could not occur, and product behaviour may not be changed. The owner amended the frozen matrix to a lost reply followed by an outage until relaunch, with automatic recovery afterwards. This avoids a journey that can never pass, or a contrived fault that blocks reads after relaunch. KEEP: the sentinel-plus-one-use-marker relaunch gate, the five check names, captures `08`–`12`, and the unit tests for refused resumes.
+
+## Review Triage Log
+
+### Pass 1 — 2026-11-10
+
+Step-4 review of today's desktop code changes (`daf2dbae7f..f965f60ae6`, 31 files): this spec's journey work, the Story 1.30 partial-tree recovery fix, the test type fixes and the panel wording. Layers: blind hunter (Haiku), edge-case hunter (Sonnet), verification-gap (Sonnet). Verdicts are the coordinating session's, after reading the cited code. No intent_gap or bad_spec entry, so no loopback.
+
+| ID | Finding | Verdict | Evidence | Route |
+|---|---|---|---|---|
+| VG1 | "Check status" outcome messages have no renderer test | medium | Filed pre-verified: no test reaches either `r.value` branch in `Onboarding.tsx` reconcile. | patch: two-case renderer test added |
+| VG2, BH5 | Two-launch logic in `run-seeded-smoke.cjs` has no unit test | low | True; it is exercised only by running the smoke, which is this repo's verification path for the launcher. | defer |
+| VG-o1, BH11 | Probe source check asserts text, not behaviour | low | True and pre-existing in kind; the behavioural proof is the Electron journey. Fix would be a new test design. | reject |
+| VG-o2 | Redundant `ownerDigest` assignment in relaunch | false | The assignment sets the resume manifest's field; it is not a second check. | reject |
+| EC1 | Partial-tree notice can linger or replace another notice | medium | `Shell.tsx` load runs every 30 s and on usage changes; it set the notice on every partial read and never withdrew it after a complete read. Reproduced by two new tests that fail on the old code. | patch: keep an existing notice, withdraw this one after a complete read |
+| EC2 | Armed fault takes whichever onboarding POST comes next | low | True as written, but the probe arms it immediately before the one confirm click and draft saves are local. | reject: unlikely, and a path guard adds complexity |
+| EC3, BH17 | "Nothing will be sent twice" beside "Send it again" | low | The retry can send the same saved request again; what cannot happen is a second application. The sentence was inaccurate. | patch: now "It won't be applied twice." |
+| EC4 | Relaunch skips the renderer secret scan | low | True. `knownSecrets()` holds what this process handled; the first launch scans the same renderer code. | reject: unlikely to expose a new path; adds a block |
+| EC5, BH14 | Log file handles leak when a launch fails | false | The launcher's outer cleanup closes `out` and `err` when defined (`run-seeded-smoke.cjs` cleanup block). | reject |
+| EC6 | Minimum-window resize is a no-op on a maximised window | low | The smoke window is created at a fixed size, never maximised. | reject |
+| EC7 | Sentinel rewrite and marker delete are not atomic | low | A crash between them leaves the run refused, which is the fail-closed outcome for a test run. | reject |
+| EC8 | Fault could consume a sign-in POST if armed early | false | Only the `OnboardingClient` transport is wrapped; sign-in traffic does not pass through it. | reject |
+| EC9 | Action label map not tied to the list of action kinds | low | `Record<string,string>` with a silent fallback. | patch: typed by the pending kind union, fallback removed |
+| BH1 | Shell notice names no next step and has no test | false | The Refresh workspace button renders with this notice kind; five tests cover the branch. | reject |
+| BH2 | Conflict message says "discard it" while discard may be disabled | low | True; the instruction was already in the earlier wording. Discard needs a definitive rejection. | defer with the copy and design polish |
+| BH3 | Copy strings duplicated across probe, renderer and service | low | True; the renderer cannot import main-process constants. | reject |
+| BH4 | Minimum-window check lifts the app's own minimum | false | Intent is layout at the minimum content size; lifting the minimum works round DPI rounding, as the code comment says. | reject |
+| BH6 | Fault hooks ship in the main bundle | low | By design and recorded in Design Notes: reachable only after every gate check, refused when packaged. | reject |
+| BH7 | Dependencies are not shown in the diff | false | Not a defect; both type checks pass. | reject |
+| BH8 | Renderer tests import main-process types | low | Type-only; twelve existing renderer tests already do this. | reject |
+| BH9 | Providers test shim may not refresh | false | It mirrors production wiring in `main.ts`, where `refreshStatus` calls `getStatus()`. | reject |
+| BH10 | Typing punctuation through key events is fragile | low | The probe checks the resulting field value; 20+ passing runs. | reject |
+| BH12 | Unrelated edits bundled | false | Review scope combined four separate commits, each with its own message. | reject |
+| BH13 | `docs/verification.md` not updated | false | That file is the verification contract, not a smoke manual. | reject |
+| BH15 | Printed events could mislead after a failed relaunch | false | The launcher prints the missing report and `ok:false`, as seen in a real failed run. | reject |
+| BH16 | Owner digest in the manifest needs justification | low | SHA-256 of a synthetic principal ID in a local temp folder, used to prove the same owner across launches. | reject |
+| BH18 | Navigation-recovery tests are brittle | low | Exact read counts are the point: they prove no extra private read. | reject |
+
+Found during verification, not by a reviewer: the journey's unexplained failure clusters. Cause established: the launcher starts Electron with a hidden-window start-up flag, Windows can let that flag swallow the first show request, and at failure the window reported `visible=false`; real key events, focus rings and captures then fail. Fixed in `main.ts` by showing and focusing the onboarding smoke window before the probe. Six consecutive passes immediately after a rebuild, the condition that had been failing.
 
 ## Design Notes
 

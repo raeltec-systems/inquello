@@ -193,3 +193,12 @@ for(const denied of [false,true])it(denied?'keeps a discovery denial distinct fr
  if(denied){expect(screen.queryByText('No invitations are waiting for this account.')).toBeNull();expect(screen.getByText(reason)).toBeTruthy();}
  else expect(within(section).getByText('No invitations are waiting for this account.')).toBeTruthy();
 });
+
+for(const applied of [true,false])it(applied?'reports a confirmed change after Check status':'does not claim success when Check status finds no record, and keeps the panel',async()=>{
+ const pending={kind:'createWorkspace',input:{name:'Preserved workspace'},operationId:I,state:'retryable',canDiscard:false};
+ const w=world({...initial,pending});w.api.reconcile.mockResolvedValue((applied?ok:{ok:true,value:null}) as never);render(<Onboarding onBack={()=>{}}/>);await ready();
+ await userEvent.click(screen.getByRole('button',{name:'Check status'}));
+ if(applied){expect(await screen.findByText('Your change went through. Refreshing your access.')).toBeTruthy();expect(screen.queryByText(/no record of this change/)).toBeNull();}
+ else{expect(await screen.findByText(/no record of this change yet\. It may still arrive, so don.t assume it failed/)).toBeTruthy();expect(screen.queryByText(/Your change went through/)).toBeNull();expect(screen.getByRole('heading',{name:'Your last change needs checking'})).toBeTruthy();}
+ expect(w.api.reconcile).toHaveBeenCalledOnce();expect(w.api.retry).not.toHaveBeenCalled();expect(w.api.discardPending).not.toHaveBeenCalled();
+});

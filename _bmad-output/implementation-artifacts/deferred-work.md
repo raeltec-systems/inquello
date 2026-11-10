@@ -202,3 +202,18 @@
   evidence: Between about 07:51 and 07:59 UTC every launch failed within seconds at its first screenshot ("Failure capture unavailable"), starting with a relaunch and then at `first-run` on fresh profiles (`.tmp/epic1-offline-pass-20261109/reword2-onboarding-{1..6}.log`, `reword3-onboarding.log`). The `--visual-only` phase, which also captures pixels, passed at 08:00. From 08:02 the same build passed 1 + 5 runs with a temporary error print in the built probe and 4 unmodified runs. The desktop session was Active throughout. Diagnosis was slowed because the probe records only the failing stage, never the error. Separately, one earlier failure was a real race in the probe (it checked the held-control reason once while the failed request was still settling); that is fixed by waiting for the settled reason. Next step: let the probe record a short, fixed-vocabulary error cause, and capture window and display state on a capture failure.
 
 ---
+- source_spec: `spec-1-31-onboarding-journey-coverage.md`
+  summary: The two-launch relaunch logic in `desktop/scripts/run-seeded-smoke.cjs` has no unit test.
+  evidence: Review pass 1 (VG2, BH5), 2026-11-10. The relaunch decision, the one-use marker write, the report merge and the requirement for both events are exercised only by running the onboarding smoke. Dropping `onboarding-resume` from the required list would not fail any vitest test. Extracting the decision and merge into a pure function with canned reports would close it.
+
+---
+- source_spec: `spec-1-31-onboarding-journey-coverage.md`
+  summary: The onboarding conflict message tells the person to discard a change that the panel may not yet allow them to discard.
+  evidence: Review pass 1 (BH2), 2026-11-10. `ONBOARDING_REASONS.conflict` says to discard the change if it was not applied; discard is enabled only after a definitive rejection. The instruction predates the plain-language rewording. Fold into the copy and design polish.
+
+---
+- source_spec: `spec-1-31-onboarding-journey-coverage.md`
+  summary: Resolved 2026-11-10 — the onboarding journey's failure clusters were caused by a hidden app window, now fixed.
+  evidence: The launcher starts Electron with a hidden-window start-up flag, and Windows can let that flag swallow the process's first show request, depending on start-up timing. A temporary diagnostic showed `visible=false` at failure, with "Onboarding capture deadline" and "Dialog focus did not start visibly inside". `desktop/src/main/main.ts` now shows and focuses the onboarding smoke window before the probe; six consecutive passes followed immediately after a rebuild. This supersedes the "cause not established" entry above. Still worth doing: let the probe record a short fixed-vocabulary cause on failure. The separate `permissions` report stall is not explained by this, because the ordinary smoke window is hidden by design.
+
+---

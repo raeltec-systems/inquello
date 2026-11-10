@@ -436,6 +436,11 @@ async function runSmokeProbe(contents: WebContents): Promise<void> {
     if(!identity)throw new Error('Onboarding identity unavailable');
     const onboardingWindow=BrowserWindow.fromWebContents(contents);
     if(!onboardingWindow)throw new Error('Owned onboarding window unavailable');
+    // The launcher starts Electron with a hidden-window start-up flag, and Windows lets that flag swallow the
+    // process's first show request. The journey's real key events, focus rings and captures need a visible,
+    // focused window, so ask again explicitly (a second request is honoured).
+    if(!onboardingWindow.isVisible())onboardingWindow.show();
+    onboardingWindow.focus();contents.focus();
     const onboardingSize=onboardingWindow.getContentSize(),onboardingMinimum=onboardingWindow.getMinimumSize();
     const report=await probeOnboarding(contents,{fixture:onboardingFixture,identity,
       // Smoke-only: exact minimum content size, independent of native DPI frame rounding.
