@@ -177,3 +177,8 @@
   evidence: See note 3 of `epic-1-offline-pass-2026-11-09.md`. The entry above is kept for history. What remains is repeatability: there is no checked-in script for this run; it used the staging script plus a one-off driver under `.tmp/epic1-offline-pass-20261109/`.
 
 ---
+- source_spec: spec-1-31-customer-onboarding.md
+  summary: Build the bounded per-scope pending journal for onboarding after V1 and the pilot (owner decision 2026-11-10).
+  evidence: The owner approved the design around 2026-11-01 (`_bmad-output/specs/spec-customer-onboarding/service-desktop-handoff.md`, "Final engine checkpoint") and on 2026-11-10 decided to defer building it until after the initial V1 and pilot. Today `desktop/src/main/onboarding/store.ts` holds one pending record per signed-in person and `service.ts` refuses any new onboarding change while it exists; that fails closed and satisfies the story's frozen "reconcile before retry" row. The deferred design keeps several uncertain operations and blocks only conflicting scopes (all create-workspace intents; team changes per Workspace; acceptance by observed Workspace), must migrate existing single-pending records without losing an uncertain envelope, bound the journal size, and take an operation ID on retry/reconcile/discard. Use pilot evidence of how often people hit the single-pending block to prioritise it.
+
+---
