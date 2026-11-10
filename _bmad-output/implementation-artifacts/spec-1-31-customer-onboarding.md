@@ -138,3 +138,19 @@ The following are whole-story verification targets; only the executed checkpoint
 - Final engine commit 3b9a10b27ad52a49a3c97ccb58520256aede907d, tree bc66456f12cdda0031ba3be967629d8002dba99c, matched native build exit 0. Frozen paths/hashes: .tmp/story131-final-matched/matched-build.json. No prior native evidence overwritten.
 - Final-source protocol generation, desktop build and targeted tests all exit 0: **496 passed, 0 failed across 16 files**, including 32 onboarding-main, 15 renderer, 6 identity and 1 route test plus existing security/data-policy/Shell/navigation/conversation suites. PID 9656 terminal exit 0. Logs .tmp/story131-ui-protocol.log, .tmp/story131-ui-build.log, .tmp/story131-ui-tests.log and .tmp/story131-ui-validation.status.
 - **Still incomplete:** actual normal-operation two-person Electron journey and inspected pixels/keyboard/focus/resize, whole desktop regression, and approved bounded scoped pending-journal recovery. Existing single pending operation remains fail-closed; no uncertain envelope is discarded. Production Auth0 and external delivery qualification remain separate. Story/sprint remain in-progress.
+
+## Consolidated offline pass — 2026-11-09/10
+
+Recorded from the Epic 1 consolidated offline verification pass at commit `f992919722` on this Windows host; full gate list, logs and limits are in [epic-1-offline-pass-2026-11-09.md](epic-1-offline-pass-2026-11-09.md). Synthetic and offline only: no live provider, no real credentials, no owner acceptance, and no change to real-data qualification. This supersedes earlier "cargo absent / unrun" entries for the gates listed as passed. Status stays `in-progress` and no task box was changed by this record; the boxes were not re-audited against the code.
+
+Shared gates that passed: `cargo fmt --all -- --check`; native tests for `inquello-domain`, `inquello-protocol`, `inquello-adapters` and `inquello-service` (`test-issuer`, all targets); clippy with warnings as errors on those four crates; default rebuild of CLI, app-server and service; `pnpm run generate:protocol` (816 files, no working-tree change); both desktop type checks; `pnpm run build`; full `pnpm test` (2,270 passed, 0 failed, 21 skipped); seeded Electron smoke (19 of 19 required reports).
+
+Specific to this story, passed:
+
+- The domain, protocol and service suites (`test-issuer`) passed at four jobs, and the whole desktop regression listed as incomplete above now passes.
+
+Still open or not run:
+
+- The onboarding smoke phase (`--onboarding`) was not part of this pass, and the normal-operation two-person Electron journey is still unwritten and unrun.
+- Bounded per-scope pending-journal recovery remains unfinished source work.
+- Auth0 real-tenant pilot, production issuer, Resend delivery qualification and owner UI acceptance.

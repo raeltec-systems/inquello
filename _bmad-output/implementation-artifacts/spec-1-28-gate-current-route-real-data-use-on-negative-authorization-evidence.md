@@ -234,3 +234,20 @@ All retained round-3 patches were applied by the original loop-2 implementer and
 Final executed desktop verification: both TypeScript checks and build pass; 11 focused files / 167 tests pass; full suite 1,403 pass / 2 failing assertions / 5 skipped, with nine additional missing-native-binary collection failures (55 files pass / 10 fail / 1 skipped). Exact failures and commands are retained in `validation/story128-final/`. Native commands including final composition tests cannot start because Cargo is absent. The present 48 generated files are baseline-identical; full stamped 816-file generation remains an explicit gate.
 
 Three independent layers completed in each of three rounds, with every finding individually triaged before grouping. Deferred concerns were appended to deferred-work.md. All confirmed retained source defects are corrected; unverified concerns and native/Windows/provider/auditor acceptance remain open. In accordance with the owner's explicit validation instruction, this spec and story remain in-progress rather than following the generic workflow's automatic done transition. No local Git metadata exists, so no local commit is fabricated. Publication requires separate approval; no merge/deployment/real-data enablement occurred.
+
+## Consolidated offline pass — 2026-11-09/10
+
+Recorded from the Epic 1 consolidated offline verification pass at commit `f992919722` on this Windows host; full gate list, logs and limits are in [epic-1-offline-pass-2026-11-09.md](epic-1-offline-pass-2026-11-09.md). Synthetic and offline only: no live provider, no real credentials, no owner acceptance, and no change to real-data qualification. This supersedes earlier "cargo absent / unrun" entries for the gates listed as passed. Status stays `in-progress` and no task box was changed by this record; the boxes were not re-audited against the code.
+
+Shared gates that passed: `cargo fmt --all -- --check`; native tests for `inquello-domain`, `inquello-protocol`, `inquello-adapters` and `inquello-service` (`test-issuer`, all targets); clippy with warnings as errors on those four crates; default rebuild of CLI, app-server and service; `pnpm run generate:protocol` (816 files, no working-tree change); both desktop type checks; `pnpm run build`; full `pnpm test` (2,270 passed, 0 failed, 21 skipped); seeded Electron smoke (19 of 19 required reports).
+
+Specific to this story, passed:
+
+- `inquello_authorization_runtime` (`inference-fixtures`, 68 cases on both routes) passed 67/68; `messages_allowed` failed once on guest setup and passed twice on re-run.
+- `inquello_behavior_fingerprint`, the app-server binary unit tests (run unfiltered) and `codex-app-server-transport` passed.
+
+Still open or not run:
+
+- `cargo test -p inquello-service --features test-issuer,retained-fixtures --lib coupled_` was not run.
+- The register evidence for `codex-responses` is bound to the 2026-11-03 build digest. On 2026-11-09 the gate was observed refusing real-tier saved reads on the current build, as designed. Any source change, including the test-only changes in `f992919722`, yields a new digest. The owner deferred re-qualification to the end of Epic 1.
+- Messages route qualification, owner two-company acceptance, live export/recovery and the eight "unverified" witnesses in `deferred-work.md`.

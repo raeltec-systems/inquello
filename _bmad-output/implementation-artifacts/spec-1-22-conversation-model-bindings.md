@@ -84,3 +84,18 @@ The same required strict check reaches `engine/codex-rs/exec-server/src/client.r
 `engine/codex-rs/core-plugins/src/mcp_admission.rs` also receives one baseline strict-lint let-chain correction for legacy MCP declaration validation; the same invalid declaration is refused and no plugin/network policy changes.
 
 Required strict Clippy also reaches four baseline core files: `core/src/unified_exec/process_manager.rs`, `core/src/tools/handlers/inquello_progress.rs`, `core/src/tools/registry.rs` and `core/src/inquello_inference.rs`. Support edits only collapse equivalent nested guards into let-chains, remove a JSON-macro borrow-redundant clone, and retain contextual fail-fast handling for fixed schema/previously checked authorization. Cancellation, accounting, tool schema contents, policy conditions and refusal bodies are preserved.
+
+## Consolidated offline pass — 2026-11-09/10
+
+Recorded from the Epic 1 consolidated offline verification pass at commit `f992919722` on this Windows host; full gate list, logs and limits are in [epic-1-offline-pass-2026-11-09.md](epic-1-offline-pass-2026-11-09.md). Synthetic and offline only: no live provider, no real credentials, no owner acceptance, and no change to real-data qualification. This supersedes earlier "cargo absent / unrun" entries for the gates listed as passed. Status stays `in-progress` and no task box was changed by this record; the boxes were not re-audited against the code.
+
+Shared gates that passed: `cargo fmt --all -- --check`; native tests for `inquello-domain`, `inquello-protocol`, `inquello-adapters` and `inquello-service` (`test-issuer`, all targets); clippy with warnings as errors on those four crates; default rebuild of CLI, app-server and service; `pnpm run generate:protocol` (816 files, no working-tree change); both desktop type checks; `pnpm run build`; full `pnpm test` (2,270 passed, 0 failed, 21 skipped); seeded Electron smoke (19 of 19 required reports).
+
+Specific to this story, passed:
+
+- Seeded smoke `visual-reader-jump` and `visual-conversation` reports passed on the fixtures app-server.
+
+Still open or not run:
+
+- The exact commands in `model-bindings-engineering.md` were not consulted, and the 60-second functional and 20-second observation gates were not measured separately.
+- The actual-head CodeRabbit review named here is superseded by the Codex review on the Epic 1 pull request per `CLAUDE.md`; confirm with the owner.

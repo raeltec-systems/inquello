@@ -197,3 +197,21 @@ checks in the candidate recovery record above. No full current-tree epic suite,
 release certification, fresh guest certification, live provider usefulness or
 cumulative owner acceptance is claimed. Story remains in progress for those
 acceptance gates; Epic 1 is not accepted and no eligibility is promoted.
+
+## Consolidated offline pass — 2026-11-09/10
+
+Recorded from the Epic 1 consolidated offline verification pass at commit `f992919722` on this Windows host; full gate list, logs and limits are in [epic-1-offline-pass-2026-11-09.md](epic-1-offline-pass-2026-11-09.md). Synthetic and offline only: no live provider, no real credentials, no owner acceptance, and no change to real-data qualification. This supersedes earlier "cargo absent / unrun" entries for the gates listed as passed. Status stays `in-progress` and no task box was changed by this record; the boxes were not re-audited against the code.
+
+Shared gates that passed: `cargo fmt --all -- --check`; native tests for `inquello-domain`, `inquello-protocol`, `inquello-adapters` and `inquello-service` (`test-issuer`, all targets); clippy with warnings as errors on those four crates; default rebuild of CLI, app-server and service; `pnpm run generate:protocol` (816 files, no working-tree change); both desktop type checks; `pnpm run build`; full `pnpm test` (2,270 passed, 0 failed, 21 skipped); seeded Electron smoke (19 of 19 required reports).
+
+Specific to this story, passed:
+
+- The `*_search_*` cases in `inquello_authorization_runtime` passed on both routes.
+- Seeded smoke `shell-layout` report passed. The full current-tree desktop suite, not claimed on 2026-11-01, now passes.
+- Renderer recovery for partial trees with no open Task was repaired in `99800744e3` with five regression cases.
+
+Still open or not run:
+
+- `node scripts/run-navigation-native.cjs`, the `--navigation` smoke phase and the populated native latency measurement were not run.
+- Saved-history reopening on the current build is blocked by the Story 1.28 qualification gate (observed 2026-11-09 on the retained pilot); see `spec-reopen-retained-pilot-for-live-acceptance.md`.
+- Fresh exact-build guest receipt, the manual Windows audit journey and cumulative owner acceptance.

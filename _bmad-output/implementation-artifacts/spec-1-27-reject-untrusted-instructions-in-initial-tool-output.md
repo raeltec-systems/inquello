@@ -212,3 +212,19 @@ Owner reran after the final product edit: TypeScript/build exit0; focused5 files
 | Limits/races | Existing mounted incomplete/revocation controls pass; exact native late-fence/cancellation/no-Begin regression authored | Native execution and long-running operational acceptance |
 
 Execution tasks remain unchecked where their verification requirement is unrun. User-approved environment limits allow an inspectable candidate, not false done status. Story/tracker remain in-progress. No local Git commit (NO_VCS), remote push, merge or deployment.
+
+## Consolidated offline pass — 2026-11-09/10
+
+Recorded from the Epic 1 consolidated offline verification pass at commit `f992919722` on this Windows host; full gate list, logs and limits are in [epic-1-offline-pass-2026-11-09.md](epic-1-offline-pass-2026-11-09.md). Synthetic and offline only: no live provider, no real credentials, no owner acceptance, and no change to real-data qualification. This supersedes earlier "cargo absent / unrun" entries for the gates listed as passed. Status stays `in-progress` and no task box was changed by this record; the boxes were not re-audited against the code.
+
+Shared gates that passed: `cargo fmt --all -- --check`; native tests for `inquello-domain`, `inquello-protocol`, `inquello-adapters` and `inquello-service` (`test-issuer`, all targets); clippy with warnings as errors on those four crates; default rebuild of CLI, app-server and service; `pnpm run generate:protocol` (816 files, no working-tree change); both desktop type checks; `pnpm run build`; full `pnpm test` (2,270 passed, 0 failed, 21 skipped); seeded Electron smoke (19 of 19 required reports).
+
+Specific to this story, passed:
+
+- `cargo test -p inquello-protocol`, `-p inquello-adapters`, `codex-core --lib inquello_`, `--lib private_command_tests`, `--test all bound_responses_` and `codex-app-server --lib progress_tests` passed.
+
+Still open or not run:
+
+- `private_pre_execution_late_fence_and_cancellation_complete_once_without_begin` was not selected by name; clippy on `codex-core` and `codex-app-server` was not run.
+- `inquello_messages_runtime` (Linux-only) was **not run**.
+- The third acceptance criterion still needs owner-authorized calls to a real model on both routes.

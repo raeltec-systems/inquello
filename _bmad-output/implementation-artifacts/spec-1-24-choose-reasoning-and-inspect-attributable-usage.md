@@ -138,3 +138,18 @@ Desktop build, both TypeScript checks, focused usage/security/regression tests a
   hash-match the pinned baseline; none were manually edited.
 - Seeded Electron/native smoke unrun. Native compiler/tests/fmt and complete-checkout
   generation/acceptance remain owner-run gates. Story remains **in-progress**.
+
+## Consolidated offline pass — 2026-11-09/10
+
+Recorded from the Epic 1 consolidated offline verification pass at commit `f992919722` on this Windows host; full gate list, logs and limits are in [epic-1-offline-pass-2026-11-09.md](epic-1-offline-pass-2026-11-09.md). Synthetic and offline only: no live provider, no real credentials, no owner acceptance, and no change to real-data qualification. This supersedes earlier "cargo absent / unrun" entries for the gates listed as passed. Status stays `in-progress` and no task box was changed by this record; the boxes were not re-audited against the code.
+
+Shared gates that passed: `cargo fmt --all -- --check`; native tests for `inquello-domain`, `inquello-protocol`, `inquello-adapters` and `inquello-service` (`test-issuer`, all targets); clippy with warnings as errors on those four crates; default rebuild of CLI, app-server and service; `pnpm run generate:protocol` (816 files, no working-tree change); both desktop type checks; `pnpm run build`; full `pnpm test` (2,270 passed, 0 failed, 21 skipped); seeded Electron smoke (19 of 19 required reports).
+
+Specific to this story, passed:
+
+- `codex-app-server --lib inquello_` (166/166) passed.
+- Seeded smoke `quota` phase passed on the fixtures app-server.
+
+Still open or not run:
+
+- The named native child test `usage_limit_fixture_refuses_at_native_boundary_and_preserves_local_work` was not selected separately, so it is not confirmed as run.

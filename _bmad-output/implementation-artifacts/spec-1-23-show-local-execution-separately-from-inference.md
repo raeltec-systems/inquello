@@ -138,3 +138,17 @@ All three independent review passes returned; twelve findings were individually 
 The seeded smoke now mounts the actual Task panel and selects a synthetic disabled route through the production service to check main/preload invalidation. It is authored but unrun here, not production-notification acceptance evidence. No real credentials or paid inference were used. Final build, both TypeScript checks and focused tests passed; final full-suite exit is 1 as recorded above.
 
 BMAD presentation is reached, but the owner's accepted deferred native/real-Electron gates override the normal done transition: spec and tracker remain in-progress. There is no local Git repository, no local commit and no publication in this candidate. Prior Story 1.21/1.22 gates remain independent.
+
+## Consolidated offline pass — 2026-11-09/10
+
+Recorded from the Epic 1 consolidated offline verification pass at commit `f992919722` on this Windows host; full gate list, logs and limits are in [epic-1-offline-pass-2026-11-09.md](epic-1-offline-pass-2026-11-09.md). Synthetic and offline only: no live provider, no real credentials, no owner acceptance, and no change to real-data qualification. This supersedes earlier "cargo absent / unrun" entries for the gates listed as passed. Status stays `in-progress` and no task box was changed by this record; the boxes were not re-audited against the code.
+
+Shared gates that passed: `cargo fmt --all -- --check`; native tests for `inquello-domain`, `inquello-protocol`, `inquello-adapters` and `inquello-service` (`test-issuer`, all targets); clippy with warnings as errors on those four crates; default rebuild of CLI, app-server and service; `pnpm run generate:protocol` (816 files, no working-tree change); both desktop type checks; `pnpm run build`; full `pnpm test` (2,270 passed, 0 failed, 21 skipped); seeded Electron smoke (19 of 19 required reports).
+
+Specific to this story, passed:
+
+- Seeded smoke `environments` report passed, which closes the "smoke blocked: no Electron binary" entry above.
+
+Still open or not run:
+
+- Actual Electron keyboard and minimum-width inspection by the owner.

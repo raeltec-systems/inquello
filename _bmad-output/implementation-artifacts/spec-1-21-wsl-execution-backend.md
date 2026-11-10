@@ -79,3 +79,21 @@ Given D-only guest setup, when seeded desktop smoke runs, all 13 reports pass wi
   - A private Task resolves over its retained executor connection, which the Task registers at setup and releases at retirement.
   - An unreachable guest, a failed query or a 10 s timeout means unresolved, so the command asks.
   - Verified only by unit tests with a fake guest channel on Linux. The real WSL connection, the queries, and the extra executor launch per `tools/exec` command have not been run on Windows. See FORK-CUT "Command rules resolve the program inside the Windows Linux guest".
+
+## Consolidated offline pass — 2026-11-09/10
+
+Recorded from the Epic 1 consolidated offline verification pass at commit `f992919722` on this Windows host; full gate list, logs and limits are in [epic-1-offline-pass-2026-11-09.md](epic-1-offline-pass-2026-11-09.md). Synthetic and offline only: no live provider, no real credentials, no owner acceptance, and no change to real-data qualification. This supersedes earlier "cargo absent / unrun" entries for the gates listed as passed. Status stays `in-progress` and no task box was changed by this record; the boxes were not re-audited against the code.
+
+Shared gates that passed: `cargo fmt --all -- --check`; native tests for `inquello-domain`, `inquello-protocol`, `inquello-adapters` and `inquello-service` (`test-issuer`, all targets); clippy with warnings as errors on those four crates; default rebuild of CLI, app-server and service; `pnpm run generate:protocol` (816 files, no working-tree change); both desktop type checks; `pnpm run build`; full `pnpm test` (2,270 passed, 0 failed, 21 skipped); seeded Electron smoke (19 of 19 required reports).
+
+Specific to this story, passed:
+
+- `wsl-backend-integration` and `wsl-data-integration` ran against the real `Inquello-Engine` guest inside the full desktop suite and passed.
+- Seeded smoke `policy`, `tool-bounds` and `permissions` reports passed.
+
+Still open or not run:
+
+- These tests first failed while D: was below the 32 GiB sandbox floor and passed once space was freed; the floor is a hard precondition for this backend.
+- Guest-side exec-server and Linux sandbox suites, and the setup/restart/cancel/export/delete/storage probes, were not run.
+- A first Task after a cold guest start timed out once in the native authorization suite; recorded in `deferred-work.md`.
+- This spec's task boxes have not been reconciled with the code that now exists under `desktop/scripts/wsl/` and `desktop/src/main/runtime/`.
