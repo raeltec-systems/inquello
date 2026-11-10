@@ -55,6 +55,28 @@ pub(crate) fn router(state: Arc<AppState>) -> Router {
         .route("/v1/session/commands", post(session_command))
         .route("/v1/memberships", get(memberships))
         .route("/v1/workspaces", get(list_workspaces))
+        .route("/v1/onboarding/commands", post(onboarding_command))
+        .route(
+            "/v1/onboarding/receipts/{operation}",
+            get(onboarding_receipt),
+        )
+        .route("/v1/invitations", get(onboarding_invitations))
+        .route(
+            "/v1/workspaces/{workspace_id}/invitations",
+            get(managed_invitations),
+        )
+        .route(
+            "/v1/workspaces/{workspace_id}/invitation-deliveries",
+            get(invitation_deliveries),
+        )
+        .route(
+            "/v1/workspaces/{workspace_id}/receipts/{operation}",
+            get(onboarding_workspace_receipt),
+        )
+        .route(
+            "/v1/workspaces/{workspace_id}/members",
+            get(onboarding_members),
+        )
         .route("/v1/workspaces/{workspace_id}/roles", get(workspace_roles))
         .route(
             "/v1/workspaces/{workspace_id}/execution-policy",
@@ -75,6 +97,14 @@ pub(crate) fn router(state: Arc<AppState>) -> Router {
         .route(
             "/v1/workspaces/{workspace_id}/route-approvals/{route_id}",
             get(route_approval_view),
+        )
+        .route(
+            "/v1/workspaces/{workspace_id}/provider-consents/{provider}",
+            get(provider_consent_view).post(provider_consent_command),
+        )
+        .route(
+            "/v1/workspaces/{workspace_id}/provider-consent-receipts/{operation}",
+            get(provider_consent_receipt),
         )
         .route("/v1/invites/{invite_id}/accept", post(accept_invite))
         .layer(axum::middleware::map_response(no_store))
@@ -344,6 +374,167 @@ async fn validate_export_receipt(
             let access = required_bearer(&headers).map_err(ApiError::on_workspace_route)?;
             let receipt_id = workspaces::path_id(&receipt_id)?;
             crate::export_receipts::validate(&state, access, receipt_id, parse(&body)?).await
+        }
+        .await,
+    )
+}
+
+async fn onboarding_command(
+    State(state): SharedState,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    respond(
+        async {
+            crate::onboarding::command(&state, required_bearer(&headers)?, parse(&body)?).await
+        }
+        .await,
+    )
+}
+async fn onboarding_receipt(
+    State(state): SharedState,
+    Path(operation): Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    respond(
+        async { crate::onboarding::receipt(&state, required_bearer(&headers)?, &operation).await }
+            .await,
+    )
+}
+async fn onboarding_invitations(State(state): SharedState, headers: HeaderMap) -> Response {
+    respond(
+        async { crate::onboarding::invitations(&state, required_bearer(&headers)?).await }.await,
+    )
+}
+async fn onboarding_members(
+    State(state): SharedState,
+    Path(workspace_id): Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    respond(
+        async {
+            crate::onboarding::members(
+                &state,
+                required_bearer(&headers)?,
+                workspaces::path_id(&workspace_id)?,
+            )
+            .await
+        }
+        .await,
+    )
+}
+
+async fn onboarding_workspace_receipt(
+    State(state): SharedState,
+    Path((workspace_id, operation)): Path<(String, String)>,
+    headers: HeaderMap,
+) -> Response {
+    respond(
+        async {
+            crate::onboarding::workspace_receipt(
+                &state,
+                required_bearer(&headers)?,
+                workspaces::path_id(&workspace_id)?,
+                &operation,
+            )
+            .await
+        }
+        .await,
+    )
+}
+
+async fn invitation_deliveries(
+    State(state): SharedState,
+    Path(workspace_id): Path<String>,
+    headers: HeaderMap,
+) -> Response {
+    let result = async {
+        let access = required_bearer(&headers).map_err(ApiError::on_workspace_route)?;
+        crate::delivery::statuses(&state, access, workspaces::path_id(&workspace_id)?).await
+    }
+    .await;
+    respond(result)
+}
+
+async fn managed_invitations(
+    State(state): SharedState,
+    Path(workspace_id): Path<String>,
+    axum::extract::RawQuery(query): axum::extract::RawQuery,
+    headers: HeaderMap,
+) -> Response {
+    respond(
+        async {
+            let access = required_bearer(&headers).map_err(ApiError::on_workspace_route)?;
+            let page = crate::onboarding::InvitationPage::parse(query.as_deref())?;
+            crate::onboarding::managed_invitations(
+                &state,
+                access,
+                workspaces::path_id(&workspace_id)?,
+                page,
+            )
+            .await
+        }
+        .await,
+    )
+}
+
+async fn provider_consent_view(
+    State(state): SharedState,
+    Path((workspace_id, provider)): Path<(String, String)>,
+    headers: HeaderMap,
+) -> Response {
+    respond(
+        async {
+            let access = required_bearer(&headers).map_err(ApiError::on_workspace_route)?;
+            crate::provider_consents::view(
+                &state,
+                access,
+                workspaces::path_id(&workspace_id)?,
+                &provider,
+            )
+            .await
+        }
+        .await,
+    )
+}
+
+async fn provider_consent_command(
+    State(state): SharedState,
+    Path((workspace_id, provider)): Path<(String, String)>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    respond(
+        async {
+            let access = required_bearer(&headers).map_err(ApiError::on_workspace_route)?;
+            crate::provider_consents::command(
+                &state,
+                access,
+                workspaces::path_id(&workspace_id)?,
+                &provider,
+                parse(&body)?,
+            )
+            .await
+        }
+        .await,
+    )
+}
+
+async fn provider_consent_receipt(
+    State(state): SharedState,
+    Path((workspace_id, operation)): Path<(String, String)>,
+    headers: HeaderMap,
+) -> Response {
+    respond(
+        async {
+            let access = required_bearer(&headers).map_err(ApiError::on_workspace_route)?;
+            crate::provider_consents::receipt(
+                &state,
+                access,
+                workspaces::path_id(&workspace_id)?,
+                workspaces::path_id(&operation)?,
+            )
+            .await
         }
         .await,
     )

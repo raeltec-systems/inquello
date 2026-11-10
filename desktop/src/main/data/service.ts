@@ -176,7 +176,7 @@ export class DataService {
 
   /** Category ids `data.delete` accepts: enabled categories held in files. */
   deletableCategories(): string[] {
-    return this.policy?.categories.filter((category) => category.enabled && !isStoreCategory(category)).map((category) => category.id) ?? [];
+    return this.policy?.categories.filter((category) => category.enabled && category.id!=='provider-consent-journal' && !isStoreCategory(category)).map((category) => category.id) ?? [];
   }
 
   inventory(): Inventory | null {

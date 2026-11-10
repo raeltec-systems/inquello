@@ -111,6 +111,7 @@ function globDirectory(glob: string): string | null {
 export function validateDeletion(policy: DataPolicy, categories: readonly string[]): void {
   if (categories.length === 0) throw new DeleteError('no category was chosen');
   for (const id of categories) {
+    if(id==='provider-consent-journal')throw new DeleteError('provider permission journals must be reconciled, not discarded; local deletion is not a workspace revoke');
     const category = categoryById(policy, id);
     if (!category) throw new DeleteError(`unknown category ${JSON.stringify(id)}`);
     if (!category.enabled) throw new DeleteError(`${category.label} is disabled and holds nothing to delete`);

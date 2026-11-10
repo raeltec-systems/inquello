@@ -1780,10 +1780,9 @@ async fn on_request_user_input_response(
                     response: empty,
                 })
                 .await
+                && !private_task
             {
-                if !private_task {
-                    error!("failed to submit UserInputAnswer: {err}");
-                }
+                error!("failed to submit UserInputAnswer: {err}");
             }
             return;
         }
@@ -1800,10 +1799,9 @@ async fn on_request_user_input_response(
                     response: empty,
                 })
                 .await
+                && !private_task
             {
-                if !private_task {
-                    error!("failed to submit UserInputAnswer: {err}");
-                }
+                error!("failed to submit UserInputAnswer: {err}");
             }
             return;
         }
@@ -1839,10 +1837,9 @@ async fn on_request_user_input_response(
             response,
         })
         .await
+        && !private_task
     {
-        if !private_task {
-            error!("failed to submit UserInputAnswer: {err}");
-        }
+        error!("failed to submit UserInputAnswer: {err}");
     }
 }
 

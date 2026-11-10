@@ -455,6 +455,110 @@ fn validate_dynamic_tools(tools: &[DynamicToolSpec]) -> Result<(), String> {
     Ok(())
 }
 
+/// Completion belongs to one captured executor incarnation, not a reusable Task
+/// socket. Keeping the receiver on timeout lets a later explicit resume observe
+/// the original cleanup finishing without launching a competing executor.
+#[derive(Clone, Default)]
+struct InquelloExecutorRetirements {
+    entries: Arc<tokio::sync::Mutex<HashMap<ThreadId, Arc<InquelloExecutorRetirement>>>>,
+}
+struct InquelloExecutorRetirement {
+    scope: String,
+    task: String,
+    generation: uuid::Uuid,
+    completion: tokio::sync::watch::Receiver<Option<bool>>,
+}
+struct InquelloExecutorRetirementCompletion {
+    generation: uuid::Uuid,
+    setup_phase: crate::inquello_wsl::ModelSetupPhase,
+    sender: tokio::sync::watch::Sender<Option<bool>>,
+}
+impl InquelloExecutorRetirementCompletion {
+    fn complete(self, confirmed: bool) {
+        let _ = self.sender.send_replace(Some(confirmed));
+    }
+}
+impl Drop for InquelloExecutorRetirementCompletion {
+    fn drop(&mut self) {
+        let unconfirmed = self.sender.borrow().is_none();
+        if unconfirmed {
+            let confirmed =
+                self.setup_phase == crate::inquello_wsl::ModelSetupPhase::NoOutstandingProcess;
+            let _ = self.sender.send_replace(Some(confirmed));
+        }
+    }
+}
+impl InquelloExecutorRetirements {
+    async fn begin(
+        &self,
+        thread: ThreadId,
+        scope: String,
+        task: String,
+        cancellation: &tokio_util::sync::CancellationToken,
+        wait: std::time::Duration,
+    ) -> Result<InquelloExecutorRetirementCompletion, &'static str> {
+        let previous = self.entries.lock().await.get(&thread).cloned();
+        if let Some(previous) = &previous {
+            if previous.scope != scope || previous.task != task {
+                return Err("Previous executor identity does not match this Task");
+            }
+            let mut completion = previous.completion.clone();
+            let confirmed = async {
+                loop {
+                    if let Some(confirmed) = *completion.borrow_and_update() {
+                        return if confirmed {
+                            Ok(())
+                        } else {
+                            Err("Previous executor cleanup is unconfirmed")
+                        };
+                    }
+                    completion
+                        .changed()
+                        .await
+                        .map_err(|_| "Previous executor cleanup completion was lost")?;
+                }
+            };
+            tokio::select! {
+                biased;
+                _ = cancellation.cancelled() => return Err("Task authority changed during executor retirement"),
+                result = tokio::time::timeout(wait, confirmed) => {
+                    result.map_err(|_| "Previous executor cleanup is still pending")??;
+                }
+            }
+        }
+        let mut entries = self.entries.lock().await;
+        if cancellation.is_cancelled() {
+            return Err("Task authority changed during executor retirement");
+        }
+        let unchanged = match (entries.get(&thread), &previous) {
+            (None, None) => true,
+            (Some(current), Some(previous)) => {
+                current.generation == previous.generation && Arc::ptr_eq(current, previous)
+            }
+            _ => false,
+        };
+        if !unchanged {
+            return Err("Executor generation changed during retirement");
+        }
+        let generation = uuid::Uuid::new_v4();
+        let (sender, completion) = tokio::sync::watch::channel(None);
+        entries.insert(
+            thread,
+            Arc::new(InquelloExecutorRetirement {
+                scope,
+                task,
+                generation,
+                completion,
+            }),
+        );
+        Ok(InquelloExecutorRetirementCompletion {
+            generation,
+            sender,
+            setup_phase: Default::default(),
+        })
+    }
+}
+
 #[derive(Clone)]
 pub(crate) struct ThreadRequestProcessor {
     pub(super) auth_manager: Arc<AuthManager>,
@@ -476,6 +580,7 @@ pub(crate) struct ThreadRequestProcessor {
     pub(super) skills_watcher: Arc<SkillsWatcher>,
     pub(super) turn_cost_worker: Option<crate::turn_cost_worker::TurnCostWorkerHandle>,
     pub(super) initial_config_warnings: Arc<Vec<ConfigWarningNotification>>,
+    inquello_executor_retirements: InquelloExecutorRetirements,
 }
 
 /// Whether resume attaches a client or restores a cold runtime during daemon startup.
@@ -537,6 +642,7 @@ impl ThreadRequestProcessor {
             skills_watcher,
             turn_cost_worker,
             initial_config_warnings: Arc::new(initial_config_warnings),
+            inquello_executor_retirements: InquelloExecutorRetirements::default(),
         }
     }
 
@@ -7138,13 +7244,17 @@ impl ThreadRequestProcessor {
             ));
         }
         self.inquello_retained_history(id).await?;
-        if let Ok(loaded) = self.thread_manager.get_thread(id).await {
-            if matches!(loaded.agent_status().await, AgentStatus::Running) {
-                return Err(invalid_request("Retained Task is still running"));
-            }
+        if let Ok(loaded) = self.thread_manager.get_thread(id).await
+            && matches!(loaded.agent_status().await, AgentStatus::Running)
+        {
+            return Err(invalid_request("Retained Task is still running"));
         }
         Ok(())
     }
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Pass the exact retained thread, workspace, route and runtime authority explicitly without combining independent trust inputs."
+    )]
     pub(crate) async fn inquello_resume_private_thread(
         &self,
         connection: ConnectionId,
@@ -7213,6 +7323,10 @@ impl ThreadRequestProcessor {
         )
         .await
     }
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Pass the exact retained thread, workspace, route and runtime authority explicitly without combining independent trust inputs."
+    )]
     async fn inquello_open_private_thread(
         &self,
         connection: ConnectionId,
@@ -7261,6 +7375,20 @@ impl ThreadRequestProcessor {
             ("web_search".into(), serde_json::json!("disabled")),
             ("model_reasoning_summary".into(), serde_json::json!("none")),
         ]);
+        if route.route_id() == inquello_domain::routes::RouteId::CodexResponses {
+            // This exact adapter sends static function schemas and the confirmed
+            // request-level effort. Do not generate optional Responses Lite tool
+            // declarations or effort-update history that it cannot represent.
+            // Retained history is never filtered or rewritten by this choice.
+            overrides.insert(
+                "features.incremental_tools".into(),
+                serde_json::json!(false),
+            );
+            overrides.insert(
+                "features.reasoning_effort_override".into(),
+                serde_json::json!(false),
+            );
+        }
         // Explicitly turn off each inherited MCP endpoint, not only an empty
         // overlay (which would leave merged user/project entries enabled).
         for name in self.config.mcp_servers.get().keys() {
@@ -7306,11 +7434,22 @@ impl ThreadRequestProcessor {
             .map_err(|_| {
                 invalid_request("Selected private runtime configuration could not be applied")
             })?;
+        if route.route_id() == inquello_domain::routes::RouteId::CodexResponses
+            && (config.features.enabled(Feature::IncrementalTools)
+                || config.features.enabled(Feature::ReasoningEffortOverride))
+        {
+            return Err(invalid_request(
+                "Selected model cannot use the required private runtime settings",
+            ));
+        }
         // Built-in provider IDs cannot be redefined by configuration overlays.
         // Disable retries on the selected runtime instance without replacing its
         // endpoint, authentication, or other exact-route properties.
         config.model_provider.request_max_retries = Some(0);
         config.model_provider.stream_max_retries = Some(0);
+        if authorization.0.paid_qualification() {
+            config.model_provider.supports_websockets = false;
+        }
         // Provider defaults explicitly clear inherited user/project values.
         config.model_reasoning_effort = if choices.reasoning == "default" {
             None
@@ -7332,6 +7471,9 @@ impl ThreadRequestProcessor {
             let mut expected = self.config.model_provider.clone();
             expected.request_max_retries = Some(0);
             expected.stream_max_retries = Some(0);
+            if authorization.0.paid_qualification() {
+                expected.supports_websockets = false;
+            }
             if config.model_provider != expected {
                 return Err(invalid_request(
                     "Retained provider differs from selected exact route; no fallback",
@@ -7371,49 +7513,101 @@ impl ThreadRequestProcessor {
                 .0
                 .execution_principal()
                 .ok_or_else(|| invalid_request("Bound execution principal missing"))?;
+            let root = config.cwd.as_path();
+            let scope = crate::inquello_wsl::scope_key(
+                root.parent()
+                    .ok_or_else(|| invalid_request("Private Task parent missing"))?,
+                &principal,
+            )
+            .map_err(|_| invalid_request("Private execution scope unavailable"))?;
+            let task = root
+                .file_name()
+                .and_then(|name| name.to_str())
+                .ok_or_else(|| invalid_request("Private Task identity missing"))?
+                .to_owned();
+            let mut retirement = self
+                .inquello_executor_retirements
+                .begin(
+                    thread_id,
+                    scope,
+                    task,
+                    &authorization.0.cancellation(),
+                    crate::inquello_wsl::EXECUTOR_RETIREMENT_WAIT,
+                )
+                .await
+                .map_err(invalid_request)?;
+            // This generation has not started any resource-bearing work yet.
+            retirement.setup_phase = crate::inquello_wsl::ModelSetupPhase::NoOutstandingProcess;
+            // A predecessor may have taken time to release its guest lock.
+            // Admission before that wait cannot authorize this new incarnation.
+            if authorization.0.before_tool_effect().await.is_err() {
+                retirement.complete(true); // No new guest process has been spawned.
+                return Err(invalid_request(
+                    "Private Task authority changed during executor retirement",
+                ));
+            }
             let plan = crate::inquello_wsl::WslExecPlan::prepare_model(
                 config.cwd.as_path(),
                 &principal,
                 !profile.writable_roots.is_empty(),
                 profile.network_allowlist.clone().unwrap_or_default(),
+                &mut retirement.setup_phase,
             )
             .await
             .map_err(|error| {
                 tracing::warn!("Linux Task setup unavailable: {error:#}");
                 invalid_request("Linux Task storage or isolation unavailable; no local fallback")
             })?;
-            let client = plan.connect().await.map_err(|error| {
-                tracing::warn!("Linux Task executor unavailable: {error:#}");
-                invalid_request("Linux Task executor unavailable; no local fallback")
-            })?;
-            let environment_id = format!("inquello-wsl-{}", uuid::Uuid::new_v4());
+            let environment_id = format!("inquello-wsl-{}", retirement.generation);
             let manager = self.thread_manager.environment_manager();
             let cwd: codex_utils_path_uri::PathUri = format!("file://{}", plan.root())
                 .parse()
                 .map_err(|_| invalid_request("Linux Task root invalid"))?;
-            manager
+            let environment_config = plan
+                .environment_config()
+                .map_err(|_| invalid_request("Linux Task permissions invalid"))?;
+            let client = plan
+                .connect_tracked(&mut retirement.setup_phase)
+                .await
+                .map_err(|error| {
+                    // The tracked boundary distinguishes pure validation/spawn failure
+                    // from a spawned guest whose cleanup remains unconfirmed.
+                    tracing::warn!("Linux Task executor unavailable: {error:#}");
+                    invalid_request("Linux Task executor unavailable; no local fallback")
+                })?;
+            if manager
                 .register_isolated_client(environment_id.clone(), client.clone(), cwd.clone())
-                .map_err(|_| invalid_request("Linux Task registration unavailable"))?;
+                .is_err()
+            {
+                let confirmed = plan.close_and_wait(&client).await.is_ok();
+                retirement.complete(confirmed);
+                return Err(invalid_request("Linux Task registration unavailable"));
+            }
+            // The Task's commands resolve their programs inside this guest,
+            // over this same connection (owner decision 2026-11-05). Without
+            // it they stay unresolved and ask; it never grants anything.
+            if let Err(error) = plan.retain_channel(retirement.generation, &client) {
+                tracing::warn!("Linux program resolution channel unavailable: {error:#}");
+            }
+            let channel_generation = retirement.generation;
             local_request = codex_protocol::protocol::TurnEnvironmentRequest {
                 environment_id,
-                cwd,
-                workspace_roots: vec![
-                    format!("file://{}", plan.root())
-                        .parse()
-                        .map_err(|_| invalid_request("Linux Task root invalid"))?,
-                ],
-                config: codex_protocol::protocol::EnvironmentConfigState::Ready(
-                    plan.environment_config()
-                        .map_err(|_| invalid_request("Linux Task permissions invalid"))?,
-                ),
+                cwd: cwd.clone(),
+                workspace_roots: vec![cwd],
+                config: codex_protocol::protocol::EnvironmentConfigState::Ready(environment_config),
             };
             let revoked = authorization.0.cancellation();
             let finished = authorization.0.execution_lifetime();
             tokio::spawn(async move {
                 tokio::select! {_=revoked.cancelled()=>{},_=finished.cancelled()=>{}}
-                if let Err(error) = plan.close_and_wait(&client).await {
+                plan.release_channel(channel_generation);
+                let cleanup = plan.close_and_wait(&client).await;
+                if let Err(error) = &cleanup {
                     tracing::warn!("Linux Task executor cleanup unconfirmed: {error:#}");
                 }
+                // Publish only after captured-client shutdown AND guest idle
+                // confirmation. A successor cannot race this Task lock probe.
+                retirement.complete(cleanup.is_ok());
             });
         }
         let mut options = StartThreadOptions::new(config);
@@ -7451,16 +7645,21 @@ impl ThreadRequestProcessor {
             .start_thread(options)
             .await
             .map_err(|_| {
+                authorization.0.cancellation().cancel();
                 internal_error("Private retained thread startup failed; reconcile without retry")
             })?;
         if new.thread_id != thread_id || authorization.0.cancellation().is_cancelled() {
+            authorization.0.cancellation().cancel();
             let _ = new.thread.shutdown_and_wait().await;
             return Err(invalid_request(
                 "Private Task linkage or session changed during startup",
             ));
         }
         self.ensure_conversation_listener(thread_id, connection, false)
-            .await?;
+            .await
+            .inspect_err(|_| {
+                authorization.0.cancellation().cancel();
+            })?;
         Ok(new.thread)
     }
     pub(crate) async fn inquello_steer_private_turn(
@@ -7497,6 +7696,10 @@ impl ThreadRequestProcessor {
     }
     /// Submission is not interruption confirmation. The Task journal observes
     /// the real TurnAborted event, retaining stronger local process cancellation.
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "Keep the expected active turn stable through local interrupt queue submission; this await performs no provider or service network I/O."
+    )]
     pub(crate) async fn inquello_interrupt_private_turn(
         &self,
         thread_id: &str,

@@ -592,6 +592,7 @@ pub(crate) use fs_processor::FsRequestProcessor;
 pub(crate) use git_processor::GitRequestProcessor;
 pub(crate) use initialize_processor::InitializeRequestProcessor;
 pub(crate) use inquello_processor::InquelloRequestProcessor;
+pub(crate) use inquello_processor::paid_profile_rpc_allowed;
 pub(crate) use inquello_processor::saved_timeout_error;
 pub use inquello_processor::take_inquello_working_store_env;
 pub(crate) use marketplace_processor::MarketplaceRequestProcessor;

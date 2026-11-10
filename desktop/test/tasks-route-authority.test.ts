@@ -1,4 +1,5 @@
 /** Actual trusted TaskService callback envelopes; service responses are fixtures. */
+import {taskBindingFixture} from './model-fixtures';
 import {describe,it,expect,vi} from 'vitest';
 import {TaskService} from '../src/main/tasks/service';
 import {parseRouteEligibilityCheckRequest,type RouteEligibilityCheckRequest} from '../src/main/identity/wire';
@@ -6,12 +7,12 @@ const id='11111111-1111-4111-8111-111111111111',other='22222222-2222-4222-8222-2
 function fixture(){
  let principal:string|null=id;
  const policy={workspaceId:id,authorizationEpoch:3,policyRevision:2};
- const request=parseRouteEligibilityCheckRequest({identity:{route_id:'codex-responses',deployment:'fixture',endpoint:'https://fixture.invalid',model:'fixture',api_version:'1',configuration_digest:'1'.repeat(64),implementation_digest:'2'.repeat(64),runtime_version:'fixture',contract_version:'1',platform:'linux'},report_digest:'3'.repeat(64),binding:{action:'derive',principal_id:id,session_id:id,task_id:id,workspace_id:id,operation_id:id,generation:1,principal_revision:'1',session_revision:'1',authorization_epoch:'3',policy_revision:'2',approval_revision:'1',processing_scope:'fixture',data_policy_digest:'4'.repeat(64)}},'');
+ const request=parseRouteEligibilityCheckRequest({identity:{schema_version:2,route_id:'codex-responses',deployment:'fixture',endpoint:'https://fixture.invalid',model:'fixture',api_version:'1',adapter_configuration_digest:'1'.repeat(64),implementation_digest:'2'.repeat(64),runtime_version:'fixture',contract_version:'1',platform:'linux'},report_digest:'3'.repeat(64),binding:{action:'derive',principal_id:id,session_id:id,task_id:id,workspace_id:id,operation_id:id,generation:1,principal_revision:'1',session_revision:'1',authorization_epoch:'3',policy_revision:'2',approval_revision:'1',processing_scope:'fixture',data_policy_digest:'4'.repeat(64)}},'');
  const approval={workspace_id:id,route_id:'codex-responses',evidence_digest:request.report_digest,processing_scope:'fixture',data_policy_digest:'4'.repeat(64),issuer:'fixture',operator_reference:'fixture',valid_from:0,expires_at:99,review_at:99,revision:'1',policy_revision:'2',revoked:false};
  const view={approval,authorization_epoch:'3',policy_revision:'2'};
  const routeApproval=vi.fn(async(_workspace:string,_route:string)=>view);
  const routeCheck=vi.fn(async(_workspace:string,r:RouteEligibilityCheckRequest)=>({authority:{binding:r.binding,approval,checked_at:1}}));
- const service=new TaskService({runtime:{ready:()=>true,instance:()=>1,request:vi.fn()},identity:{principalId:()=>principal},syncPrincipal:async()=>{},prepareRoutes:async()=>({ok:true}),freshPolicy:async()=>policy as never,routeApproval,routeCheck});
+ const service=new TaskService({taskBinding:taskBindingFixture,runtime:{ready:()=>true,instance:()=>1,request:vi.fn()},identity:{principalId:()=>principal},syncPrincipal:async()=>{},prepareRoutes:async()=>({ok:true}),freshPolicy:async()=>policy as never,routeApproval,routeCheck});
  return{service,request,view,policy,routeApproval,routeCheck,signOut:()=>{principal=null;}};
 }
 describe('actual native authority route envelopes',()=>{
@@ -23,4 +24,11 @@ describe('actual native authority route envelopes',()=>{
  it('refuses malformed request and mixed discovery/check envelope',async()=>{const d=fixture();for(const envelope of [{workspaceId:id,routeCheck:{}},{workspaceId:id,routeDiscovery:{route_id:'future'}},{workspaceId:id,routeCheck:d.request,routeDiscovery:{route_id:'codex-responses'}}])expect(await d.service.authority(envelope)).toEqual({workspacePolicy:null});expect(d.routeCheck).not.toHaveBeenCalled();expect(d.routeApproval).not.toHaveBeenCalled();});
  it('refuses mismatched service response binding',async()=>{const d=fixture();d.routeCheck.mockImplementationOnce(async()=>({authority:{binding:{...d.request.binding,task_id:other},approval:d.view.approval,checked_at:1}}));expect(await d.service.authority({workspaceId:id,routeCheck:d.request})).toEqual({workspacePolicy:null});});
  it('refuses discovery with mismatched current policy epoch',async()=>{const d=fixture();d.routeApproval.mockResolvedValueOnce({...d.view,authorization_epoch:'2'});expect(await d.service.authority({workspaceId:id,routeDiscovery:{route_id:'codex-responses'}})).toEqual({workspacePolicy:null});});
+});
+
+// Old per-credential proof cannot silently acquire adapter/build semantics.
+it('rejects legacy and unknown evidence identity schemas before service dispatch',async()=>{
+ const d=fixture();
+ for(const version of [undefined,1,3]){const request=structuredClone(d.request) as unknown as {identity:Record<string,unknown>};if(version===undefined){delete request.identity.schema_version;request.identity.configuration_digest=request.identity.adapter_configuration_digest;delete request.identity.adapter_configuration_digest;}else request.identity.schema_version=version;expect(await d.service.authority({workspaceId:id,routeCheck:request})).toEqual({workspacePolicy:null});}
+ expect(d.routeCheck).not.toHaveBeenCalled();
 });

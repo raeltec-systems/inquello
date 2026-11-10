@@ -2,7 +2,7 @@
  * Story 1.14, main process: the organise service with fake runtime, identity
  * and shared service; the operation payload validators; the runtime env.
  */
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, type Mock } from 'vitest';
 
 import { ServiceError } from '../src/main/identity/service-client';
 import type { CreateEngagementEnvelope } from '../src/main/identity/wire';
@@ -62,7 +62,7 @@ function refusal(method: string, kind: string, extra: Record<string, unknown> = 
 interface Harness {
   service: OrganiseService;
   calls: Array<{ method: string; params: unknown }>;
-  routes: { [K in keyof WorkspaceRoutes]: ReturnType<typeof vi.fn> };
+  routes: { [K in keyof WorkspaceRoutes]: Mock<WorkspaceRoutes[K]> };
   identity: { principal: string | null; shared: 'available' | 'unavailable' | 'not-configured' };
   runtime: { instance: object; ready: boolean };
   handlers: Map<string, (params: unknown) => unknown>;
@@ -307,6 +307,7 @@ describe('organise payloads', () => {
     expect(OPERATION_NAMES.filter((name) => name.startsWith('organise.'))).toEqual([
       'organise.getWorkspaces',
       'organise.getTree',
+      'organise.recoverNavigation',
       'organise.search',
       'organise.reopen',
       'organise.setNavigation',
@@ -344,7 +345,7 @@ describe('runtime env', () => {
 describe('ordered successful Workspace observations',()=>{
  it('a delayed allowed list cannot republish a Workspace removed by a newer successful list',async()=>{
   const h=harness();const allowed=await (h.routes.workspaces as unknown as WorkspaceRoutes['workspaces'])('fixture');let release!:(v:unknown)=>void;
-  h.routes.workspaces.mockImplementationOnce(()=>new Promise(resolve=>{release=resolve;}));
+  h.routes.workspaces.mockImplementationOnce(()=>new Promise<never>(resolve=>{release=resolve as (v:unknown)=>void;}));
   const old=h.service.getWorkspaces();
   h.routes.workspaces.mockResolvedValueOnce({...allowed,workspaces:[]});
   expect((await h.service.getWorkspaces()).workspaces).toEqual([]);
@@ -361,4 +362,69 @@ describe('ordered successful Workspace observations',()=>{
   expect((await h.service.getTree(WORKSPACE)).ok).toBe(true);
   expect(h.routes.workspaces).toHaveBeenCalledTimes(4);
  });
+});
+
+
+describe('Workspace tree bounded snapshot retry',()=>{
+  const method='inquello/workspace/tree';
+  const tree=()=>({workspaceId:WORKSPACE,engagements:[engagement],folders:[],tasks:[task]});
+  async function setup(){
+    const h=harness();await h.service.getWorkspaces();h.calls.length=0;h.routes.workspaces.mockClear();
+    const read=vi.fn(async(_params:unknown):Promise<unknown>=>tree());h.handlers.set(method,read);
+    return{h,read};
+  }
+  it('retries one exact stale snapshot under fresh identical membership',async()=>{
+    const{h,read}=await setup();read.mockRejectedValueOnce(refusal(method,'stale_snapshot'));
+    expect((await h.service.getTree(WORKSPACE)).ok).toBe(true);
+    expect(read).toHaveBeenCalledTimes(2);expect(h.routes.workspaces).toHaveBeenCalledTimes(3);
+    expect(h.calls.map(call=>call.method)).toEqual([method,method]);
+    expect(read.mock.calls.map(call=>call[0])).toEqual([{workspaceId:WORKSPACE},{workspaceId:WORKSPACE}]);
+    expect(Object.isFrozen(read.mock.calls[0]![0])).toBe(true);
+  });
+  it('stops after a second stale snapshot',async()=>{
+    const{h,read}=await setup();read.mockRejectedValue(refusal(method,'stale_snapshot'));
+    expect((await h.service.getTree(WORKSPACE)).ok).toBe(false);expect(read).toHaveBeenCalledTimes(2);
+  });
+  it.each(['not_found','session_changed','authority_unknown','unauthenticated','revision_conflict'])('does not retry %s',async kind=>{
+    const{h,read}=await setup();read.mockRejectedValue(refusal(method,kind));
+    expect((await h.service.getTree(WORKSPACE)).ok).toBe(false);expect(read).toHaveBeenCalledTimes(1);
+  });
+  it.each([
+    new RpcResponseError(method,-32001,'Fixed refusal',{inquello:{kind:'stale_snapshot'}}),
+    refusal('inquello/task/reopen','stale_snapshot'),
+    new Error('stale_snapshot'),
+    {rpcCode:-32600,data:{inquello:{kind:'stale_snapshot'}}},
+  ])('requires native typed method/code/kind',async error=>{
+    const{h,read}=await setup();read.mockRejectedValue(error);
+    expect((await h.service.getTree(WORKSPACE)).ok).toBe(false);expect(read).toHaveBeenCalledTimes(1);
+  });
+  it.each(['principal','runtime','ready','membership','revision','service'] as const)('refuses %s change before retry',async change=>{
+    const{h,read}=await setup();const membership=await h.routes.workspaces('synthetic-access');
+    read.mockImplementationOnce(async()=>{
+      if(change==='principal')h.identity.principal=null;
+      else if(change==='runtime')h.runtime.instance={};
+      else if(change==='ready')h.runtime.ready=false;
+      else if(change==='service')h.routes.workspaces.mockRejectedValueOnce(new Error('Unavailable'));
+      else h.routes.workspaces.mockResolvedValue({...membership,workspaces:change==='membership'?[]:membership.workspaces.map(w=>({...w,revision:'2'}))});
+      throw refusal(method,'stale_snapshot');
+    });
+    expect((await h.service.getTree(WORKSPACE)).ok).toBe(false);expect(read).toHaveBeenCalledTimes(1);
+    expect(h.calls.some(call=>call.method==='inquello/tasks/bootstrap')).toBe(false);
+  });
+  it('rechecks membership after the successful second read',async()=>{
+    const{h,read}=await setup();const membership=await h.routes.workspaces('synthetic-access');
+    read.mockRejectedValueOnce(refusal(method,'stale_snapshot')).mockImplementationOnce(async()=>{
+      h.routes.workspaces.mockResolvedValue({...membership,workspaces:[]});return tree();
+    });
+    expect((await h.service.getTree(WORKSPACE)).ok).toBe(false);expect(read).toHaveBeenCalledTimes(2);
+  });
+  it.each([{...tree(),workspaceId:PRINCIPAL},{...tree(),tasks:null}])('refuses wrong-scope or malformed results without retry',async value=>{
+    const{h,read}=await setup();read.mockResolvedValue(value);
+    expect((await h.service.getTree(WORKSPACE)).ok).toBe(false);expect(read).toHaveBeenCalledTimes(1);
+  });
+  it('does not extend snapshot retries to writes',async()=>{
+    const{h}=await setup();const write=vi.fn(()=>{throw refusal('inquello/task/create','stale_snapshot');});h.handlers.set('inquello/task/create',write);
+    expect((await h.service.createTask({operationId:OP,workspaceId:WORKSPACE,engagementId:null,folderId:null,title:'Fictional'})).ok).toBe(false);
+    expect(write).toHaveBeenCalledTimes(1);
+  });
 });

@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { ensurePrivateDirectory } from './private-paths';
+import { ensurePrivateDirectory, isPrivatePath } from './private-paths';
 import { preflightWsl, wslHostEnvironment, wslScope, WSL_STORAGE } from './wsl';
 
 const MAX_BYTES = 256 * 1024 ** 2;
@@ -97,6 +97,48 @@ function atomicJson(target: string, value: unknown): void {
   fs.renameSync(temporary, target);
 }
 
+const MAX_PROFILE_LOCATOR_BYTES = 8 * 1024;
+interface ProfileLocator { version: 1; scope: string; taskParentKey: string }
+/** Read-only locator inspection. The root is checked before entering this helper. */
+function readProfileLocator(folder: string, scope: string, discoveryKey?: string): ProfileLocator {
+  const directory = fs.lstatSync(folder);
+  if (!directory.isDirectory() || directory.isSymbolicLink()) throw new Error('Unsafe execution profile directory');
+  const locator = path.join(folder, 'profile.json');
+  const before = fs.lstatSync(locator);
+  if (!before.isFile() || before.isSymbolicLink() || before.nlink !== 1 || before.size > MAX_PROFILE_LOCATOR_BYTES) throw new Error('Unsafe profile locator');
+  const fd = fs.openSync(locator, 'r');
+  try {
+    const opened = fs.fstatSync(fd);
+    if (!opened.isFile() || opened.nlink !== 1 || opened.ino !== before.ino || opened.dev !== before.dev
+      || opened.size !== before.size || opened.size > MAX_PROFILE_LOCATOR_BYTES) throw new Error('Profile locator changed');
+    // The locator may grow after fstat. Never let a peer-controlled size choose
+    // our allocation or make readFileSync consume an unbounded stream.
+    const buffer = Buffer.alloc(MAX_PROFILE_LOCATOR_BYTES + 1);
+    let bytes = 0;
+    while (bytes < buffer.length) {
+      const count = fs.readSync(fd, buffer, bytes, buffer.length - bytes, bytes);
+      if (count === 0) break;
+      bytes += count;
+    }
+    if (bytes > MAX_PROFILE_LOCATOR_BYTES || bytes !== opened.size) throw new Error('Profile locator size changed');
+    const metadata: unknown = JSON.parse(buffer.subarray(0, bytes).toString('utf8'));
+    if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) throw new Error('Invalid profile locator');
+    const value = metadata as Partial<ProfileLocator>;
+    if (value.version !== 1 || value.scope !== scope || typeof value.taskParentKey !== 'string' || !/^[0-9a-f]{64}$/.test(value.taskParentKey)) throw new Error('Invalid profile locator');
+    let after: fs.Stats, current: fs.Stats, currentDirectory: fs.Stats;
+    try { after = fs.fstatSync(fd); current = fs.lstatSync(locator); currentDirectory = fs.lstatSync(folder); }
+    catch (error) {
+      if (discoveryKey !== undefined && value.taskParentKey !== discoveryKey
+        && (error as NodeJS.ErrnoException).code === 'ENOENT') throw error;
+      throw new Error('Profile locator changed during read');
+    }
+    if (after.size !== opened.size || after.mtimeMs !== opened.mtimeMs || after.nlink !== 1
+      || !current.isFile() || current.isSymbolicLink() || current.nlink !== 1 || current.ino !== opened.ino || current.dev !== opened.dev
+      || !currentDirectory.isDirectory() || currentDirectory.isSymbolicLink() || currentDirectory.ino !== directory.ino || currentDirectory.dev !== directory.dev) throw new Error('Profile locator changed');
+    return value as ProfileLocator;
+  } finally { fs.closeSync(fd); }
+}
+
 export class WslTasks {
   readonly scope: string;
   readonly storage: string;
@@ -116,25 +158,34 @@ export class WslTasks {
   static discoverScopes(taskParent: string): string[] {
     const parent = 'D:\\Inquello\\profiles';
     if (!fs.existsSync(parent)) return [];
-    ensurePrivateDirectory(parent);
+    if (!isPrivatePath(parent, 'directory')) throw new Error('Unsafe execution profile root');
     const key = wslScope(taskParent, '');
     const result: string[] = [];
     for (const scope of fs.readdirSync(parent)) {
       if (!/^[0-9a-f]{64}$/.test(scope)) continue;
       const folder = path.join(parent, scope);
-      ensurePrivateDirectory(folder);
-      const locator = path.join(folder, 'profile.json');
-      if (!fs.existsSync(locator)) continue;
-      const info = fs.lstatSync(locator);
-      if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1) throw new Error('Unsafe profile locator');
-      const metadata = JSON.parse(fs.readFileSync(locator, 'utf8'));
-      if (metadata.version !== 1 || metadata.scope !== scope) throw new Error('Invalid profile locator');
-      if (metadata.taskParentKey === key) result.push(scope);
+      let metadata: ProfileLocator;
+      try { metadata = readProfileLocator(folder, scope, key); }
+      catch (error) {
+        // Another desktop may delete its own profile during enumeration. Only
+        // absence before ownership is known is benign; corruption stays fatal.
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
+        throw error;
+      }
+      if (metadata.taskParentKey !== key) continue;
+      if (!isPrivatePath(folder, 'directory')) throw new Error('Unsafe owned execution profile');
+      result.push(scope);
     }
     return result.sort();
   }
   static forScope(taskParent: string, scope: string): Pick<WslTasks, 'scope' | 'storage' | 'snapshotScope' | 'eraseScope'> {
-    if (!WslTasks.discoverScopes(taskParent).includes(scope)) throw new Error('Scope does not belong to this desktop profile');
+    const parent = 'D:\\Inquello\\profiles';
+    if (!/^[0-9a-f]{64}$/.test(scope) || !isPrivatePath(parent, 'directory')) throw new Error('Unsafe execution profile scope');
+    const folder = path.join(parent, scope);
+    // Validate this exact selected scope, never re-enumerate or repair peers.
+    const metadata = readProfileLocator(folder, scope);
+    if (metadata.taskParentKey !== wslScope(taskParent, '')) throw new Error('Scope does not belong to this desktop profile');
+    if (!isPrivatePath(folder, 'directory')) throw new Error('Unsafe owned execution profile');
     const instance: WslTasks = Object.create(WslTasks.prototype);
     Object.defineProperties(instance, { taskParent: { value: taskParent }, scope: { value: scope },
       storage: { value: path.win32.join('D:\\Inquello\\profiles', scope) } });

@@ -1039,9 +1039,19 @@ pub struct InquelloTaskRouteSetParams {
     pub configuration_revision: u64,
 }
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct InquelloModelDisclosureBinding {
+    pub route_id: String,
+    #[ts(type = "number")]
+    pub configuration_revision: u64,
+    pub active: bool,
+}
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
 pub struct InquelloTaskRouteResponse {
+    pub disclosure_bindings: Vec<InquelloModelDisclosureBinding>,
     pub task_id: String,
     pub workspace_id: String,
     #[ts(type = "number")]
@@ -1084,6 +1094,91 @@ pub struct InquelloRoutesInvalidateParams {
     #[ts(type = "number")]
     pub generation: u64,
     pub task_id: Option<String>,
+}
+
+/// Cached metadata inspection never contacts a provider or refreshes login.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct InquelloModelsCatalogParams {}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloModelChoice {
+    pub choice_id: String,
+    pub provider: String,
+    pub name: String,
+    pub account_access: String,
+    pub qualification: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloModelBindingView {
+    pub binding_id: String,
+    pub provider: String,
+    pub name: String,
+    pub route_id: String,
+    #[ts(type = "number")]
+    pub configuration_revision: u64,
+    pub state: String,
+    #[ts(type = "number")]
+    pub state_revision: u64,
+    pub account_access: String,
+    pub qualification: String,
+    pub available: bool,
+    pub reason: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloModelsCatalogResponse {
+    pub catalog_version: String,
+    pub choices: Vec<InquelloModelChoice>,
+    pub bindings: Vec<InquelloModelBindingView>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct InquelloModelResolveParams {
+    pub operation_id: String,
+    pub catalog_version: String,
+    pub choice_id: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct InquelloModelBindingStateParams {
+    pub operation_id: String,
+    pub binding_id: String,
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+    pub state: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct InquelloModelSelectParams {
+    pub operation_id: String,
+    pub binding_id: String,
+    pub task_id: String,
+    #[ts(type = "number")]
+    pub expected_revision: u64,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export_to = "v2/")]
+pub struct InquelloModelBindingResponse {
+    pub binding: InquelloModelBindingView,
+    pub receipt: InquelloReceipt,
+    pub affected_task_ids: Vec<String>,
 }
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1238,6 +1333,9 @@ pub struct InquelloTasksForThreadResponse {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[ts(export_to = "v2/")]
 pub struct InquelloTasksBootstrapParams {
+    /// Restricts explicit navigation recovery; never replaces a healthy different binding.
+    #[serde(default)]
+    pub recovery_only: bool,
     pub workspace_id: String,
     pub isolated_root: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]

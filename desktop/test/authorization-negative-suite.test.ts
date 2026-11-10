@@ -1,4 +1,5 @@
 /** Executed main-process fixtures only. Native adapters/HTTPS service evidence is separate. */
+import {taskBindingFixture} from './model-fixtures';
 import fs from 'node:fs';
 import {createHash} from 'node:crypto';
 import path from 'node:path';
@@ -30,7 +31,7 @@ describe('current-route authorization desktop negative suite (fixtures, not nati
  it('native ownership uncertainty is not a successful empty export',async()=>{const d=device();d.authority.inspect=async()=>{throw new Error('unproven');};expect(await d.service.exportData()).toMatchObject({ok:false});expect(fs.existsSync(d.destination)).toBe(false);});
  it('revocation during slow export stops the next chunk and suppresses successful result',async()=>{const d=device();let n=0;const check=d.authority.check;d.authority.check=async(p,a)=>{if(++n===4)d.revoke();await check(p,a);};expect(await d.service.exportData()).toMatchObject({ok:false});expect(fs.existsSync(path.join(d.destination,'manifest.json'))).toBe(false);});
  it('late allowed authority cannot revive a newer main generation fence',async()=>{
-  let resolve!:(v:never)=>void;let calls=0;const service=new TaskService({runtime:{ready:()=>true,instance:()=>1,request:vi.fn()},identity:{principalId:()=>PRINCIPAL},syncPrincipal:async()=>{},prepareRoutes:async()=>({ok:true}),freshPolicy:async()=>++calls===1?await new Promise<never>(r=>{resolve=r;}):null});
+  let resolve!:(v:never)=>void;let calls=0;const service=new TaskService({taskBinding:taskBindingFixture,runtime:{ready:()=>true,instance:()=>1,request:vi.fn()},identity:{principalId:()=>PRINCIPAL},syncPrincipal:async()=>{},prepareRoutes:async()=>({ok:true}),freshPolicy:async()=>++calls===1?await new Promise<never>(r=>{resolve=r;}):null});
   const pending=service.authority({workspaceId:PRINCIPAL});expect(await service.authority({workspaceId:PRINCIPAL})).toEqual({workspacePolicy:null});resolve({workspaceId:PRINCIPAL,policyRevision:1,authorizationEpoch:1} as never);expect(await pending).toEqual({workspacePolicy:null});
  });
  it('unknown evidence or input classification fields are rejected at the strict service wire',()=>{expect(()=>parseRouteEligibilityCheckRequest({identity:{route_id:'claude-subscription'},report_digest:'claimed',binding:{dataTier:'real'}},'')).toThrow();});
@@ -80,7 +81,7 @@ describe('current-route authorization desktop negative suite (fixtures, not nati
  });
  it.each([false,true])('revoked suppressed terminal activity requires actual native stop before Local Data (stop failure=%s)',async failStop=>{
   const d=device();const instance={};const input={workspaceId:PRINCIPAL,routeId:'codex-responses' as const,configurationRevision:1,operationId:PRINCIPAL,engagementId:null,folderId:null,request:'Fictional draft preserved',reasoning:'default',speed:'default'};
-  const tasks=new TaskService({runtime:{ready:()=>true,instance:()=>instance,request:async()=>({operationId:PRINCIPAL,taskId:PRINCIPAL,runId:PRINCIPAL,threadId:PRINCIPAL,status:'running',request:input.request,accepted:true}) as never},identity:{principalId:()=>PRINCIPAL},syncPrincipal:async()=>{},prepareRoutes:async()=>({ok:true}),freshPolicy:async()=>({workspaceId:PRINCIPAL} as never)});
+  const tasks=new TaskService({taskBinding:taskBindingFixture,runtime:{ready:()=>true,instance:()=>instance,request:async()=>({operationId:PRINCIPAL,taskId:PRINCIPAL,runId:PRINCIPAL,threadId:PRINCIPAL,status:'running',request:input.request,accepted:true}) as never},identity:{principalId:()=>PRINCIPAL},syncPrincipal:async()=>{},prepareRoutes:async()=>({ok:true}),freshPolicy:async()=>({workspaceId:PRINCIPAL} as never)});
   await tasks.start(input);Object.assign(d.runtime,{activeTasks:()=>tasks.activeTasks(),canQuiesceUncertainActivity:()=>tasks.canQuiesceUncertainActivity()});
   expect((await d.service.deleteData(['working-store'])).ok).toBe(false);expect(d.runtime.stop).not.toHaveBeenCalled();
   tasks.invalidate();d.revoke();expect(tasks.activeTasks()).toBe(1);

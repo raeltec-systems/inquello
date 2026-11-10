@@ -1,0 +1,3550 @@
+{
+  "schema": "inquello-composed-authorization-verification-v5",
+  "suite": "inquello-current-route-negative-authorization-v5",
+  "generatedAt": "2026-11-03T12:55:36.158Z",
+  "reviewStatus": "review-required; NOT attached capability evidence or organization consent",
+  "platform": "x86_64-pc-windows-msvc",
+  "sourceProvenance": {
+    "recorded": "2026-11-03T12:06:35.110Z",
+    "head": "e011a567a6a8bcc46ed92a66cd220c09a6ca718b",
+    "engineTree": "a572f79fb91b08239de2c8beac753604b5e4ce29",
+    "modifiedFiles": [
+      {
+        "path": "desktop/src/protocol/schema-stamp.json",
+        "sha256": "6d820360308c7ba1f69a2c3078f0c0cf90ecc9aba8a2c47de6af1d4e88e5cf03"
+      }
+    ],
+    "untrackedEngineDesktop": [],
+    "sourceDeltaSha256": "ea1cb76c437d250c8f8584538d97d6c914af374202c3e7fb2df1c9fa64377769"
+  },
+  "buildIdentities": {
+    "default": {
+      "buildOutput": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\build\\codex-app-server-e3f69316c7f82ce7\\output",
+      "buildOutputCopy": "D:/Projects/inquello/.tmp/production-consent-parity-native-final-20261103/default/build-output.txt",
+      "buildOutputSha256": "93e1ac87765224e53bc3133029f1f2aab1ad24ac72cc9fcc458b55a9fdd446b0",
+      "features": "default",
+      "identity": [
+        "cargo:rustc-env=INQUELLO_BEHAVIOR_DIGEST=932afd01a5044d85a1c068e60b43c11952fc2be06b9b67d3c00b65a0e4dfb014",
+        "cargo:rustc-env=INQUELLO_BUILD_PLATFORM=x86_64-pc-windows-msvc",
+        "cargo:rustc-env=INQUELLO_DATA_POLICY_DIGEST=3a5a841c43d62482157d95e37c1f327be98bc7d4650c03f14a32ff8e0dcd875a"
+      ]
+    },
+    "recorded": "2026-11-03T12:06:32.479Z",
+    "fixture": {
+      "identity": [
+        "cargo:rustc-env=INQUELLO_BEHAVIOR_DIGEST=bc94c15c975d8b9ba60842770884c7579b45c9af05cf0a0284cc94da73766d5f",
+        "cargo:rustc-env=INQUELLO_BUILD_PLATFORM=x86_64-pc-windows-msvc",
+        "cargo:rustc-env=INQUELLO_DATA_POLICY_DIGEST=3a5a841c43d62482157d95e37c1f327be98bc7d4650c03f14a32ff8e0dcd875a"
+      ],
+      "features": "default,inference-fixtures",
+      "buildOutputSha256": "eda0327689d109edc1f2cd9b591217e60fefcb5345bd99e5270a46b6e0752154"
+    }
+  },
+  "routeIdentity": {
+    "schema_version": 2,
+    "route_id": "codex-responses",
+    "deployment": "openai-api",
+    "endpoint": "https://api.openai.com/v1/responses",
+    "model": "gpt-6.1-terra",
+    "api_version": "responses-v1",
+    "adapter_configuration_digest": "dd24d75f25112720ade3a1243dd05bb6f25a9d92b101851d01cdbd028b08053a",
+    "implementation_digest": "932afd01a5044d85a1c068e60b43c11952fc2be06b9b67d3c00b65a0e4dfb014",
+    "runtime_version": "0.165.0",
+    "contract_version": "inquello-v1-authorization-v2",
+    "platform": "x86_64-pc-windows-msvc"
+  },
+  "testedDefaultArtifact": {
+    "name": "codex-app-server",
+    "path": "D:/Projects/inquello/.tmp/production-consent-parity-native-final-20261103/default/codex-app-server.exe",
+    "sha256": "f2ea08ba35fef79aefaa7f237c5e91d4939e2e31d3c7257ef6d90f58bbeeebcd",
+    "features": []
+  },
+  "processingScope": "OpenAI API Responses processing for exact supported Terra configuration; requires reviewed build evidence, fresh per-operation workspace approval, current credential ownership and creator-private Task authority.",
+  "dataPolicyDigest": "3a5a841c43d62482157d95e37c1f327be98bc7d4650c03f14a32ff8e0dcd875a",
+  "desktopBuildArtifact": {
+    "source": {
+      "recorded": "2026-11-03T12:06:35.110Z",
+      "head": "e011a567a6a8bcc46ed92a66cd220c09a6ca718b",
+      "engineTree": "a572f79fb91b08239de2c8beac753604b5e4ce29",
+      "modifiedFiles": [
+        {
+          "path": "desktop/src/protocol/schema-stamp.json",
+          "sha256": "6d820360308c7ba1f69a2c3078f0c0cf90ecc9aba8a2c47de6af1d4e88e5cf03"
+        }
+      ],
+      "untrackedEngineDesktop": [],
+      "sourceDeltaSha256": "ea1cb76c437d250c8f8584538d97d6c914af374202c3e7fb2df1c9fa64377769"
+    },
+    "path": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-20261103\\desktop-dist",
+    "sha256": "3b569ee82ba2ddd13c65f1f323461b1a82967e2c84b9ec3745d3e3a9e2392f1b",
+    "hashAlgorithm": "Existing pilot hashDesktopDist sorted framed path/length/content SHA256",
+    "recorded": "2026-11-03T12:23:22.876Z",
+    "scope": "Canonical preattachment Desktop bytes; final qualified delivery may regenerate only provenance stamp and must record separate exact dist"
+  },
+  "desktopExecutionOrder": {
+    "sourceSuiteBeforeCanonicalBuild": true,
+    "sourceSuitePriorCandidateInputs": {
+      "head": "d229b3f944c3672aadf95a14c377eb3293db56e7",
+      "modifiedFiles": [
+        {
+          "path": "desktop/src/main/smoke-probe.ts",
+          "sha256": "875a5e1ea01c7a5d5e512b180f2617b4d8243097da94921aad30e1dd32b60c3c"
+        },
+        {
+          "path": "desktop/src/preload/preload.ts",
+          "sha256": "544beea746c720f25b911de271f94e6d1a2de6f987fa5adb138a97c03278aebb"
+        },
+        {
+          "path": "desktop/src/protocol/schema-stamp.json",
+          "sha256": "6d820360308c7ba1f69a2c3078f0c0cf90ecc9aba8a2c47de6af1d4e88e5cf03"
+        },
+        {
+          "path": "desktop/test/security.test.ts",
+          "sha256": "eca57eec98dea1c989d476f9d51dcee224f6dd70b227de6a47a9c5bfe3d8f221"
+        }
+      ],
+      "defaultBinaries": [
+        {
+          "name": "codex",
+          "path": "D:/Projects/inquello/.tmp/production-consent-terminal-native-final-20261103/default/codex.exe",
+          "sha256": "58b3603b9277e8648c7cfc9290c6a63a2c7ed2817ce4fe4840ff3183848279b5",
+          "cargoArtifact": {
+            "reason": "compiler-artifact",
+            "package_id": "path+file:///D:/Projects/inquello/engine/codex-rs/cli#codex-cli@0.165.0",
+            "manifest_path": "D:\\Projects\\inquello\\engine\\codex-rs\\cli\\Cargo.toml",
+            "target": {
+              "kind": [
+                "bin"
+              ],
+              "crate_types": [
+                "bin"
+              ],
+              "name": "codex",
+              "src_path": "D:\\Projects\\inquello\\engine\\codex-rs\\cli\\src\\main.rs",
+              "edition": "2024",
+              "doc": true,
+              "doctest": false,
+              "test": true
+            },
+            "profile": {
+              "opt_level": "0",
+              "debuginfo": "line-tables-only",
+              "debug_assertions": true,
+              "overflow_checks": true,
+              "test": false
+            },
+            "features": [],
+            "filenames": [
+              "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\codex.exe",
+              "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\codex.pdb"
+            ],
+            "executable": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\codex.exe",
+            "fresh": false
+          }
+        },
+        {
+          "name": "codex-app-server",
+          "path": "D:/Projects/inquello/.tmp/production-consent-terminal-native-final-20261103/default/codex-app-server.exe",
+          "sha256": "5b5bf8cb1f2271a64de7980f5f8deb7fe81333d98a175da52affc7ad42f935f0",
+          "cargoArtifact": {
+            "reason": "compiler-artifact",
+            "package_id": "path+file:///D:/Projects/inquello/engine/codex-rs/app-server#codex-app-server@0.165.0",
+            "manifest_path": "D:\\Projects\\inquello\\engine\\codex-rs\\app-server\\Cargo.toml",
+            "target": {
+              "kind": [
+                "bin"
+              ],
+              "crate_types": [
+                "bin"
+              ],
+              "name": "codex-app-server",
+              "src_path": "D:\\Projects\\inquello\\engine\\codex-rs\\app-server\\src\\main.rs",
+              "edition": "2024",
+              "doc": true,
+              "doctest": false,
+              "test": true
+            },
+            "profile": {
+              "opt_level": "0",
+              "debuginfo": "line-tables-only",
+              "debug_assertions": true,
+              "overflow_checks": true,
+              "test": false
+            },
+            "features": [],
+            "filenames": [
+              "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\codex-app-server.exe",
+              "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\codex_app_server.pdb"
+            ],
+            "executable": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\codex-app-server.exe",
+            "fresh": false
+          }
+        },
+        {
+          "name": "inquello-service",
+          "path": "D:/Projects/inquello/.tmp/production-consent-terminal-native-final-20261103/default/inquello-service.exe",
+          "sha256": "07ee96a425ce717ac5449024b54e94a20e9c414da5a2292a205d3caa7330878e",
+          "cargoArtifact": {
+            "reason": "compiler-artifact",
+            "package_id": "path+file:///D:/Projects/inquello/engine/codex-rs/inquello-service#0.165.0",
+            "manifest_path": "D:\\Projects\\inquello\\engine\\codex-rs\\inquello-service\\Cargo.toml",
+            "target": {
+              "kind": [
+                "bin"
+              ],
+              "crate_types": [
+                "bin"
+              ],
+              "name": "inquello-service",
+              "src_path": "D:\\Projects\\inquello\\engine\\codex-rs\\inquello-service\\src\\bin\\inquello-service.rs",
+              "edition": "2024",
+              "doc": true,
+              "doctest": false,
+              "test": true
+            },
+            "profile": {
+              "opt_level": "0",
+              "debuginfo": "line-tables-only",
+              "debug_assertions": true,
+              "overflow_checks": true,
+              "test": false
+            },
+            "features": [],
+            "filenames": [
+              "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\inquello-service.exe",
+              "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\inquello_service.pdb"
+            ],
+            "executable": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\inquello-service.exe",
+            "fresh": false
+          }
+        }
+      ],
+      "topology": {
+        "path": "D:/Projects/inquello/.tmp/production-consent-terminal-native-final-20261103/desktop-topology/inquello-dev-topology.exe",
+        "sha256": "11adb6024ae8b6dacf2882cbef366688e976dc59f686840ad11a534a4e5ac41b",
+        "cargoArtifact": {
+          "reason": "compiler-artifact",
+          "package_id": "path+file:///D:/Projects/inquello/engine/codex-rs/inquello-service#0.165.0",
+          "manifest_path": "D:\\Projects\\inquello\\engine\\codex-rs\\inquello-service\\Cargo.toml",
+          "target": {
+            "kind": [
+              "bin"
+            ],
+            "crate_types": [
+              "bin"
+            ],
+            "name": "inquello-dev-topology",
+            "src_path": "D:\\Projects\\inquello\\engine\\codex-rs\\inquello-service\\src\\bin\\inquello-dev-topology.rs",
+            "edition": "2024",
+            "required-features": [
+              "test-issuer"
+            ],
+            "doc": true,
+            "doctest": false,
+            "test": true
+          },
+          "profile": {
+            "opt_level": "0",
+            "debuginfo": "line-tables-only",
+            "debug_assertions": true,
+            "overflow_checks": true,
+            "test": false
+          },
+          "features": [
+            "test-issuer"
+          ],
+          "filenames": [
+            "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\inquello-dev-topology.exe",
+            "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\inquello_dev_topology.pdb"
+          ],
+          "executable": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\inquello-dev-topology.exe",
+          "fresh": true
+        }
+      },
+      "distSha256": "e7819f185cac65552843dd3f104c3ebb412362d444f98ede238be8d7c4decf96",
+      "recorded": "2026-11-03T11:47:33.154Z",
+      "limitation": "Source-only Desktop verification with pinned prior-candidate native behavior; not final rematched native qualification. No primary dist writes."
+    },
+    "sourceSuiteDistStability": {
+      "head": "d229b3f944c3672aadf95a14c377eb3293db56e7",
+      "modifiedFiles": [
+        {
+          "path": "desktop/src/main/smoke-probe.ts",
+          "sha256": "875a5e1ea01c7a5d5e512b180f2617b4d8243097da94921aad30e1dd32b60c3c"
+        },
+        {
+          "path": "desktop/src/preload/preload.ts",
+          "sha256": "544beea746c720f25b911de271f94e6d1a2de6f987fa5adb138a97c03278aebb"
+        },
+        {
+          "path": "desktop/src/protocol/schema-stamp.json",
+          "sha256": "6d820360308c7ba1f69a2c3078f0c0cf90ecc9aba8a2c47de6af1d4e88e5cf03"
+        },
+        {
+          "path": "desktop/test/security.test.ts",
+          "sha256": "eca57eec98dea1c989d476f9d51dcee224f6dd70b227de6a47a9c5bfe3d8f221"
+        }
+      ],
+      "defaultBinaries": [
+        {
+          "name": "codex",
+          "path": "D:/Projects/inquello/.tmp/production-consent-terminal-native-final-20261103/default/codex.exe",
+          "sha256": "58b3603b9277e8648c7cfc9290c6a63a2c7ed2817ce4fe4840ff3183848279b5",
+          "cargoArtifact": {
+            "reason": "compiler-artifact",
+            "package_id": "path+file:///D:/Projects/inquello/engine/codex-rs/cli#codex-cli@0.165.0",
+            "manifest_path": "D:\\Projects\\inquello\\engine\\codex-rs\\cli\\Cargo.toml",
+            "target": {
+              "kind": [
+                "bin"
+              ],
+              "crate_types": [
+                "bin"
+              ],
+              "name": "codex",
+              "src_path": "D:\\Projects\\inquello\\engine\\codex-rs\\cli\\src\\main.rs",
+              "edition": "2024",
+              "doc": true,
+              "doctest": false,
+              "test": true
+            },
+            "profile": {
+              "opt_level": "0",
+              "debuginfo": "line-tables-only",
+              "debug_assertions": true,
+              "overflow_checks": true,
+              "test": false
+            },
+            "features": [],
+            "filenames": [
+              "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\codex.exe",
+              "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\codex.pdb"
+            ],
+            "executable": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\codex.exe",
+            "fresh": false
+          }
+        },
+        {
+          "name": "codex-app-server",
+          "path": "D:/Projects/inquello/.tmp/production-consent-terminal-native-final-20261103/default/codex-app-server.exe",
+          "sha256": "5b5bf8cb1f2271a64de7980f5f8deb7fe81333d98a175da52affc7ad42f935f0",
+          "cargoArtifact": {
+            "reason": "compiler-artifact",
+            "package_id": "path+file:///D:/Projects/inquello/engine/codex-rs/app-server#codex-app-server@0.165.0",
+            "manifest_path": "D:\\Projects\\inquello\\engine\\codex-rs\\app-server\\Cargo.toml",
+            "target": {
+              "kind": [
+                "bin"
+              ],
+              "crate_types": [
+                "bin"
+              ],
+              "name": "codex-app-server",
+              "src_path": "D:\\Projects\\inquello\\engine\\codex-rs\\app-server\\src\\main.rs",
+              "edition": "2024",
+              "doc": true,
+              "doctest": false,
+              "test": true
+            },
+            "profile": {
+              "opt_level": "0",
+              "debuginfo": "line-tables-only",
+              "debug_assertions": true,
+              "overflow_checks": true,
+              "test": false
+            },
+            "features": [],
+            "filenames": [
+              "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\codex-app-server.exe",
+              "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\codex_app_server.pdb"
+            ],
+            "executable": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\codex-app-server.exe",
+            "fresh": false
+          }
+        },
+        {
+          "name": "inquello-service",
+          "path": "D:/Projects/inquello/.tmp/production-consent-terminal-native-final-20261103/default/inquello-service.exe",
+          "sha256": "07ee96a425ce717ac5449024b54e94a20e9c414da5a2292a205d3caa7330878e",
+          "cargoArtifact": {
+            "reason": "compiler-artifact",
+            "package_id": "path+file:///D:/Projects/inquello/engine/codex-rs/inquello-service#0.165.0",
+            "manifest_path": "D:\\Projects\\inquello\\engine\\codex-rs\\inquello-service\\Cargo.toml",
+            "target": {
+              "kind": [
+                "bin"
+              ],
+              "crate_types": [
+                "bin"
+              ],
+              "name": "inquello-service",
+              "src_path": "D:\\Projects\\inquello\\engine\\codex-rs\\inquello-service\\src\\bin\\inquello-service.rs",
+              "edition": "2024",
+              "doc": true,
+              "doctest": false,
+              "test": true
+            },
+            "profile": {
+              "opt_level": "0",
+              "debuginfo": "line-tables-only",
+              "debug_assertions": true,
+              "overflow_checks": true,
+              "test": false
+            },
+            "features": [],
+            "filenames": [
+              "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\inquello-service.exe",
+              "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\inquello_service.pdb"
+            ],
+            "executable": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\inquello-service.exe",
+            "fresh": false
+          }
+        }
+      ],
+      "topology": {
+        "path": "D:/Projects/inquello/.tmp/production-consent-terminal-native-final-20261103/desktop-topology/inquello-dev-topology.exe",
+        "sha256": "11adb6024ae8b6dacf2882cbef366688e976dc59f686840ad11a534a4e5ac41b",
+        "cargoArtifact": {
+          "reason": "compiler-artifact",
+          "package_id": "path+file:///D:/Projects/inquello/engine/codex-rs/inquello-service#0.165.0",
+          "manifest_path": "D:\\Projects\\inquello\\engine\\codex-rs\\inquello-service\\Cargo.toml",
+          "target": {
+            "kind": [
+              "bin"
+            ],
+            "crate_types": [
+              "bin"
+            ],
+            "name": "inquello-dev-topology",
+            "src_path": "D:\\Projects\\inquello\\engine\\codex-rs\\inquello-service\\src\\bin\\inquello-dev-topology.rs",
+            "edition": "2024",
+            "required-features": [
+              "test-issuer"
+            ],
+            "doc": true,
+            "doctest": false,
+            "test": true
+          },
+          "profile": {
+            "opt_level": "0",
+            "debuginfo": "line-tables-only",
+            "debug_assertions": true,
+            "overflow_checks": true,
+            "test": false
+          },
+          "features": [
+            "test-issuer"
+          ],
+          "filenames": [
+            "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\inquello-dev-topology.exe",
+            "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\inquello_dev_topology.pdb"
+          ],
+          "executable": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\inquello-dev-topology.exe",
+          "fresh": true
+        }
+      },
+      "distSha256": "e7819f185cac65552843dd3f104c3ebb412362d444f98ede238be8d7c4decf96",
+      "recorded": "2026-11-03T11:58:31.969Z",
+      "limitation": "Source-only Desktop verification with pinned prior-candidate native behavior; not final rematched native qualification. No primary dist writes."
+    },
+    "finalMatchedSubset": {
+      "passed": 47,
+      "skipped": 8,
+      "dependencyAudit": {
+        "recorded": "2026-11-03T11:52:54.548Z",
+        "purpose": "Read-only dependency audit for final matched subset; NOT execution evidence",
+        "runtimeBacked": [
+          {
+            "path": "desktop/test/integration.test.ts",
+            "sha256": "e9d439bff329f316c1a305528a5ae905984819e61da420fdf73ef6494cf69d22"
+          },
+          {
+            "path": "desktop/test/capabilities-integration.test.ts",
+            "sha256": "825c5ebb12be769a13e4becc27ee4da98a2c301053cdc589bd4f592a91c15bf7"
+          },
+          {
+            "path": "desktop/test/data-integration.test.ts",
+            "sha256": "94be69a317845b5cc8e0f6af8a5e444c24866775a90362b52a906c578179e8b7"
+          },
+          {
+            "path": "desktop/test/identity-integration.test.ts",
+            "sha256": "ad385214d78266c9c5b1fbd7627b7bfb2aee0c530075c013d8c23ccbee88ec2e"
+          },
+          {
+            "path": "desktop/test/organise-integration.test.ts",
+            "sha256": "6adb49f3ab1dc6488f614d57c1b051685a04bc75b88f50bf01e8aeea403398f9"
+          },
+          {
+            "path": "desktop/test/permissions-integration.test.ts",
+            "sha256": "0c95bb306fd7fcb002db5cc226fe1a5d05f2fef3d21e88a44a18e4cae058106b"
+          },
+          {
+            "path": "desktop/test/policy-integration.test.ts",
+            "sha256": "fc273a5b12a1ee2dc46869456d97c23feaacc6b984136b2084f7544d6f7772f4"
+          },
+          {
+            "path": "desktop/test/providers-integration.test.ts",
+            "sha256": "b67f75bcb0c6111e86b03c2b1e0646038a9bdc894f835d13e416a6dffa2fb3f7"
+          },
+          {
+            "path": "desktop/test/routes-integration.test.ts",
+            "sha256": "2809e3bc707e14386a0ac5f73d39891b766d7ce58b1c45b4889f4c663ff1c94d"
+          },
+          {
+            "path": "desktop/test/tool-bounds-integration.test.ts",
+            "sha256": "21d9eac1612ec2476509cbb0e9018371cf457144c778ffacca9e8d415216b05a"
+          },
+          {
+            "path": "desktop/test/transport-and-schema.test.ts",
+            "sha256": "daa93a36576536addc9e983d372f8150a82ace7b4431f20c5591c629591c32c2"
+          }
+        ],
+        "retainedOptInSkips": [
+          {
+            "path": "desktop/test/epic1-permissions-runtime.witness.test.ts",
+            "sha256": "5c98a1883aea9c000a05946239001f2e5aa47a2de52f464140deff09a037bfb1"
+          },
+          {
+            "path": "desktop/test/epic1-quota-runtime.witness.test.ts",
+            "sha256": "a283e074155e3fdcca2cdf89af724335a5fb140056e3f053714ec9f35b205c60"
+          }
+        ],
+        "separateGuestEvidence": [
+          {
+            "path": "desktop/test/wsl-backend-integration.test.ts",
+            "sha256": "1bda4e06efbc42ccbd02f8bcda47c3aa792773f37cc8a9f80ec410ca39b17b33"
+          },
+          {
+            "path": "desktop/test/wsl-data-integration.test.ts",
+            "sha256": "842c6570bc6f297871939b9bdd711c8c06c52d6edd293a22e877cefa98c91a81"
+          }
+        ],
+        "notes": [
+          "All actual Windows app-server integration consumers use resolveAppServerBinary with process.env. Topology uses existing INQUELLO_DEV_TOPOLOGY_BIN.",
+          "runtime.test.ts uses Node fake-runtime through helpers.ts; version-and-binary mocks exists; Unix inspector child lifecycle is not production native.",
+          "Source-only full suite uses pinned prior-candidate native/topology. Final matched subset must use newly measured default pair and selected topology, preserve skip reasons and verify these source hashes.",
+          "Canonical Desktop build and actual built-byte Electron acceptance remain separate required gates; no primary dist overwrite while retained app is open."
+        ],
+        "canonicalInputs": [
+          {
+            "path": "desktop/package.json",
+            "sha256": "9192c47da61c526ea6580afb1ed9f14eff1ede6b3b085a0c75f397266640f05e"
+          },
+          {
+            "path": "desktop/tsconfig.build.json",
+            "sha256": "c8b249df3804696b3a013c3efe8901e6537f9e79c03e0705db796061f8422fe7"
+          },
+          {
+            "path": "desktop/tsconfig.renderer.json",
+            "sha256": "575b4b8c23a2578f0e021555f7431fc6ee60d8c211246e133064a7329868870b"
+          },
+          {
+            "path": "desktop/vite.config.ts",
+            "sha256": "e542b569c29ab1d83a3250574a7daf32abec48fada314f6bcc177f68689b0a3e"
+          },
+          {
+            "path": "desktop/scripts/check-data-policy.cjs",
+            "sha256": "bec0fd23766aa97dbd424bc8b24003d92d30d558bca420a83c2837e29717e0c5"
+          },
+          {
+            "path": "desktop/scripts/generate-protocol.mjs",
+            "sha256": "e4af76f9978c9267c7f4b9364db691b4361293e814f3607d44f8d4506aadba1c"
+          }
+        ]
+      },
+      "gate": "desktop-matched-vitest"
+    },
+    "primaryDistUnchangedDuringMatchedTests": {
+      "distBefore": "3b569ee82ba2ddd13c65f1f323461b1a82967e2c84b9ec3745d3e3a9e2392f1b",
+      "distAfter": "3b569ee82ba2ddd13c65f1f323461b1a82967e2c84b9ec3745d3e3a9e2392f1b",
+      "unchanged": true,
+      "recorded": "2026-11-03T12:28:02.203Z"
+    },
+    "securityBridgeRegression": [
+      {
+        "test": "rejects extra arguments at main for provider.consent",
+        "source": "desktop/test/security.test.ts",
+        "sourceSha256": "eca57eec98dea1c989d476f9d51dcee224f6dd70b227de6a47a9c5bfe3d8f221",
+        "gate": "desktop-source-vitest-full",
+        "executionEvidence": "Γ£ô test/security.test.ts > operation registry > rejects extra arguments at main for provider.consent 1ms"
+      },
+      {
+        "test": "rejects extra arguments at main for provider.changeConsent",
+        "source": "desktop/test/security.test.ts",
+        "sourceSha256": "eca57eec98dea1c989d476f9d51dcee224f6dd70b227de6a47a9c5bfe3d8f221",
+        "gate": "desktop-source-vitest-full",
+        "executionEvidence": "Γ£ô test/security.test.ts > operation registry > rejects extra arguments at main for provider.changeConsent 1ms"
+      },
+      {
+        "test": "rejects extra arguments at main for provider.reconcileConsent",
+        "source": "desktop/test/security.test.ts",
+        "sourceSha256": "eca57eec98dea1c989d476f9d51dcee224f6dd70b227de6a47a9c5bfe3d8f221",
+        "gate": "desktop-source-vitest-full",
+        "executionEvidence": "Γ£ô test/security.test.ts > operation registry > rejects extra arguments at main for provider.reconcileConsent 1ms"
+      },
+      {
+        "test": "rejects extra arguments at main for provider.retryConsent",
+        "source": "desktop/test/security.test.ts",
+        "sourceSha256": "eca57eec98dea1c989d476f9d51dcee224f6dd70b227de6a47a9c5bfe3d8f221",
+        "gate": "desktop-source-vitest-full",
+        "executionEvidence": "Γ£ô test/security.test.ts > operation registry > rejects extra arguments at main for provider.retryConsent 1ms"
+      }
+    ],
+    "finalBuiltElectronAcceptancePending": true
+  },
+  "generatorSha256": "9b1c9910a5cca2d1fafeebb93b899efaeae53c0062da14c71f563409f40bc112",
+  "priorSourceArtifacts": [
+    {
+      "name": "codex",
+      "path": "D:/Projects/inquello/.tmp/production-consent-terminal-native-final-20261103/default/codex.exe",
+      "sha256": "58b3603b9277e8648c7cfc9290c6a63a2c7ed2817ce4fe4840ff3183848279b5",
+      "features": [],
+      "sourceHead": "d229b3f944c3672aadf95a14c377eb3293db56e7",
+      "scope": "Prior-candidate source-suite runtime only; not final native qualification"
+    },
+    {
+      "name": "codex-app-server",
+      "path": "D:/Projects/inquello/.tmp/production-consent-terminal-native-final-20261103/default/codex-app-server.exe",
+      "sha256": "5b5bf8cb1f2271a64de7980f5f8deb7fe81333d98a175da52affc7ad42f935f0",
+      "features": [],
+      "sourceHead": "d229b3f944c3672aadf95a14c377eb3293db56e7",
+      "scope": "Prior-candidate source-suite runtime only; not final native qualification"
+    },
+    {
+      "name": "inquello-service",
+      "path": "D:/Projects/inquello/.tmp/production-consent-terminal-native-final-20261103/default/inquello-service.exe",
+      "sha256": "07ee96a425ce717ac5449024b54e94a20e9c414da5a2292a205d3caa7330878e",
+      "features": [],
+      "sourceHead": "d229b3f944c3672aadf95a14c377eb3293db56e7",
+      "scope": "Prior-candidate source-suite runtime only; not final native qualification"
+    },
+    {
+      "path": "D:/Projects/inquello/.tmp/production-consent-terminal-native-final-20261103/desktop-topology/inquello-dev-topology.exe",
+      "sha256": "11adb6024ae8b6dacf2882cbef366688e976dc59f686840ad11a534a4e5ac41b",
+      "cargoArtifact": {
+        "reason": "compiler-artifact",
+        "package_id": "path+file:///D:/Projects/inquello/engine/codex-rs/inquello-service#0.165.0",
+        "manifest_path": "D:\\Projects\\inquello\\engine\\codex-rs\\inquello-service\\Cargo.toml",
+        "target": {
+          "kind": [
+            "bin"
+          ],
+          "crate_types": [
+            "bin"
+          ],
+          "name": "inquello-dev-topology",
+          "src_path": "D:\\Projects\\inquello\\engine\\codex-rs\\inquello-service\\src\\bin\\inquello-dev-topology.rs",
+          "edition": "2024",
+          "required-features": [
+            "test-issuer"
+          ],
+          "doc": true,
+          "doctest": false,
+          "test": true
+        },
+        "profile": {
+          "opt_level": "0",
+          "debuginfo": "line-tables-only",
+          "debug_assertions": true,
+          "overflow_checks": true,
+          "test": false
+        },
+        "features": [
+          "test-issuer"
+        ],
+        "filenames": [
+          "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\inquello-dev-topology.exe",
+          "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\inquello_dev_topology.pdb"
+        ],
+        "executable": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\inquello-dev-topology.exe",
+        "fresh": true
+      },
+      "scope": "Prior-candidate synthetic topology for complete source suite only"
+    }
+  ],
+  "mappingPlan": {
+    "path": ".tmp/production-consent-v5-evidence-plan-2.json",
+    "sha256": "cad8b6bf9b7174a77b8a3d77296e7e30e6fcb92e34c48fc955d77614d7546e4c"
+  },
+  "artifacts": [
+    {
+      "name": "codex",
+      "path": "D:/Projects/inquello/.tmp/production-consent-parity-native-final-20261103/default/codex.exe",
+      "sha256": "7a7071895c37cb60d9799e2ffbfd19f7566935faf1df16305de5d0cef1ff5427",
+      "features": []
+    },
+    {
+      "name": "codex-app-server",
+      "path": "D:/Projects/inquello/.tmp/production-consent-parity-native-final-20261103/default/codex-app-server.exe",
+      "sha256": "f2ea08ba35fef79aefaa7f237c5e91d4939e2e31d3c7257ef6d90f58bbeeebcd",
+      "features": []
+    },
+    {
+      "name": "inquello-service",
+      "path": "D:/Projects/inquello/.tmp/production-consent-parity-native-final-20261103/default/inquello-service.exe",
+      "sha256": "9d177c3dec8a2c6f2966391e2b56727877ef3f91e0d0c6f6d1fcdf3ec63013ae",
+      "features": []
+    },
+    {
+      "path": "D:/Projects/inquello/.tmp/production-consent-parity-native-final-20261103/fixture/codex-app-server.exe",
+      "sha256": "519e3dcf7389f2f58507c5c4751718cec7c70e82674d502bc431e4de0696f646",
+      "cargoArtifact": {
+        "reason": "compiler-artifact",
+        "package_id": "path+file:///D:/Projects/inquello/engine/codex-rs/app-server#codex-app-server@0.165.0",
+        "manifest_path": "D:\\Projects\\inquello\\engine\\codex-rs\\app-server\\Cargo.toml",
+        "target": {
+          "kind": [
+            "bin"
+          ],
+          "crate_types": [
+            "bin"
+          ],
+          "name": "codex-app-server",
+          "src_path": "D:\\Projects\\inquello\\engine\\codex-rs\\app-server\\src\\main.rs",
+          "edition": "2024",
+          "doc": true,
+          "doctest": false,
+          "test": true
+        },
+        "profile": {
+          "opt_level": "0",
+          "debuginfo": "line-tables-only",
+          "debug_assertions": true,
+          "overflow_checks": true,
+          "test": false
+        },
+        "features": [
+          "inference-fixtures"
+        ],
+        "filenames": [
+          "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\codex-app-server.exe",
+          "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\codex_app_server.pdb"
+        ],
+        "executable": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\codex-app-server.exe",
+        "fresh": false
+      },
+      "features": "default,inference-fixtures"
+    },
+    {
+      "path": "D:/Projects/inquello/.tmp/production-consent-parity-native-final-20261103/fixture/authorization-runtime.exe",
+      "sha256": "12d511596b88068281965b52e10a0a670e298d265d2ca5ce4143df49d8ff4137",
+      "cargoArtifact": {
+        "reason": "compiler-artifact",
+        "package_id": "path+file:///D:/Projects/inquello/engine/codex-rs/app-server#codex-app-server@0.165.0",
+        "manifest_path": "D:\\Projects\\inquello\\engine\\codex-rs\\app-server\\Cargo.toml",
+        "target": {
+          "kind": [
+            "test"
+          ],
+          "crate_types": [
+            "bin"
+          ],
+          "name": "inquello_authorization_runtime",
+          "src_path": "D:\\Projects\\inquello\\engine\\codex-rs\\app-server\\tests\\inquello_authorization_runtime.rs",
+          "edition": "2024",
+          "doc": false,
+          "doctest": false,
+          "test": true
+        },
+        "profile": {
+          "opt_level": "0",
+          "debuginfo": "line-tables-only",
+          "debug_assertions": true,
+          "overflow_checks": true,
+          "test": true
+        },
+        "features": [
+          "inference-fixtures"
+        ],
+        "filenames": [
+          "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\inquello_authorization_runtime-0b8276b468138333.exe",
+          "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\inquello_authorization_runtime-0b8276b468138333.pdb"
+        ],
+        "executable": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\inquello_authorization_runtime-0b8276b468138333.exe",
+        "fresh": false
+      },
+      "features": "default,inference-fixtures"
+    },
+    {
+      "path": "D:/Projects/inquello/.tmp/production-consent-parity-native-final-20261103/desktop-topology/inquello-dev-topology.exe",
+      "sha256": "11adb6024ae8b6dacf2882cbef366688e976dc59f686840ad11a534a4e5ac41b",
+      "cargoArtifact": {
+        "reason": "compiler-artifact",
+        "package_id": "path+file:///D:/Projects/inquello/engine/codex-rs/inquello-service#0.165.0",
+        "manifest_path": "D:\\Projects\\inquello\\engine\\codex-rs\\inquello-service\\Cargo.toml",
+        "target": {
+          "kind": [
+            "bin"
+          ],
+          "crate_types": [
+            "bin"
+          ],
+          "name": "inquello-dev-topology",
+          "src_path": "D:\\Projects\\inquello\\engine\\codex-rs\\inquello-service\\src\\bin\\inquello-dev-topology.rs",
+          "edition": "2024",
+          "required-features": [
+            "test-issuer"
+          ],
+          "doc": true,
+          "doctest": false,
+          "test": true
+        },
+        "profile": {
+          "opt_level": "0",
+          "debuginfo": "line-tables-only",
+          "debug_assertions": true,
+          "overflow_checks": true,
+          "test": false
+        },
+        "features": [
+          "test-issuer"
+        ],
+        "filenames": [
+          "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\inquello-dev-topology.exe",
+          "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\inquello_dev_topology.pdb"
+        ],
+        "executable": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\inquello-dev-topology.exe",
+        "fresh": true
+      },
+      "features": "test-issuer; synthetic owned topology"
+    }
+  ],
+  "supplementalBinaries": [
+    {
+      "manifest": "adapters-binaries.json",
+      "copy": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-20261103\\test-binaries\\adapters\\inquello_adapters-5e90e3cb5c5f0d5f.exe",
+      "sha256": "563873D0A2B2B405D651A15B4ECCB1696626FA468A11D8385F3FC27552648CC2",
+      "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\inquello_adapters-5e90e3cb5c5f0d5f.exe"
+    },
+    {
+      "manifest": "adapters-binaries.json",
+      "copy": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-20261103\\test-binaries\\adapters\\broad_modes-ac3123b9332f639f.exe",
+      "sha256": "20728CAEEF4B6FCAD001FA923DB7266730AE9E09CF51EC83FDBA6887DE10B6FF",
+      "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\broad_modes-ac3123b9332f639f.exe"
+    },
+    {
+      "manifest": "adapters-binaries.json",
+      "copy": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-20261103\\test-binaries\\adapters\\concurrent_operations-1730a2170b20c1be.exe",
+      "sha256": "3CF07B7345C7224D9B2BFE71FFE617E7683346FFA4BD04309C24F56327C21AE2",
+      "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\concurrent_operations-1730a2170b20c1be.exe"
+    },
+    {
+      "manifest": "adapters-binaries.json",
+      "copy": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-20261103\\test-binaries\\adapters\\organise_store-63af6578df0b08d8.exe",
+      "sha256": "351E7594244949E77F5C1E9F2E80172286A2CE05020C4E330E0ABB46BE8E89C2",
+      "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\organise_store-63af6578df0b08d8.exe"
+    },
+    {
+      "manifest": "adapters-binaries.json",
+      "copy": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-20261103\\test-binaries\\adapters\\permissions-6237da9400fb89dc.exe",
+      "sha256": "3BBB625BA81E4832EC8D03EC3AF8C71F84C49C46BB17E86EAB55051CA84B0203",
+      "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\permissions-6237da9400fb89dc.exe"
+    },
+    {
+      "manifest": "adapters-binaries.json",
+      "copy": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-20261103\\test-binaries\\adapters\\processing_routes-b0ec06c0e4cef564.exe",
+      "sha256": "EC1E52863B93EF7D8A5613C683DDD3C4208E892F8C4AEB4D735A726B1059F21F",
+      "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\processing_routes-b0ec06c0e4cef564.exe"
+    },
+    {
+      "manifest": "adapters-binaries.json",
+      "copy": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-20261103\\test-binaries\\adapters\\task_runs-3218151f3d847e00.exe",
+      "sha256": "E583B0B431C4D782A6277E09BF2F8DB96FF57539BAC8D31C04B2FDAF90BAD6EC",
+      "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\task_runs-3218151f3d847e00.exe"
+    },
+    {
+      "manifest": "adapters-binaries.json",
+      "copy": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-20261103\\test-binaries\\adapters\\task_states-ec5f123bcb10690a.exe",
+      "sha256": "13A99308A6C9C3563B04541E8413BB0633B48517013262947349D7059F99390C",
+      "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\task_states-ec5f123bcb10690a.exe"
+    },
+    {
+      "manifest": "adapters-binaries.json",
+      "copy": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-20261103\\test-binaries\\adapters\\task_usage-bfdfeb874ea462bb.exe",
+      "sha256": "32CB3B42AC956CA555E6737306D304922245D08879B63CC3DD4576816266BC94",
+      "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\task_usage-bfdfeb874ea462bb.exe"
+    },
+    {
+      "manifest": "adapters-binaries.json",
+      "copy": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-20261103\\test-binaries\\adapters\\working_store-0aa53b3d53ce5ecb.exe",
+      "sha256": "8D2065EC93FF5D00A33ADE1B2D5B483A735AB19B13BEE10D095012AC594FD1D0",
+      "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\working_store-0aa53b3d53ce5ecb.exe"
+    },
+    {
+      "manifest": "bounded-rollout-binaries.json",
+      "copy": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-20261103\\test-binaries\\bounded-rollout\\codex_rollout-e43f3b5b2bd26cd3.exe",
+      "sha256": "FCD635686C4B90EAFAA2DA5EC5E1EAB33260076FB223C1E2A4DC7A23EDC2379A",
+      "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\codex_rollout-e43f3b5b2bd26cd3.exe"
+    },
+    {
+      "manifest": "core-binaries.json",
+      "copy": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-20261103\\test-binaries\\core\\codex_core-849b3373e1b2073a.exe",
+      "sha256": "4BD62FB749D6B441DDF5DE87FD4CF1A7D900CA9372504F6A3D8F6C27E73628FD",
+      "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\codex_core-849b3373e1b2073a.exe"
+    },
+    {
+      "manifest": "core-source-boundary-binaries.json",
+      "copy": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-20261103\\test-binaries\\core-source-boundary\\all-4777421d63f85d4c.exe",
+      "sha256": "C3328FFB034B7CA6B12C69AFC7F2FE85842B950880FCB9592E238316A8E283CA",
+      "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\all-4777421d63f85d4c.exe"
+    },
+    {
+      "manifest": "domain-binaries.json",
+      "copy": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-20261103\\test-binaries\\domain\\inquello_domain-aef711b045d03f6d.exe",
+      "sha256": "F38050168CD08F8C1F50B85461DE489F2A14CD356DB7231D644AB38E5A1E48E8",
+      "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\inquello_domain-aef711b045d03f6d.exe"
+    },
+    {
+      "manifest": "domain-binaries.json",
+      "copy": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-20261103\\test-binaries\\domain\\capability_register-84c6d1e3afc58800.exe",
+      "sha256": "F3F44FBC595DFD2CC9F58CDF8B091171A6EA967D0B9250DBB2E4B385A9FA1727",
+      "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\capability_register-84c6d1e3afc58800.exe"
+    },
+    {
+      "manifest": "domain-binaries.json",
+      "copy": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-20261103\\test-binaries\\domain\\dependency_direction-ae93e2f82463b899.exe",
+      "sha256": "E2E3E117DDDEF2728E6150A8E40CD349F0F0E61BBDE12FF7B69E85D8B11ADB96",
+      "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\dependency_direction-ae93e2f82463b899.exe"
+    },
+    {
+      "manifest": "domain-binaries.json",
+      "copy": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-20261103\\test-binaries\\domain\\inventory_map-f4fb41744d236abf.exe",
+      "sha256": "EFD7A758959BB1813A630ED9F7221D00F397E09DA22AF58A4EFA7F7C5E31A052",
+      "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\inventory_map-f4fb41744d236abf.exe"
+    },
+    {
+      "manifest": "domain-binaries.json",
+      "copy": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-20261103\\test-binaries\\domain\\inquello_protocol-a145874550d307e1.exe",
+      "sha256": "803201ED135CE45252FC7D72C6B43D865687BC6D07E1DD882B19E69A39B570F9",
+      "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\inquello_protocol-a145874550d307e1.exe"
+    },
+    {
+      "manifest": "domain-binaries.json",
+      "copy": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-20261103\\test-binaries\\domain\\fixtures-e18b566b5273cb69.exe",
+      "sha256": "5F02B560ED28DFB1D120BFEFFB9F82C010DB82F72FB84F9A2165AABFEDAB6B5C",
+      "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\fixtures-e18b566b5273cb69.exe"
+    },
+    {
+      "manifest": "domain-binaries.json",
+      "copy": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-20261103\\test-binaries\\domain\\inference-42b630e95a1fc076.exe",
+      "sha256": "7AB759349368198D6E349DD1955532BD64BA4D294E3A668BD484DD30852B7B5F",
+      "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\inference-42b630e95a1fc076.exe"
+    },
+    {
+      "manifest": "exec-spawn-binaries.json",
+      "copy": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-20261103\\test-binaries\\exec-spawn\\codex_exec_server-91ca54e7854823d9.exe",
+      "sha256": "88F6EC1DA9968CB81537C49D7F38DEC67DF4E5770302AFB16734EA8849AE058F",
+      "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\codex_exec_server-91ca54e7854823d9.exe"
+    },
+    {
+      "manifest": "native-bin-fingerprint-binaries.json",
+      "copy": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-20261103\\test-binaries\\native-bin-fingerprint\\codex_app_server-efcde93d596a8f3f.exe",
+      "sha256": "DC71F4C0F8AFA1E483FA1748519203487BBFF5CCF2740B442C6638525DD6FBC3",
+      "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\codex_app_server-efcde93d596a8f3f.exe"
+    },
+    {
+      "manifest": "native-bin-fingerprint-binaries.json",
+      "copy": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-20261103\\test-binaries\\native-bin-fingerprint\\inquello_behavior_fingerprint-f62ee1bd294212d9.exe",
+      "sha256": "706B4969999585BF25BD4B84E37592FCE256BB64F353122DB729E2D73317FF2D",
+      "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\inquello_behavior_fingerprint-f62ee1bd294212d9.exe"
+    },
+    {
+      "manifest": "native-lib-binaries.json",
+      "copy": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-20261103\\test-binaries\\native-lib\\codex_app_server-f02eafa0ea1a0c52.exe",
+      "sha256": "ADA840D7F343B8BAD3633DC78839871B2095B33FD4FFD550C1279EC796582721",
+      "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\codex_app_server-f02eafa0ea1a0c52.exe"
+    },
+    {
+      "manifest": "service-binaries.json",
+      "copy": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-20261103\\test-binaries\\service\\inquello_service-debdcae211e1cd02.exe",
+      "sha256": "C8AF28D90D3701197934EC1C1FA8F832EB029A0E2D0A80D098A8BE2D64E25921",
+      "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\inquello_service-debdcae211e1cd02.exe"
+    },
+    {
+      "manifest": "service-binaries.json",
+      "copy": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-20261103\\test-binaries\\service\\inquello_dev_topology-e90c282ebf18811e.exe",
+      "sha256": "D763B50646238DE8DF665F5434C3E30D6E28C6E08A9B9F32CC3F4AC2973BF358",
+      "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\inquello_dev_topology-e90c282ebf18811e.exe"
+    },
+    {
+      "manifest": "service-binaries.json",
+      "copy": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-20261103\\test-binaries\\service\\inquello_service-e1ea8e4b57dde3f3.exe",
+      "sha256": "0573BC43D950A4D0DA9C86BFB5FEF037D3B93A350E3C1E4E9AE97A8CABEE3E87",
+      "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\inquello_service-e1ea8e4b57dde3f3.exe"
+    },
+    {
+      "manifest": "service-binaries.json",
+      "copy": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-20261103\\test-binaries\\service\\identity-ab33adeb67d66e15.exe",
+      "sha256": "06E5A07957B082A37C4059CFA97202E376B145790DA30DAF42B99B40EB5B8B88",
+      "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\identity-ab33adeb67d66e15.exe"
+    },
+    {
+      "manifest": "service-binaries.json",
+      "copy": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-20261103\\test-binaries\\service\\memberships-f8372f20e7d0d0f0.exe",
+      "sha256": "7611AEF951CBA9B5B7F62CE1238C750FAB093EFD3433036A756CE2F1FEC59A7C",
+      "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\memberships-f8372f20e7d0d0f0.exe"
+    },
+    {
+      "manifest": "service-binaries.json",
+      "copy": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-20261103\\test-binaries\\service\\onboarding-a9b0711a83f6e13e.exe",
+      "sha256": "1DB684085CE7DB04A3F899DF5CF5A7F1782D6E9C8F65675E241574FE6ADA07FE",
+      "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\onboarding-a9b0711a83f6e13e.exe"
+    },
+    {
+      "manifest": "service-binaries.json",
+      "copy": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-20261103\\test-binaries\\service\\provider_consents-8c2b279024446875.exe",
+      "sha256": "F3838D2A56DB33266E4E37B55696D6B4244ADCDE0D7E3E5F461B9581A6F48F11",
+      "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\provider_consents-8c2b279024446875.exe"
+    },
+    {
+      "manifest": "service-binaries.json",
+      "copy": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-20261103\\test-binaries\\service\\route_eligibility-b96ac18219e54e14.exe",
+      "sha256": "FA940E506E954E4F5C0B7E983299AA220D7F1B0BC1CCC38A6A9E698AB04A91AC",
+      "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\route_eligibility-b96ac18219e54e14.exe"
+    },
+    {
+      "manifest": "service-binaries.json",
+      "copy": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-20261103\\test-binaries\\service\\serve-e8d1ee748a738a2d.exe",
+      "sha256": "46DB9147B68D06832E9738283D17943A7CDB7D8FD548D4415A0F9E68E3129E34",
+      "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\serve-e8d1ee748a738a2d.exe"
+    },
+    {
+      "manifest": "service-binaries.json",
+      "copy": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-20261103\\test-binaries\\service\\topology-6e4f0c083792c8ac.exe",
+      "sha256": "27ACE43DEF81C4E29B36990244C609D5A2BB5E24CCA28DC98334D7AC9BC09197",
+      "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\topology-6e4f0c083792c8ac.exe"
+    }
+  ],
+  "gates": [
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-default-build.log",
+      "logSha256": "22c18119f0ab2de89501d666c413e81daa9503a325ae97b799eeebe5052317ed",
+      "arguments": [
+        "build",
+        "--offline",
+        "-j1",
+        "--message-format=json",
+        "--config",
+        "profile.dev.package.codex-core.debug=0",
+        "-p",
+        "codex-cli",
+        "-p",
+        "codex-app-server",
+        "-p",
+        "inquello-service"
+      ],
+      "name": "default-build",
+      "infrastructureError": null,
+      "executable": "D:\\Toolchains\\cargo\\bin\\cargo.exe",
+      "exit": 0,
+      "finished": "2026-11-03T12:06:24.3673548Z",
+      "phase": "native",
+      "rustTestSummaries": [],
+      "features": "default"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-default-identity.log",
+      "logSha256": "5cab8e2eb8409d978f19e6b5c25c875f3fe42cf918085896d497b136590dce32",
+      "arguments": [
+        "D:\\Projects\\inquello\\.tmp\\production-consent-parity-capture.cjs",
+        "default"
+      ],
+      "name": "default-identity",
+      "infrastructureError": null,
+      "executable": "C:\\Program Files\\nodejs\\node.exe",
+      "exit": 0,
+      "finished": "2026-11-03T12:06:32.5172849Z",
+      "phase": "native",
+      "rustTestSummaries": [],
+      "features": "default"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-generate-protocol.log",
+      "logSha256": "2708a4d8c32c0fed9e001ff570ffa169b9067f2c015c16fc996c965243b92fc3",
+      "arguments": [
+        "/d",
+        "/c",
+        "pnpm",
+        "run",
+        "generate:protocol"
+      ],
+      "name": "generate-protocol",
+      "infrastructureError": null,
+      "executable": "C:\\Windows\\system32\\cmd.exe",
+      "exit": 0,
+      "finished": "2026-11-03T12:06:34.3699146Z",
+      "phase": "native",
+      "rustTestSummaries": [],
+      "features": "default"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-source-capture.log",
+      "logSha256": "f4b345c11077faed1dd44f32fa6fd93a189ef390e1f68f9cc26aea2c1d649065",
+      "arguments": [
+        "D:\\Projects\\inquello\\.tmp\\production-consent-parity-capture.cjs",
+        "source"
+      ],
+      "name": "source-capture",
+      "infrastructureError": null,
+      "executable": "C:\\Program Files\\nodejs\\node.exe",
+      "exit": 0,
+      "finished": "2026-11-03T12:06:35.1319195Z",
+      "phase": "native",
+      "rustTestSummaries": [],
+      "features": "default"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-domain.log",
+      "logSha256": "920c832169c0ae1731d327b3ef362cfc38b628cb2366a036b23a04fbfb195775",
+      "arguments": [
+        "test",
+        "--offline",
+        "-j1",
+        "-p",
+        "inquello-domain",
+        "-p",
+        "inquello-protocol",
+        "--",
+        "--test-threads=1"
+      ],
+      "name": "domain",
+      "infrastructureError": null,
+      "executable": "D:\\Toolchains\\cargo\\bin\\cargo.exe",
+      "exit": 0,
+      "finished": "2026-11-03T12:06:51.5925396Z",
+      "phase": "native",
+      "rustTestSummaries": [
+        {
+          "passed": 138,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 24,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 11,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 6,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 9,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "features": "default"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-adapters.log",
+      "logSha256": "1809b9545891d2b7e457497f93bdbaf2120d3afe823c574e3b3d831424060d57",
+      "arguments": [
+        "test",
+        "--offline",
+        "-j1",
+        "-p",
+        "inquello-adapters",
+        "--",
+        "--test-threads=1"
+      ],
+      "name": "adapters",
+      "infrastructureError": null,
+      "executable": "D:\\Toolchains\\cargo\\bin\\cargo.exe",
+      "exit": 0,
+      "finished": "2026-11-03T12:07:36.3364047Z",
+      "phase": "native",
+      "rustTestSummaries": [
+        {
+          "passed": 17,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 24,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 12,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 13,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 24,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 4,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 13,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "features": "default"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-service.log",
+      "logSha256": "b3a0519c0b131b452191824811a5359e370504ad241d25d8ebdfdd4e8be6b7ed",
+      "arguments": [
+        "test",
+        "--offline",
+        "-j1",
+        "-p",
+        "inquello-service",
+        "--features",
+        "test-issuer",
+        "--all-targets",
+        "--",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "name": "service",
+      "infrastructureError": null,
+      "executable": "D:\\Toolchains\\cargo\\bin\\cargo.exe",
+      "exit": 0,
+      "finished": "2026-11-03T12:09:56.3226638Z",
+      "phase": "native",
+      "rustTestSummaries": [
+        {
+          "passed": 17,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 0,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 20,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 16,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 19,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 7,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 15,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "features": "default,test-issuer"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-exec-spawn.log",
+      "logSha256": "db9f14f987be7738a8287d0cd674093a01e73bb7fe0078fd564ce950d878488a",
+      "arguments": [
+        "test",
+        "--offline",
+        "-j1",
+        "-p",
+        "codex-exec-server",
+        "--lib",
+        "inquello_isolated_spawn_boundary",
+        "--",
+        "--test-threads=1"
+      ],
+      "name": "exec-spawn",
+      "infrastructureError": null,
+      "executable": "D:\\Toolchains\\cargo\\bin\\cargo.exe",
+      "exit": 0,
+      "finished": "2026-11-03T12:10:18.0324125Z",
+      "phase": "native",
+      "rustTestSummaries": [
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "features": "default"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-core.log",
+      "logSha256": "50ba2e89340afbd2ec48a4b45eb8021d385388e8b91ea6e84c3ca9ef38cea3af",
+      "arguments": [
+        "test",
+        "--offline",
+        "-j1",
+        "--config",
+        "profile.dev.package.codex-core.debug=0",
+        "-p",
+        "codex-core",
+        "--lib",
+        "inquello_",
+        "--",
+        "--test-threads=1"
+      ],
+      "name": "core",
+      "infrastructureError": null,
+      "executable": "D:\\Toolchains\\cargo\\bin\\cargo.exe",
+      "exit": 0,
+      "finished": "2026-11-03T12:10:30.5447757Z",
+      "phase": "native",
+      "rustTestSummaries": [
+        {
+          "passed": 34,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "features": "default"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-core-retry-controls.log",
+      "logSha256": "4096a3a920d7f95459e9f979e3e36128d4cca9f0369515606fb8c3898088da7f",
+      "arguments": [
+        "responses_retry::tests",
+        "--test-threads=1"
+      ],
+      "name": "core-retry-controls",
+      "infrastructureError": null,
+      "executable": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-20261103\\test-binaries\\core\\codex_core-849b3373e1b2073a.exe",
+      "exit": 0,
+      "finished": "2026-11-03T12:10:35.0547598Z",
+      "phase": "native",
+      "rustTestSummaries": [
+        {
+          "passed": 3,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "features": "default"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-core-auth-control.log",
+      "logSha256": "364ea08b418c67d84290c48506508a02697d4a65fc10a8944824062d645ff3b3",
+      "arguments": [
+        "provider_owned_auth_recovery_is_bounded_and_preserves_unauthorized_failures",
+        "--test-threads=1"
+      ],
+      "name": "core-auth-control",
+      "infrastructureError": null,
+      "executable": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-20261103\\test-binaries\\core\\codex_core-849b3373e1b2073a.exe",
+      "exit": 0,
+      "finished": "2026-11-03T12:10:35.1161012Z",
+      "phase": "native",
+      "rustTestSummaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "features": "default"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-core-paid-boundary-control.log",
+      "logSha256": "6292b6123a6fd61f609a449c6f340f5f7799beadadf92070d84c5602f2dc1a75",
+      "arguments": [
+        "controlled_paid_body_refuses_unbounded_or_nontext_requests",
+        "--test-threads=1"
+      ],
+      "name": "core-paid-boundary-control",
+      "infrastructureError": null,
+      "executable": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-20261103\\test-binaries\\core\\codex_core-849b3373e1b2073a.exe",
+      "exit": 0,
+      "finished": "2026-11-03T12:10:35.1917962Z",
+      "phase": "native",
+      "rustTestSummaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "features": "default"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-core-source-boundary.log",
+      "logSha256": "088e9cf3cf66bdc8e3e5007e86b1a1fd49aedba98e1e0007a5e7e96232459e3a",
+      "arguments": [
+        "test",
+        "--offline",
+        "-j1",
+        "--config",
+        "profile.dev.package.codex-core.debug=0",
+        "-p",
+        "codex-core",
+        "--test",
+        "all",
+        "bound_responses_",
+        "--",
+        "--test-threads=1"
+      ],
+      "name": "core-source-boundary",
+      "infrastructureError": null,
+      "executable": "D:\\Toolchains\\cargo\\bin\\cargo.exe",
+      "exit": 0,
+      "finished": "2026-11-03T12:10:39.3757885Z",
+      "phase": "native",
+      "rustTestSummaries": [
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "features": "default"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-bounded-rollout.log",
+      "logSha256": "1d641e52342cc05660c8dd393ff492ab8b1f8818cb7351e8075c0191eefd0de9",
+      "arguments": [
+        "test",
+        "--offline",
+        "-j1",
+        "-p",
+        "codex-rollout",
+        "--lib",
+        "saved_bounds_tests",
+        "--",
+        "--test-threads=1"
+      ],
+      "name": "bounded-rollout",
+      "infrastructureError": null,
+      "executable": "D:\\Toolchains\\cargo\\bin\\cargo.exe",
+      "exit": 0,
+      "finished": "2026-11-03T12:10:48.2249053Z",
+      "phase": "native",
+      "rustTestSummaries": [
+        {
+          "passed": 1,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "features": "default"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-native-lib.log",
+      "logSha256": "35275c94fb4ca76475678b7d5a0c769b0a20c1c4cdafc95a0c36cbe1dc50a3eb",
+      "arguments": [
+        "test",
+        "--offline",
+        "-j1",
+        "--config",
+        "profile.dev.package.codex-core.debug=0",
+        "-p",
+        "codex-app-server",
+        "--lib",
+        "inquello_",
+        "--",
+        "--test-threads=1"
+      ],
+      "name": "native-lib",
+      "infrastructureError": null,
+      "executable": "D:\\Toolchains\\cargo\\bin\\cargo.exe",
+      "exit": 0,
+      "finished": "2026-11-03T12:15:00.3714943Z",
+      "phase": "native",
+      "rustTestSummaries": [
+        {
+          "passed": 156,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "features": "default"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-native-bin-fingerprint.log",
+      "logSha256": "3667d3f76192e1a2e8b9b28ca523789272f6c51ccf890d3d3423fc462fc9f256",
+      "arguments": [
+        "test",
+        "--offline",
+        "-j1",
+        "--config",
+        "profile.dev.package.codex-core.debug=0",
+        "-p",
+        "codex-app-server",
+        "--bin",
+        "codex-app-server",
+        "--test",
+        "inquello_behavior_fingerprint",
+        "--",
+        "--test-threads=1"
+      ],
+      "name": "native-bin-fingerprint",
+      "infrastructureError": null,
+      "executable": "D:\\Toolchains\\cargo\\bin\\cargo.exe",
+      "exit": 0,
+      "finished": "2026-11-03T12:17:09.2160819Z",
+      "phase": "native",
+      "rustTestSummaries": [
+        {
+          "passed": 8,
+          "failed": 0,
+          "ignored": 0
+        },
+        {
+          "passed": 5,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "features": "default"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-default-stability.log",
+      "logSha256": "037714581f9f13957631d3a36a652a39b4c961217f38724430c68b6c13a5de07",
+      "arguments": [
+        "D:\\Projects\\inquello\\.tmp\\production-consent-parity-capture.cjs",
+        "default-stability"
+      ],
+      "name": "default-stability",
+      "infrastructureError": null,
+      "executable": "C:\\Program Files\\nodejs\\node.exe",
+      "exit": 0,
+      "finished": "2026-11-03T12:17:11.0003962Z",
+      "phase": "native",
+      "rustTestSummaries": [],
+      "features": "default"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-fixture-final-fixture-build.log",
+      "logSha256": "48f510a459bd20a02269db1b78865abeb7b87935209a2c25b751ea785f3bef0b",
+      "arguments": [
+        "build",
+        "--locked",
+        "--offline",
+        "-j1",
+        "--message-format=json",
+        "--config",
+        "profile.dev.package.codex-core.debug=0",
+        "-p",
+        "codex-app-server",
+        "--bin",
+        "codex-app-server",
+        "--features",
+        "inference-fixtures"
+      ],
+      "name": "fixture-build",
+      "infrastructureError": null,
+      "executable": "D:\\Toolchains\\cargo\\bin\\cargo.exe",
+      "exit": 0,
+      "finished": "2026-11-03T12:35:23.8087566Z",
+      "phase": "fixture",
+      "rustTestSummaries": [],
+      "features": "default,inference-fixtures"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-fixture-final-fixture-identity.log",
+      "logSha256": "aeb24ca115afe33a0d682a506820d83fc51d46940c61a9beea0041821c4a5c0d",
+      "arguments": [
+        "D:\\Projects\\inquello\\.tmp\\production-consent-parity-fixture-capture.cjs",
+        "runtime"
+      ],
+      "name": "fixture-identity",
+      "infrastructureError": null,
+      "executable": "C:\\Program Files\\nodejs\\node.exe",
+      "exit": 0,
+      "finished": "2026-11-03T12:35:25.4782977Z",
+      "phase": "fixture",
+      "rustTestSummaries": [],
+      "features": "default,inference-fixtures"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-fixture-final-fixture-test-build.log",
+      "logSha256": "06fb51849c5a6f927b8ebc77b873605e0935fd6b6653f10ebdd9a662e9cd2d3c",
+      "arguments": [
+        "test",
+        "--offline",
+        "-j1",
+        "--message-format=json",
+        "--config",
+        "profile.dev.package.codex-core.debug=0",
+        "-p",
+        "codex-app-server",
+        "--test",
+        "inquello_authorization_runtime",
+        "--features",
+        "inference-fixtures",
+        "--no-run"
+      ],
+      "name": "fixture-test-build",
+      "infrastructureError": null,
+      "executable": "D:\\Toolchains\\cargo\\bin\\cargo.exe",
+      "exit": 0,
+      "finished": "2026-11-03T12:41:47.9415391Z",
+      "phase": "fixture",
+      "rustTestSummaries": [],
+      "features": "default,inference-fixtures"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-fixture-final-fixture-test-identity.log",
+      "logSha256": "f5beb0449e0dbb273061caec4a4dcb041c0ce173c515f74e450582e011f31485",
+      "arguments": [
+        "D:\\Projects\\inquello\\.tmp\\production-consent-parity-fixture-capture.cjs",
+        "test"
+      ],
+      "name": "fixture-test-identity",
+      "infrastructureError": null,
+      "executable": "C:\\Program Files\\nodejs\\node.exe",
+      "exit": 0,
+      "finished": "2026-11-03T12:41:48.6507938Z",
+      "phase": "fixture",
+      "rustTestSummaries": [],
+      "features": "default,inference-fixtures"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-fixture-final-fixture-budgets.log",
+      "logSha256": "081c8b63e211e42288564da02de688745d3a26ae0beebc3bdd92e23e6a1db764",
+      "arguments": [
+        "fixture_",
+        "--test-threads=1"
+      ],
+      "name": "fixture-budgets",
+      "infrastructureError": null,
+      "executable": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-20261103\\fixture\\authorization-runtime.exe",
+      "exit": 0,
+      "finished": "2026-11-03T12:41:49.6124296Z",
+      "phase": "fixture",
+      "rustTestSummaries": [
+        {
+          "passed": 2,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "features": "default,inference-fixtures"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-fixture-final-responses-full.log",
+      "logSha256": "97b558671c82389f8a50cd661f270439f054de43d27759015a503b8071e03bfa",
+      "arguments": [
+        "responses_",
+        "--test-threads=1"
+      ],
+      "name": "responses-full",
+      "infrastructureError": null,
+      "executable": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-20261103\\fixture\\authorization-runtime.exe",
+      "exit": 0,
+      "finished": "2026-11-03T12:53:08.5097440Z",
+      "phase": "fixture",
+      "rustTestSummaries": [
+        {
+          "passed": 33,
+          "failed": 0,
+          "ignored": 0
+        }
+      ],
+      "features": "default,inference-fixtures"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-security-desktop-check-source-before.log",
+      "logSha256": "20b2900e92133b4209ee5eb01a9d34168eeda55975cdc945e63a6caf62f56a0c",
+      "arguments": [
+        "D:\\Projects\\inquello\\.tmp\\production-consent-security-capture.cjs",
+        "before"
+      ],
+      "name": "desktop-source-source-before",
+      "infrastructureError": null,
+      "executable": "C:\\Program Files\\nodejs\\node.exe",
+      "exit": 0,
+      "finished": "2026-11-03T11:47:33.1895376Z",
+      "phase": "desktop-source",
+      "rustTestSummaries": [],
+      "features": "Desktop source suite with pinned PRIOR-CANDIDATE native/topology; final subset separate"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-security-desktop-check-main-types.log",
+      "logSha256": "d8760763be63067f00789fcf42648cb7e89259b37690e733415676ec0b8b6596",
+      "arguments": [
+        "node_modules/typescript/bin/tsc",
+        "-p",
+        "tsconfig.build.json",
+        "--noEmit"
+      ],
+      "name": "desktop-source-main-types",
+      "infrastructureError": null,
+      "executable": "C:\\Program Files\\nodejs\\node.exe",
+      "exit": 0,
+      "finished": "2026-11-03T11:47:36.7105934Z",
+      "phase": "desktop-source",
+      "rustTestSummaries": [],
+      "features": "Static Desktop type/build gate; no inference"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-security-desktop-check-renderer-types.log",
+      "logSha256": "d8760763be63067f00789fcf42648cb7e89259b37690e733415676ec0b8b6596",
+      "arguments": [
+        "node_modules/typescript/bin/tsc",
+        "-p",
+        "tsconfig.renderer.json",
+        "--noEmit"
+      ],
+      "name": "desktop-source-renderer-types",
+      "infrastructureError": null,
+      "executable": "C:\\Program Files\\nodejs\\node.exe",
+      "exit": 0,
+      "finished": "2026-11-03T11:47:39.8331270Z",
+      "phase": "desktop-source",
+      "rustTestSummaries": [],
+      "features": "Static Desktop type/build gate; no inference"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-security-desktop-check-focused.log",
+      "logSha256": "94d7f0b3afc1ab9d4bed379c64f9f3b09fea45de4861041edb167e774634cae1",
+      "arguments": [
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--configLoader",
+        "runner",
+        "--maxWorkers=1",
+        "--reporter=verbose",
+        "test/security.test.ts",
+        "test/provider-consent.test.ts",
+        "test/provider-consent-store.test.ts",
+        "test/provider-consent-renderer.test.tsx",
+        "test/provider-consent-ui.test.tsx"
+      ],
+      "name": "desktop-source-focused",
+      "infrastructureError": null,
+      "executable": "C:\\Program Files\\nodejs\\node.exe",
+      "exit": 0,
+      "finished": "2026-11-03T11:47:50.1109998Z",
+      "phase": "desktop-source",
+      "rustTestSummaries": [],
+      "features": "Desktop source suite with pinned PRIOR-CANDIDATE native/topology; final subset separate"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-security-desktop-check-vitest-full.log",
+      "logSha256": "b89288e1aa5d927f49e8bcbafb5470bb2e0b8ff36950b0bc804ab273a3fe1743",
+      "arguments": [
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--configLoader",
+        "runner",
+        "--maxWorkers=1",
+        "--reporter=verbose"
+      ],
+      "name": "desktop-source-vitest-full",
+      "infrastructureError": null,
+      "executable": "C:\\Program Files\\nodejs\\node.exe",
+      "exit": 0,
+      "finished": "2026-11-03T11:58:30.0460942Z",
+      "phase": "desktop-source",
+      "rustTestSummaries": [],
+      "features": "Desktop source suite with pinned PRIOR-CANDIDATE native/topology; final subset separate"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-security-desktop-check-source-after.log",
+      "logSha256": "74e60e7ba80d8c958ce839bf3a7ed820c5b5093fe4f8c29682ebfa160c1f7b28",
+      "arguments": [
+        "D:\\Projects\\inquello\\.tmp\\production-consent-security-capture.cjs",
+        "after"
+      ],
+      "name": "desktop-source-source-after",
+      "infrastructureError": null,
+      "executable": "C:\\Program Files\\nodejs\\node.exe",
+      "exit": 0,
+      "finished": "2026-11-03T11:58:31.9908654Z",
+      "phase": "desktop-source",
+      "rustTestSummaries": [],
+      "features": "Desktop source suite with pinned PRIOR-CANDIDATE native/topology; final subset separate"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-desktop-matched-source-before.log",
+      "logSha256": "14a9a956bd3bf1aef86bfe5dbf44a300a424d9117af34ce36111c102ce405849",
+      "arguments": [
+        "D:\\Projects\\inquello\\.tmp\\production-consent-parity-desktop-capture.cjs",
+        "before"
+      ],
+      "name": "desktop-matched-source-before",
+      "infrastructureError": null,
+      "executable": "C:\\Program Files\\nodejs\\node.exe",
+      "exit": 0,
+      "finished": "2026-11-03T12:22:43.0234460Z",
+      "phase": "desktop-matched",
+      "rustTestSummaries": [],
+      "features": "Source/artifact/dist provenance verification; no inference"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-desktop-matched-topology-build.log",
+      "logSha256": "e67e67c9a4a43045e7a4a0bb0c04a6150e13d5d98fa088173aa2d28c802e837d",
+      "arguments": [
+        "build",
+        "--offline",
+        "-j1",
+        "--message-format=json",
+        "-p",
+        "inquello-service",
+        "--features",
+        "test-issuer",
+        "--bin",
+        "inquello-dev-topology"
+      ],
+      "name": "desktop-matched-topology-build",
+      "infrastructureError": null,
+      "executable": "D:\\Toolchains\\cargo\\bin\\cargo.exe",
+      "exit": 0,
+      "finished": "2026-11-03T12:22:44.2711557Z",
+      "phase": "desktop-matched",
+      "rustTestSummaries": [],
+      "features": "test-issuer; synthetic owned topology"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-desktop-matched-topology-capture.log",
+      "logSha256": "e40ff814f7c3888f05712813ae37ab38e5949c7a9fe6d452d703fd3aafd893aa",
+      "arguments": [
+        "D:\\Projects\\inquello\\.tmp\\production-consent-parity-desktop-capture.cjs",
+        "topology"
+      ],
+      "name": "desktop-matched-topology-capture",
+      "infrastructureError": null,
+      "executable": "C:\\Program Files\\nodejs\\node.exe",
+      "exit": 0,
+      "finished": "2026-11-03T12:22:47.0647713Z",
+      "phase": "desktop-matched",
+      "rustTestSummaries": [],
+      "features": "test-issuer; synthetic owned topology"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-desktop-matched-vitest.log",
+      "logSha256": "9e284c4907a25aa3f828511cb6e84491d5c3571eca3d6d91e7f60208f7da6a2f",
+      "arguments": [
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "--configLoader",
+        "runner",
+        "--maxWorkers=1",
+        "--reporter=verbose",
+        "test/integration.test.ts",
+        "test/capabilities-integration.test.ts",
+        "test/data-integration.test.ts",
+        "test/identity-integration.test.ts",
+        "test/organise-integration.test.ts",
+        "test/permissions-integration.test.ts",
+        "test/policy-integration.test.ts",
+        "test/providers-integration.test.ts",
+        "test/routes-integration.test.ts",
+        "test/tool-bounds-integration.test.ts",
+        "test/transport-and-schema.test.ts",
+        "test/epic1-permissions-runtime.witness.test.ts",
+        "test/epic1-quota-runtime.witness.test.ts"
+      ],
+      "name": "desktop-matched-vitest",
+      "infrastructureError": null,
+      "executable": "C:\\Program Files\\nodejs\\node.exe",
+      "exit": 0,
+      "finished": "2026-11-03T12:27:59.4128012Z",
+      "phase": "desktop-matched",
+      "rustTestSummaries": [],
+      "features": "Desktop native-backed subset with exact final retained default binaries"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-desktop-matched-source-after.log",
+      "logSha256": "cda695234ffd3d3a0876a01c7bd6664f07c1ec8e603ffa622277388015beb0f6",
+      "arguments": [
+        "D:\\Projects\\inquello\\.tmp\\production-consent-parity-desktop-capture.cjs",
+        "after"
+      ],
+      "name": "desktop-matched-source-after",
+      "infrastructureError": null,
+      "executable": "C:\\Program Files\\nodejs\\node.exe",
+      "exit": 0,
+      "finished": "2026-11-03T12:28:02.2478868Z",
+      "phase": "desktop-matched",
+      "rustTestSummaries": [],
+      "features": "Source/artifact/dist provenance verification; no inference"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-desktop-final-source-freeze.log",
+      "logSha256": "3547af1c7146d25c5c06435ef915d9bf69c0e491ef22c50c6d91049a2a200da3",
+      "arguments": [
+        "D:\\Projects\\inquello\\.tmp\\production-consent-parity-source-verify.cjs"
+      ],
+      "name": "desktop-source-freeze",
+      "infrastructureError": null,
+      "executable": "C:\\Program Files\\nodejs\\node.exe",
+      "exit": 0,
+      "finished": "2026-11-03T12:21:27.6604283Z",
+      "phase": "desktop-build",
+      "rustTestSummaries": [],
+      "features": "Source/artifact/dist provenance verification; no inference"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-desktop-final-main-types.log",
+      "logSha256": "d8760763be63067f00789fcf42648cb7e89259b37690e733415676ec0b8b6596",
+      "arguments": [
+        "node_modules/typescript/bin/tsc",
+        "-p",
+        "tsconfig.build.json",
+        "--noEmit"
+      ],
+      "name": "desktop-main-types",
+      "infrastructureError": null,
+      "executable": "C:\\Program Files\\nodejs\\node.exe",
+      "exit": 0,
+      "finished": "2026-11-03T12:21:30.9490017Z",
+      "phase": "desktop-build",
+      "rustTestSummaries": [],
+      "features": "Static Desktop type/build gate; no inference"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-desktop-final-renderer-types.log",
+      "logSha256": "d8760763be63067f00789fcf42648cb7e89259b37690e733415676ec0b8b6596",
+      "arguments": [
+        "node_modules/typescript/bin/tsc",
+        "-p",
+        "tsconfig.renderer.json",
+        "--noEmit"
+      ],
+      "name": "desktop-renderer-types",
+      "infrastructureError": null,
+      "executable": "C:\\Program Files\\nodejs\\node.exe",
+      "exit": 0,
+      "finished": "2026-11-03T12:21:34.0163724Z",
+      "phase": "desktop-build",
+      "rustTestSummaries": [],
+      "features": "Static Desktop type/build gate; no inference"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-desktop-final-build.log",
+      "logSha256": "a2e621d0b10225ad8a062918badb6dbc93ed37cfb4562d165eb4d4b024876f5a",
+      "arguments": [
+        "/d",
+        "/c",
+        "pnpm",
+        "run",
+        "build"
+      ],
+      "name": "desktop-build",
+      "infrastructureError": null,
+      "executable": "C:\\Windows\\system32\\cmd.exe",
+      "exit": 0,
+      "finished": "2026-11-03T12:21:43.3966868Z",
+      "phase": "desktop-build",
+      "rustTestSummaries": [],
+      "features": "Static Desktop type/build gate; no inference"
+    }
+  ],
+  "checkpointGates": [
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-terminal-cheap-fmt.log",
+      "logSha256": "B9124A6A596BA21D105B047B099B8C62604A8AEC059637342C6845493B98A6AF",
+      "arguments": [
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "name": "fmt",
+      "infrastructureError": null,
+      "executable": "D:\\Toolchains\\cargo\\bin\\cargo.exe",
+      "exit": 0,
+      "finished": "2026-11-03T10:32:05.6024210Z",
+      "scope": "Recovery checkpoint checks before final native rematch; exact command/source candidate separately recorded"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-terminal-cheap-protocol-service.log",
+      "logSha256": "488FEE6263E8B0B98E53D57D54AC57A303BA157AF863D93138619D75F1427885",
+      "arguments": [
+        "test",
+        "--offline",
+        "-j1",
+        "-p",
+        "inquello-protocol",
+        "-p",
+        "inquello-service",
+        "--features",
+        "inquello-service/test-issuer",
+        "--all-targets",
+        "--",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "name": "protocol-service",
+      "infrastructureError": null,
+      "executable": "D:\\Toolchains\\cargo\\bin\\cargo.exe",
+      "exit": 0,
+      "finished": "2026-11-03T10:35:42.1720387Z",
+      "scope": "Recovery checkpoint checks before final native rematch; exact command/source candidate separately recorded"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-terminal-cheap-2-main-types.log",
+      "logSha256": "D8760763BE63067F00789FCF42648CB7E89259B37690E733415676EC0B8B6596",
+      "arguments": [
+        "node_modules/typescript/bin/tsc",
+        "-p",
+        "tsconfig.build.json",
+        "--noEmit"
+      ],
+      "name": "main-types",
+      "infrastructureError": null,
+      "executable": "C:\\Program Files\\nodejs\\node.exe",
+      "exit": 0,
+      "finished": "2026-11-03T10:36:00.5592083Z",
+      "scope": "Recovery checkpoint checks before final native rematch; exact command/source candidate separately recorded"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-terminal-cheap-2-renderer-types.log",
+      "logSha256": "D8760763BE63067F00789FCF42648CB7E89259B37690E733415676EC0B8B6596",
+      "arguments": [
+        "node_modules/typescript/bin/tsc",
+        "-p",
+        "tsconfig.renderer.json",
+        "--noEmit"
+      ],
+      "name": "renderer-types",
+      "infrastructureError": null,
+      "executable": "C:\\Program Files\\nodejs\\node.exe",
+      "exit": 0,
+      "finished": "2026-11-03T10:36:03.7230174Z",
+      "scope": "Recovery checkpoint checks before final native rematch; exact command/source candidate separately recorded"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-terminal-cheap-2-consent-desktop.log",
+      "logSha256": "95D0D5A0D60F7E5430198585E435C88ADE4952D0899053FE7E29AF4F5E1B5BD1",
+      "arguments": [
+        "node_modules/vitest/vitest.mjs",
+        "run",
+        "test/provider-consent.test.ts",
+        "test/provider-consent-renderer.test.tsx",
+        "test/provider-consent-ui.test.tsx",
+        "test/provider-consent-store.test.ts",
+        "--configLoader",
+        "runner",
+        "--maxWorkers=1",
+        "--reporter=verbose"
+      ],
+      "name": "consent-desktop",
+      "infrastructureError": null,
+      "executable": "C:\\Program Files\\nodejs\\node.exe",
+      "exit": 0,
+      "finished": "2026-11-03T10:36:17.5079008Z",
+      "scope": "Recovery checkpoint checks before final native rematch; exact command/source candidate separately recorded"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-terminal-cheap-2-strict-clippy.log",
+      "logSha256": "CB70A585961F10047E49D1298AAD56FEE14BBE8E357FB738342BD7D4A0536671",
+      "arguments": [
+        "clippy",
+        "--offline",
+        "-j1",
+        "--config",
+        "profile.dev.package.codex-core.debug=0",
+        "-p",
+        "inquello-domain",
+        "-p",
+        "inquello-protocol",
+        "-p",
+        "inquello-service",
+        "-p",
+        "codex-exec-server",
+        "-p",
+        "codex-core",
+        "-p",
+        "codex-app-server",
+        "--features",
+        "inquello-service/test-issuer",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "name": "strict-clippy",
+      "infrastructureError": null,
+      "executable": "D:\\Toolchains\\cargo\\bin\\cargo.exe",
+      "exit": 0,
+      "finished": "2026-11-03T10:43:32.0504357Z",
+      "scope": "Recovery checkpoint checks before final native rematch; exact command/source candidate separately recorded"
+    }
+  ],
+  "checkpointCandidate": {
+    "path": ".tmp/production-consent-terminal-candidate-3.json",
+    "sha256": "1468ea5d317b246b19893c8d116c56b962aa6b0361815a9c63d4038549af1b41"
+  },
+  "witnesses": {
+    "B-allowed": {
+      "gate": "responses-full",
+      "test": "responses_allowed",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-fixture-final-responses-full.log",
+      "logSha256": "97b558671c82389f8a50cd661f270439f054de43d27759015a503b8071e03bfa",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "Minimal fixture metadata; synthetic Responses transport with actual retained runtime"
+    },
+    "B-bundled-tool": {
+      "gate": "responses-full",
+      "test": "responses_bundled_catalog_allowed_tool_effect",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-fixture-final-responses-full.log",
+      "logSha256": "97b558671c82389f8a50cd661f270439f054de43d27759015a503b8071e03bfa",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "Unchanged trusted bundled Terra metadata; synthetic Responses transport with actual retained runtime effects"
+    },
+    "B-bundled-text": {
+      "gate": "responses-full",
+      "test": "responses_bundled_catalog_text_completed_followup",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-fixture-final-responses-full.log",
+      "logSha256": "97b558671c82389f8a50cd661f270439f054de43d27759015a503b8071e03bfa",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "Unchanged trusted bundled Terra metadata; synthetic Responses transport with actual retained runtime effects"
+    },
+    "B-private": {
+      "gate": "responses-full",
+      "test": "responses_search_reopen_private_denials",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-fixture-final-responses-full.log",
+      "logSha256": "97b558671c82389f8a50cd661f270439f054de43d27759015a503b8071e03bfa",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "Minimal fixture metadata; synthetic Responses transport with actual retained runtime"
+    },
+    "B-deny": {
+      "gate": "responses-full",
+      "test": "responses_deny_before_dispatch",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-fixture-final-responses-full.log",
+      "logSha256": "97b558671c82389f8a50cd661f270439f054de43d27759015a503b8071e03bfa",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "Minimal fixture metadata; synthetic Responses transport with actual retained runtime"
+    },
+    "B-revoke-model": {
+      "gate": "responses-full",
+      "test": "responses_revoke_model",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-fixture-final-responses-full.log",
+      "logSha256": "97b558671c82389f8a50cd661f270439f054de43d27759015a503b8071e03bfa",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "Minimal fixture metadata; synthetic Responses transport with actual retained runtime"
+    },
+    "B-revoke-tool": {
+      "gate": "responses-full",
+      "test": "responses_revoke_running_tool",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-fixture-final-responses-full.log",
+      "logSha256": "97b558671c82389f8a50cd661f270439f054de43d27759015a503b8071e03bfa",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "Minimal fixture metadata; synthetic Responses transport with actual retained runtime"
+    },
+    "B-revoke-permission": {
+      "gate": "responses-full",
+      "test": "responses_revoke_pending_permission",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-fixture-final-responses-full.log",
+      "logSha256": "97b558671c82389f8a50cd661f270439f054de43d27759015a503b8071e03bfa",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "Minimal fixture metadata; synthetic Responses transport with actual retained runtime"
+    },
+    "B-stop-unavailable": {
+      "gate": "responses-full",
+      "test": "responses_lifecycle_stop_provider_unavailable",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-fixture-final-responses-full.log",
+      "logSha256": "97b558671c82389f8a50cd661f270439f054de43d27759015a503b8071e03bfa",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "Minimal fixture metadata; synthetic Responses transport with actual retained runtime"
+    },
+    "B-stop-resume": {
+      "gate": "responses-full",
+      "test": "responses_lifecycle_stop_resume",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-fixture-final-responses-full.log",
+      "logSha256": "97b558671c82389f8a50cd661f270439f054de43d27759015a503b8071e03bfa",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "Minimal fixture metadata; synthetic Responses transport with actual retained runtime"
+    },
+    "B-followup": {
+      "gate": "responses-full",
+      "test": "responses_lifecycle_completed_followup",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-fixture-final-responses-full.log",
+      "logSha256": "97b558671c82389f8a50cd661f270439f054de43d27759015a503b8071e03bfa",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "Minimal fixture metadata; synthetic Responses transport with actual retained runtime"
+    },
+    "B-before-resume": {
+      "gate": "responses-full",
+      "test": "responses_lifecycle_revoke_before_resume",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-fixture-final-responses-full.log",
+      "logSha256": "97b558671c82389f8a50cd661f270439f054de43d27759015a503b8071e03bfa",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "Minimal fixture metadata; synthetic Responses transport with actual retained runtime"
+    },
+    "B-during-resume": {
+      "gate": "responses-full",
+      "test": "responses_lifecycle_revoke_during_resume",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-fixture-final-responses-full.log",
+      "logSha256": "97b558671c82389f8a50cd661f270439f054de43d27759015a503b8071e03bfa",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "Minimal fixture metadata; synthetic Responses transport with actual retained runtime"
+    },
+    "B-missing": {
+      "gate": "responses-full",
+      "test": "responses_lifecycle_missing_linkage",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-fixture-final-responses-full.log",
+      "logSha256": "97b558671c82389f8a50cd661f270439f054de43d27759015a503b8071e03bfa",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "Minimal fixture metadata; synthetic Responses transport with actual retained runtime"
+    },
+    "B-peer": {
+      "gate": "responses-full",
+      "test": "responses_lifecycle_peer_private",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-fixture-final-responses-full.log",
+      "logSha256": "97b558671c82389f8a50cd661f270439f054de43d27759015a503b8071e03bfa",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "Minimal fixture metadata; synthetic Responses transport with actual retained runtime"
+    },
+    "B-company": {
+      "gate": "responses-full",
+      "test": "responses_lifecycle_cross_company",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-fixture-final-responses-full.log",
+      "logSha256": "97b558671c82389f8a50cd661f270439f054de43d27759015a503b8071e03bfa",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "Minimal fixture metadata; synthetic Responses transport with actual retained runtime"
+    },
+    "B-restart": {
+      "gate": "responses-full",
+      "test": "responses_lifecycle_restart",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-fixture-final-responses-full.log",
+      "logSha256": "97b558671c82389f8a50cd661f270439f054de43d27759015a503b8071e03bfa",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "Minimal fixture metadata; synthetic Responses transport with actual retained runtime"
+    },
+    "B-crash": {
+      "gate": "responses-full",
+      "test": "responses_lifecycle_crash",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-fixture-final-responses-full.log",
+      "logSha256": "97b558671c82389f8a50cd661f270439f054de43d27759015a503b8071e03bfa",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "Minimal fixture metadata; synthetic Responses transport with actual retained runtime"
+    },
+    "B-lost-ack": {
+      "gate": "responses-full",
+      "test": "responses_lifecycle_steer_lost_ack",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-fixture-final-responses-full.log",
+      "logSha256": "97b558671c82389f8a50cd661f270439f054de43d27759015a503b8071e03bfa",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "Minimal fixture metadata; synthetic Responses transport with actual retained runtime"
+    },
+    "B-stop-pending": {
+      "gate": "responses-full",
+      "test": "responses_lifecycle_stop_pending_steer",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-fixture-final-responses-full.log",
+      "logSha256": "97b558671c82389f8a50cd661f270439f054de43d27759015a503b8071e03bfa",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "Minimal fixture metadata; synthetic Responses transport with actual retained runtime"
+    },
+    "B-stop-inflight": {
+      "gate": "responses-full",
+      "test": "responses_lifecycle_stop_inflight_steer",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-fixture-final-responses-full.log",
+      "logSha256": "97b558671c82389f8a50cd661f270439f054de43d27759015a503b8071e03bfa",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "Minimal fixture metadata; synthetic Responses transport with actual retained runtime"
+    },
+    "B-steer": {
+      "gate": "responses-full",
+      "test": "responses_lifecycle_steer",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-fixture-final-responses-full.log",
+      "logSha256": "97b558671c82389f8a50cd661f270439f054de43d27759015a503b8071e03bfa",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "Minimal fixture metadata; synthetic Responses transport with actual retained runtime"
+    },
+    "B-progress": {
+      "gate": "responses-full",
+      "test": "responses_lifecycle_progress_continuity",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-fixture-final-responses-full.log",
+      "logSha256": "97b558671c82389f8a50cd661f270439f054de43d27759015a503b8071e03bfa",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "Minimal fixture metadata; synthetic Responses transport with actual retained runtime"
+    },
+    "B-final-await": {
+      "gate": "responses-full",
+      "test": "responses_search_final_await_contributors",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-fixture-final-responses-full.log",
+      "logSha256": "97b558671c82389f8a50cd661f270439f054de43d27759015a503b8071e03bfa",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "Minimal fixture metadata; synthetic Responses transport with actual retained runtime"
+    },
+    "B-zero-match": {
+      "gate": "responses-full",
+      "test": "responses_search_zero_to_match_final_await",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-fixture-final-responses-full.log",
+      "logSha256": "97b558671c82389f8a50cd661f270439f054de43d27759015a503b8071e03bfa",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "Minimal fixture metadata; synthetic Responses transport with actual retained runtime"
+    },
+    "B-legacy": {
+      "gate": "responses-full",
+      "test": "responses_search_paginated_and_legacy_old_turn",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-fixture-final-responses-full.log",
+      "logSha256": "97b558671c82389f8a50cd661f270439f054de43d27759015a503b8071e03bfa",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "Minimal fixture metadata; synthetic Responses transport with actual retained runtime"
+    },
+    "B-cursor": {
+      "gate": "responses-full",
+      "test": "responses_search_next_cursor_scope_snapshot",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-fixture-final-responses-full.log",
+      "logSha256": "97b558671c82389f8a50cd661f270439f054de43d27759015a503b8071e03bfa",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "Minimal fixture metadata; synthetic Responses transport with actual retained runtime"
+    },
+    "B-route-mismatch": {
+      "gate": "responses-full",
+      "test": "responses_search_retained_route_mismatch",
+      "source": "engine/codex-rs/app-server/tests/inquello_authorization_runtime.rs",
+      "sourceSha256": "f8fb540d016256a1b5c7c7a645207f27c1e566600123687defb6976569636689",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-fixture-final-responses-full.log",
+      "logSha256": "97b558671c82389f8a50cd661f270439f054de43d27759015a503b8071e03bfa",
+      "sharedDriver": {
+        "source": "engine/codex-rs/app-server/tests/common/inquello_authorization_driver.rs",
+        "sha256": "ac2b8229310ed7fd6c5a1f58fa33331595a10dbdb3274d75b3c212c4bcdedcf7"
+      },
+      "scope": "Minimal fixture metadata; synthetic Responses transport with actual retained runtime"
+    },
+    "A-admission": {
+      "gate": "native-lib",
+      "test": "request_processors::inquello_processor::tasks_bridge::bootstrap_order_tests::inquello_real_session_current_approval_all_protected_actions_default_features",
+      "source": "engine/codex-rs/app-server/src/request_processors/inquello_tasks.rs",
+      "sourceSha256": "0322348f9f45916062831544842936f63c8c1c278658243f2efb5d0145b4e4a6",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-native-lib.log",
+      "logSha256": "35275c94fb4ca76475678b7d5a0c769b0a20c1c4cdafc95a0c36cbe1dc50a3eb"
+    },
+    "A-withdrawal": {
+      "gate": "native-lib",
+      "test": "request_processors::inquello_processor::tasks_bridge::bootstrap_order_tests::inquello_real_session_withdrawal_and_late_authority_default_features",
+      "source": "engine/codex-rs/app-server/src/request_processors/inquello_tasks.rs",
+      "sourceSha256": "0322348f9f45916062831544842936f63c8c1c278658243f2efb5d0145b4e4a6",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-native-lib.log",
+      "logSha256": "35275c94fb4ca76475678b7d5a0c769b0a20c1c4cdafc95a0c36cbe1dc50a3eb"
+    },
+    "C-inventory": {
+      "gate": "native-bin-fingerprint",
+      "test": "inspection_composition_tests::terra_native_inventory_preserves_exact_proof_and_refuses_unknown_evidence",
+      "source": "engine/codex-rs/app-server/src/main_inspection_tests.rs",
+      "sourceSha256": "7886bb3197798b20f44d2534f3066840af4d1058db536cdfacfb6094c201d869",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-native-bin-fingerprint.log",
+      "logSha256": "3667d3f76192e1a2e8b9b28ca523789272f6c51ccf890d3d3423fc462fc9f256"
+    },
+    "E-approval": {
+      "gate": "service",
+      "test": "route_eligibility::transaction_tests::passing_fixture_approval_is_current_scoped_and_revocable",
+      "source": "engine/codex-rs/inquello-service/src/route_eligibility_fixture_tests.rs",
+      "sourceSha256": "1d540e4a899c479622447cef416f885d77c80bea2761f114ce3053ac1747c4f3",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-service.log",
+      "logSha256": "b3a0519c0b131b452191824811a5359e370504ad241d25d8ebdfdd4e8be6b7ed"
+    },
+    "E-receipt": {
+      "gate": "service",
+      "test": "export_receipt_survives_local_journal_loss_but_never_owner_change_or_revocation",
+      "source": "engine/codex-rs/inquello-service/tests/route_eligibility.rs",
+      "sourceSha256": "d22021353c20290d019274d2415e1ad27c0a855dcc534c63cb75939aa942ef7e",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-service.log",
+      "logSha256": "b3a0519c0b131b452191824811a5359e370504ad241d25d8ebdfdd4e8be6b7ed"
+    },
+    "F-identity": {
+      "gate": "domain",
+      "test": "routes::authorization::tests::exact_identity_conjunction_and_current_operation_binding",
+      "source": "engine/codex-rs/inquello-domain/src/routes/authorization.rs",
+      "sourceSha256": "0f2452befb3445f5032394805897109ca14563f24a9dab3e370906c975c7488e",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-domain.log",
+      "logSha256": "920c832169c0ae1731d327b3ef362cfc38b628cb2366a036b23a04fbfb195775"
+    },
+    "F-oldproof": {
+      "gate": "domain",
+      "test": "routes::authorization::tests::old_credential_bound_evidence_cannot_gain_adapter_build_semantics",
+      "source": "engine/codex-rs/inquello-domain/src/routes/authorization.rs",
+      "sourceSha256": "0f2452befb3445f5032394805897109ca14563f24a9dab3e370906c975c7488e",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-domain.log",
+      "logSha256": "920c832169c0ae1731d327b3ef362cfc38b628cb2366a036b23a04fbfb195775"
+    },
+    "F-completion": {
+      "gate": "core",
+      "test": "inquello_inference::tests::public_responses_completed_without_codex_extension_finishes_text_only_turn",
+      "source": "engine/codex-rs/core/src/inquello_inference.rs",
+      "sourceSha256": "d3d8527ab66f3e55cdb588cf5501d66bdcd9e3fb791ccf9d960e9f6c3e05d7c5",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-core.log",
+      "logSha256": "50ba2e89340afbd2ec48a4b45eb8021d385388e8b91ea6e84c3ca9ef38cea3af"
+    },
+    "F-bounded": {
+      "gate": "bounded-rollout",
+      "test": "seekable_reader::saved_bounds_tests::saved_reads_bound_plain_and_compressed_before_parsing",
+      "source": "engine/codex-rs/rollout/src/seekable_reader.rs",
+      "sourceSha256": "51c56dc3490bdecdabbf4c8c94c8e94bfdecb6dd7fb31062d357939b3af4f392",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-bounded-rollout.log",
+      "logSha256": "1d641e52342cc05660c8dd393ff492ab8b1f8818cb7351e8075c0191eefd0de9"
+    },
+    "D-bytes": {
+      "gate": "desktop-source-vitest-full",
+      "test": "exports, deletes and recovers exact bytes with independently bound service receipt checks",
+      "source": "desktop/test/data-authority-fences.test.ts",
+      "sourceSha256": "632afd6dadb4fab5aa5eb1202f0664f9431b4b79be6b4960070147f0065a2a07",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-security-desktop-check-vitest-full.log",
+      "logSha256": "b89288e1aa5d927f49e8bcbafb5470bb2e0b8ff36950b0bc804ab273a3fe1743",
+      "executionEvidence": "Γ£ô test/data-authority-fences.test.ts > composed production real-content authority and owned filesystem effects > exports, deletes and recovers exact bytes with independently bound service receipt checks 59ms",
+      "scope": "Actual DataAuthority/DataService owned filesystem bytes with parsed mock native/HTTPS wire; separate native SQLite and actual PostgreSQL witnesses, not cross-process E2E."
+    },
+    "D-export-withdrawal": {
+      "gate": "desktop-source-vitest-full",
+      "test": "withdrawal while export receipt is pending prevents publication without deleting source bytes",
+      "source": "desktop/test/data-authority-fences.test.ts",
+      "sourceSha256": "632afd6dadb4fab5aa5eb1202f0664f9431b4b79be6b4960070147f0065a2a07",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-security-desktop-check-vitest-full.log",
+      "logSha256": "b89288e1aa5d927f49e8bcbafb5470bb2e0b8ff36950b0bc804ab273a3fe1743",
+      "executionEvidence": "Γ£ô test/data-authority-fences.test.ts > composed production real-content authority and owned filesystem effects > withdrawal while export receipt is pending prevents publication without deleting source bytes 55ms",
+      "scope": "Actual DataAuthority/DataService owned filesystem bytes with parsed mock native/HTTPS wire; separate native SQLite and actual PostgreSQL witnesses, not cross-process E2E."
+    },
+    "D-recovery-withdrawal": {
+      "gate": "desktop-source-vitest-full",
+      "test": "withdrawal after recovery receipt wait cannot publish any restored family",
+      "source": "desktop/test/data-authority-fences.test.ts",
+      "sourceSha256": "632afd6dadb4fab5aa5eb1202f0664f9431b4b79be6b4960070147f0065a2a07",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-security-desktop-check-vitest-full.log",
+      "logSha256": "b89288e1aa5d927f49e8bcbafb5470bb2e0b8ff36950b0bc804ab273a3fe1743",
+      "executionEvidence": "Γ£ô test/data-authority-fences.test.ts > composed production real-content authority and owned filesystem effects > withdrawal after recovery receipt wait cannot publish any restored family 69ms",
+      "scope": "Actual DataAuthority/DataService owned filesystem bytes with parsed mock native/HTTPS wire; separate native SQLite and actual PostgreSQL witnesses, not cross-process E2E."
+    },
+    "V5-1": {
+      "gate": "service",
+      "test": "durable_consent_is_explicit_owner_cas_and_replay_not_credential_or_model_dispatch",
+      "source": "engine/codex-rs/inquello-service/tests/provider_consents.rs",
+      "sourceSha256": "69d78daf6fcbfd39db41cecacccbea83b4a19f36c516f2bec19bb2cc1451b183",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-service.log",
+      "logSha256": "b3a0519c0b131b452191824811a5359e370504ad241d25d8ebdfdd4e8be6b7ed"
+    },
+    "V5-2": {
+      "gate": "desktop-source-vitest-full",
+      "test": "owner explicitly connects and allows once, with exact displayed terms and cleared key",
+      "source": "desktop/test/provider-consent-ui.test.tsx",
+      "sourceSha256": "e51c249243c829c4727b9934ff2caebf67318af544ca78969641e2e54bc65cac",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-security-desktop-check-vitest-full.log",
+      "logSha256": "b89288e1aa5d927f49e8bcbafb5470bb2e0b8ff36950b0bc804ab273a3fe1743",
+      "executionEvidence": "Γ£ô test/provider-consent-ui.test.tsx > owner explicitly connects and allows once, with exact displayed terms and cleared key 207ms",
+      "scope": "Owned PostgreSQL actual authenticated command/CAS/history/receipt/epoch plus UI explicit-action composition; no actual workspace grant."
+    },
+    "V5-3": {
+      "gate": "domain",
+      "test": "routes::processing_contract::tests::compatible_explicit_model_mapping_is_not_software_qualification",
+      "source": "engine/codex-rs/inquello-domain/src/routes/processing_contract.rs",
+      "sourceSha256": "0be5ae48ab327a3622ca2e2ae3261c87f932b9d0b1fb11fd7182b4140213788c",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-domain.log",
+      "logSha256": "920c832169c0ae1731d327b3ef362cfc38b628cb2366a036b23a04fbfb195775"
+    },
+    "V5-4": {
+      "gate": "domain",
+      "test": "routes::processing_contract::tests::documentation_provenance_is_not_material_consent_identity",
+      "source": "engine/codex-rs/inquello-domain/src/routes/processing_contract.rs",
+      "sourceSha256": "0be5ae48ab327a3622ca2e2ae3261c87f932b9d0b1fb11fd7182b4140213788c",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-domain.log",
+      "logSha256": "920c832169c0ae1731d327b3ef362cfc38b628cb2366a036b23a04fbfb195775"
+    },
+    "V5-5": {
+      "gate": "service",
+      "test": "projection_is_session_stable_and_revoked_or_changed_consent_suppresses_legacy",
+      "source": "engine/codex-rs/inquello-service/tests/provider_consents.rs",
+      "sourceSha256": "69d78daf6fcbfd39db41cecacccbea83b4a19f36c516f2bec19bb2cc1451b183",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-service.log",
+      "logSha256": "b3a0519c0b131b452191824811a5359e370504ad241d25d8ebdfdd4e8be6b7ed"
+    },
+    "V5-6": {
+      "gate": "domain",
+      "test": "routes::processing_contract::tests::material_fields_change_consent_identity",
+      "source": "engine/codex-rs/inquello-domain/src/routes/processing_contract.rs",
+      "sourceSha256": "0be5ae48ab327a3622ca2e2ae3261c87f932b9d0b1fb11fd7182b4140213788c",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-domain.log",
+      "logSha256": "920c832169c0ae1731d327b3ef362cfc38b628cb2366a036b23a04fbfb195775"
+    },
+    "V5-7": {
+      "gate": "domain",
+      "test": "routes::processing_contract::tests::displayed_material_terms_are_bound_to_consent_identity",
+      "source": "engine/codex-rs/inquello-domain/src/routes/processing_contract.rs",
+      "sourceSha256": "0be5ae48ab327a3622ca2e2ae3261c87f932b9d0b1fb11fd7182b4140213788c",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-domain.log",
+      "logSha256": "920c832169c0ae1731d327b3ef362cfc38b628cb2366a036b23a04fbfb195775"
+    },
+    "V5-8": {
+      "gate": "service",
+      "test": "projection_is_session_stable_and_revoked_or_changed_consent_suppresses_legacy",
+      "source": "engine/codex-rs/inquello-service/tests/provider_consents.rs",
+      "sourceSha256": "69d78daf6fcbfd39db41cecacccbea83b4a19f36c516f2bec19bb2cc1451b183",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-service.log",
+      "logSha256": "b3a0519c0b131b452191824811a5359e370504ad241d25d8ebdfdd4e8be6b7ed"
+    },
+    "V5-9": {
+      "gate": "service",
+      "test": "durable_consent_is_explicit_owner_cas_and_replay_not_credential_or_model_dispatch",
+      "source": "engine/codex-rs/inquello-service/tests/provider_consents.rs",
+      "sourceSha256": "69d78daf6fcbfd39db41cecacccbea83b4a19f36c516f2bec19bb2cc1451b183",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-service.log",
+      "logSha256": "b3a0519c0b131b452191824811a5359e370504ad241d25d8ebdfdd4e8be6b7ed"
+    },
+    "V5-10": {
+      "gate": "service",
+      "test": "projection_is_session_stable_and_revoked_or_changed_consent_suppresses_legacy",
+      "source": "engine/codex-rs/inquello-service/tests/provider_consents.rs",
+      "sourceSha256": "69d78daf6fcbfd39db41cecacccbea83b4a19f36c516f2bec19bb2cc1451b183",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-service.log",
+      "logSha256": "b3a0519c0b131b452191824811a5359e370504ad241d25d8ebdfdd4e8be6b7ed"
+    },
+    "V5-11": {
+      "gate": "desktop-source-vitest-full",
+      "test": "withdrawal while export receipt is pending prevents publication without deleting source bytes",
+      "source": "desktop/test/data-authority-fences.test.ts",
+      "sourceSha256": "632afd6dadb4fab5aa5eb1202f0664f9431b4b79be6b4960070147f0065a2a07",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-security-desktop-check-vitest-full.log",
+      "logSha256": "b89288e1aa5d927f49e8bcbafb5470bb2e0b8ff36950b0bc804ab273a3fe1743",
+      "executionEvidence": "Γ£ô test/data-authority-fences.test.ts > composed production real-content authority and owned filesystem effects > withdrawal while export receipt is pending prevents publication without deleting source bytes 55ms",
+      "scope": "Explicit composition: actual consent revoke increments epoch and service refuses fresh/stale operation; independent native exact-bound late-output/effect fences and Desktop owned bytes. Not integrated consent-click-to-provider cross-process E2E."
+    },
+    "V5-12": {
+      "gate": "service",
+      "test": "concurrent_consent_cas_has_one_winner_and_current_owner_required_for_replay",
+      "source": "engine/codex-rs/inquello-service/tests/provider_consents.rs",
+      "sourceSha256": "69d78daf6fcbfd39db41cecacccbea83b4a19f36c516f2bec19bb2cc1451b183",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-service.log",
+      "logSha256": "b3a0519c0b131b452191824811a5359e370504ad241d25d8ebdfdd4e8be6b7ed"
+    },
+    "V5-13": {
+      "gate": "desktop-source-vitest-full",
+      "test": "lost acknowledgement survives restart; missing receipt never clears or replaces UUID",
+      "source": "desktop/test/provider-consent.test.ts",
+      "sourceSha256": "efd69d787726564f0507b625839c1c14088c83b83d743f3a62e93772c00ef145",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-security-desktop-check-vitest-full.log",
+      "logSha256": "b89288e1aa5d927f49e8bcbafb5470bb2e0b8ff36950b0bc804ab273a3fe1743",
+      "executionEvidence": "Γ£ô test/provider-consent.test.ts > durable owner consent mediation > lost acknowledgement survives restart; missing receipt never clears or replaces UUID 2ms",
+      "scope": "Actual transactional one-winner CAS plus main journal/restart/immutable retry composition; simulated transport ambiguity explicitly labeled. Exact command/principal-bound terminal no-effect receipt under the workspace lock prevents delayed original requests from committing after reconciliation. Applied receipt precedence is tested across command-epoch/new-session changes. Rollback witness uses an explicitly historical exact receipt fixture composed with actual current-terms HTTP replay; no runtime contract override. Missing/inaccessible/malformed receipts retain uncertainty. Terminal rejection writes only its receipt, not consent/history/authorization epoch."
+    },
+    "V5-14": {
+      "gate": "desktop-source-vitest-full",
+      "test": "a definitive denial after an uncertain repeated access callback retains the original pending command",
+      "source": "desktop/test/provider-consent.test.ts",
+      "sourceSha256": "efd69d787726564f0507b625839c1c14088c83b83d743f3a62e93772c00ef145",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-security-desktop-check-vitest-full.log",
+      "logSha256": "b89288e1aa5d927f49e8bcbafb5470bb2e0b8ff36950b0bc804ab273a3fe1743",
+      "executionEvidence": "Γ£ô test/provider-consent.test.ts > durable owner consent mediation > a definitive denial after an uncertain repeated access callback retains the original pending command 1ms",
+      "scope": "Actual transactional one-winner CAS plus main journal/restart/immutable retry composition; simulated transport ambiguity explicitly labeled. Exact command/principal-bound terminal no-effect receipt under the workspace lock prevents delayed original requests from committing after reconciliation. Applied receipt precedence is tested across command-epoch/new-session changes. Rollback witness uses an explicitly historical exact receipt fixture composed with actual current-terms HTTP replay; no runtime contract override. Missing/inaccessible/malformed receipts retain uncertainty. Terminal rejection writes only its receipt, not consent/history/authorization epoch."
+    },
+    "V5-15": {
+      "gate": "desktop-source-vitest-full",
+      "test": "restarts with exact encrypted immutable envelope and separate principal/workspace/service scopes",
+      "source": "desktop/test/provider-consent-store.test.ts",
+      "sourceSha256": "5f995942bb2b17e8819298202d8b54fae731325674f3ed2fbccac390362edb58",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-security-desktop-check-vitest-full.log",
+      "logSha256": "b89288e1aa5d927f49e8bcbafb5470bb2e0b8ff36950b0bc804ab273a3fe1743",
+      "executionEvidence": "Γ£ô test/provider-consent-store.test.ts > restarts with exact encrypted immutable envelope and separate principal/workspace/service scopes 772ms",
+      "scope": "Actual transactional one-winner CAS plus main journal/restart/immutable retry composition; simulated transport ambiguity explicitly labeled. Exact command/principal-bound terminal no-effect receipt under the workspace lock prevents delayed original requests from committing after reconciliation. Applied receipt precedence is tested across command-epoch/new-session changes. Rollback witness uses an explicitly historical exact receipt fixture composed with actual current-terms HTTP replay; no runtime contract override. Missing/inaccessible/malformed receipts retain uncertainty. Terminal rejection writes only its receipt, not consent/history/authorization epoch."
+    },
+    "V5-16": {
+      "gate": "service",
+      "test": "stale_owner_commands_record_exact_no_effect_receipts_without_changing_permission",
+      "source": "engine/codex-rs/inquello-service/tests/provider_consents.rs",
+      "sourceSha256": "69d78daf6fcbfd39db41cecacccbea83b4a19f36c516f2bec19bb2cc1451b183",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-service.log",
+      "logSha256": "b3a0519c0b131b452191824811a5359e370504ad241d25d8ebdfdd4e8be6b7ed"
+    },
+    "V5-17": {
+      "gate": "service",
+      "test": "applied_receipt_wins_after_epoch_change_and_new_session_without_reapplying_grant",
+      "source": "engine/codex-rs/inquello-service/tests/provider_consents.rs",
+      "sourceSha256": "69d78daf6fcbfd39db41cecacccbea83b4a19f36c516f2bec19bb2cc1451b183",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-service.log",
+      "logSha256": "b3a0519c0b131b452191824811a5359e370504ad241d25d8ebdfdd4e8be6b7ed"
+    },
+    "V5-18": {
+      "gate": "service",
+      "test": "concurrent_late_original_and_retry_share_one_terminal_receipt_then_new_operation_can_succeed",
+      "source": "engine/codex-rs/inquello-service/tests/provider_consents.rs",
+      "sourceSha256": "69d78daf6fcbfd39db41cecacccbea83b4a19f36c516f2bec19bb2cc1451b183",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-service.log",
+      "logSha256": "b3a0519c0b131b452191824811a5359e370504ad241d25d8ebdfdd4e8be6b7ed"
+    },
+    "V5-19": {
+      "gate": "service",
+      "test": "historical_material_rejection_cannot_revive_under_matching_terms_or_a_new_session",
+      "source": "engine/codex-rs/inquello-service/tests/provider_consents.rs",
+      "sourceSha256": "69d78daf6fcbfd39db41cecacccbea83b4a19f36c516f2bec19bb2cc1451b183",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-service.log",
+      "logSha256": "b3a0519c0b131b452191824811a5359e370504ad241d25d8ebdfdd4e8be6b7ed"
+    },
+    "V5-20": {
+      "gate": "desktop-source-vitest-full",
+      "test": "an exact not-applied receipt clears uncertainty without claiming a grant and permits a new opposite operation",
+      "source": "desktop/test/provider-consent.test.ts",
+      "sourceSha256": "efd69d787726564f0507b625839c1c14088c83b83d743f3a62e93772c00ef145",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-security-desktop-check-vitest-full.log",
+      "logSha256": "b89288e1aa5d927f49e8bcbafb5470bb2e0b8ff36950b0bc804ab273a3fe1743",
+      "executionEvidence": "Γ£ô test/provider-consent.test.ts > durable owner consent mediation > an exact not-applied receipt clears uncertainty without claiming a grant and permits a new opposite operation 1ms",
+      "scope": "Actual transactional one-winner CAS plus main journal/restart/immutable retry composition; simulated transport ambiguity explicitly labeled. Exact command/principal-bound terminal no-effect receipt under the workspace lock prevents delayed original requests from committing after reconciliation. Applied receipt precedence is tested across command-epoch/new-session changes. Rollback witness uses an explicitly historical exact receipt fixture composed with actual current-terms HTTP replay; no runtime contract override. Missing/inaccessible/malformed receipts retain uncertainty. Terminal rejection writes only its receipt, not consent/history/authorization epoch."
+    },
+    "V5-21": {
+      "gate": "desktop-source-vitest-full",
+      "test": "a retry rejection clears only after its exact recorded terminal result is read",
+      "source": "desktop/test/provider-consent.test.ts",
+      "sourceSha256": "efd69d787726564f0507b625839c1c14088c83b83d743f3a62e93772c00ef145",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-security-desktop-check-vitest-full.log",
+      "logSha256": "b89288e1aa5d927f49e8bcbafb5470bb2e0b8ff36950b0bc804ab273a3fe1743",
+      "executionEvidence": "Γ£ô test/provider-consent.test.ts > durable owner consent mediation > a retry rejection clears only after its exact recorded terminal result is read 1ms",
+      "scope": "Actual transactional one-winner CAS plus main journal/restart/immutable retry composition; simulated transport ambiguity explicitly labeled. Exact command/principal-bound terminal no-effect receipt under the workspace lock prevents delayed original requests from committing after reconciliation. Applied receipt precedence is tested across command-epoch/new-session changes. Rollback witness uses an explicitly historical exact receipt fixture composed with actual current-terms HTTP replay; no runtime contract override. Missing/inaccessible/malformed receipts retain uncertainty. Terminal rejection writes only its receipt, not consent/history/authorization epoch."
+    },
+    "V5-22": {
+      "gate": "desktop-source-vitest-full",
+      "test": "terminal no-effect reconciliation preserves its notice and permits only deliberate new changes",
+      "source": "desktop/test/provider-consent-renderer.test.tsx",
+      "sourceSha256": "55e04147c579e13cfaf5c5fae69579d31fac72ee8ea01110d9c0b93e731bbcc5",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-security-desktop-check-vitest-full.log",
+      "logSha256": "b89288e1aa5d927f49e8bcbafb5470bb2e0b8ff36950b0bc804ab273a3fe1743",
+      "executionEvidence": "Γ£ô test/provider-consent-renderer.test.tsx > owner consent renderer observations > terminal no-effect reconciliation preserves its notice and permits only deliberate new changes 56ms",
+      "scope": "Actual transactional one-winner CAS plus main journal/restart/immutable retry composition; simulated transport ambiguity explicitly labeled. Exact command/principal-bound terminal no-effect receipt under the workspace lock prevents delayed original requests from committing after reconciliation. Applied receipt precedence is tested across command-epoch/new-session changes. Rollback witness uses an explicitly historical exact receipt fixture composed with actual current-terms HTTP replay; no runtime contract override. Missing/inaccessible/malformed receipts retain uncertainty. Terminal rejection writes only its receipt, not consent/history/authorization epoch."
+    },
+    "V5-23": {
+      "gate": "service",
+      "test": "owner_transitions_reject_admin_elevation_and_preserve_current_owner",
+      "source": "engine/codex-rs/inquello-service/tests/onboarding.rs",
+      "sourceSha256": "2a1ba8aa3661637686ff63b2faa1bf49ed09b835c574f1502e620e6a45d71f69",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-service.log",
+      "logSha256": "b3a0519c0b131b452191824811a5359e370504ad241d25d8ebdfdd4e8be6b7ed"
+    },
+    "V5-24": {
+      "gate": "service",
+      "test": "concurrent_consent_cas_has_one_winner_and_current_owner_required_for_replay",
+      "source": "engine/codex-rs/inquello-service/tests/provider_consents.rs",
+      "sourceSha256": "69d78daf6fcbfd39db41cecacccbea83b4a19f36c516f2bec19bb2cc1451b183",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-service.log",
+      "logSha256": "b3a0519c0b131b452191824811a5359e370504ad241d25d8ebdfdd4e8be6b7ed"
+    },
+    "V5-25": {
+      "gate": "service",
+      "test": "projection_is_session_stable_and_revoked_or_changed_consent_suppresses_legacy",
+      "source": "engine/codex-rs/inquello-service/tests/provider_consents.rs",
+      "sourceSha256": "69d78daf6fcbfd39db41cecacccbea83b4a19f36c516f2bec19bb2cc1451b183",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-service.log",
+      "logSha256": "b3a0519c0b131b452191824811a5359e370504ad241d25d8ebdfdd4e8be6b7ed"
+    },
+    "V5-26": {
+      "gate": "desktop-source-vitest-full",
+      "test": "nonowner can connect privately but cannot allow or revoke workspace processing",
+      "source": "desktop/test/provider-consent-ui.test.tsx",
+      "sourceSha256": "e51c249243c829c4727b9934ff2caebf67318af544ca78969641e2e54bc65cac",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-security-desktop-check-vitest-full.log",
+      "logSha256": "b89288e1aa5d927f49e8bcbafb5470bb2e0b8ff36950b0bc804ab273a3fe1743",
+      "executionEvidence": "Γ£ô test/provider-consent-ui.test.tsx > nonowner can connect privately but cannot allow or revoke workspace processing 51ms",
+      "scope": "UI intentional action separation plus independent current credential ownership/native fences; no credentials shared or real account action."
+    },
+    "V5-27": {
+      "gate": "desktop-source-vitest-full",
+      "test": "personal disconnect never revokes workspace consent",
+      "source": "desktop/test/provider-consent-ui.test.tsx",
+      "sourceSha256": "e51c249243c829c4727b9934ff2caebf67318af544ca78969641e2e54bc65cac",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-security-desktop-check-vitest-full.log",
+      "logSha256": "b89288e1aa5d927f49e8bcbafb5470bb2e0b8ff36950b0bc804ab273a3fe1743",
+      "executionEvidence": "Γ£ô test/provider-consent-ui.test.tsx > personal disconnect never revokes workspace consent 31ms",
+      "scope": "UI intentional action separation plus independent current credential ownership/native fences; no credentials shared or real account action."
+    },
+    "V5-28": {
+      "gate": "desktop-source-vitest-full",
+      "test": "failed personal connection does not grant workspace consent",
+      "source": "desktop/test/provider-consent-ui.test.tsx",
+      "sourceSha256": "e51c249243c829c4727b9934ff2caebf67318af544ca78969641e2e54bc65cac",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-security-desktop-check-vitest-full.log",
+      "logSha256": "b89288e1aa5d927f49e8bcbafb5470bb2e0b8ff36950b0bc804ab273a3fe1743",
+      "executionEvidence": "Γ£ô test/provider-consent-ui.test.tsx > failed personal connection does not grant workspace consent 33ms",
+      "scope": "UI intentional action separation plus independent current credential ownership/native fences; no credentials shared or real account action."
+    },
+    "supplemental-scope-domain": {
+      "gate": "domain",
+      "test": "real_route_scopes_fit_the_service_approval_contract_before_qualification",
+      "source": "engine/codex-rs/inquello-domain/tests/capability_register.rs",
+      "sourceSha256": "793e83624533b38e924ff0b395c0350b404392a9d5ddbbf8735d99bc9368a348",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-domain.log",
+      "logSha256": "920c832169c0ae1731d327b3ef362cfc38b628cb2366a036b23a04fbfb195775",
+      "scope": "Supplemental regression"
+    },
+    "supplemental-scope-service": {
+      "gate": "service",
+      "test": "route_eligibility::tests::compiled_real_route_scopes_pass_actual_approval_validation",
+      "source": "engine/codex-rs/inquello-service/src/route_eligibility.rs",
+      "sourceSha256": "89fe66d7c6222280b01cdf1f5c099d2bda04dc794b902caf656aef8e42a6473a",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-service.log",
+      "logSha256": "b3a0519c0b131b452191824811a5359e370504ad241d25d8ebdfdd4e8be6b7ed",
+      "scope": "Supplemental regression"
+    },
+    "supplemental-compiled-approval-preattachment": {
+      "gate": "service",
+      "test": "route_eligibility::transaction_tests::compiled_terra_approval_matches_scope_policy_identity_and_is_atomic",
+      "source": "engine/codex-rs/inquello-service/src/route_eligibility_fixture_tests.rs",
+      "sourceSha256": "1d540e4a899c479622447cef416f885d77c80bea2761f114ce3053ac1747c4f3",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-service.log",
+      "logSha256": "b3a0519c0b131b452191824811a5359e370504ad241d25d8ebdfdd4e8be6b7ed",
+      "scope": "Missing current proof refusal only; positive actual compiled service gate required after reviewed attachment"
+    },
+    "supplemental-private-retry": {
+      "gate": "core",
+      "test": "responses_retry::tests::inquello_private_errors_never_enter_unbounded_retry_or_transport_fallback",
+      "source": "engine/codex-rs/core/src/responses_retry_tests.rs",
+      "sourceSha256": "a4f4a2cf1043b1a0016ffbe5af52e2fdd46f18b6d637ccfb755935d707e0ed11",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-core.log",
+      "logSha256": "50ba2e89340afbd2ec48a4b45eb8021d385388e8b91ea6e84c3ca9ef38cea3af",
+      "scope": "Supplemental regression"
+    },
+    "supplemental-private-redirect": {
+      "gate": "core",
+      "test": "client::tests::inquello_private_http_rejects_redirects_without_resending",
+      "source": "engine/codex-rs/core/src/client_tests.rs",
+      "sourceSha256": "6368c8542fe777910136177d01138ccce297a6d930eea9aa5ad8bf364bcf5c24",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-core.log",
+      "logSha256": "50ba2e89340afbd2ec48a4b45eb8021d385388e8b91ea6e84c3ca9ef38cea3af",
+      "scope": "Supplemental regression"
+    },
+    "supplemental-private-auth": {
+      "gate": "core",
+      "test": "client::tests::inquello_private_http_unauthorized_never_refreshes_or_resends",
+      "source": "engine/codex-rs/core/src/client_tests.rs",
+      "sourceSha256": "6368c8542fe777910136177d01138ccce297a6d930eea9aa5ad8bf364bcf5c24",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-core.log",
+      "logSha256": "50ba2e89340afbd2ec48a4b45eb8021d385388e8b91ea6e84c3ca9ef38cea3af",
+      "scope": "Supplemental regression"
+    },
+    "supplemental-suite::client_websockets::bound_responses_http_transmits_source_boundary_and_continuation::empty_host_base": {
+      "gate": "core-source-boundary",
+      "test": "suite::client_websockets::bound_responses_http_transmits_source_boundary_and_continuation::empty_host_base",
+      "source": "engine/codex-rs/core/tests/suite/client_websockets.rs",
+      "sourceSha256": "9e3632b16b10adcee95bbbc7e015d354a08e28277bab457230e4f12631dbeab2",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-core-source-boundary.log",
+      "logSha256": "088e9cf3cf66bdc8e3e5007e86b1a1fd49aedba98e1e0007a5e7e96232459e3a"
+    },
+    "supplemental-suite::client_websockets::bound_responses_http_transmits_source_boundary_and_continuation::nonempty_host_base": {
+      "gate": "core-source-boundary",
+      "test": "suite::client_websockets::bound_responses_http_transmits_source_boundary_and_continuation::nonempty_host_base",
+      "source": "engine/codex-rs/core/tests/suite/client_websockets.rs",
+      "sourceSha256": "9e3632b16b10adcee95bbbc7e015d354a08e28277bab457230e4f12631dbeab2",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-core-source-boundary.log",
+      "logSha256": "088e9cf3cf66bdc8e3e5007e86b1a1fd49aedba98e1e0007a5e7e96232459e3a"
+    },
+    "supplemental-suite::client_websockets::bound_responses_websocket_426_refuses_without_http_post": {
+      "gate": "core-source-boundary",
+      "test": "suite::client_websockets::bound_responses_websocket_426_refuses_without_http_post",
+      "source": "engine/codex-rs/core/tests/suite/client_websockets.rs",
+      "sourceSha256": "9e3632b16b10adcee95bbbc7e015d354a08e28277bab457230e4f12631dbeab2",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-core-source-boundary.log",
+      "logSha256": "088e9cf3cf66bdc8e3e5007e86b1a1fd49aedba98e1e0007a5e7e96232459e3a"
+    },
+    "supplemental-suite::client_websockets::bound_responses_websocket_transmits_source_boundary_and_continuation::empty_host_base": {
+      "gate": "core-source-boundary",
+      "test": "suite::client_websockets::bound_responses_websocket_transmits_source_boundary_and_continuation::empty_host_base",
+      "source": "engine/codex-rs/core/tests/suite/client_websockets.rs",
+      "sourceSha256": "9e3632b16b10adcee95bbbc7e015d354a08e28277bab457230e4f12631dbeab2",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-core-source-boundary.log",
+      "logSha256": "088e9cf3cf66bdc8e3e5007e86b1a1fd49aedba98e1e0007a5e7e96232459e3a"
+    },
+    "supplemental-suite::client_websockets::bound_responses_websocket_transmits_source_boundary_and_continuation::nonempty_host_base": {
+      "gate": "core-source-boundary",
+      "test": "suite::client_websockets::bound_responses_websocket_transmits_source_boundary_and_continuation::nonempty_host_base",
+      "source": "engine/codex-rs/core/tests/suite/client_websockets.rs",
+      "sourceSha256": "9e3632b16b10adcee95bbbc7e015d354a08e28277bab457230e4f12631dbeab2",
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-parity-native-final-core-source-boundary.log",
+      "logSha256": "088e9cf3cf66bdc8e3e5007e86b1a1fd49aedba98e1e0007a5e7e96232459e3a"
+    }
+  },
+  "cases": [
+    {
+      "name": "real-session-production-admission",
+      "status": "passed",
+      "witnessIds": [
+        "A-admission",
+        "E-approval"
+      ],
+      "scope": "Default-feature RealSession current authority for Read/Derive/Export/Resume; code-only proof dependency, no provider effect."
+    },
+    {
+      "name": "real-session-withdrawal",
+      "status": "passed",
+      "witnessIds": [
+        "A-withdrawal",
+        "E-approval"
+      ],
+      "scope": "Thirteen before/after-await authority and credential withdrawal cases across four protected actions."
+    },
+    {
+      "name": "credential-slot-independent-proof",
+      "status": "passed",
+      "witnessIds": [
+        "F-identity",
+        "F-oldproof",
+        "A-withdrawal"
+      ],
+      "scope": "Adapter proof independent of credential slot while current credential ownership remains separately required."
+    },
+    {
+      "name": "responses-standard-completion",
+      "status": "passed",
+      "witnessIds": [
+        "F-completion",
+        "B-bundled-text"
+      ],
+      "scope": "Standard Responses completed event and unchanged bundled Terra retained text follow-up, synthetic transport."
+    },
+    {
+      "name": "cross-workspace",
+      "status": "passed",
+      "witnessIds": [
+        "B-allowed",
+        "B-private"
+      ],
+      "scope": "Actual retained runtime foreign Task/Workspace/thread/tool requests refused under synthetic authority."
+    },
+    {
+      "name": "peer-private",
+      "status": "passed",
+      "witnessIds": [
+        "B-allowed",
+        "B-private"
+      ],
+      "scope": "Actual retained runtime foreign Task/Workspace/thread/tool requests refused under synthetic authority."
+    },
+    {
+      "name": "foreign-thread",
+      "status": "passed",
+      "witnessIds": [
+        "B-allowed",
+        "B-private"
+      ],
+      "scope": "Actual retained runtime foreign Task/Workspace/thread/tool requests refused under synthetic authority."
+    },
+    {
+      "name": "foreign-tool",
+      "status": "passed",
+      "witnessIds": [
+        "B-allowed",
+        "B-private"
+      ],
+      "scope": "Actual retained runtime foreign Task/Workspace/thread/tool requests refused under synthetic authority."
+    },
+    {
+      "name": "revoked-before-dispatch",
+      "status": "passed",
+      "witnessIds": [
+        "B-deny",
+        "A-withdrawal"
+      ],
+      "scope": "No provider request before denied admission; default RealSession corroboration."
+    },
+    {
+      "name": "revoked-during-model",
+      "status": "passed",
+      "witnessIds": [
+        "B-revoke-model",
+        "A-withdrawal"
+      ],
+      "scope": "Held model response after withdrawal cannot publish late output."
+    },
+    {
+      "name": "late-output",
+      "status": "passed",
+      "witnessIds": [
+        "B-revoke-model",
+        "A-withdrawal"
+      ],
+      "scope": "Held model response after withdrawal cannot publish late output."
+    },
+    {
+      "name": "revoked-during-tool",
+      "status": "passed",
+      "witnessIds": [
+        "B-revoke-tool"
+      ],
+      "scope": "Actual sandbox child/marker effect cancellation and late-effect refusal."
+    },
+    {
+      "name": "revoked-during-permission",
+      "status": "passed",
+      "witnessIds": [
+        "B-revoke-permission"
+      ],
+      "scope": "Pending permission withdrawal prevents command effect."
+    },
+    {
+      "name": "authority-unavailable",
+      "status": "passed",
+      "witnessIds": [
+        "B-stop-unavailable",
+        "A-withdrawal"
+      ],
+      "scope": "Independent Stop under provider unavailability; current authority failures remain fail-closed."
+    },
+    {
+      "name": "retained-output",
+      "status": "passed",
+      "witnessIds": [
+        "B-allowed",
+        "B-private",
+        "C-inventory"
+      ],
+      "scope": "Actual retained output/reopen with native store identity corroboration."
+    },
+    {
+      "name": "reopen",
+      "status": "passed",
+      "witnessIds": [
+        "B-allowed",
+        "B-private",
+        "C-inventory"
+      ],
+      "scope": "Actual retained output/reopen with native store identity corroboration."
+    },
+    {
+      "name": "export",
+      "status": "passed",
+      "witnessIds": [
+        "C-inventory",
+        "D-bytes",
+        "D-export-withdrawal",
+        "D-recovery-withdrawal",
+        "E-receipt"
+      ],
+      "scope": "Explicit component composition: native SQLite serialized inventory; parsed mock wire identity through real DataAuthority/DataService filesystem bytes and operation-bound receipts; separate actual PostgreSQL receipt gate. NOT cross-process RealSession/Electron/HTTPS end-to-end."
+    },
+    {
+      "name": "recovery",
+      "status": "passed",
+      "witnessIds": [
+        "C-inventory",
+        "D-bytes",
+        "D-export-withdrawal",
+        "D-recovery-withdrawal",
+        "E-receipt"
+      ],
+      "scope": "Explicit component composition: native SQLite serialized inventory; parsed mock wire identity through real DataAuthority/DataService filesystem bytes and operation-bound receipts; separate actual PostgreSQL receipt gate. NOT cross-process RealSession/Electron/HTTPS end-to-end."
+    },
+    {
+      "name": "authorized-export",
+      "status": "passed",
+      "witnessIds": [
+        "C-inventory",
+        "D-bytes",
+        "D-export-withdrawal",
+        "D-recovery-withdrawal",
+        "E-receipt"
+      ],
+      "scope": "Explicit component composition: native SQLite serialized inventory; parsed mock wire identity through real DataAuthority/DataService filesystem bytes and operation-bound receipts; separate actual PostgreSQL receipt gate. NOT cross-process RealSession/Electron/HTTPS end-to-end."
+    },
+    {
+      "name": "authorized-recovery",
+      "status": "passed",
+      "witnessIds": [
+        "C-inventory",
+        "D-bytes",
+        "D-export-withdrawal",
+        "D-recovery-withdrawal",
+        "E-receipt"
+      ],
+      "scope": "Explicit component composition: native SQLite serialized inventory; parsed mock wire identity through real DataAuthority/DataService filesystem bytes and operation-bound receipts; separate actual PostgreSQL receipt gate. NOT cross-process RealSession/Electron/HTTPS end-to-end."
+    },
+    {
+      "name": "authorized-procurement",
+      "status": "passed",
+      "witnessIds": [
+        "B-bundled-tool",
+        "A-admission"
+      ],
+      "scope": "Actual authorized sandbox marker, exact trusted bundled Terra tool inventory and tool-output continuation, with independent default RealSession admission. Synthetic provider, not paid production call."
+    },
+    {
+      "name": "resume",
+      "status": "passed",
+      "witnessIds": [
+        "B-stop-resume",
+        "B-followup",
+        "A-admission"
+      ],
+      "scope": "Actual retained run/turn continuation on same thread, no implicit effect replay."
+    },
+    {
+      "name": "authorized-resume",
+      "status": "passed",
+      "witnessIds": [
+        "B-stop-resume",
+        "B-followup",
+        "A-admission"
+      ],
+      "scope": "Actual retained run/turn continuation on same thread, no implicit effect replay."
+    },
+    {
+      "name": "revoked-before-resume",
+      "status": "passed",
+      "witnessIds": [
+        "B-before-resume",
+        "A-withdrawal"
+      ],
+      "scope": "Current authority denied before resume dispatch."
+    },
+    {
+      "name": "revoked-during-resume",
+      "status": "passed",
+      "witnessIds": [
+        "B-during-resume",
+        "A-withdrawal"
+      ],
+      "scope": "Withdrawal after resume boundary prevents late effects/output."
+    },
+    {
+      "name": "resume-missing-linkage",
+      "status": "passed",
+      "witnessIds": [
+        "B-missing"
+      ],
+      "scope": "Missing retained linkage refuses rather than creating replacement work."
+    },
+    {
+      "name": "resume-peer-private",
+      "status": "passed",
+      "witnessIds": [
+        "B-peer"
+      ],
+      "scope": "Foreign private retained work refuses."
+    },
+    {
+      "name": "resume-cross-company",
+      "status": "passed",
+      "witnessIds": [
+        "B-company"
+      ],
+      "scope": "Foreign organization continuation refuses."
+    },
+    {
+      "name": "resume-after-runtime-loss",
+      "status": "passed",
+      "witnessIds": [
+        "B-restart",
+        "B-crash"
+      ],
+      "scope": "Owned runtime restart/crash preserves uncertain retained effects without automatic replay."
+    },
+    {
+      "name": "lifecycle-lost-ack",
+      "status": "passed",
+      "witnessIds": [
+        "B-lost-ack"
+      ],
+      "scope": "Exact operation reconciliation does not duplicate effects."
+    },
+    {
+      "name": "stop-finish",
+      "status": "passed",
+      "witnessIds": [
+        "B-stop-pending",
+        "B-stop-inflight",
+        "B-steer",
+        "B-progress"
+      ],
+      "scope": "Actual retained lifecycle races with exact run/turn identity."
+    },
+    {
+      "name": "steer-finish",
+      "status": "passed",
+      "witnessIds": [
+        "B-stop-pending",
+        "B-stop-inflight",
+        "B-steer",
+        "B-progress"
+      ],
+      "scope": "Actual retained lifecycle races with exact run/turn identity."
+    },
+    {
+      "name": "search-private",
+      "status": "passed",
+      "witnessIds": [
+        "B-private",
+        "B-final-await",
+        "B-zero-match"
+      ],
+      "scope": "Retained actual-store search/reopen/Markdown scope and final contributor authority checks."
+    },
+    {
+      "name": "search-revoked-before-disclosure",
+      "status": "passed",
+      "witnessIds": [
+        "B-private",
+        "B-final-await",
+        "B-zero-match"
+      ],
+      "scope": "Retained actual-store search/reopen/Markdown scope and final contributor authority checks."
+    },
+    {
+      "name": "search-prior-lineage-revoked",
+      "status": "passed",
+      "witnessIds": [
+        "B-private",
+        "B-final-await",
+        "B-zero-match"
+      ],
+      "scope": "Retained actual-store search/reopen/Markdown scope and final contributor authority checks."
+    },
+    {
+      "name": "search-late-response",
+      "status": "passed",
+      "witnessIds": [
+        "B-private",
+        "B-final-await",
+        "B-zero-match"
+      ],
+      "scope": "Retained actual-store search/reopen/Markdown scope and final contributor authority checks."
+    },
+    {
+      "name": "exact-hit-reopen",
+      "status": "passed",
+      "witnessIds": [
+        "B-private",
+        "B-final-await",
+        "B-zero-match"
+      ],
+      "scope": "Retained actual-store search/reopen/Markdown scope and final contributor authority checks."
+    },
+    {
+      "name": "exact-hit-markdown",
+      "status": "passed",
+      "witnessIds": [
+        "B-private",
+        "B-final-await",
+        "B-zero-match"
+      ],
+      "scope": "Retained actual-store search/reopen/Markdown scope and final contributor authority checks."
+    },
+    {
+      "name": "cached-hit-revoked",
+      "status": "passed",
+      "witnessIds": [
+        "B-private",
+        "B-final-await",
+        "B-zero-match"
+      ],
+      "scope": "Retained actual-store search/reopen/Markdown scope and final contributor authority checks."
+    },
+    {
+      "name": "search-provider-independent",
+      "status": "passed",
+      "witnessIds": [
+        "B-private",
+        "B-final-await",
+        "B-zero-match"
+      ],
+      "scope": "Retained actual-store search/reopen/Markdown scope and final contributor authority checks."
+    },
+    {
+      "name": "search-legacy-old-turn",
+      "status": "passed",
+      "witnessIds": [
+        "B-legacy"
+      ],
+      "scope": "Exact old retained turn and paginated/legacy content, not substituted current turn."
+    },
+    {
+      "name": "search-paginated-old-turn",
+      "status": "passed",
+      "witnessIds": [
+        "B-legacy"
+      ],
+      "scope": "Exact old retained turn and paginated/legacy content, not substituted current turn."
+    },
+    {
+      "name": "search-legacy-markdown",
+      "status": "passed",
+      "witnessIds": [
+        "B-legacy"
+      ],
+      "scope": "Exact old retained turn and paginated/legacy content, not substituted current turn."
+    },
+    {
+      "name": "search-final-await-off-page",
+      "status": "passed",
+      "witnessIds": [
+        "B-final-await",
+        "B-zero-match"
+      ],
+      "scope": "Final awaited contributor set and late scope revocation."
+    },
+    {
+      "name": "search-final-await-history",
+      "status": "passed",
+      "witnessIds": [
+        "B-final-await",
+        "B-zero-match"
+      ],
+      "scope": "Final awaited contributor set and late scope revocation."
+    },
+    {
+      "name": "search-final-await-lineage",
+      "status": "passed",
+      "witnessIds": [
+        "B-final-await",
+        "B-zero-match"
+      ],
+      "scope": "Final awaited contributor set and late scope revocation."
+    },
+    {
+      "name": "search-next-cursor-scope-snapshot",
+      "status": "passed",
+      "witnessIds": [
+        "B-cursor"
+      ],
+      "scope": "Query/scope/snapshot-bound cursor refusal on change."
+    },
+    {
+      "name": "search-retained-route-mismatch",
+      "status": "passed",
+      "witnessIds": [
+        "B-route-mismatch"
+      ],
+      "scope": "Retained route mismatch refuses disclosure."
+    },
+    {
+      "name": "search-bounded-plain-compressed",
+      "status": "passed",
+      "witnessIds": [
+        "F-bounded"
+      ],
+      "scope": "Actual bounded plain/compressed reads before parsing on Windows; Unix FIFO test not executed."
+    },
+    {
+      "name": "search-inventory-request-bounded",
+      "status": "passed",
+      "witnessIds": [
+        "B-bundled-tool"
+      ],
+      "scope": "Driver saved_navigation_matrix creates51 actual draft Tasks, asserts50+1 pagination and exactly2 inventory/4 policy calls across candidate count."
+    },
+    {
+      "name": "owner-consent-grant-revoke",
+      "status": "passed",
+      "witnessIds": [
+        "V5-1",
+        "V5-2"
+      ],
+      "scope": "Owned PostgreSQL actual authenticated command/CAS/history/receipt/epoch plus UI explicit-action composition; no actual workspace grant."
+    },
+    {
+      "name": "owner-consent-compatible-qualification",
+      "status": "passed",
+      "witnessIds": [
+        "V5-3",
+        "V5-4",
+        "V5-5",
+        "A-admission"
+      ],
+      "scope": "Same explicit semantic contract may reuse consent; independent exact proof remains required. Preattachment missing-proof HTTP refusal is not positive qualification. Require EXECUTED compiled HTTP marker after reviewed attachment."
+    },
+    {
+      "name": "owner-consent-material-change",
+      "status": "passed",
+      "witnessIds": [
+        "V5-6",
+        "V5-7",
+        "V5-8"
+      ],
+      "scope": "Nine material fields alter digest; displayed material fields bind terms; actual service changed-contract refusal, no endpoint inference."
+    },
+    {
+      "name": "owner-consent-late-revocation-output",
+      "status": "passed",
+      "witnessIds": [
+        "V5-9",
+        "V5-10",
+        "A-withdrawal",
+        "B-revoke-model",
+        "B-revoke-tool",
+        "V5-11"
+      ],
+      "scope": "Explicit composition: actual consent revoke increments epoch and service refuses fresh/stale operation; independent native exact-bound late-output/effect fences and Desktop owned bytes. Not integrated consent-click-to-provider cross-process E2E."
+    },
+    {
+      "name": "owner-consent-lost-ack-cas",
+      "status": "passed",
+      "witnessIds": [
+        "V5-12",
+        "V5-13",
+        "V5-14",
+        "V5-15",
+        "V5-16",
+        "V5-17",
+        "V5-18",
+        "V5-19",
+        "V5-20",
+        "V5-21",
+        "V5-22"
+      ],
+      "scope": "Actual transactional one-winner CAS plus main journal/restart/immutable retry composition; simulated transport ambiguity explicitly labeled. Exact command/principal-bound terminal no-effect receipt under the workspace lock prevents delayed original requests from committing after reconciliation. Applied receipt precedence is tested across command-epoch/new-session changes. Rollback witness uses an explicitly historical exact receipt fixture composed with actual current-terms HTTP replay; no runtime contract override. Missing/inaccessible/malformed receipts retain uncertainty. Terminal rejection writes only its receipt, not consent/history/authorization epoch."
+    },
+    {
+      "name": "owner-role-transition-protection",
+      "status": "passed",
+      "witnessIds": [
+        "V5-23",
+        "V5-24"
+      ],
+      "scope": "Actual API nonowner elevation/demotion/invite/accept/delivery/restore denial and authorized successor transfer/restore; explicitly historical legacy invitation fixture. Existing consent survives transfer."
+    },
+    {
+      "name": "owner-consent-legacy-no-fallback",
+      "status": "passed",
+      "witnessIds": [
+        "V5-25"
+      ],
+      "scope": "Historical legacy grant seeded independently and initially visible; changed/revoked durable row suppresses it, fresh operation HTTP denied. No conditional fixture omission."
+    },
+    {
+      "name": "owner-consent-credential-separation",
+      "status": "passed",
+      "witnessIds": [
+        "V5-26",
+        "V5-27",
+        "V5-28",
+        "A-withdrawal"
+      ],
+      "scope": "UI intentional action separation plus independent current credential ownership/native fences; no credentials shared or real account action."
+    }
+  ],
+  "counts": {
+    "requiredScenarios": 58,
+    "passed": 58,
+    "failed": 0,
+    "skipped": 0,
+    "desktopPassed": 2051,
+    "desktopSkipped": 22,
+    "finalMatchedDesktopPassed": 47,
+    "finalMatchedDesktopSkipped": 8
+  },
+  "limitations": [
+    "Composed software-enforcement evidence; not a paid OpenAI response, real workspace consent, or integrated consent-click-to-provider E2E.",
+    "Default RealSession tests use private code-only proof dependencies and actual authority callbacks. Current compiled positive service/HTTP qualification is explicitly pending until reviewed proof attachment and must subsequently execute.",
+    "Retained provider/tool effects use debug inference-fixtures with pinned loopback synthetic Responses streams. Only two bundled-catalog cases use unchanged trusted Terra metadata; other runtime scenarios use minimal fixture metadata.",
+    "Export/recovery composes native SQLite serialized inventory, actual Desktop owned-byte effects with parsed mock native/HTTPS responses, and separate actual PostgreSQL receipts. No integrated cross-process export/recovery E2E claim.",
+    "Consent terminal-receipt rollback uses an explicit historical exact-command receipt fixture plus actual matching-terms HTTP replay/new-session/opposite-operation tests; actual stale-terms persistence is tested separately. No runtime contract override.",
+    "The complete source-based Desktop suite uses explicitly retained prior-candidate native/topology artifacts. Every native/topology-backed integration file and schema check is separately rerun against final matched artifacts; unchanged pure component and installed-guest results remain compositional evidence with original provenance. Primary dist is unchanged during both stages. Canonical build and actual built-byte Electron acceptance are separate gates; inference-fixture identity is separate.",
+    "Platform/opt-in Desktop skips remain explicit. Unix-only FIFO/pre-publication barrier tests are not executable on this Windows host; Windows bounded reads and actual child cancellation are separate evidence.",
+    "Prior setup45s, lifecycle31/33, idle-probe10s, paging1455, launcher failures, initial scope261/256 and superseded v4/r2 proofs remain historical evidence. No fast-start/performance guarantee.",
+    "Owner consent is durable until explicit revoke/material processing change; current owner, membership, policy, credential, exact software proof and operation-bound checks remain automatic. Personal credential connection is not workspace authorization.",
+    "Messages remains separately unqualified; no full two-provider claim. No budget feature, hard aggregate spend cap, key read or real organization mutation was introduced."
+  ],
+  "historicalArtifacts": [
+    "_bmad-output/implementation-artifacts/production-chat-v4-verification-2026-11-03.json",
+    "_bmad-output/implementation-artifacts/production-chat-v4-verification-r2-2026-11-03.json",
+    ".tmp/production-consent-native-final-status.json",
+    ".tmp/production-consent-terminal-desktop-prebuild-before.log",
+    ".tmp/production-consent-terminal-desktop-prebuild-2-before.log",
+    ".tmp/production-consent-terminal-desktop-prebuild-3-vitest.log",
+    ".tmp/production-consent-terminal-native-final-status.json",
+    ".tmp/production-chat-resume-checkpoint.md"
+  ],
+  "pendingGates": [
+    "Independent report/manifest review",
+    "Scoped capability evidence attachment",
+    "Postattachment COMPILED_CONSENT_HTTP_POSITIVE_EXECUTED and no-write negatives",
+    "Final default/service identity and genuine HEAD protocol stability",
+    "Matched ordinary Desktop/Electron and immutable delivery",
+    "Separate user action for actual workspace consent and separately authorized paid response"
+  ]
+}

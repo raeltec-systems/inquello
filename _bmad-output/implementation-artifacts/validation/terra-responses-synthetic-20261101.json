@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "scope": "Exact-model-label synthetic Responses runtime qualification; no live provider or real-data eligibility",
+  "model": "gpt-6.1-terra",
+  "api": "responses-v1",
+  "deployment": "openai-api",
+  "endpoint": "https://api.openai.com/v1/responses",
+  "source": {
+    "engineTree": "0e79085cfd3860bdb21790944fdae63f478868af",
+    "headAtEvidence": "2a2b0938d9f254680117a96d00e92a1ad81dab06",
+    "runtimeSha256": "FE445DB6481419F8CE333E8DB941C221572FC6DC060B6AD1B3D0D34A306DF5BC",
+    "harnessSha256": "2AA5856142DFFC31CF41F9FEBD595506E32756C5C9789797F6342F9EEFEA6B47",
+    "platform": "Windows x86_64",
+    "debugAssertions": true,
+    "inferenceFixtures": true
+  },
+  "transport": {
+    "pinnedLoopback": true,
+    "liveProvider": false,
+    "realCredentials": false
+  },
+  "tests": {
+    "passed": 31,
+    "failed": 0,
+    "ignored": 0,
+    "selectorPassed": 2,
+    "cases": [
+      "responses_allowed",
+      "responses_deny_before_dispatch",
+      "responses_lifecycle_completed_followup",
+      "responses_lifecycle_crash",
+      "responses_lifecycle_cross_company",
+      "responses_lifecycle_missing_linkage",
+      "responses_lifecycle_peer_private",
+      "responses_lifecycle_progress_cache",
+      "responses_lifecycle_progress_continuity",
+      "responses_lifecycle_restart",
+      "responses_lifecycle_revoke_before_resume",
+      "responses_lifecycle_revoke_during_resume",
+      "responses_lifecycle_source_reference",
+      "responses_lifecycle_steer",
+      "responses_lifecycle_steer_lost_ack",
+      "responses_lifecycle_stop_inflight_steer",
+      "responses_lifecycle_stop_pending_steer",
+      "responses_lifecycle_stop_provider_unavailable",
+      "responses_lifecycle_stop_resume",
+      "responses_lifecycle_unknown_turn",
+      "responses_lifecycle_warm_policy_change",
+      "responses_revoke_model",
+      "responses_revoke_pending_permission",
+      "responses_revoke_running_tool",
+      "responses_search_final_await_contributors",
+      "responses_search_next_cursor_scope_snapshot",
+      "responses_search_paginated_and_legacy_old_turn",
+      "responses_search_reopen_private_denials",
+      "responses_search_retained_route_mismatch",
+      "responses_search_stalled_admission_timeout",
+      "responses_search_zero_to_match_final_await"
+    ]
+  },
+  "artifacts": [
+    {
+      "name": "build.jsonl",
+      "sha256": "6CB87B704AF36586119285843B1F3CB1DAE7B15EF5B46FE3552822FB9F76CE59"
+    },
+    {
+      "name": "build-stderr.log",
+      "sha256": "045073976C7C9B4A9BF6C5C513A0F7EBFE88C88D39D53D6FCBC8EE6FCF44A36E"
+    },
+    {
+      "name": "selector-tests.log",
+      "sha256": "764A6D77B21BA24BC8C0849B12E317BC9CE123B676D4A3E4A9F4187D29B07F84"
+    },
+    {
+      "name": "responses-list.log",
+      "sha256": "3B42F66E968895A4D9DD4F315B132312AC99A8688D9D7276F534EF40EA9C1421"
+    },
+    {
+      "name": "terra31.log",
+      "sha256": "3C8774D2D4A70175330F1B22F0F3456DF62225C6C48FE97E7369E11E80783EAB"
+    }
+  ],
+  "limitations": [
+    "Fixture results do not establish live model access, output quality, latency, pricing or billing.",
+    "No real-data eligibility, organisation approval or Messages qualification is granted.",
+    "Credential presence, exact configuration, current Workspace authority and controlled paid-session limits remain separate gates."
+  ]
+}

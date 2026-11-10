@@ -1,0 +1,144 @@
+{
+    "schema":  1,
+    "kind":  "scoped-code-review-repair-verification",
+    "baseCommit":  "a2b31f0bab8a9aea983c7978312ba38754f45ead",
+    "recordedAt":  "2026-11-03T08:23:40.7499844Z",
+    "review":  "https://github.com/raeltec-systems/inquello/pull/4#pullrequestreview-5748605000",
+    "repairedComments":  [
+                             4451996613,
+                             4451996635,
+                             4451996646,
+                             4451996660
+                         ],
+    "files":  [
+                  {
+                      "path":  "desktop/src/renderer/Shell/StartView.tsx",
+                      "sha256":  "b7aea54a138feb33a54b8f3dcbc12863d7067fe5cf47fe7cfcc9bf79dd0cf9cf"
+                  },
+                  {
+                      "path":  "desktop/test/tasks-start.test.tsx",
+                      "sha256":  "7413303a088746a403e4a20837b45dc8162f09b1d47df8872b635a6921bf1b67"
+                  },
+                  {
+                      "path":  "engine/codex-rs/app-server/src/inquello_wsl.rs",
+                      "sha256":  "74330a8c9bcdf4d07188a0fc42decbd959510885bae8c6d371e045071882e23c"
+                  },
+                  {
+                      "path":  "engine/codex-rs/app-server/src/request_processors/inquello_routes.rs",
+                      "sha256":  "58650b72485620b4da1896b87a9035093cfca554d6e61136b9becebf0fa4fbaa"
+                  },
+                  {
+                      "path":  "engine/codex-rs/app-server/src/request_processors/thread_processor.rs",
+                      "sha256":  "e4813993099a51e2fabcc08d2c9a2e747084419b86892962c7caf32aff952da4"
+                  },
+                  {
+                      "path":  "engine/codex-rs/app-server/src/request_processors/thread_processor_tests.rs",
+                      "sha256":  "7cb32d2c568360671bbcab0f31b81aa4269c5b30835a26e6d24dbc3115f7e549"
+                  },
+                  {
+                      "path":  "engine/codex-rs/core/src/client.rs",
+                      "sha256":  "bb036bb6bb24e0b7f6bef6e3a90d002478d2594fd8295057da0a28492612925e"
+                  },
+                  {
+                      "path":  "engine/codex-rs/core/src/client_tests.rs",
+                      "sha256":  "6368c8542fe777910136177d01138ccce297a6d930eea9aa5ad8bf364bcf5c24"
+                  },
+                  {
+                      "path":  "engine/codex-rs/core/src/inquello_inference.rs",
+                      "sha256":  "d3d8527ab66f3e55cdb588cf5501d66bdcd9e3fb791ccf9d960e9f6c3e05d7c5"
+                  },
+                  {
+                      "path":  "engine/codex-rs/inquello-domain/src/routes/ports.rs",
+                      "sha256":  "d65eba3b69c80b1a5e00ce44bc093e9ca79681c4d932969783e8c64f5f30de64"
+                  }
+              ],
+    "nativeGates":  [
+                        {
+                            "log":  "D:\\Projects\\inquello\\.tmp\\production-review-fixes-clippy-targets.log",
+                            "logSha256":  "FF5D42BFA00537BB9E7C7A22F833B96F4A6087F55A20C7316BD2464927BDB453",
+                            "arguments":  [
+                                              "clippy",
+                                              "--offline",
+                                              "-j1",
+                                              "--config",
+                                              "profile.dev.package.codex-core.debug=0",
+                                              "-p",
+                                              "codex-core",
+                                              "-p",
+                                              "codex-app-server",
+                                              "-p",
+                                              "inquello-domain",
+                                              "--all-targets",
+                                              "--",
+                                              "-D",
+                                              "warnings"
+                                          ],
+                            "name":  "clippy-targets",
+                            "infrastructureError":  null,
+                            "executable":  "D:\\Toolchains\\cargo\\bin\\cargo.exe",
+                            "exit":  0,
+                            "finished":  "2026-11-03T08:04:00.8196682Z"
+                        },
+                        {
+                            "log":  "D:\\Projects\\inquello\\.tmp\\production-review-fixes-core-native-private.log",
+                            "logSha256":  "5169F34CBFB022648F94FD6ABC1767403F4807F0DA2D26348124B38BBF40871B",
+                            "arguments":  [
+                                              "test",
+                                              "--offline",
+                                              "-j1",
+                                              "--config",
+                                              "profile.dev.package.codex-core.debug=0",
+                                              "-p",
+                                              "codex-core",
+                                              "-p",
+                                              "codex-app-server",
+                                              "--lib",
+                                              "inquello_",
+                                              "--",
+                                              "--test-threads=1"
+                                          ],
+                            "name":  "core-native-private",
+                            "infrastructureError":  null,
+                            "executable":  "D:\\Toolchains\\cargo\\bin\\cargo.exe",
+                            "exit":  0,
+                            "finished":  "2026-11-03T08:20:05.9687707Z"
+                        },
+                        {
+                            "log":  "D:\\Projects\\inquello\\.tmp\\production-review-fixes-fmt.log",
+                            "logSha256":  "400F516862851738DD6335C0C8037833023884F0DE4474EA198D7C35730303E6",
+                            "arguments":  [
+                                              "fmt",
+                                              "--all",
+                                              "--",
+                                              "--check"
+                                          ],
+                            "name":  "fmt",
+                            "infrastructureError":  null,
+                            "executable":  "D:\\Toolchains\\cargo\\bin\\cargo.exe",
+                            "exit":  0,
+                            "finished":  "2026-11-03T08:20:34.9831537Z"
+                        }
+                    ],
+    "rendererGate":  {
+                         "cwd":  "desktop",
+                         "command":  "pnpm exec vitest run --configLoader runner --maxWorkers=1 test/tasks-start.test.tsx",
+                         "executable":  "C:\\Program Files\\nodejs\\pnpm.ps1",
+                         "exit":  0,
+                         "passed":  14,
+                         "log":  ".tmp/production-consent-start-review.log",
+                         "logSha256":  "3106d61201119f6de1341b295bdc4c2026d8bb1269de6284c3fed6e60380b968"
+                     },
+    "assertions":  [
+                       "Same-model deliberate reselection after authority/catalog invalidation preserves draft and does not dispatch",
+                       "Actual private HTTP and WebSocket 401 remain typed/redacted with no credential refresh or fallback",
+                       "Exact model-binding/model-select/route-set response variants preserve wire DTOs",
+                       "Only proven no-outstanding-process setup failure releases its retirement generation; uncertainty/cancellation after spawn remains fail-closed"
+                   ],
+    "limitations":  [
+                        "This is a tested source-repair checkpoint, not completed production or live-provider acceptance.",
+                        "Changed measured source is not qualified by the previously attached immutable r2 report; exact-source requalification and matched Desktop rebuild remain required.",
+                        "Owner-consent feature/spec edits are excluded and remain work in progress.",
+                        "The retained running app/profile were not changed; no real organization grant, credential access, paid call or main merge occurred.",
+                        "Hosted CI was not rerun under the user-approved local-checks plus CodeRabbit workflow."
+                    ]
+}

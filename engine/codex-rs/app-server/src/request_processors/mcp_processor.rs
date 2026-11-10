@@ -69,10 +69,10 @@ fn admit_mcp_target(
     }
     codex_core_plugins::validate_mcp_server_admission(name, server, admission).map_err(|refusal| {
         let mut error = mcp_admission_refusal(refusal.code);
-        if let Some(host) = refusal.host {
-            if let Some(data) = error.data.as_mut() {
-                data["inquelloCapabilityAdmission"]["host"] = serde_json::json!(host);
-            }
+        if let Some(host) = refusal.host
+            && let Some(data) = error.data.as_mut()
+        {
+            data["inquelloCapabilityAdmission"]["host"] = serde_json::json!(host);
         }
         error
     })
@@ -282,12 +282,12 @@ impl McpRequestProcessor {
             mcp_admission.as_ref(),
         )?;
         let previous = self.oauth_logins.lock().await.get(&name).cloned();
-        if let Some((_, control)) = previous {
-            if control.is_pending().await {
-                return Err(invalid_request(
-                    "MCP sign-in already pending; cancel that attempt first",
-                ));
-            }
+        if let Some((_, control)) = previous
+            && control.is_pending().await
+        {
+            return Err(invalid_request(
+                "MCP sign-in already pending; cancel that attempt first",
+            ));
         }
         let auth = self.auth_manager.auth().await;
         let (mcp_config, runtime_context) = match thread_id.as_deref() {
@@ -322,7 +322,7 @@ impl McpRequestProcessor {
                 mcp_config
                     .mcp_server_catalog
                     .server(&name)
-                    .map(|entry| entry.source()),
+                    .map(codex_mcp::ResolvedMcpServer::source),
                 server.config(),
                 &name,
                 expected_plugin_id.as_deref(),
@@ -628,7 +628,7 @@ impl McpRequestProcessor {
                     mcp_config
                         .mcp_server_catalog
                         .server(name)
-                        .map(|entry| entry.source()),
+                        .map(codex_mcp::ResolvedMcpServer::source),
                     server.config(),
                     name,
                     params.expected_plugin_id.as_deref(),

@@ -67,6 +67,13 @@ impl InquelloRequestProcessor {
                     "Select a current route and explicitly save its settings",
                 )
             })?;
+        if self.task_route_fixture_available(route).await {
+            return Ok(Capabilities {
+                reasoning: vec!["default".into()],
+                speeds: vec!["default".into()],
+                defaults: Choices::default(),
+            });
+        }
         if selected.configuration.route_id() == routes::RouteId::ClaudeApiKey {
             return Ok(Capabilities {
                 reasoning: vec!["default".into()],
@@ -75,7 +82,7 @@ impl InquelloRequestProcessor {
             });
         }
         #[cfg(test)]
-        if self.fixture_enabled(&self.routes.state.lock().await) {
+        if self.fixture_enabled(&*self.routes.state.lock().await) {
             return Ok(Capabilities {
                 reasoning: vec!["default".into(), "low".into(), "high".into()],
                 speeds: vec!["default".into(), "priority".into()],
@@ -101,7 +108,7 @@ impl InquelloRequestProcessor {
             )
         })?;
         let model = catalog
-            .inquello_usage_model(selected.configuration.model())
+            .inquello_cached_usage_model(selected.configuration.model())
             .await?;
         let mut reasoning = vec!["default".into()];
         for option in model.supported_reasoning_efforts {
@@ -297,7 +304,11 @@ impl InquelloRequestProcessor {
             .as_ref()
             .map(|s| s.configuration.route_id().as_str())
             .unwrap_or("none");
-        let limits = self.usage_limits_view(source, &params.task_id).await;
+        let limits = if self.task_route_fixture_available(&route).await {
+            json!({"source":"Owned synthetic fixture","status":"unknown","reason":"No live provider account or quota is used by this isolated fixture","nextAction":"Synthetic validation only; no live account access or privacy qualification is granted"})
+        } else {
+            self.usage_limits_view(source, &params.task_id).await
+        };
         let latest = routes::task_route(&store, self.actor(connection)?, &params.task_id)
             .await
             .map_err(domain_error)?;
@@ -321,6 +332,10 @@ impl InquelloRequestProcessor {
             .into(),
         ))
     }
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "Resolve capabilities before locking, then serialize exact route authority and local SQLite settings commit."
+    )]
     pub(crate) async fn usage_set(
         &self,
         connection: ConnectionId,
@@ -616,6 +631,31 @@ fn checked_account(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    #[test]
+    fn fixture_usage_requires_native_synthetic_and_exact_authoritative_policy() {
+        let expected = json!({"automatic_permission_review":true,"command_rules":[{"prefix":["/usr/bin/true"],"decision":"prompt"}]});
+        assert!(fixture_usage_authority_matches(
+            Some("synthetic"),
+            Some(&expected)
+        ));
+        for tier in [None, Some("real"), Some("unknown")] {
+            assert!(!fixture_usage_authority_matches(tier, Some(&expected)));
+        }
+        for execution in [
+            None,
+            Some(json!({})),
+            Some(json!({"automatic_permission_review":false})),
+            Some(
+                json!({"automatic_permission_review":true,"command_rules":[{"prefix":["/usr/bin/true"],"decision":"allow"}]}),
+            ),
+        ] {
+            assert!(!fixture_usage_authority_matches(
+                Some("synthetic"),
+                execution.as_ref()
+            ));
+        }
+    }
     #[test]
     fn account_bound_explicit_permission_only_no_reset_recovery() {
         for allowed in [serde_json::Value::Null, json!(false), json!(true)] {
@@ -630,6 +670,7 @@ mod tests {
 
 #[cfg(all(feature = "inference-fixtures", debug_assertions))]
 pub(super) struct UsageLimitFixture {
+    pub(super) connection: ConnectionId,
     pub(super) task: String,
     pub(super) principal: PrincipalId,
     pub(super) route_revision: u64,
@@ -641,13 +682,24 @@ fn fixture_quota() -> GetAccountRateLimitsResponse {
     serde_json::from_value(json!({"ordinaryUsageAllowed":false,"accountId":"synthetic-fixture-account","rateLimits":{"primary":{"usedPercent":100,"windowDurationMins":60,"resetsAt":1}}})).expect("fixed synthetic quota contract")
 }
 #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+fn fixture_usage_authority_matches(
+    tier: Option<&str>,
+    execution: Option<&serde_json::Value>,
+) -> bool {
+    tier == Some("synthetic")
+        && execution
+            == Some(
+                &json!({"automatic_permission_review":true,"command_rules":[{"prefix":["/usr/bin/true"],"decision":"prompt"}]}),
+            )
+}
+#[cfg(all(feature = "inference-fixtures", debug_assertions))]
 impl InquelloRequestProcessor {
     pub(crate) async fn fixture_usage_limit(
         &self,
         connection: ConnectionId,
         task: &str,
         phase: &str,
-        mut policy: InquelloWorkspaceExecutionPolicy,
+        policy: InquelloWorkspaceExecutionPolicy,
         device: DeviceRequirements,
         user: UserConfig,
     ) -> Result<serde_json::Value, JSONRPCErrorError> {
@@ -663,11 +715,9 @@ impl InquelloRequestProcessor {
         };
         if phase == "clear" {
             let mut state = self.routes.state.lock().await;
-            if state
-                .usage_fixture
-                .as_ref()
-                .is_some_and(|f| f.task == task && f.principal == actor.principal_id)
-            {
+            if state.usage_fixture.as_ref().is_some_and(|f| {
+                f.connection == connection && f.task == task && f.principal == actor.principal_id
+            }) {
                 self.routes
                     .cancel_task(&mut state, actor.principal_id, task);
                 state
@@ -688,6 +738,15 @@ impl InquelloRequestProcessor {
         {
             return Err(invalid());
         }
+        // A fixture may not classify an existing draft or rewrite service authority.
+        // Use a genuine native synthetic lifecycle Task in a dedicated seeded workspace.
+        let tier = store
+            .task_data_tier(actor.principal_id, task)
+            .await
+            .map_err(domain_error)?;
+        if !fixture_usage_authority_matches(tier.as_deref(), policy.execution.as_ref()) {
+            return Err(invalid());
+        }
         if phase == "prepare" {
             // Refuse rather than coexisting with any real Codex authentication.
             if self
@@ -703,6 +762,9 @@ impl InquelloRequestProcessor {
             let mut state = self.routes.state.lock().await;
             if state.usage_fixture.is_some()
                 || state
+                    .generations
+                    .contains_key(&(actor.principal_id, routes::RouteId::CodexResponses))
+                || state
                     .credentials
                     .contains_key(&(actor.principal_id, routes::RouteId::CodexResponses))
             {
@@ -712,7 +774,11 @@ impl InquelloRequestProcessor {
                 (actor.principal_id, routes::RouteId::CodexResponses),
                 (selected.configuration.account_ref().into(), 1),
             );
+            state
+                .generations
+                .insert((actor.principal_id, routes::RouteId::CodexResponses), 1);
             state.usage_fixture = Some(UsageLimitFixture {
+                connection,
                 task: task.into(),
                 principal: actor.principal_id,
                 route_revision: route.revision.get(),
@@ -726,7 +792,8 @@ impl InquelloRequestProcessor {
         {
             let state = self.routes.state.lock().await;
             if !state.usage_fixture.as_ref().is_some_and(|f| {
-                f.task == task
+                f.connection == connection
+                    && f.task == task
                     && f.principal == actor.principal_id
                     && f.route_revision == route.revision.get()
             }) {
@@ -736,10 +803,8 @@ impl InquelloRequestProcessor {
         let before = usage::task_usage(&store, actor, task)
             .await
             .map_err(domain_error)?;
-        // Fixed permission-only action. This fixture never runs it or applies a verdict.
-        policy.execution = Some(
-            json!({"automatic_permission_review":true,"command_rules":[{"prefix":["/usr/bin/true"],"decision":"prompt"}]}),
-        );
+        // Fixed permission-only action under unchanged service-backed authority.
+        // This fixture never runs it or applies a verdict.
         let request_id = uuid::Uuid::new_v4().to_string();
         self.permissions_request(
             connection,

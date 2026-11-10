@@ -49,7 +49,7 @@ import { LoopbackError, startLoopbackListener, type LoopbackListener, type Loopb
 import { createPkce, createState, type Pkce } from './pkce';
 import { IssuerError, ServiceError, type Issuer, type SharedService } from './service-client';
 import type { CredentialStorage, PendingLogout, StoredSession } from './vault';
-import { SCHEMA_VERSION, type SessionCredentials, type SessionCommandEnvelope } from './wire';
+import { SCHEMA_VERSION, type ExecutionPolicyView, type SessionCredentials, type SessionCommandEnvelope } from './wire';
 
 export type IdentityState =
   | { state: 'signed-out' }
@@ -85,6 +85,7 @@ export const REASONS = {
   issuerRejected: 'The identity provider did not complete the sign-in.',
   serviceRejected: 'The shared service did not accept the sign-in.',
   interrupted: 'Sign-in was interrupted. Sign in again.',
+  callbackOccupied: 'The registered sign-in callback port is already in use. Close the application using it and sign in again. Inquello will not select another port.',
   cancelled: 'Sign-in was cancelled because the session was removed. Sign in again.',
   logoutPending: 'Sign-out is waiting for the shared service. Sign out again to retry.',
   signOutUnavailable: 'The shared service could not be reached, so you are still signed in.',
@@ -147,11 +148,16 @@ class SignInFailure extends Error {
 }
 
 export class IdentitySession {
+  private identityGeneration = 0;
+  /** Main-only authentication lifecycle fence; never projected to renderer. */
+  generation(): number { return this.identityGeneration; }
   private readonly config: ServiceConfig | null;
   private readonly configInvalid: boolean;
   private record: StoredSession | null = null;
   /** The sign-in in progress; cleared (cancelling it) by sign-out and local removal. */
   private signInToken: object | null = null;
+  /** The loopback listener of the sign-in in progress, so cancelling can release its port at once. */
+  private signInListener: { close(): void } | null = null;
   /** The last save of the record failed, so nothing current is on disk. */
   private persistFailed = false;
   private shared: SharedServiceState;
@@ -220,7 +226,7 @@ export class IdentitySession {
       await this.service.capabilities();
       this.shared = 'available';
     } catch {
-      this.shared = 'unavailable';
+      this.markServiceUnavailable();
     }
   }
 
@@ -238,11 +244,11 @@ export class IdentitySession {
           this.applyView(await this.service.session(this.record.accessCredential));
           this.shared = 'available';
         } catch {
-          this.shared = 'unavailable';
+          this.markServiceUnavailable();
         }
         return;
       }
-      this.shared = 'unavailable';
+      this.markServiceUnavailable();
     }
   }
 
@@ -263,13 +269,14 @@ export class IdentitySession {
     if (this.signingIn) return this.result(false, REASONS.inProgress);
     if (this.record?.pendingLogout) return this.result(false, REASONS.logoutPending);
     if (this.record) return this.result(true);
+    this.identityGeneration += 1;
     const token = {};
     this.signInToken = token;
     let reason: string | undefined;
     try {
       await this.runSignIn(this.config, token);
     } catch (error) {
-      reason = error instanceof SignInFailure ? error.reason : REASONS.interrupted;
+      reason = error instanceof SignInFailure ? error.reason : error instanceof LoopbackError && error.failure === 'port-occupied' ? REASONS.callbackOccupied : REASONS.interrupted;
       this.options.logger.warn(`identity: sign-in did not complete (${reason})`);
     } finally {
       if (this.signInToken === token) this.signInToken = null;
@@ -277,9 +284,12 @@ export class IdentitySession {
     return reason === undefined ? this.result(true) : this.result(false, reason);
   }
 
-  /** Cancels a sign-in in progress: its result is never installed. */
+  /** Cancels a sign-in in progress: its result is never installed, and its callback listener stops at once. */
   private cancelSignIn(): void {
     this.signInToken = null;
+    // A fixed callback port must not stay bound until the browser calls back or the timeout passes.
+    this.signInListener?.close();
+    this.signInListener = null;
   }
 
   private async runSignIn(config: ServiceConfig, token: object): Promise<void> {
@@ -291,6 +301,8 @@ export class IdentitySession {
     } catch {
       throw new SignInFailure(REASONS.issuerUnavailable);
     }
+    // Cancelled while the issuer was being discovered: never open a listener for this attempt.
+    if (cancelled()) throw new SignInFailure(REASONS.cancelled);
     const pkce = (this.options.pkce ?? createPkce)();
     const state = (this.options.state ?? createState)();
     this.remember(pkce.verifier, state);
@@ -298,7 +310,13 @@ export class IdentitySession {
       state,
       issuer: config.issuerUrl,
       timeoutMs: this.options.callbackTimeoutMs,
+      port: config.callbackPort,
     });
+    if (cancelled()) {
+      listener.close();
+      throw new SignInFailure(REASONS.cancelled);
+    }
+    this.signInListener = listener;
     try {
       let transaction;
       try {
@@ -335,6 +353,10 @@ export class IdentitySession {
       ] as const) {
         authorize.searchParams.set(key, value);
       }
+      if (cancelled()) {
+        await abandon();
+        throw new SignInFailure(REASONS.cancelled);
+      }
       try {
         await this.options.openBrowser(authorize.toString());
       } catch {
@@ -347,6 +369,8 @@ export class IdentitySession {
         ({ code } = await listener.callback);
       } catch (error) {
         await abandon();
+        // A cancelled sign-in closes its own listener; report the cancellation, not an issuer refusal.
+        if (cancelled()) throw new SignInFailure(REASONS.cancelled);
         throw new SignInFailure(error instanceof LoopbackError && error.failure === 'timeout' ? REASONS.timedOut : REASONS.issuerRejected);
       }
       this.remember(code);
@@ -430,6 +454,7 @@ export class IdentitySession {
       this.persist();
       this.options.logger.info('identity: signed in');
     } finally {
+      if (this.signInListener === listener) this.signInListener = null;
       listener.close();
     }
   }
@@ -477,7 +502,7 @@ export class IdentitySession {
     } catch (error) {
       if (error instanceof ServiceError && (error.kind === 'dependency_unavailable' || (error.kind === 'transport' && !error.delivered))) {
         // The refresh did not happen: keep the family for a later attempt.
-        this.shared = 'unavailable';
+        this.markServiceUnavailable();
         return false;
       }
       // A reuse rejection, any other refusal, or an uncertain outcome: this
@@ -501,6 +526,7 @@ export class IdentitySession {
   // ---- logout --------------------------------------------------------------
 
   async signOut(): Promise<IdentityActionResult> {
+    this.identityGeneration += 1;
     if (this.configInvalid) return this.result(false, REASONS.configInvalid);
     // Signing out also cancels a sign-in that has not finished.
     this.cancelSignIn();
@@ -556,10 +582,11 @@ export class IdentitySession {
    * Sends the pending logout envelope. `interactive` is false for the
    * background retry that `getStatus` runs.
    */
-  private async attemptLogout(interactive: boolean, rePrepared = false): Promise<IdentityActionResult> {
+  private async attemptLogout(interactive: boolean, rePrepared = false, refreshed = false, wasRetry?: boolean): Promise<IdentityActionResult> {
     let record = this.record;
     if (!record?.pendingLogout) return this.result(true);
-    const retry = record.pendingLogout.sent;
+    // After the one refresh below, this call's own send has already marked the operation sent; keep the original answer.
+    const retry = wasRetry ?? record.pendingLogout.sent;
 
     const access = await this.freshAccess();
     record = this.record;
@@ -587,29 +614,31 @@ export class IdentitySession {
       return this.result(true);
     } catch (error) {
       if (!(error instanceof ServiceError)) {
-        this.shared = 'unavailable';
+        this.markServiceUnavailable();
         return this.result(false, REASONS.logoutPending);
       }
       switch (error.kind) {
         case 'unauthenticated':
           this.shared = 'available';
-          if (retry) {
-            // A retried self-logout: the first attempt committed and revoked
-            // this session, so the service no longer knows these credentials.
-            this.finishLogout();
-            return this.result(true);
-          }
-          // First attempt: the access credential was refused, so nothing was
-          // committed. Refresh once and retry the same envelope.
-          if (await this.refresh()) return this.attemptLogout(interactive, rePrepared);
+          // The access credential was refused. On a first attempt nothing was
+          // committed. On a retry an earlier attempt may have committed and
+          // revoked this session, but an expired credential is refused in the
+          // same way, so the refusal alone proves nothing. Let the refresh
+          // decide: a live family refreshes and the same envelope is sent
+          // again; a revoked family is refused, discarded and its revocation
+          // sent.
+          if (!refreshed && (await this.refresh())) return this.attemptLogout(interactive, rePrepared, true, retry);
           if (this.record?.pendingLogout) {
             // The refresh could not be attempted (service or dependency
-            // unavailable): the family is still alive on the service, so the
-            // logout is not confirmed. Keep the operation and its ID for a
-            // retry; since this attempt committed nothing, it is not "sent".
-            this.record = { ...this.record, pendingLogout: { ...this.record.pendingLogout, sent: false } };
+            // unavailable), or a freshly refreshed credential was refused
+            // again: the family is still alive on the service, so the logout
+            // is not confirmed. Keep the operation and its ID for a retry. A
+            // first attempt committed nothing, so it is not "sent"; a retry
+            // keeps "sent", because an earlier attempt may have committed.
+            this.record = { ...this.record, pendingLogout: { ...this.record.pendingLogout, sent: retry } };
             this.persist();
-            this.shared = 'unavailable';
+            // The service is unreachable only when the refresh could not be attempted; a refused fresh credential came from a service that answered.
+            if (!refreshed) this.markServiceUnavailable();
             return this.result(false, REASONS.logoutPending);
           }
           // The refresh ended the family (refused or uncertain): it was
@@ -636,7 +665,7 @@ export class IdentitySession {
         default:
           // Transport, dependency or uncertain outcome: keep the pending
           // operation and retry it later with the same ID.
-          this.shared = 'unavailable';
+          this.markServiceUnavailable();
           if (!interactive) this.options.logger.info('identity: pending sign-out not yet confirmed');
           return this.result(false, REASONS.logoutPending);
       }
@@ -656,6 +685,62 @@ export class IdentitySession {
   principalId(): string | null {
     const state = this.identityState();
     return state.state === 'signed-in' && this.record ? this.record.principalId : null;
+  }
+
+  private policyReads = 0;
+  private readonly policyReadWaiters: Array<() => void> = [];
+
+  private acquirePolicyRead(): Promise<boolean> {
+    if (this.policyReads < 4) { this.policyReads++; return Promise.resolve(true); }
+    if (this.policyReadWaiters.length >= 32) return Promise.resolve(false);
+    return new Promise(resolve => this.policyReadWaiters.push(() => resolve(true)));
+  }
+
+  private releasePolicyRead(): void {
+    const next = this.policyReadWaiters.shift();
+    if (next) next(); else this.policyReads--;
+  }
+
+  /** Only the fixed execution-policy GET may run concurrently. No response is
+   * cached or shared: every native disclosure still obtains a fresh service
+   * decision. Credential rotation and all mutations retain the exclusive lane. */
+  async readExecutionPolicy(workspaceId: string): Promise<ExecutionPolicyView | null> {
+    const generation = this.identityGeneration, principal = this.principalId(), sessionId = this.record?.sessionId;
+    if (!this.config || !principal || !sessionId) return null;
+    const current = () => generation === this.identityGeneration && principal === this.principalId() && sessionId === this.record?.sessionId;
+    if (!(await this.acquirePolicyRead())) return null;
+    try {
+      const credential = (failed?: string) => this.exclusive(async () => {
+        if (!current() || !this.record) return null;
+        // Concurrent 401s for an old token reuse the already-rotated token;
+        // they must not consume the refresh credential again.
+        const rotate = failed !== undefined && this.record.accessCredential === failed;
+        if ((rotate || Date.parse(this.record.accessExpiresAt) - this.now() < REFRESH_MARGIN_MS) && !(await this.refresh())) return null;
+        if (!current() || !this.record) return null;
+        return this.record.accessCredential;
+      });
+      let access = await credential();
+      for (let attempt = 0; attempt < 2; attempt++) {
+        if (!access || !current()) return null;
+        const failureGeneration = this.serviceFailureGeneration;
+        try {
+          const result = await this.service.executionPolicy(access, workspaceId);
+          if (!current()) return null;
+          if (failureGeneration === this.serviceFailureGeneration) this.shared = 'available';
+          return result;
+        } catch (error) {
+          if (!current()) return null;
+          if (attempt === 0 && error instanceof ServiceError && error.kind === 'unauthenticated') {
+            access = await credential(access);
+            continue;
+          }
+          this.noteServiceError(error);
+          if (failureGeneration === this.serviceFailureGeneration && error instanceof ServiceError && error.kind !== 'transport' && error.kind !== 'dependency_unavailable') this.shared = 'available';
+          throw error;
+        }
+      }
+      return null;
+    } finally { this.releasePolicyRead(); }
   }
 
   /**
@@ -694,6 +779,7 @@ export class IdentitySession {
    * session then lapses on its own.
    */
   forgetLocally(): void {
+    this.identityGeneration += 1;
     const held = this.record !== null;
     this.cancelSignIn();
     this.dropRecord();
@@ -706,6 +792,7 @@ export class IdentitySession {
   }
 
   private dropRecord(): void {
+    this.identityGeneration += 1;
     this.record = null;
     this.options.vault.clear();
     this.persistFailed = false;
@@ -742,8 +829,14 @@ export class IdentitySession {
     }
   }
 
+  private serviceFailureGeneration = 0;
+  private markServiceUnavailable(): void {
+    this.serviceFailureGeneration++;
+    this.shared = 'unavailable';
+  }
+
   private noteServiceError(error: unknown): void {
-    if (error instanceof ServiceError && (error.kind === 'transport' || error.kind === 'dependency_unavailable')) this.shared = 'unavailable';
+    if (error instanceof ServiceError && (error.kind === 'transport' || error.kind === 'dependency_unavailable')) this.markServiceUnavailable();
   }
 
   private remember(...secrets: string[]): void {

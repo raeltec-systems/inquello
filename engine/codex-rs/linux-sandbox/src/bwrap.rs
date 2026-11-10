@@ -61,6 +61,23 @@ const LINUX_PLATFORM_DEFAULT_READ_ROOTS: &[&str] = &[
     "/run/current-system/sw",
 ];
 
+/// Recognize only direct merged-/usr system aliases whose target is already
+/// visible. Other symlinks retain existing logical-mount behavior.
+fn merged_usr_alias(
+    root: &Path,
+    link: &Path,
+    readable_roots: &BTreeSet<PathBuf>,
+) -> Option<PathBuf> {
+    if !matches!(root.to_str(), Some("/bin" | "/sbin" | "/lib" | "/lib64"))
+        || !readable_roots.contains(Path::new("/usr"))
+    {
+        return None;
+    }
+    let target = Path::new("/usr").join(root.file_name()?);
+    let relative = target.strip_prefix("/").ok()?;
+    (link == target || link == relative).then_some(target)
+}
+
 /// External scanner used by deny-glob expansion and its dependency inventory.
 pub const GLOB_SCAN_PROGRAM: &str = "rg";
 
@@ -554,8 +571,26 @@ fn create_filesystem_args(
                 "/dev".to_string(),
             ];
         } else {
+            // Keep merged-/usr aliases as links into the already-readable /usr.
+            // Separate bind mounts erase canonical executable identity, which
+            // command rules rely on. Do not add targets outside existing roots.
+            let usr_aliases: BTreeMap<PathBuf, PathBuf> = readable_roots
+                .iter()
+                .filter_map(|root| {
+                    let target = fs::read_link(root).ok()?;
+                    merged_usr_alias(root, &target, &readable_roots)
+                        .map(|target| (root.clone(), target))
+                })
+                .collect();
+            for (alias, target) in &usr_aliases {
+                args.extend([
+                    "--symlink".to_string(),
+                    path_to_string(target),
+                    path_to_string(alias),
+                ]);
+            }
             for root in readable_roots {
-                if !root.exists() {
+                if usr_aliases.contains_key(&root) || !root.exists() {
                     continue;
                 }
                 // Writable roots are rebound by real target below; mirror that

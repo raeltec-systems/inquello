@@ -121,6 +121,14 @@ describe.skipIf(!databaseConfigured)('the effective policy against the real runt
     await runtime.start();
     const transport = httpsTransport(config.ca);
     const service = new SharedServiceClient(config.serviceUrl, transport);
+    // Production uses one authenticated client for identity and policy. Apply
+    // the synthetic policy revision to that same fixed read, after its real
+    // membership check, so fresh authority and expected policy cannot diverge.
+    const executionPolicy = service.executionPolicy.bind(service);
+    service.executionPolicy = async (access, workspaceId) => {
+      const current = await executionPolicy(access, workspaceId);
+      return stricterPolicy ? { ...current, policy_revision: '2', execution: { sandbox: 'read_only' } } : current;
+    };
     identity = new IdentitySession({
       config: { kind: 'configured', config },
       vault: new CredentialVault({ safeStorage: fakeSafeStorage('gnome_libsecret'), platform: 'linux', dir: path.join(dir, 'identity') }),
@@ -133,13 +141,7 @@ describe.skipIf(!databaseConfigured)('the effective policy against the real runt
     expect((await identity.withAccess((access) => service.acceptInvite(access, seed.invite_id)))?.workspace_id).toBe(seed.workspace_id);
     const organiseRuntime = { ready: () => runtime.state === 'ready', instance: () => runtime, request: <T,>(method: string, params?: unknown) => runtime.request<T>(method, params) };
     organise = new OrganiseService({ runtime: organiseRuntime, identity, service, logger: recordingLogger() });
-    // Keep the independently requested current authority consistent with the
-    // synthetic policy update below, as in the tool-boundary integration cases.
-    const policyService = { executionPolicy: async (access: Parameters<SharedServiceClient['executionPolicy']>[0], workspaceId: string) => {
-      const current = await service.executionPolicy(access, workspaceId);
-      return stricterPolicy ? { ...current, policy_revision: '2', execution: { sandbox: 'read_only' } } : current;
-    } };
-    policy = new PolicyService({ runtime: organiseRuntime, identity, organise, service: policyService, logger: recordingLogger(), taskFolders: path.join(dir, 'tasks'), sandboxProbeTarget: path.dirname(workingStore), permissions: new PermissionMediator({ runtime: organiseRuntime, logger: recordingLogger(), newId: randomUUID }) });
+    policy = new PolicyService({ runtime: organiseRuntime, identity, organise, service, logger: recordingLogger(), taskFolders: path.join(dir, 'tasks'), sandboxProbeTarget: path.dirname(workingStore), permissions: new PermissionMediator({ runtime: organiseRuntime, logger: recordingLogger(), newId: randomUUID }) });
   }, 120_000);
 
   afterAll(async () => {
@@ -147,6 +149,18 @@ describe.skipIf(!databaseConfigured)('the effective policy against the real runt
     await stopTopology();
     await removeGuestTaskStorage();
     removeTempDirs();
+  });
+
+  it('binds the fixed authenticated read to stricter fixture policy and rejects foreign membership', async () => {
+    stricterPolicy = true;
+    try {
+      expect(await identity.readExecutionPolicy(seed.workspace_id)).toMatchObject({
+        workspace_id: seed.workspace_id, policy_revision: '2', execution: { sandbox: 'read_only' },
+      });
+      await expect(identity.readExecutionPolicy(randomUUID())).rejects.toMatchObject({ kind: 'denied' });
+    } finally {
+      stricterPolicy = false;
+    }
   });
 
   it('shows the seeded Workspace policy in S07 with its revision, no device requirements and the contract', async () => {

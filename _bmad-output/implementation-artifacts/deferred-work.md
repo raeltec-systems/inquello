@@ -155,3 +155,65 @@
 - source_spec: `spec-1-29-steer-stop-and-recover-the-same-private-task.md`
   summary: Verify genuine Electron IPC pre-registration rejection while Task controls remain mounted.
   evidence: R3-B10, medium impact unverified/low likelihood. Main failures normally return typed outcomes and session invalidation unmounts controls; a real transport reproduction is needed before changing recovery authority or risking replay.
+
+
+## Found on Linux native gate runs (2026-11-04)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-21-discover-tools-and-connections.md`
+  summary: OAuth cancel leaves the MCP sign-in callback port answering-but-hanging (`oauth_cancel_rpc_selects_exact_attempt_and_prevents_late_token_persistence` fails on Linux).
+  evidence: Cancel works (status `cancelled`, `oauthLogin/completed` with `success:false`, no credential written). The test then re-sends the callback after cancellation; that request never completes (`timeout(...)` elapses), even 3 s after cancel and with a fresh connection. Instrumentation showed the callback thread exits after the first (in-flight) callback and `CallbackServerGuard` is dropped with `Arc::strong_count == 1`, so tiny_http's `Server::drop` should run and close the listener; yet the port still accepts and never answers. Adding `Connection: close` to the callback responses did not change the result (reverted). Next step: check whether the listening socket is still open after the guard drop (for example `ss -ltnp` during the test) and whether tiny_http 0.12's self-connect wake in `Server::drop` reaches the accept thread for this bind; then fix in `rmcp-client/src/perform_oauth_login.rs`. Windows runs never executed this test, so the platform difference is unconfirmed.
+- source_spec: spec-1-25-start-a-real-plain-text-private-task-on-a-configured-route.md
+  summary: First private Task after a cold Linux guest start can fail setup with "Setup probe timed out" and is not retried.
+  evidence: 2026-11-09 offline pass, `inquello_authorization_runtime` on Windows. `messages_allowed` ran first of 68 cases and failed with status `setup-failed` ("Private thread setup failed before first-turn submission"); the runtime logged "Linux Task setup unavailable: Linux empty Task initialization could not complete: Setup probe timed out: deadline has elapsed". The other 67 cases passed, and the same case passed twice when re-run alone with the guest warm (36 s and 37 s). Cold start is the likely cause but was not isolated: no run deliberately shut the guest down first. Decide whether the setup probe deadline should cover guest boot or the first start should wait for guest readiness. Logs: `.tmp/epic1-offline-pass-20261109/stage3b-fixture-authorization-runtime.log`, `stage4-fixture-messages-allowed-{1,2}.log`.
+
+---
+- source_spec: spec-1-22-configure-initial-processing-routes-without-silent-fallback.md
+  summary: `inquello_messages_runtime` is compiled only on Linux and has no recorded run on the current tree.
+  evidence: `engine/codex-rs/app-server/tests/inquello_messages_runtime.rs` is gated `#![cfg(all(feature = "inference-fixtures", target_os = "linux"))]`. On Windows it builds to zero tests and cargo reports "ok. 0 passed" (2026-11-09 offline pass, `stage2-fixture-messages-runtime.log`), which is not a pass. Stories 1.22, 1.25, 1.26 and 1.27 list this suite as a verification gate. It needs a Linux run, for example inside the `Inquello-Engine` WSL guest, with `INQUELLO_FIXTURE_APP_SERVER_BIN` set to a Linux fixtures build.
+
+---
+- source_spec: spec-1-22-configure-initial-processing-routes-without-silent-fallback.md
+  summary: Resolved 2026-11-10 — `inquello_messages_runtime` now has a Linux run on the current tree (13 of 13 passed in the `Inquello-Engine` guest).
+  evidence: See note 3 of `epic-1-offline-pass-2026-11-09.md`. The entry above is kept for history. What remains is repeatability: there is no checked-in script for this run; it used the staging script plus a one-off driver under `.tmp/epic1-offline-pass-20261109/`.
+
+---
+- source_spec: spec-1-31-customer-onboarding.md
+  summary: Build the bounded per-scope pending journal for onboarding after V1 and the pilot (owner decision 2026-11-10).
+  evidence: The owner approved the design around 2026-11-01 (`_bmad-output/specs/spec-customer-onboarding/service-desktop-handoff.md`, "Final engine checkpoint") and on 2026-11-10 decided to defer building it until after the initial V1 and pilot. Today `desktop/src/main/onboarding/store.ts` holds one pending record per signed-in person and `service.ts` refuses any new onboarding change while it exists; that fails closed and satisfies the story's frozen "reconcile before retry" row. The deferred design keeps several uncertain operations and blocks only conflicting scopes (all create-workspace intents; team changes per Workspace; acceptance by observed Workspace), must migrate existing single-pending records without losing an uncertain envelope, bound the journal size, and take an operation ID on retry/reconcile/discard. Use pilot evidence of how often people hit the single-pending block to prioritise it.
+
+---
+- source_spec: spec-1-20-authorize-specific-actions.md
+  summary: The seeded smoke's `permissions` report stalled once until the launcher's ten-minute deadline (intermittent; 1 of 4 full runs on 2026-11-10).
+  evidence: Full `node scripts/run-seeded-smoke.cjs` at `96822e94a4`. In one run the normal phase emitted eleven passing reports through `tool-bounds` (07:05:54 UTC), logged "policy: your command rules were changed" (07:06:03), then produced nothing until the 600 s deadline; quota, visual and tools phases passed. Logs: `.tmp/inquello-seeded-smoke-kkG3dg/smoke.{stdout,stderr}.log`, `.tmp/epic1-offline-pass-20261109/journey-full-smoke.log`. The same command passed 19 of 19 immediately afterwards (`journey-full-smoke-2.log`), in the implementation agent's run, and in the 2026-11-10 offline pass. The change under test touches only onboarding-fixture branches, which an ordinary smoke run does not take. Cause not established. The `Inquello-Engine` guest was Stopped when checked after the stall; the cold-guest setup timeout recorded above against Story 1.25 may be related, but `tool-bounds` had just used the sandbox successfully. Next step: when it recurs, capture what the permissions probe is awaiting (pending permission card, runtime request, or sandbox setup) before the deadline kills it.
+
+---
+- source_spec: spec-1-31-onboarding-journey-coverage.md
+  summary: Rewrite the interrupted-request panel in plain language before the pilot.
+  evidence: Capture `11-interrupted-request` (2026-11-10). The panel reads "Pending action: invite. Keep its original operation identity. A missing receipt does not authorize creating a replacement." with buttons "Reconcile request", "Review same-request retry" and "Discard rejected request"; "Resolve the pending request before another change." appears twice beside one control; the panel does not say the service is unreachable or that waiting will resolve it; "Invitations for you" shows no status when it cannot load; the confirmation dialog title is styled like body text. Behaviour is correct. Since the single-pending behaviour is kept for the pilot (owner decision 2026-11-10), this is what a pilot user meets after a dropped connection. Copy-only change in `desktop/src/renderer/Onboarding.tsx` plus the journey's text assertions.
+
+---
+- source_spec: spec-1-31-onboarding-journey-coverage.md
+  summary: Resolved 2026-11-10 — the interrupted-request panel was reworded in plain language with the owner's approval; layout and design polish remain deferred.
+  evidence: Copy-only change in `desktop/src/renderer/Onboarding.tsx` and the reason strings in `desktop/src/main/onboarding/service.ts`; tests and the journey's text checks updated. Not changed, by owner decision to do design polish later: the held reason showing twice beside one control, the dialog title styling, "Invitations for you" showing no status when it cannot load, and wider design matters the owner noted across the product.
+
+---
+- source_spec: spec-1-31-onboarding-journey-coverage.md
+  summary: The onboarding journey failed seven times in a row over about eight minutes on 2026-11-10, then passed fifteen times in a row; cause not established.
+  evidence: Between about 07:51 and 07:59 UTC every launch failed within seconds at its first screenshot ("Failure capture unavailable"), starting with a relaunch and then at `first-run` on fresh profiles (`.tmp/epic1-offline-pass-20261109/reword2-onboarding-{1..6}.log`, `reword3-onboarding.log`). The `--visual-only` phase, which also captures pixels, passed at 08:00. From 08:02 the same build passed 1 + 5 runs with a temporary error print in the built probe and 4 unmodified runs. The desktop session was Active throughout. Diagnosis was slowed because the probe records only the failing stage, never the error. Separately, one earlier failure was a real race in the probe (it checked the held-control reason once while the failed request was still settling); that is fixed by waiting for the settled reason. Next step: let the probe record a short, fixed-vocabulary error cause, and capture window and display state on a capture failure.
+
+---
+- source_spec: `spec-1-31-onboarding-journey-coverage.md`
+  summary: The two-launch relaunch logic in `desktop/scripts/run-seeded-smoke.cjs` has no unit test.
+  evidence: Review pass 1 (VG2, BH5), 2026-11-10. The relaunch decision, the one-use marker write, the report merge and the requirement for both events are exercised only by running the onboarding smoke. Dropping `onboarding-resume` from the required list would not fail any vitest test. Extracting the decision and merge into a pure function with canned reports would close it.
+
+---
+- source_spec: `spec-1-31-onboarding-journey-coverage.md`
+  summary: The onboarding conflict message tells the person to discard a change that the panel may not yet allow them to discard.
+  evidence: Review pass 1 (BH2), 2026-11-10. `ONBOARDING_REASONS.conflict` says to discard the change if it was not applied; discard is enabled only after a definitive rejection. The instruction predates the plain-language rewording. Fold into the copy and design polish.
+
+---
+- source_spec: `spec-1-31-onboarding-journey-coverage.md`
+  summary: Resolved 2026-11-10 — the onboarding journey's failure clusters were caused by a hidden app window, now fixed.
+  evidence: The launcher starts Electron with a hidden-window start-up flag, and Windows can let that flag swallow the process's first show request, depending on start-up timing. A temporary diagnostic showed `visible=false` at failure, with "Onboarding capture deadline" and "Dialog focus did not start visibly inside". `desktop/src/main/main.ts` now shows and focuses the onboarding smoke window before the probe; six consecutive passes followed immediately after a rebuild. This supersedes the "cause not established" entry above. Still worth doing: let the probe record a short fixed-vocabulary cause on failure. The separate `permissions` report stall is not explained by this, because the ordinary smoke window is hidden by design.
+
+---

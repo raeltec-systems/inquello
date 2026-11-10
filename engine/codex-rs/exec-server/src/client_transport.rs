@@ -338,6 +338,20 @@ impl ExecServerClient {
         cwd: std::path::PathBuf,
         initialize_timeout: Duration,
     ) -> Result<Self, ExecServerError> {
+        Self::connect_isolated_stdio_tracked(program, args, env, cwd, initialize_timeout, || {})
+            .await
+    }
+
+    /// Reports successful process creation synchronously, before initialization
+    /// can fail or be cancelled. The observer must not panic or block.
+    pub async fn connect_isolated_stdio_tracked(
+        program: String,
+        args: Vec<String>,
+        env: std::collections::HashMap<String, String>,
+        cwd: std::path::PathBuf,
+        initialize_timeout: Duration,
+        on_spawn: impl FnOnce() + Send,
+    ) -> Result<Self, ExecServerError> {
         let client = Self::connect_stdio_command_inner(
             StdioExecServerConnectArgs {
                 command: StdioExecServerCommand {
@@ -351,6 +365,7 @@ impl ExecServerClient {
                 resume_session_id: None,
             },
             true,
+            on_spawn,
         )
         .await?;
         client.mark_isolated_stdio();
@@ -838,12 +853,13 @@ impl ExecServerClient {
     pub(crate) async fn connect_stdio_command(
         args: StdioExecServerConnectArgs,
     ) -> Result<Self, ExecServerError> {
-        Self::connect_stdio_command_inner(args, false).await
+        Self::connect_stdio_command_inner(args, false, || {}).await
     }
 
     async fn connect_stdio_command_inner(
         args: StdioExecServerConnectArgs,
         isolate_environment: bool,
+        on_spawn: impl FnOnce() + Send,
     ) -> Result<Self, ExecServerError> {
         let mut command = stdio_command_process(&args.command);
         if isolate_environment {
@@ -856,6 +872,7 @@ impl ExecServerClient {
             .stderr(Stdio::piped())
             .spawn()
             .map_err(ExecServerError::Spawn)?;
+        on_spawn();
 
         let stdin = child.stdin.take().ok_or_else(|| {
             ExecServerError::Protocol("spawned exec-server command has no stdin".to_string())

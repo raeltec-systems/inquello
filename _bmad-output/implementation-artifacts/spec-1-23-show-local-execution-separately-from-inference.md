@@ -62,7 +62,7 @@ Native `execution_policy/effective.rs` fixes `LocalDevice`; retain it.
 - [x] `desktop/src/main/{main.ts,security/operations.ts}`, `src/preload/preload.ts` — bounded read/notification; retain sender validation and invalidation.
 - [x] `desktop/src/main/policy/service.ts` — reuse local preflight in actual `runTool`; preserve policy/sandbox and post-wait checks.
 - [x] `desktop/src/renderer/Shell/{TaskEnvironment.tsx,TaskView.tsx,shell.css}` — distinct labelled facts, disabled gates and refresh; no inference-start control.
-- [ ] `engine/codex-rs/inquello-domain/register/{capabilities,inventory-map}.json`, `tests/capability_register.rs` — record disabled remote/cloud gates; no eligibility change.
+- [x] `engine/codex-rs/inquello-domain/register/{capabilities,inventory-map}.json`, `tests/capability_register.rs` — record disabled remote/cloud gates; no eligibility change.
 - [x] `desktop/test/{environments-units.test.ts,environments-shell.test.tsx,policy-units.test.ts,security.test.ts}` — test the matrix, actual preflight callers, no read probes, late responses and zero dispatch after runtime replacement.
 - [ ] `desktop/src/main/smoke-probe.ts`, `FORK-CUT.md`, story/tracker — environment smoke and truthful validation record.
 
@@ -122,6 +122,15 @@ Partial non-Git workspace; 1.21/1.22 native/generation gates remain separate. Re
 
 Owner follow-up: restore the matching complete native/toolchain/Git/schema and imported asset inputs, run the genuine inventory generator without eligibility changes, execute native capability/fmt gates, and run seeded isolated smoke plus actual Electron keyboard/minimum-width inspection. Keep this story in progress until those acceptance gates pass; authored tests and source inspection are not native acceptance evidence. Prior 1.21/1.22 gates remain independent.
 
+### Native register and generator gate — 2026-11-09
+
+Run on this Windows host at head `99800744e3` with the installed Rust 1.99.1 toolchain, offline and locked, from `engine/codex-rs`:
+
+- `cargo test --offline --locked -j4 -p inquello-domain --test capability_register --test inventory_map`: **passed**, 24/24 and 11/11, none ignored. This includes `remote_cloud_execution_remains_disabled` and `committed_map_matches_the_planning_documents` (99 items, 0 deferred-unmet), which is the genuine inventory generator comparison. The map was compared with the working-tree `epics.md`, which has uncommitted edits.
+- `cargo fmt --all -- --check`: **passed** (exit 0; nightly-only option warnings).
+
+No source, register or map file changed; the inventory map needs no `execution.remote-cloud` row, as the Implementation Notes explain. This closes the register task and supersedes the 2026-10-30 "blocked, exit 127" entries for these two commands. **Not run here:** full `pnpm test`, seeded `pnpm smoke` including the environment report, and actual Electron keyboard/minimum-width inspection. The smoke/validation-record task stays open and the story stays in-progress.
+
 ### Final review correction and presentation record
 
 All three independent review passes returned; twelve findings were individually triaged above. Surviving corrections are implemented: uncertain post-dispatch outcomes do not invite duplicate execution, sandbox-probe settlement invalidates displayed facts, ordinary route refresh preserves focus while Task invalidation clears private facts, inference parsing is status-consistent, IPC rejection/positive-dispatch assertions and full inference projection assertions are maintained. Six effectful tests confirm exactly one execution despite lost continuity, across initial dispatch and authorized retry. Existing Settings draft/revision tests remain unchanged.
@@ -129,3 +138,17 @@ All three independent review passes returned; twelve findings were individually 
 The seeded smoke now mounts the actual Task panel and selects a synthetic disabled route through the production service to check main/preload invalidation. It is authored but unrun here, not production-notification acceptance evidence. No real credentials or paid inference were used. Final build, both TypeScript checks and focused tests passed; final full-suite exit is 1 as recorded above.
 
 BMAD presentation is reached, but the owner's accepted deferred native/real-Electron gates override the normal done transition: spec and tracker remain in-progress. There is no local Git repository, no local commit and no publication in this candidate. Prior Story 1.21/1.22 gates remain independent.
+
+## Consolidated offline pass — 2026-11-09/10
+
+Recorded from the Epic 1 consolidated offline verification pass at commit `f992919722` on this Windows host; full gate list, logs and limits are in [epic-1-offline-pass-2026-11-09.md](epic-1-offline-pass-2026-11-09.md). Synthetic and offline only: no live provider, no real credentials, no owner acceptance, and no change to real-data qualification. This supersedes earlier "cargo absent / unrun" entries for the gates listed as passed. Status stays `in-progress` and no task box was changed by this record; the boxes were not re-audited against the code.
+
+Shared gates that passed: `cargo fmt --all -- --check`; native tests for `inquello-domain`, `inquello-protocol`, `inquello-adapters` and `inquello-service` (`test-issuer`, all targets); clippy with warnings as errors on those four crates; default rebuild of CLI, app-server and service; `pnpm run generate:protocol` (816 files, no working-tree change); both desktop type checks; `pnpm run build`; full `pnpm test` (2,270 passed, 0 failed, 21 skipped); seeded Electron smoke (19 of 19 required reports).
+
+Specific to this story, passed:
+
+- Seeded smoke `environments` report passed, which closes the "smoke blocked: no Electron binary" entry above.
+
+Still open or not run:
+
+- Actual Electron keyboard and minimum-width inspection by the owner.

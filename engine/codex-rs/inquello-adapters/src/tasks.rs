@@ -7,6 +7,25 @@ use inquello_domain::{DomainError, OperationId, StoreError};
 use sqlx::{Sqlite, Transaction};
 use uuid::Uuid;
 type Tx<'a> = Transaction<'a, Sqlite>;
+
+/// Creation-only display title. No model call, later rename, or cross-principal read.
+/// The 80 Unicode scalar bound is below the existing 200-character name limit.
+fn initial_conversation_title(request: &str) -> String {
+    request
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .map(|line| {
+            line.split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ")
+                .chars()
+                .take(80)
+                .collect()
+        })
+        .unwrap_or_else(|| "New chat".to_string())
+}
+
 fn backend(_: sqlx::Error) -> DomainError {
     DomainError::Store(StoreError::Backend(
         "private Task journal storage failure".into(),
@@ -122,10 +141,10 @@ impl TaskRunStore for SqliteWorkingStore {
             }
             return Ok(old);
         }
-        let latest:Option<i64>=sqlx::query_scalar("SELECT MAX(revision) FROM processing_route_candidates WHERE principal_id=? AND route_id=?").bind(p.to_string()).bind(&intent.route_id).fetch_one(&mut *tx).await.map_err(backend)?;
-        if latest != Some(intent.configuration_revision as i64) {
+        let active:Option<i64>=sqlx::query_scalar("SELECT configuration_revision FROM processing_model_bindings WHERE principal_id=? AND route_id=? AND configuration_revision=? AND state='active'").bind(p.to_string()).bind(&intent.route_id).bind(intent.configuration_revision as i64).fetch_optional(&mut *tx).await.map_err(backend)?;
+        if active != Some(intent.configuration_revision as i64) {
             return Err(TaskReservationError::PreEffect(invalid(
-                "route configuration changed; explicitly reconfirm route and settings",
+                "selected model binding is unavailable; explicitly reconfirm model and settings",
             )));
         }
         if let Some(id) = &intent.engagement_id {
@@ -167,7 +186,7 @@ impl TaskRunStore for SqliteWorkingStore {
             choices: intent.choices.clone(),
             setup_failure: None,
         };
-        sqlx::query("INSERT INTO tasks(task_id,workspace_id,creator_principal_id,engagement_id,folder_id,title,source_refs,artifact_refs,visibility,revision,created_at_ms,updated_at_ms) VALUES(?,?,?,?,?,'Private task','[]','[]','private',1,?,?)").bind(&b.task_id).bind(&b.workspace_id).bind(&b.principal_id).bind(&intent.engagement_id).bind(&intent.folder_id).bind(now).bind(now).execute(&mut *tx).await.map_err(backend)?;
+        sqlx::query("INSERT INTO tasks(task_id,workspace_id,creator_principal_id,engagement_id,folder_id,title,source_refs,artifact_refs,visibility,revision,created_at_ms,updated_at_ms) VALUES(?,?,?,?,?,?,'[]','[]','private',1,?,?)").bind(&b.task_id).bind(&b.workspace_id).bind(&b.principal_id).bind(&intent.engagement_id).bind(&intent.folder_id).bind(initial_conversation_title(&intent.request)).bind(now).bind(now).execute(&mut *tx).await.map_err(backend)?;
         sqlx::query("INSERT INTO task_start_history(task_id,intent) VALUES(?,?)")
             .bind(&b.task_id)
             .bind(encode_intent(&intent)?)
@@ -516,10 +535,15 @@ fn lifecycle_current(i: &TaskLifecycleIntent, b: &TaskRunBinding) -> Result<(), 
             ) && b.turn_id.is_some()
                 && i.runtime_id == b.runtime_id
         }
-        TaskLifecycleKind::Resume => matches!(
-            b.status,
-            TaskRunStatus::Cancelled | TaskRunStatus::Failed | TaskRunStatus::Uncertain
-        ),
+        TaskLifecycleKind::Resume => {
+            matches!(
+                b.status,
+                TaskRunStatus::Cancelled | TaskRunStatus::Failed | TaskRunStatus::Uncertain
+            ) || (b.status == TaskRunStatus::Completed
+                && i.guidance
+                    .as_ref()
+                    .is_some_and(|text| !text.trim().is_empty()))
+        }
     };
     if !allowed {
         return Err(invalid(
@@ -662,13 +686,15 @@ impl TaskLifecycleStore for SqliteWorkingStore {
             // dispatching it again; retain its original execution identity.
             sqlx::query("UPDATE task_lifecycle SET receipt=json_set(receipt,'$.status','unresolved') WHERE principal_id=? AND task_id=? AND json_extract(receipt,'$.binding.run_id')=? AND json_extract(receipt,'$.status')='uncertain'")
                 .bind(p.to_string()).bind(&b.task_id).bind(&b.run_id).execute(&mut *tx).await.map_err(backend)?;
-            sqlx::query("INSERT INTO task_run_history(task_id,run_id,record) VALUES(?,?,?)")
-                .bind(&b.task_id)
-                .bind(&b.run_id)
-                .bind(encode_binding(&b)?)
-                .execute(&mut *tx)
-                .await
-                .map_err(backend)?;
+            sqlx::query(
+                "INSERT OR IGNORE INTO task_run_history(task_id,run_id,record) VALUES(?,?,?)",
+            )
+            .bind(&b.task_id)
+            .bind(&b.run_id)
+            .bind(encode_binding(&b)?)
+            .execute(&mut *tx)
+            .await
+            .map_err(backend)?;
             b.run_id = Uuid::new_v4().to_string();
             b.runtime_id = intent.runtime_id.clone();
             b.turn_id = None;
@@ -788,6 +814,37 @@ impl TaskLifecycleStore for SqliteWorkingStore {
 }
 
 impl SqliteWorkingStore {
+    /// Close only this still-unclaimed reservation. A losing duplicate must not
+    /// overwrite another caller's durable dispatch or terminal acknowledgement.
+    pub async fn reject_reserved_task_lifecycle(
+        &self,
+        p: PrincipalId,
+        op: &str,
+        expected: &TaskRunBinding,
+    ) -> Result<(TaskLifecycleReceipt, bool), DomainError> {
+        OperationId::parse(op)?;
+        let mut tx = self
+            .pool()
+            .begin_with("BEGIN IMMEDIATE")
+            .await
+            .map_err(backend)?;
+        let (intent, mut receipt) = lifecycle_load(&mut tx, p, op)
+            .await?
+            .ok_or(DomainError::NotFound)?;
+        if &intent.expected != expected {
+            return Err(invalid(
+                "Lifecycle reservation belongs to another execution",
+            ));
+        }
+        if receipt.status != TaskLifecycleStatus::Reserved {
+            return Ok((receipt, false));
+        }
+        receipt.status = TaskLifecycleStatus::Rejected;
+        lifecycle_write(&mut tx, p, &receipt).await?;
+        tx.commit().await.map_err(backend)?;
+        Ok((receipt, true))
+    }
+
     pub async fn find_task_current_run(
         &self,
         p: PrincipalId,
@@ -933,5 +990,27 @@ impl SqliteWorkingStore {
         .await
         .map_err(backend)?;
         Ok(found.is_some())
+    }
+}
+
+#[cfg(test)]
+mod conversation_title_tests {
+    use super::initial_conversation_title;
+    #[test]
+    fn first_nonempty_line_is_local_and_bounded_without_splitting_unicode_scalars() {
+        assert_eq!(
+            initial_conversation_title(" \n  Review invoices  \nPrivate continuation"),
+            "Review invoices"
+        );
+        assert_eq!(initial_conversation_title("\n \t \n"), "New chat");
+        assert_eq!(initial_conversation_title(""), "New chat");
+        assert_eq!(
+            initial_conversation_title("Review\tinvoices"),
+            "Review invoices"
+        );
+        assert_eq!(
+            initial_conversation_title(&"界😀".repeat(50)),
+            "界😀".repeat(40)
+        );
     }
 }

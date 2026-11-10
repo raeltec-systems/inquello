@@ -387,3 +387,25 @@ The owner's accepted environment-limited handoff overrides the workflow's normal
 mark-done terminal step: spec and sprint stay **in-progress** until the previously
 listed native/generation/runtime/platform acceptance gates are satisfied. This is
 an inspectable implementation candidate, not a release or completion certification.
+
+## Consolidated offline pass — 2026-11-09/10
+
+Recorded from the Epic 1 consolidated offline verification pass at commit `f992919722` on this Windows host; full gate list, logs and limits are in [epic-1-offline-pass-2026-11-09.md](epic-1-offline-pass-2026-11-09.md). Synthetic and offline only: no live provider, no real credentials, no owner acceptance, and no change to real-data qualification. This supersedes earlier "cargo absent / unrun" entries for the gates listed as passed. Status stays `in-progress` and no task box was changed by this record; the boxes were not re-audited against the code.
+
+Shared gates that passed: `cargo fmt --all -- --check`; native tests for `inquello-domain`, `inquello-protocol`, `inquello-adapters` and `inquello-service` (`test-issuer`, all targets); clippy with warnings as errors on those four crates; default rebuild of CLI, app-server and service; `pnpm run generate:protocol` (816 files, no working-tree change); both desktop type checks; `pnpm run build`; full `pnpm test` (2,270 passed, 0 failed, 21 skipped); seeded Electron smoke (19 of 19 required reports).
+
+Specific to this story, passed:
+
+- `codex-core --test all bound_responses_` and `codex-app-server --lib inquello_` (166/166) passed.
+- Seeded smoke `routes` report passed.
+
+Still open or not run:
+
+- `inquello_messages_runtime` is compiled only on Linux and reported zero tests here: **not run**. Recorded in `deferred-work.md`.
+- Cargo.lock and config-schema regeneration were not checked.
+
+## Linux Messages runtime suite — 2026-11-10
+
+`inquello_messages_runtime` (Linux-only, `inference-fixtures`) was run inside the `Inquello-Engine` guest and **passed: 13 of 13, none ignored**, in 102 s. Source: frozen archive `c14ad8834d7c…` of commit `71e6456333` (engine and desktop identical to `f992919722`), staged with `desktop/scripts/wsl/stage-source.py`; offline, locked, four jobs, installed Rust 1.99.1, the unchanged isolation guard from `build-guest.sh`. The fixtures app-server and the bubblewrap helper were built from that source and placed side by side, as the installed runtime keeps them. Synthetic transport only; no model call. This supersedes the "not run" entry for this suite in the record above. Details and the two earlier refused or mis-set-up attempts are in [epic-1-offline-pass-2026-11-09.md](epic-1-offline-pass-2026-11-09.md).
+
+Relevant to this story: `messages_turn_executes_inside_app_server_process_and_real_sandbox_boundary` passed.

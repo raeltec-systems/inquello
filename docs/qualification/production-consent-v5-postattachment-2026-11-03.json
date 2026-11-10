@@ -1,0 +1,156 @@
+{
+  "schema": "inquello-postattachment-v5-compiled-transition",
+  "recorded": "2026-11-03T13:13:01.882Z",
+  "reportSha256": "51845a72fcab21c136d910aae58f68cdbc27eff04cb75c41cb6bfa927b31c79a",
+  "gates": [
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-v5-postattachment-domain-compiled-positive.log",
+      "logSha256": "FA550D5416AAD94D182D224EE0CE6E1E55F3E8AD97DBAD960B95031130A5AE2D",
+      "arguments": [
+        "test",
+        "--offline",
+        "-j1",
+        "-p",
+        "inquello-domain",
+        "--test",
+        "capability_register",
+        "--",
+        "--test-threads=1"
+      ],
+      "name": "domain-compiled-positive",
+      "infrastructureError": null,
+      "executable": "D:\\Toolchains\\cargo\\bin\\cargo.exe",
+      "exit": 0,
+      "finished": "2026-11-03T13:04:57.3020694Z"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-v5-postattachment-service-compiled-positive.log",
+      "logSha256": "EF0F30ED110766FA9736684969785DA0914D8277E1015C38BE59C12C3FE3B038",
+      "arguments": [
+        "test",
+        "--offline",
+        "-j1",
+        "-p",
+        "inquello-service",
+        "--features",
+        "test-issuer",
+        "--lib",
+        "route_eligibility",
+        "--",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "name": "service-compiled-positive",
+      "infrastructureError": null,
+      "executable": "D:\\Toolchains\\cargo\\bin\\cargo.exe",
+      "exit": 0,
+      "finished": "2026-11-03T13:05:29.2820169Z"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-v5-postattachment-consent-http-compiled-positive.log",
+      "logSha256": "939349A21C72C0A1D4BB0D6A63D685BCD562852685D2F0743360B842B3CADC5B",
+      "arguments": [
+        "test",
+        "--offline",
+        "-j1",
+        "-p",
+        "inquello-service",
+        "--features",
+        "test-issuer",
+        "--test",
+        "provider_consents",
+        "--",
+        "--test-threads=1",
+        "--nocapture"
+      ],
+      "name": "consent-http-compiled-positive",
+      "infrastructureError": null,
+      "executable": "D:\\Toolchains\\cargo\\bin\\cargo.exe",
+      "exit": 0,
+      "finished": "2026-11-03T13:06:04.6768980Z"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-v5-postattachment-native-positive-fingerprint.log",
+      "logSha256": "57208F187154F15E883CAB42C548545392976B4B94BBCC45EC6CC041E643B250",
+      "arguments": [
+        "test",
+        "--offline",
+        "-j1",
+        "--config",
+        "profile.dev.package.codex-core.debug=0",
+        "-p",
+        "codex-app-server",
+        "--bin",
+        "codex-app-server",
+        "--test",
+        "inquello_behavior_fingerprint",
+        "--",
+        "--test-threads=1"
+      ],
+      "name": "native-positive-fingerprint",
+      "infrastructureError": null,
+      "executable": "D:\\Toolchains\\cargo\\bin\\cargo.exe",
+      "exit": 0,
+      "finished": "2026-11-03T13:12:19.1001276Z"
+    },
+    {
+      "log": "D:\\Projects\\inquello\\.tmp\\production-consent-v5-postattachment-fmt.log",
+      "logSha256": "B9124A6A596BA21D105B047B099B8C62604A8AEC059637342C6845493B98A6AF",
+      "arguments": [
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "name": "fmt",
+      "infrastructureError": null,
+      "executable": "D:\\Toolchains\\cargo\\bin\\cargo.exe",
+      "exit": 0,
+      "finished": "2026-11-03T13:12:49.5630739Z"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "D:\\Projects\\inquello\\.tmp\\production-consent-v5-postattachment-artifacts\\domain-compiled-positive-capability_register-148e26bd10644aab.exe",
+      "sha256": "e1f25dd7ebb9b50e169bd2dbf7ce62c2d459af66ce61aadcb2b38218f8658eab",
+      "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\capability_register-148e26bd10644aab.exe",
+      "gate": "domain-compiled-positive",
+      "features": "default",
+      "embedsReviewedReportDigest": true
+    },
+    {
+      "path": "D:\\Projects\\inquello\\.tmp\\production-consent-v5-postattachment-artifacts\\service-compiled-positive-inquello_service-debdcae211e1cd02.exe",
+      "sha256": "3f2e222a568f1a2d7b7d15992c35d85723fc9b4ae06f9eb9ca03b098e14579f6",
+      "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\inquello_service-debdcae211e1cd02.exe",
+      "gate": "service-compiled-positive",
+      "features": "default,test-issuer",
+      "embedsReviewedReportDigest": true
+    },
+    {
+      "path": "D:\\Projects\\inquello\\.tmp\\production-consent-v5-postattachment-artifacts\\consent-http-compiled-positive-provider_consents-8c2b279024446875.exe",
+      "sha256": "168b3ae0f14d009b6bd19d55b223ca44a413308a2071dc58119f86b33b58cb9a",
+      "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\provider_consents-8c2b279024446875.exe",
+      "gate": "consent-http-compiled-positive",
+      "features": "default,test-issuer",
+      "embedsReviewedReportDigest": true
+    },
+    {
+      "path": "D:\\Projects\\inquello\\.tmp\\production-consent-v5-postattachment-artifacts\\native-positive-fingerprint-codex_app_server-efcde93d596a8f3f.exe",
+      "sha256": "6ff36914fc753811d050dbdbb14b31ac19ad672a75ac34caf4c7bb958d0971b8",
+      "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\codex_app_server-efcde93d596a8f3f.exe",
+      "gate": "native-positive-fingerprint",
+      "features": "default",
+      "embedsReviewedReportDigest": true
+    },
+    {
+      "path": "D:\\Projects\\inquello\\.tmp\\production-consent-v5-postattachment-artifacts\\native-positive-fingerprint-inquello_behavior_fingerprint-f62ee1bd294212d9.exe",
+      "sha256": "591880d0e11728d4521e9042459c41b81f3518d18f74312bbd751ec3a806c411",
+      "source": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\deps\\inquello_behavior_fingerprint-f62ee1bd294212d9.exe",
+      "gate": "native-positive-fingerprint",
+      "features": "default",
+      "embedsReviewedReportDigest": true
+    }
+  ],
+  "compiledConsentHttpPositiveExecuted": true,
+  "scope": "Supplemental actual compiled qualification transition, owned fictional PostgreSQL positive and no-write negatives. Does not rewrite the immutable reviewed preattachment report or grant real workspace consent."
+}

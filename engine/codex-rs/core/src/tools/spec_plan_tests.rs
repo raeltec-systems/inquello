@@ -498,6 +498,76 @@ fn apply_patch_accepts_environment_id(spec: &ToolSpec) -> bool {
 }
 
 #[tokio::test]
+async fn private_direct_functions_preserve_policy_in_direct_and_code_mode_only() {
+    use crate::tools::registry::ToolRegistry;
+    use codex_extension_api::ToolPolicy;
+
+    for mode in [ToolMode::Direct, ToolMode::CodeModeOnly] {
+        for allow_command in [true, false] {
+            let (_, mut turn) = make_session_and_context().await;
+            update_turn_settings_for_test(&mut turn, |settings| {
+                let model = Arc::make_mut(&mut settings.model_info);
+                model.tool_mode = Some(mode);
+                model.use_responses_lite = true;
+            });
+            let mut allowed = vec![
+                ToolName::plain("inquello_progress"),
+                ToolName::plain("request_user_input"),
+            ];
+            if allow_command {
+                allowed.push(ToolName::plain("exec_command"));
+            }
+            let mut registry = ToolRegistry::with_tool_policy(Arc::new(ToolPolicy {
+                allowed_tools: Some(allowed),
+                require_managed_sandbox: true,
+                require_unified_exec: false,
+                expose_additional_permissions: false,
+            }));
+            registry.add(super::ExecCommandHandler::private_one_shot(
+                super::ExecCommandHandlerOptions {
+                    allow_tty: false,
+                    exec_permission_approvals_enabled: false,
+                    include_environment_id: false,
+                    include_windows_shell_guidance: false,
+                },
+            ));
+            registry.add(crate::tools::handlers::InquelloProgressHandler);
+            registry.add_with_exposure(
+                crate::tools::handlers::RequestUserInputHandler {
+                    available_modes: vec![codex_protocol::config_types::ModeKind::Default],
+                },
+                ToolExposure::DirectModelOnly,
+            );
+            registry.add(crate::tools::handlers::PlanHandler);
+            let router = ToolRouter::from_registry(
+                &turn,
+                turn.model_info(),
+                registry,
+                Vec::new(),
+                &Default::default(),
+            );
+            let plan = ToolPlanProbe::from_router(router);
+            plan.assert_visible_contains(&["inquello_progress", "request_user_input"]);
+            if allow_command {
+                plan.assert_visible_contains(&["exec_command"]);
+            } else {
+                plan.assert_visible_lacks(&["exec_command"]);
+            }
+            plan.assert_visible_lacks(&[
+                "exec",
+                "wait",
+                "write_stdin",
+                "shell_command",
+                "update_plan",
+            ]);
+            assert_eq!(plan.visible_names.len(), if allow_command { 3 } else { 2 });
+            assert!(plan.code_mode_tool_names.is_empty());
+            assert_eq!(plan.tool_mode, mode);
+        }
+    }
+}
+
+#[tokio::test]
 async fn allowed_tools_filter_sources_before_code_mode_and_discovery() {
     use crate::tools::registry::ToolRegistry;
     use codex_extension_api::ToolPolicy;

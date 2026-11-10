@@ -219,3 +219,19 @@ but uncompiled native source remains a high-impact verification uncertainty.
 The BMAD presentation instruction to mark done is deliberately not applied: the
 owner requires open acceptance gates and in-progress status to remain visible.
 No local commit is possible in this NO_VCS snapshot; no push is authorized yet.
+
+## Consolidated offline pass — 2026-11-09/10
+
+Recorded from the Epic 1 consolidated offline verification pass at commit `f992919722` on this Windows host; full gate list, logs and limits are in [epic-1-offline-pass-2026-11-09.md](epic-1-offline-pass-2026-11-09.md). Synthetic and offline only: no live provider, no real credentials, no owner acceptance, and no change to real-data qualification. This supersedes earlier "cargo absent / unrun" entries for the gates listed as passed. Status stays `in-progress` and no task box was changed by this record; the boxes were not re-audited against the code.
+
+Shared gates that passed: `cargo fmt --all -- --check`; native tests for `inquello-domain`, `inquello-protocol`, `inquello-adapters` and `inquello-service` (`test-issuer`, all targets); clippy with warnings as errors on those four crates; default rebuild of CLI, app-server and service; `pnpm run generate:protocol` (816 files, no working-tree change); both desktop type checks; `pnpm run build`; full `pnpm test` (2,270 passed, 0 failed, 21 skipped); seeded Electron smoke (19 of 19 required reports).
+
+Specific to this story, passed:
+
+- `inquello_authorization_runtime` ran unfiltered, so every `*_lifecycle_*` case on both routes executed and passed. This replaces the "36 native lifecycle fixture selections remain authored/unrun" entry.
+- `codex-core --lib retained_resume_fence_tests` and `codex-app-server --lib lifecycle_wire_tests` passed.
+
+Still open or not run:
+
+- `node scripts/run-lifecycle-native.cjs` itself was not run, so its required-selection check was not exercised; the test file now holds more lifecycle cases than the 36 this spec names, which should be reconciled.
+- Electron reproduction of R3-B10, the deferred R3-B4, and the owner analytical run on both providers (AC1.29.1).

@@ -400,3 +400,28 @@ Workflow completion status is intentionally not promoted to done: owner-directed
 ## Final supported verification — 2026-10-30 21:13 UTC
 
 Independently rerun on the final product sources: `pnpm exec tsc -p tsconfig.build.json --noEmit` passed; `pnpm run build` passed (five existing missing font warnings); focused command `pnpm exec vitest run test/tasks-*.test.* test/security.test.ts test/permissions-units.test.ts test/policy-units.test.ts test/composer.test.tsx test/shell-layout.test.tsx test/organise-shell.test.tsx` passed **10 files / 300 tests**. `pnpm test` returned exit 1: **46 files passed / 12 failed / 1 skipped; 1,149 tests passed / 3 failed / 5 skipped** (90.70 seconds). Failure output identifies nine missing native app-server suite inputs, missing design icons, missing imported Avatar SVG, non-Git engine-stamp lookup and incomplete generated baseline (48 versus 816). This is not a green full suite. Logs: `desktop/validation/story125-final-*.log`. Native patch regressions returned 127 because Cargo is absent; no native acceptance is asserted. Generated sources remain unchanged; no real credentials/provider calls or eligibility promotion.
+
+## Consolidated offline pass — 2026-11-09/10
+
+Recorded from the Epic 1 consolidated offline verification pass at commit `f992919722` on this Windows host; full gate list, logs and limits are in [epic-1-offline-pass-2026-11-09.md](epic-1-offline-pass-2026-11-09.md). Synthetic and offline only: no live provider, no real credentials, no owner acceptance, and no change to real-data qualification. This supersedes earlier "cargo absent / unrun" entries for the gates listed as passed. Status stays `in-progress` and no task box was changed by this record; the boxes were not re-audited against the code.
+
+Shared gates that passed: `cargo fmt --all -- --check`; native tests for `inquello-domain`, `inquello-protocol`, `inquello-adapters` and `inquello-service` (`test-issuer`, all targets); clippy with warnings as errors on those four crates; default rebuild of CLI, app-server and service; `pnpm run generate:protocol` (816 files, no working-tree change); both desktop type checks; `pnpm run build`; full `pnpm test` (2,270 passed, 0 failed, 21 skipped); seeded Electron smoke (19 of 19 required reports).
+
+Specific to this story, passed:
+
+- `inquello_authorization_runtime` (`inference-fixtures`, 68 cases on both routes) passed 67/68; see the caveat below.
+- `codex-core --lib inquello_`, `--test all bound_responses_` and `codex-app-server --lib inquello_` passed.
+- Seeded smoke `composer` and `start-surface` reports passed.
+
+Still open or not run:
+
+- `messages_allowed` failed once with `setup-failed` ("Setup probe timed out") when it started the Linux guest from cold, then passed twice warm. Recorded in `deferred-work.md` against this story.
+- The retained-child fixtures in `inquello_messages_runtime` (Linux-only) were **not run**.
+- The stalled-authority-plus-concurrent-writer exercise and residual R5-B7 remain open.
+- Real-provider inference on the fictional procurement fixture and the end-of-Epic-1 auditor session.
+
+## Linux Messages runtime suite — 2026-11-10
+
+`inquello_messages_runtime` (Linux-only, `inference-fixtures`) was run inside the `Inquello-Engine` guest and **passed: 13 of 13, none ignored**, in 102 s. Source: frozen archive `c14ad8834d7c…` of commit `71e6456333` (engine and desktop identical to `f992919722`), staged with `desktop/scripts/wsl/stage-source.py`; offline, locked, four jobs, installed Rust 1.99.1, the unchanged isolation guard from `build-guest.sh`. The fixtures app-server and the bubblewrap helper were built from that source and placed side by side, as the installed runtime keeps them. Synthetic transport only; no model call. This supersedes the "not run" entry for this suite in the record above. Details and the two earlier refused or mis-set-up attempts are in [epic-1-offline-pass-2026-11-09.md](epic-1-offline-pass-2026-11-09.md).
+
+Relevant to this story: the retained-child fixtures passed, including `real_private_task_retained_thread_denial_and_lost_ack_reconcile_without_second_turn`, `…_allowed_one_use_permission`, `…_one_use_source_approval_does_not_authorize_changed_command`, `…_failure_before_sampling_has_actual_terminal_turn`, `…_interrupt_between_attempts_has_actual_terminal_turn`, `…_interrupt_cancels_running_shell_before_later_file_effect` and `…_authority_revocation_reaps_actual_one_shot_command`. The stalled-authority-plus-concurrent-writer exercise is still not run.

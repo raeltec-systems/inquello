@@ -65,9 +65,9 @@ describe('Providers block', () => {
     render(<Providers />);
     expect(await screen.findByText('No key set')).toBeTruthy();
     expect(screen.getByText('Not connected')).toBeTruthy();
-    expect(screen.getByText(/never change your Inquello identity/)).toBeTruthy();
+    expect(screen.getByText(/Provider credentials stay separate from your Inquello identity/)).toBeTruthy();
     expect(screen.getByLabelText('Claude API key').getAttribute('type')).toBe('password');
-    expect(screen.getByLabelText('OpenAI API key for Codex').getAttribute('type')).toBe('password');
+    expect(screen.getByLabelText('OpenAI API key').getAttribute('type')).toBe('password');
     expect(block().getAttribute('data-claude-state')).toBe('not-configured');
     expect(block().getAttribute('data-codex-state')).toBe('not-connected');
     expect(button('Store key').getAttribute('aria-disabled')).toBe('true');
@@ -120,7 +120,7 @@ describe('Providers block', () => {
     const bridge = installBridge();
     render(<Providers />);
     await screen.findByText('Not connected');
-    const field = screen.getByLabelText<HTMLInputElement>('OpenAI API key for Codex');
+    const field = screen.getByLabelText<HTMLInputElement>('OpenAI API key');
     await userEvent.type(field, 'sk-proj-block-test');
     await userEvent.click(button('Connect with API key'));
     expect(bridge.codexLogin).toHaveBeenCalledWith({ type: 'apiKey', apiKey: 'sk-proj-block-test' });
@@ -130,8 +130,9 @@ describe('Providers block', () => {
     await userEvent.click(button('Disconnect'));
     expect(await screen.findByText('Not connected')).toBeTruthy();
     await userEvent.click(button('Sign in with ChatGPT'));
-    expect(bridge.codexLogin).toHaveBeenLastCalledWith({ type: 'chatgpt' });
-    expect(await screen.findByText('Waiting for the browser')).toBeTruthy();
+    expect(button('Sign in with ChatGPT').getAttribute('aria-disabled')).toBe('true');
+    expect(bridge.codexLogin).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('Waiting for the browser')).toBeNull();
   });
 
   it('says why Codex actions are unavailable while the runtime is down', async () => {
@@ -139,6 +140,35 @@ describe('Providers block', () => {
     render(<Providers />);
     expect(await screen.findByText('Runtime unavailable')).toBeTruthy();
     expect(button('Sign in with ChatGPT').getAttribute('aria-disabled')).toBe('true');
+  });
+});
+
+describe('provider onboarding clarity', () => {
+  it('keeps connection status separate from model qualification and performs no automatic check', async () => {
+    const bridge = installBridge(); render(<Providers />);
+    await screen.findByText('Connect your AI providers');
+    expect(screen.getByText(/does not establish model access or qualification/)).toBeTruthy();
+    expect(screen.getByText(/Check key does not send a prompt/)).toBeTruthy();
+    expect(bridge.verifyClaudeKey).not.toHaveBeenCalled();
+    expect(bridge.codexLogin).not.toHaveBeenCalled();
+  });
+  it('offers status refresh after a read failure without submitting credentials', async () => {
+    const getStatus=vi.fn().mockRejectedValueOnce(new Error('private transport detail')).mockResolvedValue(status('not-configured','not-connected'));
+    const bridge=installBridge({getStatus}); render(<Providers />);
+    await screen.findByText('The provider status could not be read.');
+    await userEvent.click(button('Refresh provider status'));
+    await screen.findByText('No key set');
+    expect(bridge.setClaudeKey).not.toHaveBeenCalled(); expect(bridge.codexLogin).not.toHaveBeenCalled();
+    expect(document.body.textContent).not.toContain('private transport detail');
+    expect(screen.queryByText('The provider status could not be read.')).toBeNull();
+  });
+  it('truthfully labels cancellation as disconnect and uses only existing logout', async () => {
+    let disconnected=false;const bridge=installBridge({getStatus:async()=>status('not-configured',disconnected?'not-connected':'connecting'),codexLogout:vi.fn(async()=>{disconnected=true;return {ok:true,status:status('not-configured','not-connected')};})}); render(<Providers />);
+    await screen.findByText('Waiting for the browser');
+    await userEvent.click(button('Cancel sign-in and disconnect'));
+    await screen.findByText('Not connected');
+    expect(bridge.codexLogout).toHaveBeenCalledTimes(1);
+    expect(bridge.codexLogin).not.toHaveBeenCalled();
   });
 });
 
@@ -214,4 +244,9 @@ describe('smoke providers evaluation', () => {
     expect(needles).toContain('89abcdef');
     expect(needles.filter((needle) => needle.length === 8)).toHaveLength(25);
   });
+});
+
+it('uses cached inspection on mount and requests deliberate status refresh only from its control',async()=>{
+ const refreshStatus=vi.fn(async()=>status('not-configured','connected',{account:{type:'apiKey'}}));const bridge=installBridge({refreshStatus});render(<Providers/>);await screen.findByText('Not connected');expect(refreshStatus).not.toHaveBeenCalled();
+ await userEvent.click(button('Refresh provider status'));await screen.findByText('Connected');expect(refreshStatus).toHaveBeenCalledTimes(1);expect(bridge.verifyClaudeKey).not.toHaveBeenCalled();expect(bridge.codexLogin).not.toHaveBeenCalled();
 });

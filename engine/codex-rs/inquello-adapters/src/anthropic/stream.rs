@@ -311,10 +311,10 @@ impl MessagesDecoder {
                         .map_err(|_| ErrorKind::MalformedStream)?;
                     *arguments = Some(parsed);
                 }
-                if let BlockKind::Thinking { signature, .. } = &block.kind {
-                    if signature.is_empty() {
-                        return Err(ErrorKind::MalformedStream);
-                    }
+                if let BlockKind::Thinking { signature, .. } = &block.kind
+                    && signature.is_empty()
+                {
+                    return Err(ErrorKind::MalformedStream);
                 }
                 block.closed = true;
             }

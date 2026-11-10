@@ -213,6 +213,37 @@ impl CatalogRequestProcessor {
     }
 
     /// Candidate preflight is read-only: never refresh a model catalog online.
+    pub(crate) async fn inquello_cached_model_names(
+        &self,
+    ) -> Result<Vec<String>, JSONRPCErrorError> {
+        let (config, manager) = self
+            .model_catalog
+            .current()
+            .await
+            .map_err(|err| config_load_error(&err))?;
+        if config.model_provider != self.config.model_provider {
+            return Err(invalid_request("Selected provider catalog changed"));
+        }
+        let presets = self
+            .model_catalog
+            .list_models_from_snapshot(
+                config,
+                manager,
+                codex_models_manager::manager::RefreshStrategy::Offline,
+            )
+            .await
+            .map_err(|err| config_load_error(&err))?;
+        let mut names = supported_models(presets, false)
+            .into_iter()
+            .map(|m| m.model)
+            .collect::<Vec<_>>();
+        names.sort();
+        names.dedup();
+        names.truncate(128);
+        Ok(names)
+    }
+
+    /// Candidate preflight is read-only: never refresh a model catalog online.
     pub(crate) async fn inquello_cached_usage_model(
         &self,
         model: &str,

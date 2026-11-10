@@ -232,6 +232,7 @@ fn responses_transport(endpoint: &str, certificate: &[u8]) -> Result<ResponsesTr
     let client = reqwest::Client::builder()
         .https_only(true)
         .no_proxy()
+        .use_rustls_tls()
         .redirect(reqwest::redirect::Policy::none())
         .retry(reqwest::retry::never())
         .add_root_certificate(cert)

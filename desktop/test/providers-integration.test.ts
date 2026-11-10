@@ -35,6 +35,7 @@ import type { InvokeEventLike } from '../src/main/security/sender';
 import { sentinelNeedles } from '../src/main/smoke-probe';
 import { CONFIG, FakeIssuer, FakeService, fakeOpener, fakeSafeStorage } from './identity-fakes';
 import { fakeOrganise, fakePolicy, recordingLogger, removeTempDirs, tempDir } from './helpers';
+import { fixtureDataAuthority } from './authorization-fixtures';
 
 const desktop = path.resolve(__dirname, '..');
 const binary = resolveAppServerBinary({ env: process.env, isPackaged: false, resourcesPath: '', appPath: desktop });
@@ -244,6 +245,8 @@ describe.skipIf(!keyringTools)('Codex login in the OS keyring (real app-server, 
     if (!load.ok) throw new Error(load.error);
     const exportBase = tempDir('providers-int-export');
     const data = new DataService({
+      // Fake ownership/current authority. Not negative-authorization or route evidence.
+      authority: fixtureDataAuthority(),
       load,
       roots: h.roots,
       journal: new ExportJournal(h.roots['user-data']),
@@ -275,7 +278,15 @@ describe.skipIf(!keyringTools)('Codex login in the OS keyring (real app-server, 
           deleteData: (categories) => data.deleteData(categories),
           deletableCategories: () => data.deletableCategories(),
         },
-        provider: providers,
+        provider: {
+          getStatus: () => providers.getStatus(),
+          refreshStatus: () => providers.getStatus(),
+          setClaudeKey: (key) => providers.setClaudeKey(key),
+          verifyClaudeKey: () => providers.verifyClaudeKey(),
+          removeClaudeKey: () => providers.removeClaudeKey(),
+          codexLogin: (request) => providers.codexLogin(request),
+          codexLogout: () => providers.codexLogout(),
+        },
         organise: fakeOrganise(),
         policy: fakePolicy(),
       }),
@@ -289,9 +300,11 @@ describe.skipIf(!keyringTools)('Codex login in the OS keyring (real app-server, 
     seen.push(await ipc.invoke(channelFor('provider.verifyClaudeKey')));
     seen.push(await ipc.invoke(channelFor('provider.getStatus')));
     seen.push(await ipc.invoke(channelFor('data.getPolicy')));
-    const exported = (await ipc.invoke(channelFor('data.export'))) as { ok: boolean; export: { path: string } };
+    const exported = (await ipc.invoke(channelFor('data.export'))) as { ok: true; export: { path: string } } | { ok: false; reason: string };
     seen.push(exported);
-    expect(exported.ok).toBe(true);
+    // Export only carries proven Task content; with none here it refuses, and that
+    // refusal is scanned with the other operation results.
+    if (!exported.ok) expect(exported.reason).toBe('No currently authorized known-provenance content is available to export.');
     expect(seen[1]).toMatchObject({ ok: true, status: { codex: { state: 'connected' } } });
     expect(keyringEntries(h.home)).toContain(sentinel);
 
@@ -300,7 +313,7 @@ describe.skipIf(!keyringTools)('Codex login in the OS keyring (real app-server, 
       if (needles.some((needle) => haystack.includes(needle))) found.push(where);
     };
     check('operation results', JSON.stringify(seen));
-    for (const file of [...filesUnder(h.roots['user-data']), ...filesUnder(h.roots.logs), ...filesUnder(exported.export.path)]) {
+    for (const file of [...filesUnder(h.roots['user-data']), ...filesUnder(h.roots.logs), ...(exported.ok ? filesUnder(exported.export.path) : [])]) {
       const content = readIfPresent(file);
       if (content !== null) check(path.relative(h.roots['user-data'], file), content);
     }

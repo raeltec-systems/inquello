@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "entries": [
     {
       "id": "desktop.runtime-transport.stdio",
@@ -28,7 +28,7 @@
         "Version-1 private Task progress projection and non-effect inquello_progress publication; exact native request_user_input schema"
       ],
       "processing_scope": "Local process-to-process transport on the user's machine. It carries no inference and no real data by itself",
-      "eligibility": "synthetic-only",
+      "ceiling": "synthetic-only",
       "evidence": [
         {
           "kind": "record",
@@ -73,7 +73,7 @@
         "none"
       ],
       "processing_scope": "Not enabled. No prompt, output or file leaves this device for inspection",
-      "eligibility": "disabled",
+      "ceiling": "disabled",
       "evidence": []
     },
     {
@@ -92,7 +92,7 @@
         "none"
       ],
       "processing_scope": "Not enabled. No specialist cyber model, programme or elevated access is requested or used",
-      "eligibility": "disabled",
+      "ceiling": "disabled",
       "evidence": []
     },
     {
@@ -115,7 +115,7 @@
         "command argv executed through the runtime's command execution"
       ],
       "processing_scope": "Local process sandbox on the user's device for synthetic commands only; no model runs and no real data in this story",
-      "eligibility": "synthetic-only",
+      "ceiling": "synthetic-only",
       "evidence": [
         {
           "kind": "synthetic",
@@ -146,8 +146,142 @@
         "none"
       ],
       "processing_scope": "Not enabled. No dispatch, selection, transfer or automatic upload. Execution remains This device (local host), separately from inference.",
-      "eligibility": "disabled",
+      "ceiling": "disabled",
       "evidence": []
+    },
+    {
+      "id": "processing.codex-responses",
+      "owner": "Inquello retained-runtime Responses adapter and Task authorization mediation",
+      "supply": "Inherited Codex Responses transport through the Inquello fork; exact Terra configuration exercised against a pinned local synthetic provider fixture, not a live OpenAI account",
+      "versions": {
+        "model": "gpt-6.1-terra",
+        "api": "responses-v1",
+        "deployment": "openai-api",
+        "endpoint": "https://api.openai.com/v1/responses",
+        "processing-contract": "openai-api-standard-v1"
+      },
+      "limits": [
+        "Exact-model-label Responses runtime qualification passed 31/31 pinned-loopback synthetic cases, with 2/2 model-selector controls; source and binary identities are recorded in the referenced evidence.",
+        "Synthetic fixture qualification is not evidence of live provider access, model quality, pricing, billing, latency or production eligibility",
+        "The reviewed ceiling is prospective only: missing or incomplete exact-build proof remains synthetic-only; independent current organization approval is required for every protected operation",
+        "The separately authorized paid fictional session remains constrained by its native exact-profile, dispatch, input, output, tool, retry and restart guards; this entry is not a budget or authority override",
+        "No ChatGPT deployment, alternate model, alternate API identifier, Anthropic route or provider fallback is qualified"
+      ],
+      "identity": "The current Inquello creator identity and Workspace authority are separate from the OpenAI API account; a connected OS-keyring credential does not grant route eligibility or Workspace access",
+      "formats": [
+        "Responses text request and streamed response fixtures with retained Task progress and lifecycle evidence"
+      ],
+      "processing_scope": "OpenAI API Responses processing for exact supported Terra configuration; requires reviewed build evidence, fresh per-operation workspace approval, current credential ownership and creator-private Task authority.",
+      "ceiling": "real-data-eligible",
+      "evidence": [
+        {
+          "kind": "synthetic",
+          "status": "passed",
+          "reference": "_bmad-output/implementation-artifacts/validation/terra-responses-synthetic-20261101.json#tests"
+        },
+        {
+          "kind": "negative-authorization",
+          "status": "passed",
+          "reference": "_bmad-output/implementation-artifacts/production-chat-v5-conversation-verification-2026-11-03.json"
+        }
+      ],
+      "negative_authorization": {
+        "suite": "inquello-current-route-negative-authorization-v5",
+        "tested_artifact_digest": "458ed917dd9732edf02c3315a7c46d5f86cc11f3dfba1887b4445ea1fcd6c0a7",
+        "processing_scope": "OpenAI API Responses processing for exact supported Terra configuration; requires reviewed build evidence, fresh per-operation workspace approval, current credential ownership and creator-private Task authority.",
+        "data_policy_digest": "3a5a841c43d62482157d95e37c1f327be98bc7d4650c03f14a32ff8e0dcd875a",
+        "identity": {
+          "schema_version": 2,
+          "route_id": "codex-responses",
+          "deployment": "openai-api",
+          "endpoint": "https://api.openai.com/v1/responses",
+          "model": "gpt-6.1-terra",
+          "api_version": "responses-v1",
+          "adapter_configuration_digest": "dd24d75f25112720ade3a1243dd05bb6f25a9d92b101851d01cdbd028b08053a",
+          "implementation_digest": "8823a541774ade55fa64b0c89267cbceee48afdab38c72f0b04ee82148191c9a",
+          "runtime_version": "0.165.0",
+          "contract_version": "inquello-v1-authorization-v2",
+          "platform": "x86_64-pc-windows-msvc"
+        },
+        "scenarios": {
+          "real-session-production-admission": "passed",
+          "real-session-withdrawal": "passed",
+          "credential-slot-independent-proof": "passed",
+          "responses-standard-completion": "passed",
+          "cross-workspace": "passed",
+          "peer-private": "passed",
+          "foreign-thread": "passed",
+          "foreign-tool": "passed",
+          "revoked-before-dispatch": "passed",
+          "revoked-during-model": "passed",
+          "late-output": "passed",
+          "revoked-during-tool": "passed",
+          "revoked-during-permission": "passed",
+          "authority-unavailable": "passed",
+          "retained-output": "passed",
+          "reopen": "passed",
+          "export": "passed",
+          "recovery": "passed",
+          "authorized-export": "passed",
+          "authorized-recovery": "passed",
+          "authorized-procurement": "passed",
+          "resume": "passed",
+          "authorized-resume": "passed",
+          "revoked-before-resume": "passed",
+          "revoked-during-resume": "passed",
+          "resume-missing-linkage": "passed",
+          "resume-peer-private": "passed",
+          "resume-cross-company": "passed",
+          "resume-after-runtime-loss": "passed",
+          "lifecycle-lost-ack": "passed",
+          "stop-finish": "passed",
+          "steer-finish": "passed",
+          "search-private": "passed",
+          "search-revoked-before-disclosure": "passed",
+          "search-prior-lineage-revoked": "passed",
+          "search-late-response": "passed",
+          "exact-hit-reopen": "passed",
+          "exact-hit-markdown": "passed",
+          "cached-hit-revoked": "passed",
+          "search-provider-independent": "passed",
+          "search-legacy-old-turn": "passed",
+          "search-paginated-old-turn": "passed",
+          "search-legacy-markdown": "passed",
+          "search-final-await-off-page": "passed",
+          "search-final-await-history": "passed",
+          "search-final-await-lineage": "passed",
+          "search-next-cursor-scope-snapshot": "passed",
+          "search-retained-route-mismatch": "passed",
+          "search-bounded-plain-compressed": "passed",
+          "search-inventory-request-bounded": "passed",
+          "owner-consent-grant-revoke": "passed",
+          "owner-consent-compatible-qualification": "passed",
+          "owner-consent-material-change": "passed",
+          "owner-consent-late-revocation-output": "passed",
+          "owner-consent-lost-ack-cas": "passed",
+          "owner-role-transition-protection": "passed",
+          "owner-consent-legacy-no-fallback": "passed",
+          "owner-consent-credential-separation": "passed"
+        },
+        "passed": 58,
+        "failed": 0,
+        "skipped": 0,
+        "command": "powershell -File .tmp/model-choice-clean-qualified-native-final.ps1; .tmp/model-choice-clean-qualified-desktop-final.ps1; .tmp/model-choice-clean-qualified-desktop-matched.ps1; .tmp/model-choice-clean-qualified-fixture-final.ps1; reviewed original source-suite exit1, corrected-file and affected-file regressions retained separately with exact per-layer commands, features and artifacts in referenced report",
+        "environment": "Windows x86_64-pc-windows-msvc; default-feature RealSession; separately pinned synthetic Responses/WSL effects, native SQLite, Desktop owned filesystem and actual PostgreSQL authority/consent/receipt composition",
+        "report_digest": "92bf79547067059b85f0dc627d201d937c186bba6c1a3145e7d8757f688c5624",
+        "limitations": [
+          "Composed software-enforcement evidence; not a paid OpenAI response, real workspace consent, or integrated consent-click-to-provider E2E.",
+          "Default RealSession tests use private code-only proof dependencies and actual authority callbacks. Current compiled positive service/HTTP qualification is explicitly pending until reviewed proof attachment and must subsequently execute.",
+          "Retained provider/tool effects use debug inference-fixtures with pinned loopback synthetic Responses streams. Only two bundled-catalog cases use unchanged trusted Terra metadata; other runtime scenarios use minimal fixture metadata.",
+          "Export/recovery composes native SQLite serialized inventory, actual Desktop owned-byte effects with parsed mock native/HTTPS responses, and separate actual PostgreSQL receipts. No integrated cross-process export/recovery E2E claim.",
+          "Consent terminal-receipt rollback uses an explicit historical exact-command receipt fixture plus actual matching-terms HTTP replay/new-session/opposite-operation tests; actual stale-terms persistence is tested separately. No runtime contract override.",
+          "The original complete source-based Desktop run retains2067pass/7obsolete-presentation-fail/22skip and exit1. Three corrected files passed61 overlapping tests at that checkpoint. Subsequent reviewed production changes are separately mapped to155/111 affected-source tests (overlapping, not summed) and executed targeted native gates; actual earlier source-Electron focus remains separately scoped. This is explicit composition, not a fabricated clean full invocation. It uses explicitly retained prior-candidate native/topology artifacts. Every native/topology-backed integration file and schema check is separately rerun against final matched artifacts; unchanged pure component and installed-guest results remain compositional evidence with original provenance. Primary dist is unchanged during both stages. Canonical build and actual built-byte Electron acceptance are separate gates; inference-fixture identity is separate.",
+          "Platform/opt-in Desktop skips remain explicit. Unix-only FIFO/pre-publication barrier tests are not executable on this Windows host; Windows bounded reads and actual child cancellation are separate evidence.",
+          "Prior setup45s, lifecycle31/33, idle-probe10s, paging1455, launcher failures, initial scope261/256 and superseded v4/r2 proofs remain historical evidence. No fast-start/performance guarantee.",
+          "Owner consent is durable until explicit revoke/material processing change; current owner, membership, policy, credential, exact software proof and operation-bound checks remain automatic. Personal credential connection is not workspace authorization.",
+          "Messages remains separately unqualified; no full two-provider claim. No budget feature, hard aggregate spend cap, key read or real organization mutation was introduced."
+        ]
+      }
     }
   ]
 }

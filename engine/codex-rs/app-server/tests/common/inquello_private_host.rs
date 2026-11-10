@@ -3,6 +3,19 @@
 use app_test_support::TestAppServer;
 use serde_json::{Value, json};
 use std::time::Duration;
+// Test admission envelope only: retirement 55s + serial native setup 90s
+// + 10s fixture overhead. Not a performance target or a security expiry change.
+pub(super) const PRIVATE_ADMISSION_BUDGET: Duration = Duration::from_secs(155);
+const PRIVATE_RPC_BUDGET: Duration = Duration::from_secs(45);
+
+fn private_rpc_budget(method: &str) -> Duration {
+    if matches!(method, "inquello/tasks/start" | "inquello/tasks/resume") {
+        PRIVATE_ADMISSION_BUDGET
+    } else {
+        PRIVATE_RPC_BUDGET
+    }
+}
+
 pub(super) type AuthorityCallback = std::sync::Arc<
     dyn Fn(Value) -> std::pin::Pin<Box<dyn std::future::Future<Output = Value> + Send>>
         + Send
@@ -36,18 +49,69 @@ pub(super) async fn private_rpc(
         .send_request(method, Some(params))
         .await
         .expect("send private operation");
-    private_response(server, host, id).await
+    if method == "inquello/tasks/steer" && host.authority_context["holdSteerAuthority"] == true {
+        host.authority_context["heldSteerRpcId"] = json!(id);
+    }
+    private_response_with_budget(server, host, id, private_rpc_budget(method)).await
 }
+
+async fn current_authority_response(host: &PrivateTaskHost, mut params: Value) -> Value {
+    if !host.authority_available || params["workspaceId"] != host.workspace_id {
+        json!({"workspacePolicy":null})
+    } else if let Some(callback) = host.authority_callback.clone() {
+        params["fixtureContext"] = host.authority_context.clone();
+        callback(params).await
+    } else {
+        json!({"workspacePolicy":host.policy})
+    }
+}
+
+async fn release_steer_authority(
+    server: &mut TestAppServer,
+    host: &mut PrivateTaskHost,
+    response_id: i64,
+) {
+    if host.authority_context["heldSteerRpcId"].as_i64() != Some(response_id) {
+        return;
+    }
+    host.authority_context["holdSteerAuthority"] = json!(false);
+    host.authority_context["heldSteerRpcId"] = Value::Null;
+    let held = host
+        .authority_context
+        .as_object_mut()
+        .unwrap()
+        .remove("heldAuthorityRequests")
+        .unwrap_or_else(|| json!([]));
+    for request in held.as_array().expect("held authority requests") {
+        let id: codex_app_server_protocol::RequestId =
+            serde_json::from_value(request["id"].clone()).unwrap();
+        let response = current_authority_response(host, request["params"].clone()).await;
+        server
+            .send_response(id, response)
+            .await
+            .expect("release current authority after admission settles");
+    }
+}
+
 pub(super) async fn private_response(
     server: &mut TestAppServer,
     host: &mut PrivateTaskHost,
     id: i64,
 ) -> Value {
+    private_response_with_budget(server, host, id, PRIVATE_RPC_BUDGET).await
+}
+
+async fn private_response_with_budget(
+    server: &mut TestAppServer,
+    host: &mut PrivateTaskHost,
+    id: i64,
+    budget: Duration,
+) -> Value {
     use codex_app_server_protocol::{JSONRPCMessage, RequestId};
     if let Some(response) = host.pending.remove(&id) {
         return response;
     }
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(45);
+    let deadline = tokio::time::Instant::now() + budget;
     loop {
         if let Some(response) = host.pending.remove(&id) {
             return response;
@@ -58,21 +122,25 @@ pub(super) async fn private_response(
             .expect("native message");
         match message {
             JSONRPCMessage::Response(response) if response.id == RequestId::Integer(id) => {
+                release_steer_authority(server, host, id).await;
                 return response.result;
             }
             JSONRPCMessage::Error(error) if error.id == RequestId::Integer(id) => {
+                release_steer_authority(server, host, id).await;
                 return json!({"rpcError":error.error});
             }
             JSONRPCMessage::Response(response) => {
                 let RequestId::Integer(other) = response.id else {
                     panic!("unexpected string response identity")
                 };
+                release_steer_authority(server, host, other).await;
                 host.pending.insert(other, response.result);
             }
             JSONRPCMessage::Error(error) => {
                 let RequestId::Integer(other) = error.id else {
                     panic!("unexpected string error identity")
                 };
+                release_steer_authority(server, host, other).await;
                 host.pending.insert(other, json!({"rpcError":error.error}));
             }
             JSONRPCMessage::Request(request) => match request.method.as_str() {
@@ -182,31 +250,31 @@ pub(super) async fn private_response(
                             };
                         db.close().await.unwrap();
                         if writer_held {
-                            // This is the actual admitted RPC future inside the
-                            // native SQLite validation fence, not an edited receipt.
-                            host.authority_context["holdSteerAuthority"] = json!(false);
+                            // Running-tool guards share this workspace callback. Hold
+                            // every writer-held callback until the target Steer settles,
+                            // rather than mistaking the first ambient guard for admission.
                             host.authority_context["heldAuthorityRequest"] =
                                 serde_json::to_value(&request.id).unwrap();
-                            let stop = host.authority_context["concurrentStop"].clone();
-                            let stop_id = server
-                                .send_request("inquello/tasks/stop", Some(stop))
-                                .await
-                                .unwrap();
-                            host.authority_context["concurrentStopId"] = json!(stop_id);
-                            continue; // Intentionally withhold this authority reply.
+                            host.authority_context
+                                .as_object_mut()
+                                .unwrap()
+                                .entry("heldAuthorityRequests")
+                                .or_insert_with(|| json!([]))
+                                .as_array_mut()
+                                .unwrap()
+                                .push(json!({"id":request.id,"params":request.params}));
+                            if host.authority_context["concurrentStopId"].is_null() {
+                                let stop = host.authority_context["concurrentStop"].clone();
+                                let stop_id = server
+                                    .send_request("inquello/tasks/stop", Some(stop))
+                                    .await
+                                    .unwrap();
+                                host.authority_context["concurrentStopId"] = json!(stop_id);
+                            }
+                            continue; // Release fresh authority only after Steer settles.
                         }
                     }
-                    let response = if !host.authority_available {
-                        json!({"workspacePolicy":null})
-                    } else if let Some(callback) = host.authority_callback.clone() {
-                        {
-                            let mut params = request.params.unwrap();
-                            params["fixtureContext"] = host.authority_context.clone();
-                            callback(params).await
-                        }
-                    } else {
-                        json!({"workspacePolicy":host.policy})
-                    };
+                    let response = current_authority_response(host, request.params.unwrap()).await;
                     server
                         .send_response(request.id, response)
                         .await
@@ -349,5 +417,21 @@ pub(super) async fn private_response(
                 .notifications
                 .push(json!({"method":notification.method,"params":notification.params})),
         }
+    }
+}
+
+#[test]
+fn fixture_rpc_budget_is_limited_to_start_and_resume() {
+    for method in ["inquello/tasks/start", "inquello/tasks/resume"] {
+        assert_eq!(private_rpc_budget(method), PRIVATE_ADMISSION_BUDGET);
+    }
+    for method in [
+        "inquello/tasks/stop",
+        "inquello/tasks/steer",
+        "inquello/tasks/progress",
+        "inquello/tasks/lifecycleReconcile",
+        "inquello/tasks/authority",
+    ] {
+        assert_eq!(private_rpc_budget(method), Duration::from_secs(45));
     }
 }

@@ -36,9 +36,9 @@ describe('desktop cache and temporary storage', () => {
       }
       // These two fresh per-profile directories are the only paths this test owns.
       for (const [base, target] of [['D:\\Inquello\\cache\\desktop', expected.cache], ['D:\\Inquello\\logs\\desktop', expected.logs]]) {
-        const relative = path.win32.relative(base, target);
+        const relative = path.win32.relative(base!, target!);
         if (!/^[a-f0-9]{64}$/.test(relative)) throw new Error('Refusing unexpected test cleanup path');
-        fs.rmSync(target, { recursive: true, force: true });
+        fs.rmSync(target!, { recursive: true, force: true });
       }
     }
   }, 30_000);

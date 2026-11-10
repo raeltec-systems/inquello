@@ -75,7 +75,7 @@ export interface TaskPolicyItem extends PolicyItem {
     suspendedReason: string | null;
   };
   options: BroadModeOption[];
-  sandbox: { status: 'available' | 'unavailable' | 'not-applicable'; label: string };
+  sandbox: { status: 'available' | 'unavailable' | 'not-applicable' | 'not-checked'; label: string };
 }
 
 export interface SettingsPolicyItem {
@@ -87,8 +87,9 @@ export interface SettingsPolicyItem {
 }
 
 export interface PolicyBridge {
+  onSettingsChanged?(listener: (settled: boolean) => void): () => void;
   getSettings(): Promise<unknown>;
-  forTask(request: { taskId: string }): Promise<unknown>;
+  forTask(request: { taskId: string; inspectionOnly?: true }): Promise<unknown>;
   setBroadMode(request: { operationId: string; taskId: string; expectedRevision: number; mode: BroadMode; confirmation: string | null }): Promise<unknown>;
 }
 
@@ -202,7 +203,7 @@ export function parseTaskPolicy(value: unknown): TaskPolicyItem | null {
   const sandbox = record(r.sandbox);
   const sandboxLabel = text(sandbox?.label);
   const sandboxStatus = sandbox?.status;
-  if (sandboxLabel === null || (sandboxStatus !== 'available' && sandboxStatus !== 'unavailable' && sandboxStatus !== 'not-applicable')) return null;
+  if (sandboxLabel === null || (sandboxStatus !== 'available' && sandboxStatus !== 'unavailable' && sandboxStatus !== 'not-applicable' && sandboxStatus !== 'not-checked')) return null;
   if (r.transferRecovery !== undefined && (!isMode(r.transferRecovery) || sandboxStatus !== 'unavailable')) return null;
   return {
     ...base,

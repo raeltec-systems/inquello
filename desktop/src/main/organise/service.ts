@@ -108,6 +108,8 @@ export interface OrganiseServiceOptions {
   /** Absent when the shared service is not configured. */
   service: WorkspaceRoutes | null;
   logger: Logger;
+  /** Explicit recovery only; main owns root/session and native enforces non-replacement. */
+  recoverSession?(workspaceId:string):Promise<void>;
 }
 
 export interface EngagementInput {
@@ -211,6 +213,33 @@ export class OrganiseService {
 
   constructor(private readonly options: OrganiseServiceOptions) {}
 
+  private recovering: {principal:string;runtime:unknown;workspaceId:string;generation:number;promise:Promise<OrganiseResult<{accepted:true}>>}|null=null;
+  /** Explicit read recovery. Never replay a mutation or reuse its queued disclosure. */
+  recoverNavigation(workspaceId:string):Promise<OrganiseResult<{accepted:true}>> {
+    const principal=this.options.identity.principalId(),runtime=this.options.runtime.instance(),generation=this.authorityGeneration;
+    if(!principal)return Promise.resolve(fail('signed-out',ORGANISE_REASONS.signedOut));
+    const old=this.recovering;
+    if(old&&old.principal===principal&&old.runtime===runtime&&old.workspaceId===workspaceId&&old.generation===generation)return old.promise;
+    if(old)return Promise.resolve(fail('failed',ORGANISE_REASONS.serviceDown));
+    const current=()=>principal===this.options.identity.principalId()&&runtime===this.options.runtime.instance()&&generation===this.authorityGeneration&&this.options.runtime.ready();
+    const entry={principal,runtime,workspaceId,generation,promise:Promise.resolve(null as unknown as OrganiseResult<{accepted:true}>)};
+    entry.promise=(async()=>{
+      try{
+        if(!this.options.runtime.ready())return fail<{accepted:true}>('runtime-unavailable',ORGANISE_REASONS.runtimeUnavailable);
+        if(!current())throw new Error();
+        await this.syncPrincipal();if(!current())throw new Error();
+        const before=await this.freshWorkspaces(principal);
+        if(!current()||!before.workspaces.some(w=>w.workspace_id===workspaceId)||!this.options.recoverSession)throw new Error();
+        await this.options.recoverSession(workspaceId);if(!current())throw new Error();
+        const after=await this.freshWorkspaces(principal);
+        if(!current()||JSON.stringify(before)!==JSON.stringify(after)||!after.workspaces.some(w=>w.workspace_id===workspaceId))throw new Error();
+        this.allowed={principal,ids:new Set(after.workspaces.map(w=>w.workspace_id))};
+        return {ok:true as const,value:{accepted:true as const}};
+      }catch{return fail<{accepted:true}>('failed',ORGANISE_REASONS.serviceDown);}
+    })().finally(()=>{if(this.recovering===entry)this.recovering=null;});
+    this.recovering=entry;return entry.promise;
+  }
+
   /** Binds the runtime connection to the current principal, if it changed. */
   async syncPrincipal(): Promise<void> {
     const { runtime, identity } = this.options;
@@ -263,7 +292,7 @@ export class OrganiseService {
         return fail('failed', ORGANISE_REASONS.storeUnavailable);
       default:
         this.options.logger.warn(`organise: runtime request failed (${(error as Error).message})`);
-        return fail(refusal ? 'failed' : 'runtime-unavailable', refusal ? ORGANISE_REASONS.failed : ORGANISE_REASONS.runtimeUnavailable);
+        return this.options.runtime.ready() ? fail('failed', ORGANISE_REASONS.serviceDown) : fail('runtime-unavailable', ORGANISE_REASONS.runtimeUnavailable);
     }
   }
 
@@ -316,7 +345,35 @@ export class OrganiseService {
     return this.call('inquello/workspace/search',input,raw=>{if(sequence!==this.searchSequence)throw new Error();const value=searchView(raw);if(value.workspaceId!==input.workspaceId||value.query!==input.query.trim())throw new Error();return value;});
   }
   async reopen(input:ReopenInput):Promise<OrganiseResult<ReopenView>> {
-    return this.call('inquello/task/reopen',input,raw=>{const value=reopenView(raw);if(value.task.taskId!==input.taskId||value.task.workspaceId!==input.workspaceId||input.itemId!==null&&(value.hit?.itemId!==input.itemId||value.hit?.turnId!==input.turnId))throw new Error();return value;});
+    // Reopen is read-only. A concurrent retained writer may reject its complete
+    // snapshot; one fresh read is safe, but never renew a session or retry writes.
+    const request={...input},principal=this.options.identity.principalId(),instance=this.options.runtime.instance(),generation=this.authorityGeneration;
+    const current=()=>principal!==null&&principal===this.options.identity.principalId()&&instance===this.options.runtime.instance()&&generation===this.authorityGeneration&&this.options.runtime.ready();
+    try{
+      const prepared=await this.prepare();if(!prepared.ok)return prepared;
+      if(!current()||prepared.value!==principal)throw new Error('Authority changed');
+      let initial:string|undefined;
+      for(let attempt=0;attempt<2;attempt++){
+        if(!current())throw new Error('Authority changed');
+        const before=await this.freshWorkspaces(principal!);
+        if(!current()||!before.workspaces.some(workspace=>workspace.workspace_id===request.workspaceId))throw new Error('Authority changed');
+        const snapshot=JSON.stringify(before);
+        if(initial===undefined)initial=snapshot;else if(initial!==snapshot)throw new Error('Authority changed');
+        let raw:unknown;
+        try{raw=await this.options.runtime.request('inquello/task/reopen',request);}
+        catch(error){
+          if(attempt===0&&current()&&error instanceof RpcResponseError&&error.method==='inquello/task/reopen'&&error.rpcCode===-32600&&refusalOf(error)?.kind==='stale_snapshot')continue;
+          throw error;
+        }
+        if(!current())throw new Error('Authority changed');
+        const after=await this.freshWorkspaces(principal!);
+        if(!current()||JSON.stringify(after)!==initial)throw new Error('Authority changed');
+        const value=reopenView(raw);
+        if(value.task.taskId!==request.taskId||value.task.workspaceId!==request.workspaceId||request.itemId!==null&&(value.hit?.itemId!==request.itemId||value.hit?.turnId!==request.turnId))throw new Error('Saved scope changed');
+        return{ok:true,value};
+      }
+      throw new Error('Saved snapshot unavailable');
+    }catch(error){return this.runtimeFailure(error);}
   }
   async setNavigation(input:NavigationInput):Promise<OrganiseResult<TaskView>> {
     return this.call<InquelloTaskResponse,TaskView>('inquello/task/setNavigation',input,response=>taskView(response.task));
@@ -369,13 +426,39 @@ export class OrganiseService {
       if (!this.options.identity.principalId()) return fail('signed-out', ORGANISE_REASONS.signedOut);
       if (!this.workspaceAllowed(workspaceId)) return fail('not-found', ORGANISE_REASONS.unknownWorkspace);
     }
-    return this.call<InquelloWorkspaceTreeResponse, WorkspaceTreeView>('inquello/workspace/tree', { workspaceId }, (response) => ({
-      workspaceId: String(response.workspaceId),
-      engagements: response.engagements.map(engagementView),
-      folders: response.folders.map(folderView),
-      tasks: response.tasks.map(taskView),
-      unavailableTasks: unavailableTaskViews((response as InquelloWorkspaceTreeResponse & {unavailableTasks?:unknown}).unavailableTasks),
-    }));
+    // Retry only an explicitly rejected read snapshot, under identical fresh
+    // membership. Never retry mutations, revive a session or reuse cached authority.
+    const request=Object.freeze({workspaceId}),principal=this.options.identity.principalId(),instance=this.options.runtime.instance(),generation=this.authorityGeneration;
+    const current=()=>principal!==null&&principal===this.options.identity.principalId()&&instance===this.options.runtime.instance()&&generation===this.authorityGeneration&&this.options.runtime.ready();
+    try{
+      const prepared=await this.prepare();if(!prepared.ok)return prepared;
+      if(!current()||prepared.value!==principal)throw new Error('Authority changed');
+      let initial:string|undefined;
+      for(let attempt=0;attempt<2;attempt++){
+        if(!current())throw new Error('Authority changed');
+        const before=await this.freshWorkspaces(principal!);
+        if(!current()||!before.workspaces.some(workspace=>workspace.workspace_id===request.workspaceId))throw new Error('Authority changed');
+        const snapshot=JSON.stringify(before);
+        if(initial===undefined)initial=snapshot;else if(initial!==snapshot)throw new Error('Authority changed');
+        let response:InquelloWorkspaceTreeResponse;
+        try{response=await this.options.runtime.request<InquelloWorkspaceTreeResponse>('inquello/workspace/tree',request);}
+        catch(error){
+          if(attempt===0&&current()&&error instanceof RpcResponseError&&error.method==='inquello/workspace/tree'&&error.rpcCode===-32600&&refusalOf(error)?.kind==='stale_snapshot')continue;
+          throw error;
+        }
+        if(!current())throw new Error('Authority changed');
+        const after=await this.freshWorkspaces(principal!);
+        if(!current()||JSON.stringify(after)!==initial||response.workspaceId!==request.workspaceId)throw new Error('Authority changed');
+        return{ok:true,value:{
+          workspaceId:String(response.workspaceId),
+          engagements:response.engagements.map(engagementView),
+          folders:response.folders.map(folderView),
+          tasks:response.tasks.map(taskView),
+          unavailableTasks:unavailableTaskViews((response as InquelloWorkspaceTreeResponse & {unavailableTasks?:unknown}).unavailableTasks),
+        }};
+      }
+      throw new Error('Saved snapshot unavailable');
+    }catch(error){return this.runtimeFailure(error);}
   }
 
   // ---- commands --------------------------------------------------------------

@@ -12,18 +12,22 @@ import { useEffect, useState, type ReactElement } from 'react';
 import { Button } from './primitives';
 import { createDraftStore } from './Shell/drafts';
 import { Shell } from './Shell/Shell';
+import { Onboarding } from './Onboarding';
+import { Settings } from './Settings';
 import { Specimen } from './Specimen';
 
-export type View = 'shell' | 'specimen';
+export type View = 'shell' | 'specimen' | 'onboarding' | 'settings';
 
 export function viewFor(hash: string): View {
-  return hash === '#specimen' ? 'specimen' : 'shell';
+  return /^#settings(?:-(?:account|providers(?:-(?:claude|openai|chatgpt))?|routes|tools|usage|signout))?$/.test(hash) ? 'settings' : hash === '#onboarding' ? 'onboarding' : hash === '#specimen' ? 'specimen' : 'shell';
 }
 
 export function App(): ReactElement {
   const [view, setView] = useState<View>(() => viewFor(globalThis.location?.hash ?? ''));
   const [drafts] = useState(createDraftStore);
   const [sessionEpoch,setSessionEpoch] = useState(0);
+  const [workspaceId,setWorkspaceId]=useState<string|null>(null);
+  const [conversation,setConversation]=useState<{taskId:string;title:string}|null>(null);
 
   useEffect(() => {
     const onHash = () => setView(viewFor(globalThis.location.hash));
@@ -32,13 +36,15 @@ export function App(): ReactElement {
   }, []);
 
   const show = (next: View) => {
-    globalThis.location.hash = next === 'specimen' ? '#specimen' : '#shell';
+    globalThis.location.hash = next === 'settings' ? '#settings' : next === 'onboarding' ? '#onboarding' : next === 'specimen' ? '#specimen' : '#shell';
   };
 
   return <>
-    <div hidden={view !== 'shell'}><Shell key={sessionEpoch} active={view === 'shell'} onShowSpecimen={() => show('specimen')} drafts={drafts} /></div>
+    <div hidden={view !== 'shell'}><Shell key={sessionEpoch} onWorkspaceChanged={setWorkspaceId} onConversationChanged={setConversation} active={view === 'shell'} onShowSpecimen={() => show('settings')} drafts={drafts} /></div>
+    {view === 'settings' && <Settings workspaceId={workspaceId} conversation={conversation} onBack={() => show('shell')} onIdentityChanged={() => { drafts.clear(); setWorkspaceId(null); setConversation(null); setSessionEpoch(n => n + 1); }} />}
+    {view === 'onboarding' && <Onboarding onBack={() => show('shell')} onIdentityChanged={() => { drafts.clear(); setWorkspaceId(null); setSessionEpoch(n => n + 1); }} />}
     {view === 'specimen' && <>
-      <Specimen onIdentityChanged={() => { drafts.clear(); setSessionEpoch(n => n + 1); }} />
+      <Specimen onIdentityChanged={() => { drafts.clear(); setWorkspaceId(null); setSessionEpoch(n => n + 1); }} />
       <div className="specimen specimen-back"><Button variant="quiet" size="sm" onPress={() => show('shell')}>Back to the workspace</Button></div>
     </>}
   </>;

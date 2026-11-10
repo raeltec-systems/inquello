@@ -12,7 +12,7 @@ use std::collections::BTreeSet;
 use std::sync::OnceLock;
 
 /// The register schema version this domain reads.
-pub const CAPABILITY_REGISTER_SCHEMA_VERSION: u32 = 1;
+pub const CAPABILITY_REGISTER_SCHEMA_VERSION: u32 = 2;
 
 const EMBEDDED_REGISTER: &str = include_str!("../../register/capabilities.json");
 
@@ -91,9 +91,9 @@ pub struct CapabilityEntry {
     pub identity: String,
     pub formats: Vec<String>,
     pub processing_scope: String,
-    /// The declared eligibility. Validation rejects a declaration the evidence does
-    /// not support.
-    pub eligibility: Enablement,
+    /// Reviewed maximum for this compiled implementation. It grants nothing by
+    /// itself: effective status is capped by passing, exact evidence below.
+    pub ceiling: Enablement,
     pub evidence: Vec<EvidenceRef>,
     #[serde(default)]
     pub negative_authorization: Option<crate::routes::NegativeAuthorizationEvidence>,
@@ -116,7 +116,7 @@ impl CapabilityEntry {
             && self
                 .negative_authorization
                 .as_ref()
-                .is_some_and(crate::routes::NegativeAuthorizationEvidence::complete)
+                .is_some_and(|proof| self.reviewed_authorization_matches(proof))
         {
             Enablement::RealDataEligible
         } else {
@@ -124,11 +124,29 @@ impl CapabilityEntry {
         }
     }
 
-    /// The effective enablement: the declaration, capped by what the evidence
-    /// supports. A validated register never needs the cap, but it keeps the query
-    /// fail-closed.
+    fn reviewed_authorization_matches(
+        &self,
+        proof: &crate::routes::NegativeAuthorizationEvidence,
+    ) -> bool {
+        proof.complete()
+            && crate::routes::RouteId::parse(&proof.identity.route_id)
+                .is_some_and(|route| route.capability_id() == self.id)
+            && proof.processing_scope == self.processing_scope
+            && [
+                ("model", proof.identity.model.as_str()),
+                ("api", proof.identity.api_version.as_str()),
+                ("deployment", proof.identity.deployment.as_str()),
+                ("endpoint", proof.identity.endpoint.as_str()),
+            ]
+            .into_iter()
+            .all(|(key, value)| self.versions.get(key).map(String::as_str) == Some(value))
+    }
+
+    /// Effective enablement is always the lesser of the reviewed compiled
+    /// ceiling and the evidence actually supported by this build. Pending proof
+    /// never becomes real-data eligibility.
     pub fn enablement(&self) -> Enablement {
-        self.eligibility.min(self.supported_eligibility())
+        self.ceiling.min(self.supported_eligibility())
     }
 
     fn validate(&self) -> Result<(), CapabilityError> {
@@ -189,47 +207,22 @@ impl CapabilityEntry {
                 "every evidence reference must name its source".to_string(),
             ));
         }
-        if !self.eligibility.is_enabled() {
-            return Ok(());
-        }
-        if let Some(failed) = self
-            .evidence
-            .iter()
-            .find(|evidence| evidence.status == EvidenceStatus::Failed)
-        {
-            return Err(invalid(format!(
-                "declares {:?} but evidence {} failed",
-                self.eligibility, failed.reference
-            )));
-        }
-        if !self
-            .evidence
-            .iter()
-            .any(|evidence| evidence.passes(EvidenceKind::Synthetic))
-        {
-            return Err(invalid(format!(
-                "declares {:?} without passing synthetic evidence",
-                self.eligibility
-            )));
-        }
-        if self.eligibility == Enablement::RealDataEligible
-            && !self
+        if self.ceiling.is_enabled()
+            && let Some(failed) = self
                 .evidence
                 .iter()
-                .any(|evidence| evidence.passes(EvidenceKind::NegativeAuthorization))
+                .find(|evidence| evidence.status == EvidenceStatus::Failed)
         {
-            return Err(invalid(
-                "declares RealDataEligible without a passing negative-authorization reference"
-                    .to_string(),
-            ));
+            return Err(invalid(format!(
+                "reviewed ceiling {:?} has failed evidence {}",
+                self.ceiling, failed.reference
+            )));
         }
-        if self.eligibility == Enablement::RealDataEligible
-            && self
-                .negative_authorization
-                .as_ref()
-                .is_none_or(|proof| !proof.complete())
+        if let Some(proof) = &self.negative_authorization
+            && proof.complete()
+            && !self.reviewed_authorization_matches(proof)
         {
-            return Err(invalid("declares RealDataEligible without complete exact-build negative-authorization evidence".into()));
+            return Err(invalid("complete exact-build proof does not match this capability's route, transport or scope".into()));
         }
         Ok(())
     }
@@ -265,8 +258,9 @@ impl CapabilityRegister {
         Self::from_json(EMBEDDED_REGISTER)
     }
 
-    /// Parses and validates a register document. Unknown fields, duplicate ids and
-    /// declarations the evidence does not support are rejected.
+    /// Parses and validates version 2. Unknown fields, duplicate ids, failed
+    /// references and complete proofs for a different route/scope are rejected.
+    /// Missing or incomplete proof is permitted but cannot grant real-data use.
     pub fn from_json(json: &str) -> Result<Self, CapabilityError> {
         let file: RegisterFile = serde_json::from_str(json)
             .map_err(|error| CapabilityError::Parse(error.to_string()))?;

@@ -32,6 +32,8 @@ use sha2::Digest;
 use sha2::Sha256;
 
 const GUEST_BIN: &str = "/opt/inquello/runtime/bin";
+/// The PATH every guest command is given (one-shot and private-Task).
+pub(crate) const GUEST_PATH: &str = "/usr/bin:/bin";
 const HOST_TEMP: &str = "D:\\Inquello\\tmp";
 
 #[derive(Clone, Default)]
@@ -191,7 +193,62 @@ fn uri(path: &str) -> anyhow::Result<PathUri> {
     Ok(format!("file://{path}").parse()?)
 }
 
+/// Only synchronous validation or fully completed successful setup probes prove
+/// no outstanding process. Cancellation and uncertain subprocess outcomes do not.
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) enum ModelSetupPhase {
+    NoOutstandingProcess,
+    #[default]
+    UnconfirmedResourceAttempt,
+}
+
+/// Runs only fixed synchronous setup probes, never an executor. Successful exit
+/// proves this probe completed; timeout, cancellation, write/wait failure and
+/// nonzero exit retain uncertainty. A failed spawn proves no child was created.
+async fn run_model_setup_probe(
+    process: &mut tokio::process::Command,
+    phase: &mut ModelSetupPhase,
+    input: Option<&[u8]>,
+    budget: Duration,
+) -> anyhow::Result<std::process::Output> {
+    process.kill_on_drop(true);
+    let mut child = match process.spawn() {
+        Ok(child) => child,
+        Err(error) => {
+            *phase = ModelSetupPhase::NoOutstandingProcess;
+            return Err(error.into());
+        }
+    };
+    *phase = ModelSetupPhase::UnconfirmedResourceAttempt;
+    let wait = async move {
+        if let Some(input) = input {
+            use tokio::io::AsyncWriteExt;
+            child
+                .stdin
+                .take()
+                .context("Broker input missing")?
+                .write_all(input)
+                .await?;
+        }
+        Ok::<_, anyhow::Error>(child.wait_with_output().await?)
+    };
+    let output = tokio::time::timeout(budget, wait)
+        .await
+        .context("Setup probe timed out")??;
+    if output.status.success() {
+        *phase = ModelSetupPhase::NoOutstandingProcess;
+    }
+    Ok(output)
+}
+
 async fn verified_boot_id(scope: &str) -> anyhow::Result<String> {
+    verified_boot_id_tracked(scope, None).await
+}
+
+async fn verified_boot_id_tracked(
+    scope: &str,
+    phase: Option<&mut ModelSetupPhase>,
+) -> anyhow::Result<String> {
     use base64::Engine;
     let system = std::env::var("SystemRoot")?;
     let profile = std::env::var("USERPROFILE")?;
@@ -213,11 +270,19 @@ async fn verified_boot_id(scope: &str) -> anyhow::Result<String> {
         .env("TMP", HOST_TEMP)
         .current_dir(HOST_TEMP)
         .args(["-NoProfile", "-NonInteractive", "-EncodedCommand", &encoded])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
         .kill_on_drop(true);
-    let result = tokio::time::timeout(Duration::from_secs(15), process.output())
-        .await
-        .context("Windows D-only storage preflight timed out")?
-        .context("Windows D-only storage preflight could not run")?;
+    let mut untracked = ModelSetupPhase::default();
+    let result = run_model_setup_probe(
+        &mut process,
+        phase.unwrap_or(&mut untracked),
+        None,
+        Duration::from_secs(15),
+    )
+    .await
+    .context("Windows D-only storage preflight could not complete")?;
     if !result.status.success() {
         bail!("D-only WSL host preflight failed");
     }
@@ -226,8 +291,40 @@ async fn verified_boot_id(scope: &str) -> anyhow::Result<String> {
     Ok(boot)
 }
 
+// The idle broker verifies all installed binaries before acquiring any lock.
+// Measured full verification takes ~15s; allow the existing 10s scope-lock
+// bound plus 5s launch/response overhead. No startup limit or trust check changes.
+const LOCK_RELEASE_PROBE_BUDGET: Duration = Duration::from_secs(30);
+// All retries share one envelope: close 5s + host verification 15s + probe 30s.
+const EXECUTOR_CLEANUP_BUDGET: Duration = Duration::from_secs(50);
+pub(crate) const EXECUTOR_RETIREMENT_WAIT: Duration =
+    Duration::from_secs(EXECUTOR_CLEANUP_BUDGET.as_secs() + 5);
+
+async fn within_cleanup_budget<T>(
+    cleanup: impl std::future::Future<Output = anyhow::Result<T>>,
+    budget: Duration,
+) -> anyhow::Result<T> {
+    tokio::time::timeout(budget, cleanup)
+        .await
+        .context("Linux Task executor cleanup deadline elapsed; retirement unconfirmed")?
+}
+
+async fn wait_for_lock_release_probe<T>(
+    wait: impl std::future::Future<Output = std::io::Result<T>>,
+    budget: Duration,
+) -> anyhow::Result<T> {
+    tokio::time::timeout(budget, wait)
+        .await
+        .context("Linux Task lock-release probe timed out")?
+        .context("Linux Task lock-release probe could not complete")
+}
+
 impl WslExecPlan {
     pub(crate) async fn close_and_wait(&self, client: &ExecServerClient) -> anyhow::Result<()> {
+        within_cleanup_budget(self.close_and_wait_inner(client), EXECUTOR_CLEANUP_BUDGET).await
+    }
+
+    async fn close_and_wait_inner(&self, client: &ExecServerClient) -> anyhow::Result<()> {
         tokio::time::timeout(Duration::from_secs(5), client.close_isolated_stdio())
             .await
             .context("Linux executor stdio close timed out")?;
@@ -276,10 +373,10 @@ impl WslExecPlan {
                 .context("Broker input missing")?
                 .write_all(b"{\"action\":\"idle\"}")
                 .await?;
-            let result = tokio::time::timeout(Duration::from_secs(10), child.wait_with_output())
-                .await
-                .context("Linux Task lock-release probe timed out")?
-                .context("Linux Task lock-release probe could not complete")?;
+            // Expiry drops the owned wait future and its kill_on_drop child.
+            let result =
+                wait_for_lock_release_probe(child.wait_with_output(), LOCK_RELEASE_PROBE_BUDGET)
+                    .await?;
             if result.status.success() {
                 return Ok(());
             }
@@ -294,6 +391,7 @@ impl WslExecPlan {
         principal: &str,
         writable: bool,
         domains: Vec<String>,
+        phase: &mut ModelSetupPhase,
     ) -> anyhow::Result<Self> {
         let task_id = host_root
             .file_name()
@@ -313,7 +411,7 @@ impl WslExecPlan {
             domains,
             timeout_ms: None,
         };
-        let boot = verified_boot_id(&plan.scope).await?;
+        let boot = verified_boot_id_tracked(&plan.scope, Some(phase)).await?;
         let binding_dir = Path::new("D:\\Inquello\\profiles")
             .join(&plan.scope)
             .join("bindings");
@@ -398,24 +496,22 @@ impl WslExecPlan {
                 .stdout(std::process::Stdio::piped())
                 .stderr(std::process::Stdio::piped())
                 .kill_on_drop(true);
-            let mut child = child.spawn()?;
-            use tokio::io::AsyncWriteExt;
-            child
-                .stdin
-                .take()
-                .context("Broker input missing")?
-                .write_all(b"{\"action\":\"initialize\"}")
-                .await?;
-            let result = tokio::time::timeout(Duration::from_secs(30), child.wait_with_output())
-                .await
-                .context("Linux empty Task initialization timed out")?
-                .context("Linux empty Task initialization could not complete")?;
+            let result = run_model_setup_probe(
+                &mut child,
+                phase,
+                Some(b"{\"action\":\"initialize\"}"),
+                Duration::from_secs(30),
+            )
+            .await
+            .context("Linux empty Task initialization could not complete")?;
             if !result.status.success() {
                 bail!(
                     "Empty Task guest initialization failed: {}",
                     String::from_utf8_lossy(&result.stderr)
                 );
             }
+            // The initialize action creates directories synchronously, holds its
+            // locks only for this broker process, and starts no executor/children.
             std::fs::create_dir_all(&binding_dir)?;
             let temporary = binding_dir.join(format!("{}.tmp", uuid::Uuid::new_v4()));
             let mut file = std::fs::OpenOptions::new()
@@ -443,7 +539,7 @@ impl WslExecPlan {
             shell_environment_policy: codex_protocol::config_types::ShellEnvironmentPolicy {
                 inherit: codex_protocol::config_types::ShellEnvironmentPolicyInherit::None,
                 r#set: HashMap::from([
-                    ("PATH".into(), "/usr/bin:/bin".into()),
+                    ("PATH".into(), GUEST_PATH.into()),
                     ("HOME".into(), self.root()),
                     ("LANG".into(), "C.UTF-8".into()),
                     ("TMPDIR".into(), "/tmp".into()),
@@ -539,6 +635,13 @@ impl WslExecPlan {
     /// The fixed launcher validates the live guest before it opens stdio. It
     /// holds a per-Task lock until all executor-owned descendants have exited.
     pub(crate) async fn connect(&self) -> anyhow::Result<ExecServerClient> {
+        self.connect_tracked(&mut ModelSetupPhase::default()).await
+    }
+
+    pub(crate) async fn connect_tracked(
+        &self,
+        phase: &mut ModelSetupPhase,
+    ) -> anyhow::Result<ExecServerClient> {
         if !cfg!(windows) {
             bail!("the WSL backend requires Windows");
         }
@@ -563,7 +666,7 @@ impl WslExecPlan {
         // A trusted main-process preflight supplies this receipt only after a
         // live storage/isolation probe. The launcher independently checks its
         // boot identity, mounts and immutable installed binary hashes.
-        let boot_id = verified_boot_id(&self.scope).await?;
+        let boot_id = verified_boot_id_tracked(&self.scope, Some(phase)).await?;
         let system = std::env::var("SystemRoot").context("Windows system directory missing")?;
         let env = HashMap::from([
             ("SystemRoot".into(), system.clone()),
@@ -594,12 +697,13 @@ impl WslExecPlan {
         .into_iter()
         .map(str::to_owned)
         .collect();
-        let client = ExecServerClient::connect_isolated_stdio(
+        let client = ExecServerClient::connect_isolated_stdio_tracked(
             format!("{system}\\System32\\wsl.exe"),
             args,
             env,
             HOST_TEMP.into(),
             Duration::from_secs(30),
+            || *phase = ModelSetupPhase::UnconfirmedResourceAttempt,
         )
         .await
         .context("Linux isolated executor connection failed")?;
@@ -622,7 +726,7 @@ impl WslExecPlan {
             env_policy: None,
             shell_snapshot: None,
             env: HashMap::from([
-                ("PATH".into(), "/usr/bin:/bin".into()),
+                ("PATH".into(), GUEST_PATH.into()),
                 ("HOME".into(), root.clone()),
                 ("TMPDIR".into(), "/tmp".into()),
                 ("LANG".into(), "C.UTF-8".into()),
@@ -698,5 +802,335 @@ impl WslExecPlan {
         };
         self.close_and_wait(&client).await?;
         result
+    }
+}
+
+/// Not-found as the guest executor's filesystem handler reports it
+/// (`exec-server`'s `rpc::not_found`).
+const GUEST_NOT_FOUND: i64 = -32004;
+
+/// The guest's read-only filesystem queries over an existing executor
+/// connection, under the Task's sandbox. Used only to resolve programs.
+#[derive(Clone)]
+pub(crate) struct GuestChannel {
+    client: ExecServerClient,
+    sandbox: FileSystemSandboxContext,
+}
+
+impl crate::inquello_program::GuestFs for GuestChannel {
+    fn entry<'a>(
+        &'a self,
+        path: &'a str,
+    ) -> impl std::future::Future<
+        Output = Result<
+            crate::inquello_program::GuestEntry,
+            crate::inquello_program::GuestUnavailable,
+        >,
+    > + Send
+    + 'a {
+        use crate::inquello_program::GuestEntry;
+        use crate::inquello_program::GuestUnavailable;
+        use codex_exec_server::ExecServerError;
+        async move {
+            // A program word that does not survive the file-URI round trip
+            // exactly is never queried under another name.
+            let uri = uri(path).map_err(|_| GuestUnavailable)?;
+            if uri.decoded_path_bytes().as_ref() != path.as_bytes() {
+                return Err(GuestUnavailable);
+            }
+            let not_found = |error: &ExecServerError| matches!(error, ExecServerError::Server { code, .. } if *code == GUEST_NOT_FOUND);
+            let metadata = match self
+                .client
+                .fs_get_metadata(codex_exec_server_protocol::FsGetMetadataParams {
+                    path: uri.clone(),
+                    follow_symlinks: Some(true),
+                    sandbox: Some(self.sandbox.clone()),
+                })
+                .await
+            {
+                Ok(metadata) => metadata,
+                Err(error) if not_found(&error) => return Ok(GuestEntry::Missing),
+                Err(_) => return Err(GuestUnavailable),
+            };
+            if !metadata.is_file {
+                return Ok(GuestEntry::NotFile);
+            }
+            match self
+                .client
+                .fs_canonicalize(codex_exec_server_protocol::FsCanonicalizeParams {
+                    path: uri,
+                    sandbox: Some(self.sandbox.clone()),
+                })
+                .await
+            {
+                Ok(canonical) => {
+                    String::from_utf8(canonical.path.decoded_path_bytes().into_owned())
+                        .map(GuestEntry::File)
+                        .map_err(|_| GuestUnavailable)
+                }
+                Err(error) if not_found(&error) => Ok(GuestEntry::Missing),
+                Err(_) => Err(GuestUnavailable),
+            }
+        }
+    }
+}
+
+type RetainedKey = (String, String);
+
+/// Each private Task's retained executor channel, by (scope, Task), with the
+/// generation that registered it.
+static RETAINED: std::sync::LazyLock<
+    std::sync::Mutex<HashMap<RetainedKey, (uuid::Uuid, GuestChannel)>>,
+> = std::sync::LazyLock::new(Default::default);
+
+impl WslExecPlan {
+    /// Makes this private Task's live executor connection available to
+    /// resolve its commands' programs, until [`Self::release_channel`].
+    pub(crate) fn retain_channel(
+        &self,
+        generation: uuid::Uuid,
+        client: &ExecServerClient,
+    ) -> anyhow::Result<()> {
+        let channel = GuestChannel {
+            client: client.clone(),
+            sandbox: self.sandbox()?,
+        };
+        RETAINED
+            .lock()
+            .map_err(|_| anyhow::anyhow!("guest channel registry unavailable"))?
+            .insert(
+                (self.scope.clone(), self.task_id.clone()),
+                (generation, channel),
+            );
+        Ok(())
+    }
+
+    /// Forgets the channel this generation registered (a successor's stays).
+    pub(crate) fn release_channel(&self, generation: uuid::Uuid) {
+        if let Ok(mut retained) = RETAINED.lock() {
+            let key = (self.scope.clone(), self.task_id.clone());
+            if retained
+                .get(&key)
+                .is_some_and(|(owner, _)| *owner == generation)
+            {
+                retained.remove(&key);
+            }
+        }
+    }
+}
+
+/// The Linux guest a command will run in, for resolving its program there.
+pub(crate) enum GuestTarget {
+    /// `inquello/tools/exec`: a short read-only connection to the Task's own
+    /// guest executor, with no network, closed before the command runs.
+    Connect { scope: String, task_id: String },
+    /// A private Task's model command: its live executor connection.
+    Retained { scope: String, task_id: String },
+}
+
+impl GuestTarget {
+    /// Resolves `words` inside the guest, with its PATH and the Task's guest
+    /// working folder. Unreachable, failing or slow means unresolved.
+    pub(crate) async fn resolve(&self, words: &[String]) -> crate::inquello_program::Resolutions {
+        use crate::inquello_program::GuestResolver;
+        use crate::inquello_program::RESOLUTION_BUDGET;
+        use crate::inquello_program::Resolutions;
+        use crate::inquello_program::resolve_within;
+        let (scope, task_id) = match self {
+            Self::Connect { scope, task_id } | Self::Retained { scope, task_id } => {
+                (scope, task_id)
+            }
+        };
+        let plan = WslExecPlan {
+            scope: scope.clone(),
+            task_id: task_id.clone(),
+            command: vec![],
+            writable: false,
+            domains: vec![],
+            timeout_ms: None,
+        };
+        let resolver = |channel: GuestChannel| GuestResolver {
+            fs: channel,
+            cwd: plan.root(),
+            search_path: GUEST_PATH.to_string(),
+        };
+        match self {
+            Self::Retained { .. } => {
+                let channel = RETAINED.lock().ok().and_then(|retained| {
+                    retained
+                        .get(&(scope.clone(), task_id.clone()))
+                        .map(|(_, channel)| channel.clone())
+                });
+                match channel {
+                    Some(channel) => {
+                        resolve_within(&resolver(channel), words, RESOLUTION_BUDGET).await
+                    }
+                    None => Resolutions::unresolved(),
+                }
+            }
+            Self::Connect { .. } => {
+                let Ok(sandbox) = plan.sandbox() else {
+                    return Resolutions::unresolved();
+                };
+                let client = match plan.connect().await {
+                    Ok(client) => client,
+                    Err(error) => {
+                        tracing::warn!("Linux program resolution unavailable: {error:#}");
+                        return Resolutions::unresolved();
+                    }
+                };
+                let channel = GuestChannel {
+                    client: client.clone(),
+                    sandbox,
+                };
+                let resolutions =
+                    resolve_within(&resolver(channel), words, RESOLUTION_BUDGET).await;
+                // Release the guest's Task lock before the command itself runs.
+                if let Err(error) = plan.close_and_wait(&client).await {
+                    tracing::warn!("Linux program resolution cleanup unconfirmed: {error:#}");
+                }
+                resolutions
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod inquello_lock_release_probe_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    #[tokio::test]
+    async fn connect_validation_failure_preserves_proven_no_process_phase() {
+        let plan = WslExecPlan {
+            scope: "invalid-scope".into(),
+            task_id: uuid::Uuid::new_v4().to_string(),
+            command: vec![],
+            writable: false,
+            domains: vec![],
+            timeout_ms: None,
+        };
+        let mut phase = ModelSetupPhase::NoOutstandingProcess;
+        assert!(plan.connect_tracked(&mut phase).await.is_err());
+        assert!(phase == ModelSetupPhase::NoOutstandingProcess);
+        phase = ModelSetupPhase::UnconfirmedResourceAttempt;
+        assert!(plan.connect_tracked(&mut phase).await.is_err());
+        assert!(phase == ModelSetupPhase::UnconfirmedResourceAttempt);
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn setup_probe_actual_spawn_exit_and_cancellation_classify_retirement() {
+        let missing = tempfile::tempdir().unwrap();
+        let mut phase = ModelSetupPhase::NoOutstandingProcess;
+        let mut absent = tokio::process::Command::new(missing.path().join("does-not-exist.exe"));
+        assert!(
+            run_model_setup_probe(&mut absent, &mut phase, None, Duration::from_secs(5))
+                .await
+                .is_err()
+        );
+        assert!(phase == ModelSetupPhase::NoOutstandingProcess);
+        let system = std::env::var("SystemRoot").unwrap();
+        let executable = Path::new(&system)
+            .join("System32")
+            .join("WindowsPowerShell")
+            .join("v1.0")
+            .join("powershell.exe");
+        for (script, budget, clean) in [
+            ("exit 0", Duration::from_secs(10), true),
+            ("exit 7", Duration::from_secs(10), false),
+            ("Start-Sleep -Seconds 60", Duration::from_millis(1), false),
+        ] {
+            let mut process = tokio::process::Command::new(&executable);
+            process
+                .args(["-NoProfile", "-NonInteractive", "-Command", script])
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::piped());
+            phase = ModelSetupPhase::NoOutstandingProcess;
+            let result = run_model_setup_probe(&mut process, &mut phase, None, budget).await;
+            assert_eq!(phase == ModelSetupPhase::NoOutstandingProcess, clean);
+            if clean {
+                assert!(result.unwrap().status.success());
+            }
+        }
+        let mut process = tokio::process::Command::new(&executable);
+        process
+            .args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "Start-Sleep -Seconds 60",
+            ])
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
+        phase = ModelSetupPhase::NoOutstandingProcess;
+        let mut pending = Box::pin(run_model_setup_probe(
+            &mut process,
+            &mut phase,
+            None,
+            Duration::from_secs(10),
+        ));
+        assert!(
+            tokio::time::timeout(Duration::from_millis(1), &mut pending)
+                .await
+                .is_err()
+        );
+        drop(pending); // Cancellation drops only this owned kill-on-drop child.
+        assert!(phase == ModelSetupPhase::UnconfirmedResourceAttempt);
+    }
+
+    #[tokio::test]
+    async fn bounded_probe_wait_drops_owned_future_on_expiry() {
+        struct OwnedWait(Arc<AtomicBool>);
+        impl Drop for OwnedWait {
+            fn drop(&mut self) {
+                self.0.store(true, Ordering::SeqCst);
+            }
+        }
+        let dropped = Arc::new(AtomicBool::new(false));
+        let owned = OwnedWait(Arc::clone(&dropped));
+        let pending = async move {
+            let _owned = owned;
+            std::future::pending::<std::io::Result<()>>().await
+        };
+        let error = wait_for_lock_release_probe(pending, Duration::from_millis(1))
+            .await
+            .expect_err("unconfirmed cleanup must remain bounded");
+        assert!(error.to_string().contains("probe timed out"));
+        assert!(dropped.load(Ordering::SeqCst));
+        assert_eq!(LOCK_RELEASE_PROBE_BUDGET, Duration::from_secs(30));
+    }
+
+    #[tokio::test]
+    async fn total_cleanup_envelope_expires_without_confirming_retirement() {
+        let error = within_cleanup_budget(
+            std::future::pending::<anyhow::Result<()>>(),
+            Duration::from_millis(1),
+        )
+        .await
+        .expect_err("all retries must share a finite cleanup deadline");
+        assert!(error.to_string().contains("retirement unconfirmed"));
+        assert_eq!(EXECUTOR_CLEANUP_BUDGET, Duration::from_secs(50));
+        assert_eq!(EXECUTOR_RETIREMENT_WAIT, Duration::from_secs(55));
+        within_cleanup_budget(async { Ok(()) }, Duration::from_secs(1))
+            .await
+            .expect("completed cleanup stays confirmed");
+    }
+
+    #[tokio::test]
+    async fn bounded_probe_wait_preserves_confirmation_and_io_failure() {
+        let confirmed = wait_for_lock_release_probe(async { Ok(true) }, Duration::from_secs(1))
+            .await
+            .expect("confirmed probe");
+        assert!(confirmed);
+        let error = wait_for_lock_release_probe(
+            async { Err::<(), _>(std::io::Error::other("probe unavailable")) },
+            Duration::from_secs(1),
+        )
+        .await
+        .expect_err("I/O failure must not confirm cleanup");
+        assert!(error.to_string().contains("probe could not complete"));
     }
 }

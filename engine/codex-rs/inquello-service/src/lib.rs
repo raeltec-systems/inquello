@@ -40,14 +40,18 @@ mod clock;
 mod commands;
 pub mod config;
 mod credentials;
+pub mod delivery;
 mod digest;
 mod error;
 mod export_receipts;
 mod login;
 mod oidc;
+mod onboarding;
 pub mod postgres;
+mod provider_consents;
 pub mod route_eligibility;
 mod routes;
+pub mod serve;
 mod server;
 mod sessions;
 #[cfg(feature = "test-issuer")]
@@ -76,6 +80,7 @@ pub use oidc::KeyConfigError;
 pub use server::RunningService;
 pub use server::StartError;
 pub use server::start;
+pub use server::start_with_delivery;
 pub use tls::TlsSetupError;
 
 #[cfg(all(test, feature = "test-issuer"))]

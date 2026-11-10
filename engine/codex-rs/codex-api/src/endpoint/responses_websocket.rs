@@ -1074,6 +1074,7 @@ mod tests {
                 .into(),
             ),
             tool_choice: "auto".to_string(),
+            max_output_tokens: None,
             parallel_tool_calls: true,
             reasoning: None,
             store: false,

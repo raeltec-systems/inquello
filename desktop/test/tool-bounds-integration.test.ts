@@ -37,7 +37,6 @@ import {
   outsideDenialText,
   PolicyService,
   POLICY_REASONS,
-  type ExecutionPolicyRoutes,
   type ToolRunView,
 } from '../src/main/policy';
 import { AppServerRuntime, resolveAppServerBinary, runtimeChildEnv, writeRuntimeConfig } from '../src/main/runtime';
@@ -56,6 +55,7 @@ let config: ServiceConfig;
 let seed: { workspace_id: string; invite_id: string };
 let runtime: AppServerRuntime;
 let identity: IdentitySession;
+let service: SharedServiceClient;
 let organise: OrganiseService;
 let policy: PolicyService;
 let runtimeHome: string;
@@ -135,7 +135,14 @@ describe.skipIf(!databaseConfigured)('bounded tool reads, writes and network aga
     });
     await runtime.start();
     const transport = httpsTransport(config.ca);
-    const service = new SharedServiceClient(config.serviceUrl, transport);
+    service = new SharedServiceClient(config.serviceUrl, transport);
+    // Production binds identity and policy to one service client. Keep the
+    // fixture on that same fixed GET, after the actual authenticated membership
+    // response; never replace authorization or route an arbitrary callback.
+    const executionPolicy = service.executionPolicy.bind(service);
+    service.executionPolicy = async (access, workspaceId) => ({
+      ...(await executionPolicy(access, workspaceId)), policy_revision: String(revision), execution,
+    });
     identity = new IdentitySession({
       config: { kind: 'configured', config },
       vault: new CredentialVault({ safeStorage: fakeSafeStorage('gnome_libsecret'), platform: 'linux', dir: path.join(dir, 'identity') }),
@@ -146,14 +153,17 @@ describe.skipIf(!databaseConfigured)('bounded tool reads, writes and network aga
     });
     expect((await identity.signIn()).ok).toBe(true);
     expect((await identity.withAccess((access) => service.acceptInvite(access, seed.invite_id)))?.workspace_id).toBe(seed.workspace_id);
-    // The real membership check, with the case's execution section.
-    const routes: ExecutionPolicyRoutes = {
-      executionPolicy: async (access, workspaceId) => ({ ...(await service.executionPolicy(access, workspaceId)), policy_revision: String(revision), execution }),
-    };
     const organiseRuntime = { ready: () => runtime.state === 'ready', instance: () => runtime, request: <T,>(method: string, params?: unknown) => runtime.request<T>(method, params) };
     organise = new OrganiseService({ runtime: organiseRuntime, identity, service, logger: recordingLogger() });
-    policy = new PolicyService({ runtime: organiseRuntime, identity, organise, service: routes, logger: recordingLogger(), taskFolders: path.join(dir, 'tasks'), sandboxProbeTarget: workingStoreDir, permissions: new PermissionMediator({ runtime: organiseRuntime, logger: recordingLogger(), newId: randomUUID }) });
+    policy = new PolicyService({ runtime: organiseRuntime, identity, organise, service, logger: recordingLogger(), taskFolders: path.join(dir, 'tasks'), sandboxProbeTarget: workingStoreDir, permissions: new PermissionMediator({ runtime: organiseRuntime, logger: recordingLogger(), newId: randomUUID }) });
   }, 120_000);
+
+  it('binds the fixed authenticated policy read to the fixture policy and rejects foreign membership', async () => {
+    usePolicy({ allow_full_access: true });
+    const view = await identity.readExecutionPolicy(seed.workspace_id);
+    expect(view).toMatchObject({ workspace_id: seed.workspace_id, policy_revision: String(revision), execution });
+    await expect(identity.readExecutionPolicy(randomUUID())).rejects.toMatchObject({ kind: 'denied' });
+  });
 
   afterAll(async () => {
     await runtime?.stop();
@@ -293,13 +303,12 @@ describe.skipIf(!databaseConfigured)('bounded tool reads, writes and network aga
     usePolicy(null);
     const task = await newTask('No sandbox');
     // A check whose target is inside every profile: the sandbox is treated as not applied.
-    const routes: ExecutionPolicyRoutes = { executionPolicy: async () => ({ workspace_id: seed.workspace_id, policy_revision: String(revision), authorization_epoch: '1', execution: null }) };
     const organiseRuntime = { ready: () => runtime.state === 'ready', instance: () => runtime, request: <T,>(method: string, params?: unknown) => runtime.request<T>(method, params) };
     const unchecked = new PolicyService({
       runtime: organiseRuntime,
       identity,
       organise,
-      service: routes,
+      service,
       logger: recordingLogger(),
       taskFolders: path.join(path.dirname(runtimeHome), 'tasks'),
       sandboxProbeTarget: '/usr',

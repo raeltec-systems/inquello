@@ -20,6 +20,7 @@ pub(super) const LABEL: &str =
 #[derive(Default)]
 pub(super) struct RouteRuntime {
     disclosure_tokens: std::sync::Mutex<HashMap<PrincipalId, CancellationToken>>,
+    task_disclosure_tokens: std::sync::Mutex<HashMap<(PrincipalId, String), CancellationToken>>,
     pub(super) state: std::sync::Arc<tokio::sync::Mutex<ReviewState>>,
     pub(super) auth: AuthStore,
     pub(super) responses: Option<InheritedResponses>,
@@ -82,6 +83,23 @@ struct ReadyReview {
 }
 
 impl ReviewState {
+    #[cfg(test)]
+    pub(super) fn enable_synthetic_catalog_for_test(&mut self) {
+        self.fixture_response = Some("synthetic catalog".into());
+    }
+
+    pub(super) fn task_review_pending(&self, principal: PrincipalId, task: &str) -> bool {
+        self.pending.values().any(|invocation| {
+            invocation.principal == principal
+                && invocation.task == task
+                && !invocation.request.starts_with("task:")
+                && !invocation.cancellation.is_cancelled()
+        }) || self.ready.values().any(|review| {
+            review.actor.principal_id == principal
+                && review.original.task_id.to_string() == task
+                && !review.cancellation.is_cancelled()
+        })
+    }
     pub(super) fn credential(
         &self,
         principal: PrincipalId,
@@ -94,6 +112,28 @@ impl ReviewState {
     }
 }
 impl RouteRuntime {
+    pub(super) fn task_disclosure_token(
+        &self,
+        principal: PrincipalId,
+        task: &str,
+    ) -> CancellationToken {
+        self.task_disclosure_tokens
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .entry((principal, task.into()))
+            .or_default()
+            .clone()
+    }
+    pub(super) fn invalidate_task_disclosure(&self, principal: PrincipalId, task: &str) {
+        if let Some(old) = self
+            .task_disclosure_tokens
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .insert((principal, task.into()), CancellationToken::new())
+        {
+            old.cancel();
+        }
+    }
     pub(super) fn disclosure_fence(
         &self,
         principal: PrincipalId,
@@ -150,7 +190,7 @@ impl RouteRuntime {
         state.authorities.retain(|(id, _), _| *id != principal);
     }
     pub(super) fn cancel_task(&self, state: &mut ReviewState, principal: PrincipalId, task: &str) {
-        self.invalidate_disclosure(principal);
+        self.invalidate_task_disclosure(principal, task);
         self.auth.cancel_task(&principal.to_string(), task);
         state.ready.retain(|_, review| {
             if review.actor.principal_id == principal && review.original.task_id.to_string() == task
@@ -376,22 +416,16 @@ impl InheritedResponses {
                         break;
                     }
                     Some(Ok(codex_api::ResponseEvent::ToolCallInputDelta { .. })) => break,
-                    Some(Ok(codex_api::ResponseEvent::OutputItemAdded(item)))
-                        if matches!(
-                            item,
-                            codex_protocol::models::ResponseItem::FunctionCall { .. }
-                                | codex_protocol::models::ResponseItem::CustomToolCall { .. }
-                        ) =>
-                    {
+                    Some(Ok(codex_api::ResponseEvent::OutputItemAdded(
+                        codex_protocol::models::ResponseItem::FunctionCall { .. }
+                        | codex_protocol::models::ResponseItem::CustomToolCall { .. },
+                    ))) => {
                         break;
                     }
-                    Some(Ok(codex_api::ResponseEvent::OutputItemDone(item)))
-                        if matches!(
-                            item,
-                            codex_protocol::models::ResponseItem::FunctionCall { .. }
-                                | codex_protocol::models::ResponseItem::CustomToolCall { .. }
-                        ) =>
-                    {
+                    Some(Ok(codex_api::ResponseEvent::OutputItemDone(
+                        codex_protocol::models::ResponseItem::FunctionCall { .. }
+                        | codex_protocol::models::ResponseItem::CustomToolCall { .. },
+                    ))) => {
                         break;
                     }
                     Some(Ok(codex_api::ResponseEvent::Completed {
@@ -637,7 +671,7 @@ impl InquelloRequestProcessor {
     pub(super) fn fixture_enabled(&self, state: &ReviewState) -> bool {
         #[cfg(test)]
         {
-            return state.fixture_response.is_some();
+            state.fixture_response.is_some()
         }
         #[cfg(not(test))]
         {
@@ -710,6 +744,10 @@ impl InquelloRequestProcessor {
         )
     }
 
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "Keep the authority snapshot and local SQLite check/commit atomic with invalidation; provider and service network waits occur outside this guarded region."
+    )]
     pub(crate) async fn permissions_review(
         &self,
         connection: ConnectionId,
@@ -757,6 +795,7 @@ impl InquelloRequestProcessor {
                 &authority.user,
                 &original.task_id.to_string(),
                 &original.evaluation.command,
+                ExecPlacement::Host(self.exec_lookup(None)),
             )
             .await?;
             if evaluated.evaluation.decision == RuleDecision::Forbid
@@ -962,7 +1001,7 @@ impl InquelloRequestProcessor {
         let result = async {
         // Resolve authoritative choices, then recheck all lifecycle binding after waits.
         let route = routes::task_route(&store, actor, &request.binding.task_id).await.map_err(|error| {cancellation.cancel();domain_error(error)})?;
-        let caps = self.usage_capabilities(&route).await.map_err(|error| {cancellation.cancel();error})?;
+        let caps = self.usage_capabilities(&route).await.inspect_err(|_| {cancellation.cancel();})?;
         let settings = usage::task_usage(&store,actor,&request.binding.task_id).await.map_err(|error| {cancellation.cancel();domain_error(error)})?.settings
             .ok_or_else(|| {cancellation.cancel();refusal("settings_required","Explicitly save Task reasoning/speed defaults before model work")})?;
         if !caps.reasoning.contains(&settings.choices.reasoning) || !caps.speeds.contains(&settings.choices.speed) {
@@ -990,15 +1029,13 @@ impl InquelloRequestProcessor {
         let run = async {
             request.validate().ok()?;
             #[cfg(test)]
-            let fixture = self.fixture_enabled(&self.routes.state.lock().await);
+            let fixture = self.fixture_enabled(&*self.routes.state.lock().await);
             #[cfg(not(test))]
             let fixture = false;
             #[cfg(test)]
-            if fixture {
-                if let Some(allowed)=self.routes.state.lock().await.fixture_limit {
-                    if allowed!=Some(true) {usage_status=AttemptStatus::Refused;usage_refusal=Some("Fixture Codex ordinary usage refused or unknown; use permitted human handling".into());return None;}
-                }
-            }
+            if fixture
+                && let Some(allowed)=self.routes.state.lock().await.fixture_limit
+                    && allowed!=Some(true) {usage_status=AttemptStatus::Refused;usage_refusal=Some("Fixture Codex ordinary usage refused or unknown; use permitted human handling".into());return None;}
             let expected_account = if fixture {None} else {match self.usage_limit_check(&request.binding.route_id,&request.binding.task_id).await {
                 Ok(account)=>account, Err(error)=>{usage_status=AttemptStatus::Refused;usage_refusal=Some(error.message);return None;}
             }};
@@ -1078,6 +1115,10 @@ impl InquelloRequestProcessor {
 
     /// Phase two never takes a verdict or handle. Main refreshes its service
     /// authority immediately before calling; the runtime consumes its own result.
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "Keep the authority snapshot and local SQLite check/commit atomic with invalidation; provider and service network waits occur outside this guarded region."
+    )]
     pub(crate) async fn permissions_review_apply(
         &self,
         connection: ConnectionId,
@@ -1106,6 +1147,7 @@ impl InquelloRequestProcessor {
             &fresh.user,
             &current.task_id.to_string(),
             &current.evaluation.command,
+            ExecPlacement::Host(self.exec_lookup(None)),
         )
         .await?;
         if fresh_evaluation.evaluation.decision == RuleDecision::Forbid
@@ -1207,6 +1249,7 @@ impl InquelloRequestProcessor {
             &authority.user,
             &original.task_id.to_string(),
             &original.evaluation.command,
+            ExecPlacement::Host(self.exec_lookup(None)),
         )
         .await?;
         if evaluated.evaluation.decision == RuleDecision::Forbid || evaluated.evaluation.cannot_ask
@@ -1444,21 +1487,28 @@ impl InquelloRequestProcessor {
 mod observed_disclosure_invalidation_tests {
     use super::*;
     #[test]
-    fn task_and_identity_invalidation_cancel_old_principal_payloads_not_other_recipients() {
+    fn task_invalidation_is_scoped_and_identity_revokes_all_principal_payloads() {
         let runtime = RouteRuntime::default();
         let mut state = ReviewState::default();
         let owner = PrincipalId::parse("11111111-1111-4111-8111-111111111111").unwrap();
         let peer = PrincipalId::parse("22222222-2222-4222-8222-222222222222").unwrap();
-        let old = runtime.disclosure_fence(owner);
+        let old = runtime
+            .disclosure_fence(owner)
+            .with_token(runtime.task_disclosure_token(owner, "task-fixture"));
+        let independent = runtime
+            .disclosure_fence(owner)
+            .with_token(runtime.task_disclosure_token(owner, "task-b"));
         let other = runtime.disclosure_fence(peer);
         runtime.cancel_task(&mut state, owner, "task-fixture");
         assert!(!old.is_current());
+        assert!(independent.is_current());
         assert!(other.is_current());
         let fresh = runtime.disclosure_fence(owner);
         assert!(fresh.is_current());
         assert!(!old.is_current());
         runtime.invalidate_principal(&mut state, owner);
         assert!(!fresh.is_current());
+        assert!(!independent.is_current());
         assert!(other.is_current());
     }
 }

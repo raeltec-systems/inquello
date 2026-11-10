@@ -146,7 +146,7 @@ function harness(options: { runtime?: (method: string, params: Record<string, un
     taskFolders: options.taskFolders ?? null,
     sandboxProbeTarget: null,
   });
-  return { policy, calls, serviceCalls, identity };
+  return { policy, calls, serviceCalls, identity, runtime };
 }
 
 describe('policy views', () => {
@@ -610,4 +610,66 @@ describe('post-dispatch uncertainty preserves effects and private outputs', () =
       expect(h.state.commands).toHaveLength(1);
     });
   }
+});
+
+
+describe('settings scope fences', () => {
+  it.each(['principal', 'runtime', 'invalidation'] as const)('discards all workspace labels when %s changes during a policy read', async change => {
+    let release!: (value: InquelloPolicyEffectiveResponse) => void;
+    const pending = new Promise<InquelloPolicyEffectiveResponse>(resolve => { release = resolve; });
+    const h = harness({ runtime: () => pending });
+    const reading = h.policy.settings();
+    await vi.waitFor(() => expect(h.calls.length).toBeGreaterThan(0));
+    if (change === 'principal') h.identity.principal = '22222222-2222-4222-8222-222222222222';
+    if (change === 'runtime') h.runtime.instance = () => 'replacement-runtime';
+    if (change === 'invalidation') h.policy.invalidateSettings();
+    release(response());
+    expect(await reading).toMatchObject({ workspaces: [], capabilities: DEFAULT_CAPABILITIES });
+  });
+
+  it('keeps overlapping transitions blocked until each exact token settles', async () => {
+    const h = harness();
+    const identity = h.policy.beginSettingsTransition();
+    const runtime = h.policy.beginSettingsTransition();
+    expect(h.policy.endSettingsTransition(identity)).toBe(false);
+    expect(h.policy.endSettingsTransition(identity)).toBe(false);
+    expect(h.policy.invalidateSettings()).toBe(false);
+    expect(await h.policy.settings()).toMatchObject({ workspaces: [] });
+    expect(h.calls).toHaveLength(0);
+    expect(h.policy.endSettingsTransition(runtime)).toBe(true);
+    expect((await h.policy.settings()).workspaces).toHaveLength(1);
+  });
+
+  it('does not disclose settings after a settled but failed runtime restart', async () => {
+    const h = harness();
+    const token = h.policy.beginSettingsTransition();
+    h.runtime.ready = () => false;
+    expect(h.policy.endSettingsTransition(token)).toBe(true);
+    expect(await h.policy.settings()).toMatchObject({ workspaces: [] });
+    expect(h.calls).toHaveLength(0);
+  });
+});
+
+
+describe('concurrent authority observation ordering',()=>{
+  const view=(revision:string):ExecutionPolicyView=>({workspace_id:WORKSPACE,authorization_epoch:'9',policy_revision:revision,execution:null});
+  const deferred=()=>{let resolve!:(value:ExecutionPolicyView)=>void,reject!:(error:Error)=>void;const promise=new Promise<ExecutionPolicyView>((yes,no)=>{resolve=yes;reject=no;});return{promise,resolve,reject};};
+  it('rejects a lower local revision without poisoning a newer in-flight decision',async()=>{
+    const old=deferred(),newer=deferred(),last=deferred();const queue=[old,newer,last];
+    const h=harness({service:{executionPolicy:async()=>queue.shift()!.promise}});
+    const a=h.policy.startPolicy(WORKSPACE),b=h.policy.startPolicy(WORKSPACE),c=h.policy.startPolicy(WORKSPACE);
+    newer.resolve(view('5'));expect((await b)?.policyRevision).toBe(5);old.resolve(view('4'));expect(await a).toBeNull();last.resolve(view('5'));expect((await c)?.policyRevision).toBe(5);
+  });
+  it.each(['denied','transport'] as const)('a genuinely late %s still invalidates an overlapping allowed response',async kind=>{
+    const old=deferred(),newer=deferred(),last=deferred();const queue=[old,newer,last];
+    const h=harness({service:{executionPolicy:async()=>queue.shift()!.promise}});
+    const a=h.policy.startPolicy(WORKSPACE),b=h.policy.startPolicy(WORKSPACE),c=h.policy.startPolicy(WORKSPACE);
+    newer.resolve(view('5'));expect((await b)?.policyRevision).toBe(5);old.reject(new ServiceError(kind,true));expect(await a).toBeNull();last.resolve(view('5'));expect(await c).toBeNull();
+  });
+  it('does not cascade invalidation when an already-superseded response settles',async()=>{
+    const denied=deferred(),old=deferred(),fresh=deferred();const queue=[denied,old,fresh];
+    const h=harness({service:{executionPolicy:async()=>queue.shift()!.promise}});
+    const a=h.policy.startPolicy(WORKSPACE),b=h.policy.startPolicy(WORKSPACE);denied.reject(new ServiceError('denied',true));expect(await a).toBeNull();
+    const c=h.policy.startPolicy(WORKSPACE);old.resolve(view('5'));expect(await b).toBeNull();fresh.resolve(view('5'));expect((await c)?.policyRevision).toBe(5);
+  });
 });

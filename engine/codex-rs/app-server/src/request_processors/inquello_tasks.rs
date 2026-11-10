@@ -4,7 +4,9 @@ use super::*;
 use codex_app_server_protocol::*;
 use codex_core::inquello_inference::{AttemptContext, TaskAuthorization, TaskAuthorizationContext};
 use codex_protocol::error::{CodexErr, Result as CoreResult};
-use inquello_domain::routes::{self, RouteStore};
+use inquello_domain::routes;
+#[cfg(all(feature = "inference-fixtures", debug_assertions))]
+use inquello_domain::routes::RouteStore;
 use inquello_domain::tasks::{
     NativeTaskDataTier, StartTaskIntent, TaskReservationError, TaskRunBinding, TaskRunStatus,
     TaskRunStore, TaskSetupFailure,
@@ -26,6 +28,83 @@ pub(super) struct SessionBinding {
     real: Option<RealSession>,
     pub(super) cancellation: CancellationToken,
 }
+fn recovery_binding_matches(
+    existing: Option<&SessionBinding>,
+    principal: PrincipalId,
+    workspace: &str,
+    root: &std::path::Path,
+    real: Option<&RealSession>,
+) -> bool {
+    existing.is_none_or(|binding| {
+        binding.principal == principal
+            && binding.workspace == workspace
+            && binding.root == root
+            && binding.real.is_some() == real.is_some()
+            && (binding.cancellation.is_cancelled() || binding.real.as_ref() == real)
+    })
+}
+
+// A changed observation is not a revoked session. Neither case may publish the
+// old payload, but only genuine authority/binding loss invalidates private scope.
+#[derive(Clone, Copy, Debug)]
+enum ProgressReadGateSite {
+    BeforeCache,
+    BeforeSnapshot,
+    FinalDisclosure,
+}
+
+fn progress_read_gate_diagnostic(site: ProgressReadGateSite, snapshot_changed: bool) {
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    eprintln!(
+        "[inquello] progress-read gate: {site:?}/{}",
+        if snapshot_changed {
+            "snapshot"
+        } else {
+            "authority"
+        }
+    );
+    #[cfg(not(all(feature = "inference-fixtures", debug_assertions)))]
+    let _ = (site, snapshot_changed);
+}
+
+fn check_progress_read_binding(
+    site: ProgressReadGateSite,
+    session_current: bool,
+    actor_current: bool,
+    policy_current: bool,
+    expected: &TaskRunBinding,
+    current: Option<&TaskRunBinding>,
+) -> Result<(), JSONRPCErrorError> {
+    let current = current.filter(|current| {
+        session_current
+            && actor_current
+            && policy_current
+            && current.runtime_id == expected.runtime_id
+            && current.task_id == expected.task_id
+            && current.principal_id == expected.principal_id
+            && current.workspace_id == expected.workspace_id
+            && current.thread_id == expected.thread_id
+            && current.route_id == expected.route_id
+            && current.configuration_revision == expected.configuration_revision
+            && current.choices == expected.choices
+    });
+    let Some(current) = current else {
+        progress_read_gate_diagnostic(site, false);
+        return Err(refusal(
+            "stale",
+            "Private progress authority or binding changed",
+        ));
+    };
+    if current != expected {
+        progress_read_gate_diagnostic(site, true);
+        return Err(refusal(
+            "stale_snapshot",
+            "Task observation changed before progress disclosure; read current progress",
+        ));
+    }
+    Ok(())
+}
+
 impl InquelloRequestProcessor {
     pub(crate) fn with_task_config(mut self, config: super::super::ConfigRequestProcessor) -> Self {
         self.task_config = Some(config);
@@ -98,6 +177,18 @@ impl InquelloRequestProcessor {
         params: InquelloTasksBootstrapParams,
     ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
         let bootstrap_generation = self.begin_task_bootstrap(connection)?;
+        let recovery_authority_generation = if params.recovery_only {
+            Some(
+                *self
+                    .authority_generations
+                    .lock()
+                    .map_err(|_| refusal("authority_unknown", "Authority fence unavailable"))?
+                    .entry(connection)
+                    .or_insert(1),
+            )
+        } else {
+            None
+        };
         if let Some(value) = params.real_session.as_ref() {
             let real: RealSession = serde_json::from_value(value.clone()).map_err(|_| {
                 refusal(
@@ -141,6 +232,36 @@ impl InquelloRequestProcessor {
             }) || self.actor(connection)? != actor
             {
                 return Err(refusal("stale", "Session setup was superseded"));
+            }
+            // Recovery cannot switch an active workspace/session or data tier.
+            // Hold the authority generation through the local replacement commit.
+            let recovery_authority = if params.recovery_only {
+                Some(
+                    self.authority_generations
+                        .lock()
+                        .map_err(|_| refusal("authority_unknown", "Authority fence unavailable"))?,
+                )
+            } else {
+                None
+            };
+            if params.recovery_only
+                && (recovery_authority
+                    .as_ref()
+                    .and_then(|g| g.get(&connection))
+                    .copied()
+                    != recovery_authority_generation
+                    || !recovery_binding_matches(
+                        sessions.get(&connection),
+                        actor.principal_id,
+                        &params.workspace_id,
+                        &root,
+                        Some(&real),
+                    ))
+            {
+                return Err(refusal(
+                    "stale",
+                    "Explicit recovery cannot replace this private session",
+                ));
             }
             if sessions.get(&connection).is_some_and(|s| {
                 s.principal == actor.principal_id
@@ -203,6 +324,19 @@ impl InquelloRequestProcessor {
                     "Private store and authorized isolated session root do not match",
                 ));
             }
+            if params.recovery_only {
+                let outgoing = self
+                    .task_outgoing
+                    .as_ref()
+                    .ok_or_else(|| refusal("authority_unknown", "Current service unavailable"))?;
+                current_service_policy(
+                    outgoing,
+                    connection,
+                    &params.workspace_id,
+                    &CancellationToken::new(),
+                )
+                .await?;
+            }
             let mut sessions = self.task_sessions.lock().await;
             let generations = self
                 .task_bootstrap_generations
@@ -213,6 +347,36 @@ impl InquelloRequestProcessor {
             }) || self.actor(connection)? != actor
             {
                 return Err(refusal("stale", "Session setup was superseded"));
+            }
+            // Recovery cannot switch an active workspace/session or data tier.
+            // Hold the authority generation through the local replacement commit.
+            let recovery_authority = if params.recovery_only {
+                Some(
+                    self.authority_generations
+                        .lock()
+                        .map_err(|_| refusal("authority_unknown", "Authority fence unavailable"))?,
+                )
+            } else {
+                None
+            };
+            if params.recovery_only
+                && (recovery_authority
+                    .as_ref()
+                    .and_then(|g| g.get(&connection))
+                    .copied()
+                    != recovery_authority_generation
+                    || !recovery_binding_matches(
+                        sessions.get(&connection),
+                        actor.principal_id,
+                        &params.workspace_id,
+                        &root,
+                        None,
+                    ))
+            {
+                return Err(refusal(
+                    "stale",
+                    "Explicit recovery cannot replace this private session",
+                ));
             }
             if sessions.get(&connection).is_some_and(|old| {
                 old.principal == actor.principal_id
@@ -336,6 +500,10 @@ impl InquelloRequestProcessor {
             },
         })
     }
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "Keep the authority snapshot and local SQLite check/commit atomic with invalidation; provider and service network waits occur outside this guarded region."
+    )]
     async fn checked_candidate(
         &self,
         connection: ConnectionId,
@@ -371,18 +539,14 @@ impl InquelloRequestProcessor {
             .await?;
         let id = routes::RouteId::parse(&params.route_id)
             .ok_or_else(|| refusal("invalid", "Explicit configured route required"))?;
-        let (_, candidate) = store
-            .load_candidate_route(actor.principal_id, id)
-            .await
-            .map_err(|e| domain_error(DomainError::Store(e)))?;
-        let candidate = candidate
-            .filter(|c| c.revision.get() == params.configuration_revision)
-            .ok_or_else(|| {
-                refusal(
-                    "revision_conflict",
-                    "Route configuration changed; select and confirm current settings",
-                )
-            })?;
+        let candidate = routes::active_candidate(
+            &store,
+            actor,
+            id,
+            Revision::new(params.configuration_revision),
+        )
+        .await
+        .map_err(domain_error)?;
         let generation = self
             .routes
             .state
@@ -483,13 +647,16 @@ impl InquelloRequestProcessor {
             None
         };
         let state = self.routes.state.lock().await;
-        let (_, latest) = store
-            .load_candidate_route(actor.principal_id, id)
-            .await
-            .map_err(|e| domain_error(DomainError::Store(e)))?;
+        let current = routes::active_candidate(
+            &store,
+            actor,
+            id,
+            Revision::new(params.configuration_revision),
+        )
+        .await;
         if self.actor(connection)? != actor
             || session.cancellation.is_cancelled()
-            || latest.as_ref() != Some(&candidate)
+            || current.as_ref().ok() != Some(&candidate)
             || state.credential(actor.principal_id, &candidate.configuration) != Some(generation)
             || inherited.as_ref().is_some_and(|b| {
                 !self
@@ -652,10 +819,15 @@ impl InquelloRequestProcessor {
             )
             .await
             .map(|_| ());
-        if result.is_err() {
-            if let Ok(actor) = self.actor(connection) {
-                self.routes.invalidate_disclosure(actor.principal_id);
-            }
+        if result.is_err()
+            && let Ok(actor) = self.actor(connection)
+            && let Ok(store) = self.store().await
+            && let Ok(Some(run)) = store
+                .find_thread_run(actor.principal_id, &self.runtime_id, thread)
+                .await
+        {
+            self.routes
+                .invalidate_task_disclosure(actor.principal_id, &run.task_id);
         }
         result
     }
@@ -675,6 +847,10 @@ fn status_name(status: TaskRunStatus) -> &'static str {
 }
 
 impl InquelloRequestProcessor {
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "Keep the authority snapshot and local SQLite check/commit atomic with invalidation; provider and service network waits occur outside this guarded region."
+    )]
     pub(crate) async fn tasks_start(
         self: &Arc<Self>,
         connection: ConnectionId,
@@ -842,7 +1018,7 @@ impl InquelloRequestProcessor {
                         || self.actor(connection)? != actor
                         || session.cancellation.is_cancelled()
                         || !self
-                            .task_authority_current(actor.principal_id, &fresh, &device, &user)
+                            .task_authority_current(actor.principal_id, &fresh, device, user)
                             .await
                     {
                         return Err(refusal(
@@ -853,7 +1029,7 @@ impl InquelloRequestProcessor {
                     self.task_session(connection, actor, &intent.workspace_id)
                         .await?;
                     let state = self.routes.state.lock().await;
-                    if state.credential(actor.principal_id, &configuration) != Some(generation)
+                    if state.credential(actor.principal_id, configuration) != Some(generation)
                         || self.actor(connection)? != actor
                         || session.cancellation.is_cancelled()
                     {
@@ -892,6 +1068,8 @@ impl InquelloRequestProcessor {
         #[cfg(all(feature = "inference-fixtures", debug_assertions))]
         let fixture = self.task_fixtures.lock().await.get(&connection).cloned();
         let authorization = Arc::new(TaskGuard {
+            selection_revision: 1,
+            settings_revision: 1,
             execution_lifetime: CancellationToken::new(),
             #[cfg(all(feature = "inference-fixtures", debug_assertions))]
             fixture,
@@ -1100,6 +1278,8 @@ impl InquelloRequestProcessor {
     }
 }
 struct TaskGuard {
+    selection_revision: u64,
+    settings_revision: u64,
     execution_lifetime: CancellationToken,
     #[cfg(all(feature = "inference-fixtures", debug_assertions))]
     fixture: Option<TaskFixture>,
@@ -1116,9 +1296,71 @@ struct TaskGuard {
     defaults: usage::Choices,
     terminal: std::sync::atomic::AtomicBool,
     outgoing: Arc<crate::outgoing_message::OutgoingMessageSender>,
-    tools: tokio::sync::Mutex<HashMap<String, (String, std::time::Instant)>>,
+    /// Per call: its local-tool attempt, when it began, and whether that
+    /// attempt has been finalized.
+    tools: tokio::sync::Mutex<HashMap<String, (String, std::time::Instant, bool)>>,
 }
 impl TaskGuard {
+    async fn paid_profile_check(&self, reserve: bool) -> Result<bool, JSONRPCErrorError> {
+        let Some(profile) = paid_profile_config()? else {
+            return Ok(false);
+        };
+        let session = self
+            .processor
+            .task_session(self.connection, self.actor, &self.run.workspace_id)
+            .await?;
+        let store = self.processor.store().await?;
+        let inherited = self
+            .processor
+            .routes
+            .responses
+            .as_ref()
+            .ok_or_else(paid_refusal)?;
+        let account = inherited.auth_binding().map_err(|_| paid_refusal())?;
+        if account.mode != codex_protocol::auth::AuthMode::ApiKey
+            || !inherited.binding_current(&account)
+        {
+            poison_paid_session();
+            return Err(paid_refusal());
+        }
+        let marker =
+            std::fs::symlink_metadata(session.root.join(".inquello-fictional-audit-session"))
+                .map_err(|_| paid_refusal())?;
+        if session.real.is_some()
+            || session.root != profile.root
+            || !marker.is_file()
+            || marker.file_type().is_symlink()
+            || self.actor.principal_id.to_string() != profile.principal_id
+            || self.run.workspace_id != profile.workspace_id
+            || self.configuration.route_id().as_str() != "codex-responses"
+            || self.configuration.deployment() != "openai-api"
+            || self.configuration.endpoint() != "https://api.openai.com/v1/responses"
+            || self.configuration.model() != "gpt-6.1-terra"
+            || self.configuration.api_version() != "responses-v1"
+            || self.configuration.account_ref() != profile.account_ref
+            || self.run.choices.speed != "default"
+        {
+            poison_paid_session();
+            return Err(paid_refusal());
+        }
+        let scope = format!(
+            "{}|{}|{}|{}|{}|{:?}|{}",
+            profile.store_id,
+            store.path().display(),
+            profile.principal_id,
+            profile.workspace_id,
+            self.processor.runtime_id,
+            self.connection,
+            self.generation
+        );
+        PAID_SESSION_STATE
+            .get_or_init(Default::default)
+            .lock()
+            .map_err(|_| paid_refusal())?
+            .check(&scope, &self.run.run_id, reserve)
+            .map_err(|_| paid_refusal())?;
+        Ok(true)
+    }
     async fn disclosure_recheck(&self) -> Result<(), JSONRPCErrorError> {
         let result: Result<(), JSONRPCErrorError> = async {
             if self.cancellation.is_cancelled()
@@ -1158,7 +1400,7 @@ impl TaskGuard {
         if result.is_err() {
             self.processor
                 .routes
-                .invalidate_disclosure(self.actor.principal_id);
+                .invalidate_task_disclosure(self.actor.principal_id, &self.run.task_id);
             self.cancellation.cancel();
         }
         result
@@ -1168,12 +1410,17 @@ impl TaskGuard {
         if result.is_err() {
             self.processor
                 .routes
-                .invalidate_disclosure(self.actor.principal_id);
+                .invalidate_task_disclosure(self.actor.principal_id, &self.run.task_id);
             self.cancellation.cancel();
         }
         result
     }
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "Keep the authority snapshot and local SQLite check/commit atomic with invalidation; provider and service network waits occur outside this guarded region."
+    )]
     async fn recheck_inner(&self) -> Result<(), JSONRPCErrorError> {
+        self.paid_profile_check(false).await?;
         if self.cancellation.is_cancelled() || self.processor.actor(self.connection)? != self.actor
         {
             return Err(refusal("stale", "Private Task authorization was revoked"));
@@ -1272,7 +1519,7 @@ impl TaskGuard {
             .as_ref()
             .ok_or_else(|| refusal("route_unavailable", "Task route unavailable"))?;
         if route.stale_configuration
-            || route.revision.get() != 1
+            || route.revision.get() != self.selection_revision
             || selected.configuration != self.configuration
             || selected.configuration_revision.get() != self.run.configuration_revision
             || state.credential(self.actor.principal_id, &self.configuration)
@@ -1306,7 +1553,7 @@ impl TaskGuard {
             .map_err(domain_error)?
             .settings
             .ok_or_else(|| refusal("settings_unavailable", "Task settings unavailable"))?;
-        if settings.revision != 1 || settings.choices != self.run.choices {
+        if settings.revision != self.settings_revision || settings.choices != self.run.choices {
             return Err(refusal("stale", "Task settings changed"));
         }
         if self.cancellation.is_cancelled() || self.processor.actor(self.connection)? != self.actor
@@ -1322,6 +1569,10 @@ fn core_refusal(_: JSONRPCErrorError) -> CodexErr {
     )
 }
 impl TaskAuthorization for TaskGuard {
+    fn paid_qualification(&self) -> bool {
+        paid_profile_requested()
+    }
+
     fn execution_principal(&self) -> Option<String> {
         Some(self.actor.principal_id.to_string())
     }
@@ -1392,6 +1643,9 @@ impl TaskAuthorization for TaskGuard {
             if bound.run_id != self.run.run_id || bound.runtime_id != self.run.runtime_id {
                 return;
             }
+            // Before the run reads as terminal, so a terminal run never shows
+            // an open attempt.
+            self.finish_open_tool_attempts(&store).await;
             let Some(_thread) = bound.thread_id.as_deref() else {
                 self.processor
                     .routes
@@ -1474,6 +1728,7 @@ impl TaskAuthorization for TaskGuard {
                 .map_err(|_| {
                     CodexErr::Fatal("Private turn attribution could not be retained".into())
                 })?;
+            let paid_qualification = self.paid_profile_check(true).await.map_err(core_refusal)?;
             let attempt_id = uuid::Uuid::new_v4().to_string();
             let binding = inquello_protocol::inference::Binding {
                 schema_version: 1,
@@ -1489,7 +1744,7 @@ impl TaskAuthorization for TaskGuard {
                 authority_basis: self.run.operation_id.clone(),
                 authority_epoch: self.policy.authorization_epoch,
                 policy_revision: self.policy.policy_revision,
-                route_revision: 1,
+                route_revision: self.selection_revision,
                 credential_generation: self.generation,
             };
             let effective = usage::Choices {
@@ -1516,8 +1771,8 @@ impl TaskAuthorization for TaskGuard {
                     model: Some(binding.model.clone()),
                     api_version: Some(binding.api_version.clone()),
                     configuration_revision: self.run.configuration_revision,
-                    route_revision: 1,
-                    settings_revision: 1,
+                    route_revision: self.selection_revision,
+                    settings_revision: self.settings_revision,
                     requested: self.run.choices.clone(),
                     effective,
                     started_at_ms: SystemClock.now().unix_millis(),
@@ -1575,7 +1830,8 @@ impl TaskAuthorization for TaskGuard {
             Ok(AttemptContext {
                 binding,
                 auth: Some(self.processor.routes.auth.clone()),
-                max_output_tokens: 4096,
+                max_output_tokens: if paid_qualification { 1024 } else { 4096 },
+                paid_qualification,
                 completed_tool_call_ids: Vec::new(),
                 events,
                 cancellation: self.cancellation.clone(),
@@ -1590,6 +1846,11 @@ impl TaskAuthorization for TaskGuard {
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = CoreResult<()>> + Send + 'a>> {
         Box::pin(async move {
             self.recheck().await.map_err(core_refusal)?;
+            if paid_profile_requested() {
+                return Err(CodexErr::Fatal(
+                    "Tools are disabled for the controlled fictional session".into(),
+                ));
+            }
             if !matches!(
                 name,
                 "exec_command" | "inquello_progress" | "request_user_input"
@@ -1612,10 +1873,41 @@ impl TaskAuthorization for TaskGuard {
                     }
                 }
             }
+            #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+            if name == "inquello_progress" && call_id == "publish_initial" {
+                if let Some(fixture) = self
+                    .fixture
+                    .as_ref()
+                    .filter(|f| f.hold_progress_publication)
+                {
+                    let observed = async {
+                        loop {
+                            if fixture.progress_observed_run.lock().await.as_deref()
+                                == Some(self.run.run_id.as_str())
+                            {
+                                break;
+                            }
+                            fixture.progress_observed.notified().await;
+                        }
+                    };
+                    tokio::select! {
+                        _ = self.cancellation.cancelled() => return Err(CodexErr::Fatal("Fixture publication cancelled".into())),
+                        result = tokio::time::timeout(std::time::Duration::from_secs(30), observed) => {
+                            result.map_err(|_| CodexErr::Fatal("Fixture requires observed live command before publication".into()))?;
+                        }
+                    }
+                    // A fixture synchronization point is never a grant.
+                    self.recheck().await.map_err(core_refusal)?;
+                }
+            }
             let _ = (arguments, call_id); // Native handler validates schema and resolves argv.
             Ok(())
         })
     }
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "Serialize per-call accounting and its local SQLite commit; provider/service rechecks remain outside the accounting guard."
+    )]
     fn before_command<'a>(
         &'a self,
         command: &'a [String],
@@ -1644,7 +1936,7 @@ impl TaskAuthorization for TaskGuard {
                 .map_err(|_| CodexErr::Fatal("Linux Task root unavailable".into()))?
             } else {
                 codex_utils_path_uri::PathUri::from_abs_path(
-                    &codex_utils_absolute_path::AbsolutePathBuf::try_from(root)
+                    &codex_utils_absolute_path::AbsolutePathBuf::try_from(root.clone())
                         .map_err(|_| CodexErr::Fatal("Task root unavailable".into()))?,
                 )
             };
@@ -1670,7 +1962,16 @@ impl TaskAuthorization for TaskGuard {
                 &self.device,
                 &self.user,
                 &self.run.task_id,
-                &command,
+                command,
+                // The runtime runs it in the Task root checked above: on
+                // Windows that is the Task's Linux guest, resolved there
+                // through the Task's retained executor channel.
+                private_task_placement(
+                    self.processor.exec_lookup(Some(root.as_path())),
+                    &session.root.join("tasks"),
+                    &self.actor.principal_id.to_string(),
+                    &self.run.task_id,
+                ),
             )
             .await
             .map_err(core_refusal)?;
@@ -1705,7 +2006,7 @@ impl TaskAuthorization for TaskGuard {
                     .outgoing
                     .send_request_to_connections(Some(&[self.connection]), payload, Some(thread_id))
                     .await;
-                let response = tokio::select! {biased;_=self.cancellation.cancelled()=>None,result=tokio::time::timeout(std::time::Duration::from_secs(120),response)=>result.ok().and_then(|r|r.ok()).and_then(|r|r.ok())};
+                let response = tokio::select! {biased;_=self.cancellation.cancelled()=>None,result=tokio::time::timeout(std::time::Duration::from_secs(120),response)=>result.ok().and_then(std::result::Result::ok).and_then(std::result::Result::ok)};
                 self.outgoing.cancel_request(&id).await;
                 if response
                     .as_ref()
@@ -1719,37 +2020,39 @@ impl TaskAuthorization for TaskGuard {
                 }
             }
             self.recheck().await.map_err(core_refusal)?;
-            let mut tools = self.tools.lock().await;
-            if tools.contains_key(call_id) {
-                return Err(CodexErr::Fatal(
-                    "Private tool call has already been dispatched; no retry".into(),
-                ));
+            {
+                let mut tools = self.tools.lock().await;
+                if tools.contains_key(call_id) {
+                    return Err(CodexErr::Fatal(
+                        "Private tool call has already been dispatched; no retry".into(),
+                    ));
+                }
+                let attempt_id = uuid::Uuid::new_v4().to_string();
+                store
+                    .begin_usage_attempt(usage::AttemptSnapshot {
+                        attempt_id: attempt_id.clone(),
+                        task_id: self.run.task_id.clone(),
+                        principal_id: self.actor.principal_id.to_string(),
+                        run_id: self.run.run_id.clone(),
+                        runtime_id: self.processor.runtime_id.clone(),
+                        operation_kind: usage::OperationKind::LocalTool,
+                        route_id: Some(self.run.route_id.clone()),
+                        model: Some(self.configuration.model().into()),
+                        api_version: Some(self.configuration.api_version().into()),
+                        configuration_revision: self.run.configuration_revision,
+                        route_revision: self.selection_revision,
+                        settings_revision: self.settings_revision,
+                        requested: self.run.choices.clone(),
+                        effective: self.run.choices.clone(),
+                        started_at_ms: SystemClock.now().unix_millis(),
+                    })
+                    .await
+                    .map_err(|_| CodexErr::Fatal("Private tool accounting unavailable".into()))?;
+                tools.insert(
+                    call_id.into(),
+                    (attempt_id.clone(), std::time::Instant::now(), false),
+                );
             }
-            let attempt_id = uuid::Uuid::new_v4().to_string();
-            store
-                .begin_usage_attempt(usage::AttemptSnapshot {
-                    attempt_id: attempt_id.clone(),
-                    task_id: self.run.task_id.clone(),
-                    principal_id: self.actor.principal_id.to_string(),
-                    run_id: self.run.run_id.clone(),
-                    runtime_id: self.processor.runtime_id.clone(),
-                    operation_kind: usage::OperationKind::LocalTool,
-                    route_id: Some(self.run.route_id.clone()),
-                    model: Some(self.configuration.model().into()),
-                    api_version: Some(self.configuration.api_version().into()),
-                    configuration_revision: self.run.configuration_revision,
-                    route_revision: 1,
-                    settings_revision: 1,
-                    requested: self.run.choices.clone(),
-                    effective: self.run.choices.clone(),
-                    started_at_ms: SystemClock.now().unix_millis(),
-                })
-                .await
-                .map_err(|_| CodexErr::Fatal("Private tool accounting unavailable".into()))?;
-            tools.insert(
-                call_id.into(),
-                (attempt_id.clone(), std::time::Instant::now()),
-            );
             if let Err(error) = self.recheck().await {
                 // Registry awaits this handler and finalizes the inserted attempt once.
                 return Err(core_refusal(error));
@@ -1757,16 +2060,23 @@ impl TaskAuthorization for TaskGuard {
             Ok(())
         })
     }
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "Serialize per-call accounting and its local SQLite commit; provider/service rechecks remain outside the accounting guard."
+    )]
     fn after_tool<'a>(
         &'a self,
         call_id: &'a str,
         success: bool,
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>> {
         Box::pin(async move {
-            let tools = self.tools.lock().await;
-            let Some((id, began)) = tools.get(call_id) else {
+            let mut tools = self.tools.lock().await;
+            let Some((id, began, finished)) = tools.get_mut(call_id) else {
                 return;
             }; // Shape/permission refusal never created accounting.
+            if *finished {
+                return;
+            }
             let Ok(store) = self.processor.store().await else {
                 self.processor
                     .routes
@@ -1807,8 +2117,47 @@ impl TaskAuthorization for TaskGuard {
                     .routes
                     .invalidate_disclosure(self.actor.principal_id);
                 self.cancellation.cancel();
+            } else {
+                *finished = true;
             }
         })
+    }
+}
+
+impl TaskGuard {
+    /// Closes local-tool attempts whose handler never reached `after_tool`:
+    /// an interrupted turn aborts a running handler, so its attempt would
+    /// stay open. The process may already have had effects, so the attempt
+    /// is `uncertain`, never completed. A finalization that already won the
+    /// race is left as recorded (storage refuses terminal rewrites).
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "Serialize per-call accounting and its local SQLite commit with after_tool; no provider or service wait happens under the accounting guard."
+    )]
+    async fn finish_open_tool_attempts(&self, store: &SqliteWorkingStore) {
+        let Ok(task) = TaskId::parse(&self.run.task_id) else {
+            return;
+        };
+        let mut tools = self.tools.lock().await;
+        for (id, began, finished) in tools.values_mut().filter(|(_, _, finished)| !*finished) {
+            let closed = store
+                .finish_usage_attempt(
+                    self.actor.principal_id,
+                    task,
+                    id,
+                    usage::FinishAttempt {
+                        status: usage::AttemptStatus::Uncertain,
+                        ended_at_ms: SystemClock.now().unix_millis(),
+                        elapsed_ms: began.elapsed().as_millis().try_into().unwrap_or(u64::MAX),
+                        output_ref: None,
+                    },
+                )
+                .await;
+            if let Err(error) = closed {
+                tracing::warn!("open private tool attempt not finalized at turn end: {error}");
+            }
+            *finished = true;
+        }
     }
 }
 
@@ -1998,17 +2347,19 @@ impl InquelloRequestProcessor {
             .ok_or_else(|| refusal("not_found", "Private Task/thread ownership required"))?;
         self.require_task_thread(connection, thread).await?;
         if method == "turn/interrupt" {
+            // The bound creator's interruption is not revocation. Like
+            // `inquello/tasks/stop` it only interrupts the native turn, which
+            // ends as TurnAborted (cancelled) and answers this request. It
+            // must not cancel the Task's authorization (`routes.cancel_task`):
+            // a cancelled authorization fails every later disclosure check,
+            // so the TurnAborted that answers the interrupt would never be
+            // delivered and the request would hang.
             let (store, actor) = self.context(connection).await?;
-            let run = store
+            store
                 .find_thread_run(actor.principal_id, &self.runtime_id, thread)
                 .await
                 .map_err(domain_error)?
                 .ok_or_else(|| refusal("not_found", "Private Task binding unavailable"))?;
-            self.routes.cancel_task(
-                &mut *self.routes.state.lock().await,
-                actor.principal_id,
-                &run.task_id,
-            );
         }
         Ok(Some(thread.into()))
     }
@@ -2020,6 +2371,136 @@ mod tests {
     const PRINCIPAL: &str = "11111111-1111-4111-8111-111111111111";
     const WORKSPACE: &str = "5d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e";
     const CONNECTION: ConnectionId = ConnectionId(81);
+    fn progress_binding_fixture() -> TaskRunBinding {
+        TaskRunBinding {
+            operation_id: "operation-1".into(),
+            task_id: "task-1".into(),
+            run_id: "run-1".into(),
+            principal_id: PRINCIPAL.into(),
+            workspace_id: WORKSPACE.into(),
+            runtime_id: "runtime-1".into(),
+            thread_id: Some("thread-1".into()),
+            turn_id: Some("turn-1".into()),
+            status: TaskRunStatus::Running,
+            route_id: "claude-api-key".into(),
+            configuration_revision: 1,
+            choices: usage::Choices {
+                reasoning: "default".into(),
+                speed: "default".into(),
+            },
+            setup_failure: None,
+        }
+    }
+
+    #[test]
+    fn progress_read_status_and_run_evolution_refuse_only_the_snapshot() {
+        let expected = progress_binding_fixture();
+        assert!(
+            check_progress_read_binding(
+                ProgressReadGateSite::BeforeSnapshot,
+                true,
+                true,
+                true,
+                &expected,
+                Some(&expected)
+            )
+            .is_ok()
+        );
+        let mut completed = expected.clone();
+        completed.status = TaskRunStatus::Completed;
+        let mut resumed = expected.clone();
+        resumed.operation_id = "operation-2".into();
+        resumed.run_id = "run-2".into();
+        resumed.turn_id = Some("turn-2".into());
+        for current in [completed, resumed] {
+            let error = check_progress_read_binding(
+                ProgressReadGateSite::BeforeSnapshot,
+                true,
+                true,
+                true,
+                &expected,
+                Some(&current),
+            )
+            .unwrap_err();
+            assert_eq!(error.data.unwrap()["inquello"]["kind"], "stale_snapshot");
+        }
+    }
+
+    #[test]
+    fn progress_read_authority_loss_is_strict_even_when_the_snapshot_changed() {
+        let expected = progress_binding_fixture();
+        let mut current = expected.clone();
+        current.status = TaskRunStatus::Completed;
+        for (session, actor, policy) in [
+            (false, true, true),
+            (true, false, true),
+            (true, true, false),
+        ] {
+            let error = check_progress_read_binding(
+                ProgressReadGateSite::BeforeSnapshot,
+                session,
+                actor,
+                policy,
+                &expected,
+                Some(&current),
+            )
+            .unwrap_err();
+            assert_eq!(error.data.unwrap()["inquello"]["kind"], "stale");
+        }
+        let error = check_progress_read_binding(
+            ProgressReadGateSite::BeforeSnapshot,
+            true,
+            true,
+            true,
+            &expected,
+            None,
+        )
+        .unwrap_err();
+        assert_eq!(error.data.unwrap()["inquello"]["kind"], "stale");
+    }
+
+    #[test]
+    fn progress_read_foreign_or_changed_authorization_binding_is_not_snapshot_churn() {
+        let expected = progress_binding_fixture();
+        let mut cases = Vec::new();
+        let mut value = expected.clone();
+        value.runtime_id = "other-runtime".into();
+        cases.push(value);
+        let mut value = expected.clone();
+        value.task_id = "other-task".into();
+        cases.push(value);
+        let mut value = expected.clone();
+        value.principal_id = "other-principal".into();
+        cases.push(value);
+        let mut value = expected.clone();
+        value.workspace_id = "other-workspace".into();
+        cases.push(value);
+        let mut value = expected.clone();
+        value.thread_id = Some("other-thread".into());
+        cases.push(value);
+        let mut value = expected.clone();
+        value.route_id = "codex-responses".into();
+        cases.push(value);
+        let mut value = expected.clone();
+        value.configuration_revision = 2;
+        cases.push(value);
+        let mut value = expected.clone();
+        value.choices.reasoning = "high".into();
+        cases.push(value);
+        for current in cases {
+            let error = check_progress_read_binding(
+                ProgressReadGateSite::BeforeSnapshot,
+                true,
+                true,
+                true,
+                &expected,
+                Some(&current),
+            )
+            .unwrap_err();
+            assert_eq!(error.data.unwrap()["inquello"]["kind"], "stale");
+        }
+    }
+
     fn policy() -> InquelloWorkspaceExecutionPolicy {
         InquelloWorkspaceExecutionPolicy {
             workspace_id: WORKSPACE.into(),
@@ -2041,6 +2522,186 @@ mod tests {
             .expect("bind actor");
         processor
     }
+
+    async fn private_fence_fixture() -> InquelloRequestProcessor {
+        let processor = signed_in(PathBuf::from("unused-private-fence-fixture.sqlite")).await;
+        let actor = processor.actor(CONNECTION).expect("actor");
+        processor.task_sessions.lock().await.insert(
+            CONNECTION,
+            SessionBinding {
+                principal: actor.principal_id,
+                workspace: WORKSPACE.into(),
+                root: PathBuf::from("unused-private-fence-fixture"),
+                real: None,
+                cancellation: CancellationToken::new(),
+            },
+        );
+        processor
+    }
+
+    async fn assert_capture_waiting(future: &mut crate::outgoing_message::PrivateFenceFuture<'_>) {
+        std::future::poll_fn(|cx| {
+            assert!(
+                future.as_mut().poll(cx).is_pending(),
+                "contention must wait rather than fabricate revocation"
+            );
+            std::task::Poll::Ready(())
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "The owned guard deliberately blocks the competing future across a local barrier to verify revocation; no provider or service network I/O occurs."
+    )]
+    async fn private_fence_capture_waits_for_unchanged_session_reader() {
+        use crate::outgoing_message::PrivateThreadAuthority;
+        let processor = private_fence_fixture().await;
+        let sessions = processor.task_sessions.lock().await;
+        let session_token = sessions[&CONNECTION].cancellation.clone();
+        let mut capture = processor.capture_fence(CONNECTION);
+        assert_capture_waiting(&mut capture).await;
+        drop(sessions);
+        let fence = capture.await.expect("private fence");
+        assert!(fence.is_current());
+        session_token.cancel();
+        assert!(
+            !fence.is_current(),
+            "captured session revocation remains effective"
+        );
+    }
+
+    #[tokio::test]
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "The owned guard deliberately blocks the competing future across a local barrier to verify revocation; no provider or service network I/O occurs."
+    )]
+    async fn private_fence_capture_preserves_principal_revocation_while_waiting() {
+        use crate::outgoing_message::PrivateThreadAuthority;
+        let processor = private_fence_fixture().await;
+        let sessions = processor.task_sessions.lock().await;
+        let actor = processor.actor(CONNECTION).expect("actor");
+        let mut capture = processor.capture_fence(CONNECTION);
+        assert_capture_waiting(&mut capture).await;
+        processor.routes.invalidate_disclosure(actor.principal_id);
+        drop(sessions);
+        assert!(!capture.await.expect("private fence").is_current());
+        assert!(
+            processor
+                .capture_fence(CONNECTION)
+                .await
+                .expect("fresh request fence")
+                .is_current()
+        );
+    }
+
+    #[tokio::test]
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "The owned guard deliberately blocks the competing future across a local barrier to verify revocation; no provider or service network I/O occurs."
+    )]
+    async fn private_fence_capture_preserves_session_revocation_while_waiting() {
+        use crate::outgoing_message::PrivateThreadAuthority;
+        let processor = private_fence_fixture().await;
+        let sessions = processor.task_sessions.lock().await;
+        let mut capture = processor.capture_fence(CONNECTION);
+        assert_capture_waiting(&mut capture).await;
+        sessions[&CONNECTION].cancellation.cancel();
+        drop(sessions);
+        assert!(!capture.await.expect("private fence").is_current());
+        assert!(
+            !processor
+                .capture_fence(CONNECTION)
+                .await
+                .expect("still revoked")
+                .is_current()
+        );
+    }
+
+    #[tokio::test]
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "The owned guard deliberately blocks the competing future across a local barrier to verify revocation; no provider or service network I/O occurs."
+    )]
+    async fn private_fence_capture_rejects_identity_change_while_waiting() {
+        use crate::outgoing_message::PrivateThreadAuthority;
+        let processor = private_fence_fixture().await;
+        let sessions = processor.task_sessions.lock().await;
+        let mut capture = processor.capture_fence(CONNECTION);
+        assert_capture_waiting(&mut capture).await;
+        // Isolate the identity recheck from the additional cancellation performed
+        // by production set_principal; neither may be omitted by this capture.
+        processor.principals_guard().insert(
+            CONNECTION,
+            PrincipalId::parse("22222222-2222-4222-8222-222222222222").expect("other principal"),
+        );
+        drop(sessions);
+        assert!(
+            !capture
+                .await
+                .expect("denied fence, never unfenced")
+                .is_current()
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "The owned guard deliberately blocks the competing future across a local barrier to verify revocation; no provider or service network I/O occurs."
+    )]
+    async fn private_fence_capture_timeout_remains_denied() {
+        use crate::outgoing_message::PrivateThreadAuthority;
+        let processor = private_fence_fixture().await;
+        let sessions = processor.task_sessions.lock().await;
+        let mut capture = processor.capture_fence(CONNECTION);
+        assert_capture_waiting(&mut capture).await;
+        tokio::time::advance(std::time::Duration::from_secs(5)).await;
+        assert!(
+            !capture
+                .await
+                .expect("timeout denies rather than unfences")
+                .is_current()
+        );
+        drop(sessions);
+        assert!(
+            processor
+                .capture_fence(CONNECTION)
+                .await
+                .expect("fresh capture")
+                .is_current()
+        );
+    }
+
+    #[tokio::test]
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "The owned guard deliberately blocks the competing future across a local barrier to verify revocation; no provider or service network I/O occurs."
+    )]
+    async fn private_fence_capture_replacement_keeps_old_generation_revoked() {
+        use crate::outgoing_message::PrivateThreadAuthority;
+        let processor = private_fence_fixture().await;
+        let mut sessions = processor.task_sessions.lock().await;
+        let old = sessions[&CONNECTION].cancellation.clone();
+        let actor = processor.actor(CONNECTION).expect("actor");
+        let mut capture = processor.capture_fence(CONNECTION);
+        assert_capture_waiting(&mut capture).await;
+        // Same-principal replacement follows production bootstrap invalidation.
+        processor.routes.invalidate_disclosure(actor.principal_id);
+        old.cancel();
+        sessions.get_mut(&CONNECTION).unwrap().cancellation = CancellationToken::new();
+        drop(sessions);
+        assert!(!capture.await.expect("old generation").is_current());
+        assert!(
+            processor
+                .capture_fence(CONNECTION)
+                .await
+                .expect("new generation")
+                .is_current()
+        );
+        assert!(old.is_cancelled());
+    }
+
     #[test]
     fn start_wire_rejects_renderer_thread_and_classification_and_redacts_debug() {
         let base = json!({"operationId":uuid::Uuid::new_v4().to_string(),"workspaceId":WORKSPACE,"engagementId":null,"folderId":null,
@@ -2186,7 +2847,7 @@ async fn current_service_policy(
         outgoing: outgoing.clone(),
         id: Some(id.clone()),
     };
-    let result = tokio::select! {biased;_=cancellation.cancelled()=>None,result=tokio::time::timeout(std::time::Duration::from_secs(15),response)=>result.ok().and_then(|r|r.ok()).and_then(|r|r.ok())};
+    let result = tokio::select! {biased;_=cancellation.cancelled()=>None,result=tokio::time::timeout(std::time::Duration::from_secs(15),response)=>result.ok().and_then(std::result::Result::ok).and_then(std::result::Result::ok)};
     outgoing.cancel_request(&id).await;
     cleanup.id = None;
     let result: InquelloTaskAuthorityResponse = result
@@ -2242,6 +2903,13 @@ impl InquelloRequestProcessor {
         }
         self.observe_review_authority(connection, &params.workspace_policy, &device, &user)
             .await?;
+        // The runtime runs the command in the private Task root; without a
+        // bound session a relative program stays unresolved (never allowed).
+        let run_root = self
+            .task_session(connection, actor, &task.workspace_id.to_string())
+            .await
+            .ok()
+            .map(|session| session.root.join("tasks").join(&params.task_id));
         let evaluated = evaluate_task_command(
             &store,
             actor,
@@ -2250,6 +2918,15 @@ impl InquelloRequestProcessor {
             &user,
             &params.task_id,
             &params.command,
+            match &run_root {
+                Some(run_root) => private_task_placement(
+                    self.exec_lookup(Some(run_root.as_path())),
+                    run_root.parent().unwrap_or(run_root),
+                    &actor.principal_id.to_string(),
+                    &params.task_id,
+                ),
+                None => ExecPlacement::Host(self.exec_lookup(None)),
+            },
         )
         .await?;
         if evaluated.evaluation.decision == RuleDecision::Forbid || evaluated.evaluation.cannot_ask
@@ -2311,15 +2988,17 @@ fn create_private_task_folder(root: &std::path::Path, task: &str) -> Result<(), 
         root.join("tasks").join(task),
         root.join("tasks").join(task).join("output"),
     ] {
-        if let Ok(metadata) = std::fs::symlink_metadata(&directory) {
-            if !metadata.is_dir() || metadata.file_type().is_symlink() {
-                return Err(refusal(
-                    "task_folder_missing",
-                    "Private Task folder is not an isolated directory",
-                ));
-            }
+        if let Ok(metadata) = std::fs::symlink_metadata(&directory)
+            && (!metadata.is_dir() || metadata.file_type().is_symlink())
+        {
+            return Err(refusal(
+                "task_folder_missing",
+                "Private Task folder is not an isolated directory",
+            ));
         }
-        let mut builder = std::fs::DirBuilder::new();
+        let builder = std::fs::DirBuilder::new();
+        #[cfg(unix)]
+        let mut builder = builder;
         #[cfg(unix)]
         {
             use std::os::unix::fs::DirBuilderExt;
@@ -2366,14 +3045,89 @@ pub(super) struct TaskFixture {
     hold_ack_for_question: bool,
     question_checks: Arc<std::sync::atomic::AtomicUsize>,
     question_answered: Arc<tokio::sync::Notify>,
+    hold_progress_publication: bool,
+    progress_observed_run: Arc<tokio::sync::Mutex<Option<String>>>,
+    progress_observed: Arc<tokio::sync::Notify>,
     fail_before_sampling: bool,
     principal: PrincipalId,
     workspace: String,
     revision: u64,
+    additional_revisions: Vec<u64>,
+    root: PathBuf,
+    session_cancellation: CancellationToken,
     endpoint: String,
     certificate: Vec<u8>,
 }
 impl InquelloRequestProcessor {
+    pub(super) async fn task_route_fixture_available(&self, route: &routes::TaskRoute) -> bool {
+        #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+        {
+            let Some(selected) = route
+                .current
+                .as_ref()
+                .filter(|_| !route.stale_configuration)
+            else {
+                return false;
+            };
+            let config = &selected.configuration;
+            let matched = self.task_fixtures.lock().await.values().any(|fixture| {
+                fixture.principal == selected.principal_id
+                    && fixture.workspace == route.workspace_id.to_string()
+                    && !fixture.session_cancellation.is_cancelled()
+                    && fixture.route_id == config.route_id()
+                    && config.account_ref() == selected.principal_id.to_string()
+                    && (fixture.revision == selected.configuration_revision.get()
+                        || fixture
+                            .additional_revisions
+                            .contains(&selected.configuration_revision.get()))
+            });
+            if matched && let Ok(store) = self.store().await {
+                return store
+                    .task_data_tier(selected.principal_id, &route.task_id.to_string())
+                    .await
+                    .ok()
+                    .flatten()
+                    .as_deref()
+                    == Some("synthetic")
+                    && self
+                        .routes
+                        .state
+                        .lock()
+                        .await
+                        .credential(selected.principal_id, config)
+                        == Some(1);
+            }
+        }
+        let _ = route;
+        false
+    }
+
+    pub(super) async fn synthetic_binding_available(
+        &self,
+        connection: ConnectionId,
+        actor: Actor,
+        binding: &routes::ModelBinding,
+    ) -> bool {
+        #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+        {
+            let fixture = self.task_fixtures.lock().await.get(&connection).cloned();
+            if let Some(fixture) = fixture {
+                return binding.state == routes::ModelBindingState::Active
+                    && self
+                        .task_fixture_matches(
+                            connection,
+                            actor,
+                            &fixture.workspace,
+                            &binding.candidate.configuration,
+                            binding.candidate.revision.get(),
+                        )
+                        .await;
+            }
+        }
+        let _ = (connection, actor, binding);
+        false
+    }
+
     async fn task_fixture_matches(
         &self,
         connection: ConnectionId,
@@ -2390,9 +3144,10 @@ impl InquelloRequestProcessor {
                 .await
                 .get(&connection)
                 .is_some_and(|f| {
-                    f.principal == actor.principal_id
+                    !f.session_cancellation.is_cancelled()
+                        && f.principal == actor.principal_id
                         && f.workspace == workspace
-                        && f.revision == revision
+                        && (f.revision == revision || f.additional_revisions.contains(&revision))
                         && config.route_id() == f.route_id
                         && config.account_ref() == actor.principal_id.to_string()
                 });
@@ -2403,6 +3158,189 @@ impl InquelloRequestProcessor {
             false
         }
     }
+
+    /// Main-process debug harness proof only: no credential or caller verdict.
+    /// The ordinary runtime still owns classification, admission and inference.
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    pub(crate) async fn task_fixture_status(
+        &self,
+        connection: ConnectionId,
+        raw: Option<serde_json::Value>,
+    ) -> Result<serde_json::Value, JSONRPCErrorError> {
+        #[derive(serde::Deserialize)]
+        #[serde(rename_all = "camelCase", deny_unknown_fields)]
+        struct Input {
+            workspace_id: String,
+            route_id: String,
+            configuration_revision: u64,
+        }
+        let denied = || {
+            refusal(
+                "fixture_unavailable",
+                "Current owned synthetic fixture unavailable",
+            )
+        };
+        let input: Input = serde_json::from_value(raw.ok_or_else(denied)?).map_err(|_| denied())?;
+        let route_id = routes::RouteId::parse(&input.route_id).ok_or_else(denied)?;
+        let (store, actor) = self.context(connection).await?;
+        let fixture = self
+            .task_fixtures
+            .lock()
+            .await
+            .get(&connection)
+            .cloned()
+            .ok_or_else(denied)?;
+        // Quota is a native, connection-bound no-dispatch fixture, not a
+        // renderer assertion or a second transport. Its parent remains the
+        // original pinned pre-sampling synthetic Task session.
+        let quota = {
+            let state = self.routes.state.lock().await;
+            state
+                .usage_fixture
+                .as_ref()
+                .filter(|f| {
+                    route_id == routes::RouteId::CodexResponses
+                        && f.connection == connection
+                        && f.principal == actor.principal_id
+                        && f.provider_calls == 0
+                })
+                .map(|f| (f.task.clone(), f.route_revision))
+        };
+        let session = self
+            .task_session(connection, actor, &input.workspace_id)
+            .await?;
+        if fixture.principal != actor.principal_id
+            || fixture.workspace != input.workspace_id
+            || (quota.is_none()
+                && (!(fixture.revision == input.configuration_revision
+                    || fixture
+                        .additional_revisions
+                        .contains(&input.configuration_revision))
+                    || fixture.route_id != route_id))
+            || (quota.is_some()
+                && (fixture.route_id != routes::RouteId::ClaudeApiKey
+                    || !fixture.fail_before_sampling))
+            || fixture.session_cancellation.is_cancelled()
+            || session.real.is_some()
+            || session.root != fixture.root
+        {
+            return Err(denied());
+        }
+        let root = std::fs::canonicalize(&fixture.root).map_err(|_| denied())?;
+        let marker = std::fs::symlink_metadata(root.join(".inquello-fictional-audit-session"))
+            .map_err(|_| denied())?;
+        let store_parent = self
+            .store_path
+            .as_ref()
+            .and_then(|p| p.parent())
+            .and_then(|p| std::fs::canonicalize(p).ok())
+            .ok_or_else(denied)?;
+        if root != fixture.root
+            || !root.is_dir()
+            || !marker.is_file()
+            || marker.file_type().is_symlink()
+            || !store_parent.starts_with(&root)
+        {
+            return Err(denied());
+        }
+        match fixture.route_id {
+            routes::RouteId::ClaudeApiKey => {
+                inquello_adapters::anthropic::MessagesClient::fixture_from_der(
+                    &fixture.endpoint,
+                    &fixture.certificate,
+                )
+                .map_err(|_| denied())?;
+            }
+            routes::RouteId::CodexResponses => {
+                codex_core::inquello_inference::fixtures::validate_responses_transport(
+                    &fixture.endpoint,
+                    &fixture.certificate,
+                )
+                .map_err(|_| denied())?;
+            }
+        }
+        self.authorize_task_disclosure(connection, actor, &input.workspace_id)
+            .await?;
+        // Match route records and credential generation under the same route lock
+        // used by configuration, replacement and invalidation.
+        let state = self.routes.state.lock().await;
+        let candidate = store
+            .load_candidate_route_record(
+                actor.principal_id,
+                route_id,
+                Revision::new(input.configuration_revision),
+            )
+            .await
+            .map_err(|_| denied())?;
+        let candidate = candidate
+            .filter(|c| {
+                c.revision.get() == input.configuration_revision
+                    && c.configuration.account_ref() == actor.principal_id.to_string()
+            })
+            .ok_or_else(denied)?;
+        if let Some((task, revision)) = &quota {
+            let route = routes::task_route(&store, actor, task)
+                .await
+                .map_err(|_| denied())?;
+            let selected = route
+                .current
+                .as_ref()
+                .filter(|_| !route.stale_configuration)
+                .ok_or_else(denied)?;
+            if route.workspace_id.to_string() != input.workspace_id
+                || route.revision.get() != *revision
+                || selected.configuration_revision.get() != input.configuration_revision
+                || selected.configuration != candidate.configuration
+                || selected.configuration.route_id() != routes::RouteId::CodexResponses
+                || selected.configuration.deployment() != "openai-api"
+                || selected.configuration.model() != "fixture-model-20261030"
+                || selected.configuration.api_version() != "responses-v1"
+                || selected.configuration.region().is_some()
+                || store
+                    .task_data_tier(actor.principal_id, task)
+                    .await
+                    .map_err(|_| denied())?
+                    .as_deref()
+                    != Some("synthetic")
+                || !state.usage_fixture.as_ref().is_some_and(|f| {
+                    f.connection == connection
+                        && f.task == *task
+                        && f.principal == actor.principal_id
+                        && f.route_revision == *revision
+                        && f.provider_calls == 0
+                })
+            {
+                return Err(denied());
+            }
+        }
+        let current = self.task_fixtures.lock().await;
+        if self.actor(connection)? != actor
+            || session.cancellation.is_cancelled()
+            || fixture.session_cancellation.is_cancelled()
+            || !current.get(&connection).is_some_and(|f| {
+                f.principal == fixture.principal
+                    && f.workspace == fixture.workspace
+                    && f.route_id == fixture.route_id
+                    && f.revision == fixture.revision
+                    && f.root == fixture.root
+                    && !f.session_cancellation.is_cancelled()
+            })
+            || state.credential(actor.principal_id, &candidate.configuration) != Some(1)
+            || state.generations.get(&(actor.principal_id, route_id)) != Some(&1)
+            || state.credentials.len() != 1
+            || self
+                .routes
+                .responses
+                .as_ref()
+                .and_then(|r| r.provider.auth_manager())
+                .and_then(|a| a.auth_cached())
+                .is_some()
+        {
+            return Err(denied());
+        }
+        Ok(json!({"accepted":true}))
+    }
+
     /// Test transport configuration only. Never creates work or returns a response
     /// pretending to be a model; the normal tasks/start path runs the retained turn.
     #[cfg(all(feature = "inference-fixtures", debug_assertions))]
@@ -2427,6 +3365,8 @@ impl InquelloRequestProcessor {
             fail_before_sampling: bool,
             #[serde(default)]
             hold_ack_for_question: bool,
+            #[serde(default)]
+            hold_progress_publication: bool,
         }
         let input: Input = serde_json::from_value(
             raw.ok_or_else(|| refusal("fixture_unavailable", "Missing fixture parameters"))?,
@@ -2467,19 +3407,21 @@ impl InquelloRequestProcessor {
             }
         }
         let (store, actor) = self.context(connection).await?;
-        if self
+        let session = self
             .task_session(connection, actor, &input.workspace_id)
-            .await?
-            .real
-            .is_some()
-        {
+            .await?;
+        if session.real.is_some() {
             return Err(refusal(
                 "fixture_unavailable",
                 "Fixture refuses a real-data session",
             ));
         }
-        let (_, candidate) = store
-            .load_candidate_route(actor.principal_id, route_id)
+        let candidate = store
+            .load_candidate_route_record(
+                actor.principal_id,
+                route_id,
+                Revision::new(input.configuration_revision),
+            )
             .await
             .map_err(|e| domain_error(DomainError::Store(e)))?;
         let candidate = candidate
@@ -2494,9 +3436,55 @@ impl InquelloRequestProcessor {
                 )
             })?;
         let mut state = self.routes.state.lock().await;
-        if state
-            .credential(actor.principal_id, &candidate.configuration)
-            .is_some()
+        let mut fixtures = self.task_fixtures.lock().await;
+        if let Some(existing) = fixtures.get_mut(&connection) {
+            if existing.principal != actor.principal_id
+                || existing.workspace != input.workspace_id
+                || existing.route_id != route_id
+                || existing.root != session.root
+                || existing.endpoint != input.endpoint
+                || existing.certificate != input.certificate
+                || existing.fail_before_sampling != input.fail_before_sampling
+                || existing.hold_ack_for_question != input.hold_ack_for_question
+                || existing.hold_progress_publication != input.hold_progress_publication
+                || existing.session_cancellation.is_cancelled()
+                || session.cancellation.is_cancelled()
+                || state.credential(actor.principal_id, &candidate.configuration) != Some(1)
+                || self
+                    .routes
+                    .responses
+                    .as_ref()
+                    .and_then(|r| r.provider.auth_manager())
+                    .and_then(|a| a.auth_cached())
+                    .is_some()
+            {
+                return Err(refusal(
+                    "fixture_unavailable",
+                    "Existing owned fixture authority differs",
+                ));
+            }
+            if existing.revision != input.configuration_revision
+                && !existing
+                    .additional_revisions
+                    .contains(&input.configuration_revision)
+            {
+                if existing.additional_revisions.len() >= 8 {
+                    return Err(refusal(
+                        "fixture_unavailable",
+                        "Owned fixture binding limit",
+                    ));
+                }
+                existing
+                    .additional_revisions
+                    .push(input.configuration_revision);
+            }
+            return Ok(json!({"accepted":true,"providerCalls":0}));
+        }
+        if self.actor(connection)? != actor
+            || session.cancellation.is_cancelled()
+            || state
+                .credential(actor.principal_id, &candidate.configuration)
+                .is_some()
             || state
                 .generations
                 .contains_key(&(actor.principal_id, route_id))
@@ -2537,17 +3525,23 @@ impl InquelloRequestProcessor {
             (actor.principal_id.to_string(), 1),
         );
         state.generations.insert((actor.principal_id, route_id), 1);
-        self.task_fixtures.lock().await.insert(
+        fixtures.insert(
             connection,
             TaskFixture {
                 route_id,
                 hold_ack_for_question: input.hold_ack_for_question,
                 question_checks: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
                 question_answered: Arc::new(tokio::sync::Notify::new()),
+                hold_progress_publication: input.hold_progress_publication,
+                progress_observed_run: Arc::new(tokio::sync::Mutex::new(None)),
+                progress_observed: Arc::new(tokio::sync::Notify::new()),
                 fail_before_sampling: input.fail_before_sampling,
                 principal: actor.principal_id,
                 workspace: input.workspace_id,
                 revision: input.configuration_revision,
+                additional_revisions: Vec::new(),
+                root: session.root,
+                session_cancellation: session.cancellation,
                 endpoint: input.endpoint,
                 certificate: input.certificate,
             },
@@ -2796,6 +3790,8 @@ pub(super) struct ProgressCache {
     canonical: Arc<InquelloTasksProgressResponse>,
     bytes: usize,
     cancellation: CancellationToken,
+    // Keep the allocation identity reserved without keeping an unloaded runtime alive.
+    _live_runtime: Option<std::sync::Weak<codex_core::CodexThread>>,
 }
 
 impl ProgressCache {
@@ -2804,7 +3800,292 @@ impl ProgressCache {
     }
 }
 
+/// Ephemeral bounded activity only. Never written to rollout or used as an
+/// artifact/publication. Retained completed rows always take precedence.
+struct LiveProgressCommands {
+    display_incomplete: bool,
+    // Prevent allocator-address ABA across awaited identity checks.
+    runtime: Option<std::sync::Weak<codex_core::CodexThread>>,
+    fingerprint: String,
+    turn: String,
+    order: Vec<String>,
+    entries: Vec<ThreadItemEntry>,
+}
+
+#[derive(Clone, Copy, Debug, serde::Serialize)]
+enum LiveDisplayFailure {
+    ItemBound,
+    CanonicalOrderUnavailable,
+    CommandBound,
+    MessageBound,
+    ProjectionUnavailable,
+}
+
+fn live_display_refusal(_failure: LiveDisplayFailure) -> JSONRPCErrorError {
+    refusal(
+        "history_unavailable",
+        "Live activity display exceeds its safe projection",
+    )
+}
+
+type LiveDisplayProjection = (
+    Vec<String>,
+    Vec<ThreadItemEntry>,
+    Option<LiveDisplayFailure>,
+);
+
+/// These are local display constraints, never authentication/authorization errors.
+/// Recovering only a current status tuple does not authorize or disclose its text.
+fn bounded_live_display(
+    turn: &str,
+    items: &[ThreadItem],
+    order: Option<&[String]>,
+    messages: Option<Vec<ThreadItem>>,
+    activity_only: bool,
+) -> Result<LiveDisplayProjection, JSONRPCErrorError> {
+    let projected = (|| {
+        if items.len() > 4096 || items.iter().any(|item| item.id().len() > 128) {
+            return Err(LiveDisplayFailure::ItemBound);
+        }
+        let order = order.ok_or(LiveDisplayFailure::CanonicalOrderUnavailable)?;
+        if order.len() > 4096 || order.iter().any(|id| id.is_empty() || id.len() > 128) {
+            return Err(LiveDisplayFailure::CanonicalOrderUnavailable);
+        }
+        let mut entries = bounded_live_commands(turn, items)?;
+        let messages = messages.ok_or(LiveDisplayFailure::MessageBound)?;
+        entries.extend(messages.into_iter().map(|item| ThreadItemEntry {
+            turn_id: turn.to_owned(),
+            item,
+            started_at_ms: None,
+            completed_at_ms: None,
+        }));
+        Ok((order.to_vec(), entries))
+    })();
+    match projected {
+        Ok((order, entries)) => Ok((order, entries, None)),
+        Err(failure)
+            if activity_only && !matches!(failure, LiveDisplayFailure::ProjectionUnavailable) =>
+        {
+            // No partially accumulated items are disclosed on any bound failure.
+            Ok((Vec::new(), Vec::new(), Some(failure)))
+        }
+        Err(failure) => Err(live_display_refusal(failure)),
+    }
+}
+
+fn bounded_live_commands(
+    turn: &str,
+    items: &[ThreadItem],
+) -> Result<Vec<ThreadItemEntry>, LiveDisplayFailure> {
+    if items.len() > 100_000 {
+        return Err(LiveDisplayFailure::ItemBound);
+    }
+    let mut entries = Vec::new();
+    let mut bytes = 0usize;
+    for item in items {
+        let ThreadItem::CommandExecution {
+            id,
+            command,
+            status: CommandExecutionStatus::InProgress,
+            ..
+        } = item
+        else {
+            continue;
+        };
+        bytes = bytes.saturating_add(id.len()).saturating_add(command.len());
+        if id.is_empty()
+            || id.len() > 128
+            || command.len() > 16_384
+            || entries.len() >= 128
+            || bytes > 1_048_576
+        {
+            return Err(LiveDisplayFailure::CommandBound);
+        }
+        // Only fields consumed by the closed progress projector are copied.
+        // In particular, never clone arbitrary live output/model context.
+        let item = serde_json::from_value(json!({
+            "type":"commandExecution", "id":id, "command":command,
+            "cwd":"/", "processId":null, "status":"inProgress",
+            "commandActions":[], "aggregatedOutput":null, "exitCode":null, "durationMs":null
+        }))
+        .map_err(|_| LiveDisplayFailure::ProjectionUnavailable)?;
+        entries.push(ThreadItemEntry {
+            turn_id: turn.to_owned(),
+            item,
+            started_at_ms: None,
+            completed_at_ms: None,
+        });
+    }
+    Ok(entries)
+}
+
+fn merge_live_commands(
+    mut durable: Vec<ThreadItemEntry>,
+    live: Option<&LiveProgressCommands>,
+) -> Result<Vec<ThreadItemEntry>, JSONRPCErrorError> {
+    let Some(live) = live.filter(|live| !live.entries.is_empty()) else {
+        return Ok(durable);
+    };
+    let order: HashMap<&str, usize> = live
+        .order
+        .iter()
+        .enumerate()
+        .map(|(index, id)| (id.as_str(), index))
+        .collect();
+    if durable
+        .iter()
+        .any(|entry| entry.turn_id == live.turn && !order.contains_key(entry.item.id()))
+    {
+        // Persistence precedes listener delivery. Retry rather than manufacture
+        // chronology if a newly durable item has not reached the live listener.
+        return Err(refusal(
+            "stale_snapshot",
+            "Live listener has not caught up with retained output",
+        ));
+    }
+    let retained: std::collections::HashSet<_> = durable
+        .iter()
+        .map(|entry| (entry.turn_id.clone(), entry.item.id().to_owned()))
+        .collect();
+    durable.extend(
+        live.entries
+            .iter()
+            .filter(|entry| {
+                !retained.contains(&(entry.turn_id.clone(), entry.item.id().to_owned()))
+            })
+            .cloned(),
+    );
+    // Only the current turn receives transient additions. Older durable turns
+    // retain their original order; current rows follow actual listener order.
+    let mut current = Vec::new();
+    durable.retain(|entry| {
+        if entry.turn_id == live.turn {
+            current.push(entry.clone());
+            false
+        } else {
+            true
+        }
+    });
+    current.sort_by_key(|entry| order.get(entry.item.id()).copied());
+    durable.extend(current);
+    Ok(durable)
+}
+
+fn live_progress_scope_current(
+    same_runtime: bool,
+    run_running: bool,
+    listener_matches: bool,
+    expected_turn: &str,
+    actual_turn: &str,
+    turn_status: &TurnStatus,
+) -> bool {
+    same_runtime
+        && run_running
+        && listener_matches
+        && expected_turn == actual_turn
+        && matches!(turn_status, TurnStatus::InProgress)
+}
+
+fn live_progress_revision(durable: &str, live: Option<&LiveProgressCommands>) -> String {
+    format!(
+        "{durable}:live:{}",
+        live.map_or("none", |value| value.fingerprint.as_str())
+    )
+}
+
+fn live_progress_fingerprint(
+    identity: &impl serde::Serialize,
+) -> Result<String, JSONRPCErrorError> {
+    use sha2::{Digest, Sha256};
+    let bytes = serde_json::to_vec(identity)
+        .map_err(|_| refusal("history_unavailable", "Live activity identity unavailable"))?;
+    Ok(format!("{:x}", Sha256::digest(bytes)))
+}
+
+fn live_progress_snapshot_matches(
+    expected: &str,
+    durable: &str,
+    live: Option<&LiveProgressCommands>,
+) -> bool {
+    live_progress_revision(durable, live) == expected
+}
+
 impl InquelloRequestProcessor {
+    async fn live_progress_commands(
+        &self,
+        threads: &super::super::ThreadRequestProcessor,
+        run: &TaskRunBinding,
+        activity_only: bool,
+    ) -> Result<Option<LiveProgressCommands>, JSONRPCErrorError> {
+        if run.runtime_id != self.runtime_id || run.status != TaskRunStatus::Running {
+            return Ok(None);
+        }
+        let (Some(thread), Some(turn)) = (run.thread_id.as_deref(), run.turn_id.as_deref()) else {
+            return Ok(None);
+        };
+        let id = codex_protocol::ThreadId::from_string(thread)
+            .map_err(|_| refusal("stale", "Invalid live Task thread"))?;
+        let Ok(loaded) = threads.thread_manager.get_thread(id).await else {
+            return Ok(None);
+        };
+        let state = threads.thread_state_manager.thread_state(id).await;
+        let state = state.lock().await;
+        if !state.listener_matches(&loaded) {
+            return Ok(None);
+        }
+        let Some((live_turn, status, items)) = state.active_turn_items() else {
+            return Ok(None);
+        };
+        if !live_progress_scope_current(
+            run.runtime_id == self.runtime_id,
+            run.status == TaskRunStatus::Running,
+            state.listener_matches(&loaded),
+            turn,
+            live_turn,
+            status,
+        ) {
+            return Ok(None);
+        }
+        // Bound canonical display data under this same current-listener lock.
+        // Status-only recovery still carries the exact current runtime/run identity.
+        let (order, entries, display_failure) = bounded_live_display(
+            turn,
+            items,
+            state.canonical_active_order(turn),
+            state.canonical_live_messages(turn),
+            activity_only,
+        )?;
+        let display_incomplete = display_failure.is_some();
+        if entries
+            .iter()
+            .any(|entry| !order.iter().any(|id| id == entry.item.id()))
+        {
+            return Err(refusal(
+                "stale_snapshot",
+                "Canonical live ordering has not caught up",
+            ));
+        }
+        let fingerprint = live_progress_fingerprint(&(
+            &run.run_id,
+            &run.runtime_id,
+            thread,
+            turn,
+            state.listener_generation,
+            format!("{:p}", Arc::as_ptr(&loaded)),
+            &order,
+            &entries,
+            display_failure,
+        ))?;
+        Ok(Some(LiveProgressCommands {
+            display_incomplete,
+            runtime: Some(Arc::downgrade(&loaded)),
+            fingerprint,
+            turn: turn.to_owned(),
+            order,
+            entries,
+        }))
+    }
+
     /// Hydration reads canonical item status, never a terminal turn summary. A
     /// private subscription and renderer-provided thread IDs are not authority.
     pub(crate) async fn tasks_progress(
@@ -2916,11 +4197,15 @@ impl InquelloRequestProcessor {
                 "Retained projection identity unavailable",
             )
         })?;
-        let revision = if params.activity_only {
+        let live = self
+            .live_progress_commands(threads, &run, params.activity_only)
+            .await?;
+        let durable_revision = if params.activity_only {
             String::new()
         } else {
             threads.inquello_progress_revision(thread).await?
         };
+        let revision = live_progress_revision(&durable_revision, live.as_ref());
         let mut analytical_turns = allowed_turns.iter().collect::<Vec<_>>();
         analytical_turns.sort();
         let analysis_key = serde_json::to_string(&(
@@ -2954,10 +4239,11 @@ impl InquelloRequestProcessor {
         let (canonical, bytes) = if params.activity_only {
             (
                 Arc::new(canonical_progress(
-                    Vec::new(),
+                    live.as_ref()
+                        .map_or_else(Vec::new, |value| value.entries.clone()),
                     &allowed_turns,
                     turn.as_deref(),
-                    false,
+                    live.as_ref().is_some_and(|value| value.display_incomplete),
                 )),
                 0,
             )
@@ -2994,6 +4280,7 @@ impl InquelloRequestProcessor {
                 }
             })
             .await?;
+            let entries = merge_live_commands(entries, live.as_ref())?;
             let canonical =
                 canonical_progress(entries, &allowed_turns, turn.as_deref(), incomplete);
             let bytes = serde_json::to_vec(&canonical)
@@ -3033,7 +4320,19 @@ impl InquelloRequestProcessor {
                 "Result page is outside this retained snapshot",
             ));
         }
-        if !params.activity_only && threads.inquello_progress_revision(thread).await? != revision {
+        let current_live = self
+            .live_progress_commands(threads, &run, params.activity_only)
+            .await?;
+        let current_durable_revision = if params.activity_only {
+            String::new()
+        } else {
+            threads.inquello_progress_revision(thread).await?
+        };
+        if !live_progress_snapshot_matches(
+            &revision,
+            &current_durable_revision,
+            current_live.as_ref(),
+        ) {
             return Err(refusal(
                 "stale_snapshot",
                 "Retained output changed during reconstruction; refresh progress",
@@ -3053,18 +4352,14 @@ impl InquelloRequestProcessor {
             .await
             .map_err(domain_error)?
             .ok_or_else(|| refusal("not_found", "Private binding disappeared"))?;
-        if session.cancellation.is_cancelled()
-            || self.actor(connection)? != actor
-            || latest.run_id != run.run_id
-            || latest.turn_id != run.turn_id
-            || latest.thread_id != run.thread_id
-            || !policy_current
-        {
-            return Err(refusal(
-                "stale",
-                "Private binding changed before progress disclosure",
-            ));
-        }
+        check_progress_read_binding(
+            ProgressReadGateSite::BeforeCache,
+            !session.cancellation.is_cancelled(),
+            self.actor(connection)? == actor,
+            policy_current,
+            &run,
+            Some(&latest),
+        )?;
         if !params.activity_only {
             let mut cache = self.task_progress_cache.lock().await;
             cache.retain(|entry| entry.key != key && !entry.cancellation.is_cancelled());
@@ -3077,13 +4372,14 @@ impl InquelloRequestProcessor {
             }
             cache.push(ProgressCache {
                 key,
-                revision,
+                revision: revision.clone(),
                 analysis_key,
                 analysis_digest,
                 snapshot_id: snapshot_id.clone(),
                 canonical: canonical.clone(),
                 bytes,
                 cancellation: session.cancellation.clone(),
+                _live_runtime: live.as_ref().and_then(|value| value.runtime.clone()),
             });
         }
         // Cache lock acquisition and revision reads are awaited too. A late old
@@ -3092,13 +4388,44 @@ impl InquelloRequestProcessor {
             .find_task_current_run(actor.principal_id, &params.task_id)
             .await
             .map_err(domain_error)?;
-        if session.cancellation.is_cancelled()
-            || self.actor(connection)? != actor
-            || final_run.as_ref() != Some(&latest)
-        {
+        check_progress_read_binding(
+            ProgressReadGateSite::BeforeSnapshot,
+            !session.cancellation.is_cancelled(),
+            self.actor(connection)? == actor,
+            policy_current,
+            &latest,
+            final_run.as_ref(),
+        )?;
+        // No cached live activity survives listener replacement, completion or
+        // a changed loaded runtime while the authority checks above awaited.
+        let final_live = self
+            .live_progress_commands(threads, &latest, params.activity_only)
+            .await?;
+        let final_durable_revision = if params.activity_only {
+            String::new()
+        } else {
+            threads.inquello_progress_revision(thread).await?
+        };
+        let final_policy_current = self
+            .task_read_policy_current(actor.principal_id, &params.workspace_policy)
+            .await;
+        if session.cancellation.is_cancelled() || self.actor(connection)? != actor {
+            return Err(refusal(
+                "session_changed",
+                "Private session changed before progress disclosure",
+            ));
+        }
+        if !final_policy_current {
             return Err(refusal(
                 "stale",
-                "Task incarnation changed before snapshot publication",
+                "Workspace policy changed before progress disclosure",
+            ));
+        }
+        if !live_progress_snapshot_matches(&revision, &final_durable_revision, final_live.as_ref())
+        {
+            return Err(refusal(
+                "stale_snapshot",
+                "Live or retained output changed before progress disclosure",
             ));
         }
         let mut snapshot = display_progress_page(&canonical, requested);
@@ -3127,6 +4454,49 @@ impl InquelloRequestProcessor {
         };
         snapshot.artifact = progress_artifact(&task.artifact_refs).into();
         finish_progress(&mut snapshot);
+        #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+        if snapshot
+            .items
+            .iter()
+            .any(|item| item.id == "call_authorized" && item.status == "running")
+            && live.as_ref().is_some_and(|value| {
+                value
+                    .entries
+                    .iter()
+                    .any(|entry| entry.item.id() == "call_authorized")
+            })
+        {
+            let fixture = self.task_fixtures.lock().await.get(&connection).cloned();
+            if let Some(fixture) = fixture.filter(|fixture| {
+                fixture.hold_progress_publication
+                    && fixture.principal == actor.principal_id
+                    && fixture.workspace == params.workspace_policy.workspace_id
+            }) {
+                *fixture.progress_observed_run.lock().await = Some(snapshot.run_id.clone());
+                fixture.progress_observed.notify_one();
+            }
+        }
+        // Policy and fixture locks above can await while Resume changes the run.
+        // Read the binding last; no await may follow this disclosure fence.
+        let final_binding = store
+            .find_task_current_run(actor.principal_id, &params.task_id)
+            .await
+            .map_err(domain_error)?;
+        if session.cancellation.is_cancelled() || self.actor(connection)? != actor {
+            progress_read_gate_diagnostic(ProgressReadGateSite::FinalDisclosure, false);
+            return Err(refusal(
+                "session_changed",
+                "Private authority changed before progress disclosure",
+            ));
+        }
+        check_progress_read_binding(
+            ProgressReadGateSite::FinalDisclosure,
+            true,
+            true,
+            final_policy_current,
+            &latest,
+            final_binding.as_ref(),
+        )?;
         Ok(Some(snapshot.into()))
     }
 }
@@ -3206,6 +4576,7 @@ fn project_progress(
         incomplete,
     )
 }
+#[cfg(test)]
 fn project_progress_history(
     entries: Vec<ThreadItemEntry>,
     allowed_turns: &std::collections::HashSet<String>,
@@ -3214,6 +4585,7 @@ fn project_progress_history(
 ) -> InquelloTasksProgressResponse {
     project_progress_page(entries, allowed_turns, current_turn, incomplete, None)
 }
+#[cfg(test)]
 fn project_progress_page(
     entries: Vec<ThreadItemEntry>,
     allowed_turns: &std::collections::HashSet<String>,
@@ -3445,7 +4817,11 @@ fn canonical_progress(
             }
             sequence += 1;
             step_order.insert(
-                plan[*step_indices.get(&step_id).unwrap()].id.clone(),
+                plan[*step_indices.get(&step_id).unwrap_or_else(|| {
+                    panic!("published step must have its validated plan index")
+                })]
+                .id
+                .clone(),
                 sequence,
             );
         }
@@ -3982,6 +5358,351 @@ fn finish_progress(snapshot: &mut InquelloTasksProgressResponse) {
 #[cfg(test)]
 mod progress_tests {
     use super::*;
+
+    #[test]
+    fn live_commands_are_bounded_filtered_and_never_copy_output() {
+        let running = command("inProgress", None).item;
+        let completed = command("completed", Some(0)).item;
+        let message = entry(
+            json!({"type":"agentMessage","id":"message","text":"not live evidence"}),
+            true,
+        )
+        .item;
+        let rows = bounded_live_commands("turn-1", &[message, running.clone(), completed]).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert!(rows[0].completed_at_ms.is_none());
+        let value = serde_json::to_value(&rows[0].item).unwrap();
+        assert!(value["aggregatedOutput"].is_null());
+        assert!(bounded_live_commands("turn-1", &vec![running.clone(); 129]).is_err());
+        let mut oversized = running;
+        if let ThreadItem::CommandExecution { command, .. } = &mut oversized {
+            *command = "x".repeat(16_385);
+        }
+        assert!(bounded_live_commands("turn-1", &[oversized]).is_err());
+    }
+
+    #[test]
+    fn live_scope_rejects_old_runtime_listener_turn_and_terminal_state() {
+        assert!(live_progress_scope_current(
+            true,
+            true,
+            true,
+            "t",
+            "t",
+            &TurnStatus::InProgress
+        ));
+        assert!(!live_progress_scope_current(
+            false,
+            true,
+            true,
+            "t",
+            "t",
+            &TurnStatus::InProgress
+        ));
+        assert!(!live_progress_scope_current(
+            true,
+            false,
+            true,
+            "t",
+            "t",
+            &TurnStatus::InProgress
+        ));
+        assert!(!live_progress_scope_current(
+            true,
+            true,
+            false,
+            "t",
+            "t",
+            &TurnStatus::InProgress
+        ));
+        assert!(!live_progress_scope_current(
+            true,
+            true,
+            true,
+            "old",
+            "new",
+            &TurnStatus::InProgress
+        ));
+        assert!(!live_progress_scope_current(
+            true,
+            true,
+            true,
+            "t",
+            "t",
+            &TurnStatus::Completed
+        ));
+    }
+
+    #[test]
+    #[expect(
+        clippy::type_complexity,
+        reason = "This test keeps its distinct owned record cases together to exercise the exact display bounds."
+    )]
+    fn live_display_bounds_refuse_history_but_allow_explicit_incomplete_activity() {
+        let order = vec!["cmd-1".to_owned()];
+        let running = command("inProgress", None).item;
+        let too_many = vec![running.clone(); 4097];
+        let too_many_commands = vec![running.clone(); 129];
+        let oversized_order = vec!["canonical".to_owned(); 4097];
+        let mut maximum_command = running.clone();
+        if let ThreadItem::CommandExecution { command, .. } = &mut maximum_command {
+            *command = "x".repeat(16_384);
+        }
+        let excessive_command_bytes = vec![maximum_command; 65];
+        let mut long_command = running.clone();
+        if let ThreadItem::CommandExecution { command, .. } = &mut long_command {
+            *command = "x".repeat(16_385);
+        }
+        let mut long_id = running;
+        if let ThreadItem::CommandExecution { id, .. } = &mut long_id {
+            *id = "x".repeat(129);
+        }
+        let cases: Vec<(Vec<ThreadItem>, Option<&[String]>, bool)> = vec![
+            (Vec::new(), None, true),
+            (too_many, Some(&order), true),
+            (too_many_commands, Some(&order), true),
+            (excessive_command_bytes, Some(&order), true),
+            (Vec::new(), Some(&oversized_order), true),
+            (vec![long_command], Some(&order), true),
+            (vec![long_id], Some(&order), true),
+            (Vec::new(), Some(&order), false),
+        ];
+        for (items, canonical_order, has_messages) in cases {
+            let messages = || has_messages.then(Vec::new);
+            assert!(
+                bounded_live_display("turn-1", &items, canonical_order, messages(), false).is_err()
+            );
+            let (ids, entries, failure) =
+                bounded_live_display("turn-1", &items, canonical_order, messages(), true).unwrap();
+            assert!(ids.is_empty());
+            assert!(entries.is_empty());
+            assert!(failure.is_some());
+            let allowed = std::collections::HashSet::from(["turn-1".to_owned()]);
+            let snapshot = canonical_progress(entries, &allowed, Some("turn-1"), failure.is_some());
+            assert!(snapshot.history_incomplete);
+            assert!(snapshot.items.is_empty());
+            assert!(snapshot.results.is_empty());
+        }
+        let (_, _, failure) =
+            bounded_live_display("turn-1", &[], Some(&order), Some(Vec::new()), true).unwrap();
+        assert!(failure.is_none());
+    }
+
+    #[test]
+    fn live_message_overflow_marker_changes_the_final_activity_fence() {
+        let order = vec!["agent".to_owned()];
+        let entries: Vec<ThreadItemEntry> = Vec::new();
+        let make = |incomplete| LiveProgressCommands {
+            display_incomplete: incomplete,
+            runtime: None,
+            turn: "turn-1".into(),
+            order: order.clone(),
+            entries: Vec::new(),
+            fingerprint: live_progress_fingerprint(&(
+                "run",
+                "runtime",
+                "thread",
+                "turn-1",
+                1u64,
+                "0x123",
+                &order,
+                &entries,
+                incomplete.then_some(LiveDisplayFailure::MessageBound),
+            ))
+            .unwrap(),
+        };
+        let before = make(false);
+        let revision = live_progress_revision("", Some(&before));
+        assert!(live_progress_snapshot_matches(&revision, "", Some(&before)));
+        let overflow = make(true);
+        assert!(!live_progress_snapshot_matches(
+            &revision,
+            "",
+            Some(&overflow)
+        ));
+        let overflow_revision = live_progress_revision("", Some(&overflow));
+        assert!(live_progress_snapshot_matches(
+            &overflow_revision,
+            "",
+            Some(&overflow)
+        ));
+        assert!(!live_progress_snapshot_matches(
+            &overflow_revision,
+            "",
+            None
+        ));
+    }
+
+    #[test]
+    fn canonical_live_agent_text_projects_running_and_durable_completion_wins() {
+        let message = entry(
+            json!({"type":"agentMessage","id":"canonical-agent","text":"partial"}),
+            false,
+        );
+        let live = LiveProgressCommands {
+            display_incomplete: false,
+            runtime: None,
+            fingerprint: "bounded-text-revision-1".into(),
+            turn: "turn-1".into(),
+            order: vec!["canonical-agent".into()],
+            entries: vec![message],
+        };
+        let first = project_progress(
+            merge_live_commands(Vec::new(), Some(&live)).unwrap(),
+            "turn-1",
+            false,
+        );
+        assert_eq!(first.items.len(), 1);
+        assert_eq!(first.items[0].role.as_deref(), Some("agent"));
+        assert_eq!(first.items[0].status, "running");
+        assert_eq!(first.items[0].text, "partial");
+        let complete = entry(
+            json!({"type":"agentMessage","id":"canonical-agent","text":"final"}),
+            true,
+        );
+        let rows = merge_live_commands(vec![complete], Some(&live)).unwrap();
+        assert_eq!(rows.len(), 1);
+        let last = project_progress(rows, "turn-1", false);
+        assert_eq!(last.items[0].status, "completed");
+        assert_eq!(last.items[0].text, "final");
+        let fingerprint = |entries: &[ThreadItemEntry]| {
+            live_progress_fingerprint(&(
+                "run-1",
+                "runtime-1",
+                "thread-1",
+                "turn-1",
+                7u64,
+                "0x123",
+                &live.order,
+                entries,
+            ))
+            .unwrap()
+        };
+        let original_fingerprint = fingerprint(&live.entries);
+        let mut changed_entries = live.entries.clone();
+        let ThreadItem::AgentMessage { text, .. } = &mut changed_entries[0].item else {
+            panic!("canonical agent fixture");
+        };
+        text.push_str(" next");
+        let changed_fingerprint = fingerprint(&changed_entries);
+        assert_ne!(original_fingerprint, changed_fingerprint);
+        let initial = LiveProgressCommands {
+            display_incomplete: false,
+            runtime: None,
+            fingerprint: original_fingerprint,
+            turn: live.turn.clone(),
+            order: live.order.clone(),
+            entries: live.entries.clone(),
+        };
+        let revision = live_progress_revision("same-durable", Some(&initial));
+        assert!(live_progress_snapshot_matches(
+            &revision,
+            "same-durable",
+            Some(&initial)
+        ));
+        let changed = LiveProgressCommands {
+            display_incomplete: false,
+            fingerprint: changed_fingerprint,
+            entries: changed_entries,
+            ..initial
+        };
+        // Same helper used after fresh disclosure checks rejects a text-only
+        // mutation captured under the listener lock: no stale display is emitted.
+        assert!(!live_progress_snapshot_matches(
+            &revision,
+            "same-durable",
+            Some(&changed)
+        ));
+    }
+
+    #[test]
+    fn live_running_evidence_changes_on_completion_without_reordering_or_duplicate() {
+        let body = json!({"version":1,"plan":[],"results":[{"id":"finding","kind":"observation","text":"Check","evidenceIds":["cmd-1"]}]});
+        let publication = entry(
+            json!({"type":"functionCallOutput","id":"pub","name":"inquello_progress","namespace":null,"output":body.to_string()}),
+            true,
+        );
+        let live = LiveProgressCommands {
+            display_incomplete: false,
+            runtime: None,
+            fingerprint: "runtime-listener-1-running".into(),
+            turn: "turn-1".into(),
+            order: vec!["cmd-1".into(), "pub".into()],
+            entries: bounded_live_commands("turn-1", &[command("inProgress", None).item]).unwrap(),
+        };
+        let rows = merge_live_commands(vec![publication.clone()], Some(&live)).unwrap();
+        assert_eq!(rows[0].item.id(), "cmd-1");
+        assert_eq!(rows[1].item.id(), "pub");
+        let first = project_progress(rows, "turn-1", false);
+        assert_eq!(first.items[0].status, "running");
+        assert_eq!(first.results[0].evidence_ids, vec!["cmd-1"]);
+        let completed = command("completed", Some(0));
+        let rows = merge_live_commands(vec![completed, publication], Some(&live)).unwrap();
+        assert_eq!(rows.len(), 2);
+        assert!(
+            rows[0].completed_at_ms.is_some(),
+            "durable completion beats stale live start"
+        );
+        let last = project_progress(rows, "turn-1", false);
+        assert_eq!(last.items[0].status, "completed");
+        assert_ne!(analytical_digest(&first), analytical_digest(&last));
+        assert_ne!(
+            live_progress_revision("same", Some(&live)),
+            live_progress_revision("same", None)
+        );
+        let replacement = LiveProgressCommands {
+            display_incomplete: false,
+            fingerprint: "runtime-listener-2".into(),
+            ..live
+        };
+        assert_ne!(
+            live_progress_revision("same", Some(&replacement)),
+            "same:live:runtime-listener-1-running"
+        );
+    }
+
+    #[test]
+    fn live_merge_requires_canonical_user_identity_and_preserves_start_order() {
+        let user_id = "11111111-1111-4111-8111-111111111111";
+        let user = entry(
+            json!({"type":"userMessage","id":user_id,"clientId":null,
+            "content":[{"type":"text","text":"Fictional input","text_elements":[]}]}),
+            true,
+        );
+        let mut live = LiveProgressCommands {
+            display_incomplete: false,
+            runtime: None,
+            fingerprint: "live".into(),
+            turn: "turn-1".into(),
+            order: vec!["item-1".into(), "cmd-1".into()],
+            entries: bounded_live_commands("turn-1", &[command("inProgress", None).item]).unwrap(),
+        };
+        assert!(
+            merge_live_commands(vec![user.clone()], Some(&live)).is_err(),
+            "legacy presentation IDs cannot be substituted for retained IDs"
+        );
+        live.order[0] = user_id.into();
+        let rows = merge_live_commands(vec![user], Some(&live)).unwrap();
+        assert_eq!(
+            rows.iter().map(|entry| entry.item.id()).collect::<Vec<_>>(),
+            vec![user_id, "cmd-1"]
+        );
+    }
+
+    #[test]
+    fn live_merge_refuses_listener_lag_instead_of_inventing_order() {
+        let live = LiveProgressCommands {
+            display_incomplete: false,
+            runtime: None,
+            fingerprint: "live".into(),
+            turn: "turn-1".into(),
+            order: vec!["cmd-1".into()],
+            entries: bounded_live_commands("turn-1", &[command("inProgress", None).item]).unwrap(),
+        };
+        let not_yet_observed = revised_result("new", 1, "current", "Finding", "turn-1");
+        assert!(merge_live_commands(vec![not_yet_observed], Some(&live)).is_err());
+    }
+
     fn revised_result(
         id: &str,
         revision: u32,
@@ -4144,6 +5865,7 @@ mod progress_tests {
             canonical: canonical.clone(),
             bytes: 1,
             cancellation: token.clone(),
+            _live_runtime: None,
         };
         assert!(entry.matches("principal-session-run-lineage-policy", "item:42"));
         assert!(Arc::ptr_eq(&entry.canonical, &canonical));
@@ -5033,22 +6755,65 @@ fn measured_route_identity(
     configuration: &routes::RouteConfiguration,
 ) -> routes::RouteEvidenceIdentity {
     routes::RouteEvidenceIdentity {
+        schema_version: inquello_domain::routes::ROUTE_EVIDENCE_SCHEMA_VERSION,
         route_id: configuration.route_id().as_str().into(),
         deployment: configuration.deployment().into(),
         endpoint: configuration.endpoint().into(),
         model: configuration.model().into(),
         api_version: configuration.api_version().into(),
-        configuration_digest: routes::configuration_digest(configuration),
+        adapter_configuration_digest: routes::adapter_configuration_digest(configuration),
         implementation_digest: env!("INQUELLO_BEHAVIOR_DIGEST").into(),
         runtime_version: env!("CARGO_PKG_VERSION").into(),
         contract_version: format!(
-            "inquello-v{}-authorization-v1",
+            "inquello-v{}-authorization-v2",
             inquello_protocol::PROTOCOL_MAJOR
         ),
         platform: env!("INQUELLO_BUILD_PLATFORM").into(),
     }
 }
 impl InquelloRequestProcessor {
+    async fn real_route_credential(
+        &self,
+        actor: Actor,
+        configuration: &routes::RouteConfiguration,
+    ) -> Result<(u64, Option<reviewer::InheritedAuthBinding>), JSONRPCErrorError> {
+        let generation = self
+            .routes
+            .state
+            .lock()
+            .await
+            .credential(actor.principal_id, configuration)
+            .ok_or_else(|| {
+                refusal(
+                    "credential_unavailable",
+                    "Reconnect the selected provider in Settings",
+                )
+            })?;
+        let inherited = if configuration.route_id() == routes::RouteId::CodexResponses {
+            let responses = self.routes.responses.as_ref().ok_or_else(|| {
+                refusal("credential_unavailable", "Selected provider is unavailable")
+            })?;
+            responses.check_configuration(configuration).map_err(|_| {
+                refusal(
+                    "credential_unavailable",
+                    "Selected provider authentication or endpoint changed",
+                )
+            })?;
+            Some(responses.auth_binding().map_err(|_| {
+                refusal(
+                    "credential_unavailable",
+                    "Selected provider authentication changed",
+                )
+            })?)
+        } else {
+            None
+        };
+        Ok((generation, inherited))
+    }
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Keep each independently trusted authority input explicit at the real-data dispatch fence."
+    )]
     async fn check_real_route(
         &self,
         connection: ConnectionId,
@@ -5075,6 +6840,10 @@ impl InquelloRequestProcessor {
         }
         result
     }
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Keep each independently trusted authority input explicit at the real-data dispatch fence."
+    )]
     async fn check_real_route_inner(
         &self,
         connection: ConnectionId,
@@ -5085,14 +6854,46 @@ impl InquelloRequestProcessor {
         policy: &InquelloWorkspaceExecutionPolicy,
         action: routes::ProtectedRouteAction,
     ) -> Result<(), JSONRPCErrorError> {
+        self.check_real_route_with_evidence(
+            connection,
+            actor,
+            session,
+            configuration,
+            task_id,
+            policy,
+            action,
+            routes::compiled_evidence_for_identity,
+        )
+        .await
+    }
+    // Private code-only dependency seam. The production wrapper above always
+    // selects the compiled register; no RPC, renderer or environment proof input.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Explicit independent authority inputs plus a sealed evidence dependency"
+    )]
+    async fn check_real_route_with_evidence(
+        &self,
+        connection: ConnectionId,
+        actor: Actor,
+        session: &SessionBinding,
+        configuration: &routes::RouteConfiguration,
+        task_id: &str,
+        policy: &InquelloWorkspaceExecutionPolicy,
+        action: routes::ProtectedRouteAction,
+        evidence: fn(
+            &routes::RouteEvidenceIdentity,
+        ) -> Option<routes::NegativeAuthorizationEvidence>,
+    ) -> Result<(), JSONRPCErrorError> {
         let real = session.real.as_ref().ok_or_else(|| {
             refusal(
                 "classification_unknown",
                 "Current native data classification unavailable",
             )
         })?;
+        let credential = self.real_route_credential(actor, configuration).await?;
         let identity = measured_route_identity(configuration);
-        let proof=routes::compiled_evidence_for_identity(&identity).ok_or_else(||refusal("route_unavailable","Complete reviewed negative-authorization evidence for this exact build, runtime, platform and route is required"))?;
+        let proof=evidence(&identity).filter(|proof| proof.complete() && proof.identity == identity && identity.matches_configuration(configuration)).ok_or_else(||refusal("route_unavailable","Complete reviewed negative-authorization evidence for this exact build, runtime, platform and route is required"))?;
         if proof.data_policy_digest != env!("INQUELLO_DATA_POLICY_DIGEST") {
             return Err(refusal(
                 "route_unavailable",
@@ -5119,13 +6920,13 @@ impl InquelloRequestProcessor {
             .and_then(|v| serde_json::from_value(v).ok())
             .ok_or_else(|| {
                 refusal(
-                    "route_unavailable",
+                    "organization_approval_required",
                     "Current organization approval is required",
                 )
             })?;
         let approval = view.approval.ok_or_else(|| {
             refusal(
-                "route_unavailable",
+                "organization_approval_required",
                 "Current organization approval is required",
             )
         })?;
@@ -5161,7 +6962,7 @@ impl InquelloRequestProcessor {
         };
         let request = inquello_protocol::workspace::RouteEligibilityCheckRequest {
             identity: identity.clone(),
-            report_digest: proof.report_digest,
+            report_digest: proof.report_digest.clone(),
             binding: expected.clone(),
         };
         let reply = current_route_response(
@@ -5190,7 +6991,8 @@ impl InquelloRequestProcessor {
         let current = self
             .task_session(connection, actor, &session.workspace)
             .await?;
-        if current.real != session.real
+        if self.real_route_credential(actor, configuration).await? != credential
+            || current.real != session.real
             || self.actor(connection)? != actor
             || session.cancellation.is_cancelled()
         {
@@ -5199,18 +7001,17 @@ impl InquelloRequestProcessor {
                 "Current session changed while checking route",
             ));
         }
-        let eligible = routes::protected_route_eligibility(
-            configuration,
-            true,
-            true,
-            &identity,
-            &expected,
-            Some(&authority),
-        );
-        if !eligible.enabled {
+        if authority.approval.evidence_digest != proof.report_digest
+            || !routes::current_route_authority_matches(
+                configuration,
+                &identity,
+                &expected,
+                &authority,
+            )
+        {
             return Err(refusal(
-                "route_unavailable",
-                eligible.gate.unwrap_or("Current route is unavailable"),
+                "organization_approval_stale",
+                "Current organization approval is missing, stale, revoked or outside its scope",
             ));
         }
         Ok(())
@@ -5229,32 +7030,16 @@ impl InquelloRequestProcessor {
         let session = self
             .task_session(connection, actor, &run.workspace_id)
             .await?;
-        use inquello_domain::routes::RouteStore;
         let route_id = routes::RouteId::parse(&run.route_id)
             .ok_or_else(|| refusal("route_unavailable", "Retained route identity unavailable"))?;
-        let candidate = store
-            .load_candidate_route_record(
-                actor.principal_id,
-                route_id,
-                Revision::new(run.configuration_revision),
-            )
-            .await
-            .map_err(|_| {
-                refusal(
-                    "route_unavailable",
-                    "Retained route configuration unavailable",
-                )
-            })?
-            .filter(|candidate| {
-                candidate.revision.get() == run.configuration_revision
-                    && candidate.configuration.route_id() == route_id
-            })
-            .ok_or_else(|| {
-                refusal(
-                    "route_unavailable",
-                    "The run's exact retained route configuration is unavailable",
-                )
-            })?;
+        let candidate = routes::active_candidate(
+            &store,
+            actor,
+            route_id,
+            Revision::new(run.configuration_revision),
+        )
+        .await
+        .map_err(domain_error)?;
         let configuration = candidate.configuration;
         match tier.as_deref() {
             Some("synthetic") if session.real.is_none() => Ok(()),
@@ -5305,7 +7090,7 @@ async fn current_route_response(
         outgoing: outgoing.clone(),
         id: Some(id.clone()),
     };
-    let result = tokio::select! {biased;_=cancellation.cancelled()=>None,result=tokio::time::timeout(std::time::Duration::from_secs(15),response)=>result.ok().and_then(|r|r.ok()).and_then(|r|r.ok())};
+    let result = tokio::select! {biased;_=cancellation.cancelled()=>None,result=tokio::time::timeout(std::time::Duration::from_secs(15),response)=>result.ok().and_then(std::result::Result::ok).and_then(std::result::Result::ok)};
     outgoing.cancel_request(&id).await;
     cleanup.id = None;
     result
@@ -5498,23 +7283,59 @@ impl InquelloRequestProcessor {
 }
 
 impl crate::outgoing_message::PrivateThreadAuthority for InquelloRequestProcessor {
-    fn capture_fence(
-        &self,
+    fn capture_thread_fence<'a>(
+        &'a self,
         connection: ConnectionId,
-    ) -> Option<codex_app_server_transport::PrivateOutputFence> {
-        self.actor(connection).ok().map(|actor| {
+        thread: codex_protocol::ThreadId,
+    ) -> crate::outgoing_message::PrivateFenceFuture<'a> {
+        Box::pin(async move {
+            let fence = self.capture_fence(connection).await?;
+            let actor = self.actor(connection).ok()?;
+            let store = self.store().await.ok()?;
+            let run = store
+                .find_thread_run(actor.principal_id, &self.runtime_id, &thread.to_string())
+                .await
+                .ok()??;
+            Some(
+                fence.with_token(
+                    self.routes
+                        .task_disclosure_token(actor.principal_id, &run.task_id),
+                ),
+            )
+        })
+    }
+    fn capture_fence<'a>(
+        &'a self,
+        connection: ConnectionId,
+    ) -> crate::outgoing_message::PrivateFenceFuture<'a> {
+        Box::pin(async move {
+            let actor = self.actor(connection).ok()?;
+            // Preserve the pre-wait principal generation. An identity or authority
+            // transition while waiting must not silently renew this payload.
             let fence = self.routes.disclosure_fence(actor.principal_id);
-            match self.task_sessions.try_lock() {
-                Ok(sessions) => match sessions.get(&connection) {
-                    Some(session) => fence.with_token(session.cancellation.clone()),
-                    None => fence,
-                },
-                Err(_) => {
-                    let denied = CancellationToken::new();
-                    denied.cancel();
-                    fence.with_token(denied)
-                }
+            let denied = || {
+                let token = CancellationToken::new();
+                token.cancel();
+                token
+            };
+            // Mere reader contention is not revocation. Wait for the short
+            // session-map critical section, but fail closed if it cannot settle.
+            let Ok(sessions) =
+                tokio::time::timeout(std::time::Duration::from_secs(5), self.task_sessions.lock())
+                    .await
+            else {
+                return Some(fence.with_token(denied()));
+            };
+            if self.actor(connection).ok() != Some(actor) {
+                return Some(fence.with_token(denied()));
             }
+            Some(match sessions.get(&connection) {
+                Some(session) if session.principal == actor.principal_id => {
+                    fence.with_token(session.cancellation.clone())
+                }
+                Some(_) => fence.with_token(denied()),
+                None => fence,
+            })
         })
     }
 
@@ -5527,13 +7348,34 @@ impl crate::outgoing_message::PrivateThreadAuthority for InquelloRequestProcesso
             let result = self
                 .require_task_thread(connection, &thread.to_string())
                 .await;
-            if result.is_err() {
-                if let Ok(actor) = self.actor(connection) {
-                    self.routes.invalidate_disclosure(actor.principal_id);
-                }
-            }
             result.is_ok()
         })
+    }
+}
+
+/// Where a private Task's model command runs: on Windows always inside the
+/// Task's Linux guest, resolved through its retained executor channel (no
+/// channel or no scope leaves the program unresolved, so it asks); on this
+/// host otherwise.
+fn private_task_placement<'a>(
+    host: ExecLookup<'a>,
+    task_parent: &std::path::Path,
+    principal: &str,
+    task_id: &str,
+) -> ExecPlacement<'a> {
+    if !cfg!(windows) {
+        return ExecPlacement::Host(host);
+    }
+    match crate::inquello_wsl::scope_key(task_parent, principal) {
+        Ok(scope) => ExecPlacement::Guest(crate::inquello_wsl::GuestTarget::Retained {
+            scope,
+            task_id: task_id.to_string(),
+        }),
+        // An unknown guest scope must not fall back to host resolution.
+        Err(_) => ExecPlacement::Host(ExecLookup {
+            cwd: None,
+            search_path: None,
+        }),
     }
 }
 
@@ -5541,11 +7383,13 @@ impl crate::outgoing_message::PrivateThreadAuthority for InquelloRequestProcesso
 mod bootstrap_order_tests {
     use super::*;
     use crate::outgoing_message::{OutgoingEnvelope, OutgoingMessageSender};
+    use serde_json::Value;
     const CONNECTION: ConnectionId = ConnectionId(914);
     const PRINCIPAL: &str = "11111111-1111-4111-8111-111111111111";
     const WORKSPACE: &str = "5d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e";
     fn params(root: &std::path::Path, generation: u64) -> InquelloTasksBootstrapParams {
         InquelloTasksBootstrapParams {
+            recovery_only: false,
             workspace_id: WORKSPACE.into(),
             isolated_root: root.to_string_lossy().into_owned(),
             real_session: Some(
@@ -5591,6 +7435,980 @@ mod bootstrap_order_tests {
             .unwrap();
         (processor, outgoing, rx)
     }
+
+    async fn allowed_bootstrap(
+        processor: &InquelloRequestProcessor,
+        outgoing: &OutgoingMessageSender,
+        rx: &mut tokio::sync::mpsc::Receiver<OutgoingEnvelope>,
+        params: InquelloTasksBootstrapParams,
+    ) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+        let (result, ()) = tokio::join!(processor.tasks_bootstrap(CONNECTION, params), async {
+            let id = request_id(rx).await;
+            allow(outgoing, id).await;
+        });
+        result
+    }
+
+    // Test-local proof substitution only; not a capability register or production
+    // evidence. The actual RealSession and callback awaits run without fixture features.
+    fn route_proof(
+        identity: &routes::RouteEvidenceIdentity,
+    ) -> Option<routes::NegativeAuthorizationEvidence> {
+        if !identity.valid()
+            || identity.model != "gpt-6.1-terra"
+            || identity.implementation_digest != env!("INQUELLO_BEHAVIOR_DIGEST")
+        {
+            return None;
+        }
+        Some(routes::NegativeAuthorizationEvidence {
+            suite: routes::AUTHORIZATION_SUITE.into(),
+            tested_artifact_digest: "a".repeat(64),
+            processing_scope: "default-feature native authorization fixture".into(),
+            data_policy_digest: env!("INQUELLO_DATA_POLICY_DIGEST").into(),
+            identity: identity.clone(),
+            scenarios: routes::REQUIRED_AUTHORIZATION_SCENARIOS
+                .iter()
+                .map(|name| (name.to_string(), routes::ScenarioStatus::Passed))
+                .collect(),
+            passed: routes::REQUIRED_AUTHORIZATION_SCENARIOS.len() as u32,
+            failed: 0,
+            skipped: 0,
+            command: "unit fixture only, never compiled eligibility".into(),
+            environment: "owned SQLite and native authority callback".into(),
+            report_digest: "b".repeat(64),
+            limitations: vec![
+                "Artificial test-local proof; not an executed production report".into(),
+            ],
+        })
+    }
+    async fn real_route_case(mode: &str, action: routes::ProtectedRouteAction) {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut processor, outgoing, mut rx) = fixture(dir.path()).await;
+        Arc::get_mut(&mut processor).unwrap().routes.responses =
+            Some(reviewer::InheritedResponses {
+                provider: codex_model_provider::create_model_provider(
+                    codex_model_provider_info::ModelProviderInfo::create_openai_provider(None),
+                    Some(codex_login::AuthManager::from_auth_for_testing(
+                        codex_login::CodexAuth::from_api_key("owned-non-provider-key"),
+                    )),
+                ),
+                factory: codex_http_client::HttpClientFactory::new(
+                    codex_http_client::OutboundProxyPolicy::ReqwestDefault,
+                ),
+            });
+        allowed_bootstrap(&processor, &outgoing, &mut rx, params(dir.path(), 1))
+            .await
+            .unwrap();
+        let actor = processor.actor(CONNECTION).unwrap();
+        let session = processor
+            .task_session(CONNECTION, actor, WORKSPACE)
+            .await
+            .unwrap();
+        assert!(session.real.is_some());
+        let configuration = routes::RouteConfiguration::parse(routes::RouteConfigurationInput {
+            route_id: "codex-responses".into(),
+            deployment: "openai-api".into(),
+            model: "gpt-6.1-terra".into(),
+            api_version: "responses-v1".into(),
+            account_ref: uuid::Uuid::new_v4().to_string(),
+            region: None,
+        })
+        .unwrap();
+        let policy = InquelloWorkspaceExecutionPolicy {
+            workspace_id: WORKSPACE.into(),
+            policy_revision: 1,
+            authorization_epoch: 1,
+            execution: None,
+        };
+        processor.routes.state.lock().await.credentials.insert(
+            (actor.principal_id, routes::RouteId::CodexResponses),
+            (configuration.account_ref().into(), 1),
+        );
+        let proof = route_proof(&measured_route_identity(&configuration)).unwrap();
+        let approval = routes::OrganizationRouteApproval {
+            workspace_id: WORKSPACE.into(),
+            route_id: "codex-responses".into(),
+            evidence_digest: proof.report_digest,
+            processing_scope: proof.processing_scope,
+            data_policy_digest: proof.data_policy_digest,
+            issuer: "fixture issuer".into(),
+            operator_reference: "owned fixture approval".into(),
+            valid_from: 90,
+            review_at: 110,
+            expires_at: 120,
+            revision: 1,
+            policy_revision: 1,
+            revoked: false,
+        };
+        let task = uuid::Uuid::new_v4().to_string();
+        let (result, ()) = tokio::join!(
+            processor.check_real_route_with_evidence(
+                CONNECTION,
+                actor,
+                &session,
+                &configuration,
+                &task,
+                &policy,
+                action,
+                route_proof
+            ),
+            async {
+                let id = request_id(&mut rx).await;
+                let mut view =
+                    json!({"approval":approval,"authorization_epoch":"1","policy_revision":"1"});
+                if mode == "membership" {
+                    view["authorization_epoch"] = json!("2");
+                }
+                if mode == "missing-approval" {
+                    view["approval"] = Value::Null;
+                }
+                outgoing
+                    .notify_client_response(CONNECTION, id, json!({"routeApproval":view}))
+                    .await;
+                if matches!(mode, "membership" | "missing-approval") {
+                    return;
+                }
+                let OutgoingEnvelope::ToConnection { message, .. } = rx.recv().await.unwrap()
+                else {
+                    panic!("scoped route check")
+                };
+                let message = serde_json::to_value(message).unwrap();
+                let request: inquello_protocol::workspace::RouteEligibilityCheckRequest =
+                    serde_json::from_value(message["params"]["routeCheck"].clone()).unwrap();
+                assert_eq!(request.binding.task_id, task);
+                assert_eq!(request.binding.action, action);
+                assert_eq!(request.identity, measured_route_identity(&configuration));
+                let mut authority = routes::CurrentRouteAuthority {
+                    binding: request.binding,
+                    approval,
+                    checked_at: 100,
+                };
+                match mode {
+                    "revoked" => authority.approval.revoked = true,
+                    "review-boundary" => authority.checked_at = 110,
+                    "expiry" => authority.checked_at = 120,
+                    "foreign-task" => authority.binding.task_id = uuid::Uuid::new_v4().to_string(),
+                    "foreign-workspace" => {
+                        authority.approval.workspace_id = uuid::Uuid::new_v4().to_string()
+                    }
+                    "stale-session" => authority.binding.session_revision += 1,
+                    "stale-credential-session" => authority.binding.generation += 1,
+                    "wrong-proof" => authority.approval.evidence_digest = "c".repeat(64),
+                    "session-withdrawn" => session.cancellation.cancel(),
+                    "credential-withdrawn" => {
+                        processor
+                            .routes
+                            .state
+                            .lock()
+                            .await
+                            .credentials
+                            .remove(&(actor.principal_id, routes::RouteId::CodexResponses));
+                    }
+                    "credential-rotated" => {
+                        processor.routes.state.lock().await.credentials.insert(
+                            (actor.principal_id, routes::RouteId::CodexResponses),
+                            (configuration.account_ref().into(), 2),
+                        );
+                    }
+                    _ => {}
+                }
+                outgoing
+                    .notify_client_response(
+                        CONNECTION,
+                        serde_json::from_value(message["id"].clone()).unwrap(),
+                        json!({"routeAuthority":authority}),
+                    )
+                    .await;
+            }
+        );
+        assert_eq!(result.is_ok(), mode == "allowed", "{mode}: {result:?}");
+    }
+    #[tokio::test]
+    async fn inquello_real_session_current_approval_all_protected_actions_default_features() {
+        for action in [
+            routes::ProtectedRouteAction::Read,
+            routes::ProtectedRouteAction::Derive,
+            routes::ProtectedRouteAction::Export,
+            routes::ProtectedRouteAction::Resume,
+        ] {
+            real_route_case("allowed", action).await;
+        }
+    }
+    #[tokio::test]
+    async fn inquello_real_session_withdrawal_and_late_authority_default_features() {
+        for mode in [
+            "membership",
+            "missing-approval",
+            "revoked",
+            "review-boundary",
+            "expiry",
+            "foreign-task",
+            "foreign-workspace",
+            "stale-session",
+            "stale-credential-session",
+            "wrong-proof",
+            "session-withdrawn",
+            "credential-withdrawn",
+            "credential-rotated",
+        ] {
+            for action in [
+                routes::ProtectedRouteAction::Read,
+                routes::ProtectedRouteAction::Derive,
+                routes::ProtectedRouteAction::Export,
+                routes::ProtectedRouteAction::Resume,
+            ] {
+                real_route_case(mode, action).await;
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn recovery_bootstrap_fresh_authority_repairs_only_cancelled_matching_binding() {
+        use crate::outgoing_message::PrivateThreadAuthority;
+        let dir = tempfile::tempdir().unwrap();
+        let (processor, outgoing, mut rx) = fixture(dir.path()).await;
+        let recovery = || {
+            let mut p = params(dir.path(), 1);
+            p.recovery_only = true;
+            p
+        };
+        allowed_bootstrap(&processor, &outgoing, &mut rx, recovery())
+            .await
+            .unwrap();
+        let original = processor.task_sessions.lock().await[&CONNECTION].clone();
+        let fence = processor.capture_fence(CONNECTION).await.unwrap();
+        allowed_bootstrap(&processor, &outgoing, &mut rx, recovery())
+            .await
+            .unwrap();
+        assert!(
+            !original.cancellation.is_cancelled(),
+            "healthy exact binding is idempotent"
+        );
+        assert!(fence.is_current());
+        original.cancellation.cancel();
+        allowed_bootstrap(&processor, &outgoing, &mut rx, recovery())
+            .await
+            .unwrap();
+        let current = processor.task_sessions.lock().await[&CONNECTION].clone();
+        assert!(!current.cancellation.is_cancelled());
+        assert!(original.cancellation.is_cancelled());
+        assert!(
+            !fence.is_current(),
+            "recovery never renews queued old payloads"
+        );
+        assert!(
+            processor
+                .capture_fence(CONNECTION)
+                .await
+                .unwrap()
+                .is_current()
+        );
+        let mut changed = recovery();
+        changed.real_session = params(dir.path(), 2).real_session;
+        assert!(
+            allowed_bootstrap(&processor, &outgoing, &mut rx, changed)
+                .await
+                .is_err()
+        );
+        assert!(
+            !current.cancellation.is_cancelled(),
+            "healthy different session is preserved"
+        );
+    }
+
+    #[tokio::test]
+    async fn recovery_bootstrap_rechecks_authority_generation_at_commit() {
+        let dir = tempfile::tempdir().unwrap();
+        let (processor, outgoing, mut rx) = fixture(dir.path()).await;
+        let mut recovery = params(dir.path(), 1);
+        recovery.recovery_only = true;
+        let pending = {
+            let processor = processor.clone();
+            tokio::spawn(async move { processor.tasks_bootstrap(CONNECTION, recovery).await })
+        };
+        let id = request_id(&mut rx).await;
+        *processor
+            .authority_generations
+            .lock()
+            .unwrap()
+            .get_mut(&CONNECTION)
+            .unwrap() += 1;
+        allow(&outgoing, id).await;
+        assert!(pending.await.unwrap().is_err());
+        assert!(
+            !processor
+                .task_sessions
+                .lock()
+                .await
+                .contains_key(&CONNECTION)
+        );
+    }
+
+    #[tokio::test]
+    async fn recovery_bootstrap_denied_fresh_authority_preserves_cancelled_binding() {
+        let dir = tempfile::tempdir().unwrap();
+        let (processor, outgoing, mut rx) = fixture(dir.path()).await;
+        allowed_bootstrap(&processor, &outgoing, &mut rx, params(dir.path(), 1))
+            .await
+            .unwrap();
+        let original = processor.task_sessions.lock().await[&CONNECTION].clone();
+        original.cancellation.cancel();
+        let mut recovery = params(dir.path(), 1);
+        recovery.recovery_only = true;
+        let pending = {
+            let processor = processor.clone();
+            tokio::spawn(async move { processor.tasks_bootstrap(CONNECTION, recovery).await })
+        };
+        let id = request_id(&mut rx).await;
+        outgoing
+            .notify_client_response(CONNECTION, id, json!({"workspacePolicy":null}))
+            .await;
+        assert!(pending.await.unwrap().is_err());
+        assert!(
+            processor.task_sessions.lock().await[&CONNECTION]
+                .cancellation
+                .is_cancelled()
+        );
+    }
+
+    #[test]
+    fn recovery_binding_never_switches_owner_workspace_root_or_data_tier() {
+        let principal = PrincipalId::parse(PRINCIPAL).unwrap();
+        let other = PrincipalId::parse("22222222-2222-4222-8222-222222222222").unwrap();
+        let root = PathBuf::from("profile");
+        let binding = SessionBinding {
+            principal,
+            workspace: WORKSPACE.into(),
+            root: root.clone(),
+            real: None,
+            cancellation: CancellationToken::new(),
+        };
+        assert!(recovery_binding_matches(
+            None, principal, WORKSPACE, &root, None
+        ));
+        for revoked in [false, true] {
+            if revoked {
+                binding.cancellation.cancel();
+            }
+            assert!(recovery_binding_matches(
+                Some(&binding),
+                principal,
+                WORKSPACE,
+                &root,
+                None
+            ));
+            assert!(!recovery_binding_matches(
+                Some(&binding),
+                other,
+                WORKSPACE,
+                &root,
+                None
+            ));
+            assert!(!recovery_binding_matches(
+                Some(&binding),
+                principal,
+                "another-workspace",
+                &root,
+                None
+            ));
+            assert!(!recovery_binding_matches(
+                Some(&binding),
+                principal,
+                WORKSPACE,
+                std::path::Path::new("another-root"),
+                None
+            ));
+            let real: RealSession =
+                serde_json::from_value(params(&root, 1).real_session.unwrap()).unwrap();
+            assert!(!recovery_binding_matches(
+                Some(&binding),
+                principal,
+                WORKSPACE,
+                &root,
+                Some(&real)
+            ));
+            let mut real_binding = binding.clone();
+            real_binding.real = Some(real);
+            assert!(!recovery_binding_matches(
+                Some(&real_binding),
+                principal,
+                WORKSPACE,
+                &root,
+                None
+            ));
+        }
+    }
+
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    #[tokio::test]
+    async fn recovery_bootstrap_synthetic_also_requires_fresh_authority() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join(".inquello-fictional-audit-session"),
+            "synthetic",
+        )
+        .unwrap();
+        let (processor, outgoing, mut rx) = fixture(dir.path()).await;
+        let mut recovery = params(dir.path(), 1);
+        recovery.real_session = None;
+        recovery.recovery_only = true;
+        allowed_bootstrap(&processor, &outgoing, &mut rx, recovery)
+            .await
+            .unwrap();
+        let binding = processor.task_sessions.lock().await[&CONNECTION].clone();
+        assert!(binding.real.is_none());
+        assert!(!binding.cancellation.is_cancelled());
+    }
+
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    async fn status_fixture(
+        root: &std::path::Path,
+        prepare: bool,
+    ) -> (
+        Arc<InquelloRequestProcessor>,
+        Arc<OutgoingMessageSender>,
+        tokio::sync::mpsc::Receiver<OutgoingEnvelope>,
+        serde_json::Value,
+    ) {
+        std::fs::write(root.join(".inquello-fictional-audit-session"), "synthetic").unwrap();
+        let (mut processor, outgoing, rx) = fixture(root).await;
+        Arc::get_mut(&mut processor).unwrap().task_layer_fixture =
+            Some((DeviceRequirements::default(), UserConfig::default()));
+        let mut bootstrap = params(root, 1);
+        bootstrap.real_session = None;
+        processor
+            .tasks_bootstrap(CONNECTION, bootstrap)
+            .await
+            .unwrap();
+        processor.route_configure(CONNECTION,serde_json::from_value(json!({
+            "operationId":"status-route","expectedRevision":0,"configuration":{
+                "routeId":"claude-api-key","deployment":"anthropic-direct","model":"claude-sonnet-5-5",
+                "apiVersion":"2026-10-21","accountRef":PRINCIPAL,"region":null
+            }
+        })).unwrap()).await.unwrap();
+        let cert = rcgen::generate_simple_self_signed(vec!["127.0.0.1".into()])
+            .unwrap()
+            .cert
+            .der()
+            .to_vec();
+        let transport = json!({"workspaceId":WORKSPACE,"routeId":"claude-api-key","configurationRevision":1,
+            "endpoint":"https://127.0.0.1:1/v1/messages","certificate":cert});
+        if prepare {
+            processor
+                .prepare_task_fixture(CONNECTION, Some(transport.clone()))
+                .await
+                .unwrap();
+        }
+        (processor, outgoing, rx, transport)
+    }
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    fn status_input() -> serde_json::Value {
+        json!({"workspaceId":WORKSPACE,"routeId":"claude-api-key","configurationRevision":1})
+    }
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    async fn allowed_status(
+        processor: &InquelloRequestProcessor,
+        outgoing: &OutgoingMessageSender,
+        rx: &mut tokio::sync::mpsc::Receiver<OutgoingEnvelope>,
+    ) -> Result<serde_json::Value, JSONRPCErrorError> {
+        let (result, ()) = tokio::join!(
+            processor.task_fixture_status(CONNECTION, Some(status_input())),
+            async {
+                let id = request_id(rx).await;
+                allow(outgoing, id).await;
+            }
+        );
+        result
+    }
+
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    #[tokio::test]
+    async fn fixture_status_returns_only_current_owned_proof_and_cleans_up() {
+        let dir = tempfile::tempdir().unwrap();
+        let (processor, outgoing, mut rx, _) = status_fixture(dir.path(), true).await;
+        for _ in 0..2 {
+            assert_eq!(
+                allowed_status(&processor, &outgoing, &mut rx)
+                    .await
+                    .unwrap(),
+                json!({"accepted":true})
+            );
+        }
+        assert_eq!(processor.routes.state.lock().await.credentials.len(), 1);
+        processor.connection_closed(CONNECTION).await;
+        assert!(
+            !processor
+                .task_fixtures
+                .lock()
+                .await
+                .contains_key(&CONNECTION)
+        );
+        assert!(processor.routes.state.lock().await.credentials.is_empty());
+        assert!(
+            processor
+                .task_fixture_status(CONNECTION, Some(status_input()))
+                .await
+                .is_err()
+        );
+    }
+
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    #[tokio::test]
+    async fn fixture_status_rejects_scope_and_caller_assertion_mismatches() {
+        let dir = tempfile::tempdir().unwrap();
+        let (processor, _, _, _) = status_fixture(dir.path(), true).await;
+        for (field, value) in [
+            ("workspaceId", json!("11111111-1111-4111-8111-111111111112")),
+            ("routeId", json!("codex-responses")),
+            ("configurationRevision", json!(2)),
+            ("accepted", json!(true)),
+            ("endpoint", json!("https://example.com/v1/messages")),
+        ] {
+            let mut input = status_input();
+            input[field] = value;
+            assert!(
+                processor
+                    .task_fixture_status(CONNECTION, Some(input))
+                    .await
+                    .is_err()
+            );
+        }
+        assert!(
+            processor
+                .task_fixture_status(ConnectionId(999), Some(status_input()))
+                .await
+                .is_err()
+        );
+        processor.principals_guard().insert(
+            CONNECTION,
+            PrincipalId::parse("22222222-2222-4222-8222-222222222222").unwrap(),
+        );
+        assert!(
+            processor
+                .task_fixture_status(CONNECTION, Some(status_input()))
+                .await
+                .is_err()
+        );
+    }
+
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    #[tokio::test]
+    async fn fixture_status_rejects_session_replacement_and_real_data() {
+        let dir = tempfile::tempdir().unwrap();
+        let (processor, _, _, _) = status_fixture(dir.path(), true).await;
+        {
+            let mut sessions = processor.task_sessions.lock().await;
+            let session = sessions.get_mut(&CONNECTION).unwrap();
+            session.real =
+                Some(serde_json::from_value(params(dir.path(), 1).real_session.unwrap()).unwrap());
+        }
+        assert!(
+            processor
+                .task_fixture_status(CONNECTION, Some(status_input()))
+                .await
+                .is_err()
+        );
+        {
+            let mut sessions = processor.task_sessions.lock().await;
+            let session = sessions.get_mut(&CONNECTION).unwrap();
+            session.real = None;
+            session.cancellation.cancel();
+            session.cancellation = CancellationToken::new();
+        }
+        assert!(
+            processor
+                .task_fixture_status(CONNECTION, Some(status_input()))
+                .await
+                .is_err()
+        );
+    }
+
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    #[tokio::test]
+    async fn fixture_status_rejects_replaced_or_additional_credentials() {
+        let dir = tempfile::tempdir().unwrap();
+        let (processor, outgoing, mut rx, _) = status_fixture(dir.path(), true).await;
+        let principal = PrincipalId::parse(PRINCIPAL).unwrap();
+        let key = (principal, routes::RouteId::ClaudeApiKey);
+        {
+            let mut state = processor.routes.state.lock().await;
+            state.generations.insert(key, 2);
+            state.credentials.insert(key, (PRINCIPAL.into(), 2));
+        }
+        assert!(
+            allowed_status(&processor, &outgoing, &mut rx)
+                .await
+                .is_err()
+        );
+        {
+            let mut state = processor.routes.state.lock().await;
+            state.generations.insert(key, 1);
+            state.credentials.insert(key, (PRINCIPAL.into(), 1));
+            state.credentials.insert(
+                (principal, routes::RouteId::CodexResponses),
+                ("nonfixture-account".into(), 2),
+            );
+        }
+        assert!(
+            allowed_status(&processor, &outgoing, &mut rx)
+                .await
+                .is_err()
+        );
+    }
+
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    #[tokio::test]
+    async fn fixture_status_rejects_missing_marker_and_nonloopback_transport() {
+        let dir = tempfile::tempdir().unwrap();
+        let (processor, _, _, _) = status_fixture(dir.path(), true).await;
+        std::fs::remove_file(dir.path().join(".inquello-fictional-audit-session")).unwrap();
+        assert!(
+            processor
+                .task_fixture_status(CONNECTION, Some(status_input()))
+                .await
+                .is_err()
+        );
+        std::fs::write(
+            dir.path().join(".inquello-fictional-audit-session"),
+            "synthetic",
+        )
+        .unwrap();
+        processor
+            .task_fixtures
+            .lock()
+            .await
+            .get_mut(&CONNECTION)
+            .unwrap()
+            .endpoint = "https://example.com/v1/messages".into();
+        assert!(
+            processor
+                .task_fixture_status(CONNECTION, Some(status_input()))
+                .await
+                .is_err()
+        );
+    }
+
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    #[tokio::test]
+    async fn fixture_status_requires_fresh_authority() {
+        let dir = tempfile::tempdir().unwrap();
+        let (processor, outgoing, mut rx, _) = status_fixture(dir.path(), true).await;
+        let (result, ()) = tokio::join!(
+            processor.task_fixture_status(CONNECTION, Some(status_input())),
+            async {
+                let id = request_id(&mut rx).await;
+                outgoing
+                    .notify_client_response(CONNECTION, id, json!({"workspacePolicy":null}))
+                    .await;
+            }
+        );
+        assert!(result.is_err());
+    }
+
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    #[tokio::test]
+    async fn fixture_transport_refuses_existing_ordinary_provider_credential() {
+        let dir = tempfile::tempdir().unwrap();
+        let (processor, _, _, transport) = status_fixture(dir.path(), false).await;
+        // A fictional key installed through the ordinary private-auth path,
+        // not through fixture preparation; no network/provider request occurs.
+        processor
+            .route_private_auth(
+                CONNECTION,
+                serde_json::from_value(json!({
+                    "routeId":"claude-api-key","accountRef":PRINCIPAL,"generation":2,
+                    "apiKey":"sk-ant-unit-test-ordinary-binding-only"
+                }))
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert!(
+            processor
+                .prepare_task_fixture(CONNECTION, Some(transport))
+                .await
+                .is_err()
+        );
+        assert!(
+            !processor
+                .task_fixtures
+                .lock()
+                .await
+                .contains_key(&CONNECTION)
+        );
+        assert!(
+            processor
+                .task_fixture_status(CONNECTION, Some(status_input()))
+                .await
+                .is_err()
+        );
+    }
+
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    async fn quota_status_fixture(
+        root: &std::path::Path,
+        tier: NativeTaskDataTier,
+    ) -> (
+        Arc<InquelloRequestProcessor>,
+        Arc<OutgoingMessageSender>,
+        tokio::sync::mpsc::Receiver<OutgoingEnvelope>,
+        String,
+    ) {
+        let (processor, outgoing, rx, mut transport) = status_fixture(root, false).await;
+        processor.route_configure(CONNECTION, serde_json::from_value(json!({
+            "operationId":"quota-status-route","expectedRevision":0,"configuration":{
+                "routeId":"codex-responses","deployment":"openai-api","model":"fixture-model-20261030",
+                "apiVersion":"responses-v1","accountRef":PRINCIPAL,"region":null
+            }
+        })).unwrap()).await.unwrap();
+        transport["failBeforeSampling"] = json!(true);
+        processor
+            .prepare_task_fixture(CONNECTION, Some(transport))
+            .await
+            .unwrap();
+        processor
+            .routes_invalidate(
+                CONNECTION,
+                InquelloRoutesInvalidateParams {
+                    route_id: Some("claude-api-key".into()),
+                    task_id: None,
+                    generation: 2,
+                },
+            )
+            .await
+            .unwrap();
+        let (store, actor) = processor.context(CONNECTION).await.unwrap();
+        let run = store
+            .reserve_task_run(
+                actor.principal_id,
+                StartTaskIntent {
+                    operation_id: uuid::Uuid::new_v4().to_string(),
+                    workspace_id: WORKSPACE.into(),
+                    engagement_id: None,
+                    folder_id: None,
+                    request: "Fictional quota proof".into(),
+                    route_id: "codex-responses".into(),
+                    configuration_revision: 1,
+                    choices: usage::Choices::default(),
+                },
+                "quota-status-runtime",
+                1,
+                tier,
+            )
+            .await
+            .unwrap();
+        let route = routes::task_route(&store, actor, &run.task_id)
+            .await
+            .unwrap();
+        {
+            // Unit-test state setup only; integration below exercises prepare.
+            let mut state = processor.routes.state.lock().await;
+            let key = (actor.principal_id, routes::RouteId::CodexResponses);
+            state.credentials.insert(key, (PRINCIPAL.into(), 1));
+            state.generations.insert(key, 1);
+            state.usage_fixture = Some(super::super::usage_bridge::UsageLimitFixture {
+                connection: CONNECTION,
+                task: run.task_id.clone(),
+                principal: actor.principal_id,
+                route_revision: route.revision.get(),
+                provider_calls: 0,
+            });
+        }
+        (processor, outgoing, rx, run.task_id)
+    }
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    fn quota_status_input() -> serde_json::Value {
+        json!({"workspaceId":WORKSPACE,"routeId":"codex-responses","configurationRevision":1})
+    }
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    async fn allowed_quota_status(
+        processor: &InquelloRequestProcessor,
+        outgoing: &OutgoingMessageSender,
+        rx: &mut tokio::sync::mpsc::Receiver<OutgoingEnvelope>,
+    ) -> Result<serde_json::Value, JSONRPCErrorError> {
+        let (result, ()) = tokio::join!(
+            processor.task_fixture_status(CONNECTION, Some(quota_status_input())),
+            async {
+                let id = request_id(rx).await;
+                allow(outgoing, id).await;
+            }
+        );
+        result
+    }
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    #[tokio::test]
+    async fn quota_fixture_status_returns_only_current_bound_proof_and_refuses_clear() {
+        let dir = tempfile::tempdir().unwrap();
+        let (processor, outgoing, mut rx, _) =
+            quota_status_fixture(dir.path(), NativeTaskDataTier::Synthetic).await;
+        assert_eq!(
+            allowed_quota_status(&processor, &outgoing, &mut rx)
+                .await
+                .unwrap(),
+            json!({"accepted":true})
+        );
+        processor.routes.state.lock().await.usage_fixture = None;
+        assert!(
+            processor
+                .task_fixture_status(CONNECTION, Some(quota_status_input()))
+                .await
+                .is_err()
+        );
+    }
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    #[tokio::test]
+    async fn quota_fixture_status_rejects_other_connection_owner_and_session() {
+        for kind in ["connection", "owner", "session", "real-session"] {
+            let dir = tempfile::tempdir().unwrap();
+            let (processor, _, _, _) =
+                quota_status_fixture(dir.path(), NativeTaskDataTier::Synthetic).await;
+            match kind {
+                "connection" => {
+                    processor
+                        .routes
+                        .state
+                        .lock()
+                        .await
+                        .usage_fixture
+                        .as_mut()
+                        .unwrap()
+                        .connection = ConnectionId(999)
+                }
+                "owner" => {
+                    processor
+                        .routes
+                        .state
+                        .lock()
+                        .await
+                        .usage_fixture
+                        .as_mut()
+                        .unwrap()
+                        .principal =
+                        PrincipalId::parse("22222222-2222-4222-8222-222222222222").unwrap()
+                }
+                "session" => processor
+                    .task_sessions
+                    .lock()
+                    .await
+                    .get(&CONNECTION)
+                    .unwrap()
+                    .cancellation
+                    .cancel(),
+                _ => {
+                    processor
+                        .task_sessions
+                        .lock()
+                        .await
+                        .get_mut(&CONNECTION)
+                        .unwrap()
+                        .real = Some(
+                        serde_json::from_value(params(dir.path(), 1).real_session.unwrap())
+                            .unwrap(),
+                    )
+                }
+            }
+            assert!(
+                processor
+                    .task_fixture_status(CONNECTION, Some(quota_status_input()))
+                    .await
+                    .is_err(),
+                "{kind}"
+            );
+        }
+    }
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    #[tokio::test]
+    async fn quota_fixture_status_rejects_generation_additional_credential_and_route_revision() {
+        for kind in [
+            "generation",
+            "additional",
+            "task-revision",
+            "configuration-revision",
+        ] {
+            let dir = tempfile::tempdir().unwrap();
+            let (processor, outgoing, mut rx, _) =
+                quota_status_fixture(dir.path(), NativeTaskDataTier::Synthetic).await;
+            let principal = PrincipalId::parse(PRINCIPAL).unwrap();
+            let mut input = quota_status_input();
+            {
+                let mut state = processor.routes.state.lock().await;
+                match kind {
+                    "generation" => {
+                        state
+                            .generations
+                            .insert((principal, routes::RouteId::CodexResponses), 2);
+                    }
+                    "additional" => {
+                        state.credentials.insert(
+                            (principal, routes::RouteId::ClaudeApiKey),
+                            (PRINCIPAL.into(), 2),
+                        );
+                    }
+                    "task-revision" => {
+                        state.usage_fixture.as_mut().unwrap().route_revision += 1;
+                    }
+                    _ => {
+                        input["configurationRevision"] = json!(2);
+                    }
+                }
+            }
+            let (result, ()) = tokio::join!(
+                processor.task_fixture_status(CONNECTION, Some(input)),
+                async {
+                    let id = request_id(&mut rx).await;
+                    allow(&outgoing, id).await;
+                }
+            );
+            assert!(result.is_err(), "{kind}");
+        }
+    }
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    #[tokio::test]
+    async fn quota_fixture_status_rechecks_fixture_after_fresh_authority_await() {
+        let dir = tempfile::tempdir().unwrap();
+        let (processor, outgoing, mut rx, _) =
+            quota_status_fixture(dir.path(), NativeTaskDataTier::Synthetic).await;
+        let (result, ()) = tokio::join!(
+            processor.task_fixture_status(CONNECTION, Some(quota_status_input())),
+            async {
+                let id = request_id(&mut rx).await;
+                processor.routes.state.lock().await.usage_fixture = None;
+                allow(&outgoing, id).await;
+            }
+        );
+        assert!(result.is_err());
+    }
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    #[tokio::test]
+    async fn quota_fixture_status_refuses_revoked_authority() {
+        let dir = tempfile::tempdir().unwrap();
+        let (processor, outgoing, mut rx, _) =
+            quota_status_fixture(dir.path(), NativeTaskDataTier::Synthetic).await;
+        let (result, ()) = tokio::join!(
+            processor.task_fixture_status(CONNECTION, Some(quota_status_input())),
+            async {
+                let id = request_id(&mut rx).await;
+                outgoing
+                    .notify_client_response(CONNECTION, id, json!({"workspacePolicy":null}))
+                    .await;
+            }
+        );
+        assert!(result.is_err());
+    }
+
+    #[cfg(all(feature = "inference-fixtures", debug_assertions))]
+    #[tokio::test]
+    async fn quota_fixture_status_rejects_real_task_classification() {
+        let dir = tempfile::tempdir().unwrap();
+        let (processor, outgoing, mut rx, _) =
+            quota_status_fixture(dir.path(), NativeTaskDataTier::Real).await;
+        assert!(
+            allowed_quota_status(&processor, &outgoing, &mut rx)
+                .await
+                .is_err()
+        );
+    }
+
     #[tokio::test]
     async fn dropped_saved_admission_cleanup_removes_native_callback_and_ignores_late_reply() {
         let (tx, mut rx) = tokio::sync::mpsc::channel(8);
@@ -5633,6 +8451,10 @@ mod bootstrap_order_tests {
         );
     }
     #[tokio::test]
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "This owned temporary-database fault fixture intentionally alters provenance after the authority wait; production database access still uses the guarded store."
+    )]
     async fn final_scope_rechecks_owned_task_provenance_after_workspace_authority_wait() {
         // Local device/user config is a unit fixture. SQLite provenance, fresh
         // Workspace request/response and the final native scope guard are real.
@@ -5751,6 +8573,10 @@ mod bootstrap_order_tests {
         );
     }
     #[tokio::test]
+    #[expect(
+        clippy::await_holding_invalid_type,
+        reason = "The owned guard deliberately blocks the competing future across a local barrier to verify revocation; no provider or service network I/O occurs."
+    )]
     async fn bootstrap_admission_is_blocked_while_same_principal_reset_waits_on_routes() {
         let dir = tempfile::tempdir().unwrap();
         let (processor, outgoing, mut rx) = fixture(dir.path()).await;
@@ -6109,8 +8935,7 @@ impl InquelloRequestProcessor {
             || selected.configuration != configuration
             || selected.configuration_revision.get() != run.configuration_revision
             || route.stale_configuration
-            || route.revision.get() != 1
-            || settings.revision != 1
+            || settings.route_revision != route.revision.get()
             || settings.choices != run.choices
             || !caps.reasoning.contains(&run.choices.reasoning)
             || !caps.speeds.contains(&run.choices.speed)
@@ -6244,81 +9069,71 @@ impl InquelloRequestProcessor {
             TaskLifecycleStatus::Reserved
                 | TaskLifecycleStatus::Dispatching
                 | TaskLifecycleStatus::Uncertain
-        ) {
-            if let Some(current) = store
-                .find_task_current_run(actor.principal_id, &receipt.binding.task_id)
-                .await
-                .map_err(domain_error)?
-            {
-                if current.run_id == receipt.binding.run_id
-                    && current.runtime_id == receipt.binding.runtime_id
-                {
-                    let steer_admitted = if receipt.kind == TaskLifecycleKind::Steer {
-                        let thread = current.thread_id.clone().ok_or_else(|| {
-                            refusal("not_found", "Retained Task linkage unavailable")
-                        })?;
-                        let turn = receipt.binding.turn_id.clone().ok_or_else(|| {
-                            refusal("not_found", "Retained steering turn unavailable")
-                        })?;
-                        let (entries, _) = read_progress_pages(|cursor, limit| {
-                            let thread = thread.clone();
-                            let turn = turn.clone();
-                            let binding = &receipt.binding;
-                            async move {
-                                self.authorize_task_disclosure(
-                                    connection,
-                                    actor,
-                                    &binding.workspace_id,
-                                )
-                                .await?;
-                                self.authorize_run_route_disclosure(connection, actor, binding)
-                                    .await?;
-                                let page = threads
-                                    .thread_items_list_response_inner(ThreadItemsListParams {
-                                        thread_id: thread,
-                                        turn_id: Some(turn),
-                                        cursor: cursor.map(ThreadItemsListCursor::Opaque),
-                                        limit: Some(limit),
-                                        sort_direction: Some(SortDirection::Desc),
-                                    })
-                                    .await?;
-                                self.authorize_task_disclosure(
-                                    connection,
-                                    actor,
-                                    &binding.workspace_id,
-                                )
-                                .await?;
-                                self.authorize_run_route_disclosure(connection, actor, binding)
-                                    .await?;
-                                Ok(page)
-                            }
-                        })
-                        .await?;
-                        entries.iter().any(|entry| entry.turn_id==turn && matches!(&entry.item,
-                            ThreadItem::UserMessage {client_id:Some(id),..} if id==&receipt.operation_id))
-                    } else {
-                        false
-                    };
-                    let outcome = lifecycle_observed_outcome(
-                        receipt.kind,
-                        current.status,
-                        current.turn_id.is_some(),
-                        steer_admitted,
-                    );
-                    if let (Some(outcome), Some(thread)) = (outcome, current.thread_id.as_deref()) {
-                        receipt = store
-                            .finish_task_lifecycle(
-                                actor.principal_id,
-                                &receipt.operation_id,
-                                &current.runtime_id,
-                                thread,
-                                current.turn_id.as_deref(),
-                                outcome,
-                            )
-                            .await
-                            .map_err(domain_error)?;
+        ) && let Some(current) = store
+            .find_task_current_run(actor.principal_id, &receipt.binding.task_id)
+            .await
+            .map_err(domain_error)?
+            && current.run_id == receipt.binding.run_id
+            && current.runtime_id == receipt.binding.runtime_id
+        {
+            let steer_admitted = if receipt.kind == TaskLifecycleKind::Steer {
+                let thread = current
+                    .thread_id
+                    .clone()
+                    .ok_or_else(|| refusal("not_found", "Retained Task linkage unavailable"))?;
+                let turn =
+                    receipt.binding.turn_id.clone().ok_or_else(|| {
+                        refusal("not_found", "Retained steering turn unavailable")
+                    })?;
+                let (entries, _) = read_progress_pages(|cursor, limit| {
+                    let thread = thread.clone();
+                    let turn = turn.clone();
+                    let binding = &receipt.binding;
+                    async move {
+                        self.authorize_task_disclosure(connection, actor, &binding.workspace_id)
+                            .await?;
+                        self.authorize_run_route_disclosure(connection, actor, binding)
+                            .await?;
+                        let page = threads
+                            .thread_items_list_response_inner(ThreadItemsListParams {
+                                thread_id: thread,
+                                turn_id: Some(turn),
+                                cursor: cursor.map(ThreadItemsListCursor::Opaque),
+                                limit: Some(limit),
+                                sort_direction: Some(SortDirection::Desc),
+                            })
+                            .await?;
+                        self.authorize_task_disclosure(connection, actor, &binding.workspace_id)
+                            .await?;
+                        self.authorize_run_route_disclosure(connection, actor, binding)
+                            .await?;
+                        Ok(page)
                     }
-                }
+                })
+                .await?;
+                entries.iter().any(|entry| entry.turn_id==turn && matches!(&entry.item,
+                            ThreadItem::UserMessage {client_id:Some(id),..} if id==&receipt.operation_id))
+            } else {
+                false
+            };
+            let outcome = lifecycle_observed_outcome(
+                receipt.kind,
+                current.status,
+                current.turn_id.is_some(),
+                steer_admitted,
+            );
+            if let (Some(outcome), Some(thread)) = (outcome, current.thread_id.as_deref()) {
+                receipt = store
+                    .finish_task_lifecycle(
+                        actor.principal_id,
+                        &receipt.operation_id,
+                        &current.runtime_id,
+                        thread,
+                        current.turn_id.as_deref(),
+                        outcome,
+                    )
+                    .await
+                    .map_err(domain_error)?;
             }
         }
         self.lifecycle_response(connection, actor, receipt).await
@@ -6472,18 +9287,16 @@ impl InquelloRequestProcessor {
         {
             Ok(claimed) => claimed,
             Err(error) => {
-                // Claim is transactional. A failed claim submitted no native
-                // input; close its reservation so restored authority can act.
-                let _ = store
-                    .finish_task_lifecycle(
-                        actor.principal_id,
-                        &params.operation_id,
-                        &run.runtime_id,
-                        &thread,
-                        run.turn_id.as_deref(),
-                        TaskLifecycleStatus::Rejected,
-                    )
-                    .await;
+                // A failed claim may have lost to a duplicate that already
+                // dispatched. Atomically reject only an unclaimed reservation;
+                // never rewrite the winning caller's receipt or dispatch again.
+                let (receipt, rejected) = store
+                    .reject_reserved_task_lifecycle(actor.principal_id, &params.operation_id, &run)
+                    .await
+                    .map_err(domain_error)?;
+                if !rejected {
+                    return self.lifecycle_response(connection, actor, receipt).await;
+                }
                 return Err(before_effect(domain_error(error)));
             }
         };
@@ -6639,6 +9452,17 @@ impl InquelloRequestProcessor {
         #[cfg(all(feature = "inference-fixtures", debug_assertions))]
         let fixture = self.task_fixtures.lock().await.get(&connection).cloned();
         let authorization = Arc::new(TaskGuard {
+            selection_revision: routes::task_route(&store, actor, &run.task_id)
+                .await
+                .map_err(domain_error)?
+                .revision
+                .get(),
+            settings_revision: usage::task_usage(&store, actor, &run.task_id)
+                .await
+                .map_err(domain_error)?
+                .settings
+                .ok_or_else(|| refusal("settings_unavailable", "Task settings unavailable"))?
+                .revision,
             execution_lifetime: CancellationToken::new(),
             #[cfg(all(feature = "inference-fixtures", debug_assertions))]
             fixture,

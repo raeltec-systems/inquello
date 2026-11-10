@@ -1,6 +1,7 @@
 /** Story 1.21: real runtime + real seeded policy. No fake RPC replies.
  * Requires database/topology/runtime; provider independence also needs an isolated
- * Linux keyring. Missing prerequisites are skips, never acceptance evidence. */
+ * Linux keyring or the Windows keyring entry scoped to its fresh CODEX_HOME.
+ * Missing prerequisites are skips, never acceptance evidence. */
 import { spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
@@ -31,6 +32,11 @@ const appServer = resolveAppServerBinary({ env: process.env, isPackaged: false, 
 const databaseConfigured = Boolean(process.env.INQUELLO_TEST_DATABASE_URL || process.env.INQUELLO_DEV_DATABASE_URL);
 const onPath = (name: string) => (process.env.PATH ?? '').split(path.delimiter).some(dir => fs.existsSync(path.join(dir,name)));
 const keyringTools = process.platform === 'linux' && ['dbus-run-session','gnome-keyring-daemon','secret-tool'].every(onPath);
+// DirectKeyringAuthStorage hashes canonical CODEX_HOME for every load/save/delete
+// (login/src/auth/storage.rs). The Windows native store therefore gets a distinct
+// entry for this mkdtemp profile, without reading or replacing a user's login.
+const isolatedProviderStore = keyringTools || process.platform === 'win32';
+let providerLoginAttempted = false;
 let capabilities: CapabilityService;
 let service: SharedServiceClient;
 let codex: CodexAccount;
@@ -118,14 +124,22 @@ describe.skipIf(!databaseConfigured)('capabilities against the real runtime and 
     writeRuntimeConfig(runtimeHome);
     const environment = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('DBUS_') && !key.startsWith('XDG_') && key !== 'GNOME_KEYRING_CONTROL'));
     const home = path.join(dir,'home'); fs.mkdirSync(home);
+    // Login notifications can start plugin cache sync after startup; disable it
+    // in this synthetic fixture only so a fake provider login cannot download.
+    const fixtureConfigArgs = [...RUNTIME_OWNED_CONFIG_ARGS, '-c', 'features.plugins=false'];
     runtimeOptions = {
       command: keyringTools ? 'dbus-run-session' : appServer.path,
-      commandArgsPrefix: keyringTools ? ['--','sh','-c','echo -n testpw | gnome-keyring-daemon --unlock --components=secrets >/dev/null; exec "$0" "$@"',appServer.path,'--disable-plugin-startup-tasks-for-tests',...RUNTIME_OWNED_CONFIG_ARGS] : ['--disable-plugin-startup-tasks-for-tests',...RUNTIME_OWNED_CONFIG_ARGS],
+      commandArgsPrefix: keyringTools ? ['--','sh','-c','echo -n testpw | gnome-keyring-daemon --unlock --components=secrets >/dev/null; exec "$0" "$@"',appServer.path,'--disable-plugin-startup-tasks-for-tests',...fixtureConfigArgs] : ['--disable-plugin-startup-tasks-for-tests',...fixtureConfigArgs],
       env: runtimeChildEnv({...environment,HOME:home}, { serviceConfigEnv: SERVICE_CONFIG_ENV, codexHome: runtimeHome, workingStore }),
       clientInfo: { name: 'inquello_desktop', title: 'Inquello', version: '0.0.0-test' },
       schemaStamp,
       stderrLogPath: path.join(dir, 'logs', 'app-server-stderr.log'),
       logger: recordingLogger(),
+      onServerRequest: async (method, params) => {
+        if (method === 'inquello/context/authorize') return organise?.authorizeContext(params) ?? { available: false, snapshot: null, serviceEngagementIds: [] };
+        if (method === 'inquello/tasks/authority') return { workspacePolicy: await policy?.startPolicy((params as { workspaceId: string }).workspaceId) ?? null };
+        return undefined;
+      },
     };
     runtime = new AppServerRuntime(runtimeOptions);
     await runtime.start();
@@ -149,11 +163,13 @@ describe.skipIf(!databaseConfigured)('capabilities against the real runtime and 
   }, 120_000);
 
   afterAll(async () => {
-    if (codex && keyringTools) await codex.logout();
+    const providerCleanup = providerLoginAttempted && codex ? await codex.logout() : null;
     await runtime?.stop();
     if (fixture) await new Promise<void>((resolve,reject) => fixture.close(error => error ? reject(error) : resolve()));
     await stopTopology();
     await removeGuestTaskStorage();
+    // Retain the isolated profile locator if its synthetic key could not be removed.
+    if (providerCleanup?.ok === false) throw new Error('Synthetic provider credential cleanup failed; isolated profile retained.');
     removeTempDirs();
   });
 
@@ -198,7 +214,7 @@ describe.skipIf(!databaseConfigured)('capabilities against the real runtime and 
     expect(inventory.entries.find(x=>x.id===input.id)).toMatchObject({installed:true,enabled:false,callable_now:false});
     expect((await capabilities.manage({...input,action:'remove'})).ok).toBe(true);
   },120_000);
-  it.skipIf(!keyringTools)('provider sign-in/out changes no Workspace, membership, Engagement, review or policy', async () => {
+  it.skipIf(!isolatedProviderStore)('provider sign-in/out changes no Workspace, membership, Engagement, review or policy', async () => {
     const task = ok(await organise.createTask({operationId:randomUUID(),workspaceId:seed.workspace_id,engagementId:null,folderId:null,title:'Provider independence fixture'}));
     const snapshot = async () => ({
       principal:identity.principalId(),
@@ -207,13 +223,28 @@ describe.skipIf(!databaseConfigured)('capabilities against the real runtime and 
       states:await organise.listStates(task.taskId),
       execution:await identity.withAccess(access => service.executionPolicy(access,seed.workspace_id)),
     });
+    const config = await runtime.request<{config:Record<string,unknown>}>('config/read',{includeLayers:false});
+    expect(config.config.cli_auth_credentials_store).toBe('keyring');
+    expect((config.config.features as Record<string,unknown>).secret_auth_storage).toBe(false);
+    expect((config.config.features as Record<string,unknown>).plugins).toBe(false);
+    expect((await codex.refresh()).state).toBe('not-connected');
+    expect(fs.existsSync(path.join(persistedRuntimeHome,'auth.json'))).toBe(false);
     const before = await snapshot();
-    const login = await codex.login({type:'apiKey',apiKey:'sk-inquello-capabilities-synthetic-'+randomUUID()});
-    expect(login.ok, login.reason ?? '').toBe(true);
-    expect((await codex.refresh()).state).toBe('connected');
-    expect((await capabilities.getInventory(seed.workspace_id)).provider.accountType).toBe('API key');
-    expect(await snapshot()).toEqual(before);
-    await codex.logout(); expect((await codex.refresh()).state).toBe('not-connected');
+    providerLoginAttempted = true;
+    try {
+      const login = await codex.login({type:'apiKey',apiKey:'sk-inquello-capabilities-synthetic-'+randomUUID()});
+      expect(login.ok, login.reason ?? '').toBe(true);
+      expect((await codex.refresh()).state).toBe('connected');
+      expect((await capabilities.getInventory(seed.workspace_id)).provider.accountType).toBe('API key');
+      expect(fs.existsSync(path.join(persistedRuntimeHome,'auth.json'))).toBe(false);
+      expect(await snapshot()).toEqual(before);
+    } finally {
+      const logout = await codex.logout();
+      expect(logout.ok, logout.reason ?? '').toBe(true);
+      providerLoginAttempted = false;
+    }
+    expect((await codex.refresh()).state).toBe('not-connected');
+    expect(fs.existsSync(path.join(persistedRuntimeHome,'auth.json'))).toBe(false);
     expect(await snapshot()).toEqual(before);
   });
 });

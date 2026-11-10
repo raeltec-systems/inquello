@@ -1,4 +1,5 @@
 import { isPrivatePath } from './runtime/private-paths';
+import { observeSyntheticStartup } from './smoke-startup';
 /**
  * `--smoke` renderer privilege probe (AD-5).
  *
@@ -78,9 +79,11 @@ import { isPrivatePath } from './runtime/private-paths';
  * seed file named by `INQUELLO_SMOKE_SEED`) it signs the synthetic user in,
  * accepts the seeded first-administrator invite, opens the Shell, and through
  * the UI creates an Engagement (client and period), a folder and a Task in it.
- * It reads the Header (title, client, period, Workspace), records a synthetic
- * thread ref on the Task in main, moves the Task through the Move menu, and
- * requires the same Task ID, thread ref and references, private visibility,
+ * It reads the Header (title, client, period, Workspace), then through
+ * "Conversation options" › "Rename or organise" moves the Task through the
+ * Move menu and renames it, and requires the same Task ID, no thread binding
+ * (threads are bound only by the native Task start workflow), the same
+ * references, the new title, private visibility,
  * and that a second principal bound to the runtime lists none of the Tasks.
  * It signs out at the end. `evaluateOrganise` is pure and decides pass/fail.
  *
@@ -89,10 +92,12 @@ import { isPrivatePath } from './runtime/private-paths';
  * by main's validator. With the dev topology it signs in again, creates an ad
  * hoc Task in main, and through the renderer's `state.recordTaskState` records
  * task planned, then running, then run execution_finished. It opens the Task
- * in the Shell and requires the States section to show "Execution finished"
- * in the neutral custom-label chip (not the accepted style, not green), every
- * other dimension "Not recorded", no accepted or explained chip and no text
- * claiming acceptance. A review write is refused by main's validator and, sent
+ * in the Shell and, per the owner amendment of 2026-11-04, requires the
+ * truthful pre-run conversation: no end-of-turn line (no native turn ran), no
+ * state rows and no "Not recorded" placeholder, nothing green, no accepted or
+ * explained chip and no text claiming acceptance. The neutral "Finished ·
+ * worked for …" line is checked on fixture-backed turns in the
+ * visual-conversation phase. A review write is refused by main's validator and, sent
  * straight to the runtime as a system actor, with `human_actor_required`. A
  * second principal is refused the Task's states as `not_found`.
  * `evaluateStates` is pure and decides pass/fail.
@@ -143,6 +148,7 @@ import { BROAD_MODE_REACH } from './policy/views';
 import type { ProviderService } from './providers';
 import { isProviderCredentialVar } from './runtime/env';
 import { taskFiles } from './runtime/probe-task-files';
+import { RpcResponseError } from './runtime/errors';
 import type { BlockedKind } from './security/policy';
 
 /** Exercise main's identity transition hooks as well as the session itself. */
@@ -178,15 +184,18 @@ export async function probeSavedNavigation(contents: WebContents, options: {
     const taskId = created.taskId;
     await evaluate(`
       require(await openShell(), 'Shell unavailable');
-      const row = await wait(() => q('[data-task-id="${taskId}"] a'), ${SHELL_SETTLE_MS});
+      const row = await wait(() => qVisible('[data-task-id="${taskId}"] a'), ${SHELL_SETTLE_MS});
       require(row, 'Owned draft not shown').click();
-      require(await wait(() => q('[data-task-view="${taskId}"]'), ${SHELL_SETTLE_MS}), 'Draft did not open');
-      const menu = require(button('Organise Task'), 'Organise menu unavailable'); menu.click();
-      require(await wait(() => button('Pin'), 5000), 'Pin unavailable').click();
-      require(await wait(() => q('[data-task-id="${taskId}"]')?.textContent.includes('Pinned'), 5000), 'Pin did not persist to navigation');
-      require(button('Organise Task'), 'Organise menu disappeared').click();
-      require(await wait(() => button('Archive'), 5000), 'Archive unavailable').click();
+      require(await wait(() => qVisible('[data-task-view="${taskId}"]'), ${SHELL_SETTLE_MS}), 'Draft did not open');
+      const dialog = require(await openConversationDialog('Rename or organise'), 'Rename or organise did not open');
+      const menu = require(button('Organise conversation', dialog), 'Organise menu unavailable');
+      require(menu.getClientRects().length > 0, 'Organise menu is hidden'); menu.click();
+      require(await wait(() => button('Pin', dialog), 5000), 'Pin unavailable').click();
+      require(await wait(() => qVisible('[data-task-id="${taskId}"]')?.textContent.includes('Pinned'), 5000), 'Pin did not persist to navigation');
+      require(button('Organise conversation', dialog), 'Organise menu disappeared').click();
+      require(await wait(() => button('Archive', dialog), 5000), 'Archive unavailable').click();
       require(await wait(() => !q('[data-task-id="${taskId}"]'), 5000), 'Archived Task remained in navigation');
+      require(await closeConversationDialogs(), 'Rename or organise did not close');
     `);
     checks.push('Pin and archive through actual Task menus');
     await options.restartRuntime();
@@ -215,10 +224,12 @@ export async function probeSavedNavigation(contents: WebContents, options: {
       const hit = await wait(() => [...dialog.querySelectorAll('.iq-saved-results button')].find(el => el.textContent.includes('Procurement January')), 10000);
       require(hit, 'Archived search hit missing').click();
       require(await wait(() => !q('dialog[open]') && q('[data-task-view="${taskId}"]'), 10000), 'Archived hit did not reopen');
-      require(q('[data-task-view]').textContent.includes('Opening does not unarchive'), 'Reopen silently unarchived');
-      require(button('Organise Task'), 'Reopened Task menu unavailable').click();
-      require(await wait(() => button('Unarchive'), 5000), 'Unarchive unavailable').click();
-      require(await wait(() => q('[data-task-id="${taskId}"]'), 5000), 'Unarchive did not restore navigation');
+      const reopened = require(await openConversationDialog('Rename or organise'), 'Reopened Rename or organise did not open');
+      require(reopened.textContent.includes('Opening does not unarchive'), 'Reopen silently unarchived');
+      require(button('Organise conversation', reopened), 'Reopened Task menu unavailable').click();
+      require(await wait(() => button('Unarchive', reopened), 5000), 'Unarchive unavailable').click();
+      require(await wait(() => qVisible('[data-task-id="${taskId}"]'), 5000), 'Unarchive did not restore navigation');
+      require(await closeConversationDialogs(), 'Reopened Rename or organise did not close');
       const tree = await globalThis.inquello.organise.getTree({workspaceId:${JSON.stringify(workspaceId)}});
       const task = tree.ok && tree.value.tasks.find(t => t.taskId === '${taskId}');
       require(task?.pinned && !task.archived && task.runtimeThreadId === null, 'Navigation changed execution or lost the Task');
@@ -284,24 +295,30 @@ const TAB_SETTLE_MS = 50;
 
 /** The tree `window.inquello` must expose, as `describe` renders it. */
 export const EXPECTED_BRIDGE_TREE = {
+  onboarding: {getState: 'function', saveDraft: 'function', members: 'function', createWorkspace: 'function', acceptInvitation: 'function', invite: 'function', changeRoles: 'function', removeMember: 'function', revokeInvitation: 'function', reconcile: 'function', retry: 'function', discardPending: 'function'},
   tasks: { inbox: 'function', steer: 'function', stop: 'function', resume: 'function',preflight:'function',start:'function',reconcile:'function',progress:'function',activity:'function',settleLifecycle:'function',answer:'function',onProgressChanged:'function',onSessionChanged:'function'},
   usage: { forTask: 'function', set: 'function', onChanged: 'function' },
   environments: { forTask: 'function', onChanged: 'function' },
-  routes: { list: 'function', configure: 'function', forTask: 'function', select: 'function', onChanged: 'function' },
+  routes: { list: 'function', catalog: 'function', resolve: 'function', bindingState: 'function', selectModel: 'function', pendingModel: 'function', forTask: 'function', select: 'function', onChanged: 'function' },
   capabilities: { onChanged: 'function', getInventory: 'function', manage: 'function' },
   runtime: { getStatus: 'function' },
-  identity: { getStatus: 'function', signIn: 'function', signOut: 'function' },
+  identity: { reauthenticate: 'function', getStatus: 'function', signIn: 'function', signOut: 'function' },
   data: { getPolicy: 'function', export: 'function', import: 'function', delete: 'function' },
   provider: {
     getStatus: 'function',
+    refreshStatus:'function',
     setClaudeKey: 'function',
     verifyClaudeKey: 'function',
     removeClaudeKey: 'function',
     codexLogin: 'function',
     codexLogout: 'function',
+    consent: 'function',
+    changeConsent: 'function',
+    reconcileConsent: 'function',
+    retryConsent: 'function',
   },
   organise: {
-    search:'function',reopen:'function',setNavigation:'function',
+    search:'function',reopen:'function',setNavigation:'function',recoverNavigation:'function',
     getWorkspaces: 'function',
     getTree: 'function',
     createEngagement: 'function',
@@ -312,7 +329,7 @@ export const EXPECTED_BRIDGE_TREE = {
     moveTask: 'function',
   },
   state: { list: 'function', recordTaskState: 'function' },
-  policy: { getSettings: 'function', forTask: 'function', setBroadMode: 'function' },
+  policy: { onSettingsChanged: 'function', getSettings: 'function', forTask: 'function', setBroadMode: 'function' },
   permissions: { pending: 'function', decide: 'function', getRules: 'function', setUserRules: 'function' },
 } as const;
 
@@ -1616,7 +1633,6 @@ export async function probeProviders(contents: WebContents, options: ProviderPro
 
 /** How long a Shell step may take to show up in the renderer. */
 const SHELL_SETTLE_MS = 20_000;
-const SMOKE_THREAD_REF = 'smoke-thread-1';
 const OTHER_SMOKE_PRINCIPAL = '00000000-0000-4000-8000-00000000beef';
 
 const SHELL_HELPERS = `
@@ -1630,6 +1646,10 @@ const SHELL_HELPERS = `
     return predicate();
   };
   const q = (selector, root) => (root || document).querySelector(selector);
+  // Settings hides the persistent Shell; DOM presence alone is not readiness.
+  const visible = (element) => !!element && !element.closest('[hidden]');
+  const qVisible = (selector, root) => [...(root || document).querySelectorAll(selector)].find(visible) || null;
+  const specimenReady = () => location.hash === '#specimen' && !visible(q('[data-shell]')) && !!qVisible('.specimen');
   const press = (selector) => {
     const element = q(selector);
     if (!element || element.getAttribute('aria-disabled') === 'true') return false;
@@ -1642,16 +1662,50 @@ const SHELL_HELPERS = `
     element.dispatchEvent(new Event('input', { bubbles: true }));
   };
   const text = (selector) => { const element = q(selector); return element ? element.textContent : null; };
-  const readHeader = () => ({
+  const readHeader = async () => {
+    const trigger = qVisible('button[aria-label="Organization and team"]');
+    if (!trigger) throw new Error('Current workspace footer unavailable');
+    trigger.click();
+    const menu = await wait(() => qVisible('[role="menu"]'), 5000);
+    if (!menu) throw new Error('Current workspace menu unavailable');
+    const workspace = q('[role="menuitem"] .iq-menu-label', menu)?.textContent ?? null;
+    trigger.click();
+    return ({
     title: text('[data-header-title]'),
     client: text('[data-header-client]'),
     period: text('[data-header-period]'),
-    workspace: text('[data-header-workspace]'),
+    workspace,
     visibility: q('[data-header-visibility]') ? q('[data-header-visibility]').getAttribute('data-header-visibility') : null,
-  });
+    });
+  };
+  // The open conversation's controls live in two dialogs reached from the
+  // Header's "Conversation options" menu: "Rename or organise" (Move, rename)
+  // and "Permissions" (the compact policy, reach and execution mode).
+  const CONVERSATION_DIALOGS = { 'Rename or organise': 'Conversation options', Permissions: 'Conversation permissions' };
+  const openConversationDialog = async (item) => {
+    const label = CONVERSATION_DIALOGS[item];
+    const selector = 'dialog[open][aria-label="' + label + '"]';
+    const already = qVisible(selector);
+    if (already) return already;
+    const trigger = await wait(() => qVisible('[data-header] button[aria-label="Conversation options"]'), ${SHELL_SETTLE_MS});
+    if (!trigger) return null;
+    trigger.click();
+    const entry = await wait(() => [...document.querySelectorAll('[role="menuitem"]')].find((element) => visible(element) && element.textContent.trim() === item), 5000);
+    if (!entry) return null;
+    entry.click();
+    return await wait(() => qVisible(selector), ${SHELL_SETTLE_MS});
+  };
+  const closeConversationDialogs = async () => {
+    for (const label of Object.values(CONVERSATION_DIALOGS)) {
+      const dialog = qVisible('dialog[open][aria-label="' + label + '"]');
+      const close = dialog && [...dialog.querySelectorAll('button')].find((button) => button.textContent.trim() === 'Close ' + label);
+      if (close) close.click();
+    }
+    return !!(await wait(() => !document.querySelector('dialog[open]'), 5000));
+  };
   const openShell = async () => {
     location.hash = '#shell';
-    return !!(await wait(() => q('[data-sidebar]'), ${SHELL_SETTLE_MS}));
+    return !!(await wait(() => location.hash === '#shell' && visible(q('[data-shell]')) && qVisible('[data-sidebar]:not([data-sidebar-state="loading"])'), ${SHELL_SETTLE_MS}));
   };
 `;
 
@@ -1665,14 +1719,14 @@ const SHELL_SIGNED_OUT_PROBE = `(async () => {
   return out;
 })()`;
 
-/** Creates the Engagement/folder through the Shell, verifies New thread opens
+/** Creates the Engagement/folder through the Shell, verifies New chat opens
  * the unsent start surface, then seeds an owned draft through the named bridge
  * for navigation checks. No inference is started to fabricate saved work. */
 function shellCreateProbe(workspaceId: string): string {
   return `(async () => {
     ${SHELL_HELPERS}
     const out = { shellOpened: await openShell() };
-    out.ready = !!(await wait(() => q('[data-sidebar][data-sidebar-state="ready"]') && q('[data-workspace-selector][data-workspace-id=${JSON.stringify(workspaceId)}]'), ${SHELL_SETTLE_MS}));
+    out.ready = !!(await wait(() => q('[data-sidebar][data-sidebar-state="ready"]') && q('[data-rail-workspace=${JSON.stringify(workspaceId)}]'), ${SHELL_SETTLE_MS}));
     out.newEngagementPressed = press('[data-action="new-engagement"]');
     const form = await wait(() => q('[data-engagement-form]'), 5000);
     if (form) {
@@ -1704,36 +1758,53 @@ function shellCreateProbe(workspaceId: string): string {
     const created = await globalThis.inquello.organise.createTask({operationId:crypto.randomUUID(),workspaceId:${JSON.stringify(workspaceId)},engagementId:out.engagementId,folderId:out.folderId,title:'Untitled thread'});
     if (!created.ok) return out;
     location.hash = '#specimen';
-    await wait(() => !q('[data-shell]'), 5000);
+    await wait(specimenReady, 5000);
     await openShell();
     const task = await wait(() => q('[data-folder-id] [data-task-id]'), ${SHELL_SETTLE_MS});
     out.taskId = task ? task.getAttribute('data-task-id') : null;
     if (task) q('a', task)?.click();
     await wait(() => text('[data-header-client]'), 5000);
-    out.header = readHeader();
-    out.openTaskShown = !!q('[data-task-view] [data-thread-placeholder]');
+    out.header = await readHeader();
+    // A draft Task has no run yet: its conversation area opens with no turns and no end-of-turn line.
+    const view = await wait(() => qVisible('[data-task-view=' + JSON.stringify(out.taskId) + ']'), 5000);
+    out.openTaskShown = !!view && !q('[data-progress-item], [data-turn-finished]', view);
     out.shareControls = document.querySelectorAll('[data-shell] button[aria-label*="Share" i]').length;
     return out;
   })()`;
 }
 
-/** Reopens the Shell (re-reading the tree), opens the Task and moves it to no Engagement. */
+export const SMOKE_RENAMED_TITLE = 'Smoke renamed thread';
+
+/** Reopens the Shell (re-reading the tree), opens the Task, moves it to no
+ * Engagement and renames it through "Conversation options" › "Rename or organise". */
 function shellMoveProbe(taskId: string): string {
   return `(async () => {
     ${SHELL_HELPERS}
     location.hash = '#specimen';
-    await wait(() => !q('[data-shell]'), 5000);
+    await wait(specimenReady, 5000);
     const out = { shellOpened: await openShell() };
-    const row = await wait(() => q('[data-task-id=${JSON.stringify(taskId)}] a'), ${SHELL_SETTLE_MS});
+    const row = await wait(() => qVisible('[data-task-id=${JSON.stringify(taskId)}] a'), ${SHELL_SETTLE_MS});
     if (row) row.click();
-    out.opened = !!(await wait(() => q('[data-task-view=${JSON.stringify(taskId)}]'), 5000));
-    out.headerBefore = readHeader();
-    out.movePressed = press('[data-task-move] button');
-    const target = await wait(() => [...document.querySelectorAll('[role="menuitemradio"]')].find((item) => item.textContent.includes('No Engagement')), 5000);
+    out.opened = !!(await wait(() => qVisible('[data-task-view=${JSON.stringify(taskId)}]'), 5000));
+    out.headerBefore = await readHeader();
+    const dialog = await openConversationDialog('Rename or organise');
+    if (!dialog) throw new Error('Rename or organise did not open for Move');
+    const move = q('[data-task-move] button', dialog);
+    out.movePressed = !!move?.getClientRects().length && (move.click(), true);
+    const target = await wait(() => [...dialog.querySelectorAll('[role="menuitemradio"]')].find((item) => item.textContent.includes('No Engagement')), 5000);
     if (target) target.click();
-    out.moved = !!(await wait(() => q('[data-ad-hoc-tasks] [data-task-id=${JSON.stringify(taskId)}]'), ${SHELL_SETTLE_MS}));
+    out.moved = !!(await wait(() => q('[data-recent-chats] [data-task-id=${JSON.stringify(taskId)}]'), ${SHELL_SETTLE_MS}));
     out.notice = text('[data-task-notice]');
-    out.headerAfter = readHeader();
+    const title = await wait(() => qVisible('[data-task-rename] input', dialog), 5000);
+    if (title) {
+      type(title, ${JSON.stringify(SMOKE_RENAMED_TITLE)});
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      q('[data-task-rename] button[type="submit"]', dialog)?.click();
+    }
+    out.renamed = !!(await wait(() => text('[data-header-title]') === ${JSON.stringify(SMOKE_RENAMED_TITLE)}, ${SHELL_SETTLE_MS}));
+    out.renameNotice = text('[data-task-notice]');
+    out.dialogClosed = await closeConversationDialogs();
+    out.headerAfter = await readHeader();
     return out;
   })()`;
 }
@@ -1770,12 +1841,13 @@ export interface OrganiseProbeRead {
     openTaskShown: boolean;
     shareControls: number;
   };
-  fabricatedAttachmentRefused?: boolean;
   before?: TaskView | null;
-  move?: { shellOpened: boolean; opened: boolean; headerBefore: HeaderRead; movePressed: boolean; moved: boolean; notice: string | null; headerAfter: HeaderRead };
+  move?: { shellOpened: boolean; opened: boolean; headerBefore: HeaderRead; movePressed: boolean; moved: boolean; notice: string | null; renamed: boolean; renameNotice: string | null; dialogClosed: boolean; headerAfter: HeaderRead };
   after?: TaskView | null;
   listedForCreator?: boolean;
   listedForOtherPrincipal?: number;
+  /** The runtime refused the other principal's tree read (nothing disclosed). */
+  otherPrincipalRefused?: boolean;
   signedOutAtEnd?: boolean;
   error?: string;
 }
@@ -1802,7 +1874,7 @@ export function evaluateOrganise(read: OrganiseProbeRead): OrganiseReport {
   if (!read.inviteAccepted) failures.push('the seeded Workspace invite was not accepted');
   const create = read.create;
   if (!create?.shellOpened || !create.ready) failures.push('the Shell did not show the seeded Workspace');
-  if (!create?.newTaskDraftShown || !create.newTaskCreatedNothing) failures.push('New thread did not open an unsent draft without creating saved work');
+  if (!create?.newTaskDraftShown || !create.newTaskCreatedNothing) failures.push('New chat did not open an unsent draft without creating saved work');
   if (!create?.engagementId) failures.push(`no Engagement was created through the Sidebar${create?.engagementNotice ? ` (${create.engagementNotice})` : ''}`);
   if (!create?.folderId) failures.push('no folder was created through the Sidebar');
   if (!create?.taskId) failures.push('no Task was created in the folder through the Sidebar');
@@ -1810,15 +1882,16 @@ export function evaluateOrganise(read: OrganiseProbeRead): OrganiseReport {
   if (create?.header.client !== 'Synthetic Client Ltd') failures.push(`the Header client is ${JSON.stringify(create?.header.client)}`);
   if (create?.header.period !== '2026-01-01 – 2026-12-31') failures.push(`the Header period is ${JSON.stringify(create?.header.period)}`);
   if (!read.seedWorkspaceName || create?.header.workspace !== read.seedWorkspaceName) {
-    failures.push(`the Header Workspace is ${JSON.stringify(create?.header.workspace)}, expected ${JSON.stringify(read.seedWorkspaceName)}`);
+    failures.push(`the footer Workspace is ${JSON.stringify(create?.header.workspace)}, expected ${JSON.stringify(read.seedWorkspaceName)}`);
   }
   if (create?.header.visibility !== 'private') failures.push('the Header does not show the Task as private');
-  if (!create?.openTaskShown) failures.push('the opened Task did not show its placeholder thread area');
+  if (!create?.openTaskShown) failures.push('the opened draft Task did not show an empty conversation');
   if (create?.shareControls !== 0) failures.push('a Share control is shown');
-  if (!read.fabricatedAttachmentRefused) failures.push('a fabricated thread binding was not refused');
   const before = read.before;
   const after = read.after;
   if (!read.move?.moved) failures.push(`the Task was not moved through the Move menu${read.move?.notice ? ` (${read.move.notice})` : ''}`);
+  if (!read.move?.renamed || read.move.headerAfter.title !== SMOKE_RENAMED_TITLE) failures.push(`the Task was not renamed through Rename or organise${read.move?.renameNotice ? ` (${read.move.renameNotice})` : ''}`);
+  if (read.move && !read.move.dialogClosed) failures.push('the Rename or organise dialog did not close');
   if (!before || !after) failures.push('the Task could not be read before and after the move');
   else {
     if (after.taskId !== before.taskId) failures.push('the move changed the Task ID');
@@ -1827,6 +1900,7 @@ export function evaluateOrganise(read: OrganiseProbeRead): OrganiseReport {
       failures.push('the move changed the references');
     }
     if (after.visibility !== 'private') failures.push('the Task is not private after the move');
+    if (after.title !== SMOKE_RENAMED_TITLE) failures.push(`main reads the renamed Task as ${JSON.stringify(after.title)}`);
     if (after.engagementId !== null || after.folderId !== null) failures.push('the Task did not move to no Engagement');
   }
   if (read.move && (read.move.headerAfter.client !== null || read.move.headerAfter.period !== null)) failures.push('an ad hoc Task still shows a client or period');
@@ -1887,21 +1961,24 @@ export async function probeOrganise(contents: WebContents, options: OrganiseProb
       const tree = await organise.getTree(workspaceId);
       return tree.ok ? (tree.value.tasks.find((task) => task.taskId === taskId) ?? null) : null;
     };
-    const created = await findTask();
-    const attached = created
-      ? await organise.attachThread({ operationId: randomUUID(), workspaceId, taskId, expectedRevision: created.revision, runtimeThreadId: SMOKE_THREAD_REF })
-      : null;
-    read.fabricatedAttachmentRefused = attached?.ok === false;
+    // Thread binding happens only through the native Task start workflow (see
+    // the visual-conversation phase); no renderer- or probe-supplied binding is tried.
     read.before = await findTask();
     read.move = (await contents.executeJavaScript(shellMoveProbe(taskId))) as OrganiseProbeRead['move'];
     read.after = await findTask();
     read.listedForCreator = read.after !== null;
 
-    // A second principal bound to the same runtime lists none of these Tasks.
+    // A second principal bound to the same runtime lists none of these Tasks:
+    // the runtime either answers an empty tree or refuses the Workspace outright.
     await runtimeRequest('inquello/session/setPrincipal', { principalId: OTHER_SMOKE_PRINCIPAL });
     try {
       const other = await runtimeRequest<{ tasks: unknown[] }>('inquello/workspace/tree', { workspaceId });
       read.listedForOtherPrincipal = other.tasks.length;
+    } catch (error) {
+      // Only a runtime refusal counts; a transport or internal failure stays a failure.
+      if (!(error instanceof RpcResponseError) || error.rpcCode !== -32600) throw error;
+      read.listedForOtherPrincipal = 0;
+      read.otherPrincipalRefused = true;
     } finally {
       await runtimeRequest('inquello/session/setPrincipal', { principalId: identity.session.principalId() });
     }
@@ -1918,7 +1995,6 @@ export async function probeOrganise(contents: WebContents, options: OrganiseProb
 // ---- states (Story 1.15) ------------------------------------------------------
 
 const SMOKE_RUN_REF = 'smoke-run-1';
-const STATE_DIMENSION_NAMES = ['task', 'run', 'output', 'checks', 'review', 'approval_marker', 'delivery_marker'] as const;
 
 /** Signed out: listing is refused by main and a review write never passes the validator. */
 const STATES_SIGNED_OUT_PROBE = `(async () => {
@@ -1946,42 +2022,36 @@ function statesRecordProbe(taskId: string, operationIds: readonly string[]): str
   })()`;
 }
 
-/** Opens the Task in the Shell and reads its States section. */
+/**
+ * Opens the Task in the Shell and reads what its conversation shows (owner
+ * amendment 2026-11-04). This Task never ran a native turn (no model runs in
+ * the normal phase), so the truthful pre-run state is: no end-of-turn line, no
+ * state rows (nothing recorded checks, review or the markers), no "Not
+ * recorded" placeholder, and nothing green or accepted. The recorded run state
+ * is a stored record, not a finished native turn, so it adds no line. The
+ * finished line itself is checked on fixture-backed native turns in the
+ * visual-conversation phase.
+ */
 function statesViewProbe(taskId: string): string {
   return `(async () => {
     ${SHELL_HELPERS}
     location.hash = '#specimen';
-    await wait(() => !q('[data-shell]'), 5000);
+    await wait(specimenReady, 5000);
     const out = { shellOpened: await openShell() };
-    const row = await wait(() => q('[data-task-id=${JSON.stringify(taskId)}] a'), ${SHELL_SETTLE_MS});
+    const row = await wait(() => qVisible('[data-task-id=${JSON.stringify(taskId)}] a'), ${SHELL_SETTLE_MS});
     if (row) row.click();
-    out.opened = !!(await wait(() => q('[data-task-view=${JSON.stringify(taskId)}]'), 5000));
-    out.shown = !!(await wait(() => q('[data-task-states] [data-state-dimension="run"][data-state-value="execution_finished"]'), ${SHELL_SETTLE_MS}));
-    out.dimensions = [...document.querySelectorAll('[data-task-states] [data-state-dimension]')].map((row) => ({
-      dimension: row.getAttribute('data-state-dimension'),
-      value: row.getAttribute('data-state-value'),
-      text: (q('dd', row) || row).textContent,
-    }));
-    const chip = q('[data-task-states] [data-state-dimension="run"] .iq-status-chip');
-    if (chip) {
-      const reference = document.createElement('span');
-      reference.className = 'iq-status-chip iq-status-chip--accepted';
-      document.body.appendChild(reference);
-      const style = getComputedStyle(chip);
-      const accepted = getComputedStyle(reference);
-      out.runChip = {
-        text: chip.textContent,
-        className: chip.className,
-        color: style.color,
-        background: style.backgroundColor,
-        border: style.borderTopColor,
-        acceptedColor: accepted.color,
-        acceptedBackground: accepted.backgroundColor,
-        acceptedBorder: accepted.borderTopColor,
-      };
-      reference.remove();
-    }
+    const view = await wait(() => qVisible('[data-task-view=${JSON.stringify(taskId)}]'), 5000);
+    out.opened = !!view;
+    // Let the conversation read settle (it reports unavailable history for a Task that never ran).
+    out.settled = !!(await wait(() => view && !/Reading (progress|conversation)/.test(view.textContent) ? view : null, ${SHELL_SETTLE_MS}));
+    out.finishedLine = view ? q('[data-turn-finished]', view)?.textContent ?? null : null;
+    out.stateRows = view ? [...view.querySelectorAll('[data-task-states] [data-state-dimension]')].map((row) => row.getAttribute('data-state-dimension')) : [];
     const shellRoot = q('[data-shell]');
+    out.notRecorded = shellRoot ? shellRoot.textContent.includes('Not recorded') : true;
+    out.chips = view ? [...view.querySelectorAll('.iq-status-chip')].map((chip) => {
+      const style = getComputedStyle(chip);
+      return { className: chip.className, color: style.color, background: style.backgroundColor, border: style.borderTopColor };
+    }) : [];
     out.acceptedChips = shellRoot ? shellRoot.querySelectorAll('.iq-status-chip--accepted, .iq-status-chip--explained').length : -1;
     out.acceptanceText = shellRoot ? /\\baccept|\\bapproved\\b/i.test(shellRoot.textContent) : true;
     out.toasts = [...document.querySelectorAll('.iq-toast')].map((toast) => toast.textContent);
@@ -2000,9 +2070,11 @@ export interface StatesProbeRead {
   view?: {
     shellOpened: boolean;
     opened: boolean;
-    shown: boolean;
-    dimensions: Array<{ dimension: string | null; value: string | null; text: string | null }>;
-    runChip?: { text: string | null; className: string; color: string; background: string; border: string; acceptedColor: string; acceptedBackground: string; acceptedBorder: string };
+    settled: boolean;
+    finishedLine: string | null;
+    stateRows: Array<string | null>;
+    notRecorded: boolean;
+    chips: PolicyChipRead[];
     acceptedChips: number;
     acceptanceText: boolean;
     toasts: string[];
@@ -2047,25 +2119,13 @@ export function evaluateStates(read: StatesProbeRead): StatesReport {
   if (read.runtimeReviewRefusal !== 'human_actor_required') failures.push(`a system review write reached the runtime and answered ${JSON.stringify(read.runtimeReviewRefusal)}`);
   const view = read.view;
   if (!view?.shellOpened || !view.opened) failures.push('the Task did not open in the Shell');
-  if (!view?.shown) failures.push('the States section did not show the finished run');
-  const rows = new Map((view?.dimensions ?? []).map((row) => [row.dimension, row]));
-  if (JSON.stringify([...rows.keys()]) !== JSON.stringify(STATE_DIMENSION_NAMES)) failures.push(`the States section lists ${JSON.stringify([...rows.keys()])}`);
-  const run = rows.get('run');
-  if (!run?.text?.includes('Execution finished')) failures.push(`the run state reads ${JSON.stringify(run?.text)}`);
-  const task = rows.get('task');
-  if (task?.value !== 'running' || !task.text?.includes('Running') || !task.text.includes('Planned')) failures.push(`the Task state reads ${JSON.stringify(task?.text)}`);
-  for (const dimension of STATE_DIMENSION_NAMES.slice(2)) {
-    const row = rows.get(dimension);
-    if (row?.value !== 'not-recorded' || row.text?.trim() !== 'Not recorded') failures.push(`${dimension} is not shown as "Not recorded" (${JSON.stringify(row?.text)})`);
-  }
-  const chip = view?.runChip;
-  if (!chip) failures.push('the run state has no chip');
-  else {
-    if (chip.text !== 'Execution finished') failures.push(`the run chip reads ${JSON.stringify(chip.text)}`);
-    if (!chip.className.includes('iq-status-chip--other') || /--accepted|--explained/.test(chip.className)) failures.push(`the run chip is styled ${chip.className}`);
-    if (chip.color === chip.acceptedColor || chip.background === chip.acceptedBackground || chip.border === chip.acceptedBorder) failures.push('the run chip shares the accepted style');
-    if (isGreenish(chip.color) || isGreenish(chip.background) || isGreenish(chip.border)) failures.push('the run chip is green');
-  }
+  if (!view?.settled) failures.push('the conversation read did not settle');
+  // No native turn ran: a stored run record is not a finished turn and must not read as one.
+  if (view?.finishedLine !== null) failures.push(`a Task that never ran shows an end-of-turn line (${JSON.stringify(view?.finishedLine)})`);
+  // Checks, review and the markers appear only once recorded; none is recorded here.
+  if ((view?.stateRows ?? ['unread']).length !== 0) failures.push(`the conversation lists state rows ${JSON.stringify(view?.stateRows)}`);
+  if (view?.notRecorded !== false) failures.push('the Shell shows a "Not recorded" placeholder');
+  checkChips(view?.chips, 'the conversation', failures);
   if (view?.acceptedChips !== 0) failures.push('an accepted or explained chip is shown');
   if (view?.acceptanceText !== false) failures.push('the Shell states acceptance or approval');
   if ((view?.toasts ?? []).some((toast) => /accept|approv/i.test(toast))) failures.push('a toast states acceptance');
@@ -2173,15 +2233,15 @@ export async function probeStates(contents: WebContents, options: OrganiseProbeO
  * cannot import; `test/shell-layout.test.tsx` holds the two equal.
  */
 export const SHELL_LAYOUT = {
-  windowMinWidth: 532,
-  sidebarWidth: 264,
-  railWidth: 52,
+  windowMinWidth: 544,
+  sidebarWidth: 320,
+  railWidth: 64,
   headerHeight: 48,
   threadMaxWidth: 720,
-  /** The narrowest width that is still full mode without an artifact. */
-  fullWidth: 744,
+  /** Default-sidebar full-mode threshold; the renderer may clamp the sidebar toward 280px. */
+  fullWidth: 800,
   /** The narrowest width where the thread and a 380px artifact fit beside the rail. */
-  artifactFitWidth: 912,
+  artifactFitWidth: 924,
 } as const;
 
 /** The window content widths the probe resizes to. */
@@ -2223,12 +2283,12 @@ function shellLayoutOpenProbe(taskId: string | null): string {
   return `(async () => {
     ${SHELL_HELPERS}
     location.hash = '#specimen';
-    await wait(() => !q('[data-shell]'), 5000);
+    await wait(specimenReady, 5000);
     const out = { shellOpened: await openShell() };
     if (${JSON.stringify(taskId)}) {
-      const row = await wait(() => q('[data-task-id=${JSON.stringify(taskId ?? '')}] a'), ${SHELL_SETTLE_MS});
+      const row = await wait(() => qVisible('[data-task-id=${JSON.stringify(taskId ?? '')}] a'), ${SHELL_SETTLE_MS});
       if (row) row.click();
-      out.opened = !!(await wait(() => q('[data-task-view=${JSON.stringify(taskId ?? '')}]'), 5000));
+      out.opened = !!(await wait(() => qVisible('[data-task-view=${JSON.stringify(taskId ?? '')}]'), 5000));
     }
     return out;
   })()`;
@@ -2508,20 +2568,20 @@ export async function probeShellLayout(contents: WebContents, options: ShellLayo
 /** The synthetic drafts the probe types. Only their lengths and comparisons leave the renderer. */
 const COMPOSER_DRAFT_A = 'Smoke draft for Task A';
 const COMPOSER_DRAFT_B = 'Smoke draft for Task B';
-export const COMPOSER_ROUTE_REASON = 'Sending starts once a processing route is set up.';
+export const COMPOSER_ROUTE_REASON = 'Choose a model before sending.';
 export const COMPOSER_EMPTY_REASON = 'Type a request to send.';
 
 const COMPOSER_HELPERS = `
   ${SHELL_HELPERS}
-  const composer = () => q('[data-composer]');
-  const field = () => q('[data-composer-input]');
-  const sendButton = () => q('[data-composer-send]');
+  const composer = () => qVisible('[data-composer]');
+  const field = () => qVisible('[data-composer-input]');
+  const sendButton = () => qVisible('[data-composer-send]');
   const described = (element) => element ? (element.getAttribute('aria-describedby') || '').split(' ').map((id) => { const el = document.getElementById(id); return el ? el.textContent : ''; }).join(' ') : null;
   const openTask = async (taskId) => {
-    const row = await wait(() => q('[data-task-id="' + taskId + '"] a'), ${SHELL_SETTLE_MS});
+    const row = await wait(() => qVisible('[data-task-id="' + taskId + '"] a'), ${SHELL_SETTLE_MS});
     if (!row) return false;
     row.click();
-    return !!(await wait(() => q('[data-task-view="' + taskId + '"]') && field() && composer().getAttribute('data-composer-task') === taskId, 5000));
+    return !!(await wait(() => qVisible('[data-task-view="' + taskId + '"]') && field() && composer().getAttribute('data-composer-task') === taskId, 5000));
   };
   const readField = (expected) => {
     const el = field();
@@ -2535,12 +2595,14 @@ const COMPOSER_HELPERS = `
     const root = composer();
     if (!root) return null;
     const all = [...root.querySelectorAll('button, input, select, textarea, [role="button"], [role="combobox"], [role="listbox"], [role="menu"]')];
-    const others = all.filter((el) => el !== field() && el !== sendButton());
+    const others = all.filter((el) => el !== field() && el !== sendButton() && !el.closest('[data-conversation-model]'));
     return {
       others: others.length,
       enabledOthers: others.filter((el) => el.getAttribute('aria-disabled') !== 'true' && !el.hasAttribute('disabled')).length,
       fileChips: root.querySelectorAll('.iq-file-chip').length,
-      laterWords: /attach|add files|method|scope|environment|reasoning|thorough/i.test(root.textContent || ''),
+      // The conversation's model control now also holds its reasoning and environment
+      // (owner decision 2026-11-04); no other later input may appear.
+      laterWords: /attach|add files|method|scope|environment|reasoning|thorough/i.test((() => { const copy = root.cloneNode(true); copy.querySelectorAll('[data-conversation-model]').forEach((node) => node.remove()); return copy.textContent || ''; })()),
     };
   };
 `;
@@ -2550,7 +2612,7 @@ function composerTypeProbe(taskA: string, taskB: string): string {
   return `(async () => {
     ${COMPOSER_HELPERS}
     location.hash = '#specimen';
-    await wait(() => !q('[data-shell]'), 5000);
+    await wait(specimenReady, 5000);
     const out = { shellOpened: await openShell() };
     out.openedA = await openTask(${JSON.stringify(taskA)});
     if (!out.openedA) return out;
@@ -2608,7 +2670,7 @@ const COMPOSER_SIGN_OUT_PROBE = `(async () => {
   out.reached = !!(await wait(() => q('[data-account][data-identity-state="signed-out"]'), ${ACCOUNT_SETTLE_MS}));
   out.shellOpened = await openShell();
   out.signedOutShown = !!(await wait(() => q('[data-sidebar][data-sidebar-state="signed-out"]'), ${SHELL_SETTLE_MS}));
-  out.composerShown = !!composer();
+  out.composerShown = !!q('[data-composer]'); // Sign-out must clear even hidden private drafts.
   return out;
 })()`;
 
@@ -2617,7 +2679,7 @@ function composerAfterProbe(taskA: string, taskB: string): string {
   return `(async () => {
     ${COMPOSER_HELPERS}
     location.hash = '#specimen';
-    await wait(() => !q('[data-shell]'), 5000);
+    await wait(specimenReady, 5000);
     const out = { shellOpened: await openShell() };
     out.openedA = await openTask(${JSON.stringify(taskA)});
     out.a = readField('');
@@ -2631,10 +2693,10 @@ function composerAfterProbe(taskA: string, taskB: string): string {
 const COMPOSER_SIGNED_OUT_READ = `(async () => {
   ${COMPOSER_HELPERS}
   location.hash = '#specimen';
-  await wait(() => !q('[data-shell]'), 5000);
+  await wait(specimenReady, 5000);
   const out = { shellOpened: await openShell() };
   out.signedOutShown = !!(await wait(() => q('[data-sidebar][data-sidebar-state="signed-out"]'), ${SHELL_SETTLE_MS}));
-  out.composerShown = !!composer();
+  out.composerShown = !!q('[data-composer]'); // Sign-out must clear even hidden private drafts.
   return out;
 })()`;
 
@@ -2709,7 +2771,7 @@ export function evaluateComposer(read: ComposerProbeRead): ComposerReport {
   if (!typed?.shellOpened) failures.push('the Shell did not open');
   else if (!typed.openedA || !typed.openedB || !typed.reopenedA || !typed.reopenedB) failures.push('a synthetic Task did not open with its Composer');
   else {
-    if (typed.label !== 'Request for this Task') failures.push(`the Composer field is labelled ${JSON.stringify(typed.label)}`);
+    if (typed.label !== 'Message') failures.push(`the Composer field is labelled ${JSON.stringify(typed.label)}`);
     if (typed.bBefore?.length !== 0) failures.push("Task B's Composer did not start empty");
     const empty = typed.emptySend;
     if (!empty || empty.ariaDisabled !== 'true' || empty.reason !== `${COMPOSER_EMPTY_REASON} ${COMPOSER_ROUTE_REASON}`) failures.push(`with no text, Send is not unavailable with the empty-request reason (${JSON.stringify(empty)})`);
@@ -2827,7 +2889,7 @@ function policySettingsProbe(workspaceId: string | null): string {
   return `(async () => {
     ${SHELL_HELPERS}
     location.hash = '#specimen';
-    await wait(() => !q('[data-shell]'), 5000);
+    await wait(specimenReady, 5000);
     const loaded = await wait(() => {
       const section = q('[data-policy-section][data-policy-loaded="true"]');
       if (!section) return null;
@@ -2861,21 +2923,25 @@ function policySettingsProbe(workspaceId: string | null): string {
   })()`;
 }
 
-/** Opens the Task, reads its policy section, then tries Full access through the renderer bridge. */
+/** Opens the Task's "Permissions" dialog (Conversation options), reads its
+ * compact policy, then tries Full access through the renderer bridge. */
 function policyTaskProbe(taskId: string, operationId: string): string {
   return `(async () => {
     ${SHELL_HELPERS}
     location.hash = '#specimen';
-    await wait(() => !q('[data-shell]'), 5000);
+    await wait(specimenReady, 5000);
     const out = { shellOpened: await openShell() };
-    const row = await wait(() => q('[data-task-id=${JSON.stringify(taskId)}] a'), ${SHELL_SETTLE_MS});
+    const row = await wait(() => qVisible('[data-task-id=${JSON.stringify(taskId)}] a'), ${SHELL_SETTLE_MS});
     if (row) row.click();
-    out.opened = !!(await wait(() => q('[data-task-view=${JSON.stringify(taskId)}]'), ${SHELL_SETTLE_MS}));
-    const mode = await wait(() => q('[data-task-policy=${JSON.stringify(taskId)}] [data-broad-mode]'), ${POLICY_SETTLE_MS});
-    const section = q('[data-task-policy]');
+    out.opened = !!(await wait(() => qVisible('[data-task-view=${JSON.stringify(taskId)}]'), ${SHELL_SETTLE_MS}));
+    const dialog = await openConversationDialog('Permissions');
+    if (!dialog) throw new Error('Permissions did not open for Policy');
+    const mode = await wait(() => { const control = q('[data-task-policy=${JSON.stringify(taskId)}] [data-broad-mode]', dialog); return control?.getClientRects().length ? control : null; }, ${POLICY_SETTLE_MS});
+    const section = q('[data-task-policy]', dialog);
     out.status = mode ? mode.getAttribute('data-broad-mode-status') : null;
     out.effective = mode ? mode.getAttribute('data-broad-mode-effective') : null;
-    out.summary = section && q('[data-task-policy-summary]', section) ? q('[data-task-policy-summary]', section).textContent : null;
+    // The compact dialog states the asking setting with its source; S07 lists every setting's source.
+    out.summary = section && q('[data-conversation-approval-policy]', section) ? q('[data-conversation-approval-policy]', section).textContent : null;
     const full = q('[data-broad-mode-option="full_access"]');
     out.fullDisabled = full ? full.getAttribute('aria-disabled') : null;
     out.fullReason = full && full.getAttribute('aria-describedby') ? (document.getElementById(full.getAttribute('aria-describedby').split(' ')[0]) || {}).textContent || null : null;
@@ -2893,6 +2959,7 @@ function policyTaskProbe(taskId: string, operationId: string): string {
     const set = (confirmation) => globalThis.inquello.policy.setBroadMode({ operationId: ${JSON.stringify(operationId)}, taskId: ${JSON.stringify(taskId)}, expectedRevision: 0, mode: 'full_access', confirmation });
     out.request = await set(${JSON.stringify(FULL_ACCESS_REACH)}).then((value) => value, (error) => String(error && error.message));
     out.unconfirmed = await set(null).then(() => 'accepted', (error) => String(error && error.message));
+    out.dialogClosed = await closeConversationDialogs();
     return out;
   })()`;
 }
@@ -2943,6 +3010,7 @@ export interface PolicyProbeRead {
     confirmOpened: boolean;
     request: unknown;
     unconfirmed: string;
+    dialogClosed: boolean;
   };
   threadSettings?: unknown;
   signedOutAtEnd?: boolean;
@@ -3007,7 +3075,8 @@ export function evaluatePolicy(read: PolicyProbeRead): PolicyReport {
   const t = read.task;
   if (!t?.shellOpened || !t.opened) failures.push('the Task did not open in the Shell');
   if (t?.status !== 'standard' || t.effective !== 'standard') failures.push(`the Task mode is ${JSON.stringify(t?.status)} / ${JSON.stringify(t?.effective)}`);
-  if (!t?.summary?.includes('Sandbox ceiling') || !t.summary.includes('Inquello default')) failures.push(`the Task policy summary reads ${JSON.stringify(t?.summary)}`);
+  if (!t?.summary?.includes('Asks when the agent requests it') || !t.summary.includes('Inquello default')) failures.push(`the Task policy summary reads ${JSON.stringify(t?.summary)}`);
+  if (t && !t.dialogClosed) failures.push('the Permissions dialog did not close');
   if (!t?.sectionText?.includes('Broader execution mode')) failures.push('the Task does not label its execution mode');
   const ruleText = 'Full access is not available: not permitted by the Inquello default.';
   if (t?.fullDisabled !== 'true' || !t.fullReason?.includes(ruleText)) failures.push(`the Full access control is not unavailable with its rule (${JSON.stringify(t?.fullDisabled)}, ${JSON.stringify(t?.fullReason)})`);
@@ -3081,23 +3150,26 @@ const TOOL_BOUNDS_SYSTEM = 'system (read-only)';
 const TOOL_BOUNDS_PERMITTED = 'working folder (read/write), output folder, system (read-only)';
 const TOOL_BOUNDS_DESTINATION = 'example.com';
 
-/** Opens the Task and reads what its tools can reach, then S07's sandbox entry and reach. */
+/** Opens the Task's "Permissions" dialog and reads what its tools can reach, then S07's sandbox entry and reach. */
 function toolBoundsRendererProbe(taskId: string, workspaceId: string): string {
   return `(async () => {
     ${SHELL_HELPERS}
     location.hash = '#specimen';
-    await wait(() => !q('[data-shell]'), 5000);
+    await wait(specimenReady, 5000);
     const out = { shellOpened: await openShell() };
-    const row = await wait(() => q('[data-task-id=${JSON.stringify(taskId)}] a'), ${SHELL_SETTLE_MS});
+    const row = await wait(() => qVisible('[data-task-id=${JSON.stringify(taskId)}] a'), ${SHELL_SETTLE_MS});
     if (row) row.click();
-    const reach = await wait(() => q('[data-task-reach=${JSON.stringify(taskId)}] [data-reach]'), ${POLICY_SETTLE_MS});
-    const section = q('[data-task-reach=${JSON.stringify(taskId)}]');
+    const dialog = (await wait(() => qVisible('[data-task-view=${JSON.stringify(taskId)}]'), ${SHELL_SETTLE_MS})) ? await openConversationDialog('Permissions') : null;
+    if (!dialog) throw new Error('Permissions did not open for tool reach');
+    const reach = await wait(() => { const control = q('[data-task-reach=${JSON.stringify(taskId)}] [data-reach]', dialog); return control?.getClientRects().length ? control : null; }, ${POLICY_SETTLE_MS});
+    const section = q('[data-task-reach=${JSON.stringify(taskId)}]', dialog);
     out.bounded = reach ? reach.getAttribute('data-reach-bounded') : null;
     out.lines = reach ? [...reach.querySelectorAll('[data-reach-line]')].map((line) => ({ name: line.getAttribute('data-reach-line'), text: line.textContent })) : [];
     out.sandbox = section && q('[data-task-sandbox]', section) ? { status: q('[data-task-sandbox]', section).getAttribute('data-task-sandbox'), text: q('[data-task-sandbox]', section).textContent } : null;
     out.sectionText = section ? section.textContent : null;
+    out.dialogClosed = await closeConversationDialogs();
     location.hash = '#specimen';
-    await wait(() => !q('[data-shell]'), 5000);
+    await wait(specimenReady, 5000);
     await wait(() => q('[data-policy-workspace=${JSON.stringify(workspaceId)}] [data-reach]'), ${POLICY_SETTLE_MS});
     const workspace = q('[data-policy-workspace=${JSON.stringify(workspaceId)}] [data-reach]');
     out.settingsReach = workspace ? workspace.textContent : null;
@@ -3137,6 +3209,7 @@ export interface ToolBoundsProbeRead {
     sectionText: string | null;
     settingsReach: string | null;
     contract: { text: string | null; enabled: string | null } | null;
+    dialogClosed?: boolean;
     /** Whether any rendered text held a device path of a Task folder. */
     pathShown?: boolean;
     wording?: boolean;
@@ -3185,6 +3258,7 @@ export function evaluateToolBounds(read: ToolBoundsProbeRead): ToolBoundsReport 
   if (!line('write').includes("This Task's working folder") || !line('write').includes('Output folder')) failures.push(`the Task's write line reads ${JSON.stringify(line('write'))}`);
   if (!line('contact').includes('No network destinations')) failures.push(`the Task's contact line reads ${JSON.stringify(line('contact'))}`);
   if (ui?.sandbox?.status !== 'available') failures.push(`the Task's sandbox reads ${JSON.stringify(ui?.sandbox)}`);
+  if (ui && ui.dialogClosed === false) failures.push('the Permissions dialog did not close');
   if (ui?.pathShown !== false) failures.push('a device path of a Task folder is shown');
   if (ui?.wording !== false) failures.push('the reach uses review or approval wording');
   if (!ui?.settingsReach?.includes('No network destinations')) failures.push(`S07 reach reads ${JSON.stringify(ui?.settingsReach)}`);
@@ -3300,11 +3374,16 @@ function permissionRulesProbe(rules: ReadonlyArray<{ prefix: string[]; decision:
 function permissionCardProbe(taskId: string, press: 'deny' | 'run', skip: readonly string[]): string {
   return `(async () => {
     ${SHELL_HELPERS}
-    const out = { shellOpened: !!q('[data-shell]') || await openShell() };
-    if (!q('[data-task-view=${JSON.stringify(taskId)}]')) {
-      const row = await wait(() => q('[data-task-id=${JSON.stringify(taskId)}] a'), ${SHELL_SETTLE_MS});
-      if (row) row.click();
-    }
+    const out = { shellOpened: visible(q('[data-shell]')) || await openShell() };
+    // An authority or model-catalog change while the Task is opening (the
+    // permission review refreshes the catalog) correctly drops that open, so
+    // a person would click again: retry the row until the Task view is shown.
+    out.taskOpened = !!(await wait(() => {
+      if (q('[data-task-view=${JSON.stringify(taskId)}]')) return true;
+      const row = qVisible('[data-task-id=${JSON.stringify(taskId)}] a');
+      if (row && !row.dataset.smokeClicked) { row.dataset.smokeClicked = 'true'; row.click(); setTimeout(() => { delete row.dataset.smokeClicked; }, 2000); }
+      return false;
+    }, ${SHELL_SETTLE_MS}));
     const skip = ${JSON.stringify(skip)};
     const holder = await wait(() => [...document.querySelectorAll('[data-permission-review=${JSON.stringify(taskId)}] [data-permission-state="pending"]')].find((el) => !skip.includes(el.getAttribute('data-permission-request'))), ${PERMISSION_SETTLE_MS});
     out.found = !!holder;
@@ -3335,6 +3414,7 @@ function permissionCardProbe(taskId: string, press: 'deny' | 'run', skip: readon
 
 interface PermissionCardRead {
   shellOpened: boolean;
+  taskOpened?: boolean;
   found: boolean;
   requestId?: string | null;
   regionLabel?: string | null;
@@ -3524,7 +3604,7 @@ export async function probePermissions(contents: WebContents, options: Permissio
 export interface CapabilitiesReport {
   ok: boolean; failures: string[]; configured: boolean;
   inventory?: CapabilityInventory; refusal?: CapabilityResult;
-  renderer?: { kinds: string[]; builtins: number; providerSeparate: boolean; providerText: string; text: string };
+  renderer?: { kinds: string[]; builtins: number; providerSeparate: boolean; providerText: string; text: string; ordinarySettings?: boolean; focused?: boolean; returnedToChat?: boolean };
   signedOutAtEnd?: boolean;
 }
 export interface CapabilitiesProbeOptions extends Omit<OrganiseProbeOptions, 'runtimeRequest'> { capabilities: CapabilityService }
@@ -3552,22 +3632,39 @@ export async function probeCapabilities(contents: WebContents, options: Capabili
       if (report.refusal.ok || !report.refusal.reason?.includes('extensions not allowed')) report.failures.push('plugin install was not refused with the extensions rule named');
       report.renderer = await contents.executeJavaScript(`(async () => {
         ${SHELL_HELPERS}
-        location.hash = '#specimen';
-        await wait(() => !q('[data-shell]'), 5000);
-        const section = await wait(() => q('[data-capabilities-section][data-capabilities-loaded="true"]'), ${POLICY_SETTLE_MS});
-        if (!section) return {kinds:[],builtins:0,providerSeparate:false,providerText:'',text:''};
+        const empty = {kinds:[],builtins:0,providerSeparate:false,providerText:'',text:'',ordinarySettings:false,focused:false,returnedToChat:false};
+        if (!(await openShell())) return empty;
+        const trigger = await wait(() => qVisible('button[aria-label="Organization and team"]'), ${SHELL_SETTLE_MS});
+        if (!trigger) return empty;
+        trigger.click();
+        const settings = await wait(() => [...document.querySelectorAll('[role="menuitem"]')].find(node => visible(node) && node.textContent.trim() === 'Settings'), 5000);
+        if (!settings) return empty;
+        settings.click();
+        const tools = await wait(() => qVisible('a[href="#settings-tools"]'), 5000);
+        if (!tools) return empty;
+        tools.focus(); tools.click();
+        const section = await wait(() => qVisible('.iq-settings [data-capabilities-section][data-capabilities-loaded="true"]'), ${POLICY_SETTLE_MS});
+        if (!section) return empty;
         const provider = q('[data-provider-session]', section);
-        return {
+        const result = {
           kinds:[...section.querySelectorAll('[data-capability-kind]')].map(node => node.getAttribute('data-capability-kind')),
           builtins:section.querySelectorAll('[data-capability-kind="built_in"] [data-inventory-entry]').length,
           providerSeparate:!!provider && !provider.closest('[data-identity-section]') && /separate from your Inquello identity/.test(provider.textContent),
-          providerText:provider ? provider.textContent : '', text:section.textContent
+          providerText:provider ? provider.textContent : '', text:section.textContent,
+          ordinarySettings:location.hash === '#settings-tools' && tools.getAttribute('aria-current') === 'page' && section.getAttribute('data-capabilities-workspace') === ${JSON.stringify(seed.workspace_id)} && document.querySelectorAll('.iq-settings [data-capabilities-section]').length === 1 && !qVisible('.specimen-back'),
+          focused:document.activeElement === q('.iq-settings-panel h2'), returnedToChat:false
         };
+        const back = [...document.querySelectorAll('.iq-settings button')].find(node => node.textContent.trim() === 'Back to chat');
+        if (back) back.click();
+        result.returnedToChat = !!(await wait(() => location.hash === '#shell' && visible(q('[data-shell]')), 5000));
+        return result;
       })()`) as CapabilitiesReport['renderer'];
       for (const kind of ['built_in','app','mcp_server','plugin','skill']) if (!report.renderer?.kinds.includes(kind)) report.failures.push(`inventory kind ${kind} did not render`);
+      if (!report.renderer?.ordinarySettings || !report.renderer?.focused || !report.renderer?.returnedToChat) report.failures.push('ordinary Settings tools navigation, focus or return to chat failed');
+      if (!report.renderer?.text.includes('Private Tasks currently keep configured MCP servers, apps and plugins disabled.')) report.failures.push('runtime readiness was not distinguished from private Task use');
       if (!report.renderer?.builtins) report.failures.push('built-in tools did not render');
       if (!report.renderer?.providerSeparate) report.failures.push('provider session was not separate from Inquello identity');
-      if (!report.renderer?.providerText.includes('Account type') || !report.renderer.providerText.includes('Effective route')) report.failures.push('provider account type or effective route was missing');
+      if (!report.renderer?.providerText.includes('Account type') || !report.renderer.providerText.includes('Model selection')) report.failures.push('provider account type or effective route was missing');
     }
   } catch { report.failures.push('capabilities smoke could not finish; inspect local runtime availability and seeded topology'); }
   finally {
@@ -3584,138 +3681,313 @@ export async function probeCapabilities(contents: WebContents, options: Capabili
 // ---- governed processing routes (Story 1.22) ------------------------------------
 /** Fixed probe diagnostics only; runtime/provider error text never enters reports. */
 class SmokeProbeFailure extends Error {}
-export interface RoutesReport { ok:boolean; failures:string[]; configured:boolean; verification:'configuration-only'; inferenceFixture:'not-run'; renderer?:{present:boolean;noDefault:boolean;unknownRegion:boolean}; selected?:boolean; reopened?:boolean }
+export interface RoutesReport { ok:boolean; failures:string[]; configured:boolean; verification:'configuration-only'; inferenceFixture:'not-run'; renderer?:{present:boolean;noDefault:boolean;configuredNotUsable:boolean;bindings:number}; selected?:boolean; reopened?:boolean }
 /** No provider call or credential verification. Packaged inference fixtures remain a separate required gate. */
 export async function probeRoutes(contents:WebContents, options:Omit<OrganiseProbeOptions,'runtimeRequest'> & {routes: import('./routes/service').RouteService}):Promise<RoutesReport>{
   const report:RoutesReport={ok:false,failures:[],configured:options.identity.config.kind==='configured',verification:'configuration-only',inferenceFixture:'not-run'};
+  // Fixed local stage names only: never raw RPC, provider or credential errors.
+  let stage='seeded-identity';
   try{
     if(!report.configured){report.failures.push('Seeded identity/runtime topology unavailable; route smoke unmet');return report;}
     const seed=JSON.parse(fs.readFileSync(options.seedFile??'','utf8')) as {workspace_id?:string};if(!seed.workspace_id)throw new SmokeProbeFailure('Missing seed');
     if(!(await smokeIdentity(contents, 'signIn')).ok)throw new SmokeProbeFailure('Sign-in unavailable');await options.organise.syncPrincipal();options.routes.resume();
-    const initial=await options.routes.list();if(!initial.ok)throw new SmokeProbeFailure('Routes unavailable');
+    stage='route-catalog';const initial=await options.routes.list();if(!initial.ok)throw new SmokeProbeFailure('Routes unavailable');
     const candidate=initial.value.find(r=>r.routeId==='claude-api-key');if(!candidate)throw new SmokeProbeFailure('Missing Claude route');
-    const saved=await options.routes.configure({operationId:randomUUID(),expectedRevision:candidate.revision,routeId:'claude-api-key',deployment:'anthropic-direct',model:'claude-sonnet-5-5',apiVersion:'2026-10-21',region:null});if(!saved.ok)throw new SmokeProbeFailure('Configuration refused');
+    stage='route-configure';const saved=await options.routes.configure({operationId:randomUUID(),expectedRevision:candidate.revision,routeId:'claude-api-key',deployment:'anthropic-direct',model:'claude-sonnet-5-5',apiVersion:'2026-10-21',region:null});if(!saved.ok)throw new SmokeProbeFailure('Configuration refused');
     const route=saved.value.find(r=>r.routeId==='claude-api-key');if(!route?.configuration||route.configuration.region!==null||route.enabled)report.failures.push('Configuration or unknown region falsely established eligibility');
-    const created=await options.organise.createTask({operationId:randomUUID(),workspaceId:seed.workspace_id,engagementId:null,folderId:null,title:'Synthetic processing route smoke'});if(!created.ok)throw new SmokeProbeFailure('Task unavailable');
+    stage='task-route';const created=await options.organise.createTask({operationId:randomUUID(),workspaceId:seed.workspace_id,engagementId:null,folderId:null,title:'Synthetic processing route smoke'});if(!created.ok)throw new SmokeProbeFailure('Task unavailable');
     const before=await options.routes.forTask(created.value.taskId);if(!before.ok||before.value.selected!==null)report.failures.push('A new Task had an implicit default route');
     const selected=await options.routes.select({operationId:randomUUID(),expectedRevision:0,taskId:created.value.taskId,routeId:'claude-api-key',configurationRevision:route!.revision});report.selected=selected.ok;
     const reopened=await options.routes.forTask(created.value.taskId);report.reopened=reopened.ok&&reopened.value.selected?.configuration?.model==='claude-sonnet-5-5';if(!report.selected||!report.reopened)report.failures.push('Explicit Task route did not reopen');
-    report.renderer=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}location.hash='#specimen';const section=await wait(()=>q('[data-processing-route="claude-api-key"]'),${POLICY_SETTLE_MS});const routeText=section?.closest('[data-processing-routes]')?.textContent??'';return{present:!!section,noDefault:routeText.includes('No implicit default'),unknownRegion:routeText.includes('Unknown')};})()`);
-    if(!report.renderer?.present||!report.renderer.noDefault||!report.renderer.unknownRegion)report.failures.push('Processing routes did not render truthful states');
-  }catch(error){report.failures.push(error instanceof SmokeProbeFailure ? error.message : 'Route smoke could not finish; native runtime/topology required');}
+    stage='settings-models';
+    // Settings › Models: no model is preselected, and every saved binding of the
+    // configured-but-unconnected Sonnet model is shown unavailable with main's own reason.
+    report.renderer=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}
+      location.hash='#settings-routes';
+      const section=await wait(()=>{const node=qVisible('[data-processing-routes]');return node&&q('select[aria-label="Model"]',node)?node:null;},${POLICY_SETTLE_MS});
+      const select=section?q('select[aria-label="Model"]',section):null;
+      const raw=await globalThis.inquello.routes.catalog();const bindings=raw?.ok?raw.value.bindings.filter(b=>b.name==='claude-sonnet-5-5'&&b.state==='active'):[];
+      const shown=section?.textContent??'';
+      const configuredNotUsable=bindings.every(b=>!b.available&&(!b.reason||shown.includes(b.reason)));
+      location.hash='#specimen';await wait(specimenReady,5000);
+      return{present:!!section,noDefault:select?.value==='',configuredNotUsable,bindings:bindings.length};
+    })()`);
+    if(!report.renderer?.present||!report.renderer.noDefault||!report.renderer.configuredNotUsable)report.failures.push(`Processing routes did not render truthful states (${JSON.stringify(report.renderer)})`);
+  }catch(error){report.failures.push(error instanceof SmokeProbeFailure ? error.message : `Route smoke could not finish at ${stage}; native runtime/topology required`);}
   finally{if(report.configured){await options.routes.quiesce();await smokeIdentity(contents, 'signOut');await options.organise.syncPrincipal().catch(()=>{});options.routes.resume();}}
   report.ok=report.failures.length===0;return report;
+}
+
+/** Fixed diagnostics only; raw provider/RPC messages, methods and payloads never leave this helper. */
+export function quotaFixtureDiagnostic(error: unknown): string {
+  if (!(error instanceof RpcResponseError)) return '';
+  const code = Number.isSafeInteger(error.rpcCode) && error.rpcCode >= -2147483648 && error.rpcCode <= 2147483647 ? String(error.rpcCode) : 'unknown';
+  const data = error.data as { inquello?: { kind?: unknown } } | null;
+  const kind = data?.inquello?.kind;
+  const allowed = ['classification_unknown', 'fixture_unavailable', 'settings_required', 'settings_incompatible', 'authority_unknown', 'stale_authority', 'not_found', 'invalid', 'permission_required', 'reviewer_not_available', 'route_unavailable', 'store_unavailable', 'unauthenticated'];
+  return ` [rpcCode=${code}; kind=${typeof kind === 'string' && allowed.includes(kind) ? kind : 'unclassified'}]`;
 }
 
 // ---- local execution facts (Story 1.23), no probes or inference -----------------
 export async function probeEnvironments(contents: WebContents, options: OrganiseProbeOptions & {routes: import('./routes/service').RouteService; policy: PolicyService; usageChanged(privateScope:boolean):void}): Promise<{ok:boolean;failures:string[]}> {
   const failures: string[] = [];
+  // Fixed local stage names only: never include raw RPC, provider or credential errors.
+  let stage = 'seeded-identity';
   const configured = options.identity.config.kind === 'configured';
   try {
     if (!configured) throw new SmokeProbeFailure('Seeded topology unavailable');
     const seed = JSON.parse(fs.readFileSync(options.seedFile ?? '', 'utf8')) as {workspace_id?:string};
     if (!seed.workspace_id || !(await smokeIdentity(contents, 'signIn')).ok) throw new SmokeProbeFailure('Seeded identity unavailable');
+    stage = 'principal-sync';
     await options.organise.syncPrincipal();
+    stage = 'task-create';
     const created = await options.organise.createTask({operationId:randomUUID(),workspaceId:seed.workspace_id,engagementId:null,folderId:null,title:'Synthetic environment inspection smoke'});
     if (!created.ok) throw new SmokeProbeFailure('Task unavailable');
+    stage = 'native-environment-read';
     const result = await contents.executeJavaScript(`globalThis.inquello.environments.forTask({taskId:${JSON.stringify(created.value.taskId)}})`) as import('./environments/types').TaskEnvironmentResult;
     if (!result.ok || result.value.executionLabel !== 'This device (local host)' || result.value.readiness !== 'ready' || result.value.inference.status !== 'none' || !result.value.remoteGate.includes('Story 8.1') || result.value.hostedSandboxGate !== 'V2 revisit (OQ-13)') failures.push('Environment inspection did not preserve distinct local execution, empty inference and disabled remote gates');
+    stage = 'mounted-environment';
     const rendered = await contents.executeJavaScript(`(async () => {
       ${SHELL_HELPERS}
-      location.hash = '#specimen'; await wait(() => !q('[data-shell]'), 5000);
+      location.hash = '#specimen'; await wait(specimenReady, 5000);
       if (!(await openShell())) return false;
-      const row = await wait(() => q('[data-task-id=${JSON.stringify(created.value.taskId)}] a'), ${SHELL_SETTLE_MS});
+      const row = await wait(() => qVisible('[data-task-id=${JSON.stringify(created.value.taskId)}] a'), ${SHELL_SETTLE_MS});
       if (!row) return false; row.click();
-      const panel = await wait(() => { const node = q('[data-task-environment]'); return node?.textContent.includes('No processing route selected') ? node : null; }, ${POLICY_SETTLE_MS});
+      if (!(await wait(() => qVisible('[data-task-view=${JSON.stringify(created.value.taskId)}]'), ${SHELL_SETTLE_MS}))) return false;
+      // Owner decision 2026-11-04: the environment chip sits beside the model in the composer footer.
+      const chip = await wait(() => qVisible('[data-composer] [data-conversation-model] [data-environment-chip]'), ${SHELL_SETTLE_MS});
+      if (!chip) return false; chip.click();
+      const panel = await wait(() => { const node = qVisible('dialog[open] [data-task-environment]'); return node?.textContent.includes('No conversation model selected') ? node : null; }, ${POLICY_SETTLE_MS});
       if (!panel) return false;
       return panel.textContent.includes('This device (local host)') && panel.textContent.includes('runtime-owned configuration verified') && panel.textContent.includes('Story 8.1') && panel.textContent.includes('V2 revisit (OQ-13)') && [...panel.querySelectorAll('button[aria-disabled="true"]')].length >= 2;
     })()`) as boolean;
-    if (!rendered) throw new SmokeProbeFailure('Environment panel did not render');
+    if (!rendered) throw new SmokeProbeFailure('Environment panel did not render: the composer environment chip did not open [data-task-environment] for the open Task');
     // Safe synthetic selection through the real service emits main/preload invalidation.
     // No refresh click, renderer test event, credentials or inference call is used.
+    stage = 'route-catalog';
     const catalog = await options.routes.list();
     if (!catalog.ok) throw new SmokeProbeFailure('Routes unavailable');
     const candidate = catalog.value.find(route => route.routeId === 'claude-api-key');
     if (!candidate || candidate.enabled) throw new SmokeProbeFailure('Synthetic disabled route unavailable');
+    stage = 'route-configure';
     const configuredRoute = await options.routes.configure({operationId:randomUUID(),expectedRevision:candidate.revision,routeId:'claude-api-key',deployment:'anthropic-direct',model:'claude-sonnet-5-5',apiVersion:'2026-10-21',region:null});
     if (!configuredRoute.ok) throw new SmokeProbeFailure('Synthetic configuration unavailable');
     const route = configuredRoute.value.find(row => row.routeId === 'claude-api-key');
     if (!route || route.enabled) throw new SmokeProbeFailure('Unexpected route eligibility');
-    const selected = await options.routes.select({operationId:randomUUID(),expectedRevision:0,taskId:created.value.taskId,routeId:'claude-api-key',configurationRevision:route.revision});
-    if (!selected.ok) throw new SmokeProbeFailure('Synthetic selection unavailable: ' + selected.reason);
+    stage = 'route-select';
+    const selectInput:import('./routes/types').SelectRouteInput={operationId:randomUUID(),expectedRevision:0,taskId:created.value.taskId,routeId:'claude-api-key',configurationRevision:route.revision};
+    const selected = await options.routes.select(selectInput);
+    if (!selected.ok) {
+      // Diagnostic reconciliation only: keep the original failure, never substitute
+      // a new operation or turn a replay into acceptance of this smoke gate.
+      const diagnostic={readAvailable:false,readSelectedMatch:false,revisionMatch:false,replayAccepted:false,replayed:false};
+      const current=await options.routes.forTask(selectInput.taskId);
+      if(current.ok){diagnostic.readAvailable=true;diagnostic.readSelectedMatch=current.value.selected?.routeId===selectInput.routeId&&current.value.configurationRevision===selectInput.configurationRevision;diagnostic.revisionMatch=current.value.revision===selectInput.expectedRevision+1;}
+      try{const replay=await options.runtimeRequest<{revision:number;receipt?:{replayed?:boolean}}>('inquello/routes/task/set',selectInput);diagnostic.replayAccepted=true;diagnostic.replayed=replay.receipt?.replayed===true;}catch{/* Fixed booleans only; no payload or IDs. */}
+      throw new SmokeProbeFailure('Synthetic selection unavailable: '+selected.reason+'; reconciliation='+JSON.stringify(diagnostic));
+    }
+    stage = 'mounted-route-update';
     const updated = await contents.executeJavaScript(`(async () => {
       ${SHELL_HELPERS}
-      return !!(await wait(() => { const panel = q('[data-task-environment]'); return panel?.textContent.includes('Explicit processing route') && panel.textContent.includes('claude-sonnet-5-5') && panel.textContent.includes('Unknown') && !panel.textContent.includes('No processing route selected') ? panel : null; }, ${POLICY_SETTLE_MS}));
-    })()`) as boolean;
-    if (!updated) failures.push('Mounted environment panel did not update via production route invalidation');
+      const updated = !!(await wait(() => { const panel = qVisible('dialog[open] [data-task-environment]'); return panel?.textContent.includes('Selected conversation model') && panel.textContent.includes('claude-sonnet-5-5') && panel.textContent.includes('Unknown') && !panel.textContent.includes('No conversation model selected') && !/Deployment|Endpoint|API version|anthropic-direct|api[.]anthropic[.]com/i.test(panel.textContent) ? panel : null; }, ${POLICY_SETTLE_MS}));
+      const close = [...document.querySelectorAll('dialog[open] button')].find((button) => button.textContent === 'Close Environment');
+      if (close) close.click();
+      if (!updated) { const panel = q('dialog[open] [data-task-environment]'); return JSON.stringify({taskView: !!qVisible('[data-task-view=${JSON.stringify(created.value.taskId)}]'), chip: !!qVisible('[data-environment-chip]'), dialog: !!q('dialog[open]'), panel: panel ? panel.textContent.slice(0, 400) : null}); }
+      return !!(await wait(() => !q('dialog[open] [data-task-environment]'), ${SHELL_SETTLE_MS}));
+    })()`) as boolean | string;
+    if (updated !== true) failures.push('Mounted environment panel did not update via production route invalidation' + (typeof updated === 'string' ? '; observed=' + updated : ''));
     // Story 1.24: mounted choices follow the same real main/preload notification.
     // Persist defaults explicitly; this does not enable the disabled route or call a provider.
+    stage = 'mounted-usage-settings';
     const usageChoices = await contents.executeJavaScript(`(async () => {
       ${SHELL_HELPERS}
-      const panel = await wait(() => { const node=q('[data-task-usage]'); return node?.querySelector('select[aria-label="Reasoning"]:not(:disabled)') ? node : null; }, ${POLICY_SETTLE_MS});
+      // Choosing the conversation model must leave the open conversation in place.
+      if (!qVisible('[data-task-view=${JSON.stringify(created.value.taskId)}]')) return JSON.stringify({taskView:false,trigger:null,dialog:!!q('dialog[open]')});
+      // Reasoning sits beside the model in the composer footer; it opens the explicit settings.
+      const trigger = await wait(() => { const node=qVisible('[data-composer] [data-conversation-model] [data-conversation-reasoning]'); return node?.getAttribute('data-reasoning-state')==='unsaved' ? node : null; }, ${POLICY_SETTLE_MS});
+      if (!trigger) { const node = q('[data-conversation-reasoning]'); return JSON.stringify({taskView: !!qVisible('[data-task-view=${JSON.stringify(created.value.taskId)}]'), trigger: node ? node.getAttribute('data-reasoning-state') : null, dialog: !!q('dialog[open]')}); }
+      trigger.click();
+      const panel = await wait(() => { const node=qVisible('dialog[open] [data-task-reasoning]'); return node?.querySelector('select[aria-label="Reasoning"]:not(:disabled)') ? node : null; }, ${POLICY_SETTLE_MS});
       if (!panel || !panel.textContent.includes('Defaults are not saved yet')) return false;
       const save=[...panel.querySelectorAll('button')].find(button=>button.textContent==='Save Task settings');
       if (!save) return false; save.click();
-      return !!(await wait(() => { const node=q('[data-task-usage]'); return node?.querySelector('select[aria-label="Reasoning"]') && !node.textContent.includes('Defaults are not saved yet') ? node : null; }, ${POLICY_SETTLE_MS}));
-    })()`) as boolean;
-    if (!usageChoices) failures.push('Mounted usage choices did not save explicit defaults');
+      const saved = !!(await wait(() => { const node=qVisible('dialog[open] [data-task-reasoning]'); return node?.querySelector('select[aria-label="Reasoning"]') && !node.textContent.includes('Defaults are not saved yet') && qVisible('[data-conversation-reasoning]')?.getAttribute('data-reasoning-state')==='saved' ? node : null; }, ${POLICY_SETTLE_MS}));
+      const close = [...document.querySelectorAll('dialog[open] button')].find((button) => button.textContent === 'Close Reasoning and speed');
+      if (close) close.click();
+      return saved && !!(await wait(() => !q('dialog[open] [data-task-reasoning]'), ${SHELL_SETTLE_MS}));
+    })()`) as boolean | string;
+    if (usageChoices !== true) failures.push('Mounted usage choices did not save explicit defaults' + (typeof usageChoices === 'string' ? '; observed=' + usageChoices : ''));
     // Harmless local invocations, repeated and failed, are accounted at the real boundary.
+    stage = 'bounded-local-invocations';
     for (const command of [['/bin/sh','-c','exit 0'],['/bin/sh','-c','exit 7'],['/bin/sh','-c','exit 0']]) {
       const run=await options.policy.runTool(created.value.taskId,command,{timeoutMs:30_000});
-      if (!run.ok) throw new SmokeProbeFailure('Synthetic local invocation unavailable');
+      if (!run.ok) throw new SmokeProbeFailure('Synthetic local invocation unavailable ('+run.code+')');
     }
+    stage = 'mounted-usage-history';
     const history = await contents.executeJavaScript(`(async () => {
       ${SHELL_HELPERS}
-      return !!(await wait(() => { const node=q('[data-task-usage]'); const rows=node?.querySelectorAll('[data-usage-attempt]'); return rows?.length>=3 && node.textContent.includes('Local tool invocation — completed') && node.textContent.includes('Local tool invocation — failed') && node.textContent.includes('Unknown / Unknown') ? node : null; }, ${POLICY_SETTLE_MS}));
-    })()`) as boolean;
-    if (!history) failures.push('Native repeated/failed tool history did not reach mounted usage through production notifications');
+      // Attributable usage and limits live in Settings > Usage for the open conversation.
+      location.hash = '#settings-usage';
+      const found = !!(await wait(() => { const node=qVisible('[data-settings-usage-task=${JSON.stringify(created.value.taskId)}] [data-task-usage]'); const rows=node?.querySelectorAll('[data-usage-attempt]'); return rows?.length>=3 && node.textContent.includes('Local tool invocation — completed') && node.textContent.includes('Local tool invocation — failed') && node.textContent.includes('Unknown / Unknown') ? node : null; }, ${POLICY_SETTLE_MS}));
+      const observed = found ? null : JSON.stringify({settings: !!q('[data-settings-usage]'), task: q('[data-settings-usage]')?.getAttribute('data-settings-usage-task') === ${JSON.stringify(created.value.taskId)}, rows: q('[data-task-usage]')?.querySelectorAll('[data-usage-attempt]').length ?? null, text: q('[data-task-usage]')?.textContent.slice(0, 300) ?? null});
+      location.hash = '#shell';
+      return found || observed;
+    })()`) as boolean | string;
+    if (history !== true) failures.push('Native repeated/failed tool history did not reach mounted usage through production notifications' + (typeof history === 'string' ? '; observed=' + history : ''));
+
+
+
+
+  } catch (error) { failures.push((error instanceof SmokeProbeFailure ? error.message : `Environment smoke could not finish at ${stage}; seeded identity and matching native runtime required`) + (stage === 'quota-fixture-refuse' ? quotaFixtureDiagnostic(error) : '')); }
+  finally { if (configured) { await smokeIdentity(contents, 'signOut'); await options.organise.syncPrincipal().catch(() => {}); } }
+  return {ok:failures.length===0,failures};
+}
+
+
+/** Diagnostic pixels only, bounded and scoped to the launch-owned fixture folder. */
+async function captureSmokeFailure(contents:WebContents,fixtureFile:string):Promise<{name:string;path:string;width:number;height:number}|null>{
+  let timer:ReturnType<typeof setTimeout>|undefined;
+  try{
+    if(!fixtureFile||!fs.existsSync(fixtureFile))return null;
+    const image=await Promise.race([contents.capturePage(),new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(new Error('Capture deadline')),2000);})]);
+    if(image.isEmpty())return null;
+    const folder=path.join(path.dirname(fixtureFile),'captures');fs.mkdirSync(folder,{recursive:true});
+    const file=path.join(folder,'failure-synthetic.png'),size=image.getSize();fs.writeFileSync(file,image.toPNG());
+    return{name:'failure-synthetic',path:file,width:size.width,height:size.height};
+  }catch{return null;}finally{if(timer)clearTimeout(timer);}
+}
+
+/** Dedicated debug-only Electron quota journey. The launcher supplies an isolated
+ * service Workspace and pinned loopback fixture; no renderer may classify data. */
+export async function probeQuota(contents: WebContents, options: OrganiseProbeOptions & {
+  routes: import('./routes/service').RouteService; policy: PolicyService;
+  usageChanged(privateScope:boolean):void; isolatedRoot:string; fixtureFile:string; armSyntheticSession(workspaceId:string):Promise<void>;
+}):Promise<{ok:boolean;failures:string[];failureCapture?:{name:string;path:string;width:number;height:number}}> {
+  const failures:string[]=[]; let stage='seeded-identity';
+  let failureCapture:{name:string;path:string;width:number;height:number}|null=null;
+  try {
+    const seed=JSON.parse(fs.readFileSync(options.seedFile??'', 'utf8')) as {workspace_id:string;invite_id:string};
+    const transport=JSON.parse(fs.readFileSync(options.fixtureFile,'utf8')) as {endpoint:string;certificate:number[]};
+    const endpoint=new URL(transport.endpoint);
+    if(endpoint.protocol!=='https:'||endpoint.hostname!=='127.0.0.1'||endpoint.pathname!=='/v1/messages'||!Array.isArray(transport.certificate)||transport.certificate.length>8192||transport.certificate.some(n=>!Number.isInteger(n)||n<0||n>255))throw new SmokeProbeFailure('Pinned local quota fixture unavailable');
+    if(!(await smokeIdentity(contents,'signIn')).ok)throw new SmokeProbeFailure('Quota identity unavailable');
+    const accepted=await options.identity.session.withAccess(access=>options.identity.service!.acceptInvite(access,seed.invite_id));
+    if(accepted?.workspace_id!==seed.workspace_id)throw new SmokeProbeFailure('Quota Workspace invitation unavailable');
+    await options.organise.syncPrincipal(); await options.organise.getWorkspaces();
+    stage='native-bootstrap';
+    fs.writeFileSync(path.join(options.isolatedRoot,'.inquello-fictional-audit-session'),'explicit isolated quota fixture');
+    await options.armSyntheticSession(seed.workspace_id);
+    const principal=options.identity.session.principalId();
+    // Match the passing native quota witness: configure both candidates before
+    // starting work. A later candidate edit correctly invalidates inference state.
+    await options.runtimeRequest('inquello/routes/configure',{operationId:randomUUID(),expectedRevision:0,configuration:{routeId:'codex-responses',deployment:'openai-api',model:'fixture-model-20261030',apiVersion:'responses-v1',accountRef:principal,region:null}});
+    const configuration={routeId:'claude-api-key',deployment:'anthropic-direct',model:'claude-sonnet-5-5',apiVersion:'2026-10-21',accountRef:principal,region:null};
+    await options.runtimeRequest('inquello/routes/configure',{operationId:randomUUID(),expectedRevision:0,configuration});
+    const bound=await options.runtimeRequest<{accepted:boolean;providerCalls:number}>('inquello/fixture/taskTransport',{workspaceId:seed.workspace_id,configurationRevision:1,routeId:'claude-api-key',...transport,failBeforeSampling:true});
+    if(!bound.accepted||bound.providerCalls!==0)throw new SmokeProbeFailure('Native quota transport refused');
+    const initialPolicy=await options.policy.startPolicy(seed.workspace_id);
+    const expectedExecution={automatic_permission_review:true,command_rules:[{prefix:['/usr/bin/true'],decision:'prompt'}]};
+    const execution=JSON.parse(JSON.stringify(initialPolicy?.execution??null));
+    if(!execution||execution.automatic_permission_review!==true||JSON.stringify(execution.command_rules)!==JSON.stringify(expectedExecution.command_rules)||Object.keys(execution).sort().join(',')!=='automatic_permission_review,command_rules')throw new SmokeProbeFailure('Quota service policy did not match explicit fixture policy');
+    stage='native-task-start';
+    const operationId=randomUUID();
+    type Run={taskId:string;threadId:string|null;status:string};
+    let run=await options.runtimeRequest<Run>('inquello/tasks/start',{operationId,workspaceId:seed.workspace_id,engagementId:null,folderId:null,request:'Fictional quota validation only. No customer data.',routeId:'claude-api-key',configurationRevision:1,reasoning:'default',speed:'default',workspacePolicy:initialPolicy});
+    const deadline=Date.now()+30_000;
+    while(!['failed','setup-failed','completed','cancelled','uncertain'].includes(run.status)&&Date.now()<deadline){await new Promise(resolve=>setTimeout(resolve,50));run=await options.runtimeRequest<Run>('inquello/tasks/reconcile',{operationId});}
+    if(run.status!=='failed'||!run.threadId)throw new SmokeProbeFailure('Quota native pre-sampling failure was not established');
+    const created={value:{taskId:run.taskId}};
+    const selected={value:await options.runtimeRequest<{revision:number}>('inquello/routes/task/read',{taskId:run.taskId})};
+    // No provider is needed after this pre-sampling failure. Retire our fixture
+    // credential BEFORE mounting ordinary route readers; otherwise they correctly
+    // invalidate the mismatched main/native credential and stale concurrent reads.
+    await options.runtimeRequest('inquello/routes/invalidate',{routeId:'claude-api-key',generation:Date.now(),taskId:null});
+    stage='mounted-native-task';
+    const mounted=await contents.executeJavaScript(`(async()=>{
+      ${SHELL_HELPERS}
+      const result={shell:false,sidebar:false,task:false,controls:false};
+      location.hash='#specimen';await wait(specimenReady,5000);result.shell=await openShell();if(!result.shell)return result;
+      const row=await wait(()=>qVisible('[data-task-id=${JSON.stringify(run.taskId)}] a'),${SHELL_SETTLE_MS});result.sidebar=!!row;if(!row)return result;row.click();
+      result.task=!!(await wait(()=>qVisible('[data-task-view=${JSON.stringify(run.taskId)}]'),${SHELL_SETTLE_MS}));if(!result.task)return result;
+      result.controls=!!(await wait(()=>qVisible('[data-composer] [data-conversation-model] [data-conversation-reasoning]')&&qVisible('[data-composer] [data-conversation-model] [data-environment-chip]'),${POLICY_SETTLE_MS}));return result;
+    })()`) as {shell:boolean;sidebar:boolean;task:boolean;controls:boolean};
+    if(!mounted.controls)throw new SmokeProbeFailure('Classified quota Task controls did not mount; stages='+JSON.stringify(mounted));
+    stage='bounded-local-invocations';
+    for(const command of [['/bin/sh','-c','exit 0'],['/bin/sh','-c','exit 7'],['/bin/sh','-c','exit 0']]){
+      const result=await options.policy.runTool(run.taskId,command,{timeoutMs:30_000});if(!result.ok)throw new SmokeProbeFailure('Quota local invocation unavailable');
+    }
+    options.usageChanged(false);
+    // Attributable usage and limits live in Settings > Usage for the open conversation.
+    const usagePanel=`qVisible('[data-settings-usage-task=${JSON.stringify(run.taskId)}] [data-task-usage]')`;
+    const history=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}location.hash='#settings-usage';const found=!!(await wait(()=>{const node=${usagePanel};return node&&node.querySelectorAll('[data-usage-attempt]').length>=3&&node.textContent.includes('Local tool invocation — completed')&&node.textContent.includes('Local tool invocation — failed')?node:null;},${POLICY_SETTLE_MS}));location.hash='#shell';return found;})()`);
+    if(!history)throw new SmokeProbeFailure('Quota prior local history did not mount');
     // Combined Story 1.24 gate: existing default-off debug fixture dispatcher,
     // production native reviewer/ledger, then the real mounted preload panel.
     // Default/release binaries reject the fixture method rather than bypass gates.
+    stage = 'quota-fixture-setup';
     const latestCatalog=await options.routes.list();
     if(!latestCatalog.ok)throw new SmokeProbeFailure('Fixture route catalog unavailable');
     const codex=latestCatalog.value.find(row=>row.routeId==='codex-responses');
     if(!codex)throw new SmokeProbeFailure('Fixture Codex route unavailable');
-    const configuredCodex=await options.routes.configure({operationId:randomUUID(),expectedRevision:codex.revision,routeId:'codex-responses',deployment:'openai-api',model:'fixture-model-20261030',apiVersion:'responses-v1',region:null});
-    if(!configuredCodex.ok)throw new SmokeProbeFailure('Fixture route configuration unavailable');
-    const codexRevision=configuredCodex.value.find(row=>row.routeId==='codex-responses')?.revision;
-    if(codexRevision===undefined)throw new SmokeProbeFailure('Fixture route revision unavailable');
+    const codexRevision=codex.revision;
+    if(codexRevision!==1||codex.configuration?.accountRef!==principal||codex.configuration.model!=='fixture-model-20261030'||codex.configuration.deployment!=='openai-api'||codex.configuration.apiVersion!=='responses-v1')throw new SmokeProbeFailure('Fixture route revision unavailable');
     const codexSelection=await options.routes.select({operationId:randomUUID(),expectedRevision:selected.value.revision,taskId:created.value.taskId,routeId:'codex-responses',configurationRevision:codexRevision});
     if(!codexSelection.ok)throw new SmokeProbeFailure('Fixture route selection unavailable');
     const workspacePolicy=await options.policy.reviewPolicy(created.value.taskId);
     if(!workspacePolicy)throw new SmokeProbeFailure('Fixture private policy unavailable');
     const fixture=(phase:'prepare'|'refuse'|'clear')=>options.runtimeRequest<{accepted?:boolean;providerCalls?:number;retainedAttempts?:number;refused?:boolean}>('inquello/fixture/messagesTurn',{scenario:'usage-limit',phase,taskId:created.value.taskId,workspacePolicy});
     try {
+      stage = 'quota-fixture-prepare';
       const prepared=await fixture('prepare');
       if(prepared.accepted!==true||prepared.providerCalls!==0)throw new SmokeProbeFailure('Isolated native quota fixture unavailable');
       options.usageChanged(true);
       const defaultsSaved=await contents.executeJavaScript(`(async()=>{
         ${SHELL_HELPERS}
-        const panel=await wait(()=>{const node=q('[data-task-usage]');return node?.textContent.includes('synthetic fixture')&&node.querySelector('select[aria-label="Reasoning"]:not(:disabled)')?node:null;},${POLICY_SETTLE_MS});
+        // The usage surface first reflects the prepared fixture's inherited limits.
+        location.hash='#settings-usage';
+        const fixtureSeen=!!(await wait(()=>{const node=${usagePanel};return node?.textContent.includes('synthetic fixture')?node:null;},${POLICY_SETTLE_MS}));
+        location.hash='#shell';if(!fixtureSeen)return false;
+        // Then defaults are saved explicitly from the composer footer, beside the model.
+        const trigger=await wait(()=>qVisible('[data-task-view=${JSON.stringify(run.taskId)}]')&&qVisible('[data-composer] [data-conversation-model] [data-conversation-reasoning]'),${POLICY_SETTLE_MS});
+        if(!trigger)return false;trigger.click();
+        const panel=await wait(()=>{const node=qVisible('dialog[open] [data-task-reasoning]');return node?.querySelector('select[aria-label="Reasoning"]:not(:disabled)')?node:null;},${POLICY_SETTLE_MS});
         if(!panel)return false;
         const save=[...panel.querySelectorAll('button')].find(button=>button.textContent==='Save Task settings');if(!save)return false;save.click();
-        return !!(await wait(()=>{const node=q('[data-task-usage]');return node?.textContent.includes('synthetic fixture')&&!node.textContent.includes('older route revision')?node:null;},${POLICY_SETTLE_MS}));
+        const saved=!!(await wait(()=>{const node=qVisible('dialog[open] [data-task-reasoning]');return node&&!node.textContent.includes('older route revision')&&!node.textContent.includes('Defaults are not saved yet')&&qVisible('[data-conversation-reasoning]')?.getAttribute('data-reasoning-state')==='saved'?node:null;},${POLICY_SETTLE_MS}));
+        const close=[...document.querySelectorAll('dialog[open] button')].find(button=>button.textContent==='Close Reasoning and speed');if(close)close.click();
+        return saved&&!!(await wait(()=>!q('dialog[open] [data-task-reasoning]'),${SHELL_SETTLE_MS}));
       })()`) as boolean;
       if(!defaultsSaved)throw new SmokeProbeFailure('Mounted fixture defaults were not saved');
-      const retainedIds=await contents.executeJavaScript(`[...document.querySelectorAll('[data-task-usage] [data-usage-attempt]')].map(node=>node.getAttribute('data-usage-attempt'))`) as string[];
+      const nativeHistory=await options.runtimeRequest<{usage:{attempts:Array<{snapshot:{attempt_id:string;operation_kind:string}}>}}>('inquello/usage/read',{taskId:run.taskId});
+      const retainedIds=nativeHistory.usage.attempts.map(row=>row.snapshot.attempt_id);
+      if(nativeHistory.usage.attempts.filter(row=>row.snapshot.operation_kind==='local-tool').length<3)throw new SmokeProbeFailure('Quota native local history incomplete');
+      const allHistoryMounted=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}const retained=${JSON.stringify(retainedIds)};location.hash='#settings-usage';const found=!!(await wait(()=>{const panel=${usagePanel};if(!panel||!panel.getClientRects().length)return false;const ids=[...panel.querySelectorAll('[data-usage-attempt]')].map(node=>node.getAttribute('data-usage-attempt'));return ids.length===retained.length&&retained.every(id=>ids.includes(id));},${POLICY_SETTLE_MS}));location.hash='#shell';return found;})()`);
+      if(!allHistoryMounted)throw new SmokeProbeFailure('Quota mounted history omitted retained native attempts');
+      stage = 'quota-fixture-refuse';
       const refused=await fixture('refuse');
-      if(refused.accepted!==true||refused.refused!==true||refused.providerCalls!==0||(refused.retainedAttempts??0)<3)throw new SmokeProbeFailure('Native limit refusal did not prove zero provider calls and retained work');
+      if(refused.accepted!==true||refused.refused!==true||refused.providerCalls!==0||refused.retainedAttempts!==retainedIds.length)throw new SmokeProbeFailure('Native limit refusal did not prove zero provider calls and retained work');
       // Same main/preload notification function used after native tool/reviewer settlement.
       options.usageChanged(false);
       const mountedRefusal=await contents.executeJavaScript(`(async()=>{
         ${SHELL_HELPERS}
-        const retained=${JSON.stringify(retainedIds)};
-        return !!(await wait(()=>{const node=q('[data-task-usage]');if(!node)return null;const ids=[...node.querySelectorAll('[data-usage-attempt]')].map(row=>row.getAttribute('data-usage-attempt'));
-          return node.textContent.includes('Automated permission review — refused')&&node.textContent.includes('exhausted')&&node.textContent.includes('Codex plan/Workspace')&&node.textContent.includes('Use permitted human handling')&&retained.every(id=>ids.includes(id))?node:null;},${POLICY_SETTLE_MS}));
-      })()`) as boolean;
-      if(!mountedRefusal)failures.push('Native quota refusal did not reach mounted usage with retained prior work');
-    } finally {await fixture('clear').catch(()=>undefined);options.usageChanged(true);}
-
-
-
-  } catch (error) { failures.push(error instanceof SmokeProbeFailure ? error.message : 'Environment smoke could not finish; seeded identity and matching native runtime required'); }
-  finally { if (configured) { await smokeIdentity(contents, 'signOut'); await options.organise.syncPrincipal().catch(() => {}); } }
-  return {ok:failures.length===0,failures};
+        const retained=${JSON.stringify(retainedIds)};const result={usage:false,inline:false};let refusedId=null;
+        // Settings > Usage: the refused attempt joins the retained history with the limit explanation.
+        location.hash='#settings-usage';
+        result.usage=!!(await wait(()=>{const node=${usagePanel};if(!node)return null;const ids=[...node.querySelectorAll('[data-usage-attempt]')].map(row=>row.getAttribute('data-usage-attempt'));
+          refusedId=ids.find(id=>!retained.includes(id))??null;
+          return node.textContent.includes('Automated permission review — refused')&&node.textContent.includes('exhausted')&&node.textContent.includes('Codex plan/Workspace')&&node.textContent.includes('Use permitted human handling')&&ids.length===retained.length+1&&retained.every(id=>ids.includes(id))?node:null;},${POLICY_SETTLE_MS}));
+        // The conversation: an inline notice at the point the limit stopped work, naming the refused attempt.
+        location.hash='#shell';
+        result.inline=!!refusedId&&!!(await wait(()=>{const node=qVisible('[data-task-view=${JSON.stringify(run.taskId)}] [data-usage-limit-notice][data-usage-attempt="'+refusedId+'"]');
+          return node&&node.textContent.includes('Automated permission review — refused')&&node.textContent.includes('exhausted')&&node.textContent.includes('Codex plan/Workspace')&&node.textContent.includes('Use permitted human handling')&&node.textContent.includes(refusedId)?node:null;},${POLICY_SETTLE_MS}));
+        return result;
+      })()`) as {usage:boolean;inline:boolean};
+      if(!mountedRefusal.usage)failures.push('Native quota refusal did not reach mounted usage with retained prior work');
+      if(!mountedRefusal.inline)failures.push('Native quota refusal did not show an inline limit notice in the conversation');
+    } finally {try{await fixture('clear');}catch{failures.push('Quota fixture cleanup failed');}options.usageChanged(true);}
+  }catch(error){failures.push((error instanceof SmokeProbeFailure?error.message:`Quota smoke could not finish at ${stage}`)+quotaFixtureDiagnostic(error));failureCapture=await captureSmokeFailure(contents,options.fixtureFile);if(!failureCapture)failures.push('Diagnostic failure capture unavailable');}
+  finally {try{if(!(await smokeIdentity(contents,'signOut')).ok)failures.push('Quota sign-out failed');await options.organise.syncPrincipal();}catch{failures.push('Quota identity cleanup failed');}}
+  return{ok:failures.length===0,failures,...(failureCapture?{failureCapture}: {})};
 }
 
 /** Story 1.25 Start-surface probe only; never sends a request or claims provider acceptance. */
@@ -3730,13 +4002,489 @@ export async function probeStartSurface(contents:WebContents,options:Omit<Organi
   const before=await options.organise.getTree(seed.workspace_id);if(!before.ok)throw new Error('Private tree unavailable');
   const read=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}
    const opened=await openShell();const ready=await wait(()=>q('[data-sidebar][data-sidebar-state="ready"]'),${SHELL_SETTLE_MS});
-   const button=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='New thread');if(!opened||!ready||!button)return{opened:false};button.click();
-   const start=await wait(()=>q('[data-start-view]:not([hidden])'),${SHELL_SETTLE_MS});const field=start?.querySelector('textarea');const send=start?.querySelector('[aria-label="Send"]');
-   return{opened:!!start,prompt:start?.textContent.includes('What should we work on?'),focused:document.activeElement===field,empty:field?.value==='',disabled:send?.getAttribute('aria-disabled')==='true',later:start?.textContent.includes('Files and Methods are not available yet.')};
+   const button=qVisible('[data-action="new-thread"]');if(!opened||!ready||!button)return{opened:false};button.click();
+   const start=await wait(()=>qVisible('[data-start-view]'),${SHELL_SETTLE_MS});const field=start?.querySelector('textarea');const send=start?.querySelector('[aria-label="Send"]');
+   return{opened:!!start,prompt:start?.textContent.includes('What should we work on?'),focused:document.activeElement===field,empty:field?.value==='',disabled:send?.getAttribute('aria-disabled')==='true',modelChoice:!!start?.querySelector('[data-conversation-model] button[aria-label="Choose model"]'),noUnsupportedControls:!start?.querySelector('[aria-label="Attach files"],[aria-label="Voice"]')};
   })()`) as Record<string,boolean>;
-  for(const key of ['opened','prompt','focused','empty','disabled','later'])if(read[key]!==true)failures.push(`Start surface ${key} not established`);
-  const after=await options.organise.getTree(seed.workspace_id);if(!after.ok||after.value.tasks.length!==before.value.tasks.length)failures.push('New thread changed persisted Tasks before Send');
+  // The conversation model is chosen in the Composer; response options appear only when a model offers non-default choices.
+  for(const key of ['opened','prompt','focused','empty','disabled','modelChoice','noUnsupportedControls'])if(read[key]!==true)failures.push(`Start surface ${key} not established`);
+  const after=await options.organise.getTree(seed.workspace_id);if(!after.ok||after.value.tasks.length!==before.value.tasks.length)failures.push('New chat changed persisted Tasks before Send');
  }catch{failures.push('Seeded Start surface could not be verified');}
  finally{await smokeIdentity(contents, 'signOut').catch(()=>undefined);await options.organise.syncPrincipal().catch(()=>undefined);}
  return{ok:failures.length===0,skipped:false,failures};
+}
+
+
+/** Actual Electron pixels from a native, pinned local synthetic conversation.
+ * The text is fixture-authored, not a live model result or product acceptance. */
+export async function probeVisualConversation(contents: WebContents, options: OrganiseProbeOptions & {
+  policy: PolicyService; isolatedRoot:string; fixtureFile:string; armSyntheticSession(workspaceId:string):Promise<void>;
+  resize(width:number,height:number):void; restore:{width:number;height:number};
+}):Promise<{ok:boolean;failures:string[];synthetic:true;settingsSurface:'implemented-settings';captures:{name:string;path:string;width:number;height:number}[]}> {
+  const failures:string[]=[],captures:{name:string;path:string;width:number;height:number}[]=[];
+  let stage='visual-fixture';
+  try {
+    const seed=JSON.parse(fs.readFileSync(options.seedFile??'','utf8')) as {workspace_id:string;invite_id:string};
+    const fixture=JSON.parse(fs.readFileSync(options.fixtureFile,'utf8')) as {endpoint:string;certificate:number[];answer:string;answers:string[];requests:string[];bRequest:string;bAnswer:string;stateFile:string;captureDir:string};
+    const endpoint=new URL(fixture.endpoint),captureDir=path.join(path.dirname(options.fixtureFile),'captures');
+    if(endpoint.protocol!=='https:'||endpoint.hostname!=='127.0.0.1'||endpoint.pathname!=='/v1/responses'||
+       !Array.isArray(fixture.certificate)||fixture.certificate.length>8192||fixture.certificate.some(n=>!Number.isInteger(n)||n<0||n>255)||
+       !fixture.answer.startsWith('Synthetic visual QA response - generated by the local test fixture, not a live model.')||fixture.answer.length>4096||
+       path.resolve(fixture.captureDir)!==path.resolve(captureDir)||
+       !Array.isArray(fixture.answers)||fixture.answers.length!==4||fixture.answers.some(value=>typeof value!=='string'||!value.startsWith('Synthetic visual QA response - generated by the local test fixture, not a live model.')||value.length>4096)||
+       !Array.isArray(fixture.requests)||fixture.requests.length!==3||fixture.requests.some(value=>typeof value!=='string'||!value.startsWith('Synthetic UI ')||value.length>4096)||
+       path.resolve(fixture.stateFile)!==path.resolve(path.join(path.dirname(options.fixtureFile),'synthetic-journey-state.json')))throw new SmokeProbeFailure('Local visual fixture invalid');
+    fs.mkdirSync(captureDir,{recursive:false});
+    const boundedCaptureStep = <T,>(pending: Promise<T>, reason: string): Promise<T> => new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new SmokeProbeFailure(reason)), 8_000);
+      pending.then(value => { clearTimeout(timer); resolve(value); }, () => { clearTimeout(timer); reject(new SmokeProbeFailure(reason + ' (operation rejected, not deadline)')); });
+    });
+    const capture=async(name:string)=>{
+      // Wait for actual layout/font completion, never a fixed screenshot delay.
+      await boundedCaptureStep(contents.executeJavaScript(`(async()=>{await document.fonts.ready;await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));})()`), 'Visual layout readiness unavailable');
+      const image=await boundedCaptureStep(contents.capturePage(), 'Actual Electron capture timed out'),size=image.getSize();
+      if(image.isEmpty()||size.width<640||size.height<480)throw new SmokeProbeFailure('Actual Electron capture unavailable');
+      const file=path.join(captureDir,`${name}.png`);fs.writeFileSync(file,image.toPNG());
+      captures.push({name,path:file,width:size.width,height:size.height});
+    };
+    const usableComposer=async(stage:string,inline=false)=>{
+      const geometry=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}
+        const read=()=>{const fields=[...document.querySelectorAll('[data-composer-input]')].filter(element=>visible(element)&&element.getClientRects().length);const field=fields[0],composer=field?.closest('[data-composer]'),actions=composer?.querySelector('.iq-composer-actions');if(!field||!composer||!actions)return null;const input=field.getBoundingClientRect(),surface=composer.getBoundingClientRect(),buttons=actions.getBoundingClientRect();return {viewportWidth:innerWidth,viewportHeight:innerHeight,inputWidth:input.width,inputHeight:input.height,composerWidth:surface.width,composerHeight:surface.height,oneComposer:fields.length===1,noPageOverflow:document.documentElement.scrollWidth<=document.documentElement.clientWidth,inside:input.left>=surface.left&&input.right<=surface.right&&input.top>=surface.top&&input.bottom<=surface.bottom,inline:buttons.top>=input.bottom-1&&buttons.right<=surface.right&&buttons.bottom<=surface.bottom};};
+        const usable=value=>value&&value.oneComposer&&value.noPageOverflow&&value.inside&&value.inputWidth>=240&&value.inputHeight>=20&&value.inputHeight<=112&&(!${inline}||value.inline);
+        const value=await wait(()=>{const value=read();return usable(value)?value:null;},5000)??read();return {stage:${JSON.stringify(stage)},...value,usable:!!usable(value)};
+      })()`);
+      console.info(JSON.stringify({event:'visual-composer-geometry',...geometry}));
+      if(!geometry.usable)throw new SmokeProbeFailure('Composer input geometry unusable at '+stage);
+    };
+    await contents.executeJavaScript(`void Object.defineProperty(globalThis,'__iqSyntheticStartTrace',{value:[],configurable:true});`);
+    stage='visual-identity';
+    if(!(await smokeIdentity(contents,'signIn')).ok)throw new SmokeProbeFailure('Visual identity unavailable');
+    const accepted=await options.identity.session.withAccess(access=>options.identity.service!.acceptInvite(access,seed.invite_id));
+    if(accepted?.workspace_id!==seed.workspace_id)throw new SmokeProbeFailure('Visual Workspace unavailable');
+    await options.organise.syncPrincipal();await options.organise.getWorkspaces();
+    options.resize(1920,1200);
+    const home=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}return await openShell()&&!q('[data-task-view]');})()`);
+    if(!home)throw new SmokeProbeFailure('Fresh home did not mount');
+    const homeShape=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}return !!(await wait(()=>{const fields=[...document.querySelectorAll('[data-composer-input]')].filter(element=>visible(element)&&element.getClientRects().length);return Math.abs(q('nav[data-sidebar]').getBoundingClientRect().width-320)<0.5&&fields.length===1&&q('[data-rail-workspace="'+${JSON.stringify(seed.workspace_id)}+'"]')&&q('[data-shell]')?.getAttribute('data-nav-presentation')==='sidebar';},${SHELL_SETTLE_MS}));})()`);
+    if(!homeShape)throw new SmokeProbeFailure('Expanded home did not show exactly one real composer');
+    await usableComposer('expanded-home',true);
+    await capture('01-home-synthetic');
+    const collapsedHome=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}if(!press('[data-action="collapse-nav"]'))return false;return !!(await wait(()=>q('[data-shell]')?.getAttribute('data-nav-presentation')==='rail'&&Math.abs(q('nav[data-sidebar]').getBoundingClientRect().width-64)<0.5,5000));})()`);
+    if(!collapsedHome)throw new SmokeProbeFailure('Home navigation did not collapse');
+    await capture('01b-home-collapsed-synthetic');
+    const footerOpen=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}if(!press('button[aria-label="Organization and team"]'))return false;return !!(await wait(()=>{const menu=qVisible('[role="menu"]');if(!menu)return false;const rect=menu.getBoundingClientRect();return rect.width>0&&rect.left>=0&&rect.right<=innerWidth&&rect.top>=0&&rect.bottom<=innerHeight;},5000));})()`);
+    if(!footerOpen)throw new SmokeProbeFailure('Account workspace menu unavailable');
+    await capture('01c-account-workspace-synthetic');
+    const expandedHome=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}press('button[aria-label="Organization and team"]');if(!press('[data-action="expand-nav"]'))return false;return !!(await wait(()=>q('[data-shell]')?.getAttribute('data-nav-presentation')==='sidebar',5000));})()`);
+    if(!expandedHome)throw new SmokeProbeFailure('Home navigation did not expand');
+    const draftExpanded=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}const field=qVisible('[data-composer-input]');if(!field)return false;type(field,'Fictional unsent planning draft\\nSecond planning line\\nThird planning line');return !!(await wait(()=>field.getBoundingClientRect().height>48,5000));})()`);
+    if(!draftExpanded)throw new SmokeProbeFailure('Multiline unsent draft did not expand');
+    await capture('01d-multiline-unsent-synthetic');
+    options.resize(SHELL_LAYOUT.windowMinWidth,900);
+    const minimumHome=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}return !!(await wait(()=>{const fields=[...document.querySelectorAll('[data-composer-input]')].filter(element=>visible(element)&&element.getClientRects().length);return innerWidth===${SHELL_LAYOUT.windowMinWidth}&&q('[data-shell]')?.getAttribute('data-nav-presentation')==='rail'&&document.documentElement.scrollWidth<=document.documentElement.clientWidth&&fields.length===1&&fields[0].value==='Fictional unsent planning draft\\nSecond planning line\\nThird planning line';},5000));})()`);
+    if(!minimumHome)throw new SmokeProbeFailure('Minimum-width home overflowed or lost its draft');
+    await usableComposer('minimum-home');
+    options.resize(1920,1200);
+    if(!await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}return !!(await wait(()=>innerWidth===1920&&q('[data-shell]')?.getAttribute('data-nav-presentation')==='sidebar',5000));})()`))throw new SmokeProbeFailure('Expanded home was not restored');
+    await contents.executeJavaScript(`(()=>{${SHELL_HELPERS}const field=qVisible('[data-composer-input]');if(!field)throw new Error('Draft unavailable');type(field,'');})()`);
+    if(!(await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}location.hash='#settings-routes';return !!(await wait(()=>location.hash==='#settings-routes'&&!visible(q('[data-shell]'))&&qVisible('[data-processing-routes]'),${SHELL_SETTLE_MS}));})()`)))throw new SmokeProbeFailure('Visual setup surface unavailable');
+    stage='visual-native-start';
+    fs.writeFileSync(path.join(options.isolatedRoot,'.inquello-fictional-audit-session'),'explicit isolated visual fixture');
+    await options.armSyntheticSession(seed.workspace_id);
+    const principal=options.identity.session.principalId();
+    await options.runtimeRequest('inquello/routes/configure',{operationId:randomUUID(),expectedRevision:0,configuration:{routeId:'codex-responses',deployment:'openai-api',model:'gpt-6.1-terra',apiVersion:'responses-v1',accountRef:principal,region:null}});
+    const bound=await options.runtimeRequest<{accepted:boolean;providerCalls:number}>('inquello/fixture/taskTransport',{workspaceId:seed.workspace_id,configurationRevision:1,routeId:'codex-responses',endpoint:fixture.endpoint,certificate:fixture.certificate,failBeforeSampling:false});
+    if(!bound.accepted||bound.providerCalls!==0)throw new SmokeProbeFailure('Visual pinned transport refused');
+    stage='visual-native-proof';
+    const proof=await options.runtimeRequest<{accepted:boolean}>('inquello/fixture/taskTransportStatus',{workspaceId:seed.workspace_id,configurationRevision:1,routeId:'codex-responses'});
+    if(proof.accepted!==true)throw new SmokeProbeFailure('Visual native transport proof refused');
+    // Direct fixture configuration bypasses RouteService.configure's normal notification.
+    // Notify only this owned visual renderer after the exact pinned transport is proved.
+    contents.send('inquello:routes-changed',{authority:false});
+    // Composition boundary: creation and exact saved-binding selection use the
+    // existing public main bridge against prequalified synthetic revisions.
+    // The picker resolves fresh revisions, which this pinned fixture cannot
+    // prequalify. Actual picker input is covered separately by source-Electron.
+    // Follow-up Send, Stop, reopen and Resume below use actual renderer controls.
+    const checkFixture=async(expected:number,stopped=false)=>{
+      const deadline=Date.now()+5000;
+      do{
+        let state:{calls:number;invalidCalls:number;heldCancelled:boolean;heldTimedOut:boolean;contextMatches:boolean[]}|null=null;
+        try{state=JSON.parse(fs.readFileSync(fixture.stateFile,'utf8'));}catch{/* The owned writer may be publishing a new observation. */}
+        if(state){
+          if(state.calls>expected||state.invalidCalls!==0||state.heldTimedOut||state.contextMatches.some(value=>value!==true))throw new SmokeProbeFailure('Synthetic UI dispatch/context assertion failed');
+          if(state.calls===expected&&state.contextMatches.length===expected&&(!stopped||state.heldCancelled))return;
+        }
+        await new Promise(resolve=>setTimeout(resolve,50));
+      }while(Date.now()<deadline);
+      throw new SmokeProbeFailure('Synthetic UI dispatch/context observation timed out');
+    };
+    const taskSnapshot=async(taskId:string,expectedStatus:'completed'|'cancelled')=>{
+      // An item can complete before the retained turn transaction settles. Observe
+      // the actual lifecycle condition rather than treating item completion as it.
+      const deadline=Date.now()+POLICY_SETTLE_MS;
+      do {
+        const result=await boundedCaptureStep(contents.executeJavaScript(`(async()=>{const response=await globalThis.inquello.tasks.activity({taskId:${JSON.stringify(taskId)},workspaceId:${JSON.stringify(seed.workspace_id)}});if(!response?.ok)return {refused:true,superseded:response?.code==='refused'&&['A newer Task run is being observed.','The result snapshot changed. Read the current authorized result pages.'].includes(response?.reason),code:['refused','unavailable','invalid','uncertain','not_found','permission_required'].includes(response?.code)?response.code:'other'};const value=response.value;return {taskId:value.taskId,threadId:value.threadId,runId:value.runId,status:value.status};})()`),'Synthetic current Task read timed out') as {taskId:string;threadId:string|null;runId:string;status:string;refused?:boolean;superseded?:boolean;code?:string};
+        if(result.superseded){await new Promise(resolve=>setTimeout(resolve,50));continue;}
+        if(result.refused)throw new SmokeProbeFailure('Synthetic current Task read refused: '+result.code);
+        if(result.taskId!==taskId||!result.threadId||!result.runId)throw new SmokeProbeFailure('Synthetic native Task binding unavailable');
+        if(result.status===expectedStatus)return result;
+        if(['failed','setup-failed','uncertain','cancelled','completed'].includes(result.status))throw new SmokeProbeFailure('Synthetic Task reached an unexpected terminal state');
+        await new Promise(resolve=>setTimeout(resolve,50));
+      }while(Date.now()<deadline);
+      throw new SmokeProbeFailure('Synthetic native lifecycle did not settle');
+    };
+    const waitAnswer=async(taskId:string,answer:string,completed=true)=>contents.executeJavaScript(`(async()=>{
+      ${SHELL_HELPERS}
+      return !!(await wait(()=>{const task=qVisible('[data-task-view="'+${JSON.stringify(taskId)}+'"]');return task&&[...task.querySelectorAll('.iq-conversation-item--agent'+${JSON.stringify(completed?'[data-status="completed"]':'')}+' .iq-message-body .iq-progress-text')].some(node=>node.textContent===${JSON.stringify(answer)}&&node.getClientRects().length);},${POLICY_SETTLE_MS}));
+    })()`);
+    const latestAnswerVisible=async(taskId:string,answer:string,role:'agent'|'user'='agent')=>contents.executeJavaScript(`(async()=>{
+      ${SHELL_HELPERS}
+      return !!(await wait(()=>{const task=qVisible('[data-task-view="'+${JSON.stringify(taskId)}+'"]');const thread=task?.closest('.iq-thread');if(!task||!thread)return false;const clip=thread.getBoundingClientRect();return [...task.querySelectorAll('.iq-conversation-item--'+${JSON.stringify(role)}+' .iq-message-body .iq-progress-text')].some(node=>{if(node.textContent!==${JSON.stringify(answer)})return false;const rect=node.getBoundingClientRect();return rect.height>0&&rect.bottom>clip.top&&rect.bottom<=clip.bottom+2&&rect.top<clip.bottom;});},${SHELL_SETTLE_MS}));
+    })()`);
+    const startPinnedConversation=async(configurationRevision:number,request:string)=>contents.executeJavaScript(`(async()=>{
+      ${SHELL_HELPERS}
+      location.hash='#settings-routes';
+      if(!await wait(()=>!visible(q('[data-shell]')),${SHELL_SETTLE_MS}))return null;
+      const preflight=await globalThis.inquello.tasks.preflight({workspaceId:${JSON.stringify(seed.workspace_id)},routeId:'codex-responses',configurationRevision:${configurationRevision}});
+      if(!preflight?.ok||!preflight.value.available||!preflight.value.reasoning.includes('default')||!preflight.value.speeds.includes('default'))return null;
+      const began=performance.now();
+      const result=await globalThis.inquello.tasks.start({operationId:${JSON.stringify(randomUUID())},workspaceId:${JSON.stringify(seed.workspace_id)},engagementId:null,folderId:null,request:${JSON.stringify(request)},routeId:'codex-responses',configurationRevision:${configurationRevision},reasoning:'default',speed:'default'});
+      const elapsedMs=Math.round(performance.now()-began);
+      console.info('SYNTHETIC_STARTUP_OBSERVATION',JSON.stringify({source:'public-main-bridge-start-not-ui-click',configurationRevision:${configurationRevision},elapsedMs,exceeded20s:elapsedMs>20000,accepted:result?.ok===true&&result.value?.accepted===true}));
+      if(!result?.ok||!result.value.accepted||!result.value.taskId)return null;
+      const id=result.value.taskId;
+      if(!await openShell())return null;
+      const row=await wait(()=>qVisible('[data-task-id="'+id+'"] a'),${SHELL_SETTLE_MS});if(!row)return null;row.click();
+      if(!await wait(()=>qVisible('[data-task-view="'+id+'"]'),${SHELL_SETTLE_MS}))return null;
+      return id;
+    })()`) as Promise<string|null>;
+    // Story 1.15 owner amendment (2026-11-04): a finished native turn ends with
+    // the neutral "Finished · worked for …" line, measured from the turn's own
+    // timestamps; an interrupted turn keeps its wording and shows no such line.
+    const endOfTurn=async(id:string,finished:boolean,where:string)=>{
+      const read=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}
+        const view=()=>qVisible('[data-task-view="'+${JSON.stringify(id)}+'"]');
+        const line=await wait(()=>{const task=view();if(!task)return null;const node=q('[data-turn-finished]',task);return ${finished}?(node&&node.getAttribute('data-turn-duration')==='measured'&&node.getClientRects().length?node:null):(node?null:task);},${POLICY_SETTLE_MS});
+        if(!line)return {found:false,text:view()?.querySelector('[data-turn-finished]')?.textContent??null};
+        if(!${finished})return {found:true,absent:true};
+        const style=getComputedStyle(line),items=view().querySelector('.iq-conversation-items');
+        return {found:true,text:line.textContent,className:line.className,color:style.color,background:style.backgroundColor,border:style.borderTopColor,afterItems:!!items&&!!(items.compareDocumentPosition(line)&Node.DOCUMENT_POSITION_FOLLOWING),chip:!!line.closest('.iq-status-chip,[role="alert"]')||!!line.querySelector('.iq-status-chip')};
+      })()`) as {found:boolean;absent?:boolean;text?:string|null;className?:string;color?:string;background?:string;border?:string;afterItems?:boolean;chip?:boolean};
+      console.info(JSON.stringify({event:'visual-end-of-turn',where,finished,...read}));
+      if(!finished){if(!read.found)throw new SmokeProbeFailure(`An interrupted turn showed an end-of-turn line at ${where}`);return;}
+      if(!read.found)throw new SmokeProbeFailure(`The finished turn showed no measured end-of-turn line at ${where} (${JSON.stringify(read.text)})`);
+      if(!/^Finished · worked for (\d+h \d+m|\d+m \d+s|\d+s|under 1s)$/.test(read.text??'')||/accept|approv|\bdone\b/i.test(read.text??''))throw new SmokeProbeFailure(`The end-of-turn line reads ${JSON.stringify(read.text)} at ${where}`);
+      if(read.className!=='iq-turn-finished'||read.chip||isGreenish(read.color??'')||isGreenish(read.background??'')||isGreenish(read.border??''))throw new SmokeProbeFailure(`The end-of-turn line is not neutral at ${where}`);
+      if(!read.afterItems)throw new SmokeProbeFailure(`The end-of-turn line is not at the end of the turn at ${where}`);
+    };
+    stage='visual-bridge-first-start';
+    const taskId=await startPinnedConversation(1,fixture.requests[0]!);
+    if(!taskId)throw new SmokeProbeFailure('Pinned synthetic bridge start did not open its saved conversation');
+    if(!(await waitAnswer(taskId,fixture.answers[0]!)))throw new SmokeProbeFailure('First synthetic assistant answer did not render');
+    const first=await taskSnapshot(taskId,'completed');if(first.status!=='completed')throw new SmokeProbeFailure('First synthetic native turn did not complete');
+    await checkFixture(1);
+    await endOfTurn(taskId,true,'first-turn');
+    stage='visual-same-provider-model-b';
+    // Both names are present in bundled supported metadata. Only this owned,
+    // pinned Responses fixture qualifies them for fictional validation here.
+    await options.runtimeRequest('inquello/routes/configure',{operationId:randomUUID(),expectedRevision:1,configuration:{routeId:'codex-responses',deployment:'openai-api',model:'gpt-6.1-sol',apiVersion:'responses-v1',accountRef:principal,region:null}});
+    const secondBinding=await options.runtimeRequest<{accepted:boolean;providerCalls:number}>('inquello/fixture/taskTransport',{workspaceId:seed.workspace_id,configurationRevision:2,routeId:'codex-responses',endpoint:fixture.endpoint,certificate:fixture.certificate,failBeforeSampling:false});
+    if(!secondBinding.accepted||secondBinding.providerCalls!==0)throw new SmokeProbeFailure('Second exact Responses binding refused');
+    const catalog=await options.runtimeRequest<{bindings:Array<{bindingId:string;name:string;configurationRevision:number}>}>('inquello/models/catalog',{});
+    const modelB=catalog.bindings.find(binding=>binding.name==='gpt-6.1-sol'&&binding.configurationRevision===2);
+    if(!modelB)throw new SmokeProbeFailure('Supported Sol binding absent from cached catalog');
+    contents.send('inquello:routes-changed',{authority:false});
+    const taskB=await startPinnedConversation(2,fixture.bRequest);
+    if(!taskB||taskB===taskId||!await waitAnswer(taskB,fixture.bAnswer))throw new SmokeProbeFailure('Pinned synthetic bridge Sol conversation did not complete independently');
+    const bSnapshot=await taskSnapshot(taskB,'completed');
+    if(bSnapshot.threadId===first.threadId)throw new SmokeProbeFailure('Independent Sol conversation reused the Terra thread');
+    const bState=JSON.parse(fs.readFileSync(fixture.stateFile,'utf8')) as {bCalls:number};
+    if(bState.bCalls!==1)throw new SmokeProbeFailure('Independent Sol conversation dispatch count differed');
+    const aChoice=await options.runtimeRequest<{revision:number;configurationRevision:number;staleConfiguration:boolean;selected:{configuration:{model:string}}}>('inquello/routes/task/read',{taskId});
+    if(aChoice.revision!==1||aChoice.configurationRevision!==1||aChoice.staleConfiguration||aChoice.selected.configuration.model!=='gpt-6.1-terra')throw new SmokeProbeFailure('Creating Sol changed the Terra conversation binding');
+    const reopenedA=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}const row=await wait(()=>qVisible('[data-task-id="'+${JSON.stringify(taskId)}+'"] a'),${SHELL_SETTLE_MS});if(!row)return false;row.click();return !!(await wait(()=>qVisible('[data-task-view="'+${JSON.stringify(taskId)}+'"]'),${SHELL_SETTLE_MS}));})()`);
+    if(!reopenedA||!await waitAnswer(taskId,fixture.answers[0]!))throw new SmokeProbeFailure('Reopened Terra conversation lost its answer after Sol was created');
+    await checkFixture(1);await capture('02c-independent-sol-and-reopened-terra-synthetic');
+    const cleanConversation=await contents.executeJavaScript(`(()=>{const task=document.querySelector('[data-task-view="'+${JSON.stringify(taskId)}+'"]');return !!task&&!task.querySelector('[data-task-inspector]')&&!['Initial request','Source and status','Execution details','Environment'].some(label=>task.textContent.includes(label));})()`);
+    if(!cleanConversation)throw new SmokeProbeFailure('Ordinary conversation exposed obsolete technical chrome');
+    await capture('02-completed-conversation-synthetic');
+    options.resize(700,900);
+    const narrow=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}return !!(await wait(()=>innerWidth===700&&q('[data-shell]')?.getAttribute('data-nav-presentation')==='rail'&&document.documentElement.scrollWidth<=document.documentElement.clientWidth,5000));})()`);
+    if(!narrow)throw new SmokeProbeFailure('Narrow conversation did not fit');
+    await capture('02b-narrow-conversation-synthetic');
+    options.resize(1920,1200);
+    const sendFollowup=async(request:string)=>contents.executeJavaScript(`(async()=>{
+      ${SHELL_HELPERS}
+      const task=await wait(()=>{const controls=qVisible('[data-task-controls="'+${JSON.stringify(taskId)}+'"]');return controls?.getAttribute('data-task-controls-status')==='completed'?controls:null;},${POLICY_SETTLE_MS});if(!task)return false;
+      const input=q('[data-composer-input]',task);if(!input)return false;
+      type(input,${JSON.stringify(request)});
+      const send=await wait(()=>{const button=q('[data-composer-send]',task);return button&&!button.disabled&&button.getAttribute('aria-disabled')!=='true'?button:null;},${SHELL_SETTLE_MS});if(!send)return false;send.click();return true;
+    })()`);
+    stage='visual-ui-completed-followup';
+    if(!(await sendFollowup(fixture.requests[1]!))||!(await waitAnswer(taskId,fixture.answers[1]!)))throw new SmokeProbeFailure('Completed conversation follow-up did not render');
+    const second=await taskSnapshot(taskId,'completed');
+    if(second.status!=='completed'||second.threadId!==first.threadId||second.runId===first.runId)throw new SmokeProbeFailure('Follow-up did not retain Task/thread with a new run');
+    if(!(await latestAnswerVisible(taskId,fixture.answers[1]!)))throw new SmokeProbeFailure('Completed follow-up remained outside the conversation viewport');
+    await checkFixture(2);await capture('03-followup-conversation-synthetic');
+    stage='visual-bridge-exact-model-switch';
+    const switched=await contents.executeJavaScript(`(async()=>{
+      const result=await globalThis.inquello.routes.selectModel({operationId:${JSON.stringify(randomUUID())},taskId:${JSON.stringify(taskId)},expectedRevision:1,bindingId:${JSON.stringify(modelB.bindingId)}});
+      if(!result?.ok||result.value.revision!==2||result.value.configurationRevision!==2)return false;
+      const usage=await globalThis.inquello.usage.forTask({taskId:${JSON.stringify(taskId)}});
+      return usage?.ok===true&&usage.value.usage.settings?.route_revision===2&&usage.value.usage.settings?.choices.reasoning==='default'&&usage.value.usage.settings?.choices.speed==='default';
+    })()`);
+    const switchedRoute=await options.runtimeRequest<{revision:number;configurationRevision:number}>('inquello/routes/task/read',{taskId});
+    if(!switched||switchedRoute.revision!==2||switchedRoute.configurationRevision!==2)throw new SmokeProbeFailure('Exact main-bridge selection did not atomically align its saved settings');
+    stage='visual-ui-stop';
+    if(!(await sendFollowup(fixture.requests[2]!))||!(await waitAnswer(taskId,fixture.answers[2]!,false)))throw new SmokeProbeFailure('Held synthetic turn did not render before Stop');
+    if(!(await latestAnswerVisible(taskId,fixture.answers[2]!)))throw new SmokeProbeFailure('Live streamed answer remained outside the conversation viewport');
+    await capture('03b-live-streaming-conversation-synthetic');
+    const stopped=await contents.executeJavaScript(`(async()=>{
+      ${SHELL_HELPERS}
+      const task=qVisible('[data-task-controls="'+${JSON.stringify(taskId)}+'"]');if(!task)return false;
+      const stop=await wait(()=>{const button=q('[data-composer-stop]',task);return button&&!button.disabled&&button.getAttribute('aria-disabled')!=='true'?button:null;},${SHELL_SETTLE_MS});if(!stop)return false;stop.click();
+      return !!(await wait(()=>{const controls=qVisible('[data-task-controls="'+${JSON.stringify(taskId)}+'"]');return controls&&[...controls.querySelectorAll('button')].find(button=>button.textContent.trim()==='Resume'&&button.getClientRects().length&&!button.disabled);},${POLICY_SETTLE_MS}));
+    })()`);
+    if(!stopped)throw new SmokeProbeFailure('Actual Stop did not expose explicit Resume');
+    const interrupted=await taskSnapshot(taskId,'cancelled');
+    if(interrupted.status!=='cancelled'||interrupted.threadId!==first.threadId||interrupted.runId===second.runId)throw new SmokeProbeFailure('Native interruption binding was not confirmed');
+    await endOfTurn(taskId,false,'interrupted-turn');
+    await checkFixture(3,true);await capture('04-interrupted-conversation-synthetic');
+    // The short retained transcript fits the large desktop; establish real overflow before testing reader intent.
+    options.resize(900,700);
+    const readerViewport=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}if(!await wait(()=>innerWidth===900&&innerHeight===700,5000))return false;await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));return true;})()`);
+    if(!readerViewport)throw new SmokeProbeFailure('Reader viewport did not settle');
+    await usableComposer('saved-task-900x700');
+    await capture('04a-readable-composer-narrow-synthetic');
+    const readerDistance=await contents.executeJavaScript(`(()=>{${SHELL_HELPERS}const task=qVisible('[data-task-view="'+${JSON.stringify(taskId)}+'"]'),thread=task?.closest('.iq-thread'),conversation=task?.querySelector('.iq-task-progress');if(!thread||!conversation)return null;const target=Math.max(0,Math.min(thread.scrollHeight-thread.clientHeight,conversation.getBoundingClientRect().bottom-thread.getBoundingClientRect().top+thread.scrollTop-thread.clientHeight));return {viewportWidth:innerWidth,viewportHeight:innerHeight,threadHeight:thread.clientHeight,overflow:thread.scrollHeight-thread.clientHeight,conversationTarget:target,scrollTop:thread.scrollTop};})()`);
+    console.info(JSON.stringify({event:'visual-reader-precondition',...readerDistance}));
+    if(!readerDistance)throw new SmokeProbeFailure('Conversation scroll target unavailable');
+    // A compact composer can make the conversation itself fit even while other
+    // thread content overflows. Keep the 900x700 geometry witness above, then
+    // establish genuine conversation distance in a smaller readable viewport.
+    if(readerDistance.conversationTarget<=64){
+      options.resize(900,600);
+      const smaller=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}if(!await wait(()=>innerWidth===900&&innerHeight===600,5000))return false;await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));return true;})()`);
+      if(!smaller)throw new SmokeProbeFailure('Reader distance viewport did not settle');
+      await usableComposer('reader-900x600');
+    }
+    const readerJump=await contents.executeJavaScript(`(async()=>{
+      ${SHELL_HELPERS}
+      const task=qVisible('[data-task-view="'+${JSON.stringify(taskId)}+'"]'),thread=task?.closest('.iq-thread');if(!thread)return {ok:false,phase:'thread'};
+      const read=()=>{const conversation=task.querySelector('.iq-task-progress');if(!conversation)return null;const overflow=thread.scrollHeight-thread.clientHeight,target=Math.max(0,Math.min(overflow,conversation.getBoundingClientRect().bottom-thread.getBoundingClientRect().top+thread.scrollTop-thread.clientHeight));return {viewportWidth:innerWidth,viewportHeight:innerHeight,threadHeight:thread.clientHeight,overflow,conversationTarget:target,initialTop:thread.scrollTop};};
+      const before=await wait(()=>{const value=read();return value&&value.threadHeight>=160&&value.overflow>64&&value.conversationTarget>64&&Math.abs(value.initialTop-value.conversationTarget)<=2?value:null;},5000);
+      if(!before)return {ok:false,phase:'conversation-distance',...read()};
+      thread.scrollTop=0;thread.dispatchEvent(new Event('scroll'));
+      const jump=await wait(()=>[...document.querySelectorAll('button')].find(button=>button.textContent.trim()==='Jump to latest'&&button.getClientRects().length&&!button.disabled),${SHELL_SETTLE_MS});
+      if(!jump)return {ok:false,phase:'jump',...before,readerTop:thread.scrollTop};await new Promise(resolve=>setTimeout(resolve,200));if(thread.scrollTop>2)return {ok:false,phase:'reader-preservation',...before,readerTop:thread.scrollTop};jump.click();return {ok:true,phase:'jumped',...before,readerTop:0};
+    })()`);
+    console.info(JSON.stringify({event:'visual-reader-jump',...readerJump}));
+    if(!readerJump.ok)throw new SmokeProbeFailure('Reader scroll-up preservation or explicit Jump control failed: '+readerJump.phase);
+    // Stop may discard the uncommitted live assistant fragment. This is an explicit
+    // UX limitation, not proof of durable partial-answer retention. Check the latest
+    // retained user prompt; live partial visibility was separately required before Stop.
+    if(!(await latestAnswerVisible(taskId,fixture.requests[2]!,'user')))throw new SmokeProbeFailure('Jump did not reveal the latest retained user prompt');
+    await capture('04b-reader-jump-narrow-synthetic');
+    options.resize(1920,1200);
+    if(!await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}return !!(await wait(()=>innerWidth===1920&&innerHeight===1200,5000));})()`))throw new SmokeProbeFailure('Full conversation viewport was not restored');
+    stage='visual-ui-reopen';
+    const reopened=await contents.executeJavaScript(`(async()=>{
+      ${SHELL_HELPERS}
+      if(!press('[data-action="new-thread"]')||!await wait(()=>qVisible('[data-start-view]'),${SHELL_SETTLE_MS}))return false;
+      const row=await wait(()=>qVisible('[data-task-id="'+${JSON.stringify(taskId)}+'"] a'),${SHELL_SETTLE_MS});if(!row)return false;row.click();
+      const task=await wait(()=>qVisible('[data-task-view="'+${JSON.stringify(taskId)}+'"]'),${SHELL_SETTLE_MS});if(!task)return false;
+      return !!(await wait(()=>{const controls=qVisible('[data-task-controls="'+${JSON.stringify(taskId)}+'"]');return controls&&[...controls.querySelectorAll('button')].find(button=>button.textContent.trim()==='Resume'&&button.getClientRects().length&&!button.disabled);},${POLICY_SETTLE_MS}));
+    })()`);
+    if(!reopened||!(await waitAnswer(taskId,fixture.answers[0]!))||!(await waitAnswer(taskId,fixture.answers[1]!)))throw new SmokeProbeFailure('Reopened interrupted Task did not retain conversation and Resume');
+    await checkFixture(3,true);await capture('05-reopened-conversation-synthetic');
+    await contents.executeJavaScript(`(()=>{const thread=document.querySelector('[data-task-view="'+${JSON.stringify(taskId)}+'"]')?.closest('.iq-thread');if(thread){thread.scrollTop=0;thread.dispatchEvent(new Event('scroll'));}})()`);
+    stage='visual-ui-explicit-resume';
+    const resumed=await contents.executeJavaScript(`(()=>{const task=document.querySelector('[data-task-controls="'+${JSON.stringify(taskId)}+'"]');const button=task&&[...task.querySelectorAll('button')].find(button=>button.textContent.trim()==='Resume'&&button.getClientRects().length&&!button.disabled&&button.getAttribute('aria-disabled')!=='true');if(!button)return false;button.click();return true;})()`);
+    if(!resumed||!(await waitAnswer(taskId,fixture.answers[3]!)))throw new SmokeProbeFailure('Explicit Resume did not complete the retained synthetic Task');
+    const last=await taskSnapshot(taskId,'completed');
+    if(last.status!=='completed'||last.threadId!==first.threadId||last.runId===interrupted.runId)throw new SmokeProbeFailure('Resume did not retain Task/thread with a new run');
+    await endOfTurn(taskId,true,'resumed-turn');
+    if(!(await latestAnswerVisible(taskId,fixture.answers[3]!)))throw new SmokeProbeFailure('Resumed answer remained outside the conversation viewport');
+    await checkFixture(4,true);await capture('06-resumed-conversation-synthetic');
+    const details=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}
+      if(!press('button[aria-label="Conversation options"]'))return false;
+      const item=await wait(()=>[...document.querySelectorAll('[role="menuitem"]')].find(e=>visible(e)&&e.textContent.trim()==='Rename or organise'),${SHELL_SETTLE_MS});
+      if(!item)return false;item.click();
+      return !!(await wait(()=>qVisible('dialog[open][aria-label="Conversation options"]'),${SHELL_SETTLE_MS}));
+    })()`);
+    if(!details)throw new SmokeProbeFailure('Task details unavailable for visual capture');
+    await capture('07-task-details-synthetic');
+    stage='visual-settings';
+    const settings=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}
+      const dialog=qVisible('dialog[open][aria-label="Conversation options"]');
+      const close=dialog&&[...dialog.querySelectorAll('button')].find(button=>button.textContent.trim()==='Close Conversation options');
+      if(!close)return false;close.click();if(!await wait(()=>!qVisible('dialog[open]'),${SHELL_SETTLE_MS}))return false;
+      location.hash='#settings-routes';return !!(await wait(()=>location.hash==='#settings-routes'&&!visible(q('[data-shell]'))&&qVisible('[data-processing-routes]'),${SHELL_SETTLE_MS}));})()`);
+    if(!settings)throw new SmokeProbeFailure('Implemented Settings unavailable');
+    await capture('08-settings-processing-routes');
+    stage='visual-tools-settings';
+    const toolsSettings=await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}
+      const link=qVisible('a[href="#settings-tools"]');if(!link)return false;link.click();
+      return !!(await wait(()=>location.hash==='#settings-tools'&&qVisible('.iq-settings [data-capabilities-section][data-capabilities-loaded="true"]'),${POLICY_SETTLE_MS}));})()`);
+    if(!toolsSettings)throw new SmokeProbeFailure('Ordinary tools Settings unavailable for visual capture');
+    await capture('09-settings-tools-and-connections');
+    fs.writeFileSync(path.join(captureDir,'manifest.json'),JSON.stringify({synthetic:true,source:'Actual Electron capturePage; pinned synthetic bridge creation/model selection plus renderer follow-up/Stop/Resume, not live inference',modelPicker:'Separate actual source-Electron input evidence; fresh picker resolution is not integrated in this pinned fixture',settingsSurface:'implemented-settings',captures},null,2));
+  }catch(error){failures.push(error instanceof SmokeProbeFailure?error.message:`Visual conversation failed at ${stage}${quotaFixtureDiagnostic(error)}`);const diagnostic=await captureSmokeFailure(contents,options.fixtureFile);if(diagnostic)captures.push(diagnostic);else failures.push('Diagnostic failure capture unavailable');}
+  finally {
+    try{options.resize(options.restore.width,options.restore.height);}catch{failures.push('Owned visual window size could not be restored');}
+    // Record BEFORE sign-out, so cleanup refusals cannot masquerade as the cause.
+    try{
+      const timeline=await contents.executeJavaScript(`(()=>{const rows=globalThis.__iqSyntheticStartTrace;delete globalThis.__iqSyntheticStartTrace;if(!Array.isArray(rows))return [];const events=['start-send','start-accepted','shell-accepted','tree-start','tree-result','shell-committed'];const keys=['foreground','workspaceAllowed','scopeCurrent','selected','taskPresent','receiptPresent','showStart','ok','hasTasks','selectedUnavailable'];return rows.slice(0,128).filter(row=>row&&events.includes(row.event)&&Number.isSafeInteger(row.ms)&&row.ms>=0).map(row=>({event:row.event,ms:row.ms,flags:Object.fromEntries(keys.filter(key=>typeof row.flags?.[key]==='boolean').map(key=>[key,row.flags[key]])),...(Number.isSafeInteger(row.read)&&row.read>=0?{read:row.read}:{})}));})()`);
+      console.info(JSON.stringify({event:'visual-start-timeline',beforeCleanup:true,timeline}));
+    }catch{console.info(JSON.stringify({event:'visual-start-timeline',beforeCleanup:true,unavailable:true}));}
+    try{if(!(await smokeIdentity(contents,'signOut')).ok)failures.push('Visual identity cleanup failed');await options.organise.syncPrincipal();}catch{failures.push('Visual identity cleanup unavailable');}}
+  return{ok:failures.length===0,failures,synthetic:true,settingsSurface:'implemented-settings',captures};
+}
+
+
+/** Separate permitted, fictional loopback setup journey. Never invokes a tool/model. */
+export async function probeToolsManagement(contents: WebContents, options: OrganiseProbeOptions & {
+  capabilities: CapabilityService; runtimeHome: string; restartRuntime: () => Promise<void>;
+}): Promise<{ok:boolean;failures:string[];checks:string[];fixture:{initialize:number;toolsList:number;forbidden:number};captures:string[]}> {
+  const {startToolsSmokeFixture} = await import('./tools-smoke-fixture');
+  const report = {ok:false,failures:[] as string[],checks:[] as string[],fixture:{initialize:0,toolsList:0,forbidden:0},captures:[] as string[]};
+  let fixture: Awaited<ReturnType<typeof startToolsSmokeFixture>> | null = null;
+  let workspaceId: string | null = null, stage = 'fixture-start';
+  const name = 'inquello_ui_' + randomUUID().replaceAll('-','');
+  const requireCheck = (value: unknown, label: string) => {if (!value) throw new Error(label); report.checks.push(label);};
+  const ui = async (body: string) => contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}
+    const row=()=>qVisible('[data-inventory-entry="${name}"]');
+    const button=(label,root=document)=>[...root.querySelectorAll('button')].find(node=>visible(node)&&node.textContent.trim()===label&&node.getAttribute('aria-disabled')!=='true');
+    const openTools=async()=>{
+      if(!(await openShell()))return false;
+      const trigger=await wait(()=>qVisible('button[aria-label="Organization and team"]'),${SHELL_SETTLE_MS});if(!trigger)return false;trigger.click();
+      const settings=await wait(()=>[...document.querySelectorAll('[role="menuitem"]')].find(node=>visible(node)&&node.textContent.trim()==='Settings'),5000);if(!settings)return false;settings.click();
+      const link=await wait(()=>qVisible('a[href="#settings-tools"]'),5000);if(!link)return false;link.focus();link.click();
+      return !!(await wait(()=>qVisible('.iq-settings [data-capabilities-workspace="${workspaceId}"][data-capabilities-loaded="true"]'),${POLICY_SETTLE_MS}));
+    };
+    ${body}
+  })()`);
+  const state = async (enabled: boolean | null) => {
+    const response = await options.runtimeRequest<{config:{mcp_servers?:Record<string,{url?:string;enabled?:boolean}>}}>('config/read',{includeLayers:false});
+    const entry = response.config.mcp_servers?.[name];
+    const disk = fs.readFileSync(path.join(options.runtimeHome,'config.toml'),'utf8');
+    if (enabled === null) return !entry && !disk.includes(name) && !disk.includes(fixture!.url);
+    return entry?.url === fixture!.url && entry.enabled === enabled && disk.includes(name) && disk.includes(fixture!.url);
+  };
+  const capture = async (label: string) => {
+    await ui(label.includes('removed') ? "window.scrollTo(0,0);" : "row()?.scrollIntoView({block:'start'});");
+    await contents.executeJavaScript('(async()=>{await document.fonts.ready;await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));})()');
+    const image = await contents.capturePage();
+    if (image.isEmpty()) throw new Error('Empty capture');
+    const folder = path.join(path.dirname(options.seedFile!), 'captures');fs.mkdirSync(folder,{recursive:true});
+    const file = path.join(folder,label+'.png');fs.writeFileSync(file,image.toPNG());report.captures.push(file);
+  };
+  try {
+    if (options.identity.config.kind !== 'configured' || !options.seedFile) throw new Error('Missing isolated topology');
+    const seed = JSON.parse(fs.readFileSync(options.seedFile,'utf8')) as {workspace_id?:string;invite_id?:string};
+    if (!seed.workspace_id || !seed.invite_id) throw new Error('Missing Workspace');
+    workspaceId = seed.workspace_id;fixture = await startToolsSmokeFixture();
+    stage='sign-in';requireCheck((await smokeIdentity(contents,'signIn')).ok,'identity-signed-in');
+    const accepted=await options.identity.session.withAccess(access=>options.identity.service!.acceptInvite(access,seed.invite_id!));
+    requireCheck(accepted?.workspace_id===workspaceId,'fictional-workspace-membership');
+    await options.organise.syncPrincipal();await options.organise.getWorkspaces();
+    requireCheck(await state(null),'initial-config-absent');
+    stage='ordinary-settings-add';
+    requireCheck(await ui(`
+      if(!(await openTools()))return false;
+      const form=qVisible('form[aria-label="Add MCP server"]');if(!form)return false;
+      const field=label=>{const node=[...form.querySelectorAll('label')].find(node=>node.textContent.trim()===label);return node?document.getElementById(node.htmlFor):null;};
+      const serverName=field('MCP server name'),url=field('MCP server URL');if(!serverName||!url)return false;
+      type(serverName,${JSON.stringify(name)});type(url,${JSON.stringify(fixture.url)});
+      const add=await wait(()=>button(${JSON.stringify('Add '+name+' MCP server')},form),5000);if(!add)return false;add.focus();add.click();
+      return !!(await wait(()=>{const entry=row();return entry&&entry.textContent.includes('Installed; Enabled;')&&button(${JSON.stringify('Disable '+name)},entry);},${POLICY_SETTLE_MS}));
+    `),'form-add-visible');
+    requireCheck(await state(true),'add-native-and-durable');
+    requireCheck(fixture.counts.initialize>0&&fixture.counts.toolsList>0&&fixture.counts.forbidden===0,'loopback-discovery-only');
+    await capture('tools-01-added');
+    stage='inventory-presentation';
+    requireCheck(await ui(`const entry=row();return !!entry&&!!button(${JSON.stringify('Disable '+name)},entry)&&![...entry.querySelectorAll('button')].some(node=>node.textContent.trim()===${JSON.stringify('Enable '+name)});`),'single-applicable-enablement');
+    requireCheck(await ui(`
+      const entry=row(),details=entry?.querySelector('details'),summary=details?.querySelector('summary');
+      if(!details||details.open||!summary||details.querySelector('dl')?.checkVisibility()||!entry.querySelector('.iq-tool-permission')?.checkVisibility())return false;
+      summary.focus();return document.activeElement===summary;
+    `),'reference-details-collapsed');
+    await pressKey(contents,'Return');
+    requireCheck(await ui(`return !!(await wait(()=>{const details=row()?.querySelector('details');return details?.open&&details.querySelector('dl')?.checkVisibility()&&document.activeElement===details.querySelector('summary');},5000));`),'reference-details-keyboard-open');
+    await capture('tools-06-details-expanded');
+    await pressKey(contents,'Return');
+    requireCheck(await ui(`return !!(await wait(()=>{const details=row()?.querySelector('details');return details&&!details.open&&document.activeElement===details.querySelector('summary');},5000));`),'reference-details-keyboard-close');
+    stage='disable';
+    requireCheck(await ui(`const disable=button(${JSON.stringify('Disable '+name)},row());if(!disable)return false;disable.focus();disable.click();return !!(await wait(()=>document.activeElement===disable&&row()?.textContent.includes('Disabled by you')&&button(${JSON.stringify('Enable '+name)},row()),${POLICY_SETTLE_MS}));`),'disable-visible');
+    requireCheck(await state(false),'disable-native-and-durable');
+    stage='restart-and-reopen';
+    await options.restartRuntime();
+    requireCheck(await state(false),'disabled-survives-native-restart');
+    requireCheck(await ui(`if(!(await openTools()))return false;return !!(await wait(()=>row()?.textContent.includes('Disabled by you')&&button(${JSON.stringify('Enable '+name)},row()),${POLICY_SETTLE_MS}));`),'disabled-reopened');
+    await capture('tools-02-disabled-reopened');
+    stage='enable';
+    requireCheck(await ui(`const enable=button(${JSON.stringify('Enable '+name)},row());if(!enable)return false;enable.focus();enable.click();return !!(await wait(()=>document.activeElement===enable&&row()?.textContent.includes('Installed; Enabled;')&&button(${JSON.stringify('Disable '+name)},row()),${POLICY_SETTLE_MS}));`),'enable-visible');
+    requireCheck(await state(true),'enable-native-and-durable');
+    stage='remove';
+    requireCheck(await ui(`const remove=button(${JSON.stringify('Remove '+name)},row());if(!remove)return false;remove.click();return !!(await wait(()=>!row(),${POLICY_SETTLE_MS}));`),'remove-visible');
+    requireCheck(await state(null),'remove-native-and-durable');
+    stage='removed-reopened';
+    requireCheck(await ui(`if(!(await openTools()))return false;return !row()&&!!qVisible('form[aria-label="Add MCP server"]');`),'removed-reopened');
+    requireCheck(await state(null),'removed-still-absent');
+    await capture('tools-03-removed-reopened');
+    stage='settings-usability';
+    requireCheck(await ui(`
+      const form=qVisible('form[aria-label="Add MCP server"]'),provider=qVisible('[data-provider-session]');
+      return !!form&&!!provider&&(form.compareDocumentPosition(provider)&Node.DOCUMENT_POSITION_FOLLOWING)!==0&&[...document.querySelectorAll('.iq-settings h3')].every(node=>node.textContent!=='Tools and connections');
+    `),'setup-before-inventory');
+    requireCheck(await ui(`
+      window.scrollTo(0,document.documentElement.scrollHeight);
+      await new Promise(resolve=>requestAnimationFrame(resolve));
+      const nav=qVisible('.iq-settings > nav'),rect=nav?.getBoundingClientRect();
+      return innerWidth<=700||!!rect&&rect.top>=-1&&rect.top<2&&rect.bottom<=innerHeight+1;
+    `),'navigation-stays-reachable');
+    requireCheck(await ui(`
+      const link=qVisible('a[href="#settings-usage"]');if(!link)return false;link.focus();link.click();
+      return !!(await wait(()=>{const h=qVisible('.iq-settings h2');return h?.textContent==='Usage'&&document.activeElement===h&&h.getBoundingClientRect().top>=0;},5000));
+    `),'section-focus-from-scrolled-inventory');
+    requireCheck(await ui(`
+      history.back();if(!(await wait(()=>location.hash==='#settings-tools'&&qVisible('[data-capabilities-loaded="true"]'),5000)))return false;
+      history.forward();if(!(await wait(()=>location.hash==='#settings-usage'&&document.activeElement===qVisible('.iq-settings h2'),5000)))return false;
+      const link=qVisible('a[href="#settings-tools"]');link?.focus();link?.click();
+      return !!(await wait(()=>qVisible('[data-capabilities-loaded="true"]')&&document.activeElement===qVisible('.iq-settings h2'),5000));
+    `),'settings-history-and-repeat-navigation');
+    const priorZoom=contents.getZoomFactor();
+    try {
+      contents.setZoomFactor(2);
+      requireCheck(await ui(`
+        await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+        return document.documentElement.scrollWidth<=document.documentElement.clientWidth&&!!qVisible('form[aria-label="Add MCP server"]');
+      `),'settings-200-percent-no-horizontal-overflow');
+      await capture('tools-04-removed-zoomed');
+      await ui(`qVisible('form[aria-label="Add MCP server"]')?.scrollIntoView({block:'start'});`);
+      await capture('tools-05-zoomed-form');
+      requireCheck(await ui(`
+        const details=qVisible('.iq-tool-details'),summary=details?.querySelector('summary');if(!summary)return false;
+        summary.click();summary.scrollIntoView({block:'start'});
+        await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+        return details.open&&document.documentElement.scrollWidth<=document.documentElement.clientWidth;
+      `),'expanded-reference-details-200-percent');
+      await capture('tools-07-zoomed-details');
+    } finally {contents.setZoomFactor(priorZoom);}
+    requireCheck(fixture.counts.forbidden===0,'no-tool-invocations-or-auth');
+  } catch {report.failures.push('Tools management failed at '+stage);try {if(options.seedFile)await capture('tools-failure');}catch {report.failures.push('Failure capture unavailable');}}
+  finally {
+    if (workspaceId && fixture) {
+      try {
+        if (!(await state(null))) {
+          const removed = await options.capabilities.manage({workspaceId,kind:'mcp_server',id:name,action:'remove'});
+          if (!removed.ok || !(await state(null))) report.failures.push('Owned MCP configuration cleanup failed');
+        }
+      } catch {report.failures.push('Owned MCP configuration cleanup unavailable');}
+    }
+    try {if (!(await smokeIdentity(contents,'signOut')).ok) report.failures.push('Identity cleanup failed');await options.organise.syncPrincipal();} catch {report.failures.push('Identity cleanup unavailable');}
+    if (fixture) {report.fixture={...fixture.counts};try {await fixture.close();} catch {report.failures.push('Loopback fixture cleanup failed');}}
+  }
+  report.ok=report.failures.length===0;return report;
 }

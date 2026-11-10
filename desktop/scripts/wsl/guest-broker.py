@@ -228,7 +228,15 @@ def executor(root, scope, task, access):
              '--unshare-uts', '--die-with-parent', '--new-session', '--cap-drop', 'ALL']
     for system in ['/usr', '/bin', '/sbin', '/lib', '/lib64', '/etc']:
         if Path(system).exists():
-            outer += ['--ro-bind', system, system]
+            # Preserve merged-/usr aliases. Binding both names independently
+            # erases their identity and lets a rule on /bin/sh miss /usr/bin/sh.
+            # Only recreate a direct alias into the already read-only /usr;
+            # never add a new target or infer aliases from matching filenames.
+            target = Path('/usr') / Path(system).name
+            if system in ['/bin', '/sbin', '/lib', '/lib64'] and Path(system).is_symlink() and os.readlink(system) in [str(target), str(target).lstrip('/')]:
+                outer += ['--symlink', str(target), system]
+            else:
+                outer += ['--ro-bind', system, system]
     for hidden in ['/usr/lib/modules', '/usr/src', '/usr/lib/linux-tools', '/usr/lib/wsl']:
         if Path(hidden).exists():
             outer += ['--tmpfs', hidden, '--remount-ro', hidden]

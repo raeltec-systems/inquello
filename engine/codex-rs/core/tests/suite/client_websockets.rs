@@ -3140,6 +3140,7 @@ async fn bound_responses_websocket_426_refuses_without_http_post() {
             binding,
             auth: None,
             max_output_tokens: 128,
+            paid_qualification: false,
             completed_tool_call_ids: Vec::new(),
             events,
             cancellation: tokio_util::sync::CancellationToken::new(),
@@ -3215,6 +3216,7 @@ fn bind_private_source_attempt(
             binding,
             auth: None,
             max_output_tokens: 128,
+            paid_qualification: false,
             completed_tool_call_ids: vec!["read-1".into()],
             events,
             cancellation: tokio_util::sync::CancellationToken::new(),
@@ -3253,16 +3255,19 @@ fn private_source_prompt(base: &str) -> (Prompt, serde_json::Value) {
         ],
         base,
     );
-    prompt.tools = Arc::from(vec![ToolSpec::Function(ResponsesApiTool {
-        name: "read_fixture".into(),
-        description: "Read fictional register".into(),
-        strict: false,
-        defer_loading: None,
-        output_schema: None,
-        parameters: serde_json::from_value(json!({"type":"object", "properties":{
+    codex_core::test_support::set_prompt_tools_for_test(
+        &mut prompt,
+        Arc::from(vec![ToolSpec::Function(ResponsesApiTool {
+            name: "read_fixture".into(),
+            description: "Read fictional register".into(),
+            strict: false,
+            defer_loading: None,
+            output_schema: None,
+            parameters: serde_json::from_value(json!({"type":"object", "properties":{
             "path":{"type":"string"}}, "required":["path"], "additionalProperties":false}))
-        .unwrap(),
-    })]);
+            .unwrap(),
+        })]),
+    );
     let mut expected = serde_json::to_value(&prompt.input).unwrap();
     expected[1] = native;
     (prompt, expected)

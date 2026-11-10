@@ -217,3 +217,12 @@ describe('smoke data evaluation', () => {
     expect(report.failures.join('\n')).toMatch(message);
   });
 });
+
+it('discloses unresolved consent records without offering individual deletion',async()=>{
+ const journal={...POLICY.categories[1]!,id:'provider-consent-journal',label:'Provider permission requests',deletion:'Reconcile before removing the entire profile; local deletion is not revoke.'};
+ installBridge({getPolicy:vi.fn(async()=>({...POLICY,categories:[journal]}))});
+ render(<LocalData/>);await screen.findByText('Provider permission requests');
+ const row=document.querySelector<HTMLElement>('[data-local-data-category="provider-consent-journal"]')!;
+ expect(within(row).queryByRole('checkbox')).toBeNull();
+ expect(within(row).getByText(/local deletion is not revoke/)).toBeTruthy();
+});

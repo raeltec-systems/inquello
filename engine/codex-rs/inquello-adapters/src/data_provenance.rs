@@ -74,6 +74,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0013_task_runtime_leases.sql"),
     include_str!("../migrations/0014_task_navigation.sql"),
     include_str!("../migrations/0015_local_tool_metadata_provenance.sql"),
+    include_str!("../migrations/0016_model_bindings.sql"),
 ];
 fn failure() -> String {
     "Native ownership/category provenance unavailable, mixed, changed or incomplete; data remains quarantined".into()
@@ -351,8 +352,8 @@ async fn inspect_inner_observed(
         && after.len() == 3
         && before[0] == after[0]
         && after[1].size == 0
-        && after[1].path == PathBuf::from(format!("{}-wal", request.store_path.display()))
-        && after[2].path == PathBuf::from(format!("{}-shm", request.store_path.display()));
+        && after[1].path.as_path() == Path::new(&format!("{}-wal", request.store_path.display()))
+        && after[2].path.as_path() == Path::new(&format!("{}-shm", request.store_path.display()));
     if before != after && !created_empty_family {
         return Err(failure());
     }

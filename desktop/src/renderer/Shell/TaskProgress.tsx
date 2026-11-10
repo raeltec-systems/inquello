@@ -1,16 +1,18 @@
+import { ConversationItems as EvidenceItems } from './ConversationItems';
+import type {StartedTask} from './tasks-bridge';
 import type {QuestionSelection} from './Inbox';
 /** Authorized, bounded presentation only. No native notifications or model inference here. */
 import {useEffect,useRef,useState,type FormEvent,type ReactElement} from 'react';
-import {Button,DiffLine,JudgmentTag,PlanSteps} from '../primitives';
-import {taskValue,tasksBridge,parseProgress,type ProgressSnapshot,type ProgressItem,type ProgressQuestion,type AnswerInput} from './tasks-bridge';
+import {Button,JudgmentTag,PlanSteps} from '../primitives';
+import {activityLabel} from './TaskLifecycle';
+import {taskValue,tasksBridge,parseProgress,type ProgressSnapshot,type ProgressQuestion,type ProgressResult,type AnswerInput} from './tasks-bridge';
 
-import {useTaskObservation,refreshTaskObservation} from './task-observation';
+import {useTaskObservationStatus,refreshTaskObservation} from './task-observation';
 
 const ended=(status:string)=>['completed','failed','cancelled','uncertain','setup-failed'].includes(status);
 const scope=(s:ProgressSnapshot)=>JSON.stringify([s.taskId,s.workspaceId,s.runId,s.threadId,s.turnId,s.runtimeId,s.sessionGeneration]);
 const questionKey=(q:ProgressQuestion)=>JSON.stringify([typeof q.requestId,q.requestId,q.threadId,q.turnId,q.itemId]);
 const invalidAnswer=(text:string)=>/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(text);
-const artifactText={absent:'No artifact yet',unknown:'Artifact information unavailable',failed:'Artifact failed'};
 
 function Question({request,onAnswer}:{request:ProgressQuestion;onAnswer:(answers:AnswerInput['answers'])=>Promise<void>}):ReactElement {
  const [draft,setDraft]=useState<Record<string,string>>({}),[other,setOther]=useState<Record<string,boolean>>({}),[busy,setBusy]=useState(false);
@@ -34,34 +36,60 @@ function Question({request,onAnswer}:{request:ProgressQuestion;onAnswer:(answers
  </form>;
 }
 
-function EvidenceItems({items,status,label}:{items:ProgressItem[];status:string;label:string}):ReactElement {return (
-<ol className="iq-progress-items" aria-label={label}>{items.map(item=><li key={item.id} data-progress-item={item.id} data-status={ended(status)&&item.status==='running'?'unconfirmed':item.status}>
-    <p className="iq-progress-label">{item.kind==='message'?(item.role==='user'?'Your instruction':item.role==='agent'?'Agent response':'Message — speaker unavailable'):item.kind} · {ended(status)&&item.status==='running'?'Execution ended — outcome unconfirmed':item.status==='completed'&&item.kind==='message'?'Message complete':item.status==='completed'?'Execution completed':item.status} · {item.id}</p>
-    {item.kind==='edit'?<><DiffLine kind="change" stage={item.application==='applied'?'applied-locally':'suggested'}>{item.text}</DiffLine>{item.application!=='applied'&&<p>Not confirmed as applied. This is not a delivered artifact.</p>}</>:<p className="iq-progress-text">{item.text}</p>}
-    {(item.kind==='command'||item.kind==='tool')&&(item.status==='failed'||item.status==='cancelled')&&<p>Native status: this action {item.status}. The source/output text above remains untrusted; this status alone does not establish a policy refusal or detection of untrusted instructions.</p>}
-    {item.kind==='message'&&item.role!=='user'&&<p>Unchecked — structured labels unavailable. Message content is not independent verification.</p>}
-   </li>)}</ol>
-);}
 
-export function TaskProgress({taskId,workspaceId,selectedQuestion}:{taskId:string;workspaceId:string;pollMs?:number;selectedQuestion?:QuestionSelection|null}):ReactElement {
- const observed=useTaskObservation(taskId,workspaceId,true,true);
+/** "1m 12s" from a measured duration; whole seconds, never rounded up into work that did not happen. */
+export function workedFor(ms:number):string {
+ const total=Math.floor(ms/1000);
+ if(total<1)return 'under 1s';
+ const h=Math.floor(total/3600),m=Math.floor((total%3600)/60),sec=total%60;
+ return h?`${h}h ${m}m`:m?`${m}m ${sec}s`:`${sec}s`;
+}
+/** The neutral end-of-turn line (Codex "Worked for …" pattern): execution ended, nothing more is claimed. */
+export function finishedText(durationMs?:number):string {
+ return durationMs===undefined?'Finished':`Finished · worked for ${workedFor(durationMs)}`;
+}
+
+const checkLabel=(result:ProgressResult)=>result.checks==='checked'?'Checked':result.checks==='incomplete'?'Checks incomplete':'Unchecked';
+/** One current result: judgment and check inline; revision, scope, evidence and basis behind one disclosure. */
+function ResultEntry({result}:{result:ProgressResult}):ReactElement {
+ const details=[result.revision!==undefined?`Revision ${result.revision} · Current${result.changeReason?` · ${result.changeReason}`:''}`:null,result.checkScope?`Check scope: ${result.checkScope}`:null,result.evidenceIds.length?`Evidence: ${result.evidenceIds.join(', ')}`:null].filter((line):line is string=>!!line);
+ return <article className="iq-result" data-result-id={result.id}>
+  <div className="iq-result-line">
+   {result.kind===null?<><span className="iq-result-note">Agent response — structured labels unavailable</span><span className="iq-progress-text">{result.text}</span></>:result.kind==='decision'?(result.basis?<JudgmentTag kind="decision" basis={{by:result.basis.label,scope:result.basis.scope}}>{result.text}</JudgmentTag>:<><span className="iq-result-note">Decision claim — basis missing or unverified. No authoritative decision is established.</span><span className="iq-progress-text">{result.text}</span></>):<JudgmentTag kind={result.kind}>{result.text}</JudgmentTag>}
+   <span className="iq-result-check" data-result-check={result.checks}>{checkLabel(result)}</span>
+  </div>
+  {(details.length>0||result.basis)&&<details className="iq-result-details"><summary>Details</summary>{details.map(line=><p key={line}>{line}</p>)}{result.basis&&<p>Basis: {result.basis.kind} record {result.basis.id}. Permission to execute is not analytical review or Professional Approval.</p>}</details>}
+ </article>;
+}
+/** One earlier version: its state and text inline; its reasons and citations behind one disclosure. */
+function HistoricalEntry({result}:{result:ProgressResult}):ReactElement {
+ return <article className="iq-result iq-result--history" data-result-history={result.id}>
+  <div className="iq-result-line"><span className="iq-result-note">{result.state==='withdrawn'?'Withdrawn':'Superseded'} · Revision {result.revision??1}</span><span className="iq-progress-text">{result.text}</span><span className="iq-result-check" data-result-check="unchecked">Unchecked</span></div>
+  <details className="iq-result-details"><summary>Details</summary>
+   {result.sourceTurnId&&<p>Turn {result.sourceTurnId}</p>}<p>Revision reason: {result.changeReason??'Initial finding'}</p>{result.supersededReason&&<p>Superseded because: {result.supersededReason}</p>}{result.evidenceIds.length>0&&<p>Evidence: {result.evidenceIds.join(', ')}</p>}
+  </details>
+ </article>;
+}
+
+export function TaskProgress({taskId,workspaceId,selectedQuestion,accepted}:{taskId:string;workspaceId:string;pollMs?:number;selectedQuestion?:QuestionSelection|null;accepted?:StartedTask}):ReactElement {
+ const observation=useTaskObservationStatus(taskId,workspaceId,true,true),observed=observation.snapshot;
  const [snapshot,setSnapshot]=useState<ProgressSnapshot|null>(null),[notice,setNotice]=useState('Reading progress…'),[announcement,setAnnouncement]=useState('');
  const [pages,setPages]=useState<{current?:ProgressSnapshot;history?:ProgressSnapshot}>({}),[pageBusy,setPageBusy]=useState(false);
  const offsets=useRef<{current:number[];history:number[]}>({current:[],history:[]});
  const current=useRef<ProgressSnapshot|null>(null),generation=useRef(0),consumed=useRef(new Set<string>());
  useEffect(()=>{generation.current++;current.current=null;consumed.current.clear();setPages({});setPageBusy(false);offsets.current={current:[],history:[]};setSnapshot(null);setAnnouncement('');setNotice('Reading progress…');return()=>{generation.current++;current.current=null;};},[taskId,workspaceId]);
  useEffect(()=>{
-  if(!observed){generation.current++;current.current=null;setPages({});setPageBusy(false);offsets.current={current:[],history:[]};setSnapshot(null);setAnnouncement('');consumed.current.clear();setNotice('Progress unavailable. Private content and pending answers have been cleared.');return;}
+  if(!observed){generation.current++;current.current=null;setPages({});setPageBusy(false);offsets.current={current:[],history:[]};setSnapshot(null);setAnnouncement('');consumed.current.clear();setNotice(observation.settled?'Conversation history is unavailable. Refresh to check again.':'Reading conversation…');return;}
   const next={...observed,questions:observed.questions.filter(q=>!consumed.current.has(`${scope(observed)}:${questionKey(q)}`))};
   const before=current.current;if(before?.resultPage?.snapshotId!==next.resultPage?.snapshotId||before&&scope(before)!==scope(next)){setPages({});setPageBusy(false);offsets.current={current:[],history:[]};}
   if(before&&scope(before)===scope(next)){
    const messages:string[]=[];if(before.status!==next.status)messages.push(`Execution: ${next.status==='completed'?'finished':next.status}.`);
-   for(const q of next.questions)if(!before.questions.some(old=>questionKey(old)===questionKey(q)))messages.push(`Agent question ${q.itemId} needs an answer.`);
-   for(const item of next.items){const old=before.items.find(row=>row.id===item.id);if((old&&old.status!==item.status)||(!old&&['completed','failed','cancelled'].includes(item.status)))messages.push(`${item.kind} ${item.id}: ${item.status}.`);}
+   for(const q of next.questions)if(!before.questions.some(old=>questionKey(old)===questionKey(q)))messages.push('An answer is requested.');
+   for(const item of next.items){const old=before.items.find(row=>row.id===item.id);if((old&&old.status!==item.status)||(!old&&['completed','failed','cancelled'].includes(item.status)))messages.push(`${item.kind === 'message' ? 'Response' : 'Tool activity'} ${next.items.indexOf(item)+1}: ${item.status}.`);}
    if(messages.length)setAnnouncement(messages.join(' '));
-  }else setAnnouncement([...next.questions.map(q=>`Agent question ${q.itemId} needs an answer.`),...next.items.filter(item=>['completed','failed','cancelled'].includes(item.status)).map(item=>`${item.kind} ${item.id}: ${item.status}.`)].join(' '));
+  }else setAnnouncement([...next.questions.map(q=>'An answer is requested.'),...next.items.filter(item=>['completed','failed','cancelled'].includes(item.status)).map(item=>`${item.kind === 'message' ? 'Response' : 'Tool activity'} ${next.items.indexOf(item)+1}: ${item.status}.`)].join(' '));
   current.current=next;setSnapshot(next);setNotice('');
- },[observed]);
+ },[observed,observation.settled]);
  const focusedQuestion=useRef<number|null>(null);
  const [questionNotice,setQuestionNotice]=useState('');
  useEffect(()=>{
@@ -87,8 +115,14 @@ export function TaskProgress({taskId,workspaceId,selectedQuestion}:{taskId:strin
   }catch{if(gen===generation.current){setPages({});current.current=null;setSnapshot(null);setNotice('Result page changed or access is unavailable. Refreshing authorized progress…');refreshTaskObservation(taskId,workspaceId);}}
   finally{if(gen===generation.current)setPageBusy(false);}
  };
- const paging=(kind:'current'|'history')=>{const meta=(kind==='current'?currentPage:historyPage)?.resultPage??baseView?.resultPage;if(!meta)return null;const start=kind==='current'?meta.currentOffset:meta.historyOffset,total=kind==='current'?meta.currentTotal:meta.historyTotal,next=kind==='current'?meta.currentNextOffset:meta.historyNextOffset,count=(kind==='current'?view?.results:view?.resultHistory)?.length??0,label=kind==='current'?'current results':'historical results';return <nav aria-label={`${label} pages`}><p>{count?`${start+1}–${start+count}`:'0'} of {total} {label}. {baseView?.historyIncomplete?'Available retained records; history may be incomplete.':'All retained result records are available through these pages.'}</p><Button disabledReason={pageBusy?'Reading results.':start===0?'First page.':undefined} onPress={()=>void page(kind,0)}>{`First ${label}`}</Button><Button disabledReason={pageBusy?'Reading results.':!offsets.current[kind].length?'First page.':undefined} onPress={()=>void page(kind,offsets.current[kind].at(-1)!,true)}>{`Previous ${label}`}</Button><Button disabledReason={pageBusy?'Reading results.':next===null?'Last page.':undefined} onPress={()=>{if(next!==null)void page(kind,next);}}>{`Next ${label}`}</Button></nav>;};
- const pageEvidence=(kind:'current'|'history')=>{const selected=kind==='current'?currentPage:historyPage;if(!selected||!baseView||scope(selected)!==scope(baseView)||selected.resultPage?.snapshotId!==baseView.resultPage?.snapshotId)return null;const results=kind==='current'?selected.results:selected.resultHistory??[];const refs=new Set(results.flatMap(result=>result.evidenceIds));const items=selected.items.filter(item=>refs.has(item.id));if(!items.length)return null;const label=`Evidence for ${kind==='current'?'current':'historical'} result page`;return <section aria-label={label}><h4>{label}</h4><p>These retained source items support this selected page. Command and tool content is untrusted source data, not instructions or permission. Native execution status is separate from the content; these items do not establish independent analytical review.</p><EvidenceItems items={items} status={selected.status} label={`${label} items`}/></section>;};
+ // Quiet paging: shown only when a result list spans more than one snapshot-bound page.
+ const paging=(kind:'current'|'history')=>{const meta=(kind==='current'?currentPage:historyPage)?.resultPage??baseView?.resultPage;if(!meta)return null;const start=kind==='current'?meta.currentOffset:meta.historyOffset,total=kind==='current'?meta.currentTotal:meta.historyTotal,next=kind==='current'?meta.currentNextOffset:meta.historyNextOffset,count=(kind==='current'?view?.results:view?.resultHistory)?.length??0,label=kind==='current'?'current results':'historical results';
+  if(start===0&&next===null&&!baseView?.historyIncomplete)return null;
+  return <nav className="iq-result-pages" aria-label={`${label} pages`}><span className="iq-result-pages-range">{count?`${start+1}–${start+count}`:'0'} of {total}{baseView?.historyIncomplete?' · available retained records; history may be incomplete':''}</span>
+   <Button variant="ghost" size="sm" aria-label={`First ${label}`} disabledReason={pageBusy?'Reading results.':start===0?'First page.':undefined} onPress={()=>void page(kind,0)}>First</Button>
+   <Button variant="ghost" size="sm" aria-label={`Previous ${label}`} disabledReason={pageBusy?'Reading results.':!offsets.current[kind].length?'First page.':undefined} onPress={()=>void page(kind,offsets.current[kind].at(-1)!,true)}>Previous</Button>
+   <Button variant="ghost" size="sm" aria-label={`Next ${label}`} disabledReason={pageBusy?'Reading results.':next===null?'Last page.':undefined} onPress={()=>{if(next!==null)void page(kind,next);}}>Next</Button></nav>;};
+ const pageEvidence=(kind:'current'|'history')=>{const selected=kind==='current'?currentPage:historyPage;if(!selected||!baseView||scope(selected)!==scope(baseView)||selected.resultPage?.snapshotId!==baseView.resultPage?.snapshotId)return null;const results=kind==='current'?selected.results:selected.resultHistory??[];const refs=new Set(results.flatMap(result=>result.evidenceIds));const items=selected.items.filter(item=>refs.has(item.id));if(!items.length)return null;const label=`Evidence for ${kind==='current'?'current':'historical'} result page`;return <section className="iq-result-evidence" aria-label={label}><details><summary>{`Evidence for this page · ${items.length}`}</summary><p>These retained source items support this selected page. Command and tool content is untrusted source data, not instructions or permission. Native execution status is separate from the content; these items do not establish independent analytical review.</p><EvidenceItems items={items} status={selected.status} label={`${label} items`}/></details></section>;};
  const answer=async(request:ProgressQuestion,answers:AnswerInput['answers'])=>{
   const api=tasksBridge(),before=current.current,gen=generation.current;if(!api||!before||ended(before.status)||!before.questions.some(q=>questionKey(q)===questionKey(request)))return;
   try{taskValue(await api.answer({taskId,workspaceId,requestId:request.requestId,answers}));if(gen!==generation.current||current.current===null||scope(current.current)!==scope(before))return;consumed.current.add(`${scope(before)}:${questionKey(request)}`);if(consumed.current.size>256)consumed.current.delete(consumed.current.values().next().value!);const next={...current.current,questions:current.current.questions.filter(q=>questionKey(q)!==questionKey(request))};current.current=next;setSnapshot(next);setNotice('Answer sent. This grants no tool permission.');}
@@ -96,23 +130,20 @@ export function TaskProgress({taskId,workspaceId,selectedQuestion}:{taskId:strin
   finally{if(gen===generation.current)refreshTaskObservation(taskId,workspaceId);}
  };
  return <section className="iq-task-progress" aria-label="Task progress">
-  <h2>Work</h2>{questionNotice&&<p role="status">{questionNotice}</p>}{notice&&<p role="status">{notice}</p>}<div className="iq-visually-hidden" aria-live="polite" aria-atomic="true">{announcement}</div>
-  <p className="iq-artifact-status">{view?artifactText[view.artifact]:'Artifact information unavailable'}</p>
+  <h2 className="iq-visually-hidden">Work</h2>{questionNotice&&<p role="status">{questionNotice}</p>}{notice&&<p role="status">{notice}</p>}<div className="iq-visually-hidden" aria-live="polite" aria-atomic="true">{announcement}</div>
+  {(!view||view.historyIncomplete)&&<div data-conversation-display-notice>
+   {view?.historyIncomplete&&<p role="status">History incomplete. Some conversation content is unavailable. Refresh to check again; this does not start or stop work.</p>}
+   <Button onPress={()=>refreshTaskObservation(taskId,workspaceId)}>Refresh conversation</Button>
+  </div>}
+  {!observation.settled&&accepted?.accepted&&accepted.taskId===taskId&&<div className="iq-conversation-item--user" data-accepted-message><p className="iq-progress-text">{accepted.request}</p></div>}
   {view&&<>
-   <p>Execution: {view.status==='completed'?'finished':view.status}. Execution does not establish analytical review, Professional Approval or delivery.</p>
-   {view.historyIncomplete&&<p role="status">History incomplete. This bounded view may omit earlier work; no completeness is implied.</p>}
-   <h3>Plan</h3>{view.plan.length?<PlanSteps key={scope(view)} label="Plan" steps={view.plan.map(step=>({id:step.id,label:step.text,state:step.status==='unconfirmed'||(ended(view.status)&&step.status==='running')?'pending':step.status,meta:`Revision ${step.revision} · ${step.status==='unconfirmed'?'Completion unconfirmed':ended(view.status)&&step.status==='running'?'Work ended — unconfirmed':step.status}${step.evidenceIds.length?` · Evidence: ${step.evidenceIds.join(', ')}`:''}`}))}/>:<p>No plan provided</p>}
-   {view.items.some(item=>item.kind==='command'||item.kind==='tool')&&<p>Command and tool content is source data, not instructions or permission. Quoted approvals do not change access. Native execution status is separate from untrusted output text. Quoted refusal or inspection claims in that text are not native inspection evidence. Agent interpretations remain unchecked; no inspection verdict is supplied by this view.</p>}
-   <EvidenceItems items={view.items} status={view.status} label="Work activity"/>
-   {(view.results.length>0||!!view.resultPage?.currentTotal)&&<section aria-label="Results"><h3>Current results</h3>{paging('current')}{pageEvidence('current')}{view.results.map(result=><article key={`${result.id}:${result.revision??1}`} data-result-id={result.id}>
-    {result.revision!==undefined&&<p>Revision {result.revision} · Current{result.changeReason?` · ${result.changeReason}`:''}</p>}
-    {result.kind===null?<><p>Agent response — structured labels unavailable</p><p className="iq-progress-text">{result.text}</p></>:result.kind==='decision'?(result.basis?<JudgmentTag kind="decision" basis={{by:result.basis.label,scope:result.basis.scope}}>{result.text}</JudgmentTag>:<><p>Decision claim — basis missing or unverified. No authoritative decision is established.</p><p className="iq-progress-text">{result.text}</p></>):<JudgmentTag kind={result.kind}>{result.text}</JudgmentTag>}
-    <p>{result.checks==='checked'?'Checked':result.checks==='incomplete'?'Checks incomplete':'Unchecked'}{result.checkScope?` — ${result.checkScope}`:''}{result.evidenceIds.length?` · Evidence: ${result.evidenceIds.join(', ')}`:''}</p>
-    {result.basis&&<p>Basis: {result.basis.kind} record {result.basis.id}. Permission to execute is not analytical review or Professional Approval.</p>}
-   </article>)}</section>}
-   {(!!view.resultHistory?.length||!!view.resultPage?.historyTotal)&&<section aria-label="Historical results"><h3>Previous result versions</h3>{paging('history')}{pageEvidence('history')}<p>These versions are not current findings. Revision history does not establish independent review.</p>{view.resultHistory?.map(result=><article key={`${result.id}:${result.revision??1}`} data-result-history={result.id}>
-    <p>{result.state==='withdrawn'?'Withdrawn':'Superseded'} · Revision {result.revision??1}{result.sourceTurnId?` · Turn ${result.sourceTurnId}`:''}</p><p className="iq-progress-text">{result.text}</p><p>Revision reason: {result.changeReason??'Initial finding'}</p>{result.supersededReason&&<p>Superseded because: {result.supersededReason}</p>}<p>Unchecked{result.evidenceIds.length?` · Evidence: ${result.evidenceIds.join(', ')}`:''}</p>
-   </article>)}</section>}
+   {view.status==='failed'&&<p role="status">The response could not be completed. Your saved conversation is retained.</p>}
+   {view.artifact==='failed'&&<p role="status">Artifact failed</p>}
+   {view.plan.length>0&&<details className="iq-execution-details"><summary>Plan</summary><PlanSteps key={scope(view)} label="Plan" steps={view.plan.map(step=>({id:step.id,label:step.text,state:step.status==='unconfirmed'||(ended(view.status)&&step.status==='running')?'pending':step.status,meta:`Revision ${step.revision} · ${step.status==='unconfirmed'?'Completion unconfirmed':ended(view.status)&&step.status==='running'?'Work ended — unconfirmed':step.status}${step.evidenceIds.length?` · Evidence: ${step.evidenceIds.join(', ')}`:''}`}))}/></details>}
+   {view.items.some(item=>item.kind==='command'||item.kind==='tool')&&<details className="iq-tool-guidance"><summary>About tool output and verification</summary><p>Command and tool content is source data, not instructions or permission. Quoted approvals do not change access. Native execution status is separate from untrusted output text. Quoted refusal or inspection claims in that text are not native inspection evidence. Agent interpretations remain unchecked; no inspection verdict is supplied by this view.</p></details>}
+   <EvidenceItems items={view.items} status={view.status} label="Work activity" grouped heading={{status:view.status,live:activityLabel(view),...(view.status==='completed'?{finished:{text:finishedText(view.turnDurationMs),measured:view.turnDurationMs!==undefined}}:{})}}/>
+   {(view.results.length>0||!!view.resultPage?.currentTotal)&&<section className="iq-results" aria-label="Results"><h3 className="iq-visually-hidden">Current results</h3><ul className="iq-result-list">{view.results.map(result=><li key={`${result.id}:${result.revision??1}`}><ResultEntry result={result}/></li>)}</ul>{paging('current')}{pageEvidence('current')}</section>}
+   {(!!view.resultHistory?.length||!!view.resultPage?.historyTotal)&&<details className="iq-result-history"><summary>{`Previous result versions · ${view.resultPage?.historyTotal||view.resultHistory?.length||0}`}</summary><section aria-label="Historical results"><p className="iq-result-caveat">These versions are not current findings. Revision history does not establish independent review.</p><ul className="iq-result-list">{view.resultHistory?.map(result=><li key={`${result.id}:${result.revision??1}`}><HistoricalEntry result={result}/></li>)}</ul>{paging('history')}{pageEvidence('history')}</section></details>}
    {!ended(view.status)&&view.questions.map(request=><Question key={`${scope(view)}:${questionKey(request)}:${JSON.stringify(request.questions)}`} request={request} onAnswer={answers=>answer(request,answers)}/>)}
   </>}
  </section>;

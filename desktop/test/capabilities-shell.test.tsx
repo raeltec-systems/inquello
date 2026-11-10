@@ -93,7 +93,7 @@ describe('S07 runtime inventory', () => {
  });
  it('runtime stopped never presents stale entries as callable',async () => {
   setup({...inventory({installed:true,enabled:true,callable_now:true,reason_not_callable:null}),available:false,stale:true,reason:'Unavailable — runtime not running'});
-  expect(await screen.findByText('Unavailable — runtime not running')).toBeTruthy(); expect(screen.getByText(/Not callable now/)).toBeTruthy();
+  expect(await screen.findByText('Unavailable — runtime not running')).toBeTruthy(); expect(screen.getByText(/Runtime configuration not ready/)).toBeTruthy();
   expect(screen.getByText(/Stale inventory — last read: 2026/)).toBeTruthy(); expect(screen.getByRole('button',{name:'Install Linear plugin'}).getAttribute('aria-disabled')).toBe('true');
  });
  it('Refresh recovers failed reads without retaining current claims',async () => {
@@ -159,7 +159,7 @@ describe('inventory request scopes and queued invalidation',()=>{
   const first=deferred<unknown>(),second=deferred<unknown>();
   c.getInventory.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
   c.notify();c.notify();
-  expect(screen.getByText(/Not callable now/)).toBeTruthy();
+  expect(screen.getByText(/Runtime configuration not ready/)).toBeTruthy();
   expect(screen.getByText(/Stale inventory/)).toBeTruthy();
   await act(async()=>first.resolve(inventory({display_name:'Invalidated result'})));
   await waitFor(()=>expect(c.getInventory).toHaveBeenCalledTimes(3));
@@ -210,4 +210,13 @@ it.each(['Program to run','Program arguments (JSON array)'])('invalidates local 
   await userEvent.type(screen.getByRole('textbox',{name:label}),label==='Program to run'?'-changed':'[["arg"]');
   expect((screen.getByRole('checkbox',{name:LOCAL_MCP_CONFIRMATION}) as HTMLInputElement).checked).toBe(false);
   await userEvent.click(screen.getByRole('button',{name:'Add local MCP server'}));expect(manage).not.toHaveBeenCalled();
+});
+
+it('ready integration configuration does not promise private Task invocation',async()=>{
+ setup(inventory({kind:'mcp_server',installed:true,enabled:true,callable_now:true,reason_not_callable:null,actions:[]}));
+ expect(await screen.findByText(/Runtime configuration ready/)).toBeTruthy();
+ expect(screen.queryByText(/Callable now/)).toBeNull();
+ expect(screen.getByText(/Private Tasks currently keep configured MCP servers, apps and plugins disabled/)).toBeTruthy();
+ expect(screen.getByText('Model selection')).toBeTruthy();
+ expect(screen.queryByText('Effective route')).toBeNull();
 });

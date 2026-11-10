@@ -1,3 +1,4 @@
+import {taskBindingFixture} from './model-fixtures';
 import {describe,it,expect,vi} from 'vitest';
 import {OrganiseService,searchPayload,reopenPayload,navigationPayload} from '../src/main/organise';
 import {searchView,reopenView} from '../src/main/organise/navigation';
@@ -21,7 +22,7 @@ describe('saved-work named boundary and fresh scope',()=>{
   x.revoke();expect(await x.service.authorizeContext({workspaceId:workspace,expectedSnapshot:first.snapshot})).toEqual({available:false,snapshot:null,serviceEngagementIds:[]});
  });
 });
-function attention(){let policy:unknown={workspaceId:workspace,authorizationEpoch:1};let status='running';const prepare=vi.fn(async()=>({ok:false}));const question={threadId:'thread',turnId:'turn',itemId:'vendor-question',questions:[{id:'vendor',header:'Evidence',question:'Which vendor evidence should I inspect?',isOther:true,isSecret:false,options:null}]};const request=vi.fn(async(method:string)=>method==='inquello/workspace/tree'?{workspaceId:workspace,tasks:[task]}:method==='inquello/task/reopen'?{task,hit:null}:method==='inquello/tasks/forThread'?{taskId,workspaceId:workspace,runId:'run',threadId:'thread',turnId:'turn',runtimeId:'runtime',status}: {version:1,taskId,workspaceId:workspace,runId:'run',threadId:'thread',turnId:'turn',runtimeId:'runtime',status,historyIncomplete:false,items:[],plan:[],results:[],artifact:'absent'});const service=new TaskService({runtime:{ready:()=>true,instance:()=>1,request:request as never},identity:{principalId:()=>principal},syncPrincipal:async()=>{},freshPolicy:async()=>policy as never,prepareRoutes:prepare});return{service,question,prepare,request,setPolicy:(next:unknown)=>{policy=next;},revoke:()=>{policy=null;},finish:()=>{status='completed';}};}
+function attention(){let policy:unknown={workspaceId:workspace,authorizationEpoch:1};let status='running';const prepare=vi.fn(async()=>({ok:false}));const question={threadId:'thread',turnId:'turn',itemId:'vendor-question',questions:[{id:'vendor',header:'Evidence',question:'Which vendor evidence should I inspect?',isOther:true,isSecret:false,options:null}]};const request=vi.fn(async(method:string)=>method==='inquello/workspace/tree'?{workspaceId:workspace,tasks:[task]}:method==='inquello/task/reopen'?{task,hit:null}:method==='inquello/tasks/forThread'?{taskId,workspaceId:workspace,runId:'run',threadId:'thread',turnId:'turn',runtimeId:'runtime',status}: {version:1,taskId,workspaceId:workspace,runId:'run',threadId:'thread',turnId:'turn',runtimeId:'runtime',status,historyIncomplete:false,items:[],plan:[],results:[],artifact:'absent'});const service=new TaskService({taskBinding:taskBindingFixture,runtime:{ready:()=>true,instance:()=>1,request:request as never},identity:{principalId:()=>principal},syncPrincipal:async()=>{},freshPolicy:async()=>policy as never,prepareRoutes:prepare});return{service,question,prepare,request,setPolicy:(next:unknown)=>{policy=next;},revoke:()=>{policy=null;},finish:()=>{status='completed';}};}
 describe('real current input Inbox',()=>{
  it('includes archived Tasks, reaches actual request identity and removes resolved input',async()=>{const x=attention();const pending=x.service.question('request-1',x.question);await new Promise(r=>setTimeout(r,0));expect(await x.service.inbox({workspaceId:workspace})).toMatchObject({ok:true,value:{unavailable:false,items:[{taskId,itemId:'vendor-question',requestId:'request-1'}]}});expect(x.prepare).not.toHaveBeenCalled();x.service.notification('serverRequest/resolved',{threadId:'thread',requestId:'request-1'});expect(await pending).toEqual({answers:{}});expect(await x.service.inbox({workspaceId:workspace})).toMatchObject({ok:true,value:{items:[]}});});
  it('terminal input disappears and authority loss is unavailable, not zero',async()=>{const x=attention();const pending=x.service.question(7,x.question);await new Promise(r=>setTimeout(r,0));x.finish();expect(await x.service.inbox({workspaceId:workspace})).toMatchObject({ok:true,value:{items:[]}});await pending;x.revoke();expect(await x.service.inbox({workspaceId:workspace})).toMatchObject({ok:false});});
@@ -73,7 +74,7 @@ describe('strict saved Task projection',()=>{
 describe('bounded current Inbox observation',()=>{
  it('returns unavailable on a stalled observation and never schedules later work from it',async()=>{
   const x=attention();const pending=x.service.question('bounded-question',x.question);await new Promise(r=>setTimeout(r,0));
-  let resolve!:(v:unknown)=>void;x.request.mockImplementationOnce(()=>new Promise(r=>{resolve=r;}));
+  let resolve!:(v:unknown)=>void;x.request.mockImplementationOnce(()=>new Promise<never>(r=>{resolve=r as (v:unknown)=>void;}));
   vi.useFakeTimers();try{
    const observation=x.service.inbox({workspaceId:workspace});await vi.advanceTimersByTimeAsync(0);
    const count=x.request.mock.calls.length;await vi.advanceTimersByTimeAsync(INBOX_OBSERVATION_TIMEOUT_MS);
@@ -83,14 +84,14 @@ describe('bounded current Inbox observation',()=>{
  it('does not publish a Task deleted during the final policy await',async()=>{
   let policyCalls=0,deleted=false;const question={threadId:'thread',turnId:'turn',itemId:'question',questions:[{id:'q',header:'Evidence',question:'Which vendor?',isOther:true,isSecret:false,options:null}]};
   const request=vi.fn(async(method:string)=>method==='inquello/workspace/tree'?{workspaceId:workspace,tasks:deleted?[]:[task]}:method==='inquello/task/reopen'?{task,hit:null}:method==='inquello/tasks/forThread'?{taskId,workspaceId:workspace,runId:'run',threadId:'thread',turnId:'turn',runtimeId:'runtime',status:'running'}:{version:1,taskId,workspaceId:workspace,runId:'run',threadId:'thread',turnId:'turn',runtimeId:'runtime',status:'running',historyIncomplete:false,items:[],plan:[],results:[],artifact:'absent'});
-  const service=new TaskService({runtime:{ready:()=>true,instance:()=>1,request:request as never},identity:{principalId:()=>principal},syncPrincipal:async()=>{},freshPolicy:async()=>{policyCalls++;if(policyCalls===2)deleted=true;return{workspaceId:workspace,authorizationEpoch:1} as never;},prepareRoutes:vi.fn()});
+  const service=new TaskService({taskBinding:taskBindingFixture,runtime:{ready:()=>true,instance:()=>1,request:request as never},identity:{principalId:()=>principal},syncPrincipal:async()=>{},freshPolicy:async()=>{policyCalls++;if(policyCalls===2)deleted=true;return{workspaceId:workspace,authorizationEpoch:1} as never;},prepareRoutes:vi.fn()});
   const pending=service.question('request',question);await new Promise(r=>setTimeout(r,0));policyCalls=0;
   expect(await service.inbox({workspaceId:workspace})).toMatchObject({ok:true,value:{items:[],unavailable:true}});
   expect(request.mock.calls.at(-1)?.[0]).toBe('inquello/workspace/tree');service.invalidate();await pending;
  });
  it('stops scheduling after scope invalidation while a read is in flight',async()=>{
   const x=attention(),pending=x.service.question('scope-question',x.question);await new Promise(r=>setTimeout(r,0));let resolve!:(v:unknown)=>void;
-  x.request.mockImplementationOnce(()=>new Promise(r=>{resolve=r;}));const observation=x.service.inbox({workspaceId:workspace});await new Promise(r=>setTimeout(r,0));const count=x.request.mock.calls.length;
+  x.request.mockImplementationOnce(()=>new Promise<never>(r=>{resolve=r as (v:unknown)=>void;}));const observation=x.service.inbox({workspaceId:workspace});await new Promise(r=>setTimeout(r,0));const count=x.request.mock.calls.length;
   x.service.invalidate();resolve({task,hit:null});expect(await observation).toMatchObject({ok:false});expect(x.request.mock.calls.length).toBe(count);await pending;
  });
 });
@@ -98,9 +99,25 @@ describe('bounded current Inbox observation',()=>{
 it('withholds a same-ID replacement arriving during final Inbox authorization',async()=>{
  const x=attention(),first=x.service.question('reused',x.question);await new Promise(r=>setTimeout(r,0));
  const original=x.request.getMockImplementation()!;let reached!:(v?:unknown)=>void,release!:(v:unknown)=>void;
- const atFinal=new Promise(r=>{reached=r;});x.request.mockImplementation(async(method:string)=>{if(method==='inquello/workspace/tree'){reached();return new Promise(r=>{release=r;});}return original(method);});
+ const atFinal=new Promise(r=>{reached=r;});x.request.mockImplementation(async(method:string)=>{if(method==='inquello/workspace/tree'){reached();return new Promise<never>(r=>{release=r as (v:unknown)=>void;});}return original(method);});
  const observation=x.service.inbox({workspaceId:workspace});await atFinal;
  x.service.notification('serverRequest/resolved',{threadId:'thread',requestId:'reused'});await first;
  const second=x.service.question('reused',x.question);await new Promise(r=>setTimeout(r,0));release({workspaceId:workspace,tasks:[task]});
  expect(await observation).toMatchObject({ok:true,value:{items:[],unavailable:true}});x.service.invalidate();await second;
+});
+
+it.each(['policy','generation','native'] as const)('provider-independent pending input still denies %s withdrawal during native hydration',async change=>{
+ const x=attention(),original=x.request.getMockImplementation()!;let release!:()=>void;
+ x.request.mockImplementation(async(method:string)=>{
+  if(method==='inquello/tasks/progress'){
+   await new Promise<void>(resolve=>{release=resolve;});
+   if(change==='native')throw {data:{inquello:{kind:'authority_unknown'}}};
+  }
+  return original(method);
+ });
+ const pending=x.service.question('withheld',x.question);
+ await vi.waitFor(()=>expect(release).toBeTypeOf('function'));
+ if(change==='policy')x.revoke();else if(change==='generation')x.service.invalidate();
+ release();expect(await pending).toEqual({answers:{}});expect(x.prepare).not.toHaveBeenCalled();
+ expect(await x.service.inbox({workspaceId:workspace})).toMatchObject(change==='policy'?{ok:false}:{ok:true,value:{items:[]}});
 });

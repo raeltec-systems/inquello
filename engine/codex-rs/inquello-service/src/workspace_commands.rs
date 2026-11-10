@@ -108,8 +108,8 @@ async fn keep_an_administrator(
         return Ok(());
     }
     let others: Vec<Vec<String>> = sqlx::query_scalar(
-        "SELECT roles FROM memberships \
-         WHERE workspace_id = $1 AND principal_id <> $2 AND status = 'active'",
+        "SELECT m.roles FROM memberships m JOIN principals p USING(principal_id) \
+         WHERE m.workspace_id = $1 AND m.principal_id <> $2 AND m.status = 'active' AND p.status = 'active'",
     )
     .bind(authority.workspace.workspace_id)
     .bind(excluding)
@@ -127,18 +127,56 @@ async fn keep_an_administrator(
     }
 }
 
+/// Owner removal/demotion is serialized by the enclosing Workspace UPDATE lock.
+/// Historical ownerless operator workspaces are not silently migrated.
+async fn guard_owner_transition(
+    conn: &mut PgConnection,
+    authority: &WorkspaceAuthority,
+    target: Uuid,
+    current_roles: &[String],
+    replacement: &[String],
+) -> Result<(), ApiError> {
+    let was_owner = workspaces::has_owner_role(&authority.policy, current_roles);
+    let becomes_owner = workspaces::has_owner_role(&authority.policy, replacement);
+    if !was_owner && !becomes_owner {
+        return Ok(());
+    }
+    authority.require_owner()?;
+    if was_owner && !becomes_owner {
+        let others: Vec<Vec<String>> = sqlx::query_scalar(
+            "SELECT m.roles FROM memberships m JOIN principals p USING(principal_id) \
+             WHERE m.workspace_id=$1 AND m.principal_id<>$2 \
+             AND m.status='active' AND p.status='active'",
+        )
+        .bind(authority.workspace.workspace_id)
+        .bind(target)
+        .fetch_all(&mut *conn)
+        .await?;
+        if !others
+            .iter()
+            .any(|roles| workspaces::has_owner_role(&authority.policy, roles))
+        {
+            return Err(ApiError::version_conflict(
+                "the change would leave no owner",
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// Locks an active member's row for a change, checking its revision.
 async fn lock_active_member(
     conn: &mut PgConnection,
     workspace_id: Uuid,
     principal_id: Uuid,
     expected: Revision,
-) -> Result<(), ApiError> {
+) -> Result<Vec<String>, ApiError> {
     let row = workspaces::membership(conn, workspace_id, principal_id, Some(LockMode::Update))
         .await?
         .filter(|m| m.active)
         .ok_or_else(|| ApiError::version_conflict("target is not an active member"))?;
-    expect_revision(row.revision, expected)
+    expect_revision(row.revision, expected)?;
+    Ok(row.roles)
 }
 
 /// Locks an Engagement of this Workspace, checking its revision.
@@ -199,6 +237,9 @@ async fn apply(
                 return Err(ApiError::unsupported_contract("invalid invite subject"));
             }
             validate_roles(&authority.policy, roles)?;
+            if roles.iter().any(|role| role == "owner") {
+                authority.require_owner()?;
+            }
             let invite_id = Uuid::new_v4();
             sqlx::query(
                 "INSERT INTO invites (invite_id, workspace_id, issuer, subject, roles, \
@@ -216,6 +257,31 @@ async fn apply(
             .bind(now + state.lifetimes.invite)
             .execute(&mut *conn)
             .await?;
+            Ok(Applied {
+                resource_id: invite_id,
+                revision: 1,
+                epoch_event: None,
+            })
+        }
+        WorkspaceCommand::IssueEmailInvite { email, roles } => {
+            expect_revision(0, expected)?;
+            let email = crate::oidc::normalize_email(email)
+                .ok_or_else(|| ApiError::unsupported_contract("invalid invitation email"))?;
+            validate_roles(&authority.policy, roles)?;
+            if roles.iter().any(|role| role == "owner") {
+                authority.require_owner()?;
+            }
+            let issuer: String =
+                sqlx::query_scalar("SELECT issuer FROM principals WHERE principal_id = $1")
+                    .bind(authority.principal_id)
+                    .fetch_one(&mut *conn)
+                    .await?;
+            let invite_id = Uuid::new_v4();
+            sqlx::query("INSERT INTO invites (invite_id, workspace_id, issuer, subject, recipient_email, roles, policy_revision, issued_by, state, revision, created_at, expires_at) VALUES ($1,$2,$3,'email-pending',$4,$5,$6,$7,'pending',1,$8,$9)")
+                .bind(invite_id).bind(workspace_id).bind(issuer).bind(&email).bind(roles)
+                .bind(policy_revision).bind(authority.principal_id).bind(now)
+                .bind(now + state.lifetimes.invite).execute(&mut *conn).await?;
+            crate::delivery::enqueue(conn, invite_id, &email, now).await?;
             Ok(Applied {
                 resource_id: invite_id,
                 revision: 1,
@@ -255,8 +321,10 @@ async fn apply(
             principal_id,
             roles,
         } => {
-            lock_active_member(conn, workspace_id, *principal_id, expected).await?;
+            let current_roles =
+                lock_active_member(conn, workspace_id, *principal_id, expected).await?;
             validate_roles(&authority.policy, roles)?;
+            guard_owner_transition(conn, authority, *principal_id, &current_roles, roles).await?;
             keep_an_administrator(conn, authority, *principal_id, Some(roles)).await?;
             let revision: i64 = sqlx::query_scalar(
                 "UPDATE memberships SET roles = $3, policy_revision = $4, \
@@ -277,7 +345,9 @@ async fn apply(
             })
         }
         WorkspaceCommand::RemoveMember { principal_id } => {
-            lock_active_member(conn, workspace_id, *principal_id, expected).await?;
+            let current_roles =
+                lock_active_member(conn, workspace_id, *principal_id, expected).await?;
+            guard_owner_transition(conn, authority, *principal_id, &current_roles, &[]).await?;
             keep_an_administrator(conn, authority, *principal_id, None).await?;
             sqlx::query(
                 "UPDATE engagement_memberships SET status = 'removed', \
@@ -522,6 +592,25 @@ pub(crate) async fn handle(
     }
 
     authority.require(Action::ManageMembership)?;
+    let onboarding_created: bool =
+        sqlx::query_scalar("SELECT onboarding_created FROM workspaces WHERE workspace_id=$1")
+            .bind(workspace_id)
+            .fetch_one(&mut *tx)
+            .await?;
+    if onboarding_created && matches!(envelope.payload, WorkspaceCommand::IssueInvite { .. }) {
+        return Err(ApiError::unsupported_contract(
+            "customer workspaces use verified-email invitations",
+        ));
+    }
+    let fresh_required = matches!(envelope.payload, WorkspaceCommand::IssueEmailInvite { .. })
+        || (onboarding_created
+            && matches!(
+                envelope.payload,
+                WorkspaceCommand::ChangeRoles { .. } | WorkspaceCommand::AddEngagementMember { .. }
+            ));
+    if fresh_required {
+        crate::onboarding::fresh_email(&mut tx, &auth, now).await?;
+    }
     let applied = apply(
         &mut tx,
         state,
@@ -566,6 +655,17 @@ pub(crate) async fn handle(
     .bind(now)
     .execute(&mut *tx)
     .await?;
+    if fresh_required {
+        let final_auth = sessions::authenticate(
+            &mut tx,
+            access,
+            state.clock.as_ref(),
+            LockMode::Update,
+            LockMode::Share,
+        )
+        .await?;
+        crate::onboarding::fresh_email(&mut tx, &final_auth, state.clock.now()).await?;
+    }
     tx.commit()
         .await
         .map_err(|error| ApiError::uncertain(&error))?;

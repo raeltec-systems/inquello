@@ -83,7 +83,40 @@ pub struct ProviderSettings {
     pub id_token_lifetime: TimeDelta,
 }
 
+/// Only this fixed test-only allowlist can mint onboarding proof. The default
+/// single-subject provider remains unverified, including when given login_hint.
+#[derive(Clone)]
+struct BoundIdentity {
+    subject: String,
+    email: Option<String>,
+    name: Option<String>,
+    verified: bool,
+}
+
+fn onboarding_identity(hint: Option<&str>) -> Option<BoundIdentity> {
+    let (subject, email, name) = match hint? {
+        "chanda" => (
+            "synthetic-developer",
+            "chanda.mwansa@mupeta.invalid",
+            "Chanda Mwansa",
+        ),
+        "elias" => (
+            "synthetic-colleague",
+            "elias.ndlovu@mupeta.invalid",
+            "Elias Ndlovu",
+        ),
+        _ => return None,
+    };
+    Some(BoundIdentity {
+        subject: subject.to_string(),
+        email: Some(email.to_string()),
+        name: Some(name.to_string()),
+        verified: true,
+    })
+}
+
 struct PendingCode {
+    identity: BoundIdentity,
     client_id: String,
     redirect_uri: String,
     code_challenge: String,
@@ -92,6 +125,7 @@ struct PendingCode {
 }
 
 struct Provider {
+    onboarding: bool,
     issuer: Arc<TestIssuer>,
     settings: ProviderSettings,
     clock: Arc<dyn Clock>,
@@ -140,6 +174,39 @@ pub async fn start_provider(
     settings: ProviderSettings,
     clock: Arc<dyn Clock>,
 ) -> Result<RunningProvider, StartError> {
+    start_provider_inner(bind, tls, settings, clock, false).await
+}
+
+/// Explicit debug/test-only two-person topology. No production provider or
+/// mutable account-selection endpoint exists; identity is bound per code.
+pub async fn start_onboarding_provider(
+    bind: SocketAddr,
+    tls: &TlsConfig,
+    settings: ProviderSettings,
+    clock: Arc<dyn Clock>,
+) -> Result<RunningProvider, StartError> {
+    if !cfg!(debug_assertions)
+        || bind.ip() != std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST)
+        || settings.client_id != "inquello-desktop-synthetic"
+        || settings.subject != "synthetic-developer"
+        || settings.redirect_uris != ["http://127.0.0.1/callback"]
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "onboarding fixture requires the debug synthetic loopback profile",
+        )
+        .into());
+    }
+    start_provider_inner(bind, tls, settings, clock, true).await
+}
+
+async fn start_provider_inner(
+    bind: SocketAddr,
+    tls: &TlsConfig,
+    settings: ProviderSettings,
+    clock: Arc<dyn Clock>,
+    onboarding: bool,
+) -> Result<RunningProvider, StartError> {
     let tls_config = tls_server_config(Some(tls))?;
     let listener = tokio::net::TcpListener::bind(bind).await?;
     let issuer = Arc::new(TestIssuer::with_issuer(&format!(
@@ -147,6 +214,7 @@ pub async fn start_provider(
         listener.local_addr()?
     )));
     let provider = Arc::new(Provider {
+        onboarding,
         issuer: Arc::clone(&issuer),
         settings: settings.clone(),
         clock,
@@ -315,6 +383,19 @@ async fn authorize(State(provider): SharedProvider, RawQuery(query): RawQuery) -
         return fail("invalid_request");
     };
 
+    let identity = if provider.onboarding {
+        let Some(identity) = onboarding_identity(get("login_hint")) else {
+            return fail("invalid_request");
+        };
+        identity
+    } else {
+        BoundIdentity {
+            subject: settings.subject.clone(),
+            email: settings.email.clone(),
+            name: settings.name.clone(),
+            verified: false,
+        }
+    };
     let now = provider.clock.now();
     let code = random_token();
     {
@@ -326,6 +407,7 @@ async fn authorize(State(provider): SharedProvider, RawQuery(query): RawQuery) -
         codes.insert(
             code.clone(),
             PendingCode {
+                identity,
                 client_id: settings.client_id.clone(),
                 redirect_uri: redirect_uri.to_string(),
                 code_challenge: code_challenge.to_string(),
@@ -386,6 +468,11 @@ async fn token(State(provider): SharedProvider, headers: HeaderMap, body: Bytes)
     let Some(pending) = pending.filter(|pending| pending.expires_at > now) else {
         return token_error(StatusCode::BAD_REQUEST, "invalid_grant");
     };
+    // The authorization code owns its chosen identity. A token request cannot
+    // select or override an account; even this rejected presentation consumes it.
+    if provider.onboarding && params.contains_key("login_hint") {
+        return token_error(StatusCode::BAD_REQUEST, "invalid_request");
+    }
     if pending.client_id != settings.client_id
         || get("redirect_uri") != Some(pending.redirect_uri.as_str())
     {
@@ -401,13 +488,14 @@ async fn token(State(provider): SharedProvider, headers: HeaderMap, body: Bytes)
     let mut fixture = TokenFixture::valid(
         &provider.issuer,
         &settings.client_id,
-        &settings.subject,
+        &pending.identity.subject,
         &pending.nonce,
         now,
     )
     .expiring_at(now + settings.id_token_lifetime);
-    fixture.email = settings.email.clone();
-    fixture.name = settings.name.clone();
+    fixture.email = pending.identity.email;
+    fixture.name = pending.identity.name;
+    fixture.email_verified = pending.identity.verified;
     let id_token = provider.issuer.sign(&fixture);
     tracing::info!("ID token issued for the synthetic subject");
     Json(json!({

@@ -212,6 +212,7 @@ function fakeProvider(calls: string[] = []): ProviderOperations {
   };
   return {
     getStatus: async () => (calls.push('getStatus'), status()),
+    refreshStatus:async()=>(calls.push('refreshStatus'),status()),
     setClaudeKey: async (key) => result('setClaudeKey', `:${key.length}`),
     verifyClaudeKey: async () => result('verifyClaudeKey'),
     removeClaudeKey: async () => result('removeClaudeKey'),
@@ -264,6 +265,10 @@ describe('operation registry', () => {
     const workspaceId = '5d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e';
     const operationId = '0a1b2c3d-4e5f-4a6b-8c7d-8e9f0a1b2c3d';
     await expect(ipc.invoke(channelFor('organise.getTree'), trustedEvent, { workspaceId })).resolves.toMatchObject({ ok: false, code: 'signed-out' });
+    await expect(ipc.invoke(channelFor('organise.recoverNavigation'), trustedEvent, { workspaceId })).resolves.toMatchObject({ ok: false });
+    for (const key of ['principalId', 'isolatedRoot', 'realSession', 'recoveryOnly', 'dataTier']) {
+      await expect(ipc.invoke(channelFor('organise.recoverNavigation'), trustedEvent, { workspaceId, [key]: 'forbidden' })).rejects.toThrow('invalid payload for organise.recoverNavigation');
+    }
     for (const bad of [
       { workspaceId, principalId: workspaceId },
       { workspaceId: '/home/user/.ssh' },
@@ -320,11 +325,14 @@ describe('operation registry', () => {
     const standard = { ...set, mode: 'standard', confirmation: null };
     await expect(ipc.invoke(channelFor('policy.setBroadMode'), trustedEvent, standard)).resolves.toMatchObject({ ok: false });
     await expect(ipc.invoke(channelFor('policy.forTask'), trustedEvent, { taskId })).resolves.toMatchObject({ ok: false });
+    for (const inspectionOnly of [false, 'true', 1, null]) await expect(ipc.invoke(channelFor('policy.forTask'), trustedEvent, { taskId, inspectionOnly })).rejects.toThrow('invalid payload for policy.forTask');
+    await expect(ipc.invoke(channelFor('policy.forTask'), trustedEvent, { taskId, inspectionOnly: true })).resolves.toMatchObject({ ok: false });
     await expect(ipc.invoke(channelFor('policy.getSettings'), trustedEvent)).resolves.toMatchObject({ signedIn: false });
     expect(policyCalls).toEqual([
       `setBroadMode:${JSON.stringify([set])}`,
       `setBroadMode:${JSON.stringify([standard])}`,
       `forTask:${JSON.stringify([taskId])}`,
+      `inspectTask:${JSON.stringify([taskId])}`,
       'settings',
     ]);
   });
@@ -371,10 +379,23 @@ describe('operation registry', () => {
 
   it('registers exactly one fixed channel per named operation', () => {
     expect(OPERATION_NAMES).toEqual([
+      'onboarding.getState',
+      'onboarding.saveDraft',
+      'onboarding.members',
+      'onboarding.createWorkspace',
+      'onboarding.acceptInvitation',
+      'onboarding.invite',
+      'onboarding.changeRoles',
+      'onboarding.removeMember',
+      'onboarding.revokeInvitation',
+      'onboarding.reconcile',
+      'onboarding.retry',
+      'onboarding.discardPending',
+      'identity.reauthenticate',
       'tasks.preflight', 'tasks.start', 'tasks.reconcile', 'tasks.progress', 'tasks.activity', 'tasks.inbox', 'tasks.settleLifecycle', 'tasks.answer', 'tasks.steer', 'tasks.stop', 'tasks.resume',
       'usage.forTask', 'usage.set',
       'environments.forTask',
-      'routes.list', 'routes.configure', 'routes.forTask', 'routes.select',
+      'routes.list', 'routes.catalog', 'routes.resolve', 'routes.bindingState', 'routes.selectModel', 'routes.pendingModel', 'routes.forTask', 'routes.select',
       'capabilities.getInventory',
       'capabilities.manage',
       'runtime.getStatus',
@@ -385,14 +406,19 @@ describe('operation registry', () => {
       'data.export',
       'data.import',
       'data.delete',
-      'provider.getStatus',
+      'provider.getStatus', 'provider.refreshStatus',
       'provider.setClaudeKey',
       'provider.verifyClaudeKey',
       'provider.removeClaudeKey',
       'provider.codexLogin',
       'provider.codexLogout',
+      'provider.consent',
+      'provider.changeConsent',
+      'provider.reconcileConsent',
+      'provider.retryConsent',
       'organise.getWorkspaces',
       'organise.getTree',
+      'organise.recoverNavigation',
       'organise.search',
       'organise.reopen',
       'organise.setNavigation',
@@ -414,6 +440,17 @@ describe('operation registry', () => {
     ]);
     expect([...ipc.handlers.keys()]).toEqual(OPERATION_NAMES.map((name) => `${CHANNEL_PREFIX}${name}`));
   });
+
+  it.each(['provider.consent', 'provider.changeConsent', 'provider.reconcileConsent', 'provider.retryConsent'] as const)(
+    'rejects extra arguments at main for %s', async (name) => {
+      const workspaceId = '22222222-2222-4222-8222-222222222222';
+      const input = name === 'provider.changeConsent'
+        ? {workspaceId, expectedRevision: '0', contractVersion: 1, contractDigest: 'a'.repeat(64), action: 'allow'}
+        : {workspaceId};
+      await expect(ipc.invoke(channelFor(name), trustedEvent, input, {extra: true}))
+        .rejects.toThrow('invalid payload for ' + name);
+    },
+  );
 
   it('validates environment reads and rejects untrusted frames without dispatch', async () => {
     for (const args of [[], [{ taskId: '../private' }], [{ taskId: '22222222-2222-4222-8222-222222222222', principalId: 'other' }]]) {
@@ -558,7 +595,7 @@ describe('operation registry', () => {
     expect(providerCalls).toEqual(['getStatus', 'setClaudeKey:31', 'verifyClaudeKey', 'removeClaudeKey', 'codexLogin:apiKey', 'codexLogin:chatgpt', 'codexLogout']);
   });
 
-  it.each(['provider.getStatus', 'provider.verifyClaudeKey', 'provider.removeClaudeKey', 'provider.codexLogout'] as const)('%s takes no arguments and checks the sender', async (name) => {
+  it.each(['provider.getStatus', 'provider.refreshStatus', 'provider.verifyClaudeKey', 'provider.removeClaudeKey', 'provider.codexLogout'] as const)('%s takes no arguments and checks the sender', async (name) => {
     const bad = await ipc.invoke(channelFor(name), trustedEvent, 'sk-ant-x').catch((e: Error) => e);
     expect((bad as Error).message).toBe(`invalid payload for ${name}`);
     const foreign = await ipc.invoke(channelFor(name), { sender: { id: 2, mainFrame }, senderFrame: mainFrame }).catch((e: Error) => e);
@@ -873,12 +910,19 @@ describe('preload', () => {
     expect(usageListener).toHaveBeenCalledWith(false);
     usageHandler({}, true); expect(usageListener).toHaveBeenLastCalledWith(true); unsubUsage();
     expect(removeListener).toHaveBeenCalledWith('inquello:usage-changed', usageHandler);
+    const settingsChanged = (api as {policy:{onSettingsChanged(listener:(settled:boolean)=>void):()=>void}}).policy.onSettingsChanged;
+    const settingsListener = vi.fn(); const unsubSettings = settingsChanged(settingsListener);
+    const settingsHandler = on.mock.calls.find(call => call[0] === 'inquello:policy-settings-changed')![1];
+    settingsHandler({secret:'not forwarded'}, {principal:'not forwarded'});
+    expect(settingsListener).toHaveBeenLastCalledWith(false);
+    settingsHandler({}, true); expect(settingsListener).toHaveBeenLastCalledWith(true);
+    unsubSettings(); expect(removeListener).toHaveBeenCalledWith('inquello:policy-settings-changed', settingsHandler);
     type Op = (...args: unknown[]) => Promise<unknown>;
     const typed = api as {
       runtime: { getStatus: Op };
       identity: { getStatus: Op; signIn: Op; signOut: Op };
       data: { getPolicy: Op; export: Op; import: Op; delete: Op };
-      provider: { getStatus: Op; setClaudeKey: Op; verifyClaudeKey: Op; removeClaudeKey: Op; codexLogin: Op; codexLogout: Op };
+      provider: { getStatus: Op; setClaudeKey: Op; verifyClaudeKey: Op; removeClaudeKey: Op; codexLogin: Op; codexLogout: Op; consent: Op; changeConsent: Op; reconcileConsent: Op; retryConsent: Op };
     };
     expect(Object.isFrozen(typed)).toBe(true);
     expect(Object.isFrozen(typed.runtime)).toBe(true);
@@ -913,12 +957,20 @@ describe('preload', () => {
       [typed.data.delete, channelFor('data.delete')],
       [typed.provider.setClaudeKey, channelFor('provider.setClaudeKey')],
       [typed.provider.codexLogin, channelFor('provider.codexLogin')],
+      [typed.provider.consent, channelFor('provider.consent')],
+      [typed.provider.changeConsent, channelFor('provider.changeConsent')],
+      [typed.provider.reconcileConsent, channelFor('provider.reconcileConsent')],
+      [typed.provider.retryConsent, channelFor('provider.retryConsent')],
     ];
     for (const [op, channel] of dataCalls) {
       invoke.mockClear();
       await op(['task-history']);
       expect(invoke).toHaveBeenCalledTimes(1);
       expect(invoke).toHaveBeenCalledWith(channel, ['task-history']);
+      invoke.mockClear();
+      await op('inquello:op:other', { extra: true });
+      expect(invoke).toHaveBeenCalledTimes(1);
+      expect(invoke).toHaveBeenCalledWith(channel, 'inquello:op:other', { extra: true });
       invoke.mockClear();
       await op();
       expect(invoke).toHaveBeenCalledWith(channel);
@@ -988,15 +1040,22 @@ describe('host privilege source scan', () => {
     const body = preload.replace(/^import .* from 'electron';$/m, '');
     const uses = body.match(/ipcRenderer[^\n]*/g) ?? [];
     expect(uses.length).toBeGreaterThan(0);
-    for (const use of uses) expect(use).toMatch(/^ipcRenderer\.(?:invoke\([A-Z_]+_CHANNEL(?:, \.\.\.args)?\)|(?:on|removeListener)\((?:CAPABILITIES|ROUTES|ENVIRONMENTS|USAGE|TASKS|TASKS_PROGRESS)_CHANGED_CHANNEL, handler\))/);
-    // Only the data operations, the two provider operations that take what the user entered, and the organise, state, policy and permissions operations forward arguments.
-    expect((body.match(/_CHANNEL, \.\.\.args\)/g) ?? []).length).toBe(46);
+    for (const use of uses) expect(use).toMatch(/^ipcRenderer\.(?:invoke\([A-Z_]+_CHANNEL(?:, \.\.\.args)?\)|(?:on|removeListener)\((?:CAPABILITIES|ROUTES|ENVIRONMENTS|USAGE|TASKS|TASKS_PROGRESS|POLICY_SETTINGS)_CHANGED_CHANNEL, handler\))/);
+    // Fixed payload operations forward arguments for main validation; onboarding/reauth include noPayload checks.
+    const onboardingForwarders = ["ONBOARDING_GET_STATE_CHANNEL, ...args)","ONBOARDING_SAVE_DRAFT_CHANNEL, ...args)","ONBOARDING_MEMBERS_CHANNEL, ...args)","ONBOARDING_CREATE_WORKSPACE_CHANNEL, ...args)","ONBOARDING_ACCEPT_INVITATION_CHANNEL, ...args)","ONBOARDING_INVITE_CHANNEL, ...args)","ONBOARDING_CHANGE_ROLES_CHANNEL, ...args)","ONBOARDING_REMOVE_MEMBER_CHANNEL, ...args)","ONBOARDING_REVOKE_INVITATION_CHANNEL, ...args)","ONBOARDING_RECONCILE_CHANNEL, ...args)","ONBOARDING_RETRY_CHANNEL, ...args)","ONBOARDING_DISCARD_PENDING_CHANNEL, ...args)","IDENTITY_REAUTHENTICATE_CHANNEL, ...args)"];
+    const consentForwarders = [
+      "PROVIDER_CONSENT_CHANNEL, ...args)",
+      "PROVIDER_CHANGE_CONSENT_CHANNEL, ...args)",
+      "PROVIDER_RECONCILE_CONSENT_CHANNEL, ...args)",
+      "PROVIDER_RETRY_CONSENT_CHANNEL, ...args)",
+    ];
+    expect((body.match(/_CHANNEL, \.\.\.args\)/g) ?? []).length).toBe(68);
     expect(
       body
         .match(/[A-Z_]+_CHANNEL, \.\.\.args\)/g)
-        ?.every((use) => use.startsWith('TASKS_') || use.startsWith('USAGE_') || use.startsWith('ENVIRONMENTS_') || use.startsWith('ROUTES_') || use.startsWith('CAPABILITIES_') || use.startsWith('DATA_') || use.startsWith('PROVIDER_SET_CLAUDE_KEY_') || use.startsWith('PROVIDER_CODEX_LOGIN_') || use.startsWith('ORGANISE_') || use.startsWith('STATE_') || use.startsWith('POLICY_') || use.startsWith('PERMISSIONS_')),
+        ?.every((use) => onboardingForwarders.includes(use) || consentForwarders.includes(use) || use.startsWith('TASKS_') || use.startsWith('USAGE_') || use.startsWith('ENVIRONMENTS_') || use.startsWith('ROUTES_') || use.startsWith('CAPABILITIES_') || use.startsWith('DATA_') || use.startsWith('PROVIDER_SET_CLAUDE_KEY_') || use.startsWith('PROVIDER_CODEX_LOGIN_') || use.startsWith('ORGANISE_') || use.startsWith('STATE_') || use.startsWith('POLICY_') || use.startsWith('PERMISSIONS_')),
     ).toBe(true);
-    expect(preload.replace('ipcRenderer.on(TASKS_PROGRESS_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(TASKS_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(USAGE_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(ENVIRONMENTS_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(CAPABILITIES_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(ROUTES_CHANGED_CHANNEL, handler)', '')).not.toMatch(/\.on\(|\.send\(|sendSync|postMessage/);
+    expect(preload.replace('ipcRenderer.on(TASKS_PROGRESS_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(TASKS_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(USAGE_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(ENVIRONMENTS_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(CAPABILITIES_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(ROUTES_CHANGED_CHANNEL, handler)', '').replace('ipcRenderer.on(POLICY_SETTINGS_CHANGED_CHANNEL, handler)', '')).not.toMatch(/\.on\(|\.send\(|sendSync|postMessage/);
   });
 });
 

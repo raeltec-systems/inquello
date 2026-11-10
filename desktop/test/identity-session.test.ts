@@ -6,6 +6,7 @@
  * The loopback listener and the vault are the real ones.
  */
 import fs from 'node:fs';
+import net from 'node:net';
 import path from 'node:path';
 
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
@@ -63,6 +64,18 @@ function world(backend: string | null = 'gnome_libsecret', options: { now?: () =
 function fileText(dir: string): string {
   const file = path.join(dir, SESSION_FILE);
   return fs.existsSync(file) ? fs.readFileSync(file).toString('latin1') : '';
+}
+
+/** A loopback port that was free a moment ago, for tests of the fixed callback port. */
+function freePort(): Promise<number> {
+  return new Promise<number>((resolve, reject) => {
+    const probe = net.createServer();
+    probe.once('error', reject);
+    probe.listen(0, '127.0.0.1', () => {
+      const address = probe.address();
+      probe.close(() => resolve(typeof address === 'object' && address ? address.port : 0));
+    });
+  });
 }
 
 describe('sign-in', () => {
@@ -350,6 +363,8 @@ describe('logout', () => {
     expect(second).toMatchObject({ ok: true, status: { identity: { state: 'signed-out' } } });
     expect(w.service.logoutEnvelopes.map((e) => e.operation_id)).toEqual(['logout-op-1', 'logout-op-1']);
     expect(w.service.logoutEnvelopes[1]).toEqual(w.service.logoutEnvelopes[0]);
+    // The refused retry is settled by asking the service: the revoked family cannot refresh, so the sign-out is confirmed.
+    expect(w.service.calls.filter((name) => name === 'refresh')).toHaveLength(1);
     expect(fs.existsSync(path.join(w.dir, SESSION_FILE))).toBe(false);
   });
 
@@ -391,6 +406,67 @@ describe('logout', () => {
 });
 
 describe('logout when the refresh cannot be attempted (review R02)', () => {
+  it('a logout retry refused with an expired credential is not confirmed until the family is refreshed or revoked', async () => {
+    let now = Date.now();
+    const w = world('gnome_libsecret', { now: () => now });
+    const session = w.make({ operationId: () => 'logout-op-retry' });
+    await session.signIn();
+    const command = w.service.sessionCommand.bind(w.service);
+    const refresh = w.service.refresh.bind(w.service);
+    // The first attempt never reaches the service, so nothing is committed, but it is recorded as possibly sent.
+    w.service.sessionCommand = async () => {
+      throw new ServiceError('transport', false);
+    };
+    const first = await session.signOut();
+    expect(first).toMatchObject({ ok: false, reason: REASONS.logoutPending });
+    expect(w.service.current()!.revoked).toBe(false);
+    // The access credential then expires and the refresh cannot be attempted, so the retry is refused as unauthenticated.
+    w.service.sessionCommand = command;
+    now = w.service.current()!.accessExpiresAt + 1;
+    w.service.refresh = async () => {
+      throw new ServiceError('dependency_unavailable', true, 503);
+    };
+    const second = await session.signOut();
+    // That refusal is not proof that the earlier attempt committed: the server session is still alive.
+    expect(second).toMatchObject({ ok: false, reason: REASONS.logoutPending, status: { identity: { state: 'blocked', reason: REASONS.logoutPending } } });
+    expect(w.service.current()!.revoked).toBe(false);
+    expect(session.holdsSession()).toBe(true);
+    expect(fs.existsSync(path.join(w.dir, SESSION_FILE))).toBe(true);
+    // Once the service answers, the same operation is sent with a fresh credential and the session is revoked.
+    w.service.refresh = refresh;
+    const third = await session.signOut();
+    expect(third).toMatchObject({ ok: true, status: { identity: { state: 'signed-out' } } });
+    expect(w.service.current()!.revoked).toBe(true);
+    expect(new Set(w.service.logoutEnvelopes.map((e) => e.operation_id))).toEqual(new Set(['logout-op-retry']));
+    expect(fs.existsSync(path.join(w.dir, SESSION_FILE))).toBe(false);
+  });
+
+  it('a refreshed credential that is refused again leaves the sign-out pending after one refresh, without looping', async () => {
+    const w = world();
+    const session = w.make({ operationId: () => 'logout-op-refused' });
+    await session.signIn();
+    const command = w.service.sessionCommand.bind(w.service);
+    let attempts = 0;
+    w.service.sessionCommand = async () => {
+      attempts += 1;
+      throw new ServiceError('unauthenticated', true, 401);
+    };
+    const refreshesBefore = w.service.calls.filter((name) => name === 'refresh').length;
+    const first = await session.signOut();
+    expect(first).toMatchObject({ ok: false, reason: REASONS.logoutPending, status: { identity: { state: 'blocked', reason: REASONS.logoutPending }, sharedService: 'available' } });
+    // One send, one refresh, one resend: bounded.
+    expect(attempts).toBe(2);
+    expect(w.service.calls.filter((name) => name === 'refresh').length - refreshesBefore).toBe(1);
+    expect(session.holdsSession()).toBe(true);
+    expect(w.service.current()!.revoked).toBe(false);
+    // The operation and its ID survive, and the service confirms it once it accepts the credential.
+    w.service.sessionCommand = command;
+    const second = await session.signOut();
+    expect(second).toMatchObject({ ok: true, status: { identity: { state: 'signed-out' } } });
+    expect(w.service.current()!.revoked).toBe(true);
+    expect(w.service.logoutEnvelopes.map((e) => e.operation_id)).toEqual(['logout-op-refused']);
+  });
+
   it('a first unauthorized attempt with an unavailable refresh stays pending with its operation ID, then the retry confirms it', async () => {
     let now = Date.now();
     const w = world('gnome_libsecret', { now: () => now });
@@ -545,6 +621,72 @@ describe('local removal during a sign-in (review R04)', () => {
     const saved = new CredentialVault({ safeStorage: fakeSafeStorage('gnome_libsecret'), platform: 'linux', dir: w.dir }).load();
     expect(saved).toMatchObject({ sessionId: kept.sessionId, accessCredential: kept.access });
   });
+
+  it('cancelling a sign-in that waits for the browser releases the fixed callback port at once', async () => {
+    const port = await freePort();
+    const w = world();
+    const { opener } = fakeOpener(w.issuer);
+    let silent = true;
+    let opened!: () => void;
+    const reached = new Promise<void>((resolve) => (opened = resolve));
+    const session = w.make({
+      config: { kind: 'configured', config: { ...CONFIG, callbackPort: port } },
+      callbackTimeoutMs: 60_000,
+      // The first browser never returns to the callback; later ones follow the sign-in normally.
+      openBrowser: async (url: string) => {
+        if (silent) {
+          opened();
+          return;
+        }
+        return opener(url);
+      },
+    });
+    const pending = session.signIn();
+    await reached;
+    expect(session.snapshot().identity).toEqual({ state: 'signing-in' });
+    await session.signOut();
+    // The cancelled attempt ends now, not when the callback timeout passes.
+    expect(await pending).toMatchObject({ ok: false, reason: REASONS.cancelled, status: { identity: { state: 'signed-out' } } });
+    // The fixed port is free again, so a new sign-in works immediately.
+    silent = false;
+    expect(await session.signIn()).toMatchObject({ ok: true, status: { identity: { state: 'signed-in' } } });
+  });
+
+  it.each([
+    ['issuer discovery', 'discover'],
+    ['the login transaction', 'transaction'],
+  ] as const)('a sign-in cancelled during %s never opens the browser or keeps the fixed callback port', async (_label, stage) => {
+    const port = await freePort();
+    const w = world();
+    const { opener } = fakeOpener(w.issuer);
+    let browsers = 0;
+    let reached!: () => void;
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (reached = resolve));
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const discover = w.issuer.discover.bind(w.issuer);
+    const create = w.service.createLoginTransaction.bind(w.service);
+    if (stage === 'discover') w.issuer.discover = async () => { reached(); await gate; return discover(); };
+    else w.service.createLoginTransaction = async (request) => { const transaction = await create(request); reached(); await gate; return transaction; };
+    const session = w.make({
+      config: { kind: 'configured', config: { ...CONFIG, callbackPort: port } },
+      callbackTimeoutMs: 60_000,
+      openBrowser: async (url: string) => { browsers += 1; return opener(url); },
+    });
+    const pending = session.signIn();
+    await held;
+    await session.signOut();
+    release();
+    expect(await pending).toMatchObject({ ok: false, reason: REASONS.cancelled, status: { identity: { state: 'signed-out' } } });
+    expect(browsers).toBe(0);
+    if (stage === 'discover') expect(w.service.calls).not.toContain('createLoginTransaction');
+    else expect(w.service.calls).toContain('abandon');
+    // Nothing is left listening: a new sign-in on the same fixed port works at once.
+    w.issuer.discover = discover;
+    w.service.createLoginTransaction = create;
+    expect(await session.signIn()).toMatchObject({ ok: true, status: { identity: { state: 'signed-in' } } });
+    expect(browsers).toBe(1);
+  });
 });
 
 describe('vault save failure (review R05)', () => {
@@ -683,5 +825,121 @@ describe('local data deletion support (Story 1.12)', () => {
     w.service.down = false;
     expect((await session.getStatus()).identity).toEqual({ state: 'signed-out' });
     expect(fs.existsSync(path.join(w.dir, SESSION_FILE))).toBe(false);
+  });
+});
+
+
+describe('bounded fresh execution-policy reads', () => {
+  const workspace = '11111111-1111-4111-8111-111111111111';
+  const policy = { workspace_id: workspace, authorization_epoch: '1', policy_revision: '1', execution: null };
+  const gate = () => { let release!: () => void; const promise = new Promise<void>(resolve => { release = resolve; }); return {promise, release}; };
+
+  it('allows four GETs, bounds the waiting queue, and recovers every permit', async () => {
+    const w = world(), session = w.make(); await session.signIn(); const held = gate(); let active=0, peak=0;
+    const read = vi.spyOn(w.service, 'executionPolicy').mockImplementation(async () => { active++; peak=Math.max(peak,active); await held.promise; active--; return policy; });
+    const reads = Array.from({length:37}, () => session.readExecutionPolicy(workspace));
+    await waitFor(() => read.mock.calls.length === 4); expect(await reads[36]).toBeNull(); expect(peak).toBe(4);
+    held.release(); expect((await Promise.all(reads)).filter(Boolean)).toHaveLength(36); expect(peak).toBe(4);
+    expect(await session.readExecutionPolicy(workspace)).toEqual(policy); expect(read).toHaveBeenCalledTimes(37);
+  });
+
+  it('releases permits after endpoint errors without retrying a denial', async () => {
+    const w = world(), session = w.make(); await session.signIn();
+    const read = vi.spyOn(w.service, 'executionPolicy').mockRejectedValue(new ServiceError('denied',true,403));
+    const results = await Promise.allSettled(Array.from({length:36},()=>session.readExecutionPolicy(workspace)));
+    expect(results.every(r=>r.status==='rejected')).toBe(true); expect(read).toHaveBeenCalledTimes(36);
+    read.mockResolvedValue(policy); expect(await session.readExecutionPolicy(workspace)).toEqual(policy);
+  });
+
+  it('serializes one expiry rotation across concurrent fresh GETs', async () => {
+    let now=Date.now(); const w=world('gnome_libsecret',{now:()=>now}), session=w.make(); await session.signIn(); now+=15*60_000;
+    const read=vi.spyOn(w.service,'executionPolicy').mockResolvedValue(policy);
+    expect(await Promise.all(Array.from({length:4},()=>session.readExecutionPolicy(workspace)))).toEqual(Array(4).fill(policy));
+    expect(w.service.calls.filter(c=>c==='refresh')).toHaveLength(1);
+    expect(read.mock.calls.every(([access])=>access===w.service.current()!.access)).toBe(true);
+  });
+
+  it('coalesces concurrent old-token 401s into one rotation, not four', async () => {
+    const w=world(), session=w.make(); await session.signIn(); const old=w.service.current()!.access, held=gate();
+    const read=vi.spyOn(w.service,'executionPolicy').mockImplementation(async access=>{if(access===old){await held.promise;throw new ServiceError('unauthenticated',true,401);}return policy;});
+    const reads=Array.from({length:4},()=>session.readExecutionPolicy(workspace));await waitFor(()=>read.mock.calls.length===4);held.release();
+    expect(await Promise.all(reads)).toEqual(Array(4).fill(policy));expect(w.service.calls.filter(c=>c==='refresh')).toHaveLength(1);expect(read).toHaveBeenCalledTimes(8);
+  });
+
+  it('uses an already rotated token after a late 401 and stops after a second 401', async () => {
+    const w=world(), session=w.make();await session.signIn();const old=w.service.current()!.access,held=gate();
+    const read=vi.spyOn(w.service,'executionPolicy').mockImplementation(async access=>{if(access===old)await held.promise;throw new ServiceError('unauthenticated',true,401);});
+    const pending=session.readExecutionPolicy(workspace);const rejected=expect(pending).rejects.toBeInstanceOf(ServiceError);await waitFor(()=>read.mock.calls.length===1);
+    expect(await session.refreshNow()).toBe(true);held.release();await rejected;
+    expect(w.service.calls.filter(c=>c==='refresh')).toHaveLength(1);expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(['dependency','lost','reuse'] as const)('does not dispatch a near-expiry read after %s refresh failure', async outcome=>{
+    let now=Date.now();const w=world('gnome_libsecret',{now:()=>now}),session=w.make();await session.signIn();now+=15*60_000;w.service.refreshOutcome=outcome;
+    const read=vi.spyOn(w.service,'executionPolicy').mockResolvedValue(policy);
+    expect(await session.readExecutionPolicy(workspace)).toBeNull();expect(read).not.toHaveBeenCalled();
+    expect(w.service.calls.filter(c=>c==='refresh')).toHaveLength(1);
+  });
+
+  it('suppresses queued reads and late success after logout, including same-principal sign-in', async () => {
+    const w=world(),session=w.make();await session.signIn();const principal=session.principalId(),held=gate();
+    const read=vi.spyOn(w.service,'executionPolicy').mockImplementation(async()=>{await held.promise;return policy;});
+    const pending=Array.from({length:8},()=>session.readExecutionPolicy(workspace));await waitFor(()=>read.mock.calls.length===4);
+    expect((await session.signOut()).ok).toBe(true);
+    // The default fake mints a different principal per login. Model a new
+    // session for the same principal explicitly, including its service view.
+    const bootstrap=w.service.bootstrap.bind(w.service);vi.spyOn(w.service,'bootstrap').mockImplementation(async request=>{const credentials=await bootstrap(request);w.service.current()!.principalId=principal!;return{...credentials,principal_id:principal!};});
+    await session.signIn();expect(session.principalId()).toBe(principal);
+    held.release();expect(await Promise.all(pending)).toEqual(Array(8).fill(null));expect(read).toHaveBeenCalledTimes(4);
+    expect(await session.readExecutionPolicy(workspace)).toEqual(policy);
+  });
+
+  it('does not publish a late failure into a replacement session', async () => {
+    const w=world(),session=w.make();await session.signIn();const held=gate();
+    const read=vi.spyOn(w.service,'executionPolicy').mockImplementation(async()=>{await held.promise;throw new ServiceError('transport',true);});
+    const pending=session.readExecutionPolicy(workspace);await waitFor(()=>read.mock.calls.length===1);session.forgetLocally();await session.signIn();
+    expect(session.snapshot().sharedService).toBe('available');held.release();expect(await pending).toBeNull();expect(session.snapshot().sharedService).toBe('available');
+  });
+
+  it('leaves general request and explicit refresh serialization unchanged', async () => {
+    const w=world(),session=w.make();await session.signIn();const held=gate(),entered:string[]=[];
+    const first=session.withAccess(async()=>{entered.push('first');await held.promise;return 1;});
+    const second=session.withAccess(async()=>{entered.push('second');return 2;});await waitFor(()=>entered.length===1);expect(entered).toEqual(['first']);held.release();
+    expect(await Promise.all([first,second])).toEqual([1,2]);expect(entered).toEqual(['first','second']);
+  });
+});
+
+
+describe('concurrent policy availability ordering', () => {
+  const workspace='11111111-1111-4111-8111-111111111111';
+  const policy={workspace_id:workspace,authorization_epoch:'1',policy_revision:'1',execution:null};
+  it.each(['policy','serialized'] as const)('does not overwrite a later %s failure with an old GET success',async source=>{
+    const w=world(),session=w.make();await session.signIn();let release!:()=>void;const gate=new Promise<void>(r=>{release=r;});
+    const read=vi.spyOn(w.service,'executionPolicy').mockImplementationOnce(async()=>{await gate;return policy;}).mockRejectedValue(new ServiceError('transport',true));
+    const old=session.readExecutionPolicy(workspace);await waitFor(()=>read.mock.calls.length===1);
+    const failed=source==='policy'?session.readExecutionPolicy(workspace):session.withAccess(async()=>{throw new ServiceError('transport',true);});
+    await expect(failed).rejects.toBeInstanceOf(ServiceError);expect(session.snapshot().sharedService).toBe('unavailable');release();expect(await old).toEqual(policy);expect(session.snapshot().sharedService).toBe('unavailable');
+    read.mockResolvedValue(policy);expect(await session.readExecutionPolicy(workspace)).toEqual(policy);expect(session.snapshot().sharedService).toBe('available');
+  });
+});
+
+
+describe('policy retry lifecycle races',()=>{
+  const workspace='11111111-1111-4111-8111-111111111111';
+  it('does not refresh or retry when logout supersedes a queued 401 retry',async()=>{
+    const w=world(),session=w.make();await session.signIn();let rejectRead!:()=>void,releaseBlock!:()=>void;
+    const response=new Promise<void>(resolve=>{rejectRead=resolve;}),block=new Promise<void>(resolve=>{releaseBlock=resolve;});
+    const read=vi.spyOn(w.service,'executionPolicy').mockImplementation(async()=>{await response;throw new ServiceError('unauthenticated',true,401);});
+    const pending=session.readExecutionPolicy(workspace);await waitFor(()=>read.mock.calls.length===1);let blocking=false;
+    const mutation=session.withAccess(async()=>{blocking=true;await block;return true;});await waitFor(()=>blocking);
+    rejectRead();await new Promise<void>(resolve=>setImmediate(resolve));const logout=session.signOut();releaseBlock();
+    expect(await pending).toBeNull();expect(await mutation).toBe(true);expect((await logout).ok).toBe(true);
+    expect(read).toHaveBeenCalledTimes(1);expect(w.service.calls.filter(c=>c==='refresh')).toHaveLength(0);
+  });
+  it('keeps a rotated policy credential memory-only when vault persistence fails',async()=>{
+    let now=Date.now();const w=world('gnome_libsecret',{now:()=>now});const vault=new CredentialVault({safeStorage:fakeSafeStorage('gnome_libsecret'),platform:'linux',dir:w.dir});const session=w.make({vault});await session.signIn();
+    vi.spyOn(vault,'save').mockImplementation(()=>{throw new Error('fixture vault failure');});now+=15*60_000;
+    const policy={workspace_id:workspace,authorization_epoch:'1',policy_revision:'1',execution:null};vi.spyOn(w.service,'executionPolicy').mockResolvedValue(policy);
+    expect(await session.readExecutionPolicy(workspace)).toEqual(policy);expect(session.snapshot().credentialStorage).toBe('memory-only');expect(fs.existsSync(path.join(w.dir,SESSION_FILE))).toBe(false);
   });
 });

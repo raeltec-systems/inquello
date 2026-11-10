@@ -76,7 +76,7 @@ fn snippet(text: &str, query: &str) -> Option<String> {
         .flatten()
 }
 fn conversation_text(item: &ThreadItem) -> Option<String> {
-    codex_thread_store::searchable_conversation_text(item).map(|text| text.into_owned())
+    codex_thread_store::searchable_conversation_text(item).map(std::borrow::Cow::into_owned)
 }
 /// Matching may normalize Markdown; inspection preserves the retained message.
 fn retained_message_text(item: &ThreadItem) -> Option<String> {
@@ -177,8 +177,8 @@ impl InquelloRequestProcessor {
         cleanup.id = None;
         let view = reply
             .ok()
-            .and_then(|v| v.ok())
-            .and_then(|v| v.ok())
+            .and_then(std::result::Result::ok)
+            .and_then(std::result::Result::ok)
             .and_then(|v| serde_json::from_value::<InquelloContextAuthorizeResponse>(v).ok())
             .ok_or_else(unavailable)?;
         let snapshot = view
@@ -619,20 +619,19 @@ impl InquelloRequestProcessor {
                             if !turns.contains(&turn) {
                                 return Err(unavailable());
                             }
-                            if conversation_text(&item).is_some() {
-                                if let Some(matched) =
+                            if conversation_text(&item).is_some()
+                                && let Some(matched) =
                                     codex_thread_store::conversation_match_snippet(
                                         &item,
                                         &params.query,
                                     )
-                                {
-                                    let mut hit = base.clone();
-                                    hit.kind = "conversation".into();
-                                    hit.turn_id = Some(turn);
-                                    hit.item_id = Some(item.id().into());
-                                    hit.snippet = Some(matched);
-                                    matches.push(hit);
-                                }
+                            {
+                                let mut hit = base.clone();
+                                hit.kind = "conversation".into();
+                                hit.turn_id = Some(turn);
+                                hit.item_id = Some(item.id().into());
+                                hit.snippet = Some(matched);
+                                matches.push(hit);
                             }
                         }
                     } else {
@@ -1006,12 +1005,11 @@ mod tests {
         let mut current = prior.clone();
         current.run_id = "current-run".into();
         current.turn_id = Some("current-turn".into());
-        let original = vec![prior.clone(), current.clone()];
+        let original = vec![prior, current.clone()];
         let digest = lineage_digest(&original).unwrap();
         assert!(saved_history_matches(&digest, "revision-1", &original, "revision-1").unwrap());
         assert!(
-            !saved_history_matches(&digest, "revision-1", &[current.clone()], "revision-1")
-                .unwrap(),
+            !saved_history_matches(&digest, "revision-1", &[current], "revision-1").unwrap(),
             "the generic scope await cannot erase prior-turn binding requirements"
         );
         let mut rotated = original.clone();

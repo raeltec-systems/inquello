@@ -106,10 +106,10 @@ fn inspect(plugin_root: &Path) -> Result<Inspection, &'static str> {
             .ok_or("Cannot locate selected plugin manifest")?;
         let raw: serde_json::Value = serde_json::from_str(&read(&manifest_path)?)
             .map_err(|_| "Cannot parse selected plugin manifest")?;
-        if let Some(declared) = raw.get("mcpServers") {
-            if !(declared.is_string() || declared.is_object()) || paths.mcp_servers.is_none() {
-                return Err("Invalid declared plugin MCP configuration");
-            }
+        if let Some(declared) = raw.get("mcpServers")
+            && (!(declared.is_string() || declared.is_object()) || paths.mcp_servers.is_none())
+        {
+            return Err("Invalid declared plugin MCP configuration");
         }
     }
     let contents = match &paths.mcp_servers {

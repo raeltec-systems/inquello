@@ -137,6 +137,9 @@ export function fakeOrganise(calls: string[] = []): OrganiseOperations {
     moveTask: record('moveTask'),
     listStates: record('listStates'),
     recordTaskState: record('recordTaskState'),
+    search: record('search'),
+    reopen: record('reopen'),
+    setNavigation: record('setNavigation'),
   };
 }
 
@@ -147,6 +150,10 @@ export function fakePolicy(calls: string[] = []): PolicyOperations {
     settings: async () => {
       calls.push('settings');
       return { signedIn: false, environmentLabel: 'Local device', workspaces: [], capabilities: [], reason: signedOut.reason };
+    },
+    inspectTask: async (taskId) => {
+      calls.push(`inspectTask:${JSON.stringify([taskId])}`);
+      return signedOut;
     },
     forTask: async (taskId) => {
       calls.push(`forTask:${JSON.stringify([taskId])}`);

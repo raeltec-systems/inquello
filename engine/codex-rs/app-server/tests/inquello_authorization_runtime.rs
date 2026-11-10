@@ -11,6 +11,14 @@ async fn responses_allowed() {
     driver::run("codex-responses", "allowed", None).await;
 }
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn responses_bundled_catalog_allowed_tool_effect() {
+    driver::run("codex-responses", "bundled-allowed", None).await;
+}
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn responses_bundled_catalog_text_completed_followup() {
+    driver::run("codex-responses", "lifecycle-bundled-text-followup", None).await;
+}
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn responses_revoke_model() {
     driver::run("codex-responses", "revoke-model", None).await;
 }
@@ -279,4 +287,14 @@ async fn responses_search_stalled_admission_timeout() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn messages_search_stalled_admission_timeout() {
     driver::run("claude-api-key", "search-stalled-admission", None).await;
+}
+
+// Completed conversation follow-up is distinct from interrupted recovery.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn responses_lifecycle_completed_followup() {
+    driver::run("codex-responses", "lifecycle-completed-followup", None).await;
+}
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn messages_lifecycle_completed_followup() {
+    driver::run("claude-api-key", "lifecycle-completed-followup", None).await;
 }

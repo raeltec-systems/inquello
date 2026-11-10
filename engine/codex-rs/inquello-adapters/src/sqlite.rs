@@ -9,6 +9,7 @@
 use crate::error::OpenError;
 use sqlx::ConnectOptions;
 use sqlx::Connection;
+use sqlx::SqliteConnection;
 use sqlx::SqlitePool;
 use sqlx::migrate::Migrator;
 use sqlx::sqlite::SqliteConnectOptions;
@@ -80,6 +81,19 @@ pub(crate) async fn open_pool(path: &Path) -> Result<SqlitePool, OpenError> {
         return Err(error.into());
     }
     Ok(pool)
+}
+
+/// Opens an existing, already version-checked working store for a saved-read
+/// fence. Keep every SQLite connection entry point inside this audited shim.
+pub(crate) async fn open_read_only_connection(
+    path: &Path,
+) -> Result<SqliteConnection, sqlx::Error> {
+    SqliteConnectOptions::new()
+        .filename(path)
+        .create_if_missing(false)
+        .read_only(true)
+        .connect()
+        .await
 }
 
 #[cfg(test)]

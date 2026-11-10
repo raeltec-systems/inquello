@@ -27,6 +27,7 @@ export interface IdentityBridge {
   getStatus(): Promise<unknown>;
   signIn(): Promise<unknown>;
   signOut(): Promise<unknown>;
+  reauthenticate?(): Promise<unknown>;
 }
 
 /** The identity operations, or null outside the desktop (for example in tests). */
@@ -248,7 +249,12 @@ export interface ProviderActionView {
 }
 
 export interface ProviderBridge {
+  consent?(input:{workspaceId:string}):Promise<unknown>;
+  changeConsent?(input:{workspaceId:string;expectedRevision:string;contractVersion:number;contractDigest:string;action:'allow'|'revoke'}):Promise<unknown>;
+  reconcileConsent?(input:{workspaceId:string}):Promise<unknown>;
+  retryConsent?(input:{workspaceId:string}):Promise<unknown>;
   getStatus(): Promise<unknown>;
+  refreshStatus?():Promise<unknown>;
   setClaudeKey(key: string): Promise<unknown>;
   verifyClaudeKey(): Promise<unknown>;
   removeClaudeKey(): Promise<unknown>;

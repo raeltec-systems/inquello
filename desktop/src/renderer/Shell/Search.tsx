@@ -4,13 +4,13 @@ import {Button,TextField} from '../primitives';
 import {searchView,reopenView,type SearchView,type SearchItem,type ReopenView} from '../../main/organise/navigation';
 import {organiseBridge,parseOutcome,parseTree,type EngagementItem} from './organise-bridge';
 import {taskValue,tasksBridge} from './tasks-bridge';
-export function SavedWorkDialog({label,onClose,children}:{label:string;onClose:()=>void;children:React.ReactNode}):ReactElement {
+export function SavedWorkDialog({label,onClose,children,open=true}:{label:string;onClose:()=>void;children:React.ReactNode;open?:boolean}):ReactElement {
  const ref=useRef<HTMLDialogElement>(null),opener=useRef(document.activeElement as HTMLElement|null),composing=useRef(false);
  useEffect(()=>{
-  const dialog=ref.current!;dialog.showModal();dialog.querySelector<HTMLElement>('input,button')?.focus();
+  const dialog=ref.current!;if(!open)return;opener.current=document.activeElement as HTMLElement|null;dialog.showModal();dialog.querySelector<HTMLElement>('input,button')?.focus();
   return()=>{dialog.close();if(opener.current?.isConnected)opener.current.focus();};
- },[]);
- return <dialog ref={ref} aria-label={label} aria-modal="true" className="iq-saved-dialog"
+ },[open]);
+ return <dialog ref={ref} hidden={!open} aria-label={label} aria-modal="true" className="iq-saved-dialog"
   onCompositionStart={()=>{composing.current=true;}} onCompositionEnd={()=>{composing.current=false;}}
   onCancel={e=>{e.preventDefault();if(!composing.current)onClose();}}
   onKeyDown={e=>{
@@ -18,7 +18,7 @@ export function SavedWorkDialog({label,onClose,children}:{label:string;onClose:(
    // document shortcuts navigate behind it, including during IME composition.
    e.stopPropagation();
    if(e.key==='Escape'&&!e.nativeEvent.isComposing&&!composing.current){e.preventDefault();onClose();}
-   if(e.key==='Tab'){const list=[...(ref.current?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),a[href],[tabindex="0"]')??[])];const first=list[0],last=list.at(-1);if(first&&last){if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}}
+   if(e.key==='Tab'){const list=[...(ref.current?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),a[href],[tabindex="0"]')??[])];const first=list[0],last=list.at(-1);if(first&&last){if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}}
   }}><h2>{label}</h2>{children}<Button onPress={onClose}>{`Close ${label}`}</Button></dialog>;
 }
 /** UTF-8 bytes, not JavaScript characters; retain invalid input for correction. */

@@ -328,6 +328,72 @@ fn a_prompt_under_a_mode_that_never_asks_is_refused() {
     assert!(evaluation.cannot_ask);
 }
 
+/// Security fix 2026-11-05: a program that could not be resolved is never
+/// allowed, neither by an allow rule nor by the asking behaviour; stricter
+/// rules still decide, and a prompt under a mode that never asks is refused.
+#[test]
+fn an_unresolved_program_is_never_allowed() {
+    let unresolved = |policy: &EffectivePolicy, command: &[&str], status| {
+        let rules = effective_rules(policy, &[], Revision::new(3));
+        let command = words(command);
+        let matched = literal_matches(&command, &rules);
+        evaluate_resolved_command(
+            &command,
+            &rules,
+            &matched,
+            policy,
+            status,
+            ProgramResolution::Unresolved,
+        )
+    };
+    let policy = effective(json!({
+        "approvals": ["on_request", "never"],
+        "allow_no_prompt": true,
+        "command_rules": [
+            { "prefix": ["./ls"], "decision": "allow" },
+            { "prefix": ["./rm"], "decision": "forbid" },
+        ],
+    }));
+    let literal_allow = unresolved(&policy, &["./ls"], BroadModeStatus::Standard);
+    assert_eq!(literal_allow.decision, RuleDecision::Prompt);
+    assert_eq!(literal_allow.controlling_rule, None);
+    assert_eq!(
+        literal_allow.source,
+        RuleSource::ApprovalBehaviour {
+            behaviour: ApprovalBehaviour::OnRequest
+        }
+    );
+    assert!(literal_allow.analysis.starts_with(
+        "`./ls` could not be resolved to one executable on this device, so no allow applies."
+    ));
+    let no_rule = unresolved(&policy, &["./other"], BroadModeStatus::Standard);
+    assert_eq!(no_rule.decision, RuleDecision::Prompt);
+    let forbidden = unresolved(&policy, &["./rm", "x"], BroadModeStatus::Standard);
+    assert_eq!(forbidden.decision, RuleDecision::Forbid);
+    assert_eq!(
+        forbidden.controlling_rule,
+        Some(rule(&["./rm"], RuleDecision::Forbid))
+    );
+    let never = unresolved(
+        &policy,
+        &["./ls"],
+        BroadModeStatus::Active(BroadMode::NoPrompt),
+    );
+    assert_eq!(never.decision, RuleDecision::Forbid);
+    assert!(never.cannot_ask);
+    // The same allow applies once the program resolved.
+    let rules = effective_rules(&policy, &[], Revision::new(3));
+    let command = words(&["./ls"]);
+    let resolved = evaluate_command(
+        &command,
+        &rules,
+        &literal_matches(&command, &rules),
+        &policy,
+        BroadModeStatus::Standard,
+    );
+    assert_eq!(resolved.decision, RuleDecision::Allow);
+}
+
 #[test]
 fn analysis_names_listed_and_unlisted_hosts() {
     let policy = effective(json!({ "network": "allowed", "allowed_domains": ["api.example.com"] }));

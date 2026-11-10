@@ -219,16 +219,19 @@ async fn inspect_native_data_with_evidence(
                 continue;
             };
             let identity = inquello_domain::routes::RouteEvidenceIdentity {
+                schema_version: inquello_domain::routes::ROUTE_EVIDENCE_SCHEMA_VERSION,
                 route_id: configuration.route_id().as_str().into(),
                 deployment: configuration.deployment().into(),
                 endpoint: configuration.endpoint().into(),
                 model: configuration.model().into(),
                 api_version: configuration.api_version().into(),
-                configuration_digest: inquello_domain::routes::configuration_digest(&configuration),
+                adapter_configuration_digest: inquello_domain::routes::adapter_configuration_digest(
+                    &configuration,
+                ),
                 implementation_digest: env!("INQUELLO_BEHAVIOR_DIGEST").into(),
                 runtime_version: env!("CARGO_PKG_VERSION").into(),
                 contract_version: format!(
-                    "inquello-v{}-authorization-v1",
+                    "inquello-v{}-authorization-v2",
                     inquello_protocol::PROTOCOL_MAJOR
                 ),
                 platform: env!("INQUELLO_BUILD_PLATFORM").into(),

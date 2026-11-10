@@ -130,13 +130,25 @@ pub(crate) enum OutgoingEnvelope {
     },
 }
 
+pub(crate) type PrivateFenceFuture<'a> = std::pin::Pin<
+    Box<
+        dyn std::future::Future<Output = Option<codex_app_server_transport::PrivateOutputFence>>
+            + Send
+            + 'a,
+    >,
+>;
+
 /// Sends messages to the client and manages request callbacks.
 pub(crate) trait PrivateThreadAuthority: Send + Sync {
-    fn capture_fence(
-        &self,
-        _connection: ConnectionId,
-    ) -> Option<codex_app_server_transport::PrivateOutputFence> {
-        None
+    fn capture_thread_fence<'a>(
+        &'a self,
+        connection: ConnectionId,
+        _thread: ThreadId,
+    ) -> PrivateFenceFuture<'a> {
+        self.capture_fence(connection)
+    }
+    fn capture_fence<'a>(&'a self, _connection: ConnectionId) -> PrivateFenceFuture<'a> {
+        Box::pin(async { None })
     }
     fn authorize_recipient<'a>(
         &'a self,
@@ -313,7 +325,7 @@ impl OutgoingMessageSender {
         let authority: Arc<dyn PrivateThreadAuthority> = processor.clone();
         let _ = self.private_authority.set(Arc::downgrade(&authority));
     }
-    pub(crate) fn capture_private_fence(
+    pub(crate) async fn capture_private_fence(
         &self,
         connection: ConnectionId,
     ) -> Option<codex_app_server_transport::PrivateOutputFence> {
@@ -321,6 +333,7 @@ impl OutgoingMessageSender {
             .get()?
             .upgrade()?
             .capture_fence(connection)
+            .await
     }
     pub(crate) async fn fence_request(
         &self,
@@ -336,7 +349,14 @@ impl OutgoingMessageSender {
         connection: ConnectionId,
         thread: ThreadId,
     ) -> Option<Option<codex_app_server_transport::PrivateOutputFence>> {
-        let fence = self.capture_private_fence(connection);
+        let fence = match self
+            .private_authority
+            .get()
+            .and_then(std::sync::Weak::upgrade)
+        {
+            Some(authority) => authority.capture_thread_fence(connection, thread).await,
+            None => None,
+        };
         if !self.authorize_thread_recipient(connection, thread).await
             || fence.as_ref().is_some_and(|f| !f.is_current())
         {
@@ -1891,13 +1911,12 @@ mod private_fence_capture_tests {
         revoke_during_check: bool,
     }
     impl PrivateThreadAuthority for Authority {
-        fn capture_fence(
-            &self,
-            _: ConnectionId,
-        ) -> Option<codex_app_server_transport::PrivateOutputFence> {
-            Some(codex_app_server_transport::PrivateOutputFence::new(
-                self.token.clone(),
-            ))
+        fn capture_fence<'a>(&'a self, _: ConnectionId) -> PrivateFenceFuture<'a> {
+            Box::pin(async {
+                Some(codex_app_server_transport::PrivateOutputFence::new(
+                    self.token.clone(),
+                ))
+            })
         }
         fn authorize_recipient<'a>(
             &'a self,
