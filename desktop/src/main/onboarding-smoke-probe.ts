@@ -25,9 +25,9 @@ const indicated=f=>f.focusVisible&&((!f.outline.startsWith('none')&&!/ 0px /.tes
 const inside=(e,w,h)=>{const r=e.getBoundingClientRect();return r.left>=-0.5&&r.right<=w+0.5&&(h===undefined||(r.top>=-0.5&&r.bottom<=h+0.5));};
 `;
 const SECOND_INVITEE='tamara.phiri@mupeta.invalid';
-const UNCERTAIN='The outcome is not confirmed. Reconcile before retrying; do not create a replacement request.';
+const UNCERTAIN='We couldn’t confirm whether your last change went through. Check its status below before trying again.';
 const UNREACHABLE='The service could not be reached. Your draft is preserved.';
-const RESOLVE_FIRST='Resolve the pending request before another change.';
+const RESOLVE_FIRST='Finish checking your last change first.';
 const delay=(ms:number)=>new Promise(resolve=>setTimeout(resolve,ms));
 const digest=(value:string)=>createHash('sha256').update(value).digest('hex');
 export async function probeOnboarding(contents:WebContents,options:{fixture:Fixture;identity:IdentityWiring;minimum:Size;resize:(width:number,height:number)=>void;restore:()=>Size}) {
@@ -143,15 +143,16 @@ export async function probeOnboarding(contents:WebContents,options:{fixture:Fixt
   // Main-owned test fault: the next POST is applied, its reply lost, then the service is unreachable for this launch.
   options.fixture.loseReplyThenOutage();
   await run(`if(field('Recipient email').value!==${JSON.stringify(SECOND_INVITEE)})throw Error('Second invitation draft lost');await click('Review invitation details');await confirm('Create invitation');`);
-  await run(`await wait(()=>document.getElementById('pending-heading')?.textContent==='Finish an interrupted request'&&root().textContent.includes(${JSON.stringify(UNCERTAIN)})&&button('Reconcile request'));
-   const panel=document.getElementById('pending-heading').closest('section');if(!panel.textContent.includes('Pending action: invite'))throw Error('Pending panel does not name the action');
-   if(!unavailableFor(button('Review Workspace creation'),${JSON.stringify(RESOLVE_FIRST)}))throw Error('Other changes not disabled with the resolve-first reason');
+  await run(`await wait(()=>document.getElementById('pending-heading')?.textContent==='Your last change needs checking'&&root().textContent.includes(${JSON.stringify(UNCERTAIN)})&&button('Check status'));
+   const panel=document.getElementById('pending-heading').closest('section');if(!panel.textContent.includes('Waiting to confirm: your invitation'))throw Error('Pending panel does not name the action');
+   // The panel appears while the failed request is still settling, when the control briefly shows the busy reason; wait for the settled reason.
+   await wait(()=>unavailableFor(button('Review Workspace creation'),${JSON.stringify(RESOLVE_FIRST)})).catch(()=>{throw Error('Other changes not disabled with the resolve-first reason');});
    const notice=[...root().querySelectorAll('.iq-onboarding-notice')].find(e=>e.textContent===${JSON.stringify(UNCERTAIN)});notice.scrollIntoView({block:'start'});
    if(panel.getBoundingClientRect().bottom>innerHeight)panel.scrollIntoView({block:'end'});`);
   await capture('11-interrupted-request');
-  await run(`await click('Reconcile request');await wait(()=>{const b=button('Reconcile request');return b&&b.getAttribute('aria-busy')!=='true'&&root().querySelector(':scope > .iq-onboarding-notice')?.textContent===${JSON.stringify(UNREACHABLE)};});
+  await run(`await click('Check status');await wait(()=>{const b=button('Check status');return b&&b.getAttribute('aria-busy')!=='true'&&root().querySelector(':scope > .iq-onboarding-notice')?.textContent===${JSON.stringify(UNREACHABLE)};});
    if(!document.getElementById('pending-heading'))throw Error('Pending panel vanished without confirmation');
-   if(root().textContent.includes('The original request was applied'))throw Error('Unconfirmed request reported as applied');`);
+   if(root().textContent.includes('Your change went through'))throw Error('Unconfirmed request reported as applied');`);
   checks.push('interrupted-request-visible');
  };
  const relaunch=async()=>{
@@ -160,7 +161,7 @@ export async function probeOnboarding(contents:WebContents,options:{fixture:Fixt
   await run("await wait(()=>root()&&root().textContent.includes('Chanda Mwansa · Synthetic test issuer'));");
   const owner=options.identity.session.principalId();if(!owner||digest(owner)!==first.ownerDigest)throw Error('Owner not identified after relaunch');
   await run(`await wait(()=>member('Chanda Mwansa')&&[...root().querySelectorAll('[data-managed-invitation]')].some(e=>e.textContent.includes(${JSON.stringify(SECOND_INVITEE)}))&&button('Review Workspace creation')&&button('Review Workspace creation').getAttribute('aria-disabled')!=='true');
-   if(document.getElementById('pending-heading')||button('Reconcile request'))throw Error('Pending request not reconciled');
+   if(document.getElementById('pending-heading')||button('Check status'))throw Error('Pending request not reconciled');
    if([...root().querySelectorAll('[data-managed-invitation]')].filter(e=>e.textContent.includes(${JSON.stringify(SECOND_INVITEE)})).length!==1)throw Error('Interrupted invitation not exactly once');
    if(button('Review invitation details')?.getAttribute('aria-disabled')==='true')throw Error('Changes still disabled');
    [...root().querySelectorAll('[data-managed-invitation]')].find(e=>e.textContent.includes(${JSON.stringify(SECOND_INVITEE)})).scrollIntoView({block:'center'});`);

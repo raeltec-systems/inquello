@@ -13,13 +13,13 @@ export const ONBOARDING_REASONS = {
   verification:'A recent sign-in with a verified email is required. Sign in again. If this persists, check email verification with your identity provider.',
   invitation:'This invitation is unavailable. Sign in again with the intended account for a recent verified identity. If it remains unavailable, check provider email verification or ask the owner for a current invitation.',
   denied:'This membership change is unavailable. Refresh the team and check your current role. Sign in again if a recent verified identity is required; check provider email verification only if the problem persists.',
-  conflict:'The team changed before this request. Reconcile, discard the unapplied request, and review the current team before confirming again.',
-  uncertain:'The outcome is not confirmed. Reconcile before retrying; do not create a replacement request.',
-  pending:'Finish or reconcile the existing request before starting another.',
+  conflict:'The team changed before this went through. Check its status, discard it if it wasn’t applied, then review the current team before trying again.',
+  uncertain:'We couldn’t confirm whether your last change went through. Check its status below before trying again.',
+  pending:'Finish checking your last change before starting another.',
   changed:'The signed-in identity changed. Return to onboarding with the intended account.',
   unavailable:'The service could not be reached. Your draft is preserved.',
-  noPending:'There is no pending onboarding request.',
-  discard:'This request may still complete. Only a definitively rejected request with no earlier uncertain attempt can be discarded. Reconcile or retry the same request.',
+  noPending:'There is no change waiting to be checked.',
+  discard:'This change may still go through, so it can’t be discarded yet. Check its status or send it again.',
 } as const;
 const fail=<T>(reason:string):Result<T>=>({ok:false,reason});
 interface Identity {principalId():string|null;generation():number;withAccess<T>(request:(access:string)=>Promise<T>):Promise<T|null>}

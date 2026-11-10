@@ -192,3 +192,13 @@
   evidence: Capture `11-interrupted-request` (2026-11-10). The panel reads "Pending action: invite. Keep its original operation identity. A missing receipt does not authorize creating a replacement." with buttons "Reconcile request", "Review same-request retry" and "Discard rejected request"; "Resolve the pending request before another change." appears twice beside one control; the panel does not say the service is unreachable or that waiting will resolve it; "Invitations for you" shows no status when it cannot load; the confirmation dialog title is styled like body text. Behaviour is correct. Since the single-pending behaviour is kept for the pilot (owner decision 2026-11-10), this is what a pilot user meets after a dropped connection. Copy-only change in `desktop/src/renderer/Onboarding.tsx` plus the journey's text assertions.
 
 ---
+- source_spec: spec-1-31-onboarding-journey-coverage.md
+  summary: Resolved 2026-11-10 — the interrupted-request panel was reworded in plain language with the owner's approval; layout and design polish remain deferred.
+  evidence: Copy-only change in `desktop/src/renderer/Onboarding.tsx` and the reason strings in `desktop/src/main/onboarding/service.ts`; tests and the journey's text checks updated. Not changed, by owner decision to do design polish later: the held reason showing twice beside one control, the dialog title styling, "Invitations for you" showing no status when it cannot load, and wider design matters the owner noted across the product.
+
+---
+- source_spec: spec-1-31-onboarding-journey-coverage.md
+  summary: The onboarding journey failed seven times in a row over about eight minutes on 2026-11-10, then passed fifteen times in a row; cause not established.
+  evidence: Between about 07:51 and 07:59 UTC every launch failed within seconds at its first screenshot ("Failure capture unavailable"), starting with a relaunch and then at `first-run` on fresh profiles (`.tmp/epic1-offline-pass-20261109/reword2-onboarding-{1..6}.log`, `reword3-onboarding.log`). The `--visual-only` phase, which also captures pixels, passed at 08:00. From 08:02 the same build passed 1 + 5 runs with a temporary error print in the built probe and 4 unmodified runs. The desktop session was Active throughout. Diagnosis was slowed because the probe records only the failing stage, never the error. Separately, one earlier failure was a real race in the probe (it checked the held-control reason once while the failed request was still settling); that is fixed by waiting for the settled reason. Next step: let the probe record a short, fixed-vocabulary error cause, and capture window and display state on a capture failure.
+
+---

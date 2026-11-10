@@ -63,10 +63,10 @@ describe('ordinary onboarding controls',()=>{
  it('keeps an ambiguous pending request visible and never permits discard',async()=>{
   const w=world({...initial,pending:{kind:'createWorkspace',input:{name:'Alder'},operationId:I,state:'retryable',canDiscard:false},discoveryReason:'A recent sign-in with a verified email is required. Sign in again. If this persists, check email verification with your identity provider.'});
   render(<Onboarding onBack={()=>{}}/>);await ready();
-  expect(screen.getByRole('button',{name:'Discard rejected request'}).getAttribute('aria-disabled')).toBe('true');
-  await userEvent.click(screen.getByRole('button',{name:'Discard rejected request'}));expect(w.api.discardPending).not.toHaveBeenCalled();
-  await userEvent.click(screen.getByRole('button',{name:'Review same-request retry'}));expect(w.api.retry).not.toHaveBeenCalled();
-  await userEvent.click(within(screen.getByRole('dialog')).getByRole('button',{name:'Retry same request'}));await waitFor(()=>expect(w.api.retry).toHaveBeenCalledOnce());
+  expect(screen.getByRole('button',{name:'Discard this change'}).getAttribute('aria-disabled')).toBe('true');
+  await userEvent.click(screen.getByRole('button',{name:'Discard this change'}));expect(w.api.discardPending).not.toHaveBeenCalled();
+  await userEvent.click(screen.getByRole('button',{name:'Send it again'}));expect(w.api.retry).not.toHaveBeenCalled();
+  await userEvent.click(within(screen.getByRole('dialog')).getByRole('button',{name:'Send again'}));await waitFor(()=>expect(w.api.retry).toHaveBeenCalledOnce());
  });
  it('requires confirmation for explicit reauthentication, without exposing passwords',async()=>{
   const w=world();render(<Onboarding onBack={()=>{}}/>);await ready();
@@ -181,7 +181,7 @@ it('offers recent-sign-in recovery without asserting the signed-in email is unve
  await userEvent.click(screen.getByRole('button',{name:'Sign in again'}));
  expect(screen.getByText(/Your browser may reuse its current account/)).toBeTruthy();expect(w.identity.reauthenticate).not.toHaveBeenCalled();
  await userEvent.click(within(screen.getByRole('dialog')).getByRole('button',{name:'Sign out and sign in again'}));
- await waitFor(()=>expect(w.identity.reauthenticate).toHaveBeenCalledOnce());await screen.findByText(/Pending action: createWorkspace/);
+ await waitFor(()=>expect(w.identity.reauthenticate).toHaveBeenCalledOnce());await screen.findByText(/Waiting to confirm: your new Workspace/);
  expect(w.api.createWorkspace).not.toHaveBeenCalled();expect(w.api.retry).not.toHaveBeenCalled();expect(w.api.discardPending).not.toHaveBeenCalled();
 });
 
