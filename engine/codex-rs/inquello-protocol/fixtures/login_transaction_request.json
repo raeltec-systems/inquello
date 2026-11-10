@@ -1,0 +1,6 @@
+{
+  "issuer": "https://test-issuer.inquello.invalid",
+  "client_id": "inquello-desktop-fixture",
+  "redirect_uri": "http://127.0.0.1:53682/callback",
+  "device_id": "6f1c2b9e-3d4a-4e5f-8a7b-1c2d3e4f5a6b"
+}

@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "status": "pinned-build-recipe",
+  "distribution": "Inquello-Engine",
+  "architecture": "amd64",
+  "image": {
+    "filename": "ubuntu-base-24.04.5-base-amd64.tar.gz",
+    "url": "https://cdimage.ubuntu.com/ubuntu-base/releases/noble/release/ubuntu-base-24.04.5-base-amd64.tar.gz",
+    "sha256": "e77b6f10c2590cef872b33ee9f635a0e3fd1f57fb074c0e52b5c7f56147a0c86",
+    "checksumUrl": "https://cdimage.ubuntu.com/ubuntu-base/releases/noble/release/SHA256SUMS",
+    "signatureUrl": "https://cdimage.ubuntu.com/ubuntu-base/releases/noble/release/SHA256SUMS.gpg",
+    "signatureVerified": true,
+    "verifiedSignerFingerprint": "843938DF228D22F7B3742BC0D94AA3F0EFE21092"
+  },
+  "diskMaximumBytes": 137438953472,
+  "swapBytes": 4294967296,
+  "minimumHostFreeBytes": 34359738368,
+  "packages": ["build-essential", "pkg-config", "libssl-dev", "libcap-dev", "clang", "cmake", "git", "curl", "ca-certificates", "python3", "tar", "gzip", "xz-utils"],
+  "resolvedPackageVersions": {
+    "file": "verified-packages.tsv",
+    "sha256": "1207db3de366cab3e3875f8f90ee1682de3c73cf6f131218bca24c35ce7060d4"
+  },
+  "preparedImage": {
+    "sha256": "bd324216dd0a9e5eacede9b98bd56983e5a21151d444dc2c324b0ac9c9df434c",
+    "bytes": 84152320,
+    "includesGuestInit": true
+  },
+  "rustToolchain": "1.99.1",
+  "cargoLocked": true,
+  "cargoIncremental": false,
+  "cargoJobs": 4,
+  "cargoProfileDevDebug": 0,
+  "cargoLockSha256": "b15e55dd0255426f62640a57904d39c53d1beb9e62a7b985581c8e47bcc0930f",
+  "sourceRecipe": "freeze-source.py records tracked and untracked measured working-tree files; stage-source.py verifies its SHA-256 before extraction into a new digest-addressed guest source directory",
+  "buildReceipt": "D:/Inquello/runtime/build-receipt.json",
+  "storageProof": "D:/Inquello/runtime/storage-proof.json",
+  "verificationLogs": "D:/Inquello/logs/"
+}

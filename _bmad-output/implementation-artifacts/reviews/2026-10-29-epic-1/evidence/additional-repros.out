@@ -1,0 +1,3 @@
+{"case":"pending sign-in after sign-out/local discard","signOutOk":true,"finalIdentity":"signed-in","credentialsRecreated":true}
+{"case":"refresh persistence failure","refreshed":true,"storageReported":"os-backed","staleRefreshOnDisk":true,"serverHasRotated":true}
+{"case":"legal short-write injection","reportedSize":24,"actualSize":12}

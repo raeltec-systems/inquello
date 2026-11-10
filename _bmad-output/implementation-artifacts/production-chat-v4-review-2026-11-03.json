@@ -1,0 +1,15 @@
+{
+  "recordedAt": "2026-11-03T03:52:52.330Z",
+  "reportPath": "_bmad-output/implementation-artifacts/production-chat-v4-verification-2026-11-03.json",
+  "reportSha256": "46efd06bff3a3b36f96b74337d8e4e30166e2cbc4b822b321bd224df18ddfdfd",
+  "review": "Root coordinator independently audited all50 cases, witnesses, identities, gates, limitations and actual terminal logs; scoped software qualification attachment approved 2026-11-03T03:51:46Z",
+  "changedFields": [
+    "processing.codex-responses.evidence (append only)",
+    "processing.codex-responses.negative_authorization"
+  ],
+  "projectionBeforeSha256": "1160df6344702e4e33638009f9d5ce26c1667029a9862577583c66e056bb4860",
+  "projectionAfterSha256": "1160df6344702e4e33638009f9d5ce26c1667029a9862577583c66e056bb4860",
+  "nonEvidenceProjectionUnchanged": true,
+  "existingSyntheticEvidenceUnchanged": true,
+  "limitations": "No organization approval, paid call, provider credential or actual profile mutation. Report remains immutable; its review-required creation label is preserved."
+}

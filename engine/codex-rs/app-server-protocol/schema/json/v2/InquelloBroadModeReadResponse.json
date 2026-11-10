@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "properties": {
+    "mode": {
+      "description": "`standard` when nothing was ever recorded.",
+      "type": "string"
+    },
+    "revision": {
+      "format": "uint64",
+      "minimum": 0.0,
+      "type": "integer"
+    },
+    "taskId": {
+      "type": "string"
+    },
+    "workspaceId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "mode",
+    "revision",
+    "taskId",
+    "workspaceId"
+  ],
+  "title": "InquelloBroadModeReadResponse",
+  "type": "object"
+}

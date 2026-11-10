@@ -1,0 +1,437 @@
+//! Shared retained-child host fixture. It answers ordinary authority/permission
+//! callbacks; no model response or native effect executes in this parent process.
+use app_test_support::TestAppServer;
+use serde_json::{Value, json};
+use std::time::Duration;
+// Test admission envelope only: retirement 55s + serial native setup 90s
+// + 10s fixture overhead. Not a performance target or a security expiry change.
+pub(super) const PRIVATE_ADMISSION_BUDGET: Duration = Duration::from_secs(155);
+const PRIVATE_RPC_BUDGET: Duration = Duration::from_secs(45);
+
+fn private_rpc_budget(method: &str) -> Duration {
+    if matches!(method, "inquello/tasks/start" | "inquello/tasks/resume") {
+        PRIVATE_ADMISSION_BUDGET
+    } else {
+        PRIVATE_RPC_BUDGET
+    }
+}
+
+pub(super) type AuthorityCallback = std::sync::Arc<
+    dyn Fn(Value) -> std::pin::Pin<Box<dyn std::future::Future<Output = Value> + Send>>
+        + Send
+        + Sync,
+>;
+pub(super) type RevokeCallback = std::sync::Arc<
+    dyn Fn() -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send>> + Send + Sync,
+>;
+pub(super) struct PrivateTaskHost {
+    pub(super) authority_context: Value,
+    pub(super) authority_callback: Option<AuthorityCallback>,
+    pub(super) revoke_callback: Option<RevokeCallback>,
+    pub(super) authority_available: bool,
+    pub(super) workspace_id: String,
+    pub(super) answered_questions: usize,
+    pub(super) allow_once: bool,
+    pub(super) lifecycle: Option<&'static str>,
+    pub(super) policy: Value,
+    pub(super) notifications: Vec<Value>,
+    pub(super) denied_commands: Vec<Vec<String>>,
+    pub(super) bound_thread: Option<String>,
+    pub(super) pending: std::collections::HashMap<i64, Value>,
+}
+pub(super) async fn private_rpc(
+    server: &mut TestAppServer,
+    host: &mut PrivateTaskHost,
+    method: &str,
+    params: Value,
+) -> Value {
+    let id = server
+        .send_request(method, Some(params))
+        .await
+        .expect("send private operation");
+    if method == "inquello/tasks/steer" && host.authority_context["holdSteerAuthority"] == true {
+        host.authority_context["heldSteerRpcId"] = json!(id);
+    }
+    private_response_with_budget(server, host, id, private_rpc_budget(method)).await
+}
+
+async fn current_authority_response(host: &PrivateTaskHost, mut params: Value) -> Value {
+    if !host.authority_available || params["workspaceId"] != host.workspace_id {
+        json!({"workspacePolicy":null})
+    } else if let Some(callback) = host.authority_callback.clone() {
+        params["fixtureContext"] = host.authority_context.clone();
+        callback(params).await
+    } else {
+        json!({"workspacePolicy":host.policy})
+    }
+}
+
+async fn release_steer_authority(
+    server: &mut TestAppServer,
+    host: &mut PrivateTaskHost,
+    response_id: i64,
+) {
+    if host.authority_context["heldSteerRpcId"].as_i64() != Some(response_id) {
+        return;
+    }
+    host.authority_context["holdSteerAuthority"] = json!(false);
+    host.authority_context["heldSteerRpcId"] = Value::Null;
+    let held = host
+        .authority_context
+        .as_object_mut()
+        .unwrap()
+        .remove("heldAuthorityRequests")
+        .unwrap_or_else(|| json!([]));
+    for request in held.as_array().expect("held authority requests") {
+        let id: codex_app_server_protocol::RequestId =
+            serde_json::from_value(request["id"].clone()).unwrap();
+        let response = current_authority_response(host, request["params"].clone()).await;
+        server
+            .send_response(id, response)
+            .await
+            .expect("release current authority after admission settles");
+    }
+}
+
+pub(super) async fn private_response(
+    server: &mut TestAppServer,
+    host: &mut PrivateTaskHost,
+    id: i64,
+) -> Value {
+    private_response_with_budget(server, host, id, PRIVATE_RPC_BUDGET).await
+}
+
+async fn private_response_with_budget(
+    server: &mut TestAppServer,
+    host: &mut PrivateTaskHost,
+    id: i64,
+    budget: Duration,
+) -> Value {
+    use codex_app_server_protocol::{JSONRPCMessage, RequestId};
+    if let Some(response) = host.pending.remove(&id) {
+        return response;
+    }
+    let deadline = tokio::time::Instant::now() + budget;
+    loop {
+        if let Some(response) = host.pending.remove(&id) {
+            return response;
+        }
+        let message = tokio::time::timeout_at(deadline, server.read_next_message())
+            .await
+            .expect("private RPC deadline")
+            .expect("native message");
+        match message {
+            JSONRPCMessage::Response(response) if response.id == RequestId::Integer(id) => {
+                release_steer_authority(server, host, id).await;
+                return response.result;
+            }
+            JSONRPCMessage::Error(error) if error.id == RequestId::Integer(id) => {
+                release_steer_authority(server, host, id).await;
+                return json!({"rpcError":error.error});
+            }
+            JSONRPCMessage::Response(response) => {
+                let RequestId::Integer(other) = response.id else {
+                    panic!("unexpected string response identity")
+                };
+                release_steer_authority(server, host, other).await;
+                host.pending.insert(other, response.result);
+            }
+            JSONRPCMessage::Error(error) => {
+                let RequestId::Integer(other) = error.id else {
+                    panic!("unexpected string error identity")
+                };
+                release_steer_authority(server, host, other).await;
+                host.pending.insert(other, json!({"rpcError":error.error}));
+            }
+            JSONRPCMessage::Request(request) => match request.method.as_str() {
+                "inquello/context/authorize" => {
+                    let params = request.params.unwrap_or_default();
+                    host.authority_context["inventoryCalls"] = json!(
+                        host.authority_context["inventoryCalls"]
+                            .as_u64()
+                            .unwrap_or(0)
+                            + 1
+                    );
+                    if params["expectedSnapshot"].is_string() {
+                        host.authority_context["inventoryFinalCalls"] = json!(
+                            host.authority_context["inventoryFinalCalls"]
+                                .as_u64()
+                                .unwrap_or(0)
+                                + 1
+                        );
+                        if let Some(mutation) = host
+                            .authority_context
+                            .as_object_mut()
+                            .unwrap()
+                            .remove("inventoryFinalMutation")
+                        {
+                            // Isolated parent fixture seam at the ACTUAL native final
+                            // callback await. No production grant or native bypass.
+                            use sqlx::Connection;
+                            let mut db = sqlx::SqliteConnection::connect_with(
+                                &sqlx::sqlite::SqliteConnectOptions::new()
+                                    .filename(mutation["database"].as_str().unwrap())
+                                    .busy_timeout(Duration::from_secs(2)),
+                            )
+                            .await
+                            .unwrap();
+                            let sql = mutation["sql"].as_str().unwrap();
+                            let mut query = sqlx::query(sqlx::AssertSqlSafe(sql.to_owned()));
+                            for argument in mutation["arguments"].as_array().unwrap() {
+                                query = query.bind(argument.as_str().unwrap());
+                            }
+                            assert_eq!(
+                                query.execute(&mut db).await.unwrap().rows_affected(),
+                                1,
+                                "final callback must mutate one actual contributor"
+                            );
+                            db.close().await.unwrap();
+                            host.authority_context["finalMutationExecuted"] = json!(true);
+                        }
+                    }
+                    let snapshot = host.authority_context["inventorySnapshot"]
+                        .as_str()
+                        .unwrap_or("fictional-scope-v1")
+                        .to_owned();
+                    let available = host.authority_available
+                        && params["workspaceId"] == host.workspace_id
+                        && (params["expectedSnapshot"].is_null()
+                            || params["expectedSnapshot"] == snapshot);
+                    server.send_response(request.id,json!({"available":available,"snapshot":if available{Some(snapshot)}else{None},"serviceEngagementIds":[]})).await.expect("fresh fictional context authority");
+                }
+                "inquello/tasks/authority" => {
+                    if request.params.as_ref().expect("authority params")["workspaceId"]
+                        != host.workspace_id
+                    {
+                        server
+                            .send_response(request.id, json!({"workspacePolicy":null}))
+                            .await
+                            .expect("foreign Workspace authority refused");
+                        continue;
+                    }
+                    host.authority_context["policyCalls"] =
+                        json!(host.authority_context["policyCalls"].as_u64().unwrap_or(0) + 1);
+                    if host.authority_context["holdNextAdmission"] == true {
+                        host.authority_context["holdNextAdmission"] = json!(false);
+                        host.authority_context["heldAdmissionId"] =
+                            serde_json::to_value(&request.id).unwrap();
+                        continue; // Actual initial authority callback remains unanswered.
+                    }
+                    if host.lifecycle == Some("lifecycle-stop-inflight-steer")
+                        && host.authority_context["holdSteerAuthority"] == true
+                    {
+                        use sqlx::Connection;
+                        let path = host.authority_context["workingDatabase"]
+                            .as_str()
+                            .expect("isolated writer probe");
+                        let mut db = sqlx::SqliteConnection::connect_with(
+                            &sqlx::sqlite::SqliteConnectOptions::new()
+                                .filename(path)
+                                .busy_timeout(Duration::ZERO),
+                        )
+                        .await
+                        .unwrap();
+                        let writer_held =
+                            match sqlx::query("BEGIN IMMEDIATE").execute(&mut db).await {
+                                Ok(_) => {
+                                    sqlx::query("ROLLBACK").execute(&mut db).await.unwrap();
+                                    false
+                                }
+                                Err(error) => {
+                                    assert!(
+                                        error.as_database_error().is_some_and(|e| matches!(
+                                            e.code().as_deref(),
+                                            Some("5" | "6")
+                                        )),
+                                        "unexpected writer probe failure: {error}"
+                                    );
+                                    true
+                                }
+                            };
+                        db.close().await.unwrap();
+                        if writer_held {
+                            // Running-tool guards share this workspace callback. Hold
+                            // every writer-held callback until the target Steer settles,
+                            // rather than mistaking the first ambient guard for admission.
+                            host.authority_context["heldAuthorityRequest"] =
+                                serde_json::to_value(&request.id).unwrap();
+                            host.authority_context
+                                .as_object_mut()
+                                .unwrap()
+                                .entry("heldAuthorityRequests")
+                                .or_insert_with(|| json!([]))
+                                .as_array_mut()
+                                .unwrap()
+                                .push(json!({"id":request.id,"params":request.params}));
+                            if host.authority_context["concurrentStopId"].is_null() {
+                                let stop = host.authority_context["concurrentStop"].clone();
+                                let stop_id = server
+                                    .send_request("inquello/tasks/stop", Some(stop))
+                                    .await
+                                    .unwrap();
+                                host.authority_context["concurrentStopId"] = json!(stop_id);
+                            }
+                            continue; // Release fresh authority only after Steer settles.
+                        }
+                    }
+                    let response = current_authority_response(host, request.params.unwrap()).await;
+                    server
+                        .send_response(request.id, response)
+                        .await
+                        .expect("fresh host authority");
+                }
+                "item/tool/requestUserInput" => {
+                    let params = request.params.expect("actual scoped question");
+                    let owned = Box::pin(private_rpc(
+                        server,
+                        host,
+                        "inquello/tasks/forThread",
+                        json!({"threadId":params["threadId"]}),
+                    ))
+                    .await;
+                    assert_eq!(owned["turnId"], params["turnId"]);
+                    assert_eq!(owned["workspaceId"], host.workspace_id);
+                    assert_eq!(params["questions"][0]["id"], "audit_scope");
+                    assert_eq!(params["questions"][0]["options"][0]["label"], "Review only");
+                    assert_eq!(params["questions"][0]["isSecret"], false);
+                    host.answered_questions += 1;
+                    server
+                        .send_response(
+                            request.id,
+                            json!({"answers":{"audit_scope":{"answers":["Review only"]}}}),
+                        )
+                        .await
+                        .expect("exact question response, not tool permission");
+                }
+                "execCommandApproval" => {
+                    let params = request.params.expect("approval params");
+                    if host.lifecycle == Some("interrupt-between-attempts") {
+                        let started = host
+                            .notifications
+                            .iter()
+                            .find(|n| n["method"] == "turn/started")
+                            .expect("actual started turn");
+                        let interrupt = json!({"threadId":params["conversationId"],"turnId":started["params"]["turn"]["id"]});
+                        assert!(
+                            interrupt["turnId"].as_str().is_some(),
+                            "interrupt the actual bound turn"
+                        );
+                        let response =
+                            Box::pin(private_rpc(server, host, "turn/interrupt", interrupt)).await;
+                        assert!(
+                            response.get("rpcError").is_none(),
+                            "real retained interrupt: {response}"
+                        );
+                        server
+                            .send_response(request.id, json!({"decision":"denied"}))
+                            .await
+                            .expect("close pending approval");
+                        continue;
+                    }
+                    let thread = params["conversationId"]
+                        .as_str()
+                        .expect("real thread")
+                        .to_owned();
+                    let owned = Box::pin(private_rpc(
+                        server,
+                        host,
+                        "inquello/tasks/forThread",
+                        json!({"threadId":thread}),
+                    ))
+                    .await;
+                    assert_eq!(owned["threadId"], thread);
+                    assert!(owned["taskId"].as_str().is_some());
+                    host.authority_context["taskId"] = owned["taskId"].clone();
+                    host.authority_context["runId"] = owned["runId"].clone();
+                    host.authority_context["threadId"] = owned["threadId"].clone();
+                    host.bound_thread = Some(thread);
+                    let command: Vec<String> = serde_json::from_value(params["command"].clone())
+                        .expect("exact native argv, not split command text");
+                    let permission = uuid::Uuid::new_v4().to_string();
+                    let policy = host.policy.clone();
+                    let recorded=Box::pin(private_rpc(server,host,"inquello/permissions/request",json!({"operationId":uuid::Uuid::new_v4().to_string(),"requestId":permission,
+                        "workspacePolicy":policy,"taskId":owned["taskId"],"command":command,"origin":"runtime","ttlMs":60000}))).await;
+                    assert_eq!(recorded["request"]["origin"], "runtime");
+                    let allow = host.allow_once
+                        && (host.lifecycle != Some("changed-command")
+                            || host.denied_commands.is_empty());
+                    let outcome = if allow { "allowed" } else { "denied" };
+                    let decided=Box::pin(private_rpc(server,host,"inquello/permissions/decide",json!({"operationId":uuid::Uuid::new_v4().to_string(),"requestId":permission,
+                        "expectedRevision":1,"outcome":outcome,"actorKind":"human","actorRef":null}))).await;
+                    assert_eq!(decided["request"]["decision"]["outcome"], outcome);
+                    if host.lifecycle == Some("revoke-pending-permission") {
+                        if let Some(revoke) = host.revoke_callback.clone() {
+                            revoke().await;
+                        } else {
+                            host.authority_available = false;
+                        }
+                        let consumed=Box::pin(private_rpc(server,host,"inquello/tasks/consumePermission",json!({"taskId":owned["taskId"],"requestId":permission,"command":command,"workspacePolicy":policy}))).await;
+                        assert!(
+                            consumed.get("rpcError").is_some(),
+                            "withdrawal defeats already approved permission"
+                        );
+                        host.denied_commands.push(command);
+                        server
+                            .send_response(request.id, json!({"decision":"approved"}))
+                            .await
+                            .expect("late approval is not authority");
+                        continue;
+                    }
+                    if allow {
+                        let consume = json!({"taskId":owned["taskId"],"requestId":permission,"command":command,"workspacePolicy":policy});
+                        let consumed = Box::pin(private_rpc(
+                            server,
+                            host,
+                            "inquello/tasks/consumePermission",
+                            consume.clone(),
+                        ))
+                        .await;
+                        assert_eq!(
+                            consumed["accepted"], true,
+                            "normal native permission consumption"
+                        );
+                        let twice = Box::pin(private_rpc(
+                            server,
+                            host,
+                            "inquello/tasks/consumePermission",
+                            consume,
+                        ))
+                        .await;
+                        assert!(
+                            twice.get("rpcError").is_some(),
+                            "same permission cannot be consumed twice"
+                        );
+                    }
+                    host.denied_commands.push(command);
+                    server
+                        .send_response(
+                            request.id,
+                            json!({"decision":if allow {"approved"}else{"denied"}}),
+                        )
+                        .await
+                        .expect("answer exact native action");
+                }
+                other => panic!("unexpected private runtime request: {other}"),
+            },
+            JSONRPCMessage::Notification(notification) => host
+                .notifications
+                .push(json!({"method":notification.method,"params":notification.params})),
+        }
+    }
+}
+
+#[test]
+fn fixture_rpc_budget_is_limited_to_start_and_resume() {
+    for method in ["inquello/tasks/start", "inquello/tasks/resume"] {
+        assert_eq!(private_rpc_budget(method), PRIVATE_ADMISSION_BUDGET);
+    }
+    for method in [
+        "inquello/tasks/stop",
+        "inquello/tasks/steer",
+        "inquello/tasks/progress",
+        "inquello/tasks/lifecycleReconcile",
+        "inquello/tasks/authority",
+    ] {
+        assert_eq!(private_rpc_budget(method), Duration::from_secs(45));
+    }
+}

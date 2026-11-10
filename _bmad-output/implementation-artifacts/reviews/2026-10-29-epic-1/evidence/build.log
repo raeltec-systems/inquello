@@ -1,0 +1,23 @@
+
+> inquello-desktop@0.0.0 build /workspace/inquello/desktop
+> tsc -p tsconfig.build.json && node scripts/check-data-policy.cjs && vite build
+
+data-policy: 16 categories validated, 0 real-data blocker(s) in the register
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vite.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+vite v8.3.5 building client environment for production...
+transforming...
+✓ 46 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/renderer/index.html                                   0.50 kB │ gzip:  0.30 kB
+dist/renderer/assets/inquello-symbol-N1a45CXO.svg          8.17 kB │ gzip:  2.34 kB
+dist/renderer/assets/inquello-symbol-small-DXDdSzvy.svg    8.17 kB │ gzip:  2.34 kB
+dist/renderer/assets/IBMPlexMono-400-DMJ8VG8y.woff2       14.70 kB
+dist/renderer/assets/IBMPlexMono-500-DSY6xOcd.woff2       14.88 kB
+dist/renderer/assets/IBMPlexSans-400-IvpUvPa2.woff2       45.71 kB
+dist/renderer/assets/index-CtJuoOAJ.css                   28.73 kB │ gzip:  5.69 kB
+dist/renderer/assets/index-DyjBNHw6.js                   319.18 kB │ gzip: 91.22 kB
+
+✓ built in 134ms

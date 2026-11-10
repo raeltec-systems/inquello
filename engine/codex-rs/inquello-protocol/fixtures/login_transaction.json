@@ -1,0 +1,10 @@
+{
+  "login_transaction_id": "0b8e2f4c-1a2b-4c3d-9e8f-7a6b5c4d3e2f",
+  "transaction_proof": "iqp_FIXTURE-not-a-real-proof",
+  "nonce": "n-FIXTURE-nonce",
+  "issuer": "https://test-issuer.inquello.invalid",
+  "client_id": "inquello-desktop-fixture",
+  "redirect_uri": "http://127.0.0.1:53682/callback",
+  "device_id": "6f1c2b9e-3d4a-4e5f-8a7b-1c2d3e4f5a6b",
+  "expires_at": "2026-10-28T12:05:00.000Z"
+}

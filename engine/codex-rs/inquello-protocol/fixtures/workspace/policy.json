@@ -1,0 +1,23 @@
+{
+  "policy_version": 1,
+  "roles": [
+    {
+      "id": "audit_lead",
+      "kind": "audit_team",
+      "label": "Audit lead",
+      "actions": ["read", "comment", "manage_membership"]
+    },
+    {
+      "id": "auditor",
+      "kind": "audit_team",
+      "label": "Auditor",
+      "actions": ["read", "derive", "comment", "share", "export"]
+    },
+    {
+      "id": "reviewer",
+      "kind": "reviewer",
+      "label": "Reviewer",
+      "actions": ["read", "comment", "submit_review", "issue_notes"]
+    }
+  ]
+}

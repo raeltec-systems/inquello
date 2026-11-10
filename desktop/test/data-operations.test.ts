@@ -1,0 +1,830 @@
+import {fixtureDataAuthority} from './authorization-fixtures';
+/**
+ * Story 1.12: export, reimport and delete over temp roots, and the main-side
+ * data service with fake runtime and identity controls. Covers the "Export",
+ * "Round trip" (digest mismatch), "Import into non-empty", "Delete" and
+ * "Delete identity" matrix rows; `data-integration.test.ts` runs the round
+ * trip against a runtime home the real app-server produced.
+ */
+import fs from 'node:fs';
+import path from 'node:path';
+
+import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
+
+import {
+  DataService,
+  deleteCategories,
+  ExportJournal,
+  exportData,
+  exportedFilePath,
+  governedRoots,
+  importData,
+  loadShippedPolicy,
+  MANIFEST_FILE,
+  isInside,
+  readManifest,
+  takeInventory,
+  type DataPolicy,
+  type DataServiceOptions,
+  type ExportManifest,
+  type GovernedRoots,
+} from '../src/main/data';
+import { recordingLogger, removeTempDirs, tempDir } from './helpers';
+
+afterAll(() => removeTempDirs());
+afterEach(() => vi.restoreAllMocks());
+
+const policy: DataPolicy = (() => {
+  const load = loadShippedPolicy();
+  if (!load.ok) throw new Error(load.error);
+  return load.policy;
+})();
+
+const ATTRIBUTION = { principal: { displayName: 'Alice Synthetic', issuerLabel: 'Synthetic test issuer' }, appVersion: '0.0.0-test', runtimeVersion: '0.165.0' };
+const SESSION_SECRET = 'iqa_SESSION_SECRET_never_exported';
+
+function write(root: string, rel: string, content: string | Buffer): string {
+  const file = path.join(root, ...rel.split('/'));
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, content);
+  return file;
+}
+
+/** A device with sessions, logs, state, an identity and a Chromium profile. */
+function device(): { userData: string; roots: GovernedRoots; journal: ExportJournal } {
+  const userData = tempDir('data-device');
+  const roots = governedRoots(userData, path.join(userData, 'logs'));
+  write(roots['runtime-home'], 'sessions/2026/10/28/rollout-2026-10-28-a.jsonl', '{"type":"session_meta"}\n{"type":"message","text":"hello"}\n');
+  write(roots['runtime-home'], 'archived_sessions/rollout-2026-10-27-b.jsonl', Buffer.from([0, 1, 2, 255, 10]));
+  write(roots['runtime-home'], 'session_index.jsonl', '{"id":"a"}\n');
+  write(roots['runtime-home'], 'state_5.sqlite', 'SQLite format 3\0');
+  write(roots['runtime-home'], 'logs_2.sqlite', 'SQLite format 3\0logs');
+  write(roots['runtime-home'], 'skills/.system/imagegen/SKILL.md', '# skill');
+  write(roots.logs, 'app-server-stderr.log', '\n--- app-server stderr ---\nINFO started\n');
+  write(userData, 'identity/session.bin', `encrypted:${SESSION_SECRET}`);
+  write(userData, 'identity/device-id', '6f1c1d1e-0000-4000-8000-000000000001');
+  write(userData, 'Cookies', 'cookie-db');
+  write(userData, 'Local Storage/leveldb/000003.log', 'ls');
+  return { userData, roots, journal: new ExportJournal(userData) };
+}
+
+function allFiles(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true, recursive: true })) {
+    if (entry.isFile()) out.push(path.join(entry.parentPath, entry.name));
+  }
+  return out;
+}
+
+describe('export (matrix: Export)', () => {
+  it('writes included categories with digests, declared omissions, attribution and the notice, and journals it', async () => {
+    const { roots, journal, userData } = device();
+    const destination = path.join(tempDir('data-export'), 'export');
+    const { manifest, path: written } = await exportData({ policy, roots, destination, attribution: ATTRIBUTION, journal, now: () => new Date('2026-10-28T12:00:00Z') });
+    expect(written).toBe(destination);
+    expect(manifest.notice).toBe(policy.notice);
+    expect(manifest.attribution).toEqual(ATTRIBUTION);
+    expect(manifest.included.map((entry) => [entry.category, entry.files.length])).toEqual([
+      ['task-history', 3],
+      ['working-store', 0],
+      ['task-folders', 0],
+    ]);
+    for (const entry of manifest.included) {
+      for (const file of entry.files) {
+        expect(file.sha256).toMatch(/^[0-9a-f]{64}$/);
+        expect(fs.readFileSync(exportedFilePath(destination, file.root, file.path))).toEqual(fs.readFileSync(path.join(roots[file.root], file.path)));
+      }
+    }
+    const omitted = Object.fromEntries(manifest.omissions.map((omission) => [omission.category, omission]));
+    expect(omitted['identity-session']).toMatchObject({ files: 1, reason: expect.stringMatching(/never exported/) });
+    expect(omitted['chromium-profile']).toMatchObject({ files: 2 });
+    expect(omitted['runtime-state']).toMatchObject({ files: 2 });
+    expect(omitted['runtime-logs']).toMatchObject({ files: 1 });
+    expect(omitted['device-id']).toMatchObject({ files: 1 });
+    expect(omitted['provider-credentials']).toMatchObject({ files: 0 });
+    // No credential anywhere in the export.
+    for (const file of allFiles(destination)) expect(fs.readFileSync(file, 'utf8')).not.toContain(SESSION_SECRET);
+    expect(fs.existsSync(path.join(destination, MANIFEST_FILE))).toBe(true);
+    expect(journal.read()).toEqual([{ path: destination, exportedAt: '2026-10-28T12:00:00.000Z', categories: ['task-history', 'working-store', 'task-folders'] }]);
+    if (process.platform !== 'win32') expect(fs.statSync(journal.file).mode & 0o777).toBe(0o600);
+    expect(journal.file).toBe(path.join(userData, 'data', 'export-journal.json'));
+  });
+
+  it('declares unclassified files as omissions without copying them', async () => {
+    const { roots, journal } = device();
+    write(roots['runtime-home'], 'profile.toml', 'model = "x"');
+    const destination = path.join(tempDir('data-export-unclassified'), 'export');
+    const { manifest } = await exportData({ policy, roots, destination, attribution: ATTRIBUTION, journal });
+    expect(manifest.omissions.at(-1)).toMatchObject({ category: null, label: 'Unclassified files', files: 1 });
+    expect(fs.existsSync(exportedFilePath(destination, 'runtime-home', 'config.toml'))).toBe(false);
+  });
+
+  it('removes the partial export and journals nothing when a write fails', async () => {
+    const { roots, journal } = device();
+    const parent = tempDir('data-export-fail');
+    const destination = path.join(parent, 'export');
+    const realOpen = fs.promises.open;
+    let opened = 0;
+    vi.spyOn(fs.promises, 'open').mockImplementation(async (...args: Parameters<typeof realOpen>) => {
+      opened += 1;
+      if (opened === 4) throw Object.assign(new Error('ENOSPC: no space left on device'), { code: 'ENOSPC' });
+      return realOpen(...args);
+    });
+    await expect(exportData({ policy, roots, destination, attribution: ATTRIBUTION, journal })).rejects.toThrow(/could not be written: ENOSPC/);
+    expect(fs.existsSync(destination)).toBe(false);
+    expect(journal.read()).toEqual([]);
+  });
+
+  it('removes the export when the journal cannot record it', async () => {
+    const { roots, journal } = device();
+    const destination = path.join(tempDir('data-export-journal-fail'), 'export');
+    vi.spyOn(journal, 'append').mockImplementation(() => {
+      throw new Error('EROFS');
+    });
+    await expect(exportData({ policy, roots, destination, attribution: ATTRIBUTION, journal })).rejects.toThrow(/EROFS/);
+    expect(fs.existsSync(destination)).toBe(false);
+  });
+
+  it('refuses a non-empty destination or one inside Inquello’s own folders', async () => {
+    const { roots, journal, userData } = device();
+    const occupied = tempDir('data-export-occupied');
+    write(occupied, 'keep.txt', 'mine');
+    await expect(exportData({ policy, roots, destination: occupied, attribution: ATTRIBUTION, journal })).rejects.toThrow(/not empty/);
+    expect(fs.readFileSync(path.join(occupied, 'keep.txt'), 'utf8')).toBe('mine');
+    await expect(exportData({ policy, roots, destination: path.join(userData, 'exports'), attribution: ATTRIBUTION, journal })).rejects.toThrow(/outside/);
+    // An existing empty folder is accepted.
+    const empty = tempDir('data-export-empty');
+    await expect(exportData({ policy, roots, destination: empty, attribution: ATTRIBUTION, journal })).resolves.toMatchObject({ path: empty });
+  });
+});
+
+describe('export sources (review R01)', () => {
+  const SECRET = 'SYNTHETIC_PRIVATE_CREDENTIAL_SENTINEL';
+
+  function exportedBytes(destination: string): string {
+    return allFiles(destination)
+      .map((file) => fs.readFileSync(file, 'latin1'))
+      .join('\n');
+  }
+
+  it.skipIf(process.platform === 'win32')('never follows a link to an excluded credential, an outside file or a directory, and still copies normal files', async () => {
+    const { roots, journal, userData } = device();
+    const outsideDir = tempDir('data-export-outside');
+    const outside = write(outsideDir, 'private-credential.txt', SECRET);
+    write(outsideDir, 'nested/also-private.jsonl', SECRET);
+    const auth = write(roots['runtime-home'], 'auth.json', `{"OPENAI_API_KEY":"${SECRET}"}`);
+    const sessions = path.join(roots['runtime-home'], 'sessions');
+    // Leaf links inside an included category: to an excluded credential, to an outside marker.
+    fs.symlinkSync(auth, path.join(sessions, 'linked-auth.jsonl'));
+    fs.symlinkSync(outside, path.join(sessions, 'linked-secret.jsonl'));
+    // Directory aliases inside an included category: to an outside folder and to the identity folder.
+    fs.symlinkSync(outsideDir, path.join(sessions, 'alias'));
+    fs.symlinkSync(path.join(userData, 'identity'), path.join(sessions, 'identity-alias'));
+    // A hard link to the identity session is a regular file, but not a safe source.
+    fs.linkSync(path.join(userData, 'identity', 'session.bin'), path.join(sessions, 'hard-linked.jsonl'));
+
+    const destination = path.join(tempDir('data-export-links'), 'export');
+    const { manifest } = await exportData({ policy, roots, destination, attribution: ATTRIBUTION, journal });
+    const history = manifest.included.find((entry) => entry.category === 'task-history')!;
+    // The normal session files are exported byte for byte.
+    expect(history.files.map((file) => file.path).sort()).toEqual(['archived_sessions/rollout-2026-10-27-b.jsonl', 'session_index.jsonl', 'sessions/2026/10/28/rollout-2026-10-28-a.jsonl']);
+    for (const file of history.files) expect(fs.readFileSync(exportedFilePath(destination, file.root, file.path))).toEqual(fs.readFileSync(path.join(roots[file.root], file.path)));
+    expect(manifest.omissions).toContainEqual({ category: 'task-history', label: 'Task history: links and special files', reason: expect.stringMatching(/never exported/), files: 5 });
+    // No secret byte reaches the destination, under any name.
+    const bytes = exportedBytes(destination);
+    expect(bytes).not.toContain(SECRET);
+    expect(bytes).not.toContain(SESSION_SECRET);
+    for (const name of ['linked-auth.jsonl', 'linked-secret.jsonl', 'alias', 'identity-alias', 'hard-linked.jsonl']) {
+      expect(fs.existsSync(exportedFilePath(destination, 'runtime-home', `sessions/${name}`))).toBe(false);
+    }
+    // The export still round-trips.
+    await expect(importData({ policy, roots: emptyRoots(), source: destination })).resolves.toMatchObject({ notRestored: [] });
+  });
+
+  it.skipIf(process.platform === 'win32')('refuses a file swapped for a link between the check and the open', async () => {
+    const { roots, journal } = device();
+    const outside = write(tempDir('data-export-swap'), 'secret.txt', SECRET);
+    const file = path.join(roots['runtime-home'], 'session_index.jsonl');
+    const realLstat = fs.promises.lstat;
+    // The check sees the regular file; the open then meets the replacing link (O_NOFOLLOW).
+    vi.spyOn(fs.promises, 'lstat').mockImplementation(async (...args: Parameters<typeof realLstat>) => {
+      const stat = await realLstat(...args);
+      if (args[0] === file) {
+        fs.rmSync(file);
+        fs.symlinkSync(outside, file);
+      }
+      return stat;
+    });
+    const destination = path.join(tempDir('data-export-swap-dest'), 'export');
+    const { manifest } = await exportData({ policy, roots, destination, attribution: ATTRIBUTION, journal });
+    expect(manifest.included.find((entry) => entry.category === 'task-history')!.files.map((f) => f.path)).not.toContain('session_index.jsonl');
+    expect(manifest.omissions).toContainEqual(expect.objectContaining({ category: 'task-history', files: 1 }));
+    expect(exportedBytes(destination)).not.toContain(SECRET);
+  });
+});
+
+describe('short writes (review R07)', () => {
+  /** Every write to a file whose path matches `target` writes at most half of what it was asked, or nothing when `stall`. */
+  function shortWrites(target: RegExp, stall = false): void {
+    const realOpen = fs.promises.open;
+    vi.spyOn(fs.promises, 'open').mockImplementation(async (...args: Parameters<typeof realOpen>) => {
+      const handle = await realOpen(...args);
+      if (target.test(String(args[0]))) {
+        const realWrite = handle.write.bind(handle) as (buffer: Buffer, offset: number, length: number, position: number | null) => Promise<{ bytesWritten: number; buffer: Buffer }>;
+        (handle as unknown as { write: unknown }).write = async (buffer: Buffer, offset = 0, length = buffer.length - offset, position: number | null = null) => {
+          if (stall) return { bytesWritten: 0, buffer };
+          return realWrite(buffer, offset, Math.max(1, Math.floor(length / 2)), position);
+        };
+      }
+      return handle;
+    });
+  }
+
+  it('export writes every byte despite short writes', async () => {
+    const { roots, journal } = device();
+    write(roots['runtime-home'], 'sessions/2026/10/28/rollout-big.jsonl', Buffer.alloc(2 * 1024 * 1024 + 17, 7));
+    const destination = path.join(tempDir('data-export-short'), 'export');
+    shortWrites(/data-export-short.*files/);
+    const { manifest } = await exportData({ policy, roots, destination, attribution: ATTRIBUTION, journal });
+    vi.restoreAllMocks();
+    for (const entry of manifest.included) {
+      for (const file of entry.files) {
+        const copy = fs.readFileSync(exportedFilePath(destination, file.root, file.path));
+        expect(copy.equals(fs.readFileSync(path.join(roots[file.root], file.path)))).toBe(true);
+        expect(copy.length).toBe(file.size);
+      }
+    }
+    await expect(importData({ policy, roots: emptyRoots(), source: destination })).resolves.toMatchObject({ notRestored: [] });
+  });
+
+  it('export fails explicitly, keeping nothing, when a write makes no progress', async () => {
+    const { roots, journal } = device();
+    const destination = path.join(tempDir('data-export-stall'), 'export');
+    shortWrites(/data-export-stall.*files/, true);
+    await expect(exportData({ policy, roots, destination, attribution: ATTRIBUTION, journal })).rejects.toThrow(/could not be written: EIO/);
+    expect(fs.existsSync(destination)).toBe(false);
+    expect(journal.read()).toEqual([]);
+  });
+
+  it('import restores complete files despite short writes', async () => {
+    const { roots, destination, manifest } = await exported();
+    const target = emptyRoots();
+    shortWrites(/\.import-[\da-f-]+\.tmp$/);
+    const result = await importData({ policy, roots: target, source: destination });
+    vi.restoreAllMocks();
+    expect(result.notRestored).toEqual([]);
+    for (const entry of manifest.included) {
+      for (const file of entry.files) expect(fs.readFileSync(path.join(target[file.root], file.path))).toEqual(fs.readFileSync(path.join(roots[file.root], file.path)));
+    }
+  });
+
+  it('import never restores a truncated file when a write makes no progress', async () => {
+    const { destination } = await exported();
+    const target = emptyRoots();
+    shortWrites(/\.import-[\da-f-]+\.tmp$/, true);
+    const result = await importData({ policy, roots: target, source: destination });
+    vi.restoreAllMocks();
+    expect(result.restored.every((entry) => entry.files === 0)).toBe(true);
+    expect(result.notRestored).toHaveLength(3);
+    for (const entry of result.notRestored) expect(entry.reason).toBe('It could not be written (EIO)');
+    // Nothing restored, and no temporary file left behind.
+    for (const dir of [target['runtime-home'], target.logs]) expect(fs.existsSync(dir) ? allFiles(dir) : []).toEqual([]);
+  });
+});
+
+describe('containment (review R15)', () => {
+  it('treats only a real parent segment as outside', () => {
+    const root = path.resolve(tempDir('data-contain'));
+    expect(isInside(root, root)).toBe(true);
+    expect(isInside(root, path.join(root, 'child'))).toBe(true);
+    expect(isInside(root, path.join(root, '..backup', 'export'))).toBe(true);
+    expect(isInside(root, path.join(root, '..', 'sibling'))).toBe(false);
+    expect(isInside(root, path.dirname(root))).toBe(false);
+    if (process.platform === 'win32') expect(isInside('C:\\inquello', 'D:\\export')).toBe(false);
+  });
+
+  it('export refuses a ..backup folder inside the data folder and the root itself, and accepts a true sibling', async () => {
+    const { roots, journal, userData } = device();
+    await expect(exportData({ policy, roots, destination: path.join(userData, '..backup', 'export'), attribution: ATTRIBUTION, journal })).rejects.toThrow(/outside/);
+    await expect(exportData({ policy, roots, destination: userData, attribution: ATTRIBUTION, journal })).rejects.toThrow(/outside/);
+    const sibling = path.join(tempDir('data-contain-parent'), 'export');
+    await expect(exportData({ policy, roots, destination: sibling, attribution: ATTRIBUTION, journal })).resolves.toMatchObject({ path: sibling });
+  });
+
+  it('the inventory walks a ..backup child of the user data folder', () => {
+    const { roots } = device();
+    write(roots['user-data'], '..backup/notes.txt', 'x');
+    expect(takeInventory(policy, roots).unclassified).toContain('user-data:..backup/notes.txt');
+  });
+});
+
+async function exported(): Promise<{ roots: GovernedRoots; destination: string; manifest: ExportManifest; journal: ExportJournal }> {
+  const { roots, journal } = device();
+  const destination = path.join(tempDir('data-roundtrip'), 'export');
+  const { manifest } = await exportData({ policy, roots, destination, attribution: ATTRIBUTION, journal });
+  return { roots, destination, manifest, journal };
+}
+
+function emptyRoots(): GovernedRoots {
+  const userData = tempDir('data-target');
+  return governedRoots(userData, path.join(userData, 'logs'));
+}
+
+describe('reimport (matrix: Round trip, Import into non-empty)', () => {
+  it('reproduces every included file byte for byte and lists the omissions', async () => {
+    const { roots, destination, manifest } = await exported();
+    const target = emptyRoots();
+    const result = await importData({ policy, roots: target, source: destination });
+    expect(result.restored).toEqual([
+      { category: 'task-history', label: 'Task history', files: 3 },
+      { category: 'working-store', label: 'Private work organisation', files: 0 },
+      { category: 'task-folders', label: 'Task working folders', files: 0 },
+    ]);
+    expect(result.notRestored).toEqual([]);
+    expect(result.omissions.map((omission) => omission.category)).toEqual(expect.arrayContaining(['identity-session', 'chromium-profile']));
+    for (const entry of manifest.included) {
+      for (const file of entry.files) {
+        expect(fs.readFileSync(path.join(target[file.root], file.path))).toEqual(fs.readFileSync(path.join(roots[file.root], file.path)));
+      }
+    }
+    expect(fs.existsSync(path.join(target['user-data'], 'identity'))).toBe(false);
+  });
+
+  it('refuses the whole import on a digest mismatch and writes nothing', async () => {
+    const { destination } = await exported();
+    fs.appendFileSync(exportedFilePath(destination, 'runtime-home', 'session_index.jsonl'), 'tampered');
+    const target = emptyRoots();
+    await expect(importData({ policy, roots: target, source: destination })).rejects.toThrow(/does not match its digest/);
+    expect(fs.existsSync(target['runtime-home'])).toBe(false);
+    expect(fs.existsSync(target.logs)).toBe(false);
+  });
+
+  it('refuses a missing exported file', async () => {
+    const { destination } = await exported();
+    fs.rmSync(exportedFilePath(destination, 'runtime-home', 'session_index.jsonl'));
+    await expect(importData({ policy, roots: emptyRoots(), source: destination })).rejects.toThrow(/missing from the export/);
+  });
+
+  it('refuses a runtime home that already holds task history or unclassified files, giving the reason', async () => {
+    const { destination } = await exported();
+    const target = emptyRoots();
+    write(target['runtime-home'], 'sessions/2026/10/01/rollout-existing.jsonl', 'mine');
+    await expect(importData({ policy, roots: target, source: destination })).rejects.toThrow(/already holds data .* only into an empty runtime home/);
+    const other = emptyRoots();
+    write(other['runtime-home'], 'notes.txt', 'mine');
+    await expect(importData({ policy, roots: other, source: destination })).rejects.toThrow(/already holds data/);
+  });
+
+  it('accepts a runtime home that holds only rebuildable state and logs the runtime writes on start', async () => {
+    const { destination } = await exported();
+    const target = emptyRoots();
+    write(target['runtime-home'], 'state_5.sqlite', 'fresh');
+    write(target['runtime-home'], 'logs_2.sqlite', 'fresh');
+    write(target.logs, 'app-server-stderr.log', 'current run\n');
+    const result = await importData({ policy, roots: target, source: destination });
+    expect(result.restored[0]).toMatchObject({ category: 'task-history', files: 3 });
+    // The current log is never overwritten; it is listed instead.
+    expect(result.notRestored).toEqual([]);
+    expect(fs.readFileSync(path.join(target.logs, 'app-server-stderr.log'), 'utf8')).toBe('current run\n');
+  });
+
+  it.each([
+    ['a path that escapes its root', (m: ExportManifest) => (m.included[0]!.files[0]!.path = '../../evil.jsonl')],
+    ['an absolute path', (m: ExportManifest) => (m.included[0]!.files[0]!.path = '/etc/passwd')],
+    ['a file outside its category', (m: ExportManifest) => (m.included[0]!.files[0]!.path = 'config.toml')],
+    ['a credential category', (m: ExportManifest) => (m.included[0]!.category = 'identity-session')],
+    ['an excluded category', (m: ExportManifest) => (m.included[0]!.category = 'runtime-state')],
+    ['an unknown format', (m: ExportManifest) => ((m as { format: string }).format = 'zip')],
+  ])('refuses a manifest with %s', async (_label, tamper) => {
+    const { destination } = await exported();
+    const manifest = readManifest(destination);
+    tamper(manifest);
+    fs.writeFileSync(path.join(destination, MANIFEST_FILE), JSON.stringify(manifest));
+    const target = emptyRoots();
+    await expect(importData({ policy, roots: target, source: destination })).rejects.toThrow();
+    expect(fs.existsSync(target['user-data'])).toBe(true);
+    expect(fs.readdirSync(target['user-data'])).toEqual([]);
+  });
+
+  it('refuses a folder without a manifest', async () => {
+    await expect(importData({ policy, roots: emptyRoots(), source: tempDir('data-no-manifest') })).rejects.toThrow(/no readable Inquello export manifest/);
+  });
+});
+
+describe('delete (matrix: Delete)', () => {
+  it('removes the chosen categories, retains the others and lists surviving exports outside Inquello’s control', async () => {
+    const { roots, destination, journal } = await exported();
+    const clearBrowserProfile = vi.fn(async () => {});
+    const report = await deleteCategories({ policy, roots, categories: ['task-history', 'runtime-logs', 'desktop-stderr-log'], journalEntries: journal.read(), clearBrowserProfile });
+    expect(report.removed).toEqual([
+      { category: 'task-history', label: 'Task history', filesRemoved: 3, filesRemaining: 0 },
+      { category: 'runtime-logs', label: 'Runtime logs', filesRemoved: 1, filesRemaining: 0 },
+      { category: 'desktop-stderr-log', label: 'Desktop runtime error log', filesRemoved: 1, filesRemaining: 0 },
+    ]);
+    expect(report.retained).toEqual(
+      expect.arrayContaining([
+        { category: 'runtime-state', label: 'Runtime state and indexes', files: 2 },
+        { category: 'identity-session', label: 'Identity session', files: 1 },
+        { category: 'chromium-profile', label: 'Chromium profile', files: 2 },
+        { category: 'export-journal', label: 'Export journal', files: 1 },
+      ]),
+    );
+    expect(report.survivingExports).toEqual([{ path: destination, exportedAt: expect.any(String), categories: ['task-history', 'working-store', 'task-folders'], outsideInquelloControl: true }]);
+    expect(clearBrowserProfile).not.toHaveBeenCalled();
+    // Emptied directories are pruned; the export itself is untouched.
+    expect(fs.existsSync(path.join(roots['runtime-home'], 'sessions'))).toBe(false);
+    expect(fs.existsSync(path.join(roots['runtime-home'], 'state_5.sqlite'))).toBe(true);
+    expect(fs.existsSync(path.join(destination, MANIFEST_FILE))).toBe(true);
+  });
+
+  it('clears the Chromium profile through Electron instead of unlinking it', async () => {
+    const { roots, journal } = device();
+    const clearBrowserProfile = vi.fn(async () => {
+      fs.rmSync(path.join(roots['user-data'], 'Local Storage'), { recursive: true });
+    });
+    const report = await deleteCategories({ policy, roots, categories: ['chromium-profile'], journalEntries: journal.read(), clearBrowserProfile });
+    expect(clearBrowserProfile).toHaveBeenCalledOnce();
+    expect(report.removed).toEqual([
+      { category: 'chromium-profile', label: 'Chromium profile', filesRemoved: 1, filesRemaining: 1, note: expect.stringMatching(/cleared through Electron/) },
+    ]);
+    expect(fs.existsSync(path.join(roots['user-data'], 'Cookies'))).toBe(true);
+  });
+
+  it('refuses unknown or disabled categories', async () => {
+    const { roots } = device();
+    await expect(deleteCategories({ policy, roots, categories: ['everything'], journalEntries: [] })).rejects.toThrow(/unknown category/);
+    await expect(deleteCategories({ policy, roots, categories: ['artifacts'], journalEntries: [] })).rejects.toThrow(/disabled/);
+    await expect(deleteCategories({ policy, roots, categories: [], journalEntries: [] })).rejects.toThrow(/no category/);
+  });
+});
+
+// ---- the main-side service -------------------------------------------------------
+
+interface Harness {
+  service: DataService;
+  events: string[];
+  roots: GovernedRoots;
+  journal: ExportJournal;
+  identity: { held: boolean; signOutOk: boolean };
+  setTasks(n: number): void;
+  setExport(dest: string | null): void;
+  setImport(source: string | null): void;
+}
+
+function harness(): Harness {
+  const { roots, journal } = device();
+  const events: string[] = [];
+  const identity = { held: true, signOutOk: true };
+  let tasks = 0;
+  let exportDest: string | null = path.join(tempDir('data-service-export'), 'export');
+  let importSource: string | null = null;
+  const options: DataServiceOptions = {
+    authority: fixtureDataAuthority(),
+    load: loadShippedPolicy(),
+    roots,
+    journal,
+    runtime: {
+      stop: async () => void events.push('runtime:stop'),
+      start: async () => void events.push('runtime:start'),
+      activeTasks: () => tasks,
+    },
+    identity: {
+      principal: async () => (identity.held ? { displayName: 'Alice Synthetic', issuerLabel: 'Synthetic test issuer' } : null),
+      holdsSession: () => identity.held,
+      signOut: async () => {
+        events.push('identity:signOut');
+        if (identity.signOutOk) {
+          identity.held = false;
+          fs.rmSync(path.join(roots['user-data'], 'identity', 'session.bin'), { force: true });
+        }
+        return { ok: identity.signOutOk };
+      },
+      forgetLocally: () => {
+        events.push('identity:forgetLocally');
+        identity.held = false;
+        fs.rmSync(path.join(roots['user-data'], 'identity', 'session.bin'), { force: true });
+      },
+    },
+    providers: { forgetClaudeKey: () => void events.push('providers:forgetClaudeKey'), holdsClaudeKey: () => false },
+    chooseExportDestination: async () => exportDest,
+    chooseImportSource: async () => importSource,
+    clearBrowserProfile: async () => void events.push('browser:clear'),
+    appVersion: '0.0.0-test',
+    runtimeVersion: '0.165.0',
+    logger: recordingLogger(),
+  };
+  return {
+    service: new DataService(options),
+    events,
+    roots,
+    journal,
+    identity,
+    setTasks: (n) => (tasks = n),
+    setExport: (dest) => (exportDest = dest),
+    setImport: (source) => (importSource = source),
+  };
+}
+
+describe('data service', () => {
+  it('uses guest inspection and refuses host deletion when guest deletion is unconfirmed', async () => {
+    const h = harness();
+    const options = (h.service as unknown as { options: DataServiceOptions }).options;
+    const file = path.join(h.roots['user-data'], 'tasks', 'synthetic', 'keep.txt');
+    fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, 'keep');
+    const service = new DataService({ ...options, taskStorage: {
+      inspect: async () => { throw new Error('guest unavailable'); },
+      snapshot: async () => { throw new Error('not used'); },
+      ensureEmpty: async () => { throw new Error('not empty'); },
+      erase: async () => { throw new Error('active executor'); },
+    } });
+    expect((await service.getPolicy()).blockers).toContainEqual(expect.objectContaining({ category: 'task-folders', detail: expect.stringContaining('counts are unavailable') }));
+    expect((await service.deleteData(['task-folders'])).ok).toBe(false);
+    expect(fs.readFileSync(file, 'utf8')).toBe('keep');
+    expect(h.events).toEqual(['runtime:stop', 'runtime:start']);
+  });
+
+  it('disposes a quiescent execution snapshot after export', async () => {
+    const h = harness();
+    const options = (h.service as unknown as { options: DataServiceOptions }).options;
+    const service = new DataService({ ...options, taskStorage: {
+      inspect: async () => ({ files: 0, bytes: 0 }),
+      snapshot: async (policy, roots) => {
+        h.events.push('guest:snapshot');
+        return { roots, inventory: takeInventory(policy, roots), omissions: [], dispose: () => { h.events.push('guest:dispose'); } };
+      },
+      ensureEmpty: async () => undefined,
+      erase: async () => ({ files: 0, bytes: 0 }),
+    } });
+    expect((await service.exportData()).ok).toBe(true);
+    expect(h.events).toEqual(['runtime:stop', 'guest:snapshot', 'guest:dispose', 'runtime:start']);
+  });
+
+  it('getPolicy lists every category with owner, rule, enabled flag and held counts, plus blockers (matrix: Inspect)', async () => {
+    const h = harness();
+    write(h.roots['runtime-home'], 'unexpected.bin', 'x');
+    const view = await h.service.getPolicy();
+    expect(view.loaded).toBe(true);
+    expect(view.categories).toHaveLength(policy.categories.length);
+    expect(view.categories[0]).toEqual({
+      id: 'task-history',
+      label: 'Task history',
+      enabled: true,
+      location: 'files',
+      owner: 'The signed-in creator, on this device',
+      ruleOwner: 'Organisation data-policy owner (OQ-2)',
+      retention: 'until-owner-deletes',
+      access: 'runtime',
+      export: { mode: 'included' },
+      deletion: expect.any(String),
+      recovery: expect.any(String),
+      held: { files: 3, bytes: expect.any(Number) },
+    });
+    expect(view.blockers).toEqual([{ kind: 'unclassified', detail: 'Local data policy inspection found a blocker; private file names are withheld.' }]);
+    // No absolute path reaches the renderer.
+    expect(JSON.stringify(view)).not.toContain(h.roots['user-data']);
+  });
+
+  it('blocks every action when the register did not load', async () => {
+    const h = harness();
+    const broken = new DataService({authority:fixtureDataAuthority(), ...(h.service as unknown as { options: DataServiceOptions }).options, load: { ok: false, error: 'bad' } });
+    expect(await broken.getPolicy()).toMatchObject({ loaded: false, categories: [], blockers: [{ kind: 'policy-invalid' }] });
+    await expect(broken.exportData()).resolves.toEqual({ ok: false, reason: 'The local data policy did not load, so local data actions are blocked.' });
+  });
+
+  it('exports through main’s chooser with attribution, and reports a cancelled dialog', async () => {
+    const h = harness();
+    const result = await h.service.exportData();
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.export.attribution.principal).toEqual({ displayName: 'Alice Synthetic', issuerLabel: 'Synthetic test issuer' });
+    expect(result.export.included).toEqual([
+      { category: 'task-history', label: 'Task history', files: 3 },
+      { category: 'working-store', label: 'Private work organisation', files: 0 },
+      { category: 'task-folders', label: 'Task working folders', files: 0 },
+    ]);
+    expect(h.events).toEqual(['runtime:stop', 'runtime:start']);
+    h.events.length = 0;
+    h.setExport(null);
+    await expect(h.service.exportData()).resolves.toEqual({ ok: false, reason: 'No folder was chosen.' });
+    expect(h.events).toEqual([]);
+  });
+
+  it('refuses export while a Task runs, including work started while the chooser was open', async () => {
+    const h = harness();
+    h.setTasks(1);
+    expect(await h.service.exportData()).toEqual({ ok: false, reason: 'A Task is running. Stop it before exporting local data.' });
+    h.setTasks(0);
+    const options = (h.service as unknown as { options: DataServiceOptions }).options;
+    options.chooseExportDestination = async () => {
+      h.setTasks(1);
+      return path.join(tempDir('export-dialog-race'), 'export');
+    };
+    expect(await h.service.exportData()).toEqual({ ok: false, reason: 'A Task is running. Stop it before exporting local data.' });
+    expect(h.events).toEqual([]);
+  });
+
+  it('waits for runtime exit before copying and never copies after a failed stop', async () => {
+    const h = harness();
+    const options = (h.service as unknown as { options: DataServiceOptions }).options;
+    const destination = path.join(tempDir('export-stop-failure'), 'export');
+    h.setExport(destination);
+    let failStop!: (error: Error) => void;
+    options.runtime.stop = () => new Promise<void>((_resolve, reject) => { failStop = reject; });
+    const pending = h.service.exportData();
+    await vi.waitFor(() => expect(failStop).toBeTypeOf('function'));
+    expect(fs.existsSync(destination)).toBe(false);
+    failStop(new Error('still running'));
+    expect(await pending).toEqual({ ok: false, reason: 'The runtime could not be stopped safely. The local data action was not completed.' });
+    expect(fs.existsSync(destination)).toBe(false);
+    expect(h.events).toEqual([]);
+    expect(h.journal.read()).toEqual([]);
+  });
+
+  it('holds the runtime stopped until export manifest writing finishes', async () => {
+    const h = harness();
+    const original = fs.promises.writeFile;
+    let release!: () => void;
+    const blocked = new Promise<void>((resolve) => { release = resolve; });
+    let manifestStarted = false;
+    vi.spyOn(fs.promises, 'writeFile').mockImplementation(async (...args) => {
+      if (String(args[0]).endsWith(MANIFEST_FILE)) {
+        manifestStarted = true;
+        await blocked;
+      }
+      return original(...args);
+    });
+    const pending = h.service.exportData();
+    await vi.waitFor(() => expect(manifestStarted).toBe(true));
+    expect(h.events).toEqual(['runtime:stop']);
+    expect(await h.service.importData()).toEqual({ ok: false, reason: 'Another local data action is in progress.' });
+    release();
+    expect((await pending).ok).toBe(true);
+    expect(h.events).toEqual(['runtime:stop', 'runtime:start']);
+  });
+
+  it('restarts after an export write failure and reports a failed restart after export', async () => {
+    const h = harness();
+    vi.spyOn(fs.promises, 'writeFile').mockRejectedValueOnce(Object.assign(new Error('disk full'), { code: 'ENOSPC' }));
+    expect((await h.service.exportData()).ok).toBe(false);
+    expect(h.events).toEqual(['runtime:stop', 'runtime:start']);
+    expect(h.journal.read()).toEqual([]);
+    vi.restoreAllMocks();
+    const options = (h.service as unknown as { options: DataServiceOptions }).options;
+    options.runtime.start = async () => { throw new Error('spawn failed'); };
+    expect(await h.service.exportData()).toEqual({ ok: false, reason: 'The local data action ran, but the runtime did not restart afterwards. Restart Inquello.' });
+    expect(h.journal.read()).toHaveLength(1);
+  });
+
+  it('round trip: export, delete everything, reimport; restarts the runtime around delete and import (matrix: Round trip, Delete)', async () => {
+    const h = harness();
+    const before = fs.readFileSync(path.join(h.roots['runtime-home'], 'sessions/2026/10/28/rollout-2026-10-28-a.jsonl'));
+    const exportedResult = await h.service.exportData();
+    if (!exportedResult.ok) throw new Error(exportedResult.reason);
+    h.events.length = 0;
+    const enabled = h.service.deletableCategories();
+    const deleted = await h.service.deleteData(enabled);
+    if (!deleted.ok) throw new Error(deleted.reason);
+    expect(h.events).toEqual(['identity:signOut', 'runtime:stop', 'providers:forgetClaudeKey', 'browser:clear', 'runtime:start']);
+    expect(deleted.delete.serverRevocation).toBe('confirmed');
+    // Keyring credentials and unresolved permission journals are not individually deleted.
+    expect(deleted.delete.retained).toEqual([{ category: 'codex-keyring-entry', label: 'Codex login (OS keyring)', files: 0 },{category:'provider-consent-journal',label:'Workspace provider permission journal',files:0}]);
+    expect(deleted.delete.survivingExports).toEqual([]);
+    expect(deleted.delete.otherExportCopiesMayRemain).toBe(true); // signed out: no previous-owner paths
+    expect(deleted.delete.removed.find((entry) => entry.category === 'identity-session')!.note).toMatch(/confirmed/);
+    expect(fs.existsSync(h.journal.file)).toBe(false);
+
+    h.events.length = 0;
+    h.setImport(exportedResult.export.path);
+    const imported = await h.service.importData();
+    if (!imported.ok) throw new Error(imported.reason);
+    expect(h.events).toEqual(['runtime:stop', 'runtime:start']);
+    expect(imported.import.restored).toEqual([
+      { category: 'task-history', label: 'Task history', files: 3 },
+      { category: 'working-store', label: 'Private work organisation', files: 0 },
+      { category: 'task-folders', label: 'Task working folders', files: 0 },
+    ]);
+    expect(imported.import.notRestored).toEqual([]);
+    expect(imported.import.omissions.map((omission) => omission.category)).toEqual(expect.arrayContaining(['identity-session', 'chromium-profile']));
+    expect(fs.readFileSync(path.join(h.roots['runtime-home'], 'sessions/2026/10/28/rollout-2026-10-28-a.jsonl'))).toEqual(before);
+  });
+
+  it('import into a non-empty runtime home is refused with the reason, and the runtime restarts', async () => {
+    const h = harness();
+    const exportedResult = await h.service.exportData();
+    if (!exportedResult.ok) throw new Error(exportedResult.reason);
+    h.events.length = 0;
+    h.setImport(exportedResult.export.path);
+    const result = await h.service.importData();
+    expect(result).toEqual({ ok: false, reason: expect.stringMatching(/^The runtime home already holds data .*only into an empty runtime home\.$/) });
+    expect(h.events).toEqual(['runtime:stop', 'runtime:start']);
+  });
+
+  it('refuses import and delete while a Task runs, without stopping the runtime', async () => {
+    const h = harness();
+    h.setTasks(1);
+    h.setImport(tempDir('data-any'));
+    await expect(h.service.importData()).resolves.toEqual({ ok: false, reason: 'A Task is running. Stop it before importing or deleting local data.' });
+    await expect(h.service.deleteData(['task-history'])).resolves.toEqual({ ok: false, reason: 'A Task is running. Stop it before importing or deleting local data.' });
+    expect(h.events).toEqual([]);
+  });
+
+  it('deleting the identity session while offline removes it locally and says revocation was not confirmed (matrix: Delete identity)', async () => {
+    const h = harness();
+    h.identity.signOutOk = false;
+    const result = await h.service.deleteData(['identity-session']);
+    if (!result.ok) throw new Error(result.reason);
+    expect(h.events).toEqual(['identity:signOut', 'identity:forgetLocally', 'runtime:stop', 'runtime:start']);
+    expect(result.delete.serverRevocation).toBe('not-confirmed');
+    expect(result.delete.removed).toEqual([
+      { category: 'identity-session', label: 'Identity session', filesRemoved: 0, filesRemaining: 0, note: expect.stringMatching(/could not confirm the revocation/) },
+    ]);
+    expect(fs.existsSync(path.join(h.roots['user-data'], 'identity', 'session.bin'))).toBe(false);
+    // The device ID is a separate category and stays.
+    expect(fs.existsSync(path.join(h.roots['user-data'], 'identity', 'device-id'))).toBe(true);
+  });
+
+  it('deleting the identity session when signed out needs no sign-out, but still cancels a pending sign-in (review R04)', async () => {
+    const h = harness();
+    h.identity.held = false;
+    const result = await h.service.deleteData(['identity-session']);
+    if (!result.ok) throw new Error(result.reason);
+    expect(result.delete.serverRevocation).toBe('not-signed-in');
+    expect(h.events).toEqual(['identity:forgetLocally', 'runtime:stop', 'runtime:start']);
+    expect(result.delete.removed[0]).toMatchObject({ category: 'identity-session', filesRemaining: 0 });
+    expect(fs.existsSync(path.join(h.roots['user-data'], 'identity', 'session.bin'))).toBe(false);
+  });
+
+  it('runs one action at a time', async () => {
+    const h = harness();
+    let release!: () => void;
+    h.setExport(null);
+    const slow = new Promise<null>((resolve) => (release = () => resolve(null)));
+    (h.service as unknown as { options: DataServiceOptions }).options.chooseExportDestination = () => slow;
+    const first = h.service.exportData();
+    await expect(h.service.deleteData(['task-history'])).resolves.toEqual({ ok: false, reason: 'Another local data action is in progress.' });
+    release();
+    await first;
+  });
+
+  it('reports a runtime that did not restart', async () => {
+    const h = harness();
+    (h.service as unknown as { options: DataServiceOptions }).options.runtime.start = async () => {
+      throw new Error('spawn failed');
+    };
+    const result = await h.service.deleteData(['runtime-logs']);
+    expect(result).toEqual({ ok: false, reason: 'The local data action ran, but the runtime did not restart afterwards. Restart Inquello.' });
+  });
+});
+
+describe('controlled session local-data stop fence', () => {
+  for (const action of ['export', 'import', 'delete'] as const) {
+    it(`refuses ${action} before any fixed-store mutation or restart`, async () => {
+      const h = harness();
+      const options = (h.service as unknown as { options: DataServiceOptions }).options;
+      const file = write(h.roots['user-data'], 'working/working.sqlite', 'fictional-store-sentinel');
+      const before = fs.readFileSync(file);
+      const destination = path.join(tempDir('controlled-export'), 'not-created');
+      h.setExport(destination);
+      if (action === 'import') {
+        const source = path.join(tempDir('controlled-valid-import'), 'export');
+        await exportData({policy, roots: h.roots, destination: source, attribution: ATTRIBUTION, journal: h.journal});
+        expect(readManifest(source).included.length).toBeGreaterThan(0);
+        h.setImport(source);
+      }
+      const stop = vi.fn(async () => { throw new Error('controlled session is active'); });
+      options.runtime.stop = stop;
+      const refusedGuestCall = async (): Promise<never> => { throw new Error('must not reach guest storage'); };
+      const erase = vi.fn(refusedGuestCall), ensureEmpty = vi.fn(refusedGuestCall), snapshot = vi.fn(refusedGuestCall);
+      const service = new DataService({...options, taskStorage: {
+        inspect: async () => ({files: 0, bytes: 0}),
+        erase, ensureEmpty, snapshot,
+      }});
+      const result = action === 'export' ? await service.exportData()
+        : action === 'import' ? await service.importData()
+        : await service.deleteData(['working-store']);
+      expect(result).toEqual({ok: false, reason: 'The runtime could not be stopped safely. The local data action was not completed.'});
+      expect(stop).toHaveBeenCalledTimes(1);
+      expect(fs.readFileSync(file)).toEqual(before);
+      expect(fs.existsSync(destination)).toBe(false);
+      expect(fs.existsSync(path.join(h.roots['user-data'], 'data', 'recovery-unvalidated'))).toBe(false);
+      expect(h.events).toEqual([]);
+      expect(erase).not.toHaveBeenCalled();
+      expect(ensureEmpty).not.toHaveBeenCalled();
+      expect(snapshot).not.toHaveBeenCalled();
+      expect((await service.getPolicy()).loaded).toBe(true);
+    });
+  }
+});
+
+it('never exports or individually deletes an unresolved provider consent journal',async()=>{
+ const {roots,journal,userData}=device();
+ const bytes=Buffer.from('encrypted immutable operation fixture');
+ const held=write(userData,'identity/provider-consents/pending.bin',bytes);
+ const destination=path.join(tempDir('consent-export'),'export');
+ const {manifest}=await exportData({policy,roots,destination,attribution:ATTRIBUTION,journal});
+ expect(manifest.omissions.find(row=>row.category==='provider-consent-journal')).toMatchObject({files:1});
+ expect(manifest.included.some(row=>row.category==='provider-consent-journal')).toBe(false);
+ for(const file of allFiles(destination))expect(fs.readFileSync(file).includes(bytes)).toBe(false);
+ await expect(deleteCategories({policy,roots,categories:['provider-consent-journal'],journalEntries:[]})).rejects.toThrow();
+ expect(fs.readFileSync(held)).toEqual(bytes);
+});

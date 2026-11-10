@@ -1,0 +1,1235 @@
+//! Story 1.10b: the HTTPS synthetic topology. HTTPS with scoped trust of an
+//! ephemeral test CA, loopback redirect URIs on any port, the synthetic OIDC
+//! provider's authorization-code + PKCE flow into a real bootstrap, and the
+//! `inquello-dev-topology` binary.
+//!
+//! Run with `INQUELLO_TEST_DATABASE_URL` set and `--features test-issuer`.
+
+#![allow(
+    clippy::expect_used,
+    reason = "test helpers fail the test on any unexpected error"
+)]
+
+mod support;
+
+use base64::Engine;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use chrono::TimeDelta;
+use inquello_protocol::error::ErrorKind;
+use inquello_protocol::login::LoginTransaction;
+use inquello_protocol::login::SessionCredentials;
+use inquello_service::ConfigError;
+use inquello_service::StartError;
+use inquello_service::test_provider::ProviderSettings;
+use inquello_service::test_provider::RunningProvider;
+use inquello_service::test_provider::start_onboarding_provider;
+use inquello_service::test_provider::start_provider;
+use inquello_service::test_tls::TestCertificateAuthority;
+use pretty_assertions::assert_eq;
+use reqwest::StatusCode;
+use reqwest::header::LOCATION;
+use serde_json::Value;
+use serde_json::json;
+use sha2::Digest;
+use sha2::Sha256;
+use std::collections::HashMap;
+use std::io::BufRead;
+use std::io::BufReader;
+use std::process::Command;
+use std::process::Stdio;
+use std::sync::Arc;
+use std::time::Duration;
+use support::CLIENT_ID;
+use support::Harness;
+use support::ManualClock;
+use uuid::Uuid;
+
+const LOOPBACK_REGISTRATION: &str = "http://127.0.0.1/callback";
+
+fn trusting(ca: &TestCertificateAuthority) -> reqwest::Client {
+    reqwest::Client::builder()
+        .tls_built_in_root_certs(false)
+        .add_root_certificate(
+            reqwest::Certificate::from_pem(ca.ca_pem().as_bytes()).expect("CA certificate"),
+        )
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .expect("client")
+}
+
+// ---- HTTPS ---------------------------------------------------------------
+
+#[tokio::test(flavor = "multi_thread")]
+async fn https_serves_only_clients_that_trust_the_configured_ca() {
+    let ca = TestCertificateAuthority::new("topology test CA");
+    let tls = ca.loopback_server_tls();
+    let h = Harness::start_with(|config| config.tls = Some(tls), trusting(&ca)).await;
+    assert!(h.base.starts_with("https://127.0.0.1:"), "{}", h.base);
+
+    let capabilities = h.get("/v1/capabilities", None).await;
+    assert_eq!(capabilities.status, StatusCode::OK);
+    h.sign_in("tls-alice").await;
+
+    // A client that trusts a different CA refuses the service's certificate.
+    let other = TestCertificateAuthority::new("unrelated CA");
+    let refused = trusting(&other)
+        .get(format!("{}/v1/capabilities", h.base))
+        .send()
+        .await;
+    assert!(refused.is_err(), "an untrusted certificate was accepted");
+
+    // Plain HTTP to the HTTPS listener gets no response.
+    let plain = reqwest::Client::new()
+        .get(h.base.replacen("https://", "http://", 1) + "/v1/capabilities")
+        .timeout(Duration::from_secs(5))
+        .send()
+        .await;
+    assert!(
+        plain
+            .map(|response| !response.status().is_success())
+            .unwrap_or(true),
+        "plain HTTP was served"
+    );
+
+    h.finish().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_non_loopback_bind_is_accepted_only_with_tls() {
+    let ca = TestCertificateAuthority::new("bind test CA");
+    let tls = ca.loopback_server_tls();
+    let mut h = Harness::start_with(
+        |config| {
+            config.tls = Some(tls);
+            config.bind = "0.0.0.0:0".parse().expect("address");
+        },
+        trusting(&ca),
+    )
+    .await;
+    // Reach the wildcard listener through loopback, which the certificate names.
+    let port = h.base.rsplit(':').next().expect("port").to_string();
+    h.base = format!("https://127.0.0.1:{port}");
+    let response = h
+        .client
+        .get(format!("https://127.0.0.1:{port}/v1/capabilities"))
+        .send()
+        .await
+        .expect("request");
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let mut config = support::synthetic_config(&h.issuer, h.db.options());
+    config.bind = "0.0.0.0:0".parse().expect("address");
+    let error = inquello_service::start(config, Arc::new(ManualClock::new()))
+        .await
+        .err()
+        .expect("plain HTTP on a wildcard address is refused");
+    assert!(matches!(
+        error,
+        StartError::Config(ConfigError::NonLoopbackBind { .. })
+    ));
+
+    let mut config = support::synthetic_config(&h.issuer, h.db.options());
+    config.tls = Some(inquello_service::TlsConfig {
+        cert_chain: Vec::new(),
+        private_key: ca.loopback_server_tls().private_key,
+    });
+    let error = inquello_service::start(config, Arc::new(ManualClock::new()))
+        .await
+        .err()
+        .expect("an empty chain is refused");
+    assert!(matches!(
+        error,
+        StartError::Config(ConfigError::InvalidTls(_))
+    ));
+
+    h.sign_in("bind-check").await;
+    h.finish().await;
+}
+
+// ---- loopback redirects ----------------------------------------------------
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_loopback_registration_accepts_any_port_with_the_exact_path() {
+    let h = Harness::start_with(
+        |config| config.issuers[0].redirect_uris = vec![LOOPBACK_REGISTRATION.to_string()],
+        reqwest::Client::new(),
+    )
+    .await;
+    let body = |redirect: &str| {
+        json!({
+            "issuer": h.issuer.issuer(),
+            "client_id": CLIENT_ID,
+            "redirect_uri": redirect,
+            "device_id": Uuid::new_v4(),
+        })
+    };
+
+    for redirect in [
+        "http://127.0.0.1:40123/callback",
+        "http://127.0.0.1:1/callback",
+        LOOPBACK_REGISTRATION,
+    ] {
+        let transaction: LoginTransaction = h
+            .post("/v1/login/transactions", &body(redirect), None)
+            .await
+            .ok();
+        h.remember(transaction.transaction_proof.expose());
+        // The transaction binds the exact URI requested.
+        assert_eq!(transaction.redirect_uri, redirect);
+    }
+    for redirect in [
+        "http://127.0.0.1:40123/other",
+        "http://127.0.0.1:40123/callback/",
+        "http://127.0.0.1:40123/callback?x=1",
+        "http://localhost:40123/callback",
+        "http://[::1]:40123/callback",
+        "https://127.0.0.1:40123/callback",
+    ] {
+        h.post("/v1/login/transactions", &body(redirect), None)
+            .await
+            .assert_error(ErrorKind::Denied);
+    }
+
+    // Bootstrap must present the exact bound URI, not just any loopback port.
+    let transaction: LoginTransaction = h
+        .post(
+            "/v1/login/transactions",
+            &body("http://127.0.0.1:40123/callback"),
+            None,
+        )
+        .await
+        .ok();
+    h.remember(transaction.transaction_proof.expose());
+    let token = h.sign(&h.valid_fixture("redirect-alice", &transaction));
+    let mut wrong_port = h.bootstrap_body(&transaction, &token);
+    wrong_port["redirect_uri"] = json!("http://127.0.0.1:40124/callback");
+    h.post("/v1/login/bootstrap", &wrong_port, None)
+        .await
+        .assert_error(ErrorKind::Unauthenticated);
+    let _: SessionCredentials = h.bootstrap(&transaction, &token).await.ok();
+
+    h.finish().await;
+}
+
+// ---- synthetic provider ----------------------------------------------------
+
+struct ProviderHarness {
+    h: Harness,
+    provider: RunningProvider,
+    client: reqwest::Client,
+}
+
+fn pkce() -> (String, String) {
+    let mut bytes = [0_u8; 32];
+    rand::fill(&mut bytes);
+    let verifier = URL_SAFE_NO_PAD.encode(bytes);
+    let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
+    (verifier, challenge)
+}
+
+fn query_of(location: &str) -> HashMap<String, String> {
+    let query = location.split_once('?').map(|(_, q)| q).unwrap_or_default();
+    url::form_urlencoded::parse(query.as_bytes())
+        .into_owned()
+        .collect()
+}
+
+impl ProviderHarness {
+    async fn start() -> Self {
+        Self::start_mode(false).await
+    }
+
+    async fn start_mode(onboarding: bool) -> Self {
+        let ca = TestCertificateAuthority::new("provider test CA");
+        let tls = ca.loopback_server_tls();
+        let settings = ProviderSettings {
+            client_id: CLIENT_ID.to_string(),
+            redirect_uris: vec![LOOPBACK_REGISTRATION.to_string()],
+            subject: if onboarding {
+                "synthetic-developer"
+            } else {
+                "synthetic-provider-subject"
+            }
+            .to_string(),
+            email: Some("provider@synthetic.invalid".to_string()),
+            name: Some("Provider Subject".to_string()),
+            code_lifetime: TimeDelta::minutes(1),
+            id_token_lifetime: TimeDelta::minutes(5),
+        };
+        let bind = "127.0.0.1:0".parse().expect("address");
+        let clock = Arc::new(ManualClock::new());
+        let provider = if onboarding {
+            start_onboarding_provider(bind, &tls, settings, clock).await
+        } else {
+            start_provider(bind, &tls, settings, clock).await
+        }
+        .expect("provider starts");
+        let issuer_config = provider.issuer_config();
+        let client = trusting(&ca);
+        let h = Harness::start_with(
+            move |config| {
+                config.tls = Some(tls);
+                config.issuers.push(issuer_config);
+            },
+            client.clone(),
+        )
+        .await;
+        Self {
+            h,
+            provider,
+            client,
+        }
+    }
+
+    async fn transaction(&self, redirect_uri: &str) -> LoginTransaction {
+        let transaction: LoginTransaction = self
+            .h
+            .post(
+                "/v1/login/transactions",
+                &json!({
+                    "issuer": self.provider.issuer_url(),
+                    "client_id": CLIENT_ID,
+                    "redirect_uri": redirect_uri,
+                    "device_id": Uuid::new_v4(),
+                }),
+                None,
+            )
+            .await
+            .ok();
+        self.h.remember(transaction.transaction_proof.expose());
+        transaction
+    }
+
+    /// `GET /authorize`; returns the status and the `Location`, if any.
+    async fn authorize(&self, params: &[(&str, &str)]) -> (StatusCode, Option<String>) {
+        let response = self
+            .client
+            .get(format!("{}/authorize", self.provider.issuer_url()))
+            .query(params)
+            .send()
+            .await
+            .expect("authorize");
+        let location = response
+            .headers()
+            .get(LOCATION)
+            .map(|value| value.to_str().expect("location").to_string());
+        (response.status(), location)
+    }
+
+    async fn token(&self, params: &[(&str, &str)]) -> (StatusCode, Value) {
+        let body = url::form_urlencoded::Serializer::new(String::new())
+            .extend_pairs(params)
+            .finish();
+        let response = self
+            .client
+            .post(format!("{}/token", self.provider.issuer_url()))
+            .header("content-type", "application/x-www-form-urlencoded")
+            .body(body)
+            .send()
+            .await
+            .expect("token");
+        let status = response.status();
+        (status, response.json().await.expect("token body"))
+    }
+
+    /// Runs `/authorize` for `transaction` and returns the code.
+    async fn code(&self, transaction: &LoginTransaction, challenge: &str, state: &str) -> String {
+        self.code_for(transaction, challenge, state, None).await
+    }
+
+    async fn code_for(
+        &self,
+        transaction: &LoginTransaction,
+        challenge: &str,
+        state: &str,
+        hint: Option<&str>,
+    ) -> String {
+        let mut params = vec![
+            ("response_type", "code"),
+            ("client_id", CLIENT_ID),
+            ("redirect_uri", transaction.redirect_uri.as_str()),
+            ("scope", "openid profile email"),
+            ("state", state),
+            ("nonce", transaction.nonce.as_str()),
+            ("code_challenge", challenge),
+            ("code_challenge_method", "S256"),
+        ];
+        if let Some(hint) = hint {
+            params.push(("login_hint", hint));
+        }
+        let (status, location) = self.authorize(&params).await;
+        assert_eq!(status, StatusCode::FOUND);
+        let location = location.expect("redirect");
+        assert!(
+            location.starts_with(&format!("{}?", transaction.redirect_uri)),
+            "{location}"
+        );
+        let query = query_of(&location);
+        assert_eq!(query.get("state").map(String::as_str), Some(state));
+        assert_eq!(
+            query.get("iss").map(String::as_str),
+            Some(self.provider.issuer_url())
+        );
+        let code = query.get("code").expect("code").clone();
+        self.h.remember(&code);
+        code
+    }
+
+    async fn finish(self) {
+        self.h.finish().await;
+        self.provider.shutdown().await;
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_provider_issues_an_id_token_the_service_accepts_after_pkce() {
+    let p = ProviderHarness::start().await;
+    let redirect = "http://127.0.0.1:41234/callback";
+    let transaction = p.transaction(redirect).await;
+    let (verifier, challenge) = pkce();
+    p.h.remember(&verifier);
+    let code = p.code(&transaction, &challenge, "state-1").await;
+
+    let (status, body) = p
+        .token(&[
+            ("grant_type", "authorization_code"),
+            ("code", &code),
+            ("redirect_uri", redirect),
+            ("client_id", CLIENT_ID),
+            ("code_verifier", &verifier),
+        ])
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["token_type"], "Bearer");
+    let id_token = body["id_token"].as_str().expect("id token").to_string();
+    p.h.remember(&id_token);
+    p.h.remember(body["access_token"].as_str().expect("access token"));
+
+    let credentials: SessionCredentials = p.h.bootstrap(&transaction, &id_token).await.ok();
+    let view: inquello_protocol::session::SessionView =
+        p.h.get("/v1/session", Some(credentials.access_credential.expose()))
+            .await
+            .ok();
+    assert_eq!(view.issuer, p.provider.issuer_url());
+    assert_eq!(view.subject, "synthetic-provider-subject");
+    assert_eq!(
+        view.principal.display_name.as_deref(),
+        Some("Provider Subject")
+    );
+
+    // The code is one-use: redeeming it again fails.
+    let (status, body) = p
+        .token(&[
+            ("grant_type", "authorization_code"),
+            ("code", &code),
+            ("redirect_uri", redirect),
+            ("client_id", CLIENT_ID),
+            ("code_verifier", &verifier),
+        ])
+        .await;
+    assert_eq!(
+        (status, body["error"].as_str()),
+        (StatusCode::BAD_REQUEST, Some("invalid_grant"))
+    );
+
+    p.finish().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_token_endpoint_rejects_a_wrong_verifier_client_or_redirect() {
+    let p = ProviderHarness::start().await;
+    let redirect = "http://127.0.0.1:41235/callback";
+    let transaction = p.transaction(redirect).await;
+    let (verifier, challenge) = pkce();
+    let (other_verifier, _) = pkce();
+    p.h.remember(&verifier);
+
+    type Case = (
+        &'static str,
+        Vec<(&'static str, String)>,
+        StatusCode,
+        &'static str,
+    );
+    let cases: Vec<Case> = vec![
+        (
+            "PKCE mismatch",
+            vec![("code_verifier", other_verifier.clone())],
+            StatusCode::BAD_REQUEST,
+            "invalid_grant",
+        ),
+        (
+            "short verifier",
+            vec![("code_verifier", "short".to_string())],
+            StatusCode::BAD_REQUEST,
+            "invalid_grant",
+        ),
+        (
+            "other redirect port",
+            vec![(
+                "redirect_uri",
+                "http://127.0.0.1:41236/callback".to_string(),
+            )],
+            StatusCode::BAD_REQUEST,
+            "invalid_grant",
+        ),
+        (
+            "unknown client",
+            vec![("client_id", "someone-else".to_string())],
+            StatusCode::UNAUTHORIZED,
+            "invalid_client",
+        ),
+        (
+            "client secret",
+            vec![("client_secret", "nope".to_string())],
+            StatusCode::UNAUTHORIZED,
+            "invalid_client",
+        ),
+        (
+            "grant type",
+            vec![("grant_type", "refresh_token".to_string())],
+            StatusCode::BAD_REQUEST,
+            "unsupported_grant_type",
+        ),
+    ];
+    for (label, overrides, expected_status, expected_error) in cases {
+        let code = p.code(&transaction, &challenge, "state-x").await;
+        let mut params: Vec<(&str, String)> = vec![
+            ("grant_type", "authorization_code".to_string()),
+            ("code", code.clone()),
+            ("redirect_uri", redirect.to_string()),
+            ("client_id", CLIENT_ID.to_string()),
+            ("code_verifier", verifier.clone()),
+        ];
+        for (key, value) in overrides {
+            match params.iter_mut().find(|(name, _)| *name == key) {
+                Some(entry) => entry.1 = value,
+                None => params.push((key, value)),
+            }
+        }
+        let borrowed: Vec<(&str, &str)> = params.iter().map(|(k, v)| (*k, v.as_str())).collect();
+        let (status, body) = p.token(&borrowed).await;
+        assert_eq!(status, expected_status, "{label}: {body}");
+        assert_eq!(body["error"].as_str(), Some(expected_error), "{label}");
+        assert!(body.get("id_token").is_none(), "{label}");
+
+        // Every presentation consumed the code, even a failed one.
+        let (status, body) = p
+            .token(&[
+                ("grant_type", "authorization_code"),
+                ("code", &code),
+                ("redirect_uri", redirect),
+                ("client_id", CLIENT_ID),
+                ("code_verifier", &verifier),
+            ])
+            .await;
+        if expected_error == "invalid_grant" {
+            assert_eq!(
+                body["error"].as_str(),
+                Some("invalid_grant"),
+                "{label}: {status}"
+            );
+        }
+    }
+
+    // The transaction stayed open; a correct exchange still signs in.
+    let code = p.code(&transaction, &challenge, "state-ok").await;
+    let (status, body) = p
+        .token(&[
+            ("grant_type", "authorization_code"),
+            ("code", &code),
+            ("redirect_uri", redirect),
+            ("client_id", CLIENT_ID),
+            ("code_verifier", &verifier),
+        ])
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let id_token = body["id_token"].as_str().expect("id token").to_string();
+    p.h.remember(&id_token);
+    let _: SessionCredentials = p.h.bootstrap(&transaction, &id_token).await.ok();
+
+    p.finish().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn authorize_never_redirects_to_an_unregistered_client_and_requires_s256() {
+    let p = ProviderHarness::start().await;
+    let (_, challenge) = pkce();
+    let good = |overrides: &[(&'static str, &'static str)]| {
+        let mut params: Vec<(&str, String)> = vec![
+            ("response_type", "code".to_string()),
+            ("client_id", CLIENT_ID.to_string()),
+            (
+                "redirect_uri",
+                "http://127.0.0.1:41237/callback".to_string(),
+            ),
+            ("scope", "openid".to_string()),
+            ("state", "s".to_string()),
+            ("nonce", "n".to_string()),
+            ("code_challenge", challenge.clone()),
+            ("code_challenge_method", "S256".to_string()),
+        ];
+        for (key, value) in overrides {
+            match params.iter_mut().find(|(name, _)| name == key) {
+                Some(entry) => entry.1 = (*value).to_string(),
+                None => params.push((key, (*value).to_string())),
+            }
+        }
+        params
+    };
+    let call = |params: Vec<(&'static str, String)>| {
+        let p = &p;
+        async move {
+            let borrowed: Vec<(&str, &str)> =
+                params.iter().map(|(k, v)| (*k, v.as_str())).collect();
+            p.authorize(&borrowed).await
+        }
+    };
+
+    // Unregistered client or redirect URI: no redirect at all.
+    for overrides in [
+        vec![("client_id", "someone-else")],
+        vec![("redirect_uri", "http://127.0.0.1:41237/other")],
+        vec![("redirect_uri", "http://localhost:41237/callback")],
+        vec![("redirect_uri", "https://attacker.example/callback")],
+    ] {
+        let (status, location) = call(good(&overrides)).await;
+        assert_eq!(
+            (status, location),
+            (StatusCode::BAD_REQUEST, None),
+            "{overrides:?}"
+        );
+    }
+
+    // Other errors go back to the registered loopback client with the state.
+    for (overrides, error) in [
+        (vec![("code_challenge_method", "plain")], "invalid_request"),
+        (vec![("code_challenge", "too-short")], "invalid_request"),
+        (
+            vec![("response_type", "token")],
+            "unsupported_response_type",
+        ),
+        (vec![("scope", "profile")], "invalid_scope"),
+        (vec![("nonce", "")], "invalid_request"),
+    ] {
+        let (status, location) = call(good(&overrides)).await;
+        assert_eq!(status, StatusCode::FOUND, "{overrides:?}");
+        let query = query_of(&location.expect("redirect"));
+        assert_eq!(
+            query.get("error").map(String::as_str),
+            Some(error),
+            "{overrides:?}"
+        );
+        assert_eq!(query.get("state").map(String::as_str), Some("s"));
+        assert!(!query.contains_key("code"));
+    }
+
+    // Discovery and JWKS describe this issuer.
+    let discovery: Value = p
+        .client
+        .get(format!(
+            "{}/.well-known/openid-configuration",
+            p.provider.issuer_url()
+        ))
+        .send()
+        .await
+        .expect("discovery")
+        .json()
+        .await
+        .expect("discovery body");
+    assert_eq!(discovery["issuer"], p.provider.issuer_url());
+    assert_eq!(
+        discovery["token_endpoint"],
+        format!("{}/token", p.provider.issuer_url())
+    );
+    assert_eq!(
+        discovery["code_challenge_methods_supported"],
+        json!(["S256"])
+    );
+    let jwks: Value = p
+        .client
+        .get(format!("{}/jwks", p.provider.issuer_url()))
+        .send()
+        .await
+        .expect("jwks")
+        .json()
+        .await
+        .expect("jwks body");
+    assert_eq!(jwks["keys"][0]["kty"], "EC");
+    assert!(
+        jwks["keys"][0].get("d").is_none(),
+        "the private key is never served"
+    );
+
+    p.h.sign_in("provider-checks").await;
+    p.finish().await;
+}
+
+// ---- the dev topology binary -------------------------------------------------
+
+/// Tests that spawn the binary run one at a time: `--drop-stale` and the
+/// database listings would otherwise see other tests' runs come and go.
+static TOPOLOGY_BINARY: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn topology_lock() -> std::sync::MutexGuard<'static, ()> {
+    TOPOLOGY_BINARY
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+#[test]
+fn the_dev_topology_prints_one_line_writes_only_the_ca_and_cleans_up() {
+    let _serial = topology_lock();
+    let binary = env!("CARGO_BIN_EXE_inquello-dev-topology");
+    let mut child = Command::new(binary)
+        .arg("--exit-on-stdin-eof")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .expect("spawn the topology");
+    let mut stdout = BufReader::new(child.stdout.take().expect("stdout"));
+    let mut line = String::new();
+    stdout.read_line(&mut line).expect("read the line");
+    let config: Value = serde_json::from_str(&line).expect("one JSON line");
+
+    let keys: Vec<&str> = config
+        .as_object()
+        .expect("object")
+        .keys()
+        .map(String::as_str)
+        .collect();
+    assert_eq!(
+        keys,
+        vec![
+            "ca_path",
+            "client_id",
+            "issuer_label",
+            "issuer_url",
+            "service_url"
+        ]
+    );
+    let service_url = config["service_url"].as_str().expect("service URL");
+    let issuer_url = config["issuer_url"].as_str().expect("issuer URL");
+    assert!(
+        service_url.starts_with("https://127.0.0.1:"),
+        "{service_url}"
+    );
+    assert!(issuer_url.starts_with("https://127.0.0.1:"), "{issuer_url}");
+    assert_eq!(config["client_id"], "inquello-desktop-synthetic");
+
+    let ca_path = std::path::PathBuf::from(config["ca_path"].as_str().expect("CA path"));
+    let ca_dir = ca_path.parent().expect("CA dir").to_path_buf();
+    let pem = std::fs::read_to_string(&ca_path).expect("CA file");
+    assert!(pem.starts_with("-----BEGIN CERTIFICATE-----"));
+    assert!(!pem.contains("PRIVATE KEY"));
+    let entries: Vec<_> = std::fs::read_dir(&ca_dir)
+        .expect("CA dir")
+        .map(|entry| entry.expect("entry").file_name())
+        .collect();
+    assert_eq!(entries, vec![std::ffi::OsString::from("ca.pem")]);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(&ca_path)
+            .expect("meta")
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o777, 0o644);
+        let mode = std::fs::metadata(&ca_dir)
+            .expect("meta")
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o777, 0o755);
+    }
+
+    let runtime = tokio::runtime::Runtime::new().expect("runtime");
+    runtime.block_on(async {
+        let client = reqwest::Client::builder()
+            .tls_built_in_root_certs(false)
+            .add_root_certificate(reqwest::Certificate::from_pem(pem.as_bytes()).expect("CA"))
+            .build()
+            .expect("client");
+        let capabilities: Value = client
+            .get(format!("{service_url}/v1/capabilities"))
+            .send()
+            .await
+            .expect("capabilities")
+            .json()
+            .await
+            .expect("capabilities body");
+        assert_eq!(capabilities["protocol_major"], 1);
+        let discovery: Value = client
+            .get(format!("{issuer_url}/.well-known/openid-configuration"))
+            .send()
+            .await
+            .expect("discovery")
+            .json()
+            .await
+            .expect("discovery body");
+        assert_eq!(discovery["issuer"], issuer_url);
+    });
+
+    drop(child.stdin.take());
+    let deadline = std::time::Instant::now() + Duration::from_secs(30);
+    let status = loop {
+        if let Some(status) = child.try_wait().expect("wait") {
+            break status;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the topology did not stop"
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    };
+    assert!(status.success(), "{status}");
+    assert!(!ca_path.exists(), "the CA file was left behind");
+    assert!(!ca_dir.exists(), "the CA directory was left behind");
+}
+
+/// Starts the topology with `args`, waits for its config line, and returns the
+/// child (stdin held open) and the parsed config.
+fn spawn_topology(args: &[&str]) -> (std::process::Child, Value) {
+    spawn_topology_named(args, None)
+}
+
+fn spawn_topology_named(
+    args: &[&str],
+    application_name: Option<&str>,
+) -> (std::process::Child, Value) {
+    let binary = env!("CARGO_BIN_EXE_inquello-dev-topology");
+    let mut command = Command::new(binary);
+    if let Some(name) = application_name {
+        command.env("PGAPPNAME", name);
+    }
+    let mut child = command
+        .arg("--exit-on-stdin-eof")
+        .args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .expect("spawn the topology");
+    let mut stdout = BufReader::new(child.stdout.take().expect("stdout"));
+    let mut line = String::new();
+    stdout.read_line(&mut line).expect("read the line");
+    (child, serde_json::from_str(&line).expect("one JSON line"))
+}
+
+fn stop_topology(mut child: std::process::Child) {
+    drop(child.stdin.take());
+    let deadline = std::time::Instant::now() + Duration::from_secs(30);
+    let status = loop {
+        if let Some(status) = child.try_wait().expect("wait") {
+            break status;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the topology did not stop"
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    };
+    assert!(status.success(), "{status}");
+}
+
+async fn run_database_names(application_name: Option<&str>) -> Vec<String> {
+    let url = std::env::var(support::DATABASE_ENV).expect("test database URL");
+    let pool = inquello_service::postgres::connect(&inquello_service::DatabaseConfig {
+        connect: url.parse().expect("database URL"),
+        max_connections: 1,
+        acquire_timeout: Duration::from_secs(5),
+    })
+    .await
+    .expect("admin connection");
+    let names =
+        sqlx::query_scalar("SELECT d.datname FROM pg_database d WHERE d.datname LIKE 'inquello_dev_%' AND ($1::text IS NULL OR EXISTS (SELECT 1 FROM pg_stat_activity a WHERE a.datname=d.datname AND a.application_name=$1))")
+            .bind(application_name)
+            .fetch_all(&pool)
+            .await
+            .expect("list databases");
+    pool.close().await;
+    names
+}
+
+#[test]
+fn config_out_writes_the_line_as_utf8_and_removes_it_on_stop() {
+    let _serial = topology_lock();
+    let dir = tempfile::tempdir().expect("temp dir");
+    let config_path = dir.path().join("config.json");
+    let (child, printed) =
+        spawn_topology(&["--config-out", config_path.to_str().expect("utf-8 path")]);
+    let bytes = std::fs::read(&config_path).expect("config file");
+    assert!(
+        !bytes.starts_with(&[0xEF, 0xBB, 0xBF]),
+        "no byte-order mark"
+    );
+    let text = String::from_utf8(bytes).expect("UTF-8");
+    assert!(text.ends_with('\n'));
+    let written: Value = serde_json::from_str(text.trim_end()).expect("JSON");
+    assert_eq!(written, printed);
+    assert!(!dir.path().join("config.tmp").exists(), "no temp file left");
+    stop_topology(child);
+    assert!(!config_path.exists(), "the config file was left behind");
+}
+
+#[test]
+fn drop_stale_removes_abandoned_run_databases_but_never_a_live_run() {
+    let _serial = topology_lock();
+    let runtime = tokio::runtime::Runtime::new().expect("runtime");
+    // An abandoned database already exists when the live run starts, as after
+    // an interrupted test. It must not be mistaken for that run's live lease.
+    let orphan = format!("inquello_dev_{}", Uuid::new_v4().simple());
+    runtime.block_on(async {
+        let url = std::env::var(support::DATABASE_ENV).expect("test database URL");
+        let pool = inquello_service::postgres::connect(&inquello_service::DatabaseConfig {
+            connect: url.parse().expect("database URL"),
+            max_connections: 1,
+            acquire_timeout: Duration::from_secs(5),
+        })
+        .await
+        .expect("admin connection");
+        sqlx::query(sqlx::AssertSqlSafe(format!("CREATE DATABASE \"{orphan}\"")))
+            .execute(&pool)
+            .await
+            .expect("create orphan");
+        pool.close().await;
+    });
+
+    let lease_name = format!("inquello-live-test-{}", Uuid::new_v4().simple());
+    let (live, _) = spawn_topology_named(&[], Some(&lease_name));
+    let after_live = runtime.block_on(run_database_names(Some(&lease_name)));
+    assert_eq!(
+        after_live.len(),
+        1,
+        "exactly the owned live lease must be observed"
+    );
+    let (second, _) = spawn_topology(&["--drop-stale"]);
+    let names = runtime.block_on(run_database_names(None));
+    assert!(
+        !names.contains(&orphan),
+        "the abandoned database was not dropped"
+    );
+    for name in &after_live {
+        assert!(
+            names.contains(name),
+            "a live run database {name} was dropped"
+        );
+    }
+    stop_topology(second);
+    stop_topology(live);
+}
+
+// Story 1.31: explicit fixture mode, never a production identity shortcut.
+fn signed_fixture_claims(token: &str) -> Value {
+    let payload = token.split('.').nth(1).expect("JWT payload");
+    serde_json::from_slice(&URL_SAFE_NO_PAD.decode(payload).expect("base64 claims"))
+        .expect("claims")
+}
+
+async fn exchange_fixture(
+    p: &ProviderHarness,
+    transaction: &LoginTransaction,
+    code: &str,
+    verifier: &str,
+) -> (StatusCode, Value) {
+    p.token(&[
+        ("grant_type", "authorization_code"),
+        ("code", code),
+        ("redirect_uri", &transaction.redirect_uri),
+        ("client_id", CLIENT_ID),
+        ("code_verifier", verifier),
+    ])
+    .await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn default_provider_stays_one_subject_unverified_even_with_login_hint() {
+    let p = ProviderHarness::start().await;
+    let transaction = p.transaction("http://127.0.0.1:41301/callback").await;
+    let (verifier, challenge) = pkce();
+    p.h.remember(&verifier);
+    let code = p
+        .code_for(&transaction, &challenge, "default", Some("elias"))
+        .await;
+    let (status, body) = exchange_fixture(&p, &transaction, &code, &verifier).await;
+    assert_eq!(status, StatusCode::OK);
+    let token = body["id_token"].as_str().expect("token");
+    p.h.remember(token);
+    p.h.remember(body["access_token"].as_str().expect("access"));
+    let claims = signed_fixture_claims(token);
+    assert_eq!(claims["sub"], "synthetic-provider-subject");
+    assert_eq!(claims["email_verified"], false);
+    let credentials: SessionCredentials = p.h.bootstrap(&transaction, token).await.ok();
+    p.h.get(
+        "/v1/invitations",
+        Some(credentials.access_credential.expose()),
+    )
+    .await
+    .assert_error(ErrorKind::Denied);
+    p.finish().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn onboarding_interleaved_codes_bind_fixed_identity_and_verified_claims_without_membership() {
+    let p = ProviderHarness::start_mode(true).await;
+    let ada = p.transaction("http://127.0.0.1:41302/callback").await;
+    let elias = p.transaction("http://127.0.0.1:41303/callback").await;
+    let (va, ca) = pkce();
+    let (ve, ce) = pkce();
+    p.h.remember(&va);
+    p.h.remember(&ve);
+    let ac = p.code_for(&ada, &ca, "ada-state", Some("chanda")).await;
+    let ec = p.code_for(&elias, &ce, "elias-state", Some("elias")).await;
+    // Redeem in reverse order; no global currently-selected subject exists.
+    let mut principals = Vec::new();
+    for (tx, code, verifier, subject, email) in [
+        (
+            &elias,
+            &ec,
+            &ve,
+            "synthetic-colleague",
+            "elias.ndlovu@mupeta.invalid",
+        ),
+        (
+            &ada,
+            &ac,
+            &va,
+            "synthetic-developer",
+            "chanda.mwansa@mupeta.invalid",
+        ),
+    ] {
+        let (status, body) = exchange_fixture(&p, tx, code, verifier).await;
+        assert_eq!(status, StatusCode::OK);
+        let token = body["id_token"].as_str().expect("token");
+        p.h.remember(token);
+        p.h.remember(body["access_token"].as_str().expect("access"));
+        let claims = signed_fixture_claims(token);
+        assert_eq!(claims["sub"], subject);
+        assert_eq!(claims["email"], email);
+        assert_eq!(claims["email_verified"], true);
+        assert_eq!(claims["nonce"], tx.nonce);
+        // Normal service bootstrap verifies signed issuer/nonce/PKCE flow result.
+        let credentials: SessionCredentials = p.h.bootstrap(tx, token).await.ok();
+        let view: inquello_protocol::session::SessionView =
+            p.h.get("/v1/session", Some(credentials.access_credential.expose()))
+                .await
+                .ok();
+        assert_eq!(view.subject, subject);
+        principals.push(view.principal.principal_id);
+        let invitations: Value =
+            p.h.get(
+                "/v1/invitations",
+                Some(credentials.access_credential.expose()),
+            )
+            .await
+            .ok();
+        assert_eq!(invitations["invitations"], json!([]));
+        let (status, _) = exchange_fixture(&p, tx, code, verifier).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+    }
+    assert_ne!(principals[0], principals[1]);
+    let memberships: i64 = sqlx::query_scalar("SELECT count(*) FROM memberships")
+        .fetch_one(&p.h.pool)
+        .await
+        .expect("count memberships");
+    let workspaces: i64 = sqlx::query_scalar("SELECT count(*) FROM workspaces")
+        .fetch_one(&p.h.pool)
+        .await
+        .expect("count workspaces");
+    assert_eq!(memberships, 0);
+    assert_eq!(workspaces, 0);
+    p.finish().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn onboarding_unknown_missing_hints_and_cross_code_profiles_are_rejected() {
+    let p = ProviderHarness::start_mode(true).await;
+    let tx = p.transaction("http://127.0.0.1:41304/callback").await;
+    let (verifier, challenge) = pkce();
+    p.h.remember(&verifier);
+    for hint in [
+        None,
+        Some(""),
+        Some("arbitrary-subject"),
+        Some("Ada"),
+        Some("chanda.mwansa@mupeta.invalid"),
+    ] {
+        let mut params = vec![
+            ("response_type", "code"),
+            ("client_id", CLIENT_ID),
+            ("redirect_uri", tx.redirect_uri.as_str()),
+            ("scope", "openid"),
+            ("state", "s"),
+            ("nonce", tx.nonce.as_str()),
+            ("code_challenge", challenge.as_str()),
+            ("code_challenge_method", "S256"),
+        ];
+        if let Some(hint) = hint {
+            params.push(("login_hint", hint));
+        }
+        let (status, location) = p.authorize(&params).await;
+        assert_eq!(status, StatusCode::FOUND);
+        let query = query_of(&location.expect("registered redirect"));
+        assert_eq!(
+            query.get("error").map(String::as_str),
+            Some("invalid_request")
+        );
+        assert!(!query.contains_key("code"));
+    }
+    let code = p.code_for(&tx, &challenge, "bound", Some("chanda")).await;
+    let (status, body) = p
+        .token(&[
+            ("grant_type", "authorization_code"),
+            ("code", &code),
+            ("redirect_uri", &tx.redirect_uri),
+            ("client_id", CLIENT_ID),
+            ("code_verifier", &verifier),
+            ("login_hint", "elias"),
+        ])
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(body.get("id_token").is_none());
+    let (status, _) = exchange_fixture(&p, &tx, &code, &verifier).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST); // rejected override consumed code
+    let (other_verifier, other_challenge) = pkce();
+    p.h.remember(&other_verifier);
+    let code = p
+        .code_for(&tx, &other_challenge, "other-profile", Some("elias"))
+        .await;
+    let (status, body) = exchange_fixture(&p, &tx, &code, &verifier).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(body.get("id_token").is_none());
+    let code = p
+        .code_for(&tx, &challenge, "wrong-redirect", Some("chanda"))
+        .await;
+    let (status, body) = p
+        .token(&[
+            ("grant_type", "authorization_code"),
+            ("code", &code),
+            ("redirect_uri", "http://127.0.0.1:41305/callback"),
+            ("client_id", CLIENT_ID),
+            ("code_verifier", &verifier),
+        ])
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(body.get("id_token").is_none());
+    p.finish().await;
+}
+
+#[test]
+fn onboarding_topology_refuses_every_seed_and_foreign_mode_before_startup() {
+    let binary = env!("CARGO_BIN_EXE_inquello-dev-topology");
+    for conflicting in [
+        vec!["--seed-workspace", "No seed"],
+        vec!["--seed-out", "unused.json"],
+        vec!["--seed-policy", "unused.json"],
+        vec!["--seed-execution", "unused.json"],
+        vec!["--smoke"],
+        vec!["--visual-only"],
+        vec!["--quota-only"],
+        vec!["--provider-fixture", "unused.json"],
+        vec!["--smoke-visual"],
+        vec!["--smoke-quota"],
+        vec!["--navigation"],
+        vec!["--service-bind", "0.0.0.0:0"],
+        vec!["--issuer-bind", "0.0.0.0:0"],
+    ] {
+        let output = Command::new(binary)
+            .arg("--onboarding")
+            .args(&conflicting)
+            .env_remove("INQUELLO_DEV_DATABASE_URL")
+            .env_remove("INQUELLO_TEST_DATABASE_URL")
+            .output()
+            .expect("invalid mode exits before database setup");
+        assert_eq!(output.status.code(), Some(2));
+        assert!(output.stdout.is_empty());
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn onboarding_provider_rejects_non_synthetic_profile_before_binding() {
+    let ca = TestCertificateAuthority::new("fixture gate CA");
+    let tls = ca.loopback_server_tls();
+    for (bind, client, subject, redirect) in [
+        (
+            "0.0.0.0:0",
+            CLIENT_ID,
+            "synthetic-developer",
+            LOOPBACK_REGISTRATION,
+        ),
+        (
+            "127.0.0.1:0",
+            "ordinary-client",
+            "synthetic-developer",
+            LOOPBACK_REGISTRATION,
+        ),
+        (
+            "127.0.0.1:0",
+            CLIENT_ID,
+            "arbitrary-subject",
+            LOOPBACK_REGISTRATION,
+        ),
+        (
+            "127.0.0.1:0",
+            CLIENT_ID,
+            "synthetic-developer",
+            "http://localhost/callback",
+        ),
+    ] {
+        let settings = ProviderSettings {
+            client_id: client.into(),
+            subject: subject.into(),
+            redirect_uris: vec![redirect.into()],
+            email: None,
+            name: None,
+            code_lifetime: TimeDelta::minutes(1),
+            id_token_lifetime: TimeDelta::minutes(5),
+        };
+        assert!(
+            start_onboarding_provider(
+                bind.parse().expect("bind"),
+                &tls,
+                settings,
+                Arc::new(ManualClock::new())
+            )
+            .await
+            .is_err()
+        );
+    }
+}
+
+#[test]
+fn onboarding_binary_starts_an_empty_owned_database_and_cleans_up() {
+    let _serial = topology_lock();
+    let lease_name = format!("inquello-onboarding-test-{}", Uuid::new_v4().simple());
+    let (child, config) = spawn_topology_named(&["--onboarding"], Some(&lease_name));
+    assert_eq!(config["client_id"], CLIENT_ID);
+    let runtime = tokio::runtime::Runtime::new().expect("runtime");
+    let names = runtime.block_on(run_database_names(Some(&lease_name)));
+    assert_eq!(names.len(), 1);
+    runtime.block_on(async {
+        let url = std::env::var(support::DATABASE_ENV).expect("test database URL");
+        let options: sqlx::postgres::PgConnectOptions = url.parse().expect("database URL");
+        let pool = inquello_service::postgres::connect(&inquello_service::DatabaseConfig {
+            connect: options.database(&names[0]),
+            max_connections: 1,
+            acquire_timeout: Duration::from_secs(5),
+        })
+        .await
+        .expect("owned run database");
+        for table in ["workspaces", "memberships"] {
+            let count: i64 =
+                sqlx::query_scalar(sqlx::AssertSqlSafe(format!("SELECT count(*) FROM {table}")))
+                    .fetch_one(&pool)
+                    .await
+                    .expect("count initial fixture state");
+            assert_eq!(count, 0);
+        }
+        pool.close().await;
+    });
+    stop_topology(child);
+    assert!(
+        runtime
+            .block_on(run_database_names(Some(&lease_name)))
+            .is_empty()
+    );
+}

@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "description": "Every recorded state of one Task (Story 1.15). Only the Task's creator may read them; anyone else gets `not_found`, as for an unknown Task.",
+  "properties": {
+    "taskId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "taskId"
+  ],
+  "title": "InquelloStateListParams",
+  "type": "object"
+}

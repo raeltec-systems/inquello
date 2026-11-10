@@ -1,0 +1,5 @@
+[wsl2]
+swap=4GB
+swapFile=D:\\Inquello\\wsl\\swap.vhdx
+maxCrashDumpCount=0
+crashDumpFolder=D:\\Inquello\\logs\\wsl-crashes

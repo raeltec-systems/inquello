@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "properties": {
+    "expectedRevision": {
+      "format": "uint64",
+      "minimum": 0.0,
+      "type": "integer"
+    },
+    "name": {
+      "type": "string"
+    },
+    "operationId": {
+      "type": "string"
+    },
+    "workspaceId": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "expectedRevision",
+    "name",
+    "operationId",
+    "workspaceId"
+  ],
+  "title": "InquelloWorkspaceRememberParams",
+  "type": "object"
+}

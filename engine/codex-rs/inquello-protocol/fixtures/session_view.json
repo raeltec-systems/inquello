@@ -1,0 +1,17 @@
+{
+  "session_id": "3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f",
+  "device_id": "6f1c2b9e-3d4a-4e5f-8a7b-1c2d3e4f5a6b",
+  "issuer": "https://test-issuer.inquello.invalid",
+  "subject": "synthetic-subject-alice",
+  "created_at": "2026-10-28T12:00:00.000Z",
+  "last_authenticated_at": "2026-10-28T12:00:00.000Z",
+  "expires_at": "2026-11-27T12:00:00.000Z",
+  "revoked_at": null,
+  "revision": "1",
+  "principal": {
+    "principal_id": "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d",
+    "revision": "1",
+    "email": "alice@synthetic.invalid",
+    "display_name": "Alice Synthetic"
+  }
+}

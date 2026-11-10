@@ -1,0 +1,144 @@
+
+> inquello-desktop@0.0.0 test /workspace/inquello/desktop
+> vitest run --configLoader runner
+
+
+ RUN  v5.0.5 /workspace/inquello/desktop
+
+ ❯ test/contrast.test.ts (14 tests | 1 failed) 35ms
+   ❯ contrast evidence (1)
+     × matches evidence/contrast-primitives.json 15ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/contrast.test.ts > contrast evidence > matches evidence/contrast-primitives.json
+AssertionError: evidence is stale: rerun with INQUELLO_WRITE_EVIDENCE=1 and commit it: expected '{\n  "kind": "primitive-contrast-evid…' to be '{\n  "kind": "primitive-contrast-evid…' // Object.is equality
+
+- Expected
++ Received
+
+@@ -148,11 +148,11 @@
+        },
+        "adjacent": {
+          "token": "action-quiet-bg",
+          "value": "#eef0f3"
+        },
+-       "ratio": 15.445078501523632,
++       "ratio": 15.445078501523636,
+        "threshold": 4.5,
+        "pass": true,
+        "rendered": "static"
+      },
+      {
+@@ -188,11 +188,11 @@
+        },
+        "adjacent": {
+          "token": "action-quiet-bg",
+          "value": "#eef0f3"
+        },
+-       "ratio": 15.445078501523632,
++       "ratio": 15.445078501523636,
+        "threshold": 4.5,
+        "pass": true,
+        "rendered": "static"
+      },
+      {
+@@ -488,11 +488,11 @@
+        },
+        "adjacent": {
+          "token": "action-quiet-bg",
+          "value": "#eef0f3"
+        },
+-       "ratio": 8.746890280891797,
++       "ratio": 8.746890280891801,
+        "threshold": 3,
+        "pass": true,
+        "rendered": "static"
+      },
+      {
+@@ -508,11 +508,11 @@
+        },
+        "adjacent": {
+          "token": "action-quiet-bg",
+          "value": "#eef0f3"
+        },
+-       "ratio": 8.746890280891797,
++       "ratio": 8.746890280891801,
+        "threshold": 3,
+        "pass": true,
+        "rendered": "static"
+      },
+      {
+@@ -2168,11 +2168,11 @@
+        },
+        "adjacent": {
+          "token": "action-quiet-bg",
+          "value": "#eef0f3"
+        },
+-       "ratio": 15.445078501523632,
++       "ratio": 15.445078501523636,
+        "threshold": 4.5,
+        "pass": true,
+        "rendered": "static"
+      },
+      {
+@@ -2188,11 +2188,11 @@
+        },
+        "adjacent": {
+          "token": "action-quiet-bg",
+          "value": "#eef0f3"
+        },
+-       "ratio": 5.324211468824727,
++       "ratio": 5.3242114688247275,
+        "threshold": 4.5,
+        "pass": true,
+        "rendered": "static"
+      },
+      {
+@@ -2668,11 +2668,11 @@
+        },
+        "adjacent": {
+          "token": "status-investigating-bg",
+          "value": "#eef0f2"
+        },
+-       "ratio": 8.741159115316183,
++       "ratio": 8.741159115316185,
+        "threshold": 4.5,
+        "pass": true,
+        "rendered": "static"
+      },
+      {
+@@ -3228,11 +3228,11 @@
+        },
+        "adjacent": {
+          "token": "ink-50",
+          "value": "#fafbfc"
+        },
+-       "ratio": 8.99580851260002,
++       "ratio": 8.995808512600018,
+        "threshold": 4.5,
+        "pass": true,
+        "rendered": "static"
+      },
+      {
+
+ ❯ test/contrast.test.ts:194:124
+    192|       fs.writeFileSync(evidencePath, expected);
+    193|     }
+    194|     expect(fs.readFileSync(evidencePath, 'utf8'), 'evidence is stale: …
+       |                                                                                                                            ^
+    195|   });
+    196| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 22 passed | 1 skipped (24)
+      Tests  1 failed | 709 passed | 8 skipped (718)
+   Start at  06:41:24
+   Duration  20.88s (tests 71%, environment 16%, import 8%, transform 4%)
+
+    Isolate  24 workers spawned · ~215ms startup each (spawn + environment, per file)
+             at least ~4.95s faster with isolate: false — reuses workers across files instead of one per file
+
+ ELIFECYCLE  Test failed. See above for more details.
