@@ -106,6 +106,7 @@ context:
 
 - `engine/codex-rs/inquello-domain/src/execution_policy/section.rs` -- the `allow_local_mcp_servers` field and its validation, plus the service wire.
 - `engine/codex-rs/app-server/src/request_processors/mcp_processor.rs`, its protocol and runtime OAuth helpers -- runtime-owned cancellable login lifecycle and persistence arbitration; isolated regression tests.
+- `engine/codex-rs/rmcp-client/src/perform_oauth_login.rs` -- remaining callback transport teardown defect from the native Linux gate. Preserve atomic credential-persistence arbitration. See [November 5 callback investigation](verification-2026-11-05/oauth-cancel-investigation.md) and `deferred-work.md` for source evidence and the required actual listener/accepted-connection cancellation checks. The investigation is a proposed repair, not a verified result; no new dependency or external authorization grant is permitted.
 - `desktop/src/main/` -- a new `capabilities/` mediator: inventory assembly, management operations, notification handling and policy gating.
 - `desktop/src/main/security/operations.ts` and `preload` -- the operations.
 - `desktop/src/renderer/Capabilities.tsx` (S07) -- inventory UI, management controls, provider block.
@@ -306,3 +307,32 @@ Final verification: `pnpm run build` and full main/renderer TypeScript passed. F
 Round-2 targeted patch verification passed 129 tests across four edited-surface suites. Native guarded status/login, cancellation and plugin-install boundary tests are authored but **unrun**, not verified outcomes. No Rust toolchain, matching binaries, database topology or native/keyring smoke is available. Genuine protocol generation remains a required build-completion blocker.
 
 The BMAD presentation step's automatic done/commit transition is intentionally withheld: the owner accepted documented unavailable validation, not fabricated native success or completed generated artifacts. This snapshot has no Git metadata, so no local story commit was created. Story and tracker remain **in-progress**; no Story 1.21 push/merge/deployment occurred. The previously published focused fixes at 3c7b4e9 are preserved. R5–R8/R10 from the earlier review remain separate work.
+
+
+## Current Epic1 completion gate — 2026-11-05
+The owner identified that normal Settings had no tools/plugin/connector setup to try. Current source confirms the management component is mounted only in the design specimen, not ordinary Settings. See [production exposure gap and owner clarification](verification-2026-11-05/story121-production-exposure-gap.md) for exact source paths, current protected-Task restrictions and required completion evidence. Retain discoverable supported setup, connection/configuration/revocation/readiness and authorized private-Task use within approved scope as an Epic1 completion gate, not merely inventory presence. Reconcile historical no-model-run/dependent-story boundaries before any scope expansion; do not infer all integrations. Reuse inherited machinery and verify actual ordinary-user paths. Story1.26 remains active; no implementation switch or frozen-intent change is made by this note.
+
+## Ordinary Settings continuation — 2026-11-06
+
+The tools management UI is now mounted through ordinary Settings for the current Workspace only, with a dedicated navigation entry, focus handling, loading/identity-transition states, and collapsed policy details. Existing runtime management and callable rules are reused. Integration rows explicitly describe runtime configuration readiness; private Tasks still keep MCP/apps/plugins disabled. Provider model-selection wording replaces the stale pre-Story1.25 no-model-run claim without inventing a selected model.
+
+Focused renderer/service checks and builds passed; production navigation/capture checks are authored for the next seeded smoke. The original OAuth RPC cancellation regression was reproduced failing on the unchanged native baseline; repair and source-matched validation are underway. Windows provider-independence coverage uses a fresh CODEX_HOME-scoped keyring and synthetic local-save credentials, but runtime execution remains pending. Full evidence and outstanding gates: [tools Settings continuation](verification-2026-11-05/tools-settings-continuation-20261106.md).
+
+Story status, original baseline_commit, frozen acceptance and unchecked completion gates remain unchanged. A configured integration is not proof of supported private-Task invocation. That cross-story gate requires an explicit authorized scope decision and subsequent evidence; no private-Task restrictions were relaxed.
+
+## Consolidated offline pass — 2026-11-09/10
+
+Recorded from the Epic 1 consolidated offline verification pass at commit `f992919722` on this Windows host; full gate list, logs and limits are in [epic-1-offline-pass-2026-11-09.md](epic-1-offline-pass-2026-11-09.md). Synthetic and offline only: no live provider, no real credentials, no owner acceptance, and no change to real-data qualification. This supersedes earlier "cargo absent / unrun" entries for the gates listed as passed. Status stays `in-progress` and no task box was changed by this record; the boxes were not re-audited against the code.
+
+Shared gates that passed: `cargo fmt --all -- --check`; native tests for `inquello-domain`, `inquello-protocol`, `inquello-adapters` and `inquello-service` (`test-issuer`, all targets); clippy with warnings as errors on those four crates; default rebuild of CLI, app-server and service; `pnpm run generate:protocol` (816 files, no working-tree change); both desktop type checks; `pnpm run build`; full `pnpm test` (2,270 passed, 0 failed, 21 skipped); seeded Electron smoke (19 of 19 required reports).
+
+Specific to this story, passed:
+
+- `cargo test -p codex-rmcp-client --lib` passed. The OAuth callback teardown repair this spec calls "underway" landed in commit `c79147358c` (2026-11-06); see the FORK-CUT section of that date.
+- Seeded smoke `capabilities` report and the separate `tools-management` phase passed.
+- The full desktop suite ran with the test database configured; individual files were not itemised.
+
+Still open or not run:
+
+- App-server MCP OAuth cancellation and plugin-install boundary RPC tests were not selected separately.
+- Owner scope decision on tool use inside private Tasks; hosted-app sign-in remains real external OAuth.

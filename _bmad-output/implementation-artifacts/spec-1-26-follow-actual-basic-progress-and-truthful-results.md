@@ -50,6 +50,7 @@ context:
 
 ## Code Map
 
+- Current Windows continuation: [November 5 visual investigation and baseline](verification-2026-11-05/visual-investigation.md). The unchanged native synthetic follow-up was accepted by the fixture but did not render before the existing deadline. Diagnose and repair the exact live-progress path without weakening timeouts, freshness fences, permissions or tests. This is current evidence, unlike the historical re-derivation snapshots below.
 - `desktop/src/main/runtime/rpc.ts`, `main.ts`, `tasks/{service,types,validators}.ts`, new `tasks/progress.ts`: main currently discards progress and drops server-request IDs. Add bounded typed projection and question correlation; reuse epoch/current-authority checks, not renderer thread identity.
 - `desktop/src/main/security/operations.ts`, `preload/preload.ts`, `renderer/Shell/{tasks-bridge,TaskView,Shell,PermissionRequests}.tsx|ts`: named snapshot/subscription/answer operations; sanitized current-selection delivery and existing permission cards.
 - `renderer/primitives/{PlanStep,JudgmentTag,DiffLine,ApprovalCard}.tsx`, new `Shell/TaskProgress.tsx`: compose semantic rows, not fictional Message/ToolCall primitives. JudgmentTag's basis shape check is not provenance validation. Preserve Story 1.15 independent state dimensions.
@@ -247,3 +248,35 @@ Story/tracker remain in-progress; no eligibility promotion.
 Three independent review layers completed in each of three passes. Final direct corrections cover unresolved-reference incompleteness, stale read rejection, ended activity presentation, single-flight permission polling and consumed-card suppression, plus parser-to-mounted failed/cancelled citations. All actual findings were individually triaged above with likelihood/impact; rejected low-risk enhancements and unverified residuals are not represented as fixed.
 
 Owner verification rerun after all product edits: main TypeScript and production build exit0; focused **14 files /392 tests passed**, none skipped; full **48 files passed /12 failed /1 skipped;1,223 tests passed /3 failed /5 skipped**. Full command exit1 retains baseline missing native/design/Git/generated-source failures, not a full pass. Native regression attempt exits127 (cargo unavailable). Exact logs are `desktop/validation/story126-final-*`. The inherited matrix is covered by passing desktop tests for its supported projection/UI paths; actual native, protocol, Windows Electron and provider/auditor outcomes remain unrun, therefore the native verification task and story remain in progress. No automatic done/review promotion or local/remote commit was made.
+
+
+### Current Windows continuation — 2026-11-05
+The owner authorized completing Epic1 after planning reconciliation. Continue from current branch HEAD c407483170e93ad9bea0f2d1c36e9d32693b0c44 in D:\Projects\inquello, not from the historical missing/cloud snapshots or any old instruction to revert the tree. Preserve existing local planning and other edits. The original baseline_commit NO_VCS remains historical and is not overwritten. Story and tracker are already in-progress; no acceptance promotion is justified.
+
+Current default Windows engine, topology, fixture engine and desktop production build passed. The full desktop baseline and full seeded smoke failed; exact evidence is in verification-2026-11-05. All baseline processes have ended. The isolated approved Docker PostgreSQL18.6 fixture on D: remains available for diagnostics through the recorded validation helper. Complete the live-progress repair and verification sequentially. Ask before any new install/download beyond an approved spec. No real paid inference, real audit data, new credentials, sandbox bypass, commit/push/PR or unrelated source changes are authorized by this continuation note. Read CLAUDE.md and docs/verification.md as required repository instructions; no BMAD review-layer subagents.
+
+
+### Current Windows verification checkpoint — 2026-11-05
+
+The current 11-file desktop candidate passed **9 focused files / 282 tests, 0 failed and 0 skipped** (135.59s). Exact-current-source Windows fixture and production desktop builds passed. Two sequential, unchanged actual Electron synthetic journeys passed (**155.64s / 148.28s**, log-file elapsed), each with 5 valid fixture calls, 0 invalid calls, retained-context follow-up, explicit Stop/Resume, reader-jump checks and clean cleanup. Actual Windows follow-up, interrupted/narrow and resumed captures were inspected; retained answers and the approved Finished/worked-for presentation remained readable.
+
+Source hashes, commands, logs, prior failures and exact capture paths are in the [final candidate manifest](verification-2026-11-05/progress-repair-final-candidate-manifest.json), [candidate diff](verification-2026-11-05/progress-repair-final-candidate.diff) and [investigation record](verification-2026-11-05/progress-repair-investigation.md). The source-matched installed guest is recorded by its [activation verification receipt](../../.tmp/guest-activation-verified-20261105.json), with [isolation](../../.tmp/guest-isolation-20261105-1829.log), [executor](../../.tmp/guest-executor-20261105-1829.log) and [runtime matrix](../../.tmp/guest-runtime-matrix-20261105-1830.log) evidence. Guest source archive SHA-256: `9e8f47c61315ccf013a4fbb0616418de2d5c7de69c731ce1e855eff8ce4deeb3`.
+
+This is bounded focused-test and actual Electron synthetic evidence, **not native/protocol-suite, full desktop suite, full 18-report seeded-smoke, real-provider or auditor-usefulness acceptance**. The full gates and conditional SQLite writer-contention residual remain open; known baseline failures are not dismissed. The original historical composite selection-observation failure's exact code was not retained; the additional observation-only usage regression was independently reproduced and repaired, without claiming that historical causality. Story and tracker remain **in-progress**, with no eligibility promotion, frozen-intent change, staging or commit.
+
+## Consolidated offline pass — 2026-11-09/10
+
+Recorded from the Epic 1 consolidated offline verification pass at commit `f992919722` on this Windows host; full gate list, logs and limits are in [epic-1-offline-pass-2026-11-09.md](epic-1-offline-pass-2026-11-09.md). Synthetic and offline only: no live provider, no real credentials, no owner acceptance, and no change to real-data qualification. This supersedes earlier "cargo absent / unrun" entries for the gates listed as passed. Status stays `in-progress` and no task box was changed by this record; the boxes were not re-audited against the code.
+
+Shared gates that passed: `cargo fmt --all -- --check`; native tests for `inquello-domain`, `inquello-protocol`, `inquello-adapters` and `inquello-service` (`test-issuer`, all targets); clippy with warnings as errors on those four crates; default rebuild of CLI, app-server and service; `pnpm run generate:protocol` (816 files, no working-tree change); both desktop type checks; `pnpm run build`; full `pnpm test` (2,270 passed, 0 failed, 21 skipped); seeded Electron smoke (19 of 19 required reports).
+
+Specific to this story, passed:
+
+- `cargo test -p inquello-protocol`, `codex-core --lib private_progress_control_tests` and `codex-app-server --lib progress_tests` passed.
+- The full desktop suite and the full seeded smoke, which were failing at the 2026-11-05 baseline, now pass.
+
+Still open or not run:
+
+- The two `exact_*_schema_*_fits_current_route` core tests were not selected by name; clippy on `codex-core` and `codex-app-server` was not run.
+- `real_private_task_retains_publication_question_and_truthful_progress` lives in the Linux-only `inquello_messages_runtime`: **not run**.
+- Provider useful-output acceptance, auditor validation and owner acceptance of the Windows UI.
