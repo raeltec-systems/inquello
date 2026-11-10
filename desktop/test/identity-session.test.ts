@@ -6,6 +6,7 @@
  * The loopback listener and the vault are the real ones.
  */
 import fs from 'node:fs';
+import net from 'node:net';
 import path from 'node:path';
 
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
@@ -63,6 +64,18 @@ function world(backend: string | null = 'gnome_libsecret', options: { now?: () =
 function fileText(dir: string): string {
   const file = path.join(dir, SESSION_FILE);
   return fs.existsSync(file) ? fs.readFileSync(file).toString('latin1') : '';
+}
+
+/** A loopback port that was free a moment ago, for tests of the fixed callback port. */
+function freePort(): Promise<number> {
+  return new Promise<number>((resolve, reject) => {
+    const probe = net.createServer();
+    probe.once('error', reject);
+    probe.listen(0, '127.0.0.1', () => {
+      const address = probe.address();
+      probe.close(() => resolve(typeof address === 'object' && address ? address.port : 0));
+    });
+  });
 }
 
 describe('sign-in', () => {
@@ -350,6 +363,8 @@ describe('logout', () => {
     expect(second).toMatchObject({ ok: true, status: { identity: { state: 'signed-out' } } });
     expect(w.service.logoutEnvelopes.map((e) => e.operation_id)).toEqual(['logout-op-1', 'logout-op-1']);
     expect(w.service.logoutEnvelopes[1]).toEqual(w.service.logoutEnvelopes[0]);
+    // The refused retry is settled by asking the service: the revoked family cannot refresh, so the sign-out is confirmed.
+    expect(w.service.calls.filter((name) => name === 'refresh')).toHaveLength(1);
     expect(fs.existsSync(path.join(w.dir, SESSION_FILE))).toBe(false);
   });
 
@@ -391,6 +406,67 @@ describe('logout', () => {
 });
 
 describe('logout when the refresh cannot be attempted (review R02)', () => {
+  it('a logout retry refused with an expired credential is not confirmed until the family is refreshed or revoked', async () => {
+    let now = Date.now();
+    const w = world('gnome_libsecret', { now: () => now });
+    const session = w.make({ operationId: () => 'logout-op-retry' });
+    await session.signIn();
+    const command = w.service.sessionCommand.bind(w.service);
+    const refresh = w.service.refresh.bind(w.service);
+    // The first attempt never reaches the service, so nothing is committed, but it is recorded as possibly sent.
+    w.service.sessionCommand = async () => {
+      throw new ServiceError('transport', false);
+    };
+    const first = await session.signOut();
+    expect(first).toMatchObject({ ok: false, reason: REASONS.logoutPending });
+    expect(w.service.current()!.revoked).toBe(false);
+    // The access credential then expires and the refresh cannot be attempted, so the retry is refused as unauthenticated.
+    w.service.sessionCommand = command;
+    now = w.service.current()!.accessExpiresAt + 1;
+    w.service.refresh = async () => {
+      throw new ServiceError('dependency_unavailable', true, 503);
+    };
+    const second = await session.signOut();
+    // That refusal is not proof that the earlier attempt committed: the server session is still alive.
+    expect(second).toMatchObject({ ok: false, reason: REASONS.logoutPending, status: { identity: { state: 'blocked', reason: REASONS.logoutPending } } });
+    expect(w.service.current()!.revoked).toBe(false);
+    expect(session.holdsSession()).toBe(true);
+    expect(fs.existsSync(path.join(w.dir, SESSION_FILE))).toBe(true);
+    // Once the service answers, the same operation is sent with a fresh credential and the session is revoked.
+    w.service.refresh = refresh;
+    const third = await session.signOut();
+    expect(third).toMatchObject({ ok: true, status: { identity: { state: 'signed-out' } } });
+    expect(w.service.current()!.revoked).toBe(true);
+    expect(new Set(w.service.logoutEnvelopes.map((e) => e.operation_id))).toEqual(new Set(['logout-op-retry']));
+    expect(fs.existsSync(path.join(w.dir, SESSION_FILE))).toBe(false);
+  });
+
+  it('a refreshed credential that is refused again leaves the sign-out pending after one refresh, without looping', async () => {
+    const w = world();
+    const session = w.make({ operationId: () => 'logout-op-refused' });
+    await session.signIn();
+    const command = w.service.sessionCommand.bind(w.service);
+    let attempts = 0;
+    w.service.sessionCommand = async () => {
+      attempts += 1;
+      throw new ServiceError('unauthenticated', true, 401);
+    };
+    const refreshesBefore = w.service.calls.filter((name) => name === 'refresh').length;
+    const first = await session.signOut();
+    expect(first).toMatchObject({ ok: false, reason: REASONS.logoutPending, status: { identity: { state: 'blocked', reason: REASONS.logoutPending }, sharedService: 'available' } });
+    // One send, one refresh, one resend: bounded.
+    expect(attempts).toBe(2);
+    expect(w.service.calls.filter((name) => name === 'refresh').length - refreshesBefore).toBe(1);
+    expect(session.holdsSession()).toBe(true);
+    expect(w.service.current()!.revoked).toBe(false);
+    // The operation and its ID survive, and the service confirms it once it accepts the credential.
+    w.service.sessionCommand = command;
+    const second = await session.signOut();
+    expect(second).toMatchObject({ ok: true, status: { identity: { state: 'signed-out' } } });
+    expect(w.service.current()!.revoked).toBe(true);
+    expect(w.service.logoutEnvelopes.map((e) => e.operation_id)).toEqual(['logout-op-refused']);
+  });
+
   it('a first unauthorized attempt with an unavailable refresh stays pending with its operation ID, then the retry confirms it', async () => {
     let now = Date.now();
     const w = world('gnome_libsecret', { now: () => now });
@@ -544,6 +620,72 @@ describe('local removal during a sign-in (review R04)', () => {
     expect(kept.revoked).toBe(false);
     const saved = new CredentialVault({ safeStorage: fakeSafeStorage('gnome_libsecret'), platform: 'linux', dir: w.dir }).load();
     expect(saved).toMatchObject({ sessionId: kept.sessionId, accessCredential: kept.access });
+  });
+
+  it('cancelling a sign-in that waits for the browser releases the fixed callback port at once', async () => {
+    const port = await freePort();
+    const w = world();
+    const { opener } = fakeOpener(w.issuer);
+    let silent = true;
+    let opened!: () => void;
+    const reached = new Promise<void>((resolve) => (opened = resolve));
+    const session = w.make({
+      config: { kind: 'configured', config: { ...CONFIG, callbackPort: port } },
+      callbackTimeoutMs: 60_000,
+      // The first browser never returns to the callback; later ones follow the sign-in normally.
+      openBrowser: async (url: string) => {
+        if (silent) {
+          opened();
+          return;
+        }
+        return opener(url);
+      },
+    });
+    const pending = session.signIn();
+    await reached;
+    expect(session.snapshot().identity).toEqual({ state: 'signing-in' });
+    await session.signOut();
+    // The cancelled attempt ends now, not when the callback timeout passes.
+    expect(await pending).toMatchObject({ ok: false, reason: REASONS.cancelled, status: { identity: { state: 'signed-out' } } });
+    // The fixed port is free again, so a new sign-in works immediately.
+    silent = false;
+    expect(await session.signIn()).toMatchObject({ ok: true, status: { identity: { state: 'signed-in' } } });
+  });
+
+  it.each([
+    ['issuer discovery', 'discover'],
+    ['the login transaction', 'transaction'],
+  ] as const)('a sign-in cancelled during %s never opens the browser or keeps the fixed callback port', async (_label, stage) => {
+    const port = await freePort();
+    const w = world();
+    const { opener } = fakeOpener(w.issuer);
+    let browsers = 0;
+    let reached!: () => void;
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (reached = resolve));
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const discover = w.issuer.discover.bind(w.issuer);
+    const create = w.service.createLoginTransaction.bind(w.service);
+    if (stage === 'discover') w.issuer.discover = async () => { reached(); await gate; return discover(); };
+    else w.service.createLoginTransaction = async (request) => { const transaction = await create(request); reached(); await gate; return transaction; };
+    const session = w.make({
+      config: { kind: 'configured', config: { ...CONFIG, callbackPort: port } },
+      callbackTimeoutMs: 60_000,
+      openBrowser: async (url: string) => { browsers += 1; return opener(url); },
+    });
+    const pending = session.signIn();
+    await held;
+    await session.signOut();
+    release();
+    expect(await pending).toMatchObject({ ok: false, reason: REASONS.cancelled, status: { identity: { state: 'signed-out' } } });
+    expect(browsers).toBe(0);
+    if (stage === 'discover') expect(w.service.calls).not.toContain('createLoginTransaction');
+    else expect(w.service.calls).toContain('abandon');
+    // Nothing is left listening: a new sign-in on the same fixed port works at once.
+    w.issuer.discover = discover;
+    w.service.createLoginTransaction = create;
+    expect(await session.signIn()).toMatchObject({ ok: true, status: { identity: { state: 'signed-in' } } });
+    expect(browsers).toBe(1);
   });
 });
 

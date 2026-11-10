@@ -156,6 +156,8 @@ export class IdentitySession {
   private record: StoredSession | null = null;
   /** The sign-in in progress; cleared (cancelling it) by sign-out and local removal. */
   private signInToken: object | null = null;
+  /** The loopback listener of the sign-in in progress, so cancelling can release its port at once. */
+  private signInListener: { close(): void } | null = null;
   /** The last save of the record failed, so nothing current is on disk. */
   private persistFailed = false;
   private shared: SharedServiceState;
@@ -282,9 +284,12 @@ export class IdentitySession {
     return reason === undefined ? this.result(true) : this.result(false, reason);
   }
 
-  /** Cancels a sign-in in progress: its result is never installed. */
+  /** Cancels a sign-in in progress: its result is never installed, and its callback listener stops at once. */
   private cancelSignIn(): void {
     this.signInToken = null;
+    // A fixed callback port must not stay bound until the browser calls back or the timeout passes.
+    this.signInListener?.close();
+    this.signInListener = null;
   }
 
   private async runSignIn(config: ServiceConfig, token: object): Promise<void> {
@@ -296,6 +301,8 @@ export class IdentitySession {
     } catch {
       throw new SignInFailure(REASONS.issuerUnavailable);
     }
+    // Cancelled while the issuer was being discovered: never open a listener for this attempt.
+    if (cancelled()) throw new SignInFailure(REASONS.cancelled);
     const pkce = (this.options.pkce ?? createPkce)();
     const state = (this.options.state ?? createState)();
     this.remember(pkce.verifier, state);
@@ -305,6 +312,11 @@ export class IdentitySession {
       timeoutMs: this.options.callbackTimeoutMs,
       port: config.callbackPort,
     });
+    if (cancelled()) {
+      listener.close();
+      throw new SignInFailure(REASONS.cancelled);
+    }
+    this.signInListener = listener;
     try {
       let transaction;
       try {
@@ -341,6 +353,10 @@ export class IdentitySession {
       ] as const) {
         authorize.searchParams.set(key, value);
       }
+      if (cancelled()) {
+        await abandon();
+        throw new SignInFailure(REASONS.cancelled);
+      }
       try {
         await this.options.openBrowser(authorize.toString());
       } catch {
@@ -353,6 +369,8 @@ export class IdentitySession {
         ({ code } = await listener.callback);
       } catch (error) {
         await abandon();
+        // A cancelled sign-in closes its own listener; report the cancellation, not an issuer refusal.
+        if (cancelled()) throw new SignInFailure(REASONS.cancelled);
         throw new SignInFailure(error instanceof LoopbackError && error.failure === 'timeout' ? REASONS.timedOut : REASONS.issuerRejected);
       }
       this.remember(code);
@@ -436,6 +454,7 @@ export class IdentitySession {
       this.persist();
       this.options.logger.info('identity: signed in');
     } finally {
+      if (this.signInListener === listener) this.signInListener = null;
       listener.close();
     }
   }
@@ -563,10 +582,11 @@ export class IdentitySession {
    * Sends the pending logout envelope. `interactive` is false for the
    * background retry that `getStatus` runs.
    */
-  private async attemptLogout(interactive: boolean, rePrepared = false): Promise<IdentityActionResult> {
+  private async attemptLogout(interactive: boolean, rePrepared = false, refreshed = false, wasRetry?: boolean): Promise<IdentityActionResult> {
     let record = this.record;
     if (!record?.pendingLogout) return this.result(true);
-    const retry = record.pendingLogout.sent;
+    // After the one refresh below, this call's own send has already marked the operation sent; keep the original answer.
+    const retry = wasRetry ?? record.pendingLogout.sent;
 
     const access = await this.freshAccess();
     record = this.record;
@@ -600,23 +620,25 @@ export class IdentitySession {
       switch (error.kind) {
         case 'unauthenticated':
           this.shared = 'available';
-          if (retry) {
-            // A retried self-logout: the first attempt committed and revoked
-            // this session, so the service no longer knows these credentials.
-            this.finishLogout();
-            return this.result(true);
-          }
-          // First attempt: the access credential was refused, so nothing was
-          // committed. Refresh once and retry the same envelope.
-          if (await this.refresh()) return this.attemptLogout(interactive, rePrepared);
+          // The access credential was refused. On a first attempt nothing was
+          // committed. On a retry an earlier attempt may have committed and
+          // revoked this session, but an expired credential is refused in the
+          // same way, so the refusal alone proves nothing. Let the refresh
+          // decide: a live family refreshes and the same envelope is sent
+          // again; a revoked family is refused, discarded and its revocation
+          // sent.
+          if (!refreshed && (await this.refresh())) return this.attemptLogout(interactive, rePrepared, true, retry);
           if (this.record?.pendingLogout) {
             // The refresh could not be attempted (service or dependency
-            // unavailable): the family is still alive on the service, so the
-            // logout is not confirmed. Keep the operation and its ID for a
-            // retry; since this attempt committed nothing, it is not "sent".
-            this.record = { ...this.record, pendingLogout: { ...this.record.pendingLogout, sent: false } };
+            // unavailable), or a freshly refreshed credential was refused
+            // again: the family is still alive on the service, so the logout
+            // is not confirmed. Keep the operation and its ID for a retry. A
+            // first attempt committed nothing, so it is not "sent"; a retry
+            // keeps "sent", because an earlier attempt may have committed.
+            this.record = { ...this.record, pendingLogout: { ...this.record.pendingLogout, sent: retry } };
             this.persist();
-            this.markServiceUnavailable();
+            // The service is unreachable only when the refresh could not be attempted; a refused fresh credential came from a service that answered.
+            if (!refreshed) this.markServiceUnavailable();
             return this.result(false, REASONS.logoutPending);
           }
           // The refresh ended the family (refused or uncertain): it was
