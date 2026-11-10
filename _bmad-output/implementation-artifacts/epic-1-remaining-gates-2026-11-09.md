@@ -45,7 +45,7 @@ Piles:
 | 1.23 | `execution.remote-cloud` missing from `register/inventory-map.json`; run the genuine inventory generator | Confirmed absent from the map, present in `capabilities.json`. Edits `engine/`. |
 | 1.25 | R5-B7: SQLite 5 s busy timeout under two authority fences of up to 15 s each | Accepted residual with a follow-up design; owner decision whether it blocks the epic. |
 | 1.31 | ~~Bounded per-scope pending-journal recovery~~ | **Deferred until after V1 and the pilot** by owner decision, 2026-11-10; logged in `deferred-work.md`. The single-pending behaviour fails closed and stays. |
-| 1.31 | Extend the two-person Electron onboarding journey | Corrected 2026-11-10: the journey exists as the `--onboarding` phase of `run-seeded-smoke.cjs` and passes (11 checks, 7 captures). Missing from it: real keyboard/focus, other window sizes, restart and lost-response recovery, revocation, private-Task isolation, Stop/Resume. |
+| 1.31 | ~~Extend the two-person Electron onboarding journey~~ | **Done 2026-11-10** (`96822e94a4`): keyboard and focus, minimum window, interrupted request and relaunch recovery added; sixteen checks, twelve captures. Earlier note — Corrected 2026-11-10: the journey exists as the `--onboarding` phase of `run-seeded-smoke.cjs` and passes (11 checks, 7 captures). Missing from it: real keyboard/focus, other window sizes, restart and lost-response recovery, revocation, private-Task isolation, Stop/Resume. |
 | 1.28, 1.30 | Stale documents: spec/support text, `inquello-authorization-evidence-not-run.json`, two register references still `pending` | Documentation only. Register edits are under `engine/`. |
 
 **Follow-up the same day (two of these rows were not real source work):**

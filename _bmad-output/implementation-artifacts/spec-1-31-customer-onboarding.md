@@ -161,3 +161,9 @@ Still open or not run:
 The bounded per-scope pending journal is **deferred until after the initial V1 and pilot**, by owner decision in the build session of 2026-11-10. It is recorded in `deferred-work.md` and is no longer an open item for Epic 1. The existing single-pending behaviour stays: one uncertain onboarding operation per signed-in person, reconciled before any retry or new change. The earlier notes above that list the scoped journal as "still incomplete" are superseded for Epic 1 by this decision; nothing in the frozen intent changes.
 
 Remaining for this story inside Epic 1: wider coverage in the synthetic two-person Electron journey (planned separately in `spec-1-31-onboarding-journey-coverage.md`), then owner UI acceptance and the separately authorized Auth0, production-issuer and Resend gates.
+
+## Journey coverage widened — 2026-11-10
+
+`spec-1-31-onboarding-journey-coverage.md` is done (commit `96822e94a4`). The `--onboarding` smoke phase now runs as two launches of one run and reports sixteen checks with twelve captures: the original eleven, plus keyboard-only Workspace creation, dialog focus containment and return, layout at the minimum window size (544 × 400), an interrupted invitation made visible (reply lost, then service unreachable), and automatic recovery after a full app relaunch with exactly one invitation. Verified independently by re-running it and inspecting the captures. Synthetic only; `hostedAuth0Proven` stays false.
+
+Still open for this story: plain-language wording for the interrupted-request panel (logged in `deferred-work.md` as a pre-pilot follow-up), revocation, private-Task isolation and conversation Stop/Resume in the journey, owner UI acceptance, and the separately authorized Auth0, production-issuer and Resend gates. Status stays `in-progress`.
