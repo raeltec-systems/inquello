@@ -2,7 +2,7 @@
 title: 'Widen the synthetic two-person onboarding journey'
 type: 'feature'
 created: '2026-11-10'
-status: 'in-progress'
+status: 'done'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: 'b56bfc483a3c3942194238e2f18eccd3f85cb3e1'
@@ -58,11 +58,11 @@ context:
 ## Tasks & Acceptance
 
 **Execution:**
-- [ ] `desktop/src/main/onboarding-smoke.ts` -- write the run's ownership sentinel into the empty profile once the gate passes; accept a non-empty profile only for the resume case in the owner decision, consuming the resume marker; add the transport wrapper with one-shot `loseReplyThenOutage()`: forward the next `POST`, await the reply, throw a transport error, then fail every later request through the wrapper as unreachable until the process exits -- relaunch gate and deterministic interruption.
-- [ ] `desktop/src/main/main.ts` -- build `OnboardingClient` on the wrapped transport when the fixture is present; pass `resize`/`restore` and the fixture's phase to the probe; emit `onboarding-resume` for the second launch; skip the smoke start-up cleanup on the accepted resume launch only -- wiring only.
-- [ ] `desktop/src/main/onboarding-smoke-probe.ts` -- first launch: perform the existing create-Workspace stage by real key events (it then records both its existing check and `keyboard-create-workspace`), with the dialog-focus leg before the confirming key; minimum-window leg; then as owner invite a second fictional address with the fault armed, assert the interrupted state, press "Reconcile request" once, and stop. Second launch: assert automatic recovery. Captures `08`–`12`; record focus evidence in the manifest -- the new coverage.
-- [ ] `desktop/scripts/run-seeded-smoke.cjs` -- for `--onboarding`, after a clean first exit write the resume marker, relaunch once on the same profile and topology, and require both events -- two launches, one run.
-- [ ] `desktop/test/onboarding-smoke.test.ts` -- unit-test the "Resume refused" and "Fault misuse" rows and one accepted resume; extend the probe source check for the new check names.
+- [x] `desktop/src/main/onboarding-smoke.ts` -- write the run's ownership sentinel into the empty profile once the gate passes; accept a non-empty profile only for the resume case in the owner decision, consuming the resume marker; add the transport wrapper with one-shot `loseReplyThenOutage()`: forward the next `POST`, await the reply, throw a transport error, then fail every later request through the wrapper as unreachable until the process exits -- relaunch gate and deterministic interruption.
+- [x] `desktop/src/main/main.ts` -- build `OnboardingClient` on the wrapped transport when the fixture is present; pass `resize`/`restore` and the fixture's phase to the probe; emit `onboarding-resume` for the second launch; skip the smoke start-up cleanup on the accepted resume launch only -- wiring only.
+- [x] `desktop/src/main/onboarding-smoke-probe.ts` -- first launch: perform the existing create-Workspace stage by real key events (it then records both its existing check and `keyboard-create-workspace`), with the dialog-focus leg before the confirming key; minimum-window leg; then as owner invite a second fictional address with the fault armed, assert the interrupted state, press "Reconcile request" once, and stop. Second launch: assert automatic recovery. Captures `08`–`12`; record focus evidence in the manifest -- the new coverage.
+- [x] `desktop/scripts/run-seeded-smoke.cjs` -- for `--onboarding`, after a clean first exit write the resume marker, relaunch once on the same profile and topology, and require both events -- two launches, one run.
+- [x] `desktop/test/onboarding-smoke.test.ts` -- unit-test the "Resume refused" and "Fault misuse" rows and one accepted resume; extend the probe source check for the new check names.
 
 **Acceptance Criteria:**
 - Given default binaries, when `node scripts/run-seeded-smoke.cjs --onboarding` runs, then both events are `ok: true`, the original eleven checks and the five new ones are present, and cleanup reports no errors.
@@ -70,6 +70,27 @@ context:
 - Given a packaged build or no fixture, when the app starts, then no fault can be armed and no resume is possible.
 
 ## Implementation Notes
+
+- **Gate.** After every existing check passes, a first launch writes `profile/.inquello-onboarding-owner` (`runId`, random `nonce`, `resumed:false`) with exclusive create. A resume is requested only by `INQUELLO_ONBOARDING_RESUME=<runId>`. It needs that run's sentinel with `resumed:false` and the launcher's `.inquello-onboarding-resume` (`runId`, `sentinelNonce`) beside the fixture marker, both with exact keys. Only once every check has passed does it set `resumed:true` and delete the marker. Without the variable, the old empty-profile rule applies unchanged. Outside `--smoke-onboarding`, the variable is refused like the other fixture variables. On the resume launch, `select`, the sign-in opener and fault arming all refuse.
+- **Fault.** `onboardingTransport()` wraps only the `OnboardingClient` transport. The one-shot `loseReplyThenOutage()` forwards the next `POST`, waits for its reply and throws `ServiceError('transport', delivered=true)`, which the product reads as uncertain. Every later request through the wrapper throws `ServiceError('transport', false)` until the process exits. Identity and sign-in traffic is not wrapped.
+- **Main.** The resume launch skips the smoke start-up cleanup. The probe gets `minimum` (544 × 400), `resize` and `restore`. The second launch's event is `onboarding-resume`.
+- **Probe.** Creation now goes by real `sendInputEvent` keys: Tab to the name field, type it, Tab, Return. Inside the dialog it then checks: focus starts on Cancel and is visibly indicated, four Tabs stay inside, and Escape returns focus to "Review Workspace creation". Return reopens the dialog, then Tab and Return confirm. The manifest records the focus evidence and the minimum-window measurements. The first launch writes `manifest.json` with `ownerDigest` (SHA-256 of the owner principal). The relaunch reads it to prove the same owner and writes `manifest-resume.json`. The second invitee is `tamara.phiri@mupeta.invalid`.
+- **Launcher.** It relaunches only after a first exit with code 0, a clean runtime exit, a passed handshake and `onboarding ok`. It writes the marker from the sentinel and relaunches on the same topology and profile; logs go to `smoke-resume.*.log`. It requires both `onboarding` and `onboarding-resume`.
+- **Changed test assertion.** The probe source check no longer looks for the literal `confirm('Create Workspace')`, because creation is now confirmed by keyboard as this spec directs. It now requires `'Create Workspace'`, `sendInputEvent`, the five new check names, `loseReplyThenOutage()` and the Reconcile click. The forbidden-shortcut list is unchanged.
+- **Defects seen in captures 08–12; recorded, not fixed.**
+  1. The pending panel shows the internal operation kind: "Pending action: invite".
+  2. During the outage, "The service could not be reached. Your draft is preserved." appears as both the discovery notice and the team notice, and again as the main notice after Reconcile. The panel itself does not say the service is unreachable or that the person should retry later; the outage is explained only by those separate notices.
+  3. "Invitations for you" shows no inline status when discovery fails.
+  4. The confirmation dialog title renders at body-text weight and size.
+  5. "Review same-request retry" stays enabled during the outage. That is correct, because a retry rechecks the receipt first.
+  - Focus is clearly indicated (2 px blue ring plus halo), and nothing is clipped at 544 × 400.
+- **Evidence (2026-11-10, Windows host, default binaries, offline).**
+  - Both type checks passed, exit 0.
+  - Focused Vitest: 48 passed, 1 skipped (the symlink case on Windows).
+  - `pnpm run build`: exit 0.
+  - `run-seeded-smoke.cjs --onboarding`: `ok:true` twice. The final run took 53 s with two launches, events `onboarding` and `onboarding-resume`, 15 + 1 checks, 12 captures and no cleanup errors. Afterwards the marker had been consumed and the sentinel read `resumed:true`.
+  - Full `run-seeded-smoke.cjs`: `ok:true`, 19 of 19 required reports, no cleanup errors (log `.tmp/story131-journey-full-smoke-2.log`). The quota and visual phases need `INQUELLO_FIXTURE_APP_SERVER_BIN`, which `story121-env.ps1` does not set. A first run without it failed only those two phases at native bootstrap (log `.tmp/story131-journey-full-smoke.log`); that was a harness omission, not a code failure. The passing rerun used the 2026-11-09 offline pass's fixtures binary, `.tmp/epic1-offline-pass-20261109/fixture/codex-app-server.exe` (SHA-256 `67130893…dc7e6`). Nothing was rebuilt.
+- **Not covered:** owner inspection of the captures; refused resumes and fault misuse are proved by unit tests, not inside Electron. A refused gate still leaves Electron open until the launcher's ten-minute deadline (the known harness wart).
 
 ## Spec Change Log
 

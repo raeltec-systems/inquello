@@ -3,7 +3,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {createHash,randomUUID} from 'node:crypto';
-import {ownedOnboardingFixture} from '../src/main/onboarding-smoke';
+import {ownedOnboardingFixture,ONBOARDING_RESUME_MARKER,ONBOARDING_SENTINEL} from '../src/main/onboarding-smoke';
+import {ServiceError} from '../src/main/identity/service-client';
 const roots:string[]=[];
 afterEach(()=>{for(const root of roots.splice(0))fs.rmSync(root,{recursive:true,force:true});});
 function fixture(){
@@ -16,6 +17,8 @@ function fixture(){
  const env={INQUELLO_SERVICE_CONFIG:config,INQUELLO_ONBOARDING_FIXTURE:marker,INQUELLO_ONBOARDING_RUN:run};
  return{root,config,marker,raw,record,env,options:{packaged:false,argv:['electron','.','--smoke-onboarding'],env},save(){fs.writeFileSync(config,JSON.stringify(raw));record.configSha256=createHash('sha256').update(fs.readFileSync(config)).digest('hex');fs.writeFileSync(marker,JSON.stringify(record));}};
 }
+function writeResume(f:ReturnType<typeof fixture>,nonce?:string){const sentinel=JSON.parse(fs.readFileSync(path.join(f.root,'profile',ONBOARDING_SENTINEL),'utf8'));const file=path.join(f.root,ONBOARDING_RESUME_MARKER);fs.writeFileSync(file,JSON.stringify({runId:f.record.runId,sentinelNonce:nonce??sentinel.nonce}));return file;}
+function resumeOptions(f:ReturnType<typeof fixture>,run=f.record.runId){return {...f.options,env:{...f.env,INQUELLO_ONBOARDING_RESUME:run}};}
 describe('explicit owned onboarding fixture',()=>{
  it('is absent by default and rejects a marker without the explicit mode',()=>{expect(ownedOnboardingFixture({packaged:false,argv:[],env:{}})).toBeNull();const f=fixture();expect(()=>ownedOnboardingFixture({...f.options,argv:[]})).toThrow();});
  it('requires unpackaged exclusive mode and rejects every seeded or foreign smoke mode',()=>{const f=fixture();expect(()=>ownedOnboardingFixture({...f.options,packaged:true})).toThrow();for(const flag of ['--smoke','--smoke-navigation','--smoke-quota','--smoke-visual','--smoke-onboarding','--seed-workspace','--provider-fixture','--visual-only','--quota-only','--navigation','--smoke-foreign'])expect(()=>ownedOnboardingFixture({...f.options,argv:[...f.options.argv,flag]})).toThrow();});
@@ -28,5 +31,37 @@ describe('explicit owned onboarding fixture',()=>{
  it('rejects oversized marker and config',()=>{for(const name of ['marker','config'] as const){const f=fixture();fs.writeFileSync(f[name],'x'.repeat(65537));expect(()=>ownedOnboardingFixture(f.options)).toThrow();}});
  it.skipIf(process.platform==='win32')('rejects symbolic marker and config on symlink-capable hosts',()=>{for(const name of ['marker','config'] as const){const f=fixture(),target=f[name]+'.real';fs.renameSync(f[name],target);fs.symlinkSync(target,f[name]);expect(()=>ownedOnboardingFixture(f.options)).toThrow();}});
  it('rejects callback redirects to another port/path or with userinfo/hash before following',async()=>{const f=fixture(),owned=ownedOnboardingFixture(f.options)!;for(const location of ['http://127.0.0.1:43823/callback?code=fake','http://127.0.0.1:43822/foreign?code=fake','http://user@127.0.0.1:43822/callback?code=fake','http://127.0.0.1:43822/callback?code=fake#fragment','https://127.0.0.1:43822/callback?code=fake']){const open=owned.opener(async()=>({status:302,text:'',contentType:'text/html',location}));await expect(open(f.raw.issuer_url+'/authorize?client_id=inquello-desktop-synthetic&redirect_uri=http%3A%2F%2F127.0.0.1%3A43822%2Fcallback')).rejects.toThrow('Owned onboarding fixture unavailable');}});
- it('uses the visible onboarding route and no service mutation shortcuts in its probe',()=>{const source=fs.readFileSync(path.resolve('src/main/onboarding-smoke-probe.ts'),'utf8');expect(source).toContain("location.hash!=='#onboarding'");expect(source).toContain("confirm('Create Workspace')");expect(source).toContain("confirm('Create invitation')");expect(source).toContain("confirm('Accept invitation')");expect(source).toContain("confirm('Change roles')");for(const forbidden of ['acceptInvite(','.createWorkspace(','.invite(','.changeRoles(','armSyntheticSession','runtimeRequest','fetch('])expect(source).not.toContain(forbidden);expect(source).toContain('contents.capturePage()');});
+ it('writes this run\'s ownership sentinel only after every gate check passes',()=>{const f=fixture();fs.writeFileSync(f.config,'{}');expect(()=>ownedOnboardingFixture(f.options)).toThrow();expect(fs.readdirSync(path.join(f.root,'profile'))).toEqual([]);f.save();const owned=ownedOnboardingFixture(f.options)!;expect(owned.phase).toBe('first');expect(fs.readdirSync(path.join(f.root,'profile'))).toEqual([ONBOARDING_SENTINEL]);const sentinel=JSON.parse(fs.readFileSync(path.join(f.root,'profile',ONBOARDING_SENTINEL),'utf8'));expect(Object.keys(sentinel).sort()).toEqual(['nonce','resumed','runId']);expect(sentinel).toMatchObject({runId:f.record.runId,resumed:false});expect(()=>ownedOnboardingFixture(f.options)).toThrow();});
+ it('accepts exactly one relaunch of the same run and consumes the resume marker',()=>{const f=fixture();ownedOnboardingFixture(f.options);const extra=path.join(f.root,'profile','Local State');fs.writeFileSync(extra,'kept');const resume=writeResume(f);const owned=ownedOnboardingFixture(resumeOptions(f))!;expect(owned.phase).toBe('resume');expect(fs.existsSync(resume)).toBe(false);expect(JSON.parse(fs.readFileSync(path.join(f.root,'profile',ONBOARDING_SENTINEL),'utf8')).resumed).toBe(true);expect(fs.readFileSync(extra,'utf8')).toBe('kept');expect(()=>owned.select('elias')).toThrow();expect(()=>owned.loseReplyThenOutage()).toThrow();});
+ it('refuses a resume with wrong run, missing or reused marker, missing or foreign sentinel, and leaves profile files untouched',()=>{
+  const snapshot=(root:string)=>Object.fromEntries(fs.readdirSync(path.join(root,'profile')).map(name=>[name,fs.readFileSync(path.join(root,'profile',name),'utf8')]));
+  const refused=(f:ReturnType<typeof fixture>,options:{packaged:boolean;argv:string[];env:NodeJS.ProcessEnv}=resumeOptions(f))=>{const before=snapshot(f.root),marker=path.join(f.root,ONBOARDING_RESUME_MARKER),hadMarker=fs.existsSync(marker);expect(()=>ownedOnboardingFixture(options)).toThrow('Owned onboarding fixture unavailable');expect(snapshot(f.root)).toEqual(before);expect(fs.existsSync(marker)).toBe(hadMarker);};
+  {const f=fixture();ownedOnboardingFixture(f.options);writeResume(f);refused(f,resumeOptions(f,randomUUID()));}
+  {const f=fixture();ownedOnboardingFixture(f.options);refused(f);}
+  {const f=fixture();ownedOnboardingFixture(f.options);writeResume(f);ownedOnboardingFixture(resumeOptions(f));refused(f);writeResume(f);refused(f);}
+  {const f=fixture();fs.writeFileSync(path.join(f.root,'profile','Local State'),'other');fs.writeFileSync(path.join(f.root,ONBOARDING_RESUME_MARKER),JSON.stringify({runId:f.record.runId,sentinelNonce:randomUUID()}));refused(f);}
+  {const f=fixture();ownedOnboardingFixture(f.options);const file=path.join(f.root,'profile',ONBOARDING_SENTINEL),own=JSON.parse(fs.readFileSync(file,'utf8'));fs.writeFileSync(file,JSON.stringify({...own,runId:randomUUID()}));writeResume(f,own.nonce);refused(f);}
+  {const f=fixture();ownedOnboardingFixture(f.options);writeResume(f,randomUUID());refused(f);}
+  {const f=fixture();ownedOnboardingFixture(f.options);writeResume(f);fs.writeFileSync(path.join(f.root,ONBOARDING_RESUME_MARKER),JSON.stringify({runId:f.record.runId,sentinelNonce:JSON.parse(fs.readFileSync(path.join(f.root,'profile',ONBOARDING_SENTINEL),'utf8')).nonce,extra:true}));refused(f);}
+  {const f=fixture();ownedOnboardingFixture(f.options);writeResume(f);refused(f,f.options);}
+  {const f=fixture();ownedOnboardingFixture(f.options);writeResume(f);refused(f,{...resumeOptions(f),packaged:true});expect(()=>ownedOnboardingFixture({packaged:false,argv:['electron','.'],env:{INQUELLO_ONBOARDING_RESUME:f.record.runId}})).toThrow();}
+ });
+ it('arms the lost-reply outage once, passes requests through before arming and never on a relaunch',async()=>{
+  const f=fixture(),owned=ownedOnboardingFixture(f.options)!;const seen:string[]=[];
+  const transport=owned.onboardingTransport(async request=>{seen.push(request.method+' '+request.url);return {status:200,text:'{}',contentType:'application/json',location:null};});
+  await expect(transport({url:'https://127.0.0.1:45001/v1/capabilities',method:'GET'})).resolves.toMatchObject({status:200});
+  await expect(transport({url:'https://127.0.0.1:45001/v1/onboarding/commands',method:'POST',body:'{}'})).resolves.toMatchObject({status:200});
+  owned.loseReplyThenOutage();expect(()=>owned.loseReplyThenOutage()).toThrow();
+  await expect(transport({url:'https://127.0.0.1:45001/v1/capabilities',method:'GET'})).resolves.toMatchObject({status:200});
+  const lost=await transport({url:'https://127.0.0.1:45001/v1/workspaces/w/commands',method:'POST',body:'{}'}).catch((error:unknown)=>error);
+  expect(lost).toBeInstanceOf(ServiceError);expect((lost as ServiceError).kind).toBe('transport');expect((lost as ServiceError).uncertain).toBe(true);
+  expect(seen).toHaveLength(4);
+  for(const method of ['GET','POST'] as const){const down=await transport({url:'https://127.0.0.1:45001/v1/workspaces/w/receipts/x',method}).catch((error:unknown)=>error);expect(down).toBeInstanceOf(ServiceError);expect((down as ServiceError).uncertain).toBe(false);}
+  expect(seen).toHaveLength(4);
+  writeResume(f);const resumed=ownedOnboardingFixture(resumeOptions(f))!;expect(()=>resumed.loseReplyThenOutage()).toThrow();
+  const after=resumed.onboardingTransport(async()=>({status:200,text:'{}',contentType:'application/json',location:null}));
+  await expect(after({url:'https://127.0.0.1:45001/v1/workspaces/w/receipts/x',method:'GET'})).resolves.toMatchObject({status:200});
+  await expect(resumed.opener(async()=>({status:400,text:'',contentType:'text/plain',location:null}))(f.raw.issuer_url+'/authorize?client_id=inquello-desktop-synthetic')).rejects.toThrow('Owned onboarding fixture unavailable');
+ });
+ it('uses the visible onboarding route and no service mutation shortcuts in its probe',()=>{const source=fs.readFileSync(path.resolve('src/main/onboarding-smoke-probe.ts'),'utf8');expect(source).toContain("location.hash!=='#onboarding'");for(const name of ['keyboard-create-workspace','dialog-focus-contained-and-restored','minimum-window-layout','interrupted-request-visible','interrupted-request-recovered-after-relaunch','sendInputEvent','loseReplyThenOutage()',"click('Reconcile request')"])expect(source).toContain(name);expect(source).toContain("'Create Workspace'");expect(source).toContain("confirm('Create invitation')");expect(source).toContain("confirm('Accept invitation')");expect(source).toContain("confirm('Change roles')");for(const forbidden of ['acceptInvite(','.createWorkspace(','.invite(','.changeRoles(','armSyntheticSession','runtimeRequest','fetch('])expect(source).not.toContain(forbidden);expect(source).toContain('contents.capturePage()');});
 });

@@ -115,12 +115,13 @@ fs.writeFileSync(policyFile,JSON.stringify(policy));
     const lines=readline.createInterface({input:topology.stdout});
     const line=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('Synthetic topology readiness timed out')),60000);lines.once('line',text=>{clearTimeout(timer);resolve(text);});topology.once('error',()=>{clearTimeout(timer);reject(new Error('Synthetic topology unavailable'));});topology.once('exit',()=>{clearTimeout(timer);reject(new Error('Synthetic topology exited before readiness'));});});
     fs.writeFileSync(config,line);
-    const output=path.join(folder,'smoke.stdout.log');out=fs.openSync(output,'w');err=fs.openSync(path.join(folder,'smoke.stderr.log'),'w');
     const env={...process.env,INQUELLO_SERVICE_CONFIG:config,...(onboarding?{}:{INQUELLO_SMOKE_SEED:seed})};
+    delete env.INQUELLO_ONBOARDING_RESUME;
+    let runId,profileRoot;
     if(onboarding){
       // Main verifies this exact owned root/config/hash/run before using fixed hints.
       if(['INQUELLO_SMOKE_SEED','INQUELLO_QUOTA_FIXTURE','INQUELLO_VISUAL_FIXTURE','INQUELLO_FICTIONAL_AUDIT_SESSION'].some(key=>key in env))throw new Error('Foreign fixture environment refused');
-      const runId=randomUUID(),profileRoot=path.join(folder,'profile');fs.mkdirSync(profileRoot);
+      runId=randomUUID();profileRoot=path.join(folder,'profile');fs.mkdirSync(profileRoot);
       const raw=JSON.parse(line),marker=path.join(folder,'.inquello-onboarding-fixture');
       fs.writeFileSync(marker,JSON.stringify({runId,profileRoot:fs.realpathSync(profileRoot),configSha256:createHash('sha256').update(fs.readFileSync(config)).digest('hex'),issuerUrl:raw.issuer_url,serviceUrl:raw.service_url}));
       env.INQUELLO_ONBOARDING_FIXTURE=marker;env.INQUELLO_ONBOARDING_RUN=runId;
@@ -131,20 +132,40 @@ fs.writeFileSync(policyFile,JSON.stringify(policy));
     delete env.INQUELLO_FIXTURE_APP_SERVER_BIN;if((quota||visual)&&process.env.INQUELLO_FIXTURE_APP_SERVER_BIN)env.INQUELLO_APP_SERVER=process.env.INQUELLO_FIXTURE_APP_SERVER_BIN;
     stage='electron-journey';
     const electronBinary=path.join(desktop,`node_modules/electron/dist/electron${suffix}`);
-    electron=spawn(electronBinary,['.',tools?'--smoke-tools-management':onboarding?'--smoke-onboarding':quota?'--smoke-quota':visual?'--smoke-visual':navigationOnly?'--smoke-navigation':'--smoke'],{cwd:desktop,env,stdio:['ignore',out,err],windowsHide:true,detached:process.platform!=='win32'});
-    electronGuard=createOwnedProcessGuard(electron,{executable:electronBinary});
-    const code=await new Promise((resolve,reject)=>{const deadline=setTimeout(()=>{reject(new Error('Owned Electron smoke deadline exceeded'));},600000);electron.once('error',()=>{clearTimeout(deadline);reject(new Error('Owned Electron smoke unavailable'));});electron.once('exit',code=>{clearTimeout(deadline);resolve(code);});});
-    fs.closeSync(out);out=undefined;fs.closeSync(err);err=undefined;
+    const handshake=reports=>reports.some(report=>report.event==='handshake'&&report.versionCheck==='passed');
+    const runElectron=async(launchEnv,label)=>{
+      const output=path.join(folder,`${label}.stdout.log`);out=fs.openSync(output,'w');err=fs.openSync(path.join(folder,`${label}.stderr.log`),'w');
+      electron=spawn(electronBinary,['.',tools?'--smoke-tools-management':onboarding?'--smoke-onboarding':quota?'--smoke-quota':visual?'--smoke-visual':navigationOnly?'--smoke-navigation':'--smoke'],{cwd:desktop,env:launchEnv,stdio:['ignore',out,err],windowsHide:true,detached:process.platform!=='win32'});
+      electronGuard=createOwnedProcessGuard(electron,{executable:electronBinary});
+      const code=await new Promise((resolve,reject)=>{const deadline=setTimeout(()=>{reject(new Error('Owned Electron smoke deadline exceeded'));},600000);electron.once('error',()=>{clearTimeout(deadline);reject(new Error('Owned Electron smoke unavailable'));});electron.once('exit',code=>{clearTimeout(deadline);resolve(code);});});
+      fs.closeSync(out);out=undefined;fs.closeSync(err);err=undefined;
+      const reports=fs.readFileSync(output,'utf8').split(/\r?\n/).flatMap(line=>{try{return[JSON.parse(line)];}catch{return[];}});
+      // Assertion failure may exit 1 after a verified clean runtime shutdown.
+      cleanRuntimeExit=reports.some(report=>report.event==='runtime-exit'&&report.state==='stopped'&&report.exit?.exitCode===0&&report.exit.killed===false);
+      return{code,reports};
+    };
+    let {code,reports}=await runElectron(env,'smoke');
     stage='phase-report';
-    const reports=fs.readFileSync(output,'utf8').split(/\r?\n/).flatMap(line=>{try{return[JSON.parse(line)];}catch{return[];}});
-    // Assertion failure may exit 1 after a verified clean runtime shutdown.
-    cleanRuntimeExit=reports.some(report=>report.event==='runtime-exit'&&report.state==='stopped'&&report.exit?.exitCode===0&&report.exit.killed===false);
-    const expected=tools?['tools-management']:onboarding?['onboarding']:quota?['quota']:visual?['visual-conversation']:normalRequired;
+    const expected=tools?['tools-management']:onboarding?['onboarding','onboarding-resume']:quota?['quota']:visual?['visual-conversation']:normalRequired;
+    let launches=1;
+    if(onboarding&&code===0&&cleanRuntimeExit&&handshake(reports)&&reports.some(report=>report.event==='onboarding'&&report.ok===true)){
+      // One relaunch of the same run on the same profile and topology, permitted by a one-use marker.
+      stage='onboarding-relaunch';
+      await electronGuard.stop(cleanRuntimeExit);electronGuard=undefined;electron=undefined;cleanRuntimeExit=false;
+      const sentinel=JSON.parse(fs.readFileSync(path.join(profileRoot,'.inquello-onboarding-owner'),'utf8'));
+      if(sentinel.runId!==runId||sentinel.resumed!==false||typeof sentinel.nonce!=='string')throw new Error('Owned onboarding sentinel unavailable');
+      fs.writeFileSync(path.join(folder,'.inquello-onboarding-resume'),JSON.stringify({runId,sentinelNonce:sentinel.nonce}),{flag:'wx'});
+      const first=reports;
+      ({code,reports}=await runElectron({...env,INQUELLO_ONBOARDING_RESUME:runId},'smoke-resume'));launches=2;
+      if(!handshake(reports))code=code===0?1:code;
+      reports=[...first.filter(report=>report.event==='onboarding'),...reports];
+      stage='phase-report';
+    }
     const missing=expected.filter(event=>!reports.some(report=>report.event===event&&report.ok===true));
     const zeroFixtureCalls=!quota||tls.calls()===0;
     const visualFixtureCalls=!visual||(tls.journeyValid());
-    const ok=code===0&&missing.length===0&&zeroFixtureCalls&&visualFixtureCalls&&reports.some(report=>report.event==='handshake'&&report.versionCheck==='passed');
-    console.log(JSON.stringify({phase,exitCode:code,required:expected.length,missingOrFailed:missing,zeroFixtureCalls,...(visual?{localSyntheticCalls:tls.calls(),invalidFixtureCalls:tls.invalidCalls()}: {})}));
+    const ok=code===0&&missing.length===0&&zeroFixtureCalls&&visualFixtureCalls&&handshake(reports);
+    console.log(JSON.stringify({phase,exitCode:code,required:expected.length,missingOrFailed:missing,zeroFixtureCalls,...(onboarding?{launches}:{}),...(visual?{localSyntheticCalls:tls.calls(),invalidFixtureCalls:tls.invalidCalls()}: {})}));
     return{ok,missing,events:reports.filter(report=>report.ok===true).map(report=>report.event)};
   },async()=>{
     const errors=[];

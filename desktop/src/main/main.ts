@@ -434,8 +434,15 @@ async function chooseImportSource(): Promise<string | null> {
 async function runSmokeProbe(contents: WebContents): Promise<void> {
   if(onboardingFixture){
     if(!identity)throw new Error('Onboarding identity unavailable');
-    const report=await probeOnboarding(contents,{fixture:onboardingFixture,identity});
-    onboardingOk=report.ok;process.stdout.write(`${JSON.stringify({event:'onboarding',...report})}\n`);return;
+    const onboardingWindow=BrowserWindow.fromWebContents(contents);
+    if(!onboardingWindow)throw new Error('Owned onboarding window unavailable');
+    const onboardingSize=onboardingWindow.getContentSize(),onboardingMinimum=onboardingWindow.getMinimumSize();
+    const report=await probeOnboarding(contents,{fixture:onboardingFixture,identity,
+      // Smoke-only: exact minimum content size, independent of native DPI frame rounding.
+      minimum:{width:SHELL_LAYOUT.windowMinWidth,height:WINDOW_MIN_HEIGHT},
+      resize:(width,height)=>{onboardingWindow.setMinimumSize(0,0);onboardingWindow.setContentSize(width,height);},
+      restore:()=>{onboardingWindow.setContentSize(onboardingSize[0]!,onboardingSize[1]!);onboardingWindow.setMinimumSize(onboardingMinimum[0]!,onboardingMinimum[1]!);return {width:onboardingSize[0]!,height:onboardingSize[1]!};}});
+    onboardingOk=report.ok;process.stdout.write(`${JSON.stringify({event:onboardingFixture.phase==='resume'?'onboarding-resume':'onboarding',...report})}\n`);return;
   }
   if (toolsManagementSmoke) {
     if (!identity || !organise || !capabilities || !runtime) throw new Error('Tools management services unavailable');
@@ -649,7 +656,8 @@ void app.whenReady().then(async () => {
     if(fs.realpathSync(userData)!==developmentProfile.profile)throw new Error('Owned development profile mismatch');
     process.stdout.write(`${JSON.stringify({event:'owned-dev-profile',runId:developmentProfile.runId,resumed:developmentProfile.resumed,userData,runtimeHome:roots['runtime-home']})}\n`);
   }
-  if (smoke) {
+  // The accepted onboarding relaunch keeps its own run's profile: that is what it proves.
+  if (smoke && onboardingFixture?.phase !== 'resume') {
     // The smoke run starts signed out, with an empty runtime home and no export journal.
     fs.rmSync(identityDir(userData), { recursive: true, force: true });
     fs.rmSync(roots['runtime-home'], { recursive: true, force: true, maxRetries: 3 });
@@ -680,7 +688,7 @@ void app.whenReady().then(async () => {
   const onboardingService = new OnboardingService({
     identity: identitySession,
     onAuthorityChanged: () => taskSessionChanged(false),
-    client: onboardingConfig && identity.transport ? new OnboardingClient(onboardingConfig.serviceUrl,identity.transport) : null,
+    client: onboardingConfig && identity.transport ? new OnboardingClient(onboardingConfig.serviceUrl,onboardingFixture?onboardingFixture.onboardingTransport(identity.transport):identity.transport) : null,
     store: new OnboardingStore({dir:path.join(identityDir(app.getPath('userData')),'onboarding'),scope:JSON.stringify([onboardingConfig?.serviceUrl,onboardingConfig?.issuerUrl]),safeStorage,platform:process.platform}),
   });
   const sharedAuthority=identity.service;
