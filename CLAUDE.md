@@ -2,6 +2,20 @@
 
 This codebase is yours: what it's for and how it's built are your call, and you'll keep building on it.
 
+## What Inquello is for
+
+Inquello does for internal auditors what Claude Code and Codex did for developers: an assistant that works inside their real files and workflow, shows its work, and leaves professional judgement with them. The north star is the auditor's actual way of working, as described in the domain research anchored on the Global Internal Audit Standards (`_bmad-output/planning-artifacts/research/`) and the product glossary (`_bmad-output/specs/spec-inquello/glossary.md`). Read the relevant research before designing a feature, and keep it in mind when shaping stories and epics.
+
+## Reuse Codex first
+
+`engine/` is a fork of Codex. Before building any feature, answer these in order and write the answers into the spec:
+
+1. **How does Codex already handle this?** Find the exact tools, protocol items, prompts and UI behaviour in `engine/`.
+2. **How can that be reused for this use case?** Prefer exposing, adapting or copying what exists over building from scratch.
+3. **What must be adjusted or added so it fits an auditor and their workflow?** Build only that on top.
+
+Building something Codex already provides needs a stated reason in the spec.
+
 ## Build workflow (bmad-build)
 
 - **Follow the full bmad-build workflow.** Claude is the build agent. For each story, follow the workflow's steps as written: plan the spec, stop at the spec checkpoint for the owner's approval, implement, run the review step (step 4) and its triage, run the spec's Verification commands, mark the spec `done`, sync `sprint-status.yaml`, and commit locally.

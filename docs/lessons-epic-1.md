@@ -2,6 +2,11 @@
 
 Read this before planning, implementing or verifying a story. Each item cost real time once. Verify a detail against the repository if it matters; this file records what was true on 2026-11-11.
 
+## Before you design anything
+
+- **Ask how Codex already does it.** `engine/` is a fork of Codex, which already reads files, runs tools in a sandbox, attaches images and loads skills. The first Story 2.1 draft specified hand-written document parsers before anyone had checked what the engine and the sandbox guest already provide. Find the existing mechanism, reuse it, then add what an auditor needs on top.
+- **Design for the auditor, from the research.** The domain research on the internal audit lifecycle and the glossary say how auditors handle evidence, references and review. Read them before specifying a feature.
+
 ## Before you run anything
 
 - **Environment.** In PowerShell, dot-source `.tmp/story121-env.ps1` from the repository root. It sets the toolchain paths, `CARGO_INCREMENTAL=0` and the test database URL. Add `D:\Toolchains\cargo\bin` to `PATH`, and set `COREPACK_ENABLE_NETWORK=0` and `ELECTRON_SKIP_BINARY_DOWNLOAD=1`. Work offline with `--offline --locked -j4`.
