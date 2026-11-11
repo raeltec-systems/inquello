@@ -6,6 +6,11 @@ import {Composer} from './Composer';
 import {ConversationModelPicker} from './ConversationModelPicker';
 import type {DraftBinding} from './drafts';
 import {taskValue,tasksBridge,type ProgressSnapshot,type LifecycleReceipt} from './tasks-bridge';
+import {AttachControl} from './AttachControl';
+import {awaitingNote,parseAttachment,parseStageOutcome,sourcesBridge,sourcesValue,useSourcesView,SOURCES_RUNNING_REASON,type AttachmentView} from './sources-bridge';
+
+/** Adds the visible note that tells the agent where the material is, unless the draft already has it. The person can edit or remove it. */
+export function withSourcesNote(draft:string,note:string):string {return draft.includes(note)?draft:draft.trim()?`${draft.replace(/\s+$/,'')}\n\n${note}`:note;}
 
 export {useTaskObservation as useTaskActivity} from './task-observation';
 import {useTaskObservation} from './task-observation';
@@ -65,6 +70,26 @@ export function TaskLifecycle({taskId,workspaceId,draft,operationIds=()=>crypto.
   catch(error){if(mounted.current){setNotice(error instanceof Error?error.message:'The operation is unconfirmed. Your draft is preserved.');}}
   finally{if(mounted.current)setBusy(current=>current===kind?null:current);}
  };
+ // Story 2.1: attach files or a folder to this Task between turns. Main stages them only while the Task is idle.
+ const sourcesApi=sourcesBridge();
+ const [attachment,setAttachment]=useState<{pending:boolean;shown:AttachmentView[];notice:string|null}>({pending:false,shown:[],notice:null});
+ const sourceView=useSourcesView(taskId,workspaceId,view?.status??'',!!sourcesApi&&!!view);
+ useEffect(()=>{const current=sourceView.view;if(!current)return;
+  for(const item of current.deferred)awaitingNote.add(item.attachmentId);
+  const ready=current.attachments.filter(item=>awaitingNote.has(item.attachmentId));
+  if(ready.length&&current.note){for(const item of ready)awaitingNote.delete(item.attachmentId);latest.current.onChange(withSourcesNote(latest.current.value,current.note));setAttachment(old=>({...old,notice:`${ready.map(item=>item.label).join(', ')} is now in the Task folder. A note for the agent was added to your message; edit it as you like.`}));}
+ },[sourceView.view]);
+ const attachNow=async(kind:'files'|'folder')=>{
+  if(!sourcesApi||attachment.pending)return;setAttachment(old=>({...old,pending:true,notice:null}));
+  let held:AttachmentView|null=null;
+  try{const value=sourcesValue(await sourcesApi.attach({kind}));if(value===null){if(mounted.current)setAttachment(old=>({...old,pending:false}));return;}held=parseAttachment(value);
+   if(mounted.current)setAttachment(old=>({...old,shown:[held!]}));
+   const outcome=parseStageOutcome(sourcesValue(await sourcesApi.stage({taskId,workspaceId,attachmentId:held.attachmentId,firstTurn:false})));
+   if(!mounted.current)return;
+   if(outcome.state==='staged'){latest.current.onChange(withSourcesNote(latest.current.value,outcome.note));setAttachment({pending:false,shown:[outcome.attachment],notice:`Attached ${outcome.attachment.label}: ${outcome.attachment.files.length} file${outcome.attachment.files.length===1?'':'s'} in the Task folder, available to your next message. A note for the agent was added to your message.`});}
+   else setAttachment({pending:false,shown:[],notice:`${outcome.label}: ${outcome.notice}`});
+  }catch(error){if(held)void sourcesApi.discard({attachmentId:held.attachmentId}).catch(()=>undefined);if(mounted.current)setAttachment({pending:false,shown:[],notice:error instanceof Error?error.message:'Nothing was attached.'});}
+ };
  const stopPending=busy==='stop'||pending.current?.kind==='stop'||view?.lifecycleOperations?.some(op=>op.kind==='stop'&&['reserved','dispatching','uncertain'].includes(op.status));
  const unavailable=modelPending?(modelRecovering?'Checking model…':'Confirm the model change before sending.'):busy?'Waiting for the current operation.':pending.current?'Reconciling the current operation.':!view?'Current Task access is unavailable.':!running&&!completed?'Use Resume to continue interrupted work.':undefined;
  return <section aria-label="Message composer" data-task-controls={taskId} data-task-controls-status={view?.status ?? 'unavailable'}>
@@ -72,6 +97,8 @@ export function TaskLifecycle({taskId,workspaceId,draft,operationIds=()=>crypto.
   {view?.status==='uncertain'&&<p role="status">Work was interrupted or its outcome is uncertain. Resume is explicit; work does not restart automatically.</p>}
   {notice&&<p role="status">{notice}{completed&&draft.value.trim()&&notice==='That turn has ended. Your instruction is preserved; no new turn was started.'?' Press Send again to start a follow-up.':''}</p>}
   {resumable&&<Button onPress={()=>void execute('resume')} disabledReason={busy?'Reconciling the current operation.':undefined}>Resume</Button>}
+  {sourcesApi&&view&&<AttachControl attachments={attachment.shown} onAttach={kind=>void attachNow(kind)} pending={attachment.pending}
+   disabledReason={sourceView.view&&!sourceView.view.available?sourceView.view.reason??'Attaching is unavailable.':running?SOURCES_RUNNING_REASON:busy||pending.current?'Waiting for the current operation.':undefined} notice={attachment.notice}/>}
   <Composer draft={draft} routeBeforeField routeLabel={<ConversationModelPicker taskId={taskId} workspaceId={workspaceId} selected={null} onPendingChange={(pending,recovering)=>{setModelPending(pending);setModelRecovering(recovering);}} disabled={running||!!busy||!!pending.current}/>} onSend={()=>void execute(completed?'resume':'steer')} disabledReason={unavailable} onStop={view&&(!completed||stopPending)?()=>void execute('stop'):undefined} stopDisabledReason={stopPending?'Waiting for interruption confirmation.':!running?'Work is not running.':undefined}/>
  </section>;
 }

@@ -120,6 +120,11 @@ const TASKS_CHANGED_CHANNEL = 'inquello:tasks-session-changed';
 const TASKS_PREFLIGHT_CHANNEL = 'inquello:op:tasks.preflight';
 const TASKS_START_CHANNEL = 'inquello:op:tasks.start';
 const TASKS_RECONCILE_CHANNEL = 'inquello:op:tasks.reconcile';
+const SOURCES_ATTACH_CHANNEL = 'inquello:op:sources.attach';
+const SOURCES_DISCARD_CHANNEL = 'inquello:op:sources.discard';
+const SOURCES_STAGE_CHANNEL = 'inquello:op:sources.stage';
+const SOURCES_VIEW_CHANNEL = 'inquello:op:sources.view';
+const SOURCES_CHANGED_CHANNEL = 'inquello:sources-changed';
 const api = Object.freeze({
   onboarding: Object.freeze({
     getState: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(ONBOARDING_GET_STATE_CHANNEL, ...args),
@@ -160,6 +165,23 @@ const api = Object.freeze({
     preflight: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(TASKS_PREFLIGHT_CHANNEL, ...args),
     start: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(TASKS_START_CHANNEL, ...args),
     reconcile: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(TASKS_RECONCILE_CHANNEL, ...args),
+  }),
+  // Attached material (Story 2.1): main opens the file or folder dialog; the renderer names a kind, an attachment ID or a Task, never a path.
+  sources: Object.freeze({
+    /** `{ kind: 'files' | 'folder' }`; main shows the system dialog and resolves with `{ ok, value }` (an attachment ID and summary, or null when cancelled). */
+    attach: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(SOURCES_ATTACH_CHANNEL, ...args),
+    /** `{ attachmentId }`; forgets an attachment that was not staged. Originals are never touched. */
+    discard: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(SOURCES_DISCARD_CHANNEL, ...args),
+    /** `{ taskId, workspaceId, attachmentId, firstTurn }`; stages into an idle Task, or after the first turn of a Task just started. */
+    stage: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(SOURCES_STAGE_CHANNEL, ...args),
+    /** `{ taskId, workspaceId }`; the Task's attached material, Coverage and checked references. */
+    view: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(SOURCES_VIEW_CHANNEL, ...args),
+    onChanged: (listener: (taskId: string | null) => void): (() => void) => {
+      if (typeof listener !== 'function') throw new Error('expected a listener');
+      const handler = (_event: unknown, taskId: unknown) => listener(typeof taskId === 'string' ? taskId : null);
+      ipcRenderer.on(SOURCES_CHANGED_CHANNEL, handler);
+      return () => ipcRenderer.removeListener(SOURCES_CHANGED_CHANNEL, handler);
+    },
   }),
   usage: Object.freeze({
     forTask: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(USAGE_TASK_CHANNEL, ...args),

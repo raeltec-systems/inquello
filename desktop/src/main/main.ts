@@ -4,6 +4,8 @@ import {probeOnboarding} from './onboarding-smoke-probe';
 import { configureDesktopStorage } from './runtime/desktop-storage';
 import { smokeCatalogArgs } from './runtime/smoke-catalog';
 import { wslDataStorage } from './runtime/wsl-data';
+import { WslTasks } from './runtime/wsl-tasks';
+import { SourcesService, hostStagingTarget, sourcesPolicyGate, wslStagingTarget } from './sources';
 import { ensurePrivateDirectory } from './runtime/private-paths';
 import {createDataAuthority} from './data/authority';
 import { taskBootstrap } from './tasks/bootstrap';
@@ -151,7 +153,7 @@ import {
   type PolicyOptions,
 } from './security/policy';
 import { OrganiseService } from './organise';
-import { EscalationGate, PermissionMediator, PolicyService, taskFoldersRoot } from './policy';
+import { EscalationGate, PermissionMediator, PolicyService, taskFolderPaths, taskFoldersRoot } from './policy';
 import { createProviders, loadProviderDevConfig, PROVIDER_DEV_CONFIG_ENV, providersDir, type ProviderService } from './providers';
 import { probeStartSurface, probeRoutes, probeCapabilities, probeComposer, probeData, probeIdentity, probeOrganise, probePermissions, probePolicy, probeProviders, probeRenderer, probeShellLayout, probeStates, probeToolBounds, SHELL_LAYOUT } from './smoke-probe';
 
@@ -165,7 +167,9 @@ let toolsManagementOk = false;
 const navigationSmoke = !app.isPackaged && process.argv.includes('--smoke-navigation');
 const quotaSmoke = !app.isPackaged && process.argv.includes('--smoke-quota');
 const visualSmoke = !app.isPackaged && process.argv.includes('--smoke-visual');
-const smoke = process.argv.includes('--smoke') || navigationSmoke || quotaSmoke || visualSmoke || onboardingSmoke || toolsManagementSmoke;
+/** Story 2.1: runs only the `source-references` report, for focused checks; the normal smoke runs it too. */
+const sourcesSmoke = !app.isPackaged && process.argv.includes('--smoke-sources');
+const smoke = process.argv.includes('--smoke') || navigationSmoke || quotaSmoke || visualSmoke || onboardingSmoke || toolsManagementSmoke || sourcesSmoke;
 let visualOk = false;
 let quotaOk = false;
 let navigationOk = false;
@@ -200,6 +204,11 @@ let routes: RouteService | undefined;
 let environments: EnvironmentService | undefined;
 let usage: UsageService | undefined;
 let tasks: TaskService | undefined;
+/** Story 2.1: attached material, its staging, Coverage and verified references. */
+let sources: SourcesService | undefined;
+let sourceReferencesOk = false;
+/** The smoke run plays the person's part in the attach dialog with the synthetic engagement folder. */
+let smokeSourcesChoice: { files: string[]; folders: string[] } | null = null;
 let armSmokeTaskSession: ((workspaceId:string)=>Promise<void>) | undefined;
 function notifySettingsChanged(settled: boolean): void {
   for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:policy-settings-changed', settled);
@@ -425,6 +434,16 @@ async function chooseExportDestination(): Promise<string | null> {
   return result.canceled || !result.filePath ? null : result.filePath;
 }
 
+/** Story 2.1: main shows the file or folder dialog; the renderer never names a path. */
+async function chooseSources(kind: 'files' | 'folder'): Promise<{ files: string[]; folders: string[] } | null> {
+  const options: Electron.OpenDialogOptions = kind === 'folder'
+    ? { title: 'Attach a folder', buttonLabel: 'Attach', properties: ['openDirectory', 'dontAddToRecent'] }
+    : { title: 'Attach files', buttonLabel: 'Attach', properties: ['openFile', 'multiSelections', 'dontAddToRecent'] };
+  const result = mainWindow ? await dialog.showOpenDialog(mainWindow, options) : await dialog.showOpenDialog(options);
+  if (result.canceled || result.filePaths.length === 0) return null;
+  return kind === 'folder' ? { files: [], folders: result.filePaths.slice(0, 1) } : { files: result.filePaths, folders: [] };
+}
+
 async function chooseImportSource(): Promise<string | null> {
   const options: Electron.OpenDialogOptions = { title: 'Import local data', buttonLabel: 'Import', properties: ['openDirectory'] };
   const result = mainWindow ? await dialog.showOpenDialog(mainWindow, options) : await dialog.showOpenDialog(options);
@@ -483,6 +502,7 @@ async function runSmokeProbe(contents: WebContents): Promise<void> {
       runtimeRequest:<T,>(method:string,params?:unknown)=>runtime!.request<T>(method,params)});
     quotaOk=report.ok;process.stdout.write(`${JSON.stringify({event:'quota',...report})}\n`);return;
   }
+  if (sourcesSmoke) { await runSourceReferencesProbe(contents); return; }
   if (navigationSmoke) {
     if (!identity || !organise) throw new Error('Navigation services unavailable');
     const { probeSavedNavigation } = await import('./smoke-probe');
@@ -610,6 +630,21 @@ async function runSmokeProbe(contents: WebContents): Promise<void> {
   environmentsOk = environmentsReport.ok;
   process.stdout.write(`${JSON.stringify({event: 'environments', ...environmentsReport})}\n`);
   if (!capabilitiesReport.ok) logger.error(`capabilities probe failed: ${capabilitiesReport.failures.join('; ')}`);
+  await runSourceReferencesProbe(contents);
+}
+
+/** Story 2.1: the `source-references` report. Element clicks only; no real key events, so the hidden window needs no focus. */
+async function runSourceReferencesProbe(contents: WebContents): Promise<void> {
+  if (!identity || !organise || !policy || !sources) throw new Error('Source references services unavailable');
+  const { probeSourceReferences } = await import('./smoke-probe');
+  const report = await probeSourceReferences(contents, {
+    identity, organise, policy, sources, seedFile: process.env.INQUELLO_SMOKE_SEED ?? null,
+    fixtureRoot: path.join(app.getAppPath(), 'test', 'fixtures', 'engagement'),
+    choose: (selection) => { smokeSourcesChoice = selection; },
+  });
+  sourceReferencesOk = report.ok;
+  process.stdout.write(`${JSON.stringify({ event: 'source-references', ...report })}\n`);
+  if (!report.ok) logger.error(`source-references probe failed: ${report.failures.join('; ')}`);
 }
 
 function exitCodeFor(exit: ExitInfo | undefined): number {
@@ -619,7 +654,8 @@ function exitCodeFor(exit: ExitInfo | undefined): number {
   if (visualSmoke) return handshakeOk && visualOk && exit?.exitCode === 0 && !exit.killed ? 0 : 1;
   if (quotaSmoke) return handshakeOk && quotaOk && exit?.exitCode === 0 && !exit.killed ? 0 : 1;
   if (navigationSmoke) return handshakeOk && navigationOk && shellLayoutOk && exit?.exitCode === 0 && !exit.killed ? 0 : 1;
-  return handshakeOk && privilegesOk && designOk && identityOk && dataOk && providersOk && organiseOk && statesOk && shellLayoutOk && composerOk && startSurfaceOk && policyOk && toolBoundsOk && permissionsOk && capabilitiesOk && routesOk && environmentsOk && exit !== undefined && exit.exitCode === 0 && !exit.killed ? 0 : 1;
+  if (sourcesSmoke) return handshakeOk && sourceReferencesOk && exit?.exitCode === 0 && !exit.killed ? 0 : 1;
+  return handshakeOk && privilegesOk && designOk && identityOk && dataOk && providersOk && organiseOk && statesOk && shellLayoutOk && composerOk && startSurfaceOk && policyOk && toolBoundsOk && permissionsOk && capabilitiesOk && routesOk && environmentsOk && sourceReferencesOk && exit !== undefined && exit.exitCode === 0 && !exit.killed ? 0 : 1;
 }
 
 app.on('before-quit', (event) => {
@@ -775,12 +811,42 @@ void app.whenReady().then(async () => {
     onCatalogChanged: () => { for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:routes-changed',{authority:false}); },
     onBindingChanged: (binding,taskIds) => { tasks?.invalidateBinding(binding.routeId,binding.configurationRevision,taskIds);for(const window of BrowserWindow.getAllWindows())window.webContents.send('inquello:routes-changed',{authority:true,binding:{routeId:binding.routeId,configurationRevision:binding.configurationRevision}}); },
   });
-  tasks = new TaskService({runtime: policyRuntime, identity: identitySession, bootstrap: trustedTaskBootstrap, syncPrincipal: () => organiseService.syncPrincipal(), prepareRoutes: () => routes!.list(), taskBinding:async taskId=>{const result=await routes!.forTask(taskId);return result.ok&&!result.value.staleConfiguration&&result.value.selected&&result.value.configurationRevision!==null&&result.value.disclosureBindings?.every(ref=>ref.active)?{routeId:result.value.selected.routeId,configurationRevision:result.value.configurationRevision,disclosureBindings:result.value.disclosureBindings}:null;}, freshPolicy: workspaceId => policyService.startPolicy(workspaceId), askPermission: (taskId, command) => policyService.askRuntimePermission(taskId, command), routeApproval:(workspaceId,routeId)=>sharedAuthority?identitySession.withAccess(access=>sharedAuthority.routeApproval(access,workspaceId,routeId)):Promise.resolve(null),routeCheck:(workspaceId,request)=>sharedAuthority?identitySession.withAccess(access=>sharedAuthority.routeEligibilityCheck(access,workspaceId,request)):Promise.resolve(null),onAuthorityUnavailable:()=>{taskSessionChanged();usageChanged(true);}, ...((quotaSmoke||visualSmoke)?{authorityDiagnostic:(stage:string,scope:string)=>logger.info(`smoke Task authority: ${stage}/${scope} monotonic_ms=${Math.floor(performance.now()/10)*10}`)}:{}), onProgressChanged: () => { for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:tasks-progress-changed'); }, onAccepted: () => usageChanged()});
+  tasks = new TaskService({runtime: policyRuntime, identity: identitySession, bootstrap: trustedTaskBootstrap, syncPrincipal: () => organiseService.syncPrincipal(), prepareRoutes: () => routes!.list(), taskBinding:async taskId=>{const result=await routes!.forTask(taskId);return result.ok&&!result.value.staleConfiguration&&result.value.selected&&result.value.configurationRevision!==null&&result.value.disclosureBindings?.every(ref=>ref.active)?{routeId:result.value.selected.routeId,configurationRevision:result.value.configurationRevision,disclosureBindings:result.value.disclosureBindings}:null;}, freshPolicy: workspaceId => policyService.startPolicy(workspaceId), askPermission: (taskId, command) => policyService.askRuntimePermission(taskId, command), routeApproval:(workspaceId,routeId)=>sharedAuthority?identitySession.withAccess(access=>sharedAuthority.routeApproval(access,workspaceId,routeId)):Promise.resolve(null),routeCheck:(workspaceId,request)=>sharedAuthority?identitySession.withAccess(access=>sharedAuthority.routeEligibilityCheck(access,workspaceId,request)):Promise.resolve(null),onAuthorityUnavailable:()=>{taskSessionChanged();usageChanged(true);}, ...((quotaSmoke||visualSmoke)?{authorityDiagnostic:(stage:string,scope:string)=>logger.info(`smoke Task authority: ${stage}/${scope} monotonic_ms=${Math.floor(performance.now()/10)*10}`)}:{}), onProgressChanged: () => { sources?.progressChanged(); for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:tasks-progress-changed'); }, onAccepted: () => usageChanged()});
   usage = new UsageService({runtime: policyRuntime, identity: identitySession, policy: policyService, onChanged: usageChanged});
   environments = new EnvironmentService({runtime: policyRuntime, identity: identitySession, policy: policyService, routes});
   providerService.setRouteInvalidator((id) => routes!.invalidate(id));
   const policyLoad = loadShippedPolicy();
   if (!policyLoad.ok) logger.error(`local data policy did not load; local data actions are blocked: ${policyLoad.error}`);
+  // Story 2.1: attached material. Staging goes to the Task's Linux guest folder through the transfer broker, or to its Windows
+  // folder when the Task runs under Full access; verification reads each cited location with the same scripts through runTool.
+  const sourceTaskRoot = taskFoldersRoot(userData);
+  let sourceGuest: { principal: string; tasks: WslTasks } | null = null;
+  const sourcesService = new SourcesService({
+    userData,
+    skillRoot: app.isPackaged ? path.join(process.resourcesPath, 'skills', 'inquello-evidence') : path.join(app.getAppPath(), 'resources', 'skills', 'inquello-evidence'),
+    principalId: () => identitySession.principalId(),
+    choose: smoke ? async () => smokeSourcesChoice : chooseSources,
+    runTool: async (taskId, argv, options) => { const result = await policyService.runTool(taskId, argv, options); return result.ok ? { ok: true, value: result.value } : { ok: false, reason: result.reason }; },
+    stagingTarget: (taskId) => {
+      const host = hostStagingTarget((id) => taskFolderPaths(sourceTaskRoot, id).working);
+      if (process.platform !== 'win32') return host;
+      const principal = identitySession.principalId();
+      if (!principal) throw new Error('Signed out');
+      if (sourceGuest?.principal !== principal) sourceGuest = { principal, tasks: new WslTasks(sourceTaskRoot, principal) };
+      return sourceGuest.tasks.binding(taskId)?.backend === 'windows' ? host : wslStagingTarget(sourceGuest.tasks);
+    },
+    policyGate: () => sourcesPolicyGate(policyLoad),
+    taskState: async (taskId, workspaceId) => {
+      const progress = await tasks?.progress({ taskId, workspaceId });
+      if (!progress?.ok) return null;
+      return { status: progress.value.status, messages: progress.value.items.filter((item) => item.kind === 'message' && item.role === 'agent' && item.status === 'completed').map((item) => ({ itemId: item.id, text: item.text })) };
+    },
+    onChanged: (taskId) => { for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:sources-changed', taskId); },
+    logger,
+  });
+  // An interrupted extract write leaves only a temporary file; it is discarded, never restored.
+  try { const discarded = sourcesService.store.recover(); if (discarded) logger.info(`sources: discarded ${discarded} interrupted extract write(s)`); } catch (error) { logger.warn(`sources: extract recovery failed (${(error as Error).message})`); }
+  sources = sourcesService;
   const dataOptions: DataServiceOptions = {
     ...(process.platform === 'win32' ? { taskStorage: wslDataStorage(taskFoldersRoot(userData), () => identitySession.principalId()) } : {}),
     authority:createDataAuthority({identity:identitySession,service:sharedAuthority,storeName:path.basename(workingStorePath(userData)),binary:()=>resolveAppServerBinary({env:process.env,isPackaged:app.isPackaged,resourcesPath:process.resourcesPath,appPath:app.getAppPath()}).path,env:()=>runtimeEnv(roots!['runtime-home'],workingStorePath(userData))}),
@@ -847,6 +913,7 @@ void app.whenReady().then(async () => {
       environments,
       usage,
       tasks,
+      sources: sourcesService,
       runtimeState: () => runtime?.state ?? 'stopped',
       runtimeVersion: schemaStamp.runtimeVersion,
       identity: {
@@ -857,8 +924,9 @@ void app.whenReady().then(async () => {
       data: {
         getPolicy: () => service.getPolicy(),
         exportData: () => service.exportData(),
-        importData: () => service.importData(),
-        deleteData: (categories) => service.deleteData(categories),
+        // References checked earlier are held in memory; after an import or a deletion of the category they are read again.
+        importData: async () => { const result = await service.importData(); sourcesService.forgetChecked(); return result; },
+        deleteData: async (categories) => { const result = await service.deleteData(categories); if (categories.includes('source-extracts')) sourcesService.forgetChecked(); return result; },
         deletableCategories: () => service.deletableCategories(),
       },
       provider: {

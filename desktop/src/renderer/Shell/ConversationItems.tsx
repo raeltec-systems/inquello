@@ -7,7 +7,12 @@
 import { useLayoutEffect, useRef, type ReactElement, type ReactNode } from 'react';
 import { DiffLine } from '../primitives';
 import { MessageMarkdown } from './MessageMarkdown';
+import { MessageWithSources } from './SourceReferences';
+import type { MessageReferences } from './sources-bridge';
 import type { ProgressItem } from './tasks-bridge';
+
+/** Story 2.1: checked references per agent message, by item ID, as main reported them. */
+export type ReferencesByItem = ReadonlyMap<string, MessageReferences>;
 
 const ended = (status: string) => ['completed', 'failed', 'cancelled', 'uncertain', 'setup-failed'].includes(status);
 const LIVE_EDGE_PX = 4;
@@ -42,21 +47,24 @@ function nativeStatus(item: ProgressItem, status: string): string {
 
 const kindLabel = (item: ProgressItem) => item.kind === 'command' ? 'Command' : item.kind === 'tool' ? 'Tool activity' : item.kind === 'edit' ? 'File change' : 'Message';
 
-function ItemContent({ item }: { item: ProgressItem }): ReactElement {
+function ItemContent({ item, references }: { item: ProgressItem; references?: ReferencesByItem }): ReactElement {
   if (item.kind === 'edit') return <><DiffLine kind="change" stage={item.application === 'applied' ? 'applied-locally' : 'suggested'}>{item.text}</DiffLine>
     {item.application !== 'applied' && <p>Not confirmed as applied. This is not a delivered artifact.</p>}</>;
   // Only the agent's own message text is formatted. Everything else stays literal.
-  if (item.kind === 'message' && item.role === 'agent') return <MessageMarkdown text={item.text} />;
+  if (item.kind === 'message' && item.role === 'agent') {
+    const checked = references?.get(item.id);
+    return checked ? <MessageWithSources text={item.text} references={checked} /> : <MessageMarkdown text={item.text} />;
+  }
   return <p className="iq-progress-text">{item.text}</p>;
 }
 
-function Row({ item, status }: { item: ProgressItem; status: string }): ReactElement {
+function Row({ item, status, references }: { item: ProgressItem; status: string; references?: ReferencesByItem }): ReactElement {
   const message = item.kind === 'message';
   const role = message ? item.role ?? 'unknown' : 'activity';
   return <li className={`iq-conversation-item iq-conversation-item--${role}`}
     data-progress-item={item.id} data-status={unconfirmed(item, status) ? 'unconfirmed' : item.status}>
     {message
-      ? <div className="iq-message-body">{role === 'unknown' && <span className="iq-message-unknown">Unknown speaker</span>}<ItemContent item={item} /></div>
+      ? <div className="iq-message-body">{role === 'unknown' && <span className="iq-message-unknown">Unknown speaker</span>}<ItemContent item={item} references={references} /></div>
       : <details className="iq-work-log-row">
         <summary><span className="iq-work-log-kind">{kindLabel(item)}</span>
           <span className="iq-work-log-status">{unconfirmed(item, status) ? 'Outcome unconfirmed' : nativeStatus(item, status)}</span>
@@ -163,9 +171,9 @@ function ActivityGroup({ items, status, heading, latest }: { items: ProgressItem
  * `grouped` folds each turn's actions into one collapsed group (the open
  * conversation); evidence lists pass `grouped={false}` and keep one row each.
  */
-export function ConversationItems({ items, status, label, grouped = false, heading }: { items: ProgressItem[]; status: string; label: string; grouped?: boolean; heading?: TurnHeading }): ReactElement {
+export function ConversationItems({ items, status, label, grouped = false, heading, references }: { items: ProgressItem[]; status: string; label: string; grouped?: boolean; heading?: TurnHeading; references?: ReferencesByItem }): ReactElement {
   if (!grouped) return <ol className="iq-progress-items iq-conversation-items" aria-label={label}>
-    {items.map(item => <Row key={item.id} item={item} status={status} />)}
+    {items.map(item => <Row key={item.id} item={item} status={status} references={references} />)}
   </ol>;
   const blocks = turnBlocks(items);
   // The finished line heads the latest turn's group; without one it ends the turn.
@@ -173,7 +181,7 @@ export function ConversationItems({ items, status, label, grouped = false, headi
   return <>
     <ol className="iq-progress-items iq-conversation-items" aria-label={label}>
       {blocks.map(block => block.kind === 'item'
-        ? <Row key={block.item.id} item={block.item} status={status} />
+        ? <Row key={block.item.id} item={block.item} status={status} references={references} />
         : <ActivityGroup key={`group:${block.key}`} items={block.items} status={status} heading={heading} latest={block.latest} />)}
     </ol>
     {heading?.finished && !finishedInGroup && <FinishedLine finished={heading.finished} />}

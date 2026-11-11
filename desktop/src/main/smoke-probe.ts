@@ -130,7 +130,7 @@ import { observeSyntheticStartup } from './smoke-startup';
  * the topology it requires the signed-out Shell to show no Composer.
  * `evaluateComposer` is pure and decides pass/fail.
  */
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -150,6 +150,7 @@ import { isProviderCredentialVar } from './runtime/env';
 import { taskFiles } from './runtime/probe-task-files';
 import { RpcResponseError } from './runtime/errors';
 import type { BlockedKind } from './security/policy';
+import type { SourcesService } from './sources';
 
 /** Exercise main's identity transition hooks as well as the session itself. */
 function smokeIdentity(contents: WebContents, action: 'signIn' | 'signOut'): Promise<{ ok: boolean }> {
@@ -297,6 +298,7 @@ const TAB_SETTLE_MS = 50;
 export const EXPECTED_BRIDGE_TREE = {
   onboarding: {getState: 'function', saveDraft: 'function', members: 'function', createWorkspace: 'function', acceptInvitation: 'function', invite: 'function', changeRoles: 'function', removeMember: 'function', revokeInvitation: 'function', reconcile: 'function', retry: 'function', discardPending: 'function'},
   tasks: { inbox: 'function', steer: 'function', stop: 'function', resume: 'function',preflight:'function',start:'function',reconcile:'function',progress:'function',activity:'function',settleLifecycle:'function',answer:'function',onProgressChanged:'function',onSessionChanged:'function'},
+  sources: { attach: 'function', discard: 'function', stage: 'function', view: 'function', onChanged: 'function' },
   usage: { forTask: 'function', set: 'function', onChanged: 'function' },
   environments: { forTask: 'function', onChanged: 'function' },
   routes: { list: 'function', catalog: 'function', resolve: 'function', bindingState: 'function', selectModel: 'function', pendingModel: 'function', forTask: 'function', select: 'function', onChanged: 'function' },
@@ -4487,4 +4489,146 @@ export async function probeToolsManagement(contents: WebContents, options: Organ
     if (fixture) {report.fixture={...fixture.counts};try {await fixture.close();} catch {report.failures.push('Loopback fixture cleanup failed');}}
   }
   report.ok=report.failures.length===0;return report;
+}
+
+// ---- attached material and verified references (Story 2.1) ----------------------------
+
+export interface SourceReferencesProbeOptions extends Omit<OrganiseProbeOptions, 'runtimeRequest'> {
+  policy: PolicyService;
+  sources: SourcesService;
+  /** `desktop/test/fixtures/engagement`: the synthetic engagement folder and its answer key. */
+  fixtureRoot: string;
+  /** Plays the person's part in the attach dialog; null restores "cancelled". */
+  choose(selection: { files: string[]; folders: string[] } | null): void;
+}
+export interface SourceReferencesReport { ok: boolean; skipped: boolean; failures: string[]; facts: Record<string, unknown> }
+
+function fixtureDigests(folder: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const name of fs.readdirSync(folder).sort()) out[name] = createHash('sha256').update(fs.readFileSync(path.join(folder, name))).digest('hex');
+  return out;
+}
+
+/**
+ * Story 2.1 seeded smoke: the start view's attach control with the synthetic
+ * engagement folder (main plays the dialog), attach and view over the real
+ * IPC operations, staging into an idle Task's real sandbox folder, checking a
+ * fixture answer's references in the sandbox (the answer is authored from the
+ * answer key, not produced by a model), retention, deletion and unchanged
+ * originals. A Task without a runtime thread has no authorized progress read,
+ * so the renderer's idle-Task path would refuse it; main stages directly.
+ */
+export async function probeSourceReferences(contents: WebContents, options: SourceReferencesProbeOptions): Promise<SourceReferencesReport> {
+  const facts: Record<string, unknown> = {};
+  if (options.identity.config.kind !== 'configured') return { ok: true, skipped: true, failures: [], facts };
+  const failures: string[] = [];
+  const check = (condition: boolean, what: string) => { if (!condition) failures.push(what); };
+  const folder = path.join(options.fixtureRoot, 'folder');
+  let stage = 'fixture';
+  try {
+    const before = fixtureDigests(folder);
+    const key = JSON.parse(fs.readFileSync(path.join(options.fixtureRoot, 'answer-key.json'), 'utf8')) as { files: Record<string, { format: string; keys: Array<{ at: string; text: string }> }> };
+    stage = 'seed';
+    const seed = JSON.parse(fs.readFileSync(options.seedFile ?? '', 'utf8')) as { workspace_id?: string; invite_id?: string };
+    if (!seed.workspace_id) throw new Error('Seeded Workspace unavailable');
+    const workspaceId = seed.workspace_id;
+    stage = 'sign-in';
+    if (!(await smokeIdentity(contents, 'signIn')).ok) throw new Error('Seeded identity unavailable');
+    // Run alone, this report joins the seeded Workspace itself; in the normal phase an earlier report already has.
+    if (seed.invite_id) await options.identity.session.withAccess(access => options.identity.service!.acceptInvite(access, seed.invite_id!)).catch(() => null);
+    await options.organise.syncPrincipal(); await options.organise.getWorkspaces();
+    stage = 'task';
+    const created = await options.organise.createTask({ operationId: randomUUID(), workspaceId, engagementId: null, folderId: null, title: 'Smoke source references' });
+    if (!created.ok) throw new Error(created.reason);
+    const taskId = created.value.taskId;
+    const settings = await options.policy.effectiveThreadSettings(taskId);
+    if (!settings.ok) throw new Error(settings.reason);
+
+    // The start view: Attach folder through the real control and IPC; main shows the folder's summary, never a path.
+    stage = 'start-view-attach';
+    options.choose({ files: [], folders: [folder] });
+    const start = await contents.executeJavaScript(`(async()=>{${SHELL_HELPERS}
+      const opened=await openShell();const ready=await wait(()=>q('[data-sidebar][data-sidebar-state="ready"]'),${SHELL_SETTLE_MS});
+      const fresh=qVisible('[data-action="new-thread"]');if(!opened||!ready||!fresh)return{opened:false};fresh.click();
+      const view=await wait(()=>qVisible('[data-start-view]'),${SHELL_SETTLE_MS});const button=view&&await wait(()=>{const b=view.querySelector('button[data-attach="folder"]');return b&&b.getAttribute('aria-disabled')!=='true'?b:null;},${SHELL_SETTLE_MS});
+      if(!button)return{opened:!!view,control:false};button.click();
+      const summary=await wait(()=>view.querySelector('[data-attachment]'),60000);
+      const counts=summary?.querySelector('[data-attachment-counts]')?.textContent??null;const label=summary?.querySelector('.iq-file-chip-name')?.textContent??null;const notice=view.querySelector('[data-attach-notice]')?.textContent??null;const pageText=document.body.innerText;
+      summary?.querySelector('button[aria-label^="Remove"]')?.click();const removed=await wait(()=>!view.querySelector('[data-attachment]'),5000);
+      return{opened:true,control:true,counts,label,notice,removed,pageText};
+    })()`) as { opened: boolean; control?: boolean; counts?: string | null; label?: string | null; notice?: string | null; removed?: boolean; pageText?: string };
+    facts.startView = { ...start, pageText: undefined };
+    check(start.opened && start.control === true, 'The start view has no available Attach folder control');
+    check(start.counts === '17 files to read · 1 not searched', `The start view summary was ${JSON.stringify(start.counts)}`);
+    check(start.label === 'folder', `The start view named the attachment ${JSON.stringify(start.label)}`);
+    check(!!start.notice && /first request cannot read it/.test(start.notice), 'The start view does not say the first request cannot read attached material');
+    check(start.removed === true, 'Removing the attachment on the start view did not clear it');
+    check(!(start.pageText ?? '').includes(options.fixtureRoot), 'The renderer showed an absolute path');
+
+    // Attach over IPC (main plays the dialog with selected files of the same folder, to keep the sandbox work bounded).
+    stage = 'attach-ipc';
+    const chosen = ['payables-export.csv', 'meeting-notes.txt', 'ap-ledger.xlsx', 'purchasing-policy.docx', 'planning-deck.pptx', 'sample-report.pdf', 'scanned-receipt.pdf', 'confirmation-letter.png', 'protected-statement.pdf', 'system-dump.bin'];
+    options.choose({ files: chosen.map(name => path.join(folder, name)), folders: [] });
+    const attached = await contents.executeJavaScript('globalThis.inquello.sources.attach({kind:"files"})') as { ok: boolean; reason?: string; value?: { attachmentId: string; files: unknown[]; notSearched: Array<{ relative: string; reason: string }> } };
+    if (!attached.ok || !attached.value) throw new Error(attached.reason ?? 'attach returned nothing');
+    check(attached.value.files.length === 9, `${attached.value.files.length} files attached, expected 9`);
+    check(JSON.stringify(attached.value.notSearched) === JSON.stringify([{ relative: 'system-dump.bin', reason: 'Unsupported file type' }]), 'The unsupported file was not listed as not searched');
+    check(!JSON.stringify(attached.value).includes(options.fixtureRoot), 'The attach result named an absolute path');
+    const pathRefused = await contents.executeJavaScript(`globalThis.inquello.sources.attach({kind:${JSON.stringify(folder)}}).then(()=>false,()=>true)`) as boolean;
+    check(pathRefused, 'A path from the renderer was accepted');
+
+    stage = 'stage';
+    const started = Date.now();
+    const staged = await options.sources.stage(taskId, attached.value.attachmentId);
+    facts.stageMs = Date.now() - started;
+    if (!staged.ok) throw new Error(staged.reason);
+    const cover = staged.value.coverage;
+    facts.coverage = cover.statement;
+    check(cover.filesAttached === 10 && cover.incomplete, `Coverage was ${cover.statement}`);
+    check(cover.unreadable.some(item => item.relative === 'protected-statement.pdf' && /password/i.test(item.reason)), 'The protected PDF was not listed as unreadable with its reason');
+
+    stage = 'view-ipc';
+    const view = await contents.executeJavaScript(`globalThis.inquello.sources.view(${JSON.stringify({ taskId, workspaceId })})`) as { ok: boolean; reason?: string; value?: { attachments: unknown[]; coverage: { statement: string } | null; available: boolean } };
+    if (!view.ok || !view.value) throw new Error(view.reason ?? 'view returned nothing');
+    check(view.value.available && view.value.attachments.length === 1 && view.value.coverage?.statement === cover.statement, 'The renderer view did not carry the attachment and its Coverage');
+    check(!JSON.stringify(view.value).includes(options.fixtureRoot), 'The renderer view named an absolute path');
+
+    // A fixture answer: one keyed location per staged format, one wrong quote, a computed figure and an inference.
+    stage = 'verify';
+    const escape = (value: string) => value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    const good = chosen.filter(name => key.files[name]).map(name => ({ name, ...key.files[name]!.keys[0]! }));
+    const answer = [
+      ...good.map(item => `From ${item.name} :inquello-source{id="attached/${item.name}" at="${item.at}" quote="${escape(item.text)}"}`),
+      'A wrong quote :inquello-source{id="attached/payables-export.csv" at="R3" quote="Fabrikam paid twice"}',
+      'Total :inquello-computed{command="python3 -c \'print(1)\'" from="attached/payables-export.csv R2-R4"} probably monthly :inquello-inference{}',
+    ].join('\n');
+    const checked = await options.sources.references(taskId, answer);
+    if (!checked.ok) throw new Error(checked.reason);
+    const views = checked.value.references;
+    facts.references = views.map(item => ({ file: item.id, at: item.at, status: item.status, reason: item.reason, ocr: item.extract?.ocr ?? null }));
+    for (const [index, item] of good.entries()) check(views[index]?.status === 'verified', `${item.name} ${item.at} was not verified (${views[index]?.reason ?? 'missing'})`);
+    check(views.at(-1)?.status === 'unverified' && views.at(-1)?.reason === 'The quoted text is not at that location', 'A wrong quote was not shown as unverified');
+    check(views.some(item => item.id.endsWith('scanned-receipt.pdf') && item.extract?.ocr === true), 'The scanned PDF reference is not labelled as recognised text');
+    check(checked.value.computed.length === 1 && checked.value.computed[0]!.command === "python3 -c 'print(1)'" && checked.value.inferences.length === 1, 'The computed command or the inference marker was lost');
+    check(checked.value.retained === good.length, `${checked.value.retained} extracts retained, expected ${good.length}`);
+
+    stage = 'retained';
+    const extracts = options.sources.extracts(taskId);
+    check(extracts.ok && extracts.value.length === good.length && extracts.value.every(item => item.reference.file.sha256.length === 64), 'The retained extracts do not match the verified references');
+
+    stage = 'delete';
+    const removed = options.sources.deleteTask(taskId);
+    check(removed.ok && removed.value.remaining === 0, 'Deleting the Task’s extracts left files behind');
+    const after = options.sources.extracts(taskId);
+    check(after.ok && after.value.length === 0, 'Extracts remained after deletion');
+    stage = 'originals';
+    check(isDeepStrictEqual(fixtureDigests(folder), before), 'An original file changed');
+  } catch (error) {
+    failures.push(`${stage}: ${(error as Error).message.slice(0, 240)}`);
+  } finally {
+    options.choose(null);
+    await smokeIdentity(contents, 'signOut').catch(() => undefined);
+    await options.organise.syncPrincipal().catch(() => undefined);
+  }
+  return { ok: failures.length === 0, skipped: false, failures, facts };
 }

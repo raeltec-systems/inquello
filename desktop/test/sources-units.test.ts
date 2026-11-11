@@ -14,7 +14,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 
 import { deleteCategories, exportData, governedRoots, importData, loadShippedPolicy, takeInventory, type DataPolicy } from '../src/main/data';
 import {
-  coverage, ExtractStore, formatOf, inventoryAttachment, locationLabel, mergeEntries, parseCitations, parseMarkers, readerDigests, SKILL_DIR, SourcesService,
+  coverage, ExtractStore, formatOf, inventoryAttachment, locationLabel, MAX_ATTACHED_BYTES, MAX_ATTACHED_FILES, mergeEntries, parseCitations, parseMarkers, readerDigests, SKILL_DIR, SourcesService,
   stagingEntries, validLocator, VERIFY_BOOT, verifyCitations, attachmentView, type ReferenceView, type RunInTask,
 } from '../src/main/sources';
 import { recordingLogger, removeTempDirs, tempDir } from './helpers';
@@ -83,6 +83,22 @@ describe('attachment inventory on the Windows side', () => {
     expect(sha(fs.readFileSync(path.join(folder, 'ledger.csv')))).toBe(before);
   });
 
+  it('stops at the file bound, names what was left out as an incomplete input set, and never stages a hard-linked file', () => {
+    const root = tempDir('sources-bounds');
+    const folder = path.join(root, 'Big');
+    fs.mkdirSync(folder, { recursive: true });
+    for (let index = 0; index <= MAX_ATTACHED_FILES; index++) fs.writeFileSync(path.join(folder, `f${String(index).padStart(5, '0')}.txt`), 'x');
+    const linked = path.join(root, 'Linked');
+    write(path.join(linked, 'original.txt'), 'shared');
+    fs.linkSync(path.join(linked, 'original.txt'), path.join(linked, 'second-name.txt'));
+    const attachment = inventoryAttachment({ files: [], folders: [folder, linked] });
+    expect(attachment.files).toHaveLength(MAX_ATTACHED_FILES);
+    expect(attachment.notSearched).toEqual(expect.arrayContaining([{ relative: `Big/f${String(MAX_ATTACHED_FILES).padStart(5, '0')}.txt`, reason: 'Left out: the attachment bound was reached' }]));
+    expect(attachment.notSearched).toEqual(expect.arrayContaining([{ relative: 'Linked/original.txt', reason: 'Hard-linked file; not staged' }, { relative: 'Linked/second-name.txt', reason: 'Hard-linked file; not staged' }]));
+    expect(attachment.incomplete[0]).toBe(`Only part of the material was attached: the bound is ${MAX_ATTACHED_FILES} files and ${MAX_ATTACHED_BYTES / 1024 ** 2} MiB.`);
+    expect(coverage([attachmentView(attachment)], null).incomplete).toBe(true);
+  });
+
   it('treats a single attached file like a one-file folder', () => {
     const root = tempDir('sources-single');
     const file = write(path.join(root, 'policy.txt'), 'line one\n');
@@ -92,13 +108,21 @@ describe('attachment inventory on the Windows side', () => {
     expect(attachment.incomplete).toEqual([]);
   });
 
-  it.skipIf(process.platform !== 'win32')('lists a denied file as inaccessible, still attaches the rest, and refuses a denied folder', () => {
+  // A process whose token has the backup privilege enabled (Git Bash's MSYS runtime enables it, and Node inherits it) reads
+  // through a deny entry, because libuv opens files with backup semantics. The denial is checked before it is relied on.
+  it.skipIf(process.platform !== 'win32')('lists a denied file as inaccessible, still attaches the rest, and refuses a denied folder', ({ skip }) => {
     const root = tempDir('sources-denied');
     const folder = path.join(root, 'Folder');
     write(path.join(folder, 'open.txt'), 'open');
     const denied = write(path.join(folder, 'denied.txt'), 'secret');
     const user = `${os.userInfo().username}`;
     execFileSync('icacls', [denied, '/deny', `${user}:(R)`], { stdio: 'ignore' });
+    let enforced = false;
+    try { fs.readFileSync(denied); } catch (error) { enforced = ['EACCES', 'EPERM'].includes((error as NodeJS.ErrnoException).code ?? ''); }
+    if (!enforced) {
+      execFileSync('icacls', [denied, '/remove:d', user], { stdio: 'ignore' });
+      skip('The operating system does not enforce the deny entry for this process (an enabled backup privilege, for example inherited from Git Bash), so a denied file cannot be established here.');
+    }
     try {
       const attachment = inventoryAttachment({ files: [], folders: [folder] });
       expect(attachment.files.map(file => file.relative)).toEqual(['Folder/open.txt']);

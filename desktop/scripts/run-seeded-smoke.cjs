@@ -16,12 +16,15 @@ if(onboardingOnly && process.argv.slice(2).some(arg=>arg!=='--onboarding'))throw
 const navigationOnly=process.argv.includes('--navigation');
 const toolsOnly=process.argv.includes('--tools-only');
 if(toolsOnly&&process.argv.slice(2).some(arg=>arg!=='--tools-only'))throw new Error('Tools management is an exclusive owned smoke phase');
-const isolatedPhase=toolsOnly?'tools':onboardingOnly?'onboarding':process.argv.includes('--visual-only')?'visual':process.argv.includes('--quota-only')?'quota':null;
+// Story 2.1: the source-references report alone, for focused checks. The normal phase runs it too.
+const sourcesOnly=process.argv.includes('--sources-only');
+if(sourcesOnly&&process.argv.slice(2).some(arg=>arg!=='--sources-only'))throw new Error('Source references is an exclusive owned smoke phase');
+const isolatedPhase=sourcesOnly?'sources':toolsOnly?'tools':onboardingOnly?'onboarding':process.argv.includes('--visual-only')?'visual':process.argv.includes('--quota-only')?'quota':null;
 if((navigationOnly&&isolatedPhase)||(process.argv.includes('--visual-only')&&process.argv.includes('--quota-only')))throw new Error('Choose one isolated smoke phase');
 const base=onboardingOnly&&process.platform==='win32'?'D:\\Inquello\\tmp':os.tmpdir();fs.mkdirSync(base,{recursive:true});
 const dir=fs.realpathSync(fs.mkdtempSync(path.join(base,'inquello-seeded-smoke-')));
-const normalRequired=navigationOnly?['saved-navigation','shell-layout']:['renderer-privileges','design','identity','data','providers','organise','states','shell-layout','composer','start-surface','policy','tool-bounds','permissions','capabilities','routes','environments'];
-const required=isolatedPhase?[isolatedPhase==='onboarding'?'onboarding':isolatedPhase==='visual'?'visual-conversation':isolatedPhase==='tools'?'tools-management':'quota']:navigationOnly?normalRequired:[...normalRequired,'quota','visual-conversation','tools-management'];
+const normalRequired=navigationOnly?['saved-navigation','shell-layout']:['renderer-privileges','design','identity','data','providers','organise','states','shell-layout','composer','start-surface','policy','tool-bounds','permissions','capabilities','routes','environments','source-references'];
+const required=isolatedPhase?[isolatedPhase==='onboarding'?'onboarding':isolatedPhase==='visual'?'visual-conversation':isolatedPhase==='tools'?'tools-management':isolatedPhase==='sources'?'source-references':'quota']:navigationOnly?normalRequired:[...normalRequired,'quota','visual-conversation','tools-management'];
 console.log(`Smoke logs: ${dir}`);
 function ownedExit(child,ms){return new Promise(resolve=>{
   if(child.exitCode!==null||child.signalCode!==null||child.pid===undefined)return resolve(true);
@@ -135,7 +138,7 @@ fs.writeFileSync(policyFile,JSON.stringify(policy));
     const handshake=reports=>reports.some(report=>report.event==='handshake'&&report.versionCheck==='passed');
     const runElectron=async(launchEnv,label)=>{
       const output=path.join(folder,`${label}.stdout.log`);out=fs.openSync(output,'w');err=fs.openSync(path.join(folder,`${label}.stderr.log`),'w');
-      electron=spawn(electronBinary,['.',tools?'--smoke-tools-management':onboarding?'--smoke-onboarding':quota?'--smoke-quota':visual?'--smoke-visual':navigationOnly?'--smoke-navigation':'--smoke'],{cwd:desktop,env:launchEnv,stdio:['ignore',out,err],windowsHide:true,detached:process.platform!=='win32'});
+      electron=spawn(electronBinary,['.',phase==='sources'?'--smoke-sources':tools?'--smoke-tools-management':onboarding?'--smoke-onboarding':quota?'--smoke-quota':visual?'--smoke-visual':navigationOnly?'--smoke-navigation':'--smoke'],{cwd:desktop,env:launchEnv,stdio:['ignore',out,err],windowsHide:true,detached:process.platform!=='win32'});
       electronGuard=createOwnedProcessGuard(electron,{executable:electronBinary});
       const code=await new Promise((resolve,reject)=>{const deadline=setTimeout(()=>{reject(new Error('Owned Electron smoke deadline exceeded'));},600000);electron.once('error',()=>{clearTimeout(deadline);reject(new Error('Owned Electron smoke unavailable'));});electron.once('exit',code=>{clearTimeout(deadline);resolve(code);});});
       fs.closeSync(out);out=undefined;fs.closeSync(err);err=undefined;
@@ -146,7 +149,7 @@ fs.writeFileSync(policyFile,JSON.stringify(policy));
     };
     let {code,reports}=await runElectron(env,'smoke');
     stage='phase-report';
-    const expected=tools?['tools-management']:onboarding?['onboarding','onboarding-resume']:quota?['quota']:visual?['visual-conversation']:normalRequired;
+    const expected=phase==='sources'?['source-references']:tools?['tools-management']:onboarding?['onboarding','onboarding-resume']:quota?['quota']:visual?['visual-conversation']:normalRequired;
     let launches=1;
     if(onboarding&&code===0&&cleanRuntimeExit&&handshake(reports)&&reports.some(report=>report.event==='onboarding'&&report.ok===true)){
       // One relaunch of the same run on the same profile and topology, permitted by a one-use marker.

@@ -16,6 +16,11 @@ export const taskProgressPayload=safe(a=>{if(a.length!==1)throw new Error();cons
 export const taskAnswerPayload=safe(a=>{const r=fields(a,['taskId','workspaceId','requestId','answers']);return{taskId:uuid(r.taskId),workspaceId:uuid(r.workspaceId),requestId:requestId(r.requestId),answers:parseAnswers(r.answers)};});
 
 const lifecyclePayload=(kind:'steer'|'stop'|'resume')=>safe(a=>{const r=fields(a,kind==='stop'?['operationId','taskId','workspaceId']:['operationId','taskId','workspaceId','request']);let request:string|null=null;if(kind!=='stop'){if(r.request!==null){if(typeof r.request!=='string'||!r.request.trim()||Buffer.byteLength(r.request,'utf8')>131072||/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/.test(r.request))throw new Error();request=r.request;}if(kind==='steer'&&request===null)throw new Error();}return{operationId:uuid(r.operationId),taskId:uuid(r.taskId),workspaceId:uuid(r.workspaceId),request};});
+// Attached material (Story 2.1): the renderer names a dialog kind, an attachment ID or a Task, never a path.
+export const sourcesAttachPayload=safe(a=>{const r=fields(a,['kind']);if(r.kind!=='files'&&r.kind!=='folder')throw new Error();return{kind:r.kind as 'files'|'folder'};});
+export const sourcesDiscardPayload=safe(a=>{const r=fields(a,['attachmentId']);return{attachmentId:uuid(r.attachmentId)};});
+export const sourcesStagePayload=safe(a=>{const r=fields(a,['taskId','workspaceId','attachmentId','firstTurn']);if(typeof r.firstTurn!=='boolean')throw new Error();return{taskId:uuid(r.taskId),workspaceId:uuid(r.workspaceId),attachmentId:uuid(r.attachmentId),firstTurn:r.firstTurn};});
+export const sourcesViewPayload=safe(a=>{const r=fields(a,['taskId','workspaceId']);return{taskId:uuid(r.taskId),workspaceId:uuid(r.workspaceId)};});
 export const taskSteerPayload=lifecyclePayload('steer');
 export const taskStopPayload=lifecyclePayload('stop');
 export const taskResumePayload=lifecyclePayload('resume');

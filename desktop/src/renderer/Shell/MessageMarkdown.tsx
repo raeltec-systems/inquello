@@ -19,7 +19,58 @@ import remarkGfm from 'remark-gfm';
 import rehypeSanitize, { type Options as SanitizeSchema } from 'rehype-sanitize';
 
 interface MdNode { type: string; value?: string; alt?: string | null; url?: string; children?: MdNode[]; label?: string | null; identifier?: string }
-interface HastNode { type: string; value?: string; children?: HastNode[] }
+interface HastNode { type: string; value?: string; children?: HastNode[]; tagName?: string; properties?: Record<string, unknown> }
+
+/**
+ * A span of the message text that main identified (a reference, computed
+ * figure or inference directive) and the element shown in its place. Its
+ * directive text is replaced by a private-use placeholder before Markdown
+ * parsing; after sanitising, each placeholder becomes the mark's element.
+ * Inside code the directive's own text is restored and shown literally.
+ */
+export interface InlineMark { start: number; end: number; raw: string; node: ReactNode }
+const OPEN = '\uE000', CLOSE = '\uE001';
+const PLACEHOLDER = /\uE000(\d{1,4})\uE001/g;
+
+/** The message text with each mark replaced by its placeholder. Placeholder characters already in the text are neutralised first. */
+export function placeMarks(text: string, marks: readonly InlineMark[]): string {
+  const clean = text.replace(/[\uE000\uE001]/g, '\uFFFD');
+  let out = '', at = 0;
+  marks.forEach((mark, index) => {
+    if (mark.start < at || mark.end > clean.length || mark.end <= mark.start) return;
+    out += clean.slice(at, mark.start) + `${OPEN}${index}${CLOSE}`;
+    at = mark.end;
+  });
+  return out + clean.slice(at);
+}
+
+/** rehype plugin, run after sanitising: placeholders become mark elements, or the directive text inside code. */
+export function rehypeMarks(marks: readonly InlineMark[]) {
+  return () => (tree: HastNode) => {
+    const walk = (node: HastNode, literal: boolean) => {
+      if (!node.children) return;
+      const next: HastNode[] = [];
+      for (const child of node.children) {
+        if (child.type === 'text' && child.value?.includes(OPEN)) {
+          const value = child.value;
+          if (literal) { next.push({ type: 'text', value: value.replace(PLACEHOLDER, (_match, index: string) => marks[Number(index)]?.raw ?? '') }); continue; }
+          let last = 0;
+          for (const match of value.matchAll(PLACEHOLDER)) {
+            if (match.index > last) next.push({ type: 'text', value: value.slice(last, match.index) });
+            if (marks[Number(match[1])]) next.push({ type: 'element', tagName: 'span', properties: { dataInquelloMark: match[1] }, children: [] });
+            last = match.index + match[0].length;
+          }
+          if (last < value.length) next.push({ type: 'text', value: value.slice(last) });
+          continue;
+        }
+        walk(child, literal || (child.type === 'element' && (child.tagName === 'code' || child.tagName === 'pre')));
+        next.push(child);
+      }
+      node.children = next;
+    };
+    walk(tree, false);
+  };
+}
 
 /** The written source of nodes that must never become markup or a fetch. */
 function literal(node: MdNode): MdNode | null {
@@ -108,9 +159,17 @@ const components: Components = {
 const remarkPlugins = [remarkGfm, remarkLiteralUnsafe];
 const rehypePlugins: NonNullable<Parameters<typeof Markdown>[0]['rehypePlugins']> = [[rehypeSanitize, MARKDOWN_SCHEMA]];
 
-/** Sanitised Markdown for one agent message; re-renders only when its text changes. */
-export const MessageMarkdown = memo(function MessageMarkdown({ text }: { text: string }): ReactElement {
-  return <div className="iq-progress-text iq-markdown" data-markdown>
+/** Sanitised Markdown for one agent message; re-renders only when its text or marks change. */
+export const MessageMarkdown = memo(function MessageMarkdown({ text, marks }: { text: string; marks?: readonly InlineMark[] }): ReactElement {
+  if (!marks?.length) return <div className="iq-progress-text iq-markdown" data-markdown>
     <Markdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={components} skipHtml={false}>{text}</Markdown>
+  </div>;
+  // The sanitiser allows no span, so after it every span is a placeholder this component inserted.
+  const marked: Components = { ...components, span({ node }) {
+    const index = Number((node as HastNode | undefined)?.properties?.dataInquelloMark);
+    return <>{Number.isInteger(index) ? marks[index]?.node ?? null : null}</>;
+  } };
+  return <div className="iq-progress-text iq-markdown" data-markdown>
+    <Markdown remarkPlugins={remarkPlugins} rehypePlugins={[...rehypePlugins, rehypeMarks(marks)]} components={marked} skipHtml={false}>{placeMarks(text, marks)}</Markdown>
   </div>;
 });
