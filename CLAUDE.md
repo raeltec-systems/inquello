@@ -5,7 +5,7 @@ This codebase is yours: what it's for and how it's built are your call, and you'
 ## Build workflow (bmad-build)
 
 - **Follow the full bmad-build workflow.** Claude is the build agent. For each story, follow the workflow's steps as written: plan the spec, stop at the spec checkpoint for the owner's approval, implement, run the review step (step 4) and its triage, run the spec's Verification commands, mark the spec `done`, sync `sprint-status.yaml`, and commit locally.
-- **Review layers run on cheaper models; the main session decides.** Run bmad-build step 4 with its reviewer subagents (blind-hunter, edge-case-hunter, verification-gap and any others the step names). Use Haiku and Sonnet for most subagent work: gathering information, reading code and producing findings. The main session reasons over those findings, triages them, and decides which issues are worth fixing now and which to defer. Use a stronger model for a subagent only when the task needs it.
+- **Run the review layers; the main session decides.** Run bmad-build step 4 with its reviewer subagents (blind-hunter, edge-case-hunter, verification-gap and any others the step names), on the models named under Subagents. The main session reasons over their findings, triages them, and decides which issues are worth fixing now and which to defer.
 - **One pull request per epic.** Work all of an epic's stories on one branch (for example `feat/epic-1-secure-private-desktop`). Push and open the pull request only when the epic is complete, unless the owner asks earlier. Respond to review comments left on that pull request.
 
 ## Finishing work
@@ -47,7 +47,12 @@ Approval rules apply exactly as written here. An approval covers the action it n
 
 - **A subagent costs tokens and loses context.** Delegate when the work is independent and can run in parallel, or when it means reading widely and you need only the conclusion. Do small lookups and single edits yourself.
 - **Brief a subagent completely:** the goal, what is already ruled out, the files to read, the scope, and what to return. Check its result before you rely on it or report it.
-- **Set the model on every subagent** as the build workflow rule says. Do not let one inherit the session's model by default.
+- **Set the model on every subagent.** Do not let one inherit the session's model by default.
+  - **Haiku:** discovery, grep and search, reading files, read-only analysis.
+  - **Sonnet:** anything more complex that is not implementation, such as the review layers, tracing behaviour across files, or compiling context.
+  - **Opus:** implementation. It is the workhorse for writing and changing code.
+  - **The main session (Fable):** orchestrator and decision maker. It plans, triages, verifies and reports; it does not hand off decisions.
+  - If a subagent fails to return its report twice, re-run it on the next model up.
 
 ## Repository rules
 
@@ -58,3 +63,7 @@ Approval rules apply exactly as written here. An approval covers the action it n
 ## Verification
 
 Read and follow [docs/verification.md](docs/verification.md) for implementation and verification work.
+
+## Lessons learned
+
+Read [docs/lessons-epic-1.md](docs/lessons-epic-1.md) before planning, implementing or verifying a story, and give it to implementation subagents. Add to it when something costs time that a note would have saved.
