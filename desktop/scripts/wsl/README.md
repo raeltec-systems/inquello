@@ -85,6 +85,28 @@ paths to make a tool request work.
   refused with its source retained. The backend does not silently move an
   existing profile or its credential identity to make that transition succeed.
 
+## Adding a guest package
+
+The sandbox runs commands on confidential evidence, so its programs are a declared
+list with recorded versions; nothing is installed at Task run time and nothing comes
+from outside Ubuntu's archive. To add a package, a story spec names it and the owner
+approves it. Then: add it to the `apt-get install` line in `bootstrap-guest.sh` and to
+`packages` in `build-manifest.json`; install it in the live guest as root with the
+same `apt-get install -y --no-install-recommends ...` command; regenerate the records
+with `dpkg-query -W -f='${binary:Package}\t${Version}\n'` into
+`/var/lib/inquello/provisioning/packages.tsv` and copy that file to
+`verified-packages.tsv` with LF line endings; write its SHA-256 into
+`resolvedPackageVersions.sha256`. `test/sources-guest-packages.test.ts` fails when the
+records, their digest and the two package lists disagree.
+
+Story 2.1 (2026-11-11) added the document-reading tools: `poppler-utils`,
+`tesseract-ocr`, `tesseract-ocr-eng`, `python3-pypdf`, `python3-pdfminer`,
+`python3-openpyxl`, `python3-docx`, `python3-xlrd`, `python3-pil`,
+`libreoffice-writer-nogui`, `libreoffice-calc-nogui` and `libreoffice-impress-nogui`
+(166 packages with dependencies; no installed package changed version). The
+`preparedImage` digest describes the image prepared before this addition, which did
+not contain build packages either; a fresh image still needs `bootstrap-guest.sh`.
+
 ## Seeded desktop verification
 
 After building the desktop, CLI/app-server and the `test-issuer` dev topology,

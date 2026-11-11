@@ -88,6 +88,7 @@ describe('export (matrix: Export)', () => {
       ['task-history', 3],
       ['working-store', 0],
       ['task-folders', 0],
+      ['source-extracts', 0],
     ]);
     for (const entry of manifest.included) {
       for (const file of entry.files) {
@@ -105,7 +106,7 @@ describe('export (matrix: Export)', () => {
     // No credential anywhere in the export.
     for (const file of allFiles(destination)) expect(fs.readFileSync(file, 'utf8')).not.toContain(SESSION_SECRET);
     expect(fs.existsSync(path.join(destination, MANIFEST_FILE))).toBe(true);
-    expect(journal.read()).toEqual([{ path: destination, exportedAt: '2026-10-28T12:00:00.000Z', categories: ['task-history', 'working-store', 'task-folders'] }]);
+    expect(journal.read()).toEqual([{ path: destination, exportedAt: '2026-10-28T12:00:00.000Z', categories: ['task-history', 'working-store', 'task-folders', 'source-extracts'] }]);
     if (process.platform !== 'win32') expect(fs.statSync(journal.file).mode & 0o777).toBe(0o600);
     expect(journal.file).toBe(path.join(userData, 'data', 'export-journal.json'));
   });
@@ -339,6 +340,7 @@ describe('reimport (matrix: Round trip, Import into non-empty)', () => {
       { category: 'task-history', label: 'Task history', files: 3 },
       { category: 'working-store', label: 'Private work organisation', files: 0 },
       { category: 'task-folders', label: 'Task working folders', files: 0 },
+      { category: 'source-extracts', label: 'Source references and extracts', files: 0 },
     ]);
     expect(result.notRestored).toEqual([]);
     expect(result.omissions.map((omission) => omission.category)).toEqual(expect.arrayContaining(['identity-session', 'chromium-profile']));
@@ -429,7 +431,7 @@ describe('delete (matrix: Delete)', () => {
         { category: 'export-journal', label: 'Export journal', files: 1 },
       ]),
     );
-    expect(report.survivingExports).toEqual([{ path: destination, exportedAt: expect.any(String), categories: ['task-history', 'working-store', 'task-folders'], outsideInquelloControl: true }]);
+    expect(report.survivingExports).toEqual([{ path: destination, exportedAt: expect.any(String), categories: ['task-history', 'working-store', 'task-folders', 'source-extracts'], outsideInquelloControl: true }]);
     expect(clearBrowserProfile).not.toHaveBeenCalled();
     // Emptied directories are pruned; the export itself is untouched.
     expect(fs.existsSync(path.join(roots['runtime-home'], 'sessions'))).toBe(false);
@@ -601,6 +603,7 @@ describe('data service', () => {
       { category: 'task-history', label: 'Task history', files: 3 },
       { category: 'working-store', label: 'Private work organisation', files: 0 },
       { category: 'task-folders', label: 'Task working folders', files: 0 },
+      { category: 'source-extracts', label: 'Source references and extracts', files: 0 },
     ]);
     expect(h.events).toEqual(['runtime:stop', 'runtime:start']);
     h.events.length = 0;
@@ -702,6 +705,7 @@ describe('data service', () => {
       { category: 'task-history', label: 'Task history', files: 3 },
       { category: 'working-store', label: 'Private work organisation', files: 0 },
       { category: 'task-folders', label: 'Task working folders', files: 0 },
+      { category: 'source-extracts', label: 'Source references and extracts', files: 0 },
     ]);
     expect(imported.import.notRestored).toEqual([]);
     expect(imported.import.omissions.map((omission) => omission.category)).toEqual(expect.arrayContaining(['identity-session', 'chromium-profile']));

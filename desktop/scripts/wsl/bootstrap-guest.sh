@@ -12,7 +12,7 @@ export DEBIAN_FRONTEND=noninteractive
 export TMPDIR=/tmp
 install -d -m 0700 /var/lib/inquello/provisioning
 apt-get update -o APT::Update::Error-Mode=any
-apt-get install -y --no-install-recommends build-essential pkg-config libssl-dev libcap-dev clang cmake git curl ca-certificates python3 tar gzip xz-utils
+apt-get install -y --no-install-recommends build-essential pkg-config libssl-dev libcap-dev clang cmake git curl ca-certificates python3 tar gzip xz-utils poppler-utils tesseract-ocr tesseract-ocr-eng python3-pypdf python3-pdfminer python3-openpyxl python3-docx python3-xlrd python3-pil libreoffice-writer-nogui libreoffice-calc-nogui libreoffice-impress-nogui
 dpkg-query -W -f='${binary:Package}\t${Version}\n' > /var/lib/inquello/provisioning/packages.tsv
 install -d -m 0755 /opt/inquello
 install -d -m 0700 -o inquello -g inquello /opt/inquello/build /opt/inquello/toolchains

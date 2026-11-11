@@ -1,0 +1,6 @@
+Invoice,Vendor,Amount,Posted
+INV-1001,Northwind Traders,4250.00,2026-01-15
+INV-1002,"Contoso, Ltd",1890.50,2026-01-22
+INV-1003,Fabrikam Supplies,760.00,2026-02-03
+INV-1004,Tailspin Logistics,3120.75,2026-02-17
+INV-1005,Northwind Traders,2324.75,2026-03-01

@@ -10,3 +10,6 @@ _bmad-output/implementation-artifacts/production-chat-v5-conversation-verificati
 _bmad-output/implementation-artifacts/production-chat-v5-conversation-review-2026-11-03.json text eol=lf
 docs/qualification/model-choice-v5-postattachment-2026-11-03.json text eol=lf
 docs/qualification/model-choice-v5-delivery-visual-2026-11-03.json text eol=lf
+desktop/scripts/wsl/verified-packages.tsv text eol=lf
+desktop/resources/skills/** text eol=lf
+desktop/test/fixtures/engagement/** -text

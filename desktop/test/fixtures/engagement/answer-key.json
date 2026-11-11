@@ -1,0 +1,300 @@
+{
+  "files": {
+    "payables-export.csv": {
+      "format": "csv",
+      "keys": [
+        {
+          "at": "R3",
+          "text": "Contoso, Ltd | 1890.50"
+        },
+        {
+          "at": "R2-R2",
+          "text": "INV-1001 | Northwind Traders"
+        },
+        {
+          "at": "R6",
+          "text": "INV-1005"
+        }
+      ],
+      "rows": 5
+    },
+    "meeting-notes.txt": {
+      "format": "text",
+      "keys": [
+        {
+          "at": "L4",
+          "text": "three-way match control was described as operating weekly"
+        },
+        {
+          "at": "L6",
+          "text": "Next review: April 2026"
+        }
+      ]
+    },
+    "ap-ledger.xlsx": {
+      "format": "xlsx",
+      "keys": [
+        {
+          "at": "Ledger!B4",
+          "text": "Contoso, Ltd"
+        },
+        {
+          "at": "Ledger!A3",
+          "text": "2026-01-15"
+        },
+        {
+          "at": "Ledger!C8",
+          "text": "12346"
+        },
+        {
+          "at": "Ledger!C8",
+          "text": "formula =SUM(C3:C7)"
+        },
+        {
+          "at": "Summary!B1",
+          "text": "12346"
+        },
+        {
+          "at": "'Reviewer notes'!A1",
+          "text": "Sample of 5 invoices traced to approvals"
+        },
+        {
+          "at": "Ledger!A1:D1",
+          "text": "merged cells"
+        }
+      ],
+      "sheets": {
+        "Ledger": {
+          "hidden": false
+        },
+        "Summary": {
+          "hidden": false
+        },
+        "Reviewer notes": {
+          "hidden": true
+        }
+      }
+    },
+    "payments-2026.xls": {
+      "format": "xls",
+      "keys": [
+        {
+          "at": "Payments!B3",
+          "text": "Contoso, Ltd"
+        },
+        {
+          "at": "Payments!C2",
+          "text": "4250"
+        },
+        {
+          "at": "Payments!D2",
+          "text": "2026-01-30"
+        }
+      ]
+    },
+    "purchasing-policy.docx": {
+      "format": "docx",
+      "keys": [
+        {
+          "at": "P1",
+          "text": "Purchasing policy"
+        },
+        {
+          "at": "P2",
+          "text": "require a second approver"
+        },
+        {
+          "at": "P3",
+          "text": "Approval limits"
+        },
+        {
+          "at": "P8",
+          "text": "Finance controller"
+        },
+        {
+          "at": "P9",
+          "text": "50,000"
+        },
+        {
+          "at": "P10",
+          "text": "Invoices are matched to purchase orders and goods receipts within three working days of receipt."
+        },
+        {
+          "at": "F1",
+          "text": "Goods receipt notes are kept in the warehouse system."
+        },
+        {
+          "at": "C1",
+          "text": "Which committee meeting minutes show this?"
+        },
+        {
+          "at": "C1",
+          "text": "R. Reviewer"
+        },
+        {
+          "at": "P11",
+          "text": "Exceptions are reported to the audit committee monthly."
+        }
+      ],
+      "pendingChanges": 2,
+      "comments": 1,
+      "heading": {
+        "P5": "Approval limits"
+      },
+      "changes": {
+        "P10": "deleted by A. Auditor"
+      }
+    },
+    "count-memo.doc": {
+      "format": "doc",
+      "keys": [
+        {
+          "at": "P1",
+          "text": "Inventory count memo"
+        },
+        {
+          "at": "P2",
+          "text": "observed at the Leeds warehouse on 31 December 2025"
+        },
+        {
+          "at": "P3",
+          "text": "all twelve were returned"
+        }
+      ],
+      "converted": true
+    },
+    "planning-deck.pptx": {
+      "format": "pptx",
+      "keys": [
+        {
+          "at": "S1",
+          "text": "slide 1: Engagement scope"
+        },
+        {
+          "at": "S2",
+          "text": "Duplicate payments"
+        },
+        {
+          "at": "S2",
+          "text": "notes: Duplicate payment testing uses the full population."
+        },
+        {
+          "at": "S3",
+          "text": "Fieldwork starts 13 April 2026"
+        }
+      ],
+      "slides": 3
+    },
+    "kickoff-deck.ppt": {
+      "format": "ppt",
+      "keys": [
+        {
+          "at": "S1",
+          "text": "Engagement scope"
+        },
+        {
+          "at": "S2",
+          "text": "Unapproved vendor changes"
+        },
+        {
+          "at": "S3",
+          "text": "Draft report due in May."
+        }
+      ],
+      "converted": true
+    },
+    "sample-report.pdf": {
+      "format": "pdf",
+      "keys": [
+        {
+          "at": "PG1:L1",
+          "text": "Vendor payments sample"
+        },
+        {
+          "at": "PG1:L8",
+          "text": "Contoso, Ltd"
+        },
+        {
+          "at": "PG1:L8",
+          "text": "1,890.50"
+        },
+        {
+          "at": "PG1:L12",
+          "text": "All three invoices were traced to approved purchase orders."
+        }
+      ],
+      "pages": 1
+    },
+    "scanned-receipt.pdf": {
+      "format": "pdf",
+      "keys": [
+        {
+          "at": "PG1:L3",
+          "text": "Receipt number: GR-5521"
+        },
+        {
+          "at": "PG1:L4",
+          "text": "Supplier: Northwind Traders"
+        },
+        {
+          "at": "PG1:L6",
+          "text": "Quantity: 40 cartons"
+        }
+      ],
+      "ocr": true,
+      "pages": 1
+    },
+    "mixed-pack.pdf": {
+      "format": "pdf",
+      "keys": [
+        {
+          "at": "PG1:L6",
+          "text": "Northwind Traders"
+        },
+        {
+          "at": "PG2:L3",
+          "text": "Delivery number: DN-8830"
+        }
+      ],
+      "ocrPages": [
+        2
+      ],
+      "pages": 2
+    },
+    "confirmation-letter.png": {
+      "format": "image",
+      "keys": [
+        {
+          "at": "L5",
+          "text": "We confirm the balance owed at 31 March 2026"
+        },
+        {
+          "at": "L6",
+          "text": "was 760.00 GBP."
+        },
+        {
+          "at": "",
+          "text": "image PNG"
+        }
+      ],
+      "ocr": true
+    },
+    "site-photo.jpg": {
+      "format": "image",
+      "keys": [
+        {
+          "at": "",
+          "text": "image JPEG, 640 x 480 pixels"
+        }
+      ],
+      "noText": true
+    }
+  },
+  "unreadable": {
+    "protected-statement.pdf": "password-protected",
+    "system-dump.bin": "unsupported file type",
+    "broken-budget.xlsx": "corrupt or not an Office file",
+    "expanding-report.docx": "archive expansion ratio over the bound",
+    "escaping-entry.pptx": "archive entry path escapes the archive"
+  }
+}

@@ -382,25 +382,24 @@
     },
     {
       "id": "source-extracts",
-      "label": "Source extracts",
+      "label": "Source references and extracts",
       "location": {
         "root": "user-data",
         "globs": [
           "sources/**"
         ]
       },
-      "enabled": false,
+      "enabled": true,
       "credentials": false,
-      "owner": "Not held",
+      "owner": "The signed-in creator, on this device",
       "rule_owner": "Organisation data-policy owner (OQ-2)",
-      "retention": "unknown",
+      "retention": "until-owner-deletes",
       "access": "main-process-only",
       "export": {
-        "mode": "excluded",
-        "reason": "Not held: files and Methods arrive in Epic 2"
+        "mode": "included"
       },
-      "deletion": "Not held: the desktop never writes it",
-      "recovery": "Not applicable"
+      "deletion": "Delete Source references and extracts in Local data. This removes every retained extract and every Task's attachment record (file names, relative paths, modified times and hashes) on this device. Staged copies of attached files are Task working folders and are deleted with them; the original files are never touched. Exported copies remain.",
+      "recovery": "Each record is written atomically and only verified references are retained. A temporary file left by an interrupted write is discarded, never restored, so recovery cannot resurrect a deleted extract. Export includes this category only for files whose ownership the native data inspector proves; any it cannot prove are listed as omitted with that reason. Import restores extracts with their references; imported extracts grant no access to the original files."
     },
     {
       "id": "artifacts",

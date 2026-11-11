@@ -88,13 +88,15 @@ describe('shipped register', () => {
       'codex-keyring-entry',
       'working-store',
       'task-folders',
+      'source-extracts',
       'recovery-quarantine',
       'runtime-lease',
       'provider-consent-journal',
       'onboarding-drafts',
     ]);
     const disabled = policy.categories.filter((category) => !category.enabled).map((category) => category.id);
-    expect(disabled).toEqual(expect.arrayContaining(['source-extracts', 'artifacts', 'shared-caches', 'unattended-work']));
+    expect(disabled).toEqual(expect.arrayContaining(['artifacts', 'shared-caches', 'unattended-work']));
+    expect(disabled).not.toContain('source-extracts');
   });
 
   it('gives every enabled category a named owner, rule owner, retention and export rule, with no invented duration', () => {
