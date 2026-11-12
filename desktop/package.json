@@ -16,7 +16,8 @@
     "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.renderer.json --noEmit && node scripts/check-data-policy.cjs && vite build",
     "test": "vitest run --configLoader runner",
     "generate:protocol": "node scripts/generate-protocol.mjs",
-    "smoke": "pnpm run build && electron . --smoke"
+    "smoke": "pnpm run build && electron . --smoke",
+    "dev": "node scripts/run-dev.cjs"
   },
   "devDependencies": {
     "@testing-library/dom": "10.4.2",

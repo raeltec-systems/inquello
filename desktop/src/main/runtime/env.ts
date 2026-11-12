@@ -44,11 +44,18 @@ export function isProviderCredentialVar(name: string): boolean {
 /** Names the Inquello working store for the runtime (Story 1.14); the runtime takes it out of its own environment at startup. */
 export const WORKING_STORE_ENV = 'INQUELLO_WORKING_STORE';
 
+/**
+ * The debug runtime's development switch (spec-dev-mode-real-model-testing).
+ * An inherited value never reaches the runtime; main sets it only when the
+ * unpackaged app runs in development mode. Release runtimes ignore it.
+ */
+export const DEVELOPMENT_RUNTIME_ENV = 'INQUELLO_DEVELOPMENT_MODE';
+
 export function runtimeChildEnv(
   base: NodeJS.ProcessEnv,
-  options: { serviceConfigEnv: string; codexHome?: string; workingStore?: string; blocked?: readonly string[] },
+  options: { serviceConfigEnv: string; codexHome?: string; workingStore?: string; blocked?: readonly string[]; development?: boolean },
 ): NodeJS.ProcessEnv {
-  const blocked = new Set(['ELECTRON_RUN_AS_NODE', options.serviceConfigEnv.toUpperCase(), ...(options.blocked ?? []).map((name) => name.toUpperCase())]);
+  const blocked = new Set(['ELECTRON_RUN_AS_NODE', DEVELOPMENT_RUNTIME_ENV, options.serviceConfigEnv.toUpperCase(), ...(options.blocked ?? []).map((name) => name.toUpperCase())]);
   const env: NodeJS.ProcessEnv = {};
   for (const [key, value] of Object.entries(base)) {
     const upper = key.toUpperCase();
@@ -59,5 +66,6 @@ export function runtimeChildEnv(
   if (options.workingStore !== undefined) env[WORKING_STORE_ENV] = options.workingStore;
   // Match the owner-approved local data register, not the upstream rotating-log default.
   env.INQUELLO_SANDBOX_LOG_RETENTION = 'until-owner-deletes';
+  if (options.development === true) env[DEVELOPMENT_RUNTIME_ENV] = '1';
   return env;
 }

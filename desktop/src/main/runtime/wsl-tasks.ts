@@ -40,8 +40,11 @@ export function validateTransfer(entries: Entry[]): void {
     if (seen.has(key)) throw new Error('Duplicate or case-colliding transfer name');
     seen.set(key, entry.kind);
     if (entry.kind === 'file') {
-      if (typeof entry.data !== 'string' || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(entry.data)) throw new Error('Invalid transfer encoding');
+      // Canonical base64 check without a regular expression: a pattern over a
+      // multi-megabyte string overflows V8's regex stack and refused large files.
+      if (typeof entry.data !== 'string' || entry.data.length % 4 !== 0) throw new Error('Invalid transfer encoding');
       const data = Buffer.from(entry.data, 'base64');
+      if (data.toString('base64') !== entry.data) throw new Error('Invalid transfer encoding');
       total += data.length;
       if (total > MAX_BYTES || crypto.createHash('sha256').update(data).digest('hex') !== entry.sha256) throw new Error('Transfer digest or quota failure');
     } else if (entry.kind !== 'directory') throw new Error('Unsupported transfer entry');
@@ -143,6 +146,10 @@ export class WslTasks {
   readonly scope: string;
   readonly storage: string;
   constructor(readonly taskParent: string, principal: string) {
+    // The scope is keyed by the Task-folders root's real path. On a new profile no Task folder exists
+    // yet (a first Send with attached material comes before any), so create the root privately, as
+    // `ensureTaskFolder` would, instead of failing to resolve it.
+    ensurePrivateDirectory(taskParent);
     this.scope = wslScope(taskParent, principal);
     this.storage = path.win32.join('D:\\Inquello\\profiles', this.scope);
     for (const dir of ['D:\\Inquello\\profiles', this.storage, path.join(this.storage, 'bindings'), path.join(this.storage, 'transactions')]) ensurePrivateDirectory(dir);

@@ -1,4 +1,5 @@
 import {ownedDevProfile,DEV_PROFILE_ENV,DEV_RUN_ENV} from './dev-profile';
+import {developmentMode,developmentSignInProblem,DEVELOPMENT_SEED_ENV} from './development-mode';
 import {ownedOnboardingFixture,ONBOARDING_FIXTURE_ENV,ONBOARDING_RUN_ENV} from './onboarding-smoke';
 import {probeOnboarding} from './onboarding-smoke-probe';
 import { configureDesktopStorage } from './runtime/desktop-storage';
@@ -141,7 +142,7 @@ import { OnboardingStore } from './onboarding/store';
 import { OnboardingService } from './onboarding/service';
 import { createIdentity, headlessOpener, identityDir, SERVICE_CONFIG_ENV, type IdentityWiring } from './identity';
 import { openSystemBrowser } from './identity/browser';
-import { AppServerRuntime, consoleLogger, isProviderCredentialVar, recordingConsoleLogger, resolveAppServerBinary, runtimeChildEnv, writeRuntimeConfig, RUNTIME_OWNED_CONFIG_ARGS, verifyRuntimeOwnedConfig, type ExitInfo } from './runtime';
+import { AppServerRuntime, consoleLogger, isProviderCredentialVar, recordingConsoleLogger, resolveAppServerBinary, runtimeChildEnv, writeRuntimeConfig, RUNTIME_OWNED_CONFIG_ARGS, RUNTIME_AGENT_INSTRUCTION_ARGS, verifyRuntimeOwnedConfig, type ExitInfo } from './runtime';
 import { APP_SCHEME_PRIVILEGES, handleAppProtocol } from './security/app-protocol';
 import { createOperations, registerOperations } from './security/operations';
 import {
@@ -159,6 +160,10 @@ import { probeStartSurface, probeRoutes, probeCapabilities, probeComposer, probe
 
 const paidQualificationRequested = controlledPaidLaunchRequested(Object.keys(process.env), process.argv);
 const developmentProfile=ownedDevProfile({packaged:app.isPackaged,paid:paidQualificationRequested,argv:process.argv,env:process.env});
+// Development mode (scripts/run-dev.cjs): refused when packaged; see development-mode.ts.
+const development=developmentMode({packaged:app.isPackaged,paid:paidQualificationRequested,argv:process.argv,env:process.env});
+/** Development mode: the sign-in or Workspace join failure the window shows; null while there is none. */
+let developmentProblem: string | null = null;
 const onboardingFixture=ownedOnboardingFixture({packaged:app.isPackaged,argv:process.argv,env:process.env});
 const onboardingSmoke=onboardingFixture!==null;
 let onboardingOk=false;
@@ -258,6 +263,7 @@ const policyOptions: PolicyOptions = { logger, onBlocked: (kind, url) => blocked
 let quitting = false;
 
 if(developmentProfile)app.setPath('userData',developmentProfile.profile);
+if(development){fs.mkdirSync(development.profile,{recursive:true});app.setPath('userData',development.profile);}
 
 if (smoke) {
   // Keep the smoke run's Electron profile, and with it the runtime home, out of
@@ -312,7 +318,7 @@ function workingStorePath(userData: string): string {
 }
 
 function runtimeEnv(runtimeHome: string, workingStore: string): NodeJS.ProcessEnv {
-  return runtimeChildEnv(process.env, { serviceConfigEnv: SERVICE_CONFIG_ENV, codexHome: runtimeHome, workingStore, blocked: [DEV_PROFILE_ENV,DEV_RUN_ENV,ONBOARDING_FIXTURE_ENV, ONBOARDING_RUN_ENV, PROVIDER_DEV_CONFIG_ENV, 'INQUELLO_SMOKE_SEED', 'INQUELLO_QUOTA_FIXTURE', 'INQUELLO_VISUAL_FIXTURE'] });
+  return runtimeChildEnv(process.env, { serviceConfigEnv: SERVICE_CONFIG_ENV, codexHome: runtimeHome, workingStore, blocked: [DEV_PROFILE_ENV,DEV_RUN_ENV,ONBOARDING_FIXTURE_ENV, ONBOARDING_RUN_ENV, PROVIDER_DEV_CONFIG_ENV, DEVELOPMENT_SEED_ENV, 'INQUELLO_SMOKE_SEED', 'INQUELLO_QUOTA_FIXTURE', 'INQUELLO_VISUAL_FIXTURE'], development: development !== null });
 }
 
 const runtimeLifecycle = new RuntimeLifecycle();
@@ -357,8 +363,8 @@ async function startRuntimeNow(): Promise<void> {
   runtime = new AppServerRuntime({
     command: binary.path,
     commandArgsPrefix: smoke && !app.isPackaged
-      ? [...RUNTIME_OWNED_CONFIG_ARGS, ...smokeCatalogArgs(smoke, app.isPackaged, app.getAppPath()), '--disable-plugin-startup-tasks-for-tests']
-      : RUNTIME_OWNED_CONFIG_ARGS,
+      ? [...RUNTIME_OWNED_CONFIG_ARGS, ...RUNTIME_AGENT_INSTRUCTION_ARGS, ...smokeCatalogArgs(smoke, app.isPackaged, app.getAppPath()), '--disable-plugin-startup-tasks-for-tests']
+      : [...RUNTIME_OWNED_CONFIG_ARGS, ...RUNTIME_AGENT_INSTRUCTION_ARGS],
     env: runtimeEnv(runtimeHome, workingStore),
     clientInfo: { name: 'inquello_desktop', title: 'Inquello', version: app.getVersion() },
     schemaStamp,
@@ -714,6 +720,12 @@ void app.whenReady().then(async () => {
       process.env.OPENAI_API_KEY = `sk-inherited-smoke-${randomUUID()}`;
     }
   }
+  if (development) {
+    // Each launch has a fresh topology (new issuer, service and database), so the previous launch's
+    // service session, onboarding and consent records are meaningless. Provider keys, the runtime
+    // home and the working store are kept.
+    fs.rmSync(identityDir(userData), { recursive: true, force: true });
+  }
   identity = createIdentity({
     env: process.env,
     safeStorage,
@@ -721,7 +733,7 @@ void app.whenReady().then(async () => {
     userDataDir: app.getPath('userData'),
     logger,
     // The smoke run plays the browser's part headlessly; the app always uses the system browser.
-    opener: (transport) => (onboardingFixture && transport ? onboardingFixture.opener(transport) : smoke && transport ? headlessOpener(transport) : openSystemBrowser),
+    opener: (transport) => (onboardingFixture && transport ? onboardingFixture.opener(transport) : (smoke || development) && transport ? headlessOpener(transport) : openSystemBrowser),
     recordSecrets: smoke,
   });
   const identitySession = identity.session;
@@ -918,6 +930,7 @@ void app.whenReady().then(async () => {
     runtime: { stop: async () => {}, start: async () => {}, activeTasks: () => 0 },
   }).importData();
   dataService = service;
+  const signInWithTransitions = async () => { const settled = beginSettingsTransition(); try { taskSessionChanged(true); permissionMediator?.declineAll(); await routes?.quiesce(); if (capabilities && !(await capabilities.quiesce())) await stopRuntime(); const result = await afterIdentityChange(await identitySession.signIn()); capabilities?.resume(); routes?.resume(); return result; } finally { settled(); } };
   registerOperations(
     ipcMain,
     createOperations({
@@ -931,9 +944,11 @@ void app.whenReady().then(async () => {
       sources: sourcesService,
       runtimeState: () => runtime?.state ?? 'stopped',
       runtimeVersion: schemaStamp.runtimeVersion,
+      developmentMode: development !== null,
+      developmentProblem: () => developmentProblem,
       identity: {
         getStatus: () => identitySession.getStatus(),
-        signIn: async () => { const settled = beginSettingsTransition(); try { taskSessionChanged(true); permissionMediator?.declineAll(); await routes?.quiesce(); if (capabilities && !(await capabilities.quiesce())) await stopRuntime(); const result = await afterIdentityChange(await identitySession.signIn()); capabilities?.resume(); routes?.resume(); return result; } finally { settled(); } },
+        signIn: signInWithTransitions,
         signOut: async () => { const settled = beginSettingsTransition(); try { taskSessionChanged(true); permissionMediator?.declineAll(); await routes?.quiesce(); const result = await signOutWithCapabilities({capabilities, stopRuntime, signOut: () => identitySession.signOut(), afterIdentityChange}); routes?.resume(); return result; } finally { settled(); } },
       },
       data: {
@@ -991,6 +1006,31 @@ void app.whenReady().then(async () => {
     return;
   }
   if(developmentProfile)process.stdout.write(`${JSON.stringify({event:'owned-dev-ready',runId:developmentProfile.runId})}\n`);
+  if (development) {
+    // The synthetic local identity signs in without a browser and joins the seeded Workspace; the
+    // window then reloads so every view reads the signed-in state. A failure leaves the app signed out
+    // and is shown in the window under the development notice.
+    let signedIn = false, member = false, reason: string | undefined;
+    try {
+      const result = await signInWithTransitions();
+      signedIn = result.ok; reason = result.reason;
+      const seed = JSON.parse(fs.readFileSync(development.seedFile, 'utf8')) as { workspace_id?: unknown; invite_id?: unknown };
+      const service = identity.service, workspaceId = seed.workspace_id, inviteId = seed.invite_id;
+      if (signedIn && service && typeof workspaceId === 'string' && typeof inviteId === 'string') {
+        const memberships = await identitySession.withAccess((access) => service.workspaces(access));
+        member = memberships?.workspaces.some((workspace) => workspace.workspace_id === workspaceId) ?? false;
+        if (!member) member = (await identitySession.withAccess((access) => service.acceptInvite(access, inviteId)))?.workspace_id === workspaceId;
+        await organiseService.syncPrincipal();
+      }
+    } catch (error) {
+      reason = (error as Error).message;
+      logger.error(`development mode: synthetic sign-in failed (${reason})`);
+    }
+    developmentProblem = developmentSignInProblem({ signedIn, member, reason });
+    if (developmentProblem) logger.error(`development mode: ${developmentProblem}`);
+    process.stdout.write(`${JSON.stringify({ event: 'development-ready', signedIn, member, userData })}\n`);
+    if (!mainWindow.isDestroyed()) mainWindow.webContents.reload();
+  }
   if (smoke) {
     try {
       await runSmokeProbe(mainWindow.webContents);

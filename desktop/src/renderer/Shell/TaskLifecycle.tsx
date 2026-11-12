@@ -7,10 +7,7 @@ import {ConversationModelPicker} from './ConversationModelPicker';
 import type {DraftBinding} from './drafts';
 import {taskValue,tasksBridge,type ProgressSnapshot,type LifecycleReceipt} from './tasks-bridge';
 import {AttachControl} from './AttachControl';
-import {parseAttachment,parseStageOutcome,sourcesBridge,sourcesValue,useSourcesView,withSourcesNote,SOURCES_RUNNING_REASON,type AttachmentView} from './sources-bridge';
-
-/** Adds the visible note that tells the agent where the material is, unless the draft already has it. The person can edit or remove it. */
-export {withSourcesNote} from './sources-bridge';
+import {AGENT_MATERIAL_DISCLOSURE,parseAttachment,parseStageOutcome,sourcesBridge,sourcesValue,useSourcesView,SOURCES_RUNNING_REASON,type AttachmentView} from './sources-bridge';
 
 export {useTaskObservation as useTaskActivity} from './task-observation';
 import {useTaskObservation} from './task-observation';
@@ -81,7 +78,7 @@ export function TaskLifecycle({taskId,workspaceId,draft,operationIds=()=>crypto.
    if(mounted.current)setAttachment(old=>({...old,shown:[held!]}));
    const outcome=parseStageOutcome(sourcesValue(await sourcesApi.stage({taskId,workspaceId,attachmentId:held.attachmentId})));
    if(!mounted.current)return;
-   latest.current.onChange(withSourcesNote(latest.current.value,outcome.note));setAttachment({pending:false,shown:[outcome.attachment],notice:`Attached ${outcome.attachment.label}: ${outcome.attachment.files.length} file${outcome.attachment.files.length===1?'':'s'} in the Task folder, available to your next message. A note for the agent was added to your message.`});
+   setAttachment({pending:false,shown:[outcome.attachment],notice:`Attached ${outcome.attachment.label}: ${outcome.attachment.files.length} file${outcome.attachment.files.length===1?'':'s'} in the Task folder, available to your next message. ${AGENT_MATERIAL_DISCLOSURE}`});
   }catch(error){if(held)void sourcesApi.discard({attachmentId:held.attachmentId}).catch(()=>undefined);if(mounted.current)setAttachment({pending:false,shown:[],notice:error instanceof Error?error.message:'Nothing was attached.'});}
  };
  const stopPending=busy==='stop'||pending.current?.kind==='stop'||view?.lifecycleOperations?.some(op=>op.kind==='stop'&&['reserved','dispatching','uncertain'].includes(op.status));

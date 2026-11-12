@@ -2,12 +2,14 @@ import {rememberTaskModel} from './Shell/model-authority';
 /** Name-only model selection. Main retains ambiguous owner-bound commands. */
 import {useEffect,useRef,useState,type ReactElement} from 'react';
 import {Button} from './primitives';
+import {useDevelopmentBuild} from './development';
 import {tasksBridge} from './Shell/tasks-bridge';
 import {parseModelCatalog,parseModelBinding,parseTaskRoute,parsePendingModelOperation,savedModelReason,record,type ModelCatalog,type ModelBinding,type PendingModelOperation,type BindingStateInput,type ResolveModelInput,type SelectModelInput,type TaskRouteView} from '../main/routes/types';
 interface Bridge {catalog():Promise<unknown>;pendingModel(input:{taskId:string|null}):Promise<unknown>;resolve(input:ResolveModelInput):Promise<unknown>;bindingState(input:BindingStateInput):Promise<unknown>;forTask(input:{taskId:string}):Promise<unknown>;selectModel(input:SelectModelInput):Promise<unknown>;onChanged?(listener:()=>void):()=>void}
 const bridge=():Bridge|null=>(globalThis as {inquello?:{routes?:Bridge}}).inquello?.routes??null;
 function value(raw:unknown):unknown {const result=record(raw);if(result.ok!==true){const error=new Error(typeof result.reason==='string'?result.reason:'Model information is unavailable.');Object.assign(error,{definitive:result.code==='conflict'||result.code==='refused'});throw error;}return result.value;}
 export function ProcessingRoutes({taskId,onReconnect}:{taskId?:string;onReconnect?:(destination:string)=>void}):ReactElement {
+ const development=useDevelopmentBuild();
  const [catalog,setCatalog]=useState<ModelCatalog|null>(null),[task,setTask]=useState<TaskRouteView|null>(null),[choice,setChoice]=useState(''),[notice,setNotice]=useState<string|null>(null),[busy,setBusy]=useState(false),[current,setCurrent]=useState(false);
  const epoch=useRef(0),scopeVersion=useRef(0),reload=useRef<()=>void>(()=>{}),pending=useRef<PendingModelOperation|null>(null);
  useEffect(()=>{let live=true;scopeVersion.current++;const api=bridge();setCatalog(null);setTask(null);setChoice('');setCurrent(false);setBusy(false);pending.current=null;
@@ -33,7 +35,7 @@ export function ProcessingRoutes({taskId,onReconnect}:{taskId?:string;onReconnec
  const selected=task?.selected;
  const binding=task?.configurationRevision===null?undefined:catalog?.bindings.find(b=>b.routeId===selected?.routeId&&b.configurationRevision===task?.configurationRevision);
  const choices=taskId?catalog?.bindings.filter(b=>b.state==='active').map(b=>({id:b.bindingId,label:`${b.provider} · ${b.name}`,reason:b.reason})):catalog?.choices.map(c=>({id:c.choiceId,label:`${c.provider} · ${c.name}`,reason:null}));
- const savedReason=savedModelReason(selected??null,task?.staleConfiguration,task?.disclosureBindings?.some(ref=>!ref.active));
+ const savedReason=savedModelReason(selected??null,task?.staleConfiguration,task?.disclosureBindings?.some(ref=>!ref.active),development);
  return <section className="specimen-policy-workspace" aria-label="Models" data-processing-routes>
   <h3>{taskId?'Conversation model':'Choose a model'}</h3>
   {taskId&&<><p><strong>{selected?.configuration?.model??'No model selected'}</strong></p>{selected&&<p>{task?.staleConfiguration?binding?.reason??'This saved model is unavailable. Revalidate it in Settings or choose another model.':savedReason}</p>}{selected&&!selected.credentialPresent&&onReconnect&&<Button onPress={()=>onReconnect(selected.routeId==='claude-api-key'?'provider-claude-key':selected.configuration?.deployment==='chatgpt-codex'?'codex-chatgpt':'provider-codex-key')}>{`Connect ${selected.provider}`}</Button>}</>}
@@ -42,7 +44,7 @@ export function ProcessingRoutes({taskId,onReconnect}:{taskId?:string;onReconnec
   <Button onPress={save} pending={busy} disabledReason={pending.current?undefined:!current?'Refresh model information first':!choice?'Choose a model first':taskId&&!task?'Conversation information unavailable':undefined}>{pending.current?'Retry same model operation':taskId?'Change conversation model':'Save model'}</Button>
   <Button variant="quiet" onPress={()=>reload.current()} disabledReason={busy?'Wait for the model operation':undefined}>Refresh models</Button>
   {taskId&&<p>Finish or stop pending work before changing this conversation’s model.</p>}
-  {!taskId&&catalog?.bindings.map(b=><div key={b.bindingId}><p><strong>{b.name}</strong> · {b.provider}</p><p>{b.reason??(b.qualification==='synthetic-only'?'Qualified for fictional work only.':b.qualification==='requires-fresh-policy'?'Model qualification verified. Current workspace approval and account access are checked before use.':'Current availability must be checked before use.')} Account access: {b.accountAccess}.</p>{b.state==='legacy-superseded'&&<Button onPress={()=>changeState(b,'active')} disabledReason={busy||!current?'Refresh model information first':undefined}>{`Revalidate saved ${b.name}`}</Button>}{b.state!=='revoked'&&<Button variant="quiet" onPress={()=>changeState(b,'revoked')} disabledReason={busy||!current?'Refresh model information first':undefined}>{`Revoke ${b.name}`}</Button>}</div>)}
+  {!taskId&&catalog?.bindings.map(b=><div key={b.bindingId}><p><strong>{b.name}</strong> · {b.provider}</p><p>{b.reason??(b.qualification==='synthetic-only'?'Qualified for fictional work only.':b.qualification==='development'?'Development build: qualification checks are off.':b.qualification==='requires-fresh-policy'?'Model qualification verified. Current workspace approval and account access are checked before use.':'Current availability must be checked before use.')} Account access: {b.accountAccess}.</p>{b.state==='legacy-superseded'&&<Button onPress={()=>changeState(b,'active')} disabledReason={busy||!current?'Refresh model information first':undefined}>{`Revalidate saved ${b.name}`}</Button>}{b.state!=='revoked'&&<Button variant="quiet" onPress={()=>changeState(b,'revoked')} disabledReason={busy||!current?'Refresh model information first':undefined}>{`Revoke ${b.name}`}</Button>}</div>)}
   {notice&&<p role="status">{notice}</p>}
  </section>;
 }

@@ -3,6 +3,7 @@ import {useEffect,useRef,useState,type ReactElement} from 'react';
 import {Menu,Button} from '../primitives';
 import {parseModelCatalog,parseModelBinding,parsePendingModelOperation,parseTaskRoute,record,savedModelReason,type ModelBinding,type ModelCatalog,type PendingModelOperation,type TaskRouteView} from '../../main/routes/types';
 import {tasksBridge,taskValue} from './tasks-bridge';
+import {useDevelopmentBuild} from '../development';
 export function displayModelName(name:string):string {
  return name.replace(/^gpt-(\d+(?:\.\d+)?)-([a-z]+)$/,(_,version:string,model:string)=>'GPT-'+version+' '+model[0]!.toUpperCase()+model.slice(1));
 }
@@ -28,6 +29,7 @@ export interface ConversationModelPickerProps {
  onResolved?:(binding:ModelBinding)=>void;onPendingChange?:(pending:boolean,recovering:boolean)=>void;
 }
 export function ConversationModelPicker({workspaceId,taskId,selected,disabled=false,active=true,onResolved,onPendingChange}:ConversationModelPickerProps):ReactElement {
+ const development=useDevelopmentBuild();
  const [connectionEpoch,setConnectionEpoch]=useState(0);
  const [catalog,setCatalog]=useState<ModelCatalog|null>(null),[saved,setSaved]=useState<TaskRouteView|null>(null);
  const [pending,setPending]=useState<PendingModelOperation|null>(null),[busy,setBusy]=useState(false),[notice,setNotice]=useState<string|null>(null);
@@ -111,7 +113,7 @@ export function ConversationModelPicker({workspaceId,taskId,selected,disabled=fa
  const rawLabel=taskId?configuration?.model??'Choose model':selected?.name??'Choose model';
  const label=displayModelName(rawLabel);
  const currentChoice=catalog?.choices.find(c=>c.name===(taskId?configuration?.model:selected?.name)&&c.provider===(taskId?saved?.selected?.provider:selected?.provider))?.choiceId??'';
- const unavailable=saved?savedModelReason(saved.selected,saved.staleConfiguration,saved.disclosureBindings.some(ref=>!ref.active)):null;
+ const unavailable=saved?savedModelReason(saved.selected,saved.staleConfiguration,saved.disclosureBindings.some(ref=>!ref.active),development):null;
  const blocked=disabled?'Finish or stop the current response first.':busy?'Changing model…':pending?'Confirm the previous model change first.':undefined;
  if(!active)return <></>;
  return <div ref={root} className="iq-conversation-model" data-conversation-model>

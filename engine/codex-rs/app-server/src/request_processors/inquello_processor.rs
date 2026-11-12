@@ -174,6 +174,54 @@ pub fn take_inquello_working_store_env() {
     unsafe { std::env::remove_var(INQUELLO_WORKING_STORE_ENV_VAR) };
     let _ = TAKEN_WORKING_STORE.set(path);
     take_paid_session_env();
+    take_development_mode_env();
+}
+
+/// Set only by the desktop's development launcher for its runtime child.
+pub(crate) const DEVELOPMENT_MODE_ENV_VAR: &str = "INQUELLO_DEVELOPMENT_MODE";
+static DEVELOPMENT_MODE: OnceLock<bool> = OnceLock::new();
+
+/// Reads and removes the development switch before worker threads start, so
+/// nothing the runtime spawns inherits it. Only the exact name with the value
+/// `1` turns it on; another casing, any other value or a controlled fictional
+/// session turns it off. Release builds always remove it and stay off.
+fn take_development_mode_env() {
+    let aliases: Vec<_> = std::env::vars_os()
+        .map(|(key, _)| key)
+        .filter(|key| {
+            key.to_string_lossy()
+                .eq_ignore_ascii_case(DEVELOPMENT_MODE_ENV_VAR)
+        })
+        .collect();
+    let value = std::env::var_os(DEVELOPMENT_MODE_ENV_VAR);
+    // SAFETY: called only by the pre-thread startup environment capture.
+    for key in &aliases {
+        unsafe { std::env::remove_var(key) };
+    }
+    let on = development_switch(&aliases, value.as_deref(), paid_profile_requested());
+    let _ = DEVELOPMENT_MODE.set(cfg!(debug_assertions) && on);
+}
+fn development_switch(
+    aliases: &[std::ffi::OsString],
+    value: Option<&std::ffi::OsStr>,
+    paid: bool,
+) -> bool {
+    !paid
+        && aliases.len() == 1
+        && aliases[0].as_os_str() == std::ffi::OsStr::new(DEVELOPMENT_MODE_ENV_VAR)
+        && value == Some(std::ffi::OsStr::new("1"))
+}
+
+/// Development mode (debug builds only, launcher-set): real-tier Tasks skip the
+/// exact-build qualification evidence, the data-policy digest and the
+/// organisation route approval and service route check. Everything else stays.
+#[cfg(debug_assertions)]
+pub(crate) fn development_mode() -> bool {
+    DEVELOPMENT_MODE.get().copied().unwrap_or(false)
+}
+#[cfg(not(debug_assertions))]
+pub(crate) fn development_mode() -> bool {
+    false
 }
 
 /// The configured store path: the value taken at startup or, for hosts that did

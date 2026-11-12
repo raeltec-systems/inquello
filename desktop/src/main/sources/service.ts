@@ -86,11 +86,9 @@ export interface SourcesView {
   coverage: CoverageView | null;
   /** Material staged at Task start that could not be examined in the sandbox afterwards, in plain words. */
   problem: string | null;
-  /** The visible note that tells the agent where the material is and how to read it; null without attachments. */
-  note: string | null;
   messages: MessageReferences[];
 }
-export type StageOutcome = { state: 'staged'; attachment: AttachmentView; coverage: CoverageView; note: string };
+export type StageOutcome = { state: 'staged'; attachment: AttachmentView; coverage: CoverageView };
 
 export const SOURCES_REASONS = {
   signedOut: 'Sign in to attach material.',
@@ -105,11 +103,6 @@ export const SOURCES_REASONS = {
   notExamined: 'The attached material is in the Task folder, but it could not be examined in the sandbox, so Coverage counts only what was attached.',
 } as const;
 export const SOURCES_CATEGORY = 'source-extracts';
-
-/** The visible note added to the request, so the agent knows where the material is and how to read it. Mirrored in `renderer/Shell/sources-bridge.ts`. */
-export function sourcesNote(labels: readonly string[]): string {
-  return `Attached material (${labels.join('; ')}) is in the Task folder under attached/. Read it with the evidence skill in skills/inquello-evidence/SKILL.md and cite what you rely on.`;
-}
 
 /** Attaching needs the `source-extracts` category enabled with every rule known. */
 export function sourcesPolicyGate(load: PolicyLoad): { ok: true } | { ok: false; reason: string } {
@@ -229,7 +222,7 @@ export class SourcesService {
     const staged = await this.stage(taskId, attachmentId);
     if (!staged.ok) return staged;
     this.options.onChanged?.(taskId);
-    return { ok: true, value: { state: 'staged', attachment: staged.value.attachment, coverage: staged.value.coverage, note: sourcesNote([staged.value.attachment.label]) } };
+    return { ok: true, value: { state: 'staged', attachment: staged.value.attachment, coverage: staged.value.coverage } };
   }
 
   /**
@@ -434,7 +427,7 @@ export class SourcesService {
       available: gate.ok, reason: gate.ok ? null : gate.reason, attachments,
       coverage: record ? coverage(record.attachments, Array.isArray(record.inventory) ? record.inventory as SandboxFile[] : null) : null,
       problem: record && record.inventory === null && this.failures.has(taskId) ? SOURCES_REASONS.notExamined : null,
-      note: attachments.length ? sourcesNote(attachments.map(item => item.label)) : null, messages,
+      messages,
     } };
   }
 

@@ -23,7 +23,7 @@ import { AttachControl } from '../src/renderer/Shell/AttachControl';
 import { AttachedMaterial, MessageWithSources } from '../src/renderer/Shell/SourceReferences';
 import { TaskLifecycle } from '../src/renderer/Shell/TaskLifecycle';
 import { TaskProgress } from '../src/renderer/Shell/TaskProgress';
-import { parseSourcesView, replaceSourcesNote, sourcesNote, type AttachmentView, type MarkedReference, type MessageReferences, type SourcesView } from '../src/renderer/Shell/sources-bridge';
+import { AGENT_MATERIAL_DISCLOSURE, parseSourcesView, type AttachmentView, type MarkedReference, type MessageReferences, type SourcesView } from '../src/renderer/Shell/sources-bridge';
 import type { ProgressSnapshot } from '../src/renderer/Shell/tasks-bridge';
 
 afterEach(() => { cleanup(); delete (globalThis as { inquello?: unknown }).inquello; });
@@ -73,7 +73,7 @@ describe('references in an answer', () => {
   });
 
   it('downgrades a verified status that arrives without its file or extract', () => {
-    const view = parseSourcesView({ available: true, reason: null, attachments: [], coverage: null, deferred: [], problem: null, note: null, messages: [{ ...message, references: [{ ...verified, extract: null }] }] });
+    const view = parseSourcesView({ available: true, reason: null, attachments: [], coverage: null, deferred: [], problem: null, messages: [{ ...message, references: [{ ...verified, extract: null }] }] });
     expect(view.messages[0]!.references[0]).toMatchObject({ status: 'unverified', reason: 'Not verified', extract: null });
   });
 
@@ -106,7 +106,7 @@ describe('references in an answer', () => {
 });
 
 const coverageView: SourcesView = {
-  available: true, reason: null, attachments: [{ attachmentId: 'a1', label: 'Engagement', kind: 'folder', files: 17 }], problem: null, note: 'note', messages: [],
+  available: true, reason: null, attachments: [{ attachmentId: 'a1', label: 'Engagement', kind: 'folder', files: 17 }], problem: null, messages: [],
   coverage: { filesAttached: 20, filesRead: 15, rows: { read: 40, present: 40, unknown: 1 }, unreadable: [{ relative: 'Engagement/protected-statement.pdf', reason: 'password-protected PDF' }], notSearched: [{ relative: 'Engagement/system-dump.bin', reason: 'Unsupported file type' }, { relative: 'Engagement/rest.csv', reason: 'Left out: the attachment bound was reached' }], inaccessible: [{ relative: 'Engagement/hr/salaries.xlsx', reason: 'Permission denied by the operating system' }], partlyRead: [{ relative: 'Engagement/mixed.pdf', reason: 'No recognisable text on page 3' }], incomplete: true, statement: '15 of 20 attached files read; 40 of 40 rows read in the readable tables, rows of 1 unreadable table(s) not counted. The input set is incomplete.' },
 };
 
@@ -127,7 +127,7 @@ describe('Coverage with the answer', () => {
   });
 
   it('shows nothing for a Task without attached material, and says so when material staged at start could not be examined', () => {
-    const { container } = render(<AttachedMaterial view={{ ...coverageView, attachments: [], coverage: null, note: null }} />);
+    const { container } = render(<AttachedMaterial view={{ ...coverageView, attachments: [], coverage: null }} />);
     expect(container.innerHTML).toBe('');
     cleanup();
     render(<AttachedMaterial view={{ ...coverageView, problem: 'The attached material is in the Task folder, but it could not be examined in the sandbox, so Coverage counts only what was attached.' }} />);
@@ -139,15 +139,6 @@ describe('Coverage with the answer', () => {
 const attachment: AttachmentView = { attachmentId: 'a1', label: 'Engagement', createdAt: '2026-11-11T00:00:00.000Z', bytes: 100, files: [{ id: 'attached/Engagement/a.csv', name: 'a.csv', relative: 'Engagement/a.csv', bytes: 100, modifiedAt: '2026-11-11T00:00:00.000Z', sha256: HASH, format: 'csv' }], notSearched: [{ relative: 'Engagement/tool.exe', reason: 'Unsupported file type' }], inaccessible: [{ relative: 'Engagement/locked.txt', reason: 'Permission denied by the operating system' }], incomplete: ['2 item(s) were not attached; see Not searched.'] };
 
 describe('the attach control', () => {
-  it('replaces the note for the agent literally, whatever the attached names contain (review pass 1)', () => {
-    const before = sourcesNote(['Ledger']), after = sourcesNote(['Costs $& fees', "$' and $`"]);
-    expect(replaceSourcesNote(`Check the ledger.
-
-${before}`, before, after)).toBe(`Check the ledger.
-
-${after}`);
-  });
-
   it('summarises an attachment, removes it on request and carries an unavailable reason', () => {
     const onRemove = vi.fn(), onAttach = vi.fn();
     render(<AttachControl attachments={[attachment]} onAttach={onAttach} onRemove={onRemove} />);
@@ -189,12 +180,12 @@ describe('the open conversation', () => {
     expect(document.querySelector('[data-sources-panel],[data-message-with-sources]')).toBeNull();
   });
 
-  it('attaches to an idle Task, adds the visible note to the draft, and refuses while a turn runs', async () => {
+  it('attaches to an idle Task, leaves the draft exactly as typed, says the agent is told, and refuses while a turn runs', async () => {
     const note = 'Attached material (Engagement) is in the Task folder under attached/. Read it with the evidence skill in skills/inquello-evidence/SKILL.md and cite what you rely on.';
     const sources = {
-      view: vi.fn(async () => ({ ok: true, value: { ...coverageView, attachments: [], coverage: null, note: null } })),
+      view: vi.fn(async () => ({ ok: true, value: { ...coverageView, attachments: [], coverage: null } })),
       attach: vi.fn(async () => ({ ok: true, value: attachment })),
-      stage: vi.fn(async () => ({ ok: true, value: { state: 'staged', attachment, coverage: coverageView.coverage, note } })),
+      stage: vi.fn(async () => ({ ok: true, value: { state: 'staged', attachment, coverage: coverageView.coverage } })),
       discard: vi.fn(),
     };
     bridges(base, sources);
@@ -204,8 +195,10 @@ describe('the open conversation', () => {
     await waitFor(() => expect(folder.getAttribute('aria-disabled')).not.toBe('true'));
     await act(async () => { fireEvent.click(folder); });
     await waitFor(() => expect(sources.stage).toHaveBeenCalledWith({ taskId: 'task-1', workspaceId: 'workspace-1', attachmentId: 'a1' }));
-    await waitFor(() => expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe(`Total the ledger\n\n${note}`));
-    expect(document.querySelector('[data-attach-notice]')!.textContent).toContain('available to your next message');
+    await waitFor(() => expect(document.querySelector('[data-attach-notice]')?.textContent).toContain('available to your next message'));
+    expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('Total the ledger');
+    expect(document.querySelector('[data-attach-notice]')!.textContent).toContain(AGENT_MATERIAL_DISCLOSURE);
+    expect(document.body.textContent).not.toContain(note);
     cleanup();
     bridges({ ...base, status: 'running' }, sources);
     render(<Controls />);

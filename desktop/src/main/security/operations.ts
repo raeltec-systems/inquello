@@ -273,6 +273,10 @@ export const codexLoginPayload: PayloadValidator<CodexLoginRequest> = (args) => 
 export interface RuntimeStatus {
   state: RuntimeState;
   runtimeVersion: string;
+  /** Present only in development mode (`main/development-mode.ts`), for the renderer's notice. */
+  developmentMode?: true;
+  /** Development mode only: why the development sign-in or Workspace join failed. */
+  developmentProblem?: string;
 }
 
 /** The identity session as the operations see it (main-owned; see `identity/session.ts`). */
@@ -354,6 +358,10 @@ export interface OperationDeps {
   capabilities?: {getInventory(workspaceId: string): Promise<CapabilityInventory>; manage(input: CapabilityInput): Promise<CapabilityResult>};
   runtimeState: () => RuntimeState;
   runtimeVersion: string;
+  /** Development mode only; never set in a packaged app. */
+  developmentMode?: boolean;
+  /** Development mode only: the sign-in failure to show in the window, if any. */
+  developmentProblem?: () => string | null;
   identity: IdentityOperations;
   data: DataOperations;
   provider: ProviderOperations;
@@ -370,7 +378,10 @@ export function createOperations(deps: OperationDeps): Operation[] {
   const getStatus: Operation<undefined, RuntimeStatus> = {
     name: 'runtime.getStatus',
     validate: noPayload,
-    handle: () => ({ state: deps.runtimeState(), runtimeVersion: deps.runtimeVersion }),
+    handle: () => {
+      const problem = deps.developmentMode === true ? deps.developmentProblem?.() : null;
+      return { state: deps.runtimeState(), runtimeVersion: deps.runtimeVersion, ...(deps.developmentMode === true ? { developmentMode: true as const } : {}), ...(problem ? { developmentProblem: problem } : {}) };
+    },
   };
   const identityStatus: Operation<undefined, IdentityStatus> = {
     name: 'identity.getStatus',

@@ -48,6 +48,23 @@ fn binding_view(
     let eligibility =
         routes::route_eligibility(Some(config), credential, true, DataTier::Synthetic);
     let active = binding.state == routes::ModelBindingState::Active;
+    binding_view_for_mode(development_mode(), binding, credential, active, eligibility)
+}
+
+/// In development mode an active saved model with a connected provider is
+/// available whatever its qualification, and says so; otherwise unchanged.
+fn binding_view_for_mode(
+    development: bool,
+    binding: &routes::ModelBinding,
+    credential: bool,
+    active: bool,
+    mut eligibility: routes::RouteEligibility,
+) -> InquelloModelBindingView {
+    let config = &binding.candidate.configuration;
+    let development = development && active && credential;
+    if development {
+        eligibility.enabled = true;
+    }
     InquelloModelBindingView {
         binding_id: binding.binding_id.clone(),
         provider: config.route_id().provider().into(),
@@ -58,6 +75,7 @@ fn binding_view(
         state_revision: binding.revision.get(),
         account_access: "unknown".into(),
         qualification: match eligibility.verification {
+            _ if development => "development",
             routes::RouteVerification::NotVerified => "unqualified",
             routes::RouteVerification::VerifiedForSynthetic => "synthetic-only",
             routes::RouteVerification::VerifiedForRealData => "requires-fresh-policy",
@@ -72,6 +90,18 @@ fn binding_view(
             routes::ModelBindingState::Active => Some("This saved model is not qualified for the current work. Review its availability in Settings.".into()),
         },
     }
+}
+
+/// Revalidating a saved model always needs its provider's credential; outside
+/// development mode it also needs passing qualification.
+fn revalidation_allowed_for_mode(
+    development: bool,
+    credential: bool,
+    config: &routes::RouteConfiguration,
+) -> bool {
+    credential
+        && (development
+            || routes::route_eligibility(Some(config), true, true, DataTier::Synthetic).enabled)
 }
 
 impl InquelloRequestProcessor {
@@ -339,14 +369,11 @@ impl InquelloRequestProcessor {
             "active" => {
                 let config = &binding.candidate.configuration;
                 if !recorded
-                    && (state.credential(actor.principal_id, config).is_none()
-                        || !routes::route_eligibility(
-                            Some(config),
-                            true,
-                            true,
-                            DataTier::Synthetic,
-                        )
-                        .enabled)
+                    && !revalidation_allowed_for_mode(
+                        development_mode(),
+                        state.credential(actor.principal_id, config).is_some(),
+                        config,
+                    )
                 {
                     return Err(refusal(
                         "route_unavailable",
@@ -934,6 +961,100 @@ mod model_binding_tests {
     use super::*;
     use inquello_domain::organise::{CreateTask, OrganiseRecord, create_task};
     use tokio_util::sync::CancellationToken;
+
+    fn development_binding(route: &str, model: &str, state: routes::ModelBindingState) -> routes::ModelBinding {
+        let configuration = routes::RouteConfiguration::parse(routes::RouteConfigurationInput {
+            route_id: route.into(),
+            deployment: if route == "claude-api-key" { "anthropic-direct" } else { "openai-api" }.into(),
+            model: model.into(),
+            api_version: if route == "claude-api-key" { routes::CLAUDE_API_VERSION } else { "responses-v1" }.into(),
+            account_ref: PRINCIPAL.into(),
+            region: None,
+        })
+        .unwrap();
+        routes::ModelBinding {
+            binding_id: uuid::Uuid::new_v4().to_string(),
+            candidate: routes::CandidateRouteRecord {
+                principal_id: PrincipalId::parse(PRINCIPAL).unwrap(),
+                configuration,
+                revision: Revision::new(1),
+                recorded_at: inquello_domain::Timestamp::from_unix_millis(1),
+            },
+            state,
+            revision: Revision::new(1),
+        }
+    }
+
+    #[test]
+    fn development_mode_off_leaves_saved_model_views_unchanged_and_on_allows_both_providers() {
+        use routes::ModelBindingState::{Active, LegacySuperseded, Revoked};
+        let cases = [
+            ("codex-responses", "gpt-unregistered-dev-model"),
+            ("claude-api-key", routes::CLAUDE_MODEL),
+        ];
+        for (route, model) in cases {
+            for state in [Active, Revoked, LegacySuperseded] {
+                for credential in [true, false] {
+                    let binding = development_binding(route, model, state);
+                    let config = &binding.candidate.configuration;
+                    let eligibility =
+                        routes::route_eligibility(Some(config), credential, true, DataTier::Synthetic);
+                    assert!(!eligibility.enabled, "{route}/{model} has no register entry");
+                    let active = state == Active;
+                    let off = binding_view_for_mode(false, &binding, credential, active, eligibility.clone());
+                    assert!(!off.available);
+                    assert_eq!(off.qualification, "unqualified");
+                    assert!(off.reason.is_some());
+                    let on = binding_view_for_mode(true, &binding, credential, active, eligibility);
+                    if active && credential {
+                        assert!(on.available, "{route}");
+                        assert_eq!(on.qualification, "development");
+                        assert_eq!(on.reason, None);
+                    } else {
+                        assert_eq!(on.available, off.available);
+                        assert_eq!(on.qualification, off.qualification);
+                        assert_eq!(on.reason, off.reason);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn development_mode_off_refuses_unqualified_revalidation_and_on_still_needs_credentials() {
+        for (route, model) in [
+            ("codex-responses", "gpt-unregistered-dev-model"),
+            ("claude-api-key", routes::CLAUDE_MODEL),
+        ] {
+            let binding = development_binding(route, model, routes::ModelBindingState::Active);
+            let config = &binding.candidate.configuration;
+            assert!(!revalidation_allowed_for_mode(false, true, config), "{route}: unqualified when off");
+            assert!(!revalidation_allowed_for_mode(false, false, config), "{route}");
+            assert!(revalidation_allowed_for_mode(true, true, config), "{route}: development allows it");
+            assert!(!revalidation_allowed_for_mode(true, false, config), "{route}: still needs credentials");
+        }
+    }
+
+    #[test]
+    fn development_switch_needs_the_exact_launcher_value_and_no_fictional_session() {
+        use std::ffi::{OsStr, OsString};
+        let exact = [OsString::from(super::super::DEVELOPMENT_MODE_ENV_VAR)];
+        let switch = super::super::development_switch;
+        assert!(switch(&exact, Some(OsStr::new("1")), false));
+        assert!(!switch(&exact, Some(OsStr::new("1")), true), "never with the controlled fictional session");
+        assert!(!switch(&exact, Some(OsStr::new("true")), false));
+        assert!(!switch(&exact, Some(OsStr::new("")), false));
+        assert!(!switch(&exact, None, false));
+        assert!(!switch(&[], None, false));
+        assert!(!switch(&[OsString::from("inquello_development_mode")], Some(OsStr::new("1")), false));
+        assert!(!switch(
+            &[exact[0].clone(), OsString::from("Inquello_Development_Mode")],
+            Some(OsStr::new("1")),
+            false
+        ));
+        // Tests never run under the launcher: the process-wide switch stays off.
+        assert!(!development_mode());
+    }
 
     #[test]
     fn inquello_disclosure_dependencies_are_complete_or_refused_at_the_bound() {

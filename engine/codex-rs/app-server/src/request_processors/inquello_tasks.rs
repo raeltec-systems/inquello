@@ -6881,6 +6881,7 @@ impl InquelloRequestProcessor {
     ) -> Result<(), JSONRPCErrorError> {
         let result = self
             .check_real_route_inner(
+                development_mode(),
                 connection,
                 actor,
                 session,
@@ -6901,6 +6902,7 @@ impl InquelloRequestProcessor {
     )]
     async fn check_real_route_inner(
         &self,
+        development: bool,
         connection: ConnectionId,
         actor: Actor,
         session: &SessionBinding,
@@ -6909,6 +6911,11 @@ impl InquelloRequestProcessor {
         policy: &InquelloWorkspaceExecutionPolicy,
         action: routes::ProtectedRouteAction,
     ) -> Result<(), JSONRPCErrorError> {
+        if development {
+            return self
+                .check_development_route(connection, actor, session, configuration)
+                .await;
+        }
         self.check_real_route_with_evidence(
             connection,
             actor,
@@ -6920,6 +6927,39 @@ impl InquelloRequestProcessor {
             routes::compiled_evidence_for_identity,
         )
         .await
+    }
+    /// Development mode only (see `development_mode`): no exact-build evidence,
+    /// data-policy digest, organisation approval or service route check. The
+    /// real session, the selected provider credential (and inherited Responses
+    /// binding), the actor and the session's currency are still required.
+    async fn check_development_route(
+        &self,
+        connection: ConnectionId,
+        actor: Actor,
+        session: &SessionBinding,
+        configuration: &routes::RouteConfiguration,
+    ) -> Result<(), JSONRPCErrorError> {
+        if session.real.is_none() {
+            return Err(refusal(
+                "classification_unknown",
+                "Current native data classification unavailable",
+            ));
+        }
+        let credential = self.real_route_credential(actor, configuration).await?;
+        let current = self
+            .task_session(connection, actor, &session.workspace)
+            .await?;
+        if self.real_route_credential(actor, configuration).await? != credential
+            || current.real != session.real
+            || self.actor(connection)? != actor
+            || session.cancellation.is_cancelled()
+        {
+            return Err(refusal(
+                "stale",
+                "Current session changed while checking route",
+            ));
+        }
+        Ok(())
     }
     // Private code-only dependency seam. The production wrapper above always
     // selects the compiled register; no RPC, renderer or environment proof input.
@@ -7713,6 +7753,114 @@ mod bootstrap_order_tests {
                 routes::ProtectedRouteAction::Resume,
             ] {
                 real_route_case(mode, action).await;
+            }
+        }
+    }
+
+    /// Runs the production real-route fence with the development switch given,
+    /// answering no service request: development mode must need none.
+    async fn development_route_case(
+        development: bool,
+        route: &str,
+        mode: &str,
+        action: routes::ProtectedRouteAction,
+    ) -> (Result<(), JSONRPCErrorError>, bool) {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut processor, outgoing, mut rx) = fixture(dir.path()).await;
+        Arc::get_mut(&mut processor).unwrap().routes.responses =
+            Some(reviewer::InheritedResponses {
+                provider: codex_model_provider::create_model_provider(
+                    codex_model_provider_info::ModelProviderInfo::create_openai_provider(None),
+                    Some(codex_login::AuthManager::from_auth_for_testing(
+                        codex_login::CodexAuth::from_api_key("owned-non-provider-key"),
+                    )),
+                ),
+                factory: codex_http_client::HttpClientFactory::new(
+                    codex_http_client::OutboundProxyPolicy::ReqwestDefault,
+                ),
+            });
+        allowed_bootstrap(&processor, &outgoing, &mut rx, params(dir.path(), 1))
+            .await
+            .unwrap();
+        let actor = processor.actor(CONNECTION).unwrap();
+        let session = processor
+            .task_session(CONNECTION, actor, WORKSPACE)
+            .await
+            .unwrap();
+        assert!(session.real.is_some());
+        let claude = route == "claude-api-key";
+        let configuration = routes::RouteConfiguration::parse(routes::RouteConfigurationInput {
+            route_id: route.into(),
+            deployment: if claude { "anthropic-direct" } else { "openai-api" }.into(),
+            // Neither model has compiled evidence for this build.
+            model: if claude { routes::CLAUDE_MODEL } else { "gpt-unregistered-dev-model" }.into(),
+            api_version: if claude { routes::CLAUDE_API_VERSION } else { "responses-v1" }.into(),
+            account_ref: uuid::Uuid::new_v4().to_string(),
+            region: None,
+        })
+        .unwrap();
+        let policy = InquelloWorkspaceExecutionPolicy {
+            workspace_id: WORKSPACE.into(),
+            policy_revision: 1,
+            authorization_epoch: 1,
+            execution: None,
+        };
+        if mode != "credential-missing" {
+            processor.routes.state.lock().await.credentials.insert(
+                (actor.principal_id, configuration.route_id()),
+                (configuration.account_ref().into(), 1),
+            );
+        }
+        if mode == "session-withdrawn" {
+            session.cancellation.cancel();
+        }
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(30),
+            processor.check_real_route_inner(
+                development,
+                CONNECTION,
+                actor,
+                &session,
+                &configuration,
+                &uuid::Uuid::new_v4().to_string(),
+                &policy,
+                action,
+            ),
+        )
+        .await
+        .expect("no service answer is needed to decide");
+        (result, rx.try_recv().is_err())
+    }
+    #[tokio::test]
+    async fn development_mode_off_refuses_unqualified_real_routes_without_service_requests() {
+        for route in ["codex-responses", "claude-api-key"] {
+            for action in [
+                routes::ProtectedRouteAction::Read,
+                routes::ProtectedRouteAction::Derive,
+                routes::ProtectedRouteAction::Resume,
+            ] {
+                let (result, quiet) = development_route_case(false, route, "allowed", action).await;
+                let error = result.expect_err("today's gate refuses a build without evidence");
+                assert!(error.message.contains("negative-authorization evidence"), "{route}: {error:?}");
+                assert!(quiet, "refused before any approval request");
+            }
+        }
+    }
+    #[tokio::test]
+    async fn development_mode_on_allows_both_providers_and_keeps_session_and_credential_fences() {
+        for route in ["codex-responses", "claude-api-key"] {
+            for action in [
+                routes::ProtectedRouteAction::Read,
+                routes::ProtectedRouteAction::Derive,
+                routes::ProtectedRouteAction::Resume,
+            ] {
+                let (result, quiet) = development_route_case(true, route, "allowed", action).await;
+                assert!(result.is_ok(), "{route}: {result:?}");
+                assert!(quiet, "no organisation approval or route check is requested");
+                for mode in ["credential-missing", "session-withdrawn"] {
+                    let (result, _) = development_route_case(true, route, mode, action).await;
+                    assert!(result.is_err(), "{route}/{mode} must still refuse");
+                }
             }
         }
     }

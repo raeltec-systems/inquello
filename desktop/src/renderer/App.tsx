@@ -10,6 +10,7 @@
 import { useEffect, useState, type ReactElement } from 'react';
 
 import { Button } from './primitives';
+import { DevelopmentNotice } from './development';
 import { createDraftStore } from './Shell/drafts';
 import { Shell } from './Shell/Shell';
 import { Onboarding } from './Onboarding';
@@ -40,6 +41,7 @@ export function App(): ReactElement {
   };
 
   return <>
+    <DevelopmentNotice />
     <div hidden={view !== 'shell'}><Shell key={sessionEpoch} onWorkspaceChanged={setWorkspaceId} onConversationChanged={setConversation} active={view === 'shell'} onShowSpecimen={() => show('settings')} drafts={drafts} /></div>
     {view === 'settings' && <Settings workspaceId={workspaceId} conversation={conversation} onBack={() => show('shell')} onIdentityChanged={() => { drafts.clear(); setWorkspaceId(null); setConversation(null); setSessionEpoch(n => n + 1); }} />}
     {view === 'onboarding' && <Onboarding onBack={() => show('shell')} onIdentityChanged={() => { drafts.clear(); setWorkspaceId(null); setSessionEpoch(n => n + 1); }} />}

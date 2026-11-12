@@ -13,7 +13,7 @@ import type {MouseEvent,ReactElement} from 'react';
 import {FileChip} from '../primitives';
 import {ExcludedList} from './AttachControl';
 import {MessageMarkdown,type InlineMark} from './MessageMarkdown';
-import {chipType,type MarkedReference,type MessageReferences,type SourcesView} from './sources-bridge';
+import {AGENT_MATERIAL_DISCLOSURE,chipType,type MarkedReference,type MessageReferences,type SourcesView} from './sources-bridge';
 
 /** Opens a detail below the answer and moves focus to it. */
 function openDetail(event:MouseEvent<HTMLElement>,selector:string):void {
@@ -107,6 +107,7 @@ export function AttachedMaterial({view}:{view:SourcesView}):ReactElement|null {
  return <section className="iq-sources" aria-label="Attached material and coverage" data-sources-panel>
   <h3>Attached material</h3>
   {view.attachments.length>0&&<ul className="iq-sources-chips">{view.attachments.map(item=><li key={item.attachmentId}><FileChip {...(item.kind==='folder'?{type:'folder' as const}:item.files===1?chipType(item.label):{type:'files',typeLabel:'Files'})} name={item.label}/></li>)}</ul>}
+  {view.attachments.length>0&&<p className="iq-sources-agent" data-agent-instruction>{AGENT_MATERIAL_DISCLOSURE}</p>}
   {view.problem&&<p role="alert" data-sources-problem>{view.problem}</p>}
   {coverage&&<>
    <p className="iq-coverage" data-coverage-statement><strong>Coverage:</strong> {coverage.statement}</p>

@@ -1211,3 +1211,7 @@ button.iq-claim-mark { cursor:pointer; }
 .iq-ref-extract:focus-visible, .iq-computed-command:focus-visible { outline:2px solid var(--blue-600); outline-offset:2px; }
 @media(max-width:700px) { .iq-ref-facts { grid-template-columns:1fr; } }
 @media (forced-colors: active) { .iq-ref-chip, .iq-claim-mark, .iq-ref-extract, .iq-computed-command { border-color:CanvasText; } }
+/* Development mode only (spec-dev-mode-real-model-testing): persistent, never interactive. */
+.iq-development-notice { position: fixed; top: 0; left: 50%; transform: translateX(-50%); z-index: 1000; margin: 0; max-width: calc(100vw - var(--space-4)); padding: 2px var(--space-3); font: var(--type-caption); color: var(--amber-800); background: var(--amber-150); border: 1px solid var(--amber-200); border-top: none; border-radius: 0 0 var(--radius-sm) var(--radius-sm); pointer-events: none; text-align: center; }
+.iq-development-notice p { margin: 0; }
+.iq-development-notice .iq-development-problem { font-weight: 600; }

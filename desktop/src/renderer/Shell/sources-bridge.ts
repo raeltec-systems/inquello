@@ -9,12 +9,9 @@
  */
 import {useEffect,useRef,useState} from 'react';
 
-/** Mirrors `sourcesNote` in `src/main/sources/service.ts`: the visible note that tells the agent where attached material is and how to read it. */
-export function sourcesNote(labels:readonly string[]):string {return `Attached material (${labels.join('; ')}) is in the Task folder under attached/. Read it with the evidence skill in skills/inquello-evidence/SKILL.md and cite what you rely on.`;}
-/** Appends the note to a draft once. */
-export function withSourcesNote(draft:string,note:string):string {return draft.includes(note)?draft:draft.trim()?`${draft.replace(/\s+$/,'')}\n\n${note}`:note;}
-/** Replaces an earlier note left unedited in the draft, or appends the new one; null removes it. */
-export function replaceSourcesNote(draft:string,before:string|null,after:string|null):string {if(before&&before!==after&&draft.includes(before)){const next=draft.replace(before,()=>after??'');return after?next:next.replace(/\s+$/,'');}return after?withSourcesNote(draft,after):draft;}
+/** Shown where attached material is listed. The agent's standing instruction is the runtime's developer instruction
+ * (`AGENT_MATERIAL_INSTRUCTION` in `src/main/runtime/config.ts`); the person's message is never changed. */
+export const AGENT_MATERIAL_DISCLOSURE='The agent is told where the attached material is and how to read and cite it.';
 /** Why attaching waits while a turn runs; main refuses with `SOURCES_REASONS.busy` in `src/main/sources/service.ts` if asked anyway. */
 export const SOURCES_RUNNING_REASON='Attach material after the current turn finishes.';
 
@@ -30,8 +27,8 @@ export interface ComputedMarker {start:number;end:number;command:string;from:str
 export interface InferenceMarker {start:number;end:number}
 export interface MessageReferences {itemId:string;state:'checked'|'waiting';references:MarkedReference[];problems:CitationProblem[];computed:ComputedMarker[];inferences:InferenceMarker[]}
 export interface AttachedSummary {attachmentId:string;label:string;kind:'folder'|'files';files:number}
-export interface SourcesView {available:boolean;reason:string|null;attachments:AttachedSummary[];coverage:CoverageView|null;problem:string|null;note:string|null;messages:MessageReferences[]}
-export type StageOutcome={state:'staged';attachment:AttachmentView;coverage:CoverageView;note:string};
+export interface SourcesView {available:boolean;reason:string|null;attachments:AttachedSummary[];coverage:CoverageView|null;problem:string|null;messages:MessageReferences[]}
+export type StageOutcome={state:'staged';attachment:AttachmentView;coverage:CoverageView};
 
 interface SourcesBridge {attach(input:{kind:'files'|'folder'}):Promise<unknown>;discard(input:{attachmentId:string}):Promise<unknown>;stage(input:{taskId:string;workspaceId:string;attachmentId:string}):Promise<unknown>;view(input:{taskId:string;workspaceId:string}):Promise<unknown>;onChanged?(listener:(taskId:string|null)=>void):()=>void}
 export const sourcesBridge=():SourcesBridge|null=>(globalThis as {inquello?:{sources?:SourcesBridge}}).inquello?.sources??null;
@@ -59,11 +56,11 @@ export function parseSourcesView(v:unknown):SourcesView {
  return{available:r.available,reason:r.reason===null?null:text(r.reason),
   attachments:list(r.attachments,256,a=>{const x=object(a);return{attachmentId:text(x.attachmentId),label:text(x.label),kind:x.kind==='folder'?'folder':'files',files:count(x.files)};}),
   coverage:r.coverage===null?null:parseCoverage(r.coverage),
-  problem:r.problem===null?null:text(r.problem),note:r.note===null?null:text(r.note),
+  problem:r.problem===null?null:text(r.problem),
   messages:list(r.messages,64,m=>{const x=object(m);return{itemId:text(x.itemId),state:x.state==='waiting'?'waiting':'checked',references:list(x.references,500,parseReference),problems:list(x.problems,500,p=>{const y=object(p);return{start:count(y.start),end:count(y.end),raw:text(y.raw),reason:text(y.reason)};}),computed:list(x.computed,500,c=>{const y=object(c);return{start:count(y.start),end:count(y.end),command:text(y.command),from:text(y.from)};}),inferences:list(x.inferences,500,i=>{const y=object(i);return{start:count(y.start),end:count(y.end)};})};}),
  };
 }
-export function parseStageOutcome(v:unknown):StageOutcome {const r=object(v);if(r.state!=='staged')return bad();return{state:'staged',attachment:parseAttachment(r.attachment),coverage:parseCoverage(r.coverage),note:text(r.note)};}
+export function parseStageOutcome(v:unknown):StageOutcome {const r=object(v);if(r.state!=='staged')return bad();return{state:'staged',attachment:parseAttachment(r.attachment),coverage:parseCoverage(r.coverage)};}
 
 /**
  * The Task's attached material as main reports it. Read again whenever `key`
@@ -86,11 +83,11 @@ export function useSourcesView(taskId:string,workspaceId:string,key:string,enabl
  return state.scope===scope?{view:state.view,notice:state.notice}:{view:null,notice:null};
 }
 
-/** FileChip's type for a file name: the three known tags, otherwise the extension as the label. */
+/** FileChip's type for a file name: a known tag only when it is the file's own extension, otherwise the extension itself, so a CSV never shows as XLS. */
 export function chipType(name:string):{type:'pdf'|'xls'|'doc'}|{type:string;typeLabel:string} {
  const dot=name.lastIndexOf('.'),ext=dot<0?'':name.slice(dot+1).toLowerCase();
  if(ext==='pdf')return{type:'pdf'};
- if(['xls','xlsx','xlsm','csv','tsv'].includes(ext))return{type:'xls'};
- if(['doc','docx','docm'].includes(ext))return{type:'doc'};
+ if(ext==='xls')return{type:'xls'};
+ if(ext==='doc')return{type:'doc'};
  return{type:'file',typeLabel:ext?ext.slice(0,4).toUpperCase():'File'};
 }

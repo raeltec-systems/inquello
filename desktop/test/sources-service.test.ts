@@ -115,14 +115,14 @@ describe('the source-extracts policy gate', () => {
 });
 
 describe('attaching to an existing Task', () => {
-  it('stages into an idle Task, returns the note for the agent and the Coverage, and never names an absolute path', async () => {
+  it('stages into an idle Task, returns the Coverage and no message text, and never names an absolute path', async () => {
     const x = harness();
     const attached = await x.service.attach('folder');
     if (!attached.ok || !attached.value) throw new Error('attach failed');
     expect(attached.value.notSearched).toEqual([{ relative: 'Engagement/tool.exe', reason: 'Unsupported file type' }]);
     const staged = await x.service.stageIdle(TASK, WORKSPACE, attached.value.attachmentId);
     if (!staged.ok) throw new Error(staged.reason);
-    expect(staged.value.note).toBe('Attached material (Engagement) is in the Task folder under attached/. Read it with the evidence skill in skills/inquello-evidence/SKILL.md and cite what you rely on.');
+    expect(staged.value).not.toHaveProperty('note');
     expect(staged.value.coverage).toMatchObject({ filesAttached: 3, filesRead: 2, incomplete: true, notSearched: [{ relative: 'Engagement/tool.exe', reason: 'Unsupported file type' }] });
     expect(x.staged[0]!.map(entry => entry.path)).toEqual(expect.arrayContaining(['attached/Engagement/ledger.csv', 'attached/Engagement/notes.txt', 'skills/inquello-evidence/SKILL.md']));
     expect(JSON.stringify(staged.value)).not.toContain(x.folder);
@@ -174,7 +174,7 @@ describe('attaching at Task start', () => {
     if (!running.ok) throw new Error(running.reason);
     expect(running.value.attachments).toEqual([{ attachmentId: attached.value.attachmentId, label: 'Engagement', kind: 'folder', files: 2 }]);
     expect(running.value.coverage?.unreadable.map(item => item.reason)).toEqual(['Not yet examined in the sandbox', 'Not yet examined in the sandbox']);
-    expect(running.value.note).toBe('Attached material (Engagement) is in the Task folder under attached/. Read it with the evidence skill in skills/inquello-evidence/SKILL.md and cite what you rely on.');
+    expect(running.value).not.toHaveProperty('note');
     expect(x.sandbox.calls).toEqual([]);
     x.setState({ status: 'completed', messages: [] });
     const done = await x.service.view(TASK, WORKSPACE);
@@ -251,7 +251,7 @@ describe('references in a Task’s answers', () => {
     x.setState({ status: 'completed', messages: [{ itemId: 'm1', text: answer }, { itemId: 'm0', text: 'No directives here.' }] });
     const view = await x.service.view(TASK, WORKSPACE);
     if (!view.ok) throw new Error(view.reason);
-    expect(view.value).toMatchObject({ attachments: [], coverage: null, problem: null, note: null });
+    expect(view.value).toMatchObject({ attachments: [], coverage: null, problem: null });
     expect(view.value.messages.map(m => m.itemId)).toEqual(['m1']);
     expect(view.value.messages[0]!.references.map(r => [r.status, r.reason])).toEqual([['unverified', 'The cited file is not in this Task’s attached material'], ['unverified', 'The cited file is not in this Task’s attached material']]);
     expect(x.sandbox.calls).toEqual([]);

@@ -38,6 +38,17 @@ export const RUNTIME_OWNED_CONFIG_ARGS: readonly string[] = [
   '-c', 'features.network_proxy=true',
 ];
 
+/**
+ * Story 2.1 (owner, 2026-11-12): the agent's standing instruction for attached material. Skills do not load in
+ * private Tasks, and the person's message is never changed, so it travels as Codex's own `developer_instructions`
+ * (one developer message in each thread's initial context; guardian reviewers replace it with their own policy).
+ * The renderer tells the person: "The agent is told where the attached material is and how to read and cite it."
+ */
+export const AGENT_MATERIAL_INSTRUCTION = 'Material the person attached to this Task is in the Task folder under attached/. When that folder exists, read the material with the evidence skill in skills/inquello-evidence/SKILL.md and cite what you rely on.';
+
+/** Appended by main after `RUNTIME_OWNED_CONFIG_ARGS`; a TOML basic string (JSON escaping is valid TOML here). */
+export const RUNTIME_AGENT_INSTRUCTION_ARGS: readonly string[] = ['-c', `developer_instructions=${JSON.stringify(AGENT_MATERIAL_INSTRUCTION)}`];
+
 /** Initializes `config.toml` once; returns its path, preserving runtime-owned edits. */
 export function writeRuntimeConfig(runtimeHome: string): string {
   ensurePrivateDirectory(runtimeHome);
