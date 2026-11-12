@@ -10,9 +10,13 @@
  *   Task folder, and the staging is refused rather than raced.
  * - `stageIdle` is the renderer's path for an existing Task: it proves the
  *   Task through an authorized progress read and refuses while a turn runs.
- * - `attachToNewTask` is the Task-start path. Files cannot be in the Task
- *   folder before the first turn yet (`stageBeforeFirstTurn`), so the staging
- *   waits until the first turn ends and the person is told so.
+ * - `startTask` is the Task-start path (`stageBeforeFirstTurn`): the material
+ *   and the skill are written as one transfer manifest for the guest broker,
+ *   and the runtime stages it into the new Task folder before the first turn.
+ *   A start whose material could not be staged does not start the turn; the
+ *   attachments stay held so the person can send again. The sandbox inventory
+ *   for Coverage runs once that first turn has ended (a running turn holds the
+ *   Task folder); until then Coverage says the files are not yet examined.
  * - `references` verifies an answer's citations by re-reading each location
  *   in the sandbox, retains verified extracts and returns the Coverage facts;
  *   `view` does that for every completed agent message of a Task.
@@ -21,11 +25,15 @@
  * rules are unknown or it is disabled, attaching is unavailable with the
  * blocking reason.
  */
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 
 import { categoryById, ruleBlockers, type PolicyLoad } from '../data/policy';
+import { validateTransfer, type Entry } from '../runtime/wsl-tasks';
 import { terminalProgress } from '../tasks/progress';
-import { attachmentView, AttachRefused, inventoryAttachment, readerDigests, stageIntoTask, stagingEntries, type Attachment, type AttachmentView, type StagingTarget } from './attachments';
+import type { StartedTaskView, TasksResult } from '../tasks/types';
+import { attachmentView, AttachRefused, inventoryAttachment, mergeEntries, readerDigests, stageIntoTask, stagingEntries, type Attachment, type AttachmentView, type StagingTarget } from './attachments';
 import { formatOf, locationLabel, parseCitations, parseMarkers, type CitationProblem, type ComputedMarker, type InferenceMarker } from './citations';
 import { coverage, parseSandboxInventory, type CoverageView, type SandboxFile } from './coverage';
 import { ExtractStore, principalKey, type RetainedExtract, type TaskSourceRecord } from './store';
@@ -47,7 +55,13 @@ export interface SourcesServiceOptions {
   policyGate(): { ok: true } | { ok: false; reason: string };
   /** The Task's current run status and completed agent messages; null when the Task cannot be read for this person. */
   taskState?(taskId: string, workspaceId: string): Promise<TaskTurnState | null>;
-  /** Something about a Task's attached material changed (a deferred staging finished or failed). */
+  /**
+   * Where a Task start's transfer manifest is written for the runtime to stage
+   * before the first turn (`<profile storage>\material\<operationId>.json`, a
+   * private folder); null when this device cannot stage at Task start.
+   */
+  startMaterial?(operationId: string): string | null;
+  /** Something about a Task's attached material changed (staged at start, or examined in the sandbox). */
   onChanged?(taskId: string): void;
   logger: SourcesLogger;
 }
@@ -70,17 +84,13 @@ export interface SourcesView {
   reason: string | null;
   attachments: AttachedSummary[];
   coverage: CoverageView | null;
-  /** Attached at Task start, staged once the first turn ends. */
-  deferred: Array<{ attachmentId: string; label: string }>;
-  /** A deferred staging that failed, in plain words. */
+  /** Material staged at Task start that could not be examined in the sandbox afterwards, in plain words. */
   problem: string | null;
   /** The visible note that tells the agent where the material is and how to read it; null without attachments. */
   note: string | null;
   messages: MessageReferences[];
 }
-export type StageOutcome =
-  | { state: 'staged'; attachment: AttachmentView; coverage: CoverageView; note: string }
-  | { state: 'deferred'; label: string; notice: string };
+export type StageOutcome = { state: 'staged'; attachment: AttachmentView; coverage: CoverageView; note: string };
 
 export const SOURCES_REASONS = {
   signedOut: 'Sign in to attach material.',
@@ -89,14 +99,13 @@ export const SOURCES_REASONS = {
   stageFailed: 'The attached material could not be staged in the Task folder. Nothing in the original files changed.',
   nothingStaged: 'None of the chosen files can be attached.',
   taskUnavailable: 'This Task cannot be read right now, so nothing was staged. Try again when the conversation is shown.',
+  startUnavailable: 'Attaching material when a Task starts needs the Linux Task sandbox, which this device does not use. Send without it, then attach it between turns. Your draft is preserved.',
+  startFailed: 'The attached material could not be prepared for the Task folder, so nothing was sent. Your draft and attachments are preserved.',
+  notExamined: 'The attached material is in the Task folder, but it could not be examined in the sandbox, so Coverage counts only what was attached.',
 } as const;
-/** Told to the person when material attached at Task start waits for the first turn to end. Mirrored in `renderer/Shell/sources-bridge.ts`. */
-export const SOURCES_DEFERRED_NOTICE = 'Attached files become available to your next message, once this first turn finishes. The request you just sent cannot use them.';
-/** Why files cannot be in the Task folder before the first turn (owner decision pending). */
-export const STAGE_BEFORE_FIRST_TURN_UNAVAILABLE = 'The runtime starts a Task and its first turn in one step and refuses a Task folder that already holds files.';
 export const SOURCES_CATEGORY = 'source-extracts';
 
-/** The visible note added to the next request, so the agent knows where the material is and how to read it. */
+/** The visible note added to the request, so the agent knows where the material is and how to read it. Mirrored in `renderer/Shell/sources-bridge.ts`. */
 export function sourcesNote(labels: readonly string[]): string {
   return `Attached material (${labels.join('; ')}) is in the Task folder under attached/. Read it with the evidence skill in skills/inquello-evidence/SKILL.md and cite what you rely on.`;
 }
@@ -116,13 +125,13 @@ const CACHE_LIMIT = 256;
 
 export class SourcesService {
   private readonly pending = new Map<string, { principal: string; attachment: Attachment }>();
-  private readonly deferred = new Map<string, { principal: string; workspaceId: string; attachments: Attachment[] }>();
-  private readonly failures = new Map<string, { principal: string; text: string }>();
+  /** Task starts whose outcome was uncertain: recorded on the Task once reconciliation confirms it. */
+  private readonly inDoubt = new Map<string, { principal: string; attachmentIds: string[]; views: AttachmentView[]; stagedAt: string }>();
+  /** Staged material not yet examined in the sandbox is examined once its Task is idle; a failed examination is not retried in this app run. */
+  private readonly examining = new Map<string, Promise<void>>();
+  private readonly failures = new Set<string>();
   private readonly checked = new Map<string, MessageReferences>();
   private readonly checking = new Map<string, Promise<MessageReferences>>();
-  private flushing: Promise<void> | null = null;
-  private flushAgain = false;
-  private flushTimer: ReturnType<typeof setTimeout> | null = null;
   readonly store: ExtractStore;
   constructor(private readonly options: SourcesServiceOptions) { this.store = new ExtractStore(options.userData); }
 
@@ -186,6 +195,7 @@ export class SourcesService {
     const attachments = [...(record?.attachments ?? []).filter(item => item.attachmentId !== view.attachmentId), view];
     const inventory = await this.examine(taskId);
     this.store.saveTask(principal, { version: 1, taskId, attachments, inventory, stagedAt: new Date().toISOString() });
+    this.failures.delete(taskId);
     this.options.logger.info(`sources: staged ${view.files.length} file(s) into a Task`);
     return { ok: true, value: { attachment: view, coverage: coverage(attachments, inventory) } };
   }
@@ -199,81 +209,110 @@ export class SourcesService {
     if (!terminalProgress(state.status)) return { ok: false, reason: SOURCES_REASONS.busy };
     const staged = await this.stage(taskId, attachmentId);
     if (!staged.ok) return staged;
-    this.failures.delete(taskId);
     return { ok: true, value: { state: 'staged', attachment: staged.value.attachment, coverage: staged.value.coverage, note: sourcesNote([staged.value.attachment.label]) } };
   }
 
   /**
-   * The seam for staging before a Task's first turn. `inquello/tasks/start`
-   * creates the Task, sets up its folder and starts the first turn in one
-   * engine call, and refuses a Task folder that already holds files, so this
-   * is not possible yet. When the engine accepts a desktop-prepared staging,
-   * this is the one place to implement it; `attachToNewTask` already calls it
-   * first and only falls back to waiting when it reports unsupported.
+   * Staging before a Task's first turn: the held attachments and the skill as
+   * one transfer manifest (the broker's `replace` entries, with the same
+   * bounds the between-turns staging uses), written privately for this
+   * operation. Returns the manifest's digest, which the start request carries.
    */
-  stageBeforeFirstTurn(_taskId: string, _attachmentId: string): { supported: false; reason: string } {
-    return { supported: false, reason: STAGE_BEFORE_FIRST_TURN_UNAVAILABLE };
+  stageBeforeFirstTurn(operationId: string, attachmentIds: readonly string[]): SourcesResult<{ file: string; sha256: string; attachments: Attachment[] }> {
+    const gate = this.options.policyGate();
+    if (!gate.ok) return gate;
+    const principal = this.principal();
+    if (!principal) return { ok: false, reason: SOURCES_REASONS.signedOut };
+    const ids = [...new Set(attachmentIds)];
+    const held = ids.map(id => this.pending.get(id));
+    if (!ids.length || held.some(item => !item || item.principal !== principal)) return { ok: false, reason: SOURCES_REASONS.unknown };
+    const file = this.options.startMaterial?.(operationId) ?? null;
+    if (!file) return { ok: false, reason: SOURCES_REASONS.startUnavailable };
+    let entries: Entry[] = [];
+    const attachments: Attachment[] = [];
+    for (const item of held) {
+      const staged = stagingEntries(item!.attachment, this.options.skillRoot);
+      const attachment: Attachment = { ...item!.attachment, files: item!.attachment.files.filter(entry => !staged.changed.some(changed => changed.relative === entry.relative)), notSearched: [...item!.attachment.notSearched, ...staged.changed] };
+      if (staged.changed.length) attachment.incomplete = [...attachment.incomplete, `${staged.changed.length} file(s) changed after they were attached and were not staged.`];
+      attachments.push(attachment);
+      entries = mergeEntries(entries, staged.entries);
+    }
+    try {
+      validateTransfer(entries);
+      const bytes = Buffer.from(JSON.stringify(entries));
+      fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+      const temporary = `${file}.${randomUUID()}.tmp`;
+      const fd = fs.openSync(temporary, 'wx', 0o600);
+      try { fs.writeFileSync(fd, bytes); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+      fs.renameSync(temporary, file);
+      return { ok: true, value: { file, sha256: createHash('sha256').update(bytes).digest('hex'), attachments } };
+    } catch (error) {
+      this.options.logger.warn(`sources: the start material could not be prepared (${(error as Error).message.slice(0, 200)})`);
+      try { fs.rmSync(file, { force: true }); } catch { /* not a file we wrote */ }
+      return { ok: false, reason: SOURCES_REASONS.startFailed };
+    }
   }
 
   /**
-   * Material attached on the start view, for the Task that start just
-   * created. Until files can be staged before the first turn, they are
-   * staged as soon as that turn ends; the person is told plainly that the
-   * request already sent cannot use them. Nothing pretends otherwise.
+   * Starts a Task with attached material in its folder before the first turn.
+   * `start` sends the Task start with the manifest's digest; the manifest is
+   * removed once the runtime has answered. The attachments are recorded on the
+   * Task only when the runtime set it up (any outcome but `setup-failed`); a
+   * refused or setup-failed start leaves them held for a new Send, and an
+   * uncertain one is recorded when reconciliation confirms the Task.
    */
-  async attachToNewTask(taskId: string, workspaceId: string, attachmentId: string): Promise<SourcesResult<StageOutcome>> {
+  async startTask(operationId: string, attachmentIds: readonly string[], start: (material: { sha256: string }) => Promise<TasksResult<StartedTaskView>>): Promise<TasksResult<StartedTaskView>> {
     const principal = this.principal();
-    if (!principal) return { ok: false, reason: SOURCES_REASONS.signedOut };
-    const held = this.pending.get(attachmentId);
-    if (!held || held.principal !== principal) return { ok: false, reason: SOURCES_REASONS.unknown };
-    const early = this.stageBeforeFirstTurn(taskId, attachmentId);
-    if (early.supported) return { ok: false, reason: early.reason };
-    // Nothing is staged here: `flushOnce` stages only after an authorized progress read of this Task shows its turn has ended.
-    const entry = this.deferred.get(taskId);
-    if (entry && entry.principal === principal) { if (!entry.attachments.some(item => item.attachmentId === attachmentId)) entry.attachments.push(held.attachment); }
-    else {
-      if (this.deferred.size >= 32) return { ok: false, reason: 'Too many Tasks are waiting for attached material. Attach this material after the first turn finishes.' };
-      this.deferred.set(taskId, { principal, workspaceId, attachments: [held.attachment] });
+    const prepared = this.stageBeforeFirstTurn(operationId, attachmentIds);
+    if (!prepared.ok || !principal) return { ok: false, code: 'refused', reason: prepared.ok ? SOURCES_REASONS.signedOut : prepared.reason };
+    const ids = [...new Set(attachmentIds)];
+    let result: TasksResult<StartedTaskView>;
+    try { result = await start({ sha256: prepared.value.sha256 }); }
+    finally { fs.rmSync(prepared.value.file, { force: true }); }
+    const views = prepared.value.attachments.map(attachmentView);
+    const stagedAt = new Date().toISOString();
+    if (result.ok) this.recordStarted(principal, result.value, ids, views, stagedAt);
+    else if (result.code === 'uncertain') {
+      this.inDoubt.set(operationId, { principal, attachmentIds: ids, views, stagedAt });
+      if (this.inDoubt.size > 32) this.inDoubt.delete(this.inDoubt.keys().next().value!);
     }
-    this.pending.delete(attachmentId);
-    this.options.logger.info('sources: material attached at Task start waits for the first turn to end');
-    this.scheduleFlush(0);
-    return { ok: true, value: { state: 'deferred', label: held.attachment.label, notice: SOURCES_DEFERRED_NOTICE } };
+    return result;
   }
 
-  /** Called when any Task's progress changed; stages waiting material once its Task is idle. */
-  progressChanged(): void { if (this.deferred.size) this.scheduleFlush(); }
-
-  private scheduleFlush(delayMs = 750): void {
-    if (this.flushTimer) return;
-    this.flushTimer = setTimeout(() => { this.flushTimer = null; void this.flushDeferred(); }, delayMs);
-    this.flushTimer.unref?.();
+  /** A Task start reconciled after an uncertain outcome: records its material if the runtime set the Task up. */
+  reconciled(operationId: string, result: TasksResult<StartedTaskView>): void {
+    const entry = this.inDoubt.get(operationId);
+    if (!entry || !result.ok || result.value.operationId !== operationId) return;
+    this.inDoubt.delete(operationId);
+    if (entry.principal === this.principal()) this.recordStarted(entry.principal, result.value, entry.attachmentIds, entry.views, entry.stagedAt);
   }
 
-  /** Stages every waiting attachment whose Task is now idle. Never runs twice at once. */
-  flushDeferred(): Promise<void> {
-    if (this.flushing) { this.flushAgain = true; return this.flushing; }
-    this.flushing = (async () => { do { this.flushAgain = false; await this.flushOnce(); } while (this.flushAgain); })().finally(() => { this.flushing = null; });
-    return this.flushing;
+  private recordStarted(principal: string, started: StartedTaskView, attachmentIds: string[], views: AttachmentView[], stagedAt: string): void {
+    // A setup failure happened before the first turn; the material may not be in any usable Task. Keep it held.
+    if (started.status === 'setup-failed' || principal !== this.principal()) return;
+    for (const id of attachmentIds) if (this.pending.get(id)?.principal === principal) this.pending.delete(id);
+    const record = this.store.task(principal, started.taskId);
+    const attachments = [...(record?.attachments ?? []).filter(item => !views.some(view => view.attachmentId === item.attachmentId)), ...views];
+    this.store.saveTask(principal, { version: 1, taskId: started.taskId, attachments, inventory: null, stagedAt });
+    this.failures.delete(started.taskId);
+    this.options.logger.info(`sources: staged ${views.reduce((sum, view) => sum + view.files.length, 0)} file(s) into a Task before its first turn`);
+    this.options.onChanged?.(started.taskId);
   }
 
-  private async flushOnce(): Promise<void> {
-    const principal = this.principal();
-    for (const [taskId, entry] of [...this.deferred]) {
-      if (entry.principal !== principal) continue;
-      const state = await this.taskState(taskId, entry.workspaceId);
-      if (!state || !terminalProgress(state.status)) continue;
-      let changed = false;
-      for (const attachment of [...entry.attachments]) {
-        const result = await this.stageAttachment(taskId, principal, attachment);
-        if (!result.ok && result.reason === SOURCES_REASONS.busy) break;
-        entry.attachments = entry.attachments.filter(item => item !== attachment);
-        changed = true;
-        if (!result.ok) this.failures.set(taskId, { principal, text: `${attachment.label} could not be attached after the first turn: ${result.reason}` });
-      }
-      if (entry.attachments.length === 0) this.deferred.delete(taskId);
-      if (changed) this.options.onChanged?.(taskId);
-    }
+  /** Examines material staged at Task start once the Task is idle (the running first turn holds the Task folder). */
+  private examineStarted(principal: string, taskId: string): Promise<void> {
+    const running = this.examining.get(taskId);
+    if (running) return running;
+    const work = (async () => {
+      const inventory = await this.examine(taskId);
+      const record = this.store.task(principal, taskId);
+      if (!record || principal !== this.principal()) return;
+      if (inventory) this.store.saveTask(principal, { ...record, inventory });
+      else this.failures.add(taskId);
+      this.options.onChanged?.(taskId);
+    })().finally(() => this.examining.delete(taskId));
+    this.examining.set(taskId, work);
+    return work;
   }
 
   private async taskState(taskId: string, workspaceId: string): Promise<TaskTurnState | null> {
@@ -343,23 +382,21 @@ export class SourcesService {
     const principal = this.principal();
     if (!principal) return { ok: false, reason: SOURCES_REASONS.signedOut };
     const gate = this.options.policyGate();
-    const record = this.store.task(principal, taskId);
-    const deferredEntry = this.deferred.get(taskId);
-    const deferred = deferredEntry?.principal === principal ? deferredEntry.attachments.map(item => ({ attachmentId: item.attachmentId, label: item.label })) : [];
-    if (deferred.length) this.scheduleFlush();
+    let record = this.store.task(principal, taskId);
     const state = await this.taskState(taskId, workspaceId);
     const messages: MessageReferences[] = [];
     if (state) {
       const idle = terminalProgress(state.status);
+      // Material staged at Task start is examined once the first turn has ended.
+      if (idle && record && record.inventory === null && !this.failures.has(taskId)) { await this.examineStarted(principal, taskId); record = this.store.task(principal, taskId); }
       for (const message of state.messages.slice(-64)) if (MARKER.test(message.text)) messages.push(await this.messageReferences(principal, taskId, message, idle, record));
     }
     if (principal !== this.principal()) return { ok: false, reason: SOURCES_REASONS.signedOut };
-    const failure = this.failures.get(taskId);
     const attachments: AttachedSummary[] = (record?.attachments ?? []).map(item => ({ attachmentId: item.attachmentId, label: item.label, kind: item.files.some(file => file.relative.includes('/')) || item.notSearched.some(file => file.relative.includes('/')) ? 'folder' : 'files', files: item.files.length }));
     return { ok: true, value: {
       available: gate.ok, reason: gate.ok ? null : gate.reason, attachments,
       coverage: record ? coverage(record.attachments, Array.isArray(record.inventory) ? record.inventory as SandboxFile[] : null) : null,
-      deferred, problem: failure?.principal === principal ? failure.text : null,
+      problem: record && record.inventory === null && this.failures.has(taskId) ? SOURCES_REASONS.notExamined : null,
       note: attachments.length ? sourcesNote(attachments.map(item => item.label)) : null, messages,
     } };
   }

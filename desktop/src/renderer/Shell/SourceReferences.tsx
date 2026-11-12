@@ -13,7 +13,7 @@ import type {MouseEvent,ReactElement} from 'react';
 import {FileChip} from '../primitives';
 import {ExcludedList} from './AttachControl';
 import {MessageMarkdown,type InlineMark} from './MessageMarkdown';
-import {chipType,SOURCES_DEFERRED_NOTICE,type MarkedReference,type MessageReferences,type SourcesView} from './sources-bridge';
+import {chipType,type MarkedReference,type MessageReferences,type SourcesView} from './sources-bridge';
 
 /** Opens a detail below the answer and moves focus to it. */
 function openDetail(event:MouseEvent<HTMLElement>,selector:string):void {
@@ -103,11 +103,10 @@ export function MessageWithSources({text,references}:{text:string;references:Mes
 /** The Task's attached material and Coverage, shown with the answer. Nothing is shown for a Task without attachments. */
 export function AttachedMaterial({view}:{view:SourcesView}):ReactElement|null {
  const coverage=view.coverage;
- if(!view.attachments.length&&!view.deferred.length&&!view.problem&&!coverage)return null;
+ if(!view.attachments.length&&!view.problem&&!coverage)return null;
  return <section className="iq-sources" aria-label="Attached material and coverage" data-sources-panel>
   <h3>Attached material</h3>
   {view.attachments.length>0&&<ul className="iq-sources-chips">{view.attachments.map(item=><li key={item.attachmentId}><FileChip {...(item.kind==='folder'?{type:'folder' as const}:item.files===1?chipType(item.label):{type:'files',typeLabel:'Files'})} name={item.label}/></li>)}</ul>}
-  {view.deferred.map(item=><p key={item.attachmentId} role="status" data-sources-deferred>{`${item.label}: ${SOURCES_DEFERRED_NOTICE}`}</p>)}
   {view.problem&&<p role="alert" data-sources-problem>{view.problem}</p>}
   {coverage&&<>
    <p className="iq-coverage" data-coverage-statement><strong>Coverage:</strong> {coverage.statement}</p>

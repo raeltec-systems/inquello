@@ -8,7 +8,7 @@
  *
  * I/O matrix rows covered here (presentation):
  * - No attachment: no Coverage panel; an answer without references renders as before.
- * - Attach single files / Attach and start: the attach control's summary and the deferred notice.
+ * - Attach single files / Attach and start: the attach control's summary; a start view test is in `tasks-start.test.tsx`.
  * - Verified reference: chip with file and location; extract view with file, location, modified time, hash, OCR and converted labels.
  * - Unverifiable reference: "Unverified" chip with the reason; never "Verified"; a forged verified status without its extract is shown unverified.
  * - Computed figure: "Computed" marker opening the command and inputs; inference marker.
@@ -106,7 +106,7 @@ describe('references in an answer', () => {
 });
 
 const coverageView: SourcesView = {
-  available: true, reason: null, attachments: [{ attachmentId: 'a1', label: 'Engagement', kind: 'folder', files: 17 }], deferred: [], problem: null, note: 'note', messages: [],
+  available: true, reason: null, attachments: [{ attachmentId: 'a1', label: 'Engagement', kind: 'folder', files: 17 }], problem: null, note: 'note', messages: [],
   coverage: { filesAttached: 20, filesRead: 15, rows: { read: 40, present: 40, unknown: 1 }, unreadable: [{ relative: 'Engagement/protected-statement.pdf', reason: 'password-protected PDF' }], notSearched: [{ relative: 'Engagement/system-dump.bin', reason: 'Unsupported file type' }, { relative: 'Engagement/rest.csv', reason: 'Left out: the attachment bound was reached' }], inaccessible: [{ relative: 'Engagement/hr/salaries.xlsx', reason: 'Permission denied by the operating system' }], partlyRead: [{ relative: 'Engagement/mixed.pdf', reason: 'No recognisable text on page 3' }], incomplete: true, statement: '15 of 20 attached files read; 40 of 40 rows read in the readable tables, rows of 1 unreadable table(s) not counted. The input set is incomplete.' },
 };
 
@@ -126,12 +126,13 @@ describe('Coverage with the answer', () => {
     expect(within(inaccessible).getByText('Permission limited')).toBeTruthy();
   });
 
-  it('shows nothing for a Task without attached material, and the waiting notice for material attached at start', () => {
+  it('shows nothing for a Task without attached material, and says so when material staged at start could not be examined', () => {
     const { container } = render(<AttachedMaterial view={{ ...coverageView, attachments: [], coverage: null, note: null }} />);
     expect(container.innerHTML).toBe('');
     cleanup();
-    render(<AttachedMaterial view={{ ...coverageView, attachments: [], coverage: null, deferred: [{ attachmentId: 'a2', label: 'policy.pdf' }] }} />);
-    expect(document.querySelector('[data-sources-deferred]')!.textContent).toBe('policy.pdf: Attached files become available to your next message, once this first turn finishes. The request you just sent cannot use them.');
+    render(<AttachedMaterial view={{ ...coverageView, problem: 'The attached material is in the Task folder, but it could not be examined in the sandbox, so Coverage counts only what was attached.' }} />);
+    expect(document.querySelector('[data-sources-problem]')!.textContent).toContain('could not be examined in the sandbox');
+    expect(document.querySelector('[data-sources-deferred]')).toBeNull();
   });
 });
 
@@ -193,7 +194,7 @@ describe('the open conversation', () => {
     const folder = await screen.findByRole('button', { name: 'Attach folder' });
     await waitFor(() => expect(folder.getAttribute('aria-disabled')).not.toBe('true'));
     await act(async () => { fireEvent.click(folder); });
-    await waitFor(() => expect(sources.stage).toHaveBeenCalledWith({ taskId: 'task-1', workspaceId: 'workspace-1', attachmentId: 'a1', firstTurn: false }));
+    await waitFor(() => expect(sources.stage).toHaveBeenCalledWith({ taskId: 'task-1', workspaceId: 'workspace-1', attachmentId: 'a1' }));
     await waitFor(() => expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe(`Total the ledger\n\n${note}`));
     expect(document.querySelector('[data-attach-notice]')!.textContent).toContain('available to your next message');
     cleanup();

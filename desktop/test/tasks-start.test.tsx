@@ -9,7 +9,7 @@ import {StartView} from '../src/renderer/Shell/StartView';
 const route:RouteView={routeId:'claude-api-key',provider:'Claude',configurable:true,configuration:{routeId:'claude-api-key',deployment:'anthropic-direct',model:'claude-sonnet-5-5',apiVersion:'2026-10-21',accountRef:'account',region:null},endpoint:'https://api.anthropic.com',revision:3,credentialPresent:true,adapterSupported:true,verification:'verified_for_synthetic',enabled:true,gate:null,limits:[],evidence:['fixture'],executionFlow:'Local sandbox',inferenceFlow:'Cloud inference',connectorFlow:'Unavailable'};
 const candidate={routeId:route.routeId,configurationRevision:3,reasoning:['default'],speeds:['default'],available:true,reason:'Available',executionFlow:'Local sandbox',inferenceFlow:'Cloud inference'};
 const result={operationId:'op-1',taskId:'task-1',runId:'run-1',threadId:'thread-1',status:'active',request:'Review R01 and R03 for duplicates.',accepted:true};
-function setup(start=vi.fn<(...args:unknown[])=>Promise<unknown>>(async()=>({ok:true,value:result}))) {const reconcile=vi.fn(async()=>({ok:true,value:result}));const preflight=vi.fn(async()=>({ok:true,value:candidate}));const accepted=vi.fn();Object.assign(globalThis,{inquello:{routes:{pendingModel:vi.fn(async()=>({ok:true,value:{operation:null}})),resolve:vi.fn(async()=>({ok:true,value:(await (globalThis as any).inquello.routes.catalog()).value.bindings[0]})),catalog:vi.fn(async()=>({ok:true,value:modelCatalog([route])}))},tasks:{preflight,start,reconcile}}});function Harness({epoch=0}:{epoch?:number}){const[value,setValue]=useState('');return <StartView runtimeEpoch={epoch} workspaceId="workspace-1" engagementId={null} folderId={null} active draft={{taskId:null,value,onChange:setValue}} operationIds={()=>'op-1'} onAccepted={accepted}/>;}const view=render(<Harness/>);return{start,reconcile,preflight,accepted,runtimeLoss:()=>view.rerender(<Harness epoch={1}/>)};}
+function setup(start=vi.fn<(...args:unknown[])=>Promise<unknown>>(async()=>({ok:true,value:result})),sources?:Record<string,unknown>) {const reconcile=vi.fn(async()=>({ok:true,value:result}));const preflight=vi.fn(async()=>({ok:true,value:candidate}));const accepted=vi.fn();Object.assign(globalThis,{inquello:{routes:{pendingModel:vi.fn(async()=>({ok:true,value:{operation:null}})),resolve:vi.fn(async()=>({ok:true,value:(await (globalThis as any).inquello.routes.catalog()).value.bindings[0]})),catalog:vi.fn(async()=>({ok:true,value:modelCatalog([route])}))},tasks:{preflight,start,reconcile},...(sources?{sources}:{})}});function Harness({epoch=0}:{epoch?:number}){const[value,setValue]=useState('');return <StartView runtimeEpoch={epoch} workspaceId="workspace-1" engagementId={null} folderId={null} active draft={{taskId:null,value,onChange:setValue}} operationIds={()=>'op-1'} onAccepted={accepted}/>;}const view=render(<Harness/>);return{start,reconcile,preflight,accepted,runtimeLoss:()=>view.rerender(<Harness epoch={1}/>)};}
 async function choices(){fireEvent.click(screen.getByRole('button',{name:'Choose model'}));fireEvent.click(await screen.findByRole('menuitemradio',{name:'claude-sonnet-5-5'}));fireEvent.change(screen.getByRole('textbox'),{target:{value:result.request}});await waitFor(()=>expect(screen.getByLabelText('Send').getAttribute('aria-disabled')).not.toBe('true'));}
 afterEach(()=>{cleanup();delete (globalThis as {inquello?:unknown}).inquello;});
 describe('Story 1.25 Start',()=>{
@@ -89,4 +89,35 @@ it.each(['authority','catalog'] as const)('allows deliberate same-model reselect
  expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe(result.request);
  expect(screen.getByLabelText('Send').getAttribute('aria-disabled')).toBe('true');expect(start).not.toHaveBeenCalled();
  await choices();expect(preflight).toHaveBeenCalledTimes(2);expect(screen.getByLabelText('Send').getAttribute('aria-disabled')).not.toBe('true');expect(start).not.toHaveBeenCalled();
+});
+
+describe('Story 2.1 attached material at Task start',()=>{
+ const note='Attached material (Engagement) is in the Task folder under attached/. Read it with the evidence skill in skills/inquello-evidence/SKILL.md and cite what you rely on.';
+ const attachment={attachmentId:'6f1c1d1e-0000-4000-8000-0000000000a1',label:'Engagement',createdAt:'2026-11-12T00:00:00.000Z',bytes:3,files:[{id:'attached/Engagement/a.csv',name:'a.csv',relative:'Engagement/a.csv',bytes:3,modifiedAt:'2026-11-12T00:00:00.000Z',sha256:'0'.repeat(64),format:'csv'}],notSearched:[],inaccessible:[],incomplete:[]};
+ const sources=()=>({attach:vi.fn(async()=>({ok:true,value:attachment})),discard:vi.fn(async()=>({ok:true,value:{discarded:true}})),stage:vi.fn(),view:vi.fn()});
+ async function attachFolder(){const button=await screen.findByRole('button',{name:'Attach folder'});await waitFor(()=>expect(button.getAttribute('aria-disabled')).not.toBe('true'));fireEvent.click(button);await waitFor(()=>expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe(`${result.request}\n\n${note}`));}
+ it('sends the attachment ID with the start, with the visible note in the request, and says the material is there before the request is sent',async()=>{
+  const start=vi.fn(async(command:unknown)=>({ok:true,value:{...result,request:(command as {request:string}).request}}));const bridge=sources();const api=setup(start,bridge);
+  await choices();await attachFolder();
+  expect(document.querySelector('[data-attach-notice]')!.textContent).toContain('placed in the Task folder before your request is sent');
+  fireEvent.click(screen.getByLabelText('Send'));await waitFor(()=>expect(api.accepted).toHaveBeenCalled());
+  expect(start).toHaveBeenCalledWith(expect.objectContaining({request:`${result.request}\n\n${note}`,attachmentIds:[attachment.attachmentId]}));
+  expect(JSON.stringify(start.mock.calls)).not.toMatch(/[A-Z]:\\/);
+  expect(bridge.stage).not.toHaveBeenCalled();
+  expect(document.querySelector('[data-attachment]')).toBeNull();
+ });
+ it('keeps the attachment held after a refused or setup-failed start, sends it again only on a deliberate Send, and removing it removes the note',async()=>{
+  const start=vi.fn<(command:unknown)=>Promise<unknown>>(async(command)=>({ok:true,value:{...result,request:(command as {request:string}).request,accepted:false,status:'setup-failed',reason:'The attached material could not be placed in the Task folder, so the first request was not sent.'}}));const api=setup(start,sources());
+  await choices();await attachFolder();fireEvent.click(screen.getByLabelText('Send'));
+  await screen.findByText('The attached material could not be placed in the Task folder, so the first request was not sent.');
+  expect(document.querySelector('[data-attachment]')).toBeTruthy();expect(api.accepted).not.toHaveBeenCalled();expect(start).toHaveBeenCalledTimes(1);
+  start.mockResolvedValueOnce({ok:false,code:'refused',reason:'The attached material could not be placed in the Task folder, so nothing was sent. Your draft and attachments are preserved.'});
+  await choices();fireEvent.change(screen.getByRole('textbox'),{target:{value:`${result.request}\n\n${note}`}});await waitFor(()=>expect(screen.getByLabelText('Send').getAttribute('aria-disabled')).not.toBe('true'));
+  fireEvent.click(screen.getByLabelText('Send'));await screen.findByText(/so nothing was sent/);
+  expect(start).toHaveBeenLastCalledWith(expect.objectContaining({attachmentIds:[attachment.attachmentId]}));
+  fireEvent.click(screen.getByRole('button',{name:/^Remove/}));
+  await waitFor(()=>expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe(result.request));
+  await choices();fireEvent.click(screen.getByLabelText('Send'));await waitFor(()=>expect(start).toHaveBeenCalledTimes(3));
+  expect(start.mock.calls[2]![0]).not.toHaveProperty('attachmentIds');
+ });
 });

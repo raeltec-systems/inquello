@@ -1275,6 +1275,22 @@ pub struct InquelloTasksStartParams {
     pub reasoning: String,
     pub speed: String,
     pub workspace_policy: InquelloWorkspaceExecutionPolicy,
+    /// Story 2.1: material the desktop already inventoried, bounded and wrote
+    /// for this operation; staged into the new Task folder before the first
+    /// turn. Absent means a Task without attached material, as before.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub attached_material: Option<InquelloTaskStartMaterial>,
+}
+/// Identifies the transfer manifest the desktop main process wrote for one
+/// Task start under its private profile storage. Carries no path: the runtime
+/// derives the location from the execution scope and the operation id, and
+/// stages the manifest only when its SHA-256 matches.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(export_to = "v2/")]
+pub struct InquelloTaskStartMaterial {
+    pub sha256: String,
 }
 impl std::fmt::Debug for InquelloTasksStartParams {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

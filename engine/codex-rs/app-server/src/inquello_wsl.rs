@@ -193,6 +193,96 @@ fn uri(path: &str) -> anyhow::Result<PathUri> {
     Ok(format!("file://{path}").parse()?)
 }
 
+/// The guest broker's transfer bounds (`guest-broker.py`: `LIMIT`, `MAX_FILES`;
+/// the desktop's `validateTransfer` uses the same). The broker re-validates
+/// every entry; these only refuse an oversized manifest before any effect.
+const MATERIAL_ENTRY_LIMIT: usize = 10_000;
+const MATERIAL_BYTE_LIMIT: u64 = 2 * 256 * 1024 * 1024 - 64;
+const MATERIAL_STAGING_BUDGET: Duration = Duration::from_secs(120);
+
+/// Story 2.1: attached material for a new Task, staged by the guest broker's
+/// existing `replace` action before the first turn (owner decision
+/// 2026-11-11). The desktop main process inventoried and bounded it and wrote
+/// the broker's transfer manifest under its private profile storage; the
+/// request names only the operation and the manifest's digest.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct StartMaterial {
+    pub operation_id: String,
+    pub sha256: String,
+}
+
+/// Staging the attached material failed before the Task's first turn.
+#[derive(Debug)]
+pub(crate) struct MaterialNotStaged(pub &'static str);
+impl std::fmt::Display for MaterialNotStaged {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.0)
+    }
+}
+impl std::error::Error for MaterialNotStaged {}
+
+impl StartMaterial {
+    pub(crate) fn new(operation_id: &str, sha256: &str) -> anyhow::Result<Self> {
+        uuid::Uuid::parse_str(operation_id)?;
+        if operation_id != operation_id.to_ascii_lowercase()
+            || sha256.len() != 64
+            || !sha256.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+        {
+            bail!(MaterialNotStaged("attached material identity is invalid"));
+        }
+        Ok(Self {
+            operation_id: operation_id.into(),
+            sha256: sha256.into(),
+        })
+    }
+
+    /// `D:\Inquello\profiles\<scope>\material\<operation>.json`, beside the
+    /// scope's bindings and transfer journals.
+    fn manifest(&self, profiles: &Path, scope: &str) -> std::path::PathBuf {
+        profiles
+            .join(scope)
+            .join("material")
+            .join(format!("{}.json", self.operation_id))
+    }
+
+    /// The broker `replace` request for the verified manifest. Refuses a link,
+    /// an oversized or changed manifest, anything but a JSON array, and more
+    /// entries than the broker accepts.
+    fn replace_request(&self, profiles: &Path, scope: &str) -> anyhow::Result<Vec<u8>> {
+        let file = self.manifest(profiles, scope);
+        let metadata = std::fs::symlink_metadata(&file)
+            .map_err(|_| MaterialNotStaged("attached material is missing"))?;
+        if !metadata.is_file() || metadata.file_type().is_symlink() {
+            bail!(MaterialNotStaged("attached material is not a regular file"));
+        }
+        if metadata.len() > MATERIAL_BYTE_LIMIT {
+            bail!(MaterialNotStaged("attached material exceeds the transfer bound"));
+        }
+        let mut bytes = Vec::with_capacity(metadata.len() as usize);
+        {
+            use std::io::Read;
+            std::fs::File::open(&file)
+                .and_then(|source| source.take(MATERIAL_BYTE_LIMIT + 1).read_to_end(&mut bytes))
+                .map_err(|_| MaterialNotStaged("attached material could not be read"))?;
+        }
+        if bytes.len() as u64 > MATERIAL_BYTE_LIMIT {
+            bail!(MaterialNotStaged("attached material exceeds the transfer bound"));
+        }
+        if format!("{:x}", Sha256::digest(&bytes)) != self.sha256 {
+            bail!(MaterialNotStaged("attached material changed after it was prepared"));
+        }
+        let entries: Vec<serde::de::IgnoredAny> = serde_json::from_slice(&bytes)
+            .map_err(|_| MaterialNotStaged("attached material is not a transfer manifest"))?;
+        if entries.is_empty() || entries.len() > MATERIAL_ENTRY_LIMIT {
+            bail!(MaterialNotStaged("attached material exceeds the transfer bound"));
+        }
+        let mut request = b"{\"action\":\"replace\",\"entries\":".to_vec();
+        request.extend_from_slice(&bytes);
+        request.push(b'}');
+        Ok(request)
+    }
+}
+
 /// Only synchronous validation or fully completed successful setup probes prove
 /// no outstanding process. Cancellation and uncertain subprocess outcomes do not.
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
@@ -386,12 +476,16 @@ impl WslExecPlan {
     }
     /// Native model-Task setup may initialize a newly reserved empty Task.
     /// Nonempty legacy data requires the verified desktop migration broker.
+    /// With `material`, the new guest Task folder is published by the broker's
+    /// `replace` action from the desktop-prepared manifest instead of being
+    /// initialized empty, so the files are there before the first command.
     pub(crate) async fn prepare_model(
         host_root: &Path,
         principal: &str,
         writable: bool,
         domains: Vec<String>,
         phase: &mut ModelSetupPhase,
+        material: Option<&StartMaterial>,
     ) -> anyhow::Result<Self> {
         let task_id = host_root
             .file_name()
@@ -449,6 +543,10 @@ impl WslExecPlan {
             }
             Err(error) => return Err(error.into()),
         }
+        if material.is_some() && binding.exists() {
+            // Material belongs only to a newly reserved Task; never republish.
+            bail!(MaterialNotStaged("attached material needs a new Task"));
+        }
         if !binding.exists() {
             for child in std::fs::read_dir(host_root)? {
                 let child = child?;
@@ -461,6 +559,16 @@ impl WslExecPlan {
                     bail!("Existing Task files require verified migration to Linux");
                 }
             }
+            let (request, budget) = match material {
+                Some(material) => (
+                    material.replace_request(Path::new("D:\\Inquello\\profiles"), &plan.scope)?,
+                    MATERIAL_STAGING_BUDGET,
+                ),
+                None => (
+                    b"{\"action\":\"initialize\"}".to_vec(),
+                    Duration::from_secs(30),
+                ),
+            };
             let system = std::env::var("SystemRoot")?;
             let mut child = tokio::process::Command::from(codex_utils_process::background_command(
                 format!("{system}\\System32\\wsl.exe"),
@@ -496,22 +604,27 @@ impl WslExecPlan {
                 .stdout(std::process::Stdio::piped())
                 .stderr(std::process::Stdio::piped())
                 .kill_on_drop(true);
-            let result = run_model_setup_probe(
-                &mut child,
-                phase,
-                Some(b"{\"action\":\"initialize\"}"),
-                Duration::from_secs(30),
-            )
-            .await
-            .context("Linux empty Task initialization could not complete")?;
-            if !result.status.success() {
-                bail!(
-                    "Empty Task guest initialization failed: {}",
+            let result = run_model_setup_probe(&mut child, phase, Some(&request), budget).await;
+            let staged = match result {
+                Ok(result) if result.status.success() => Ok(()),
+                Ok(result) => Err(anyhow::anyhow!(
+                    "Task guest initialization failed: {}",
                     String::from_utf8_lossy(&result.stderr)
-                );
+                )),
+                Err(error) => Err(error.context("Linux Task initialization could not complete")),
+            };
+            if let Err(error) = staged {
+                if material.is_some() {
+                    tracing::warn!("Attached material was not staged: {error:#}");
+                    bail!(MaterialNotStaged(
+                        "the Task folder could not receive the attached material"
+                    ));
+                }
+                return Err(error);
             }
-            // The initialize action creates directories synchronously, holds its
-            // locks only for this broker process, and starts no executor/children.
+            // The initialize and replace actions create directories and files
+            // synchronously, hold their locks only for this broker process, and
+            // start no executor/children.
             std::fs::create_dir_all(&binding_dir)?;
             let temporary = binding_dir.join(format!("{}.tmp", uuid::Uuid::new_v4()));
             let mut file = std::fs::OpenOptions::new()
@@ -588,11 +701,17 @@ impl WslExecPlan {
                 FileSystemAccessMode::Read
             },
         ));
+        // The guest's system socket locations stay hidden (owner decision
+        // 2026-11-11): Task commands may use local sockets, but only their own.
         for hidden in [
             "/usr/lib/modules",
             "/usr/src",
             "/usr/lib/linux-tools",
             "/usr/lib/wsl",
+            "/run",
+            "/var/run",
+            "/tmp/.X11-unix",
+            "/mnt/wslg",
         ] {
             entries.push(FileSystemSandboxEntry::new(
                 FileSystemPath::Path { path: uri(hidden)? },
@@ -611,6 +730,12 @@ impl WslExecPlan {
         ))
     }
 
+    /// `dangerously_allow_all_unix_sockets` grants private Task commands local
+    /// (Unix) sockets in the Linux sandbox's proxy-routed seccomp mode, so a
+    /// program such as LibreOffice can use its own single-instance pipe (owner
+    /// decision 2026-11-11). On Linux the proxy never forwards to Unix sockets
+    /// (`x-unix-socket` is macOS-only), the command's network namespace is
+    /// private, and the guest's socket locations are hidden by `sandbox`.
     fn network_config(&self) -> anyhow::Result<NetworkProxyConfig> {
         let domains: serde_json::Map<String, serde_json::Value> = self
             .domains
@@ -620,7 +745,7 @@ impl WslExecPlan {
         let config: NetworkProxyConfig = serde_json::from_value(serde_json::json!({
             "enabled": true, "domains": domains, "enable_socks5": false,
             "enable_socks5_udp": false, "allow_upstream_proxy": false,
-            "dangerously_allow_all_unix_sockets": false, "allow_local_binding": false,
+            "dangerously_allow_all_unix_sockets": true, "allow_local_binding": false,
             "credential_broker": false, "mitm": false
         }))?;
         Ok(config)
@@ -1117,6 +1242,146 @@ mod inquello_lock_release_probe_tests {
         within_cleanup_budget(async { Ok(()) }, Duration::from_secs(1))
             .await
             .expect("completed cleanup stays confirmed");
+    }
+
+    fn plan() -> WslExecPlan {
+        WslExecPlan {
+            scope: "a".repeat(64),
+            task_id: uuid::Uuid::new_v4().to_string(),
+            command: vec![],
+            writable: true,
+            domains: vec![],
+            timeout_ms: None,
+        }
+    }
+
+    #[test]
+    fn private_task_commands_get_local_sockets_and_never_the_guest_socket_locations() {
+        let plan = plan();
+        // The one existing grant: allow-all Unix sockets for this Task's
+        // managed network, on both the model path and the one-shot tool path.
+        assert_eq!(
+            plan.network_config()
+                .unwrap()
+                .dangerously_allow_all_unix_sockets,
+            Some(true)
+        );
+        let environment = plan.environment_config().unwrap();
+        assert!(
+            environment
+                .network_policy
+                .as_ref()
+                .is_some_and(|policy| policy.dangerously_allow_all_unix_sockets)
+        );
+        assert!(plan.network().unwrap().proxy.dangerously_allow_all_unix_sockets);
+        // Nothing else in the managed network widens.
+        let config = plan.network_config().unwrap();
+        assert!(config.enabled && !config.allow_upstream_proxy && !config.mitm);
+        assert_eq!(config.allow_local_binding, Some(false));
+        assert!(config.unix_sockets.is_none());
+        fn denied(value: &serde_json::Value, found: &mut Vec<String>) {
+            match value {
+                serde_json::Value::Object(map) => {
+                    if map.get("access").and_then(serde_json::Value::as_str) == Some("deny") {
+                        found.push(map.get("path").map(ToString::to_string).unwrap_or_default());
+                    }
+                    map.values().for_each(|child| denied(child, found));
+                }
+                serde_json::Value::Array(items) => items.iter().for_each(|item| denied(item, found)),
+                _ => {}
+            }
+        }
+        let mut found = Vec::new();
+        denied(&serde_json::to_value(plan.sandbox().unwrap()).unwrap(), &mut found);
+        for hidden in ["/run", "/var/run", "/tmp/.X11-unix", "/mnt/wslg", "/usr/lib/wsl"] {
+            assert!(
+                found.iter().any(|path| path.contains(&format!("//{hidden}\""))),
+                "{hidden} must stay hidden from Task commands: {found:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn start_material_identity_is_strict() {
+        let operation = uuid::Uuid::new_v4().to_string();
+        assert!(StartMaterial::new(&operation, &"0".repeat(64)).is_ok());
+        for (operation, digest) in [
+            (operation.as_str(), "0".repeat(63)),
+            (operation.as_str(), "G".repeat(64)),
+            (operation.as_str(), "A".repeat(64)),
+            ("..\\escape", "0".repeat(64)),
+            ("not-an-operation", "0".repeat(64)),
+        ] {
+            assert!(StartMaterial::new(operation, &digest).is_err(), "{operation} {digest}");
+        }
+        let upper = uuid::Uuid::new_v4().to_string().to_uppercase();
+        assert!(StartMaterial::new(&upper, &"0".repeat(64)).is_err());
+    }
+
+    #[test]
+    fn start_material_stages_only_the_verified_bounded_manifest() {
+        let profiles = tempfile::tempdir().unwrap();
+        let scope = "b".repeat(64);
+        let folder = profiles.path().join(&scope).join("material");
+        std::fs::create_dir_all(&folder).unwrap();
+        let operation = uuid::Uuid::new_v4().to_string();
+        let write = |bytes: &[u8]| {
+            std::fs::write(folder.join(format!("{operation}.json")), bytes).unwrap();
+            format!("{:x}", Sha256::digest(bytes))
+        };
+        let manifest =
+            br#"[{"path":"attached","kind":"directory"},{"path":"attached/a.txt","kind":"file","data":"YQ==","sha256":"ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"}]"#;
+        let digest = write(manifest);
+        let material = StartMaterial::new(&operation, &digest).unwrap();
+        let request = material.replace_request(profiles.path(), &scope).unwrap();
+        let parsed: serde_json::Value = serde_json::from_slice(&request).unwrap();
+        assert_eq!(parsed["action"], "replace");
+        assert_eq!(parsed["entries"], serde_json::from_slice::<serde_json::Value>(manifest).unwrap());
+        assert_eq!(parsed.as_object().unwrap().len(), 2);
+        let refused = |material: &StartMaterial| {
+            let error = material.replace_request(profiles.path(), &scope).unwrap_err();
+            assert!(error.downcast_ref::<MaterialNotStaged>().is_some(), "{error:#}");
+            error.to_string()
+        };
+        // Changed after it was prepared.
+        write(br#"[{"path":"attached","kind":"directory"}]"#);
+        assert!(refused(&material).contains("changed"));
+        // A manifest that tries to add another broker action is not an array.
+        let smuggled = br#"[], "action": "retire""#;
+        let digest = write(smuggled);
+        assert!(refused(&StartMaterial::new(&operation, &digest).unwrap()).contains("not a transfer manifest"));
+        // Empty and over the broker's entry bound.
+        let digest = write(b"[]");
+        assert!(refused(&StartMaterial::new(&operation, &digest).unwrap()).contains("bound"));
+        let many = format!("[{}]", vec!["{}"; MATERIAL_ENTRY_LIMIT + 1].join(","));
+        let digest = write(many.as_bytes());
+        assert!(refused(&StartMaterial::new(&operation, &digest).unwrap()).contains("bound"));
+        // Another operation's manifest, or none, is never used.
+        let other = StartMaterial::new(&uuid::Uuid::new_v4().to_string(), &digest).unwrap();
+        assert!(refused(&other).contains("missing"));
+        // A directory where the manifest should be.
+        std::fs::remove_file(folder.join(format!("{operation}.json"))).unwrap();
+        std::fs::create_dir(folder.join(format!("{operation}.json"))).unwrap();
+        assert!(refused(&StartMaterial::new(&operation, &digest).unwrap()).contains("regular file"));
+    }
+
+    #[tokio::test]
+    async fn invalid_task_with_material_fails_before_any_probe() {
+        let material = StartMaterial::new(&uuid::Uuid::new_v4().to_string(), &"0".repeat(64)).unwrap();
+        let mut phase = ModelSetupPhase::NoOutstandingProcess;
+        assert!(
+            WslExecPlan::prepare_model(
+                Path::new("invalid-task-id"),
+                "principal",
+                true,
+                vec![],
+                &mut phase,
+                Some(&material)
+            )
+            .await
+            .is_err()
+        );
+        assert!(phase == ModelSetupPhase::NoOutstandingProcess);
     }
 
     #[tokio::test]

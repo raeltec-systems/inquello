@@ -7,10 +7,10 @@ import {ConversationModelPicker} from './ConversationModelPicker';
 import type {DraftBinding} from './drafts';
 import {taskValue,tasksBridge,type ProgressSnapshot,type LifecycleReceipt} from './tasks-bridge';
 import {AttachControl} from './AttachControl';
-import {awaitingNote,parseAttachment,parseStageOutcome,sourcesBridge,sourcesValue,useSourcesView,SOURCES_RUNNING_REASON,type AttachmentView} from './sources-bridge';
+import {parseAttachment,parseStageOutcome,sourcesBridge,sourcesValue,useSourcesView,withSourcesNote,SOURCES_RUNNING_REASON,type AttachmentView} from './sources-bridge';
 
 /** Adds the visible note that tells the agent where the material is, unless the draft already has it. The person can edit or remove it. */
-export function withSourcesNote(draft:string,note:string):string {return draft.includes(note)?draft:draft.trim()?`${draft.replace(/\s+$/,'')}\n\n${note}`:note;}
+export {withSourcesNote} from './sources-bridge';
 
 export {useTaskObservation as useTaskActivity} from './task-observation';
 import {useTaskObservation} from './task-observation';
@@ -74,20 +74,14 @@ export function TaskLifecycle({taskId,workspaceId,draft,operationIds=()=>crypto.
  const sourcesApi=sourcesBridge();
  const [attachment,setAttachment]=useState<{pending:boolean;shown:AttachmentView[];notice:string|null}>({pending:false,shown:[],notice:null});
  const sourceView=useSourcesView(taskId,workspaceId,view?.status??'',!!sourcesApi&&!!view);
- useEffect(()=>{const current=sourceView.view;if(!current)return;
-  for(const item of current.deferred)awaitingNote.add(item.attachmentId);
-  const ready=current.attachments.filter(item=>awaitingNote.has(item.attachmentId));
-  if(ready.length&&current.note){for(const item of ready)awaitingNote.delete(item.attachmentId);latest.current.onChange(withSourcesNote(latest.current.value,current.note));setAttachment(old=>({...old,notice:`${ready.map(item=>item.label).join(', ')} is now in the Task folder. A note for the agent was added to your message; edit it as you like.`}));}
- },[sourceView.view]);
  const attachNow=async(kind:'files'|'folder')=>{
   if(!sourcesApi||attachment.pending)return;setAttachment(old=>({...old,pending:true,notice:null}));
   let held:AttachmentView|null=null;
   try{const value=sourcesValue(await sourcesApi.attach({kind}));if(value===null){if(mounted.current)setAttachment(old=>({...old,pending:false}));return;}held=parseAttachment(value);
    if(mounted.current)setAttachment(old=>({...old,shown:[held!]}));
-   const outcome=parseStageOutcome(sourcesValue(await sourcesApi.stage({taskId,workspaceId,attachmentId:held.attachmentId,firstTurn:false})));
+   const outcome=parseStageOutcome(sourcesValue(await sourcesApi.stage({taskId,workspaceId,attachmentId:held.attachmentId})));
    if(!mounted.current)return;
-   if(outcome.state==='staged'){latest.current.onChange(withSourcesNote(latest.current.value,outcome.note));setAttachment({pending:false,shown:[outcome.attachment],notice:`Attached ${outcome.attachment.label}: ${outcome.attachment.files.length} file${outcome.attachment.files.length===1?'':'s'} in the Task folder, available to your next message. A note for the agent was added to your message.`});}
-   else setAttachment({pending:false,shown:[],notice:`${outcome.label}: ${outcome.notice}`});
+   latest.current.onChange(withSourcesNote(latest.current.value,outcome.note));setAttachment({pending:false,shown:[outcome.attachment],notice:`Attached ${outcome.attachment.label}: ${outcome.attachment.files.length} file${outcome.attachment.files.length===1?'':'s'} in the Task folder, available to your next message. A note for the agent was added to your message.`});
   }catch(error){if(held)void sourcesApi.discard({attachmentId:held.attachmentId}).catch(()=>undefined);if(mounted.current)setAttachment({pending:false,shown:[],notice:error instanceof Error?error.message:'Nothing was attached.'});}
  };
  const stopPending=busy==='stop'||pending.current?.kind==='stop'||view?.lifecycleOperations?.some(op=>op.kind==='stop'&&['reserved','dispatching','uncertain'].includes(op.status));

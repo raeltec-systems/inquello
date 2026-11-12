@@ -2,7 +2,8 @@
 import {object, uuid, identifier, integer} from '../usage/types';
 import {routeId, type RouteId} from '../routes/types';
 export interface TaskCandidateInput {workspaceId:string;routeId:RouteId;configurationRevision:number}
-export interface StartTaskInput extends TaskCandidateInput {operationId:string;engagementId:string|null;folderId:string|null;request:string;reasoning:string;speed:string}
+/** `attachmentIds` (Story 2.1): material main holds for this person, staged into the new Task folder before the first turn; never sent to the runtime. */
+export interface StartTaskInput extends TaskCandidateInput {operationId:string;engagementId:string|null;folderId:string|null;request:string;reasoning:string;speed:string;attachmentIds?:string[]}
 export interface TaskCandidateView extends TaskCandidateInput {reasoning:string[];speeds:string[];available:boolean;reason:string;executionFlow:string;inferenceFlow:string}
 export interface StartedTaskView {operationId:string;taskId:string;runId:string;threadId:string|null;status:string;request:string;accepted:boolean;reason?:string}
 export type TasksResult<T>={ok:true;value:T}|{ok:false;reason:string;code?:'refused'|'uncertain'};

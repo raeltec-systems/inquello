@@ -23,6 +23,7 @@ import { OrganiseService } from '../src/main/organise';
 import { PermissionMediator, PolicyService, type ToolRunView } from '../src/main/policy';
 import { WslTasks } from '../src/main/runtime/wsl-tasks';
 import { SourcesService, VERIFY_BOOT, hostStagingTarget, normaliseQuote, readerDigests, wslStagingTarget } from '../src/main/sources';
+import type { Entry } from '../src/main/runtime/wsl-tasks';
 import { AppServerRuntime, resolveAppServerBinary, runtimeChildEnv, writeRuntimeConfig } from '../src/main/runtime';
 import { fakeSafeStorage } from './identity-fakes';
 import { recordingLogger, removeTempDirs, removeGuestTaskStorage, tempDir } from './helpers';
@@ -127,7 +128,9 @@ describe.skipIf(!databaseConfigured)('evidence reading in the real Task sandbox'
   const skillRoot = path.join(desktop, 'resources', 'skills', 'inquello-evidence');
   const key = JSON.parse(fs.readFileSync(path.join(fixtures, 'answer-key.json'), 'utf8')) as { files: Record<string, { format: string; keys: Array<{ at: string; text: string }> }>; unreadable: Record<string, string> };
   const digests = readerDigests(skillRoot);
-  const LEGACY_REFUSED = 'legacy format conversion is unavailable in the Task sandbox (LibreOffice needs a local socket the sandbox does not allow)';
+  // The socket check shared with `scripts/wsl/probe-sandbox.sh` (one text, two runners).
+  const probe = fs.readFileSync(path.join(desktop, 'scripts', 'wsl', 'probe-sandbox.sh'), 'utf8');
+  const SOCKET_CHECK = probe.slice(probe.indexOf("SOCKET_CHECK = r'''") + "SOCKET_CHECK = r'''".length, probe.indexOf("'''", probe.indexOf("SOCKET_CHECK = r'''") + 20));
   const boot = (...args: string[]) => ['/usr/bin/python3', '-I', '-c', VERIFY_BOOT, JSON.stringify(digests), ...args];
 
   /** A Task whose guest folder exists, with a SourcesService bound to that Task's real broker. */
@@ -185,11 +188,8 @@ describe.skipIf(!databaseConfigured)('evidence reading in the real Task sandbox'
       rates.set(want.format, rate);
     });
     if (process.env.SOURCES_RATES_OUT) fs.writeFileSync(process.env.SOURCES_RATES_OUT, JSON.stringify(Object.fromEntries(rates), null, 2));
-    // Legacy .doc/.ppt conversion cannot run in the Task sandbox (LibreOffice needs a
-    // local socket the sandbox's seccomp policy denies). Those keys must fail with
-    // that stated reason, never silently; every other keyed location must pass.
-    expect(failures.filter(line => !/^(count-memo\.doc|kickoff-deck\.ppt) /.test(line))).toEqual([]);
-    for (const line of failures) expect(line).toContain(LEGACY_REFUSED);
+    // Every keyed location passes, legacy .doc/.ppt included (converted by LibreOffice inside the sandbox).
+    expect(failures).toEqual([]);
     expect([...rates.keys()].sort()).toEqual(['csv', 'doc', 'docx', 'image', 'pdf', 'ppt', 'pptx', 'text', 'unreadable', 'xls', 'xlsx']);
   }, 600_000);
 
@@ -243,7 +243,7 @@ describe.skipIf(!databaseConfigured)('evidence reading in the real Task sandbox'
     expect(files.find(file => file.path.endsWith('.csv'))).toMatchObject({ status: 'readable' });
   }, 300_000);
 
-  it('shows Word tracked changes with author when asked, and refuses legacy conversion in the sandbox without changing the original', async () => {
+  it('shows Word tracked changes with author when asked, and converts a legacy file in the sandbox without changing the original or leaving a copy', async () => {
     const { task, service } = await preparedTask('Changes', { files: [path.join(fixtures, 'folder', 'purchasing-policy.docx'), path.join(fixtures, 'folder', 'count-memo.doc')], folders: [] });
     const attached = await service.attach('files');
     if (!attached.ok || !attached.value) throw new Error('attach failed');
@@ -258,8 +258,49 @@ describe.skipIf(!databaseConfigured)('evidence reading in the real Task sandbox'
     const sums = legacy.stdout.split('\n').filter(line => line.endsWith('attached/count-memo.doc'));
     expect(sums).toHaveLength(2);
     expect(sums[0]).toBe(sums[1]);
-    // In the Task sandbox the conversion is refused with its reason; the original is unchanged and no copy is left.
-    expect(legacy.stdout).toContain(`NOT READ attached/count-memo.doc: ${LEGACY_REFUSED}`);
+    // Converted in the Task sandbox and read with paragraph locations; the original is unchanged and no converted copy or profile is left.
+    expect(legacy.stdout).toContain('observed at the Leeds warehouse on 31 December 2025');
+    expect(legacy.stdout).toMatch(/converted from legacy format/);
     expect(legacy.stdout.trim().split('\n').at(-1)).toBe('0');
+    const leftovers = await run(task, ['/bin/sh', '-c', 'ls -a .inquello-work | grep -c ^lo- || true']);
+    expect(leftovers.stdout.trim()).toBe('0');
+  }, 300_000);
+
+  it('Task commands can create and use their own local socket, and no socket they did not create is reachable', async () => {
+    const task = await newTask('Socket isolation');
+    ok(await policy.effectiveThreadSettings(task));
+    expect(SOCKET_CHECK).toContain('own-socket-check');
+    const result = await run(task, ['/usr/bin/python3', '-I', '-c', SOCKET_CHECK], 120_000);
+    const report = JSON.parse(result.stdout) as { foreign: string[]; connectable: string[]; hidden: string[]; own: boolean };
+    expect(report).toEqual({ foreign: [], connectable: [], hidden: [], own: true });
+    expect(result.exitCode).toBe(0);
+  }, 300_000);
+
+  it.skipIf(process.platform !== 'win32')('stages the start manifest the way a Task start does, so a Task command reads the material before any turn', async () => {
+    const task = await newTask('Start staging');
+    const settings = ok(await policy.effectiveThreadSettings(task));
+    const guest = new WslTasks(path.dirname(settings.folders.working), identity.principalId()!);
+    const operationId = randomUUID();
+    const service = new SourcesService({
+      userData: tempDir('sources-userdata'), skillRoot, principalId: () => identity.principalId(), choose: async () => ({ files: [path.join(fixtures, 'folder', 'count-memo.doc'), path.join(fixtures, 'folder', 'payables-export.csv')], folders: [] }),
+      runTool: async (taskId, argv, options) => { const result = await policy.runTool(taskId, argv, options); return result.ok ? { ok: true, value: result.value } : { ok: false, reason: result.reason }; },
+      stagingTarget: () => wslStagingTarget(guest), policyGate: () => ({ ok: true }), logger: recordingLogger(),
+      startMaterial: id => path.join(tempDir('sources-material'), `${id}.json`),
+    });
+    const attached = await service.attach('files');
+    if (!attached.ok || !attached.value) throw new Error('attach failed');
+    // The runtime's part of a start (inquello_wsl.rs): read the manifest by digest and publish it with the broker's `replace`.
+    const started = await service.startTask(operationId, [attached.value.attachmentId], async material => {
+      const prepared = ok(service.stageBeforeFirstTurn(operationId, [attached.value!.attachmentId]));
+      expect(prepared.sha256).toBe(material.sha256);
+      await guest.broker(task, { action: 'replace', entries: JSON.parse(fs.readFileSync(prepared.file, 'utf8')) as Entry[] });
+      return { ok: true, value: { operationId, taskId: task, runId: task, threadId: null, status: 'running', request: 'r', accepted: false } };
+    });
+    expect(started.ok).toBe(true);
+    const listing = await run(task, ['/bin/sh', '-c', 'ls attached; test -f skills/inquello-evidence/SKILL.md && echo skill']);
+    expect(listing.stdout.split('\n').filter(Boolean).sort()).toEqual(['count-memo.doc', 'payables-export.csv', 'skill']);
+    // Once idle, the view examines the material in the sandbox for Coverage.
+    const coverage = ok(service.coverage(task));
+    expect(coverage?.unreadable.every(item => item.reason === 'Not yet examined in the sandbox')).toBe(true);
   }, 300_000);
 });

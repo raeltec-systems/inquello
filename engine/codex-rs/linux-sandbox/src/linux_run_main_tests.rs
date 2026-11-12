@@ -205,6 +205,64 @@ fn masks_wsl_interop_with_full_network_and_restricted_filesystem() {
 }
 
 #[test]
+fn denied_run_hides_wsl_interop_without_a_second_mount_inside_it() {
+    use codex_protocol::permissions::FileSystemAccessMode;
+    use codex_protocol::permissions::FileSystemPath;
+    use codex_protocol::permissions::FileSystemSandboxEntry;
+    use codex_protocol::permissions::FileSystemSpecialPath;
+    let entry = |path, access| FileSystemSandboxEntry::new(path, access);
+    let mut entries = vec![entry(
+        FileSystemPath::Special {
+            value: FileSystemSpecialPath::Minimal,
+        },
+        FileSystemAccessMode::Read,
+    )];
+    let denied = |path: &str| {
+        entry(
+            FileSystemPath::Path {
+                path: AbsolutePathBuf::from_absolute_path(path).unwrap().into(),
+            },
+            FileSystemAccessMode::Deny,
+        )
+    };
+    entries.push(denied("/run"));
+    let argv = build_bwrap_argv(
+        vec!["/bin/true".to_string()],
+        &FileSystemSandboxPolicy::restricted(entries.clone()),
+        Path::new("/"),
+        Path::new("/"),
+        BwrapOptions {
+            network_mode: BwrapNetworkMode::ProxyOnly,
+            mask_wsl_interop: true,
+            ..Default::default()
+        },
+    )
+    .expect("build bwrap argv")
+    .args;
+    // The denied /run (read-only, mode 000 when it exists) already covers /run/WSL.
+    assert!(!argv.windows(2).any(|args| args == ["--tmpfs", "/run/WSL"]));
+    if Path::new("/run").is_dir() {
+        assert!(argv.windows(2).any(|args| args == ["--tmpfs", "/run"]));
+    }
+    // Without the denial the interop mask still applies.
+    entries.pop();
+    let argv = build_bwrap_argv(
+        vec!["/bin/true".to_string()],
+        &FileSystemSandboxPolicy::restricted(entries),
+        Path::new("/"),
+        Path::new("/"),
+        BwrapOptions {
+            network_mode: BwrapNetworkMode::ProxyOnly,
+            mask_wsl_interop: true,
+            ..Default::default()
+        },
+    )
+    .expect("build bwrap argv")
+    .args;
+    assert!(argv.windows(2).any(|args| args == ["--tmpfs", "/run/WSL"]));
+}
+
+#[test]
 fn masks_inherited_procfs_when_wsl_interop_is_masked_without_fresh_proc() {
     let argv = build_bwrap_argv(
         vec!["/bin/true".to_string()],

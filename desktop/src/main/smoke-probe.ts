@@ -4561,7 +4561,7 @@ export async function probeSourceReferences(contents: WebContents, options: Sour
     check(start.opened && start.control === true, 'The start view has no available Attach folder control');
     check(start.counts === '17 files to read · 1 not searched', `The start view summary was ${JSON.stringify(start.counts)}`);
     check(start.label === 'folder', `The start view named the attachment ${JSON.stringify(start.label)}`);
-    check(!!start.notice && /first request cannot read it/.test(start.notice), 'The start view does not say the first request cannot read attached material');
+    check(!!start.notice && /placed in the Task folder before your request is sent/.test(start.notice), 'The start view does not say the material is placed in the Task folder before the request is sent');
     check(start.removed === true, 'Removing the attachment on the start view did not clear it');
     check(!(start.pageText ?? '').includes(options.fixtureRoot), 'The renderer showed an absolute path');
 

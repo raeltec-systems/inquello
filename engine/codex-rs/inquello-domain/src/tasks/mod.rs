@@ -87,6 +87,8 @@ pub enum TaskSetupFailure {
     AuthorityUnavailable,
     ThreadSetupFailed,
     TurnNotIdle,
+    /// Attached material could not be staged into the new Task folder (Story 2.1).
+    MaterialNotStaged,
 }
 #[derive(Debug)]
 pub enum TaskReservationError {

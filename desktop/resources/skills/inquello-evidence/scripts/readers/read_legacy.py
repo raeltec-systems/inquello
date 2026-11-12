@@ -10,15 +10,22 @@ import os
 import shutil
 import signal
 import subprocess
+import time
 import uuid
 
 from .common import Unreadable, TOOL_UNAVAILABLE, check_size, sha256_file, tool
 
 EXTENSIONS = {'.doc', '.ppt'}
 TIMEOUT = 120
-# LibreOffice needs a local (Unix) socket for its single-instance pipe. The Task
-# sandbox does not allow creating one, so conversion cannot run there.
-SANDBOX_REFUSED = 'legacy format conversion is unavailable in the Task sandbox (LibreOffice needs a local socket the sandbox does not allow)'
+# LibreOffice's launcher (`soffice`) insists on a writable /tmp for its
+# single-instance pipe; the Task sandbox's /tmp is read-only. The office
+# program itself (`soffice.bin`) takes the pipe folder from OSL_SOCKET_PATH, so
+# the pipe is created inside this conversion's folder in the Task folder. The
+# path is relative to the Task folder because a socket path is limited to 107
+# bytes. The office program exits with 81 after creating a fresh profile and
+# must be started again, which the launcher would otherwise do.
+RESTART = 81
+FAILED = 'conversion from legacy format failed (protected, corrupt or unsupported)'
 MACROS_OFF = '''<?xml version="1.0" encoding="UTF-8"?>
 <oor:items xmlns:oor="http://openoffice.org/2001/registry" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 <item oor:path="/org.openoffice.Office.Common/Security/Scripting"><prop oor:name="MacroSecurityLevel" oor:op="fuse"><value>3</value></prop></item>
@@ -49,7 +56,9 @@ def convert(path):
     so an earlier copy could have been replaced. The caller removes it after reading.
     """
     check_size(path)
-    if not tool('soffice'):
+    launcher = tool('soffice')
+    office = os.path.join(os.path.dirname(os.path.realpath(launcher)), 'soffice.bin') if launcher else None
+    if not office or not os.path.isfile(office):
         raise Unreadable(TOOL_UNAVAILABLE)
     original = sha256_file(path)
     extension = os.path.splitext(path)[1].lower()
@@ -58,39 +67,40 @@ def convert(path):
     outdir = os.path.join(root, 'converted', uuid.uuid4().hex)
     converted = os.path.join(outdir, os.path.splitext(os.path.basename(path))[0] + '.' + target)
     os.makedirs(outdir, mode=0o700)
-    profile = os.path.join(root, 'lo-profile-' + uuid.uuid4().hex)
+    # A private throwaway profile with macros disabled; it also holds the pipe.
+    profile = os.path.join(root, 'lo-' + uuid.uuid4().hex[:12])
     os.makedirs(os.path.join(profile, 'user'), mode=0o700)
     with open(os.path.join(profile, 'user', 'registrymodifications.xcu'), 'w') as handle:
         handle.write(MACROS_OFF)
     filters = {'docx': 'docx:MS Word 2007 XML', 'pptx': 'pptx:Impress MS PowerPoint 2007 XML'}
-    argv = ['soffice', '-env:UserInstallation=file://' + profile, '--headless', '--norestore', '--nolockcheck',
-            '--nodefault', '--nologo', '--convert-to', filters[target], '--outdir', outdir, path]
+    argv = [office, '-env:UserInstallation=file://' + profile, '-env:OSL_SOCKET_PATH=' + os.path.relpath(profile),
+            '--headless', '--invisible', '--norestore', '--nolockcheck', '--nodefault', '--nologo',
+            '--convert-to', filters[target], '--outdir', outdir, path]
     env = {'PATH': '/usr/bin:/bin', 'LANG': 'C.UTF-8', 'HOME': profile, 'TMPDIR': profile, 'SAL_USE_VCLPLUGIN': 'svp'}
+    deadline = time.monotonic() + TIMEOUT
     try:
         log = os.path.join(profile, 'conversion.log')
-        with open(log, 'wb') as errors:
-            child = subprocess.Popen(argv, stdout=errors, stderr=errors, env=env, start_new_session=True)
-        try:
-            child.wait(timeout=TIMEOUT)
-        except subprocess.TimeoutExpired:
-            os.killpg(child.pid, signal.SIGKILL)
-            child.wait()
-            raise Unreadable('conversion from legacy format timed out')
-        finally:
+        for _ in range(3):
+            with open(log, 'ab') as errors:
+                child = subprocess.Popen(argv, stdout=errors, stderr=errors, env=env, start_new_session=True)
             try:
+                code = child.wait(timeout=max(1, deadline - time.monotonic()))
+            except subprocess.TimeoutExpired:
                 os.killpg(child.pid, signal.SIGKILL)
-            except (ProcessLookupError, PermissionError):
-                pass
-        with open(log, 'rb') as errors:
-            diagnostics = errors.read(65536)
+                child.wait()
+                raise Unreadable('conversion from legacy format timed out')
+            finally:
+                try:
+                    os.killpg(child.pid, signal.SIGKILL)
+                except (ProcessLookupError, PermissionError):
+                    pass
+            if code != RESTART:
+                break
     finally:
         shutil.rmtree(profile, ignore_errors=True)
-    if not os.path.isfile(converted) and b'no valid pipe path' in diagnostics:
-        shutil.rmtree(outdir, ignore_errors=True)
-        raise Unreadable(SANDBOX_REFUSED)
     if not os.path.isfile(converted):
         shutil.rmtree(outdir, ignore_errors=True)
-        raise Unreadable('conversion from legacy format failed (protected, corrupt or unsupported)')
+        raise Unreadable(FAILED)
     return converted, original
 
 

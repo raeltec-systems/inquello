@@ -1527,7 +1527,8 @@ mod inquello_executor_retirement_tests {
                 "principal",
                 false,
                 vec![],
-                &mut first.setup_phase
+                &mut first.setup_phase,
+                None
             )
             .await
             .is_err()

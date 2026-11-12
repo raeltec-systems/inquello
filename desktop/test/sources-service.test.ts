@@ -1,6 +1,6 @@
 /**
  * Story 2.1, main process without the sandbox: the policy gate, attaching to
- * an idle Task, the Task-start path (staging waits for the first turn), the
+ * an idle Task, the Task-start path (staged before the first turn), the
  * per-Task view that checks an answer's references, retention, deletion and
  * the IPC payloads. The sandbox is a fake that answers like the skill's
  * `inventory` and `verify-batch`; the reading itself is covered in
@@ -8,7 +8,7 @@
  *
  * I/O matrix rows covered here:
  * - No attachment: `view` has no attachments and no Coverage; references in an answer stay unverified.
- * - Attach single files / Attach and start: `attachToNewTask` defers, then stages once the turn ends; the view names the material.
+ * - Attach single files / Attach and start: `startTask` writes one bounded manifest the runtime stages before the first turn; a retried start never stages twice; a failed start keeps the material held; the view names the material.
  * - Verified reference: a quote found at the location is verified, retained and carries file, location, time and hash.
  * - Unverifiable reference: a different quote or an unknown file is unverified and nothing is retained.
  * - Computed figure: the computed marker keeps its command and inputs.
@@ -17,6 +17,7 @@
  * - Policy unknown: attach and staging are unavailable with the blocking reason.
  * Also: attaching to a running Task is refused, a Task that cannot be read is refused, payloads never carry a path.
  */
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -24,9 +25,9 @@ import { afterAll, describe, expect, it, vi } from 'vitest';
 
 import { loadShippedPolicy, type DataPolicy } from '../src/main/data';
 import { createOperations, OperationError } from '../src/main/security/operations';
-import { SOURCES_DEFERRED_NOTICE, SOURCES_REASONS, SourcesService, sourcesPolicyGate, type StagingTarget, type TaskTurnState } from '../src/main/sources';
-import type { Entry } from '../src/main/runtime/wsl-tasks';
-import { sourcesAttachPayload, sourcesStagePayload, sourcesViewPayload } from '../src/main/tasks/validators';
+import { SOURCES_REASONS, SourcesService, hostStagingTarget, sourcesPolicyGate, type StagingTarget, type TaskTurnState } from '../src/main/sources';
+import { validateTransfer, type Entry } from '../src/main/runtime/wsl-tasks';
+import { sourcesAttachPayload, sourcesStagePayload, sourcesViewPayload, taskStartPayload } from '../src/main/tasks/validators';
 import { recordingLogger, removeTempDirs, tempDir } from './helpers';
 
 afterAll(() => removeTempDirs());
@@ -34,6 +35,7 @@ const desktop = path.resolve(__dirname, '..');
 const skillRoot = path.join(desktop, 'resources', 'skills', 'inquello-evidence');
 const TASK = '6f1c1d1e-0000-4000-8000-0000000000aa';
 const WORKSPACE = '6f1c1d1e-0000-4000-8000-0000000000bb';
+const OPERATION = '6f1c1d1e-0000-4000-8000-0000000000cc';
 const write = (file: string, content: string) => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, content); return file; };
 
 /** A sandbox that answers the skill's commands from a table of located lines. */
@@ -55,7 +57,7 @@ function fakeSandbox(lines: Record<string, Array<{ label: string; text: string }
   return { runTool, calls };
 }
 
-function harness(options: { state?: () => TaskTurnState | null; gate?: () => { ok: true } | { ok: false; reason: string }; lines?: Record<string, Array<{ label: string; text: string }>> } = {}) {
+function harness(options: { startMaterial?: (operationId: string) => string | null; state?: () => TaskTurnState | null; gate?: () => { ok: true } | { ok: false; reason: string }; lines?: Record<string, Array<{ label: string; text: string }>> } = {}) {
   const root = tempDir('sources-service');
   const folder = path.join(root, 'Engagement');
   write(path.join(folder, 'ledger.csv'), 'Vendor,Amount\nNorthwind,10\n');
@@ -73,9 +75,10 @@ function harness(options: { state?: () => TaskTurnState | null; gate?: () => { o
     policyGate: options.gate ?? (() => ({ ok: true })),
     taskState: async () => options.state ? options.state() : state,
     onChanged: (taskId) => changed.push(taskId),
+    startMaterial: options.startMaterial ?? (operationId => path.join(root, 'profile', 'material', `${operationId}.json`)),
     logger: recordingLogger(),
   });
-  return { service, staged, sandbox, changed, folder, setState: (next: TaskTurnState | null) => { state = next; } };
+  return { service, staged, sandbox, changed, folder, manifest: (operationId: string) => path.join(root, 'profile', 'material', `${operationId}.json`), setState: (next: TaskTurnState | null) => { state = next; } };
 }
 
 const answer = [
@@ -117,7 +120,7 @@ describe('attaching to an existing Task', () => {
     if (!attached.ok || !attached.value) throw new Error('attach failed');
     expect(attached.value.notSearched).toEqual([{ relative: 'Engagement/tool.exe', reason: 'Unsupported file type' }]);
     const staged = await x.service.stageIdle(TASK, WORKSPACE, attached.value.attachmentId);
-    if (!staged.ok || staged.value.state !== 'staged') throw new Error(staged.ok ? 'deferred' : staged.reason);
+    if (!staged.ok) throw new Error(staged.reason);
     expect(staged.value.note).toBe('Attached material (Engagement) is in the Task folder under attached/. Read it with the evidence skill in skills/inquello-evidence/SKILL.md and cite what you rely on.');
     expect(staged.value.coverage).toMatchObject({ filesAttached: 3, filesRead: 2, incomplete: true, notSearched: [{ relative: 'Engagement/tool.exe', reason: 'Unsupported file type' }] });
     expect(x.staged[0]!.map(entry => entry.path)).toEqual(expect.arrayContaining(['attached/Engagement/ledger.csv', 'attached/Engagement/notes.txt', 'skills/inquello-evidence/SKILL.md']));
@@ -139,37 +142,115 @@ describe('attaching to an existing Task', () => {
 });
 
 describe('attaching at Task start', () => {
-  it('waits for the first turn to end, says so, then stages and tells the renderer', async () => {
+  const started = (status: string, taskId = TASK) => ({ ok: true as const, value: { operationId: OPERATION, taskId, runId: TASK, threadId: 'thread-1', status, request: 'r', accepted: status === 'running' } });
+
+  it('writes one bounded transfer manifest that the start stages before the first turn, then examines it once the turn ends', async () => {
     const x = harness();
     x.setState({ status: 'running', messages: [] });
     const attached = await x.service.attach('folder');
     if (!attached.ok || !attached.value) throw new Error('attach failed');
-    expect(x.service.stageBeforeFirstTurn(TASK, attached.value.attachmentId).supported).toBe(false);
-    const deferred = await x.service.attachToNewTask(TASK, WORKSPACE, attached.value.attachmentId);
-    expect(deferred).toEqual({ ok: true, value: { state: 'deferred', label: 'Engagement', notice: SOURCES_DEFERRED_NOTICE } });
-    await x.service.flushDeferred();
+    let seen: { sha256: string; manifest: Entry[] } | null = null;
+    const start = vi.fn(async (material: { sha256: string }) => {
+      const bytes = fs.readFileSync(x.manifest(OPERATION));
+      expect(createHash('sha256').update(bytes).digest('hex')).toBe(material.sha256);
+      seen = { sha256: material.sha256, manifest: JSON.parse(bytes.toString('utf8')) as Entry[] };
+      return started('running');
+    });
+    const result = await x.service.startTask(OPERATION, [attached.value.attachmentId], start);
+    expect(result).toEqual(started('running'));
+    expect(start).toHaveBeenCalledTimes(1);
+    const manifest = seen!.manifest;
+    expect(() => validateTransfer(manifest)).not.toThrow();
+    expect(manifest.map(entry => entry.path)).toEqual(expect.arrayContaining(['attached', 'attached/Engagement', 'attached/Engagement/ledger.csv', 'attached/Engagement/notes.txt', 'skills/inquello-evidence/SKILL.md']));
+    expect(manifest.some(entry => entry.path.endsWith('tool.exe'))).toBe(false);
+    expect(JSON.stringify(manifest)).not.toContain(x.folder);
+    // The manifest is removed once the runtime answered; nothing went through the between-turns staging.
+    expect(fs.existsSync(x.manifest(OPERATION))).toBe(false);
     expect(x.staged).toEqual([]);
-    const waiting = await x.service.view(TASK, WORKSPACE);
-    expect(waiting).toMatchObject({ ok: true, value: { deferred: [{ attachmentId: attached.value.attachmentId, label: 'Engagement' }], attachments: [], coverage: null, note: null } });
-    x.setState({ status: 'completed', messages: [] });
-    await x.service.flushDeferred();
-    expect(x.staged).toHaveLength(1);
     expect(x.changed).toEqual([TASK]);
-    const ready = await x.service.view(TASK, WORKSPACE);
-    if (!ready.ok) throw new Error(ready.reason);
-    expect(ready.value.deferred).toEqual([]);
-    expect(ready.value.attachments).toEqual([{ attachmentId: attached.value.attachmentId, label: 'Engagement', kind: 'folder', files: 2 }]);
-    expect(ready.value.note).toContain('attached/');
+    // While the first turn runs the material is listed but not yet examined (the running turn holds the Task folder).
+    const running = await x.service.view(TASK, WORKSPACE);
+    if (!running.ok) throw new Error(running.reason);
+    expect(running.value.attachments).toEqual([{ attachmentId: attached.value.attachmentId, label: 'Engagement', kind: 'folder', files: 2 }]);
+    expect(running.value.coverage?.unreadable.map(item => item.reason)).toEqual(['Not yet examined in the sandbox', 'Not yet examined in the sandbox']);
+    expect(running.value.note).toBe('Attached material (Engagement) is in the Task folder under attached/. Read it with the evidence skill in skills/inquello-evidence/SKILL.md and cite what you rely on.');
+    expect(x.sandbox.calls).toEqual([]);
+    x.setState({ status: 'completed', messages: [] });
+    const done = await x.service.view(TASK, WORKSPACE);
+    if (!done.ok) throw new Error(done.reason);
+    expect(done.value.coverage).toMatchObject({ filesAttached: 3, filesRead: 2, incomplete: true });
+    expect(done.value.problem).toBeNull();
+    await x.service.view(TASK, WORKSPACE);
+    expect(x.sandbox.calls).toEqual(['inventory']);
+  });
+
+  it('never stages twice for a retried start, and records an uncertain start only when reconciliation confirms it', async () => {
+    const x = harness();
+    const attached = await x.service.attach('folder');
+    if (!attached.ok || !attached.value) throw new Error('attach failed');
+    const id = attached.value.attachmentId;
+    expect(await x.service.startTask(OPERATION, [id], async () => started('running'))).toMatchObject({ ok: true });
+    const again = vi.fn(async () => started('running'));
+    // The attachment went with the first start; resending the same start cannot stage it again.
+    expect(await x.service.startTask(OPERATION, [id], again)).toEqual({ ok: false, code: 'refused', reason: SOURCES_REASONS.unknown });
+    expect(again).not.toHaveBeenCalled();
+
+    const y = harness();
+    const held = await y.service.attach('folder');
+    if (!held.ok || !held.value) throw new Error('attach failed');
+    const uncertain = { ok: false as const, code: 'uncertain' as const, reason: 'The submission outcome is uncertain.' };
+    expect(await y.service.startTask(OPERATION, [held.value.attachmentId], async () => uncertain)).toEqual(uncertain);
+    expect(fs.existsSync(y.manifest(OPERATION))).toBe(false);
+    expect((await y.service.view(TASK, WORKSPACE)).ok && y.service.coverage(TASK)).toEqual({ ok: true, value: null });
+    y.service.reconciled('6f1c1d1e-0000-4000-8000-0000000000ff', started('running'));
+    expect(y.service.coverage(TASK)).toEqual({ ok: true, value: null });
+    y.service.reconciled(OPERATION, started('running'));
+    expect(y.service.coverage(TASK)).toMatchObject({ ok: true, value: { filesAttached: 3 } });
+  });
+
+  it('keeps the attachments held when staging fails, the start is refused or the manifest cannot be written', async () => {
+    const x = harness();
+    const attached = await x.service.attach('folder');
+    if (!attached.ok || !attached.value) throw new Error('attach failed');
+    const id = attached.value.attachmentId;
+    const failed = { ok: true as const, value: { ...started('setup-failed').value, accepted: false, reason: 'The attached material could not be placed in the Task folder, so the first request was not sent.' } };
+    expect(await x.service.startTask(OPERATION, [id], async () => failed)).toEqual(failed);
+    expect(x.service.coverage(TASK)).toEqual({ ok: true, value: null });
+    expect(fs.existsSync(x.manifest(OPERATION))).toBe(false);
+    const refused = { ok: false as const, code: 'refused' as const, reason: 'The attached material could not be placed in the Task folder, so nothing was sent.' };
+    expect(await x.service.startTask(OPERATION, [id], async () => refused)).toEqual(refused);
+    // A manifest that cannot be written refuses the start before anything is sent.
+    fs.mkdirSync(x.manifest(OPERATION), { recursive: true });
+    const never = vi.fn(async () => started('running'));
+    expect(await x.service.startTask(OPERATION, [id], never)).toEqual({ ok: false, code: 'refused', reason: SOURCES_REASONS.startFailed });
+    expect(never).not.toHaveBeenCalled();
+    fs.rmSync(x.manifest(OPERATION), { recursive: true });
+    // Still held: a deliberate new Send stages it.
+    expect(await x.service.startTask(OPERATION, [id], async () => started('running'))).toMatchObject({ ok: true });
+    expect(x.service.coverage(TASK)).toMatchObject({ ok: true, value: { filesAttached: 3 } });
+  });
+
+  it('refuses at start, before sending, where the device cannot stage at Task start; between turns still stages into the Task folder', async () => {
+    const x = harness({ startMaterial: () => null });
+    const attached = await x.service.attach('folder');
+    if (!attached.ok || !attached.value) throw new Error('attach failed');
+    const never = vi.fn(async () => started('running'));
+    expect(await x.service.startTask(OPERATION, [attached.value.attachmentId], never)).toEqual({ ok: false, code: 'refused', reason: SOURCES_REASONS.startUnavailable });
+    expect(never).not.toHaveBeenCalled();
+    // A Task under Full access (its Windows folder) is staged between turns through the host target.
+    const folder = tempDir('full-access-task');
+    const target = hostStagingTarget(() => folder);
+    await target.replace(TASK, [{ path: 'attached', kind: 'directory' }, { path: 'attached/a.txt', kind: 'file', data: Buffer.from('a').toString('base64'), sha256: createHash('sha256').update('a').digest('hex') }]);
+    expect(fs.readFileSync(path.join(folder, 'attached', 'a.txt'), 'utf8')).toBe('a');
   });
 });
-
 describe('references in a Task’s answers', () => {
   it('without attachments: no Coverage, and citations stay unverified with nothing retained', async () => {
     const x = harness();
     x.setState({ status: 'completed', messages: [{ itemId: 'm1', text: answer }, { itemId: 'm0', text: 'No directives here.' }] });
     const view = await x.service.view(TASK, WORKSPACE);
     if (!view.ok) throw new Error(view.reason);
-    expect(view.value).toMatchObject({ attachments: [], coverage: null, deferred: [], note: null });
+    expect(view.value).toMatchObject({ attachments: [], coverage: null, problem: null, note: null });
     expect(view.value.messages.map(m => m.itemId)).toEqual(['m1']);
     expect(view.value.messages[0]!.references.map(r => [r.status, r.reason])).toEqual([['unverified', 'The cited file is not in this Task’s attached material'], ['unverified', 'The cited file is not in this Task’s attached material']]);
     expect(x.sandbox.calls).toEqual([]);
@@ -223,21 +304,34 @@ describe('references in a Task’s answers', () => {
 });
 
 describe('the sources operations', () => {
-  it('accept only a dialog kind, IDs and booleans; a path or an extra key is refused', () => {
+  it('accept only a dialog kind and IDs; a path, a flag or an extra key is refused', () => {
     expect(sourcesAttachPayload([{ kind: 'folder' }])).toEqual({ kind: 'folder' });
     for (const bad of [[{ kind: 'C:\\Engagement' }], [{ kind: 'files', path: 'C:\\x' }], [{ kind: 'files' }, 'C:\\x'], []]) expect(() => sourcesAttachPayload(bad)).toThrow(OperationError);
-    expect(() => sourcesStagePayload([{ taskId: TASK, workspaceId: WORKSPACE, attachmentId: 'C:\\Engagement', firstTurn: false }])).toThrow(OperationError);
-    expect(() => sourcesStagePayload([{ taskId: TASK, workspaceId: WORKSPACE, attachmentId: TASK, firstTurn: 'yes' }])).toThrow(OperationError);
+    expect(sourcesStagePayload([{ taskId: TASK, workspaceId: WORKSPACE, attachmentId: TASK }])).toEqual({ taskId: TASK, workspaceId: WORKSPACE, attachmentId: TASK });
+    expect(() => sourcesStagePayload([{ taskId: TASK, workspaceId: WORKSPACE, attachmentId: 'C:\\Engagement' }])).toThrow(OperationError);
+    expect(() => sourcesStagePayload([{ taskId: TASK, workspaceId: WORKSPACE, attachmentId: TASK, firstTurn: true }])).toThrow(OperationError);
     expect(() => sourcesViewPayload([{ taskId: TASK, workspaceId: WORKSPACE, answer: 'forged text' }])).toThrow(OperationError);
+    const start = { operationId: OPERATION, workspaceId: WORKSPACE, routeId: 'codex-responses', configurationRevision: 1, engagementId: null, folderId: null, request: 'Read the ledger', reasoning: 'default', speed: 'default' };
+    expect(taskStartPayload([start])).not.toHaveProperty('attachmentIds');
+    expect(taskStartPayload([{ ...start, attachmentIds: [TASK] }])).toMatchObject({ attachmentIds: [TASK] });
+    for (const ids of [[], ['C:\\Engagement'], [TASK, TASK], Array.from({ length: 9 }, (_, i) => `6f1c1d1e-0000-4000-8000-00000000000${i}`), 'C:\\Engagement']) expect(() => taskStartPayload([{ ...start, attachmentIds: ids }])).toThrow(OperationError);
   });
 
-  it('route first-turn staging to the start path and the rest to the idle path', async () => {
-    const sources = { attach: vi.fn(), discard: vi.fn(), stageIdle: vi.fn(async () => ({ ok: true })), attachToNewTask: vi.fn(async () => ({ ok: true })), view: vi.fn() };
-    const operations = createOperations({ sources, runtimeState: () => 'ready', runtimeVersion: '0' } as never);
-    const stage = operations.find(op => op.name === 'sources.stage')!;
-    await stage.handle({ taskId: TASK, workspaceId: WORKSPACE, attachmentId: TASK, firstTurn: true });
-    await stage.handle({ taskId: TASK, workspaceId: WORKSPACE, attachmentId: TASK, firstTurn: false });
-    expect(sources.attachToNewTask).toHaveBeenCalledWith(TASK, WORKSPACE, TASK);
+  it('send a start with material through the sources path, never forward the IDs to the runtime, and report reconciliation', async () => {
+    const sources = { attach: vi.fn(), discard: vi.fn(), stageIdle: vi.fn(async () => ({ ok: true })), view: vi.fn(), reconciled: vi.fn(),
+      startTask: vi.fn(async (_operationId: string, _ids: string[], start: (material: { sha256: string }) => Promise<unknown>) => start({ sha256: 'f'.repeat(64) })) };
+    const tasks = { start: vi.fn(async () => ({ ok: true, value: {} })), reconcile: vi.fn(async () => ({ ok: true, value: {} })) };
+    const operations = createOperations({ sources, tasks, runtimeState: () => 'ready', runtimeVersion: '0' } as never);
+    const handle = (name: string, input: unknown) => operations.find(op => op.name === name)!.handle(input);
+    const start = { operationId: OPERATION, workspaceId: WORKSPACE, routeId: 'codex-responses', configurationRevision: 1, engagementId: null, folderId: null, request: 'Read the ledger', reasoning: 'default', speed: 'default' };
+    await handle('tasks.start', start);
+    expect(tasks.start).toHaveBeenLastCalledWith(start);
+    expect(sources.startTask).not.toHaveBeenCalled();
+    await handle('tasks.start', { ...start, attachmentIds: [TASK] });
+    expect(sources.startTask).toHaveBeenCalledWith(OPERATION, [TASK], expect.any(Function));
+    expect(tasks.start).toHaveBeenLastCalledWith(start, { sha256: 'f'.repeat(64) });
+    await handle('tasks.reconcile', { operationId: OPERATION });
+    expect(sources.reconciled).toHaveBeenCalledWith(OPERATION, { ok: true, value: {} });
+    await handle('sources.stage', { taskId: TASK, workspaceId: WORKSPACE, attachmentId: TASK });
     expect(sources.stageIdle).toHaveBeenCalledWith(TASK, WORKSPACE, TASK);
-  });
-});
+  });});

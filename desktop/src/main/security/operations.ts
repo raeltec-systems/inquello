@@ -347,7 +347,7 @@ export interface OperationDeps {
   onboarding?: OnboardingService;
   tasks?: Pick<TaskService, 'preflight' | 'start' | 'reconcile' | 'progress' | 'activity' | 'inbox' | 'settleLifecycle' | 'answer' | 'steer' | 'stop' | 'resume'>;
   /** Story 2.1: attached material. Main opens every dialog; results carry IDs, names and relative paths, never an absolute path. */
-  sources?: Pick<SourcesService, 'attach' | 'discard' | 'stageIdle' | 'attachToNewTask' | 'view'>;
+  sources?: Pick<SourcesService, 'attach' | 'discard' | 'stageIdle' | 'startTask' | 'reconciled' | 'view'>;
   usage?: Pick<UsageService, 'forTask' | 'set'>;
   environments?: Pick<EnvironmentService, 'forTask'>;
   routes?: Pick<RouteService, 'list' | 'catalog' | 'resolve' | 'bindingState' | 'selectModel' | 'pendingModel' | 'forTask' | 'select'>;
@@ -543,8 +543,8 @@ export function createOperations(deps: OperationDeps): Operation[] {
   const routes = () => { if (!deps.routes) throw new Error('Processing routes unavailable'); return deps.routes; };
   const routeOps: Operation[] = [
     { name: 'tasks.preflight', validate: taskPreflightPayload, handle: input => { if (!deps.tasks) throw new Error('Task start unavailable'); return deps.tasks.preflight(input as Parameters<TaskService['preflight']>[0]); } },
-    { name: 'tasks.start', validate: taskStartPayload, handle: input => { if (!deps.tasks) throw new Error('Task start unavailable'); return deps.tasks.start(input as Parameters<TaskService['start']>[0]); } },
-    { name: 'tasks.reconcile', validate: taskReconcilePayload, handle: input => { if (!deps.tasks) throw new Error('Task reconciliation unavailable'); return deps.tasks.reconcile((input as {operationId:string}).operationId); } },
+    { name: 'tasks.start', validate: taskStartPayload, handle: input => { const tasks = deps.tasks; if (!tasks) throw new Error('Task start unavailable'); const { attachmentIds, ...start } = input as Parameters<TaskService['start']>[0]; if (!attachmentIds?.length) return tasks.start(start); if (!deps.sources) return { ok: false, code: 'refused', reason: 'Attaching material is unavailable. Your draft is preserved.' }; return deps.sources.startTask(start.operationId, attachmentIds, material => tasks.start(start, material)); } },
+    { name: 'tasks.reconcile', validate: taskReconcilePayload, handle: async input => { if (!deps.tasks) throw new Error('Task reconciliation unavailable'); const operationId = (input as {operationId:string}).operationId; const result = await deps.tasks.reconcile(operationId); deps.sources?.reconciled(operationId, result); return result; } },
     { name: 'tasks.progress', validate: taskProgressPayload, handle: input => { if (!deps.tasks) throw new Error('Task progress unavailable'); return deps.tasks.progress(input as Parameters<TaskService['progress']>[0]); } },
     { name: 'tasks.activity', validate: taskActivityPayload, handle: input => { if (!deps.tasks) throw new Error('Task progress unavailable'); return deps.tasks.activity(input as Parameters<TaskService['progress']>[0]); } },
     {name:'tasks.inbox',validate:treePayload,handle:input=>deps.tasks?.inbox(input as {workspaceId:string})??{ok:false,reason:'Current requests for input are unavailable.'}},
@@ -555,7 +555,7 @@ export function createOperations(deps: OperationDeps): Operation[] {
     { name: 'tasks.resume', validate: taskResumePayload, handle: input => { if (!deps.tasks) throw new Error('Task lifecycle unavailable'); return deps.tasks.resume(input as Parameters<TaskService['resume']>[0]); } },
     { name: 'sources.attach', validate: sourcesAttachPayload, handle: input => deps.sources?.attach((input as {kind:'files'|'folder'}).kind) ?? { ok: false, reason: 'Attaching material is unavailable.' } },
     { name: 'sources.discard', validate: sourcesDiscardPayload, handle: input => deps.sources?.discard((input as {attachmentId:string}).attachmentId) ?? { ok: false, reason: 'Attaching material is unavailable.' } },
-    { name: 'sources.stage', validate: sourcesStagePayload, handle: input => { const r = input as {taskId:string;workspaceId:string;attachmentId:string;firstTurn:boolean}; if (!deps.sources) return { ok: false, reason: 'Attaching material is unavailable.' }; return r.firstTurn ? deps.sources.attachToNewTask(r.taskId, r.workspaceId, r.attachmentId) : deps.sources.stageIdle(r.taskId, r.workspaceId, r.attachmentId); } },
+    { name: 'sources.stage', validate: sourcesStagePayload, handle: input => { const r = input as {taskId:string;workspaceId:string;attachmentId:string}; return deps.sources?.stageIdle(r.taskId, r.workspaceId, r.attachmentId) ?? { ok: false, reason: 'Attaching material is unavailable.' }; } },
     { name: 'sources.view', validate: sourcesViewPayload, handle: input => { const r = input as {taskId:string;workspaceId:string}; return deps.sources?.view(r.taskId, r.workspaceId) ?? { ok: false, reason: 'Attached material is unavailable.' }; } },
     { name: 'usage.forTask', validate: usageReadPayload, handle: input => { if (!deps.usage) throw new Error('Usage unavailable'); return deps.usage.forTask((input as {taskId:string}).taskId); } },
     { name: 'usage.set', validate: usageSetPayload, handle: input => { if (!deps.usage) throw new Error('Usage unavailable'); return deps.usage.set(input as Parameters<UsageService['set']>[0]); } },

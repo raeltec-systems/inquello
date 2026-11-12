@@ -811,7 +811,7 @@ void app.whenReady().then(async () => {
     onCatalogChanged: () => { for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:routes-changed',{authority:false}); },
     onBindingChanged: (binding,taskIds) => { tasks?.invalidateBinding(binding.routeId,binding.configurationRevision,taskIds);for(const window of BrowserWindow.getAllWindows())window.webContents.send('inquello:routes-changed',{authority:true,binding:{routeId:binding.routeId,configurationRevision:binding.configurationRevision}}); },
   });
-  tasks = new TaskService({runtime: policyRuntime, identity: identitySession, bootstrap: trustedTaskBootstrap, syncPrincipal: () => organiseService.syncPrincipal(), prepareRoutes: () => routes!.list(), taskBinding:async taskId=>{const result=await routes!.forTask(taskId);return result.ok&&!result.value.staleConfiguration&&result.value.selected&&result.value.configurationRevision!==null&&result.value.disclosureBindings?.every(ref=>ref.active)?{routeId:result.value.selected.routeId,configurationRevision:result.value.configurationRevision,disclosureBindings:result.value.disclosureBindings}:null;}, freshPolicy: workspaceId => policyService.startPolicy(workspaceId), askPermission: (taskId, command) => policyService.askRuntimePermission(taskId, command), routeApproval:(workspaceId,routeId)=>sharedAuthority?identitySession.withAccess(access=>sharedAuthority.routeApproval(access,workspaceId,routeId)):Promise.resolve(null),routeCheck:(workspaceId,request)=>sharedAuthority?identitySession.withAccess(access=>sharedAuthority.routeEligibilityCheck(access,workspaceId,request)):Promise.resolve(null),onAuthorityUnavailable:()=>{taskSessionChanged();usageChanged(true);}, ...((quotaSmoke||visualSmoke)?{authorityDiagnostic:(stage:string,scope:string)=>logger.info(`smoke Task authority: ${stage}/${scope} monotonic_ms=${Math.floor(performance.now()/10)*10}`)}:{}), onProgressChanged: () => { sources?.progressChanged(); for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:tasks-progress-changed'); }, onAccepted: () => usageChanged()});
+  tasks = new TaskService({runtime: policyRuntime, identity: identitySession, bootstrap: trustedTaskBootstrap, syncPrincipal: () => organiseService.syncPrincipal(), prepareRoutes: () => routes!.list(), taskBinding:async taskId=>{const result=await routes!.forTask(taskId);return result.ok&&!result.value.staleConfiguration&&result.value.selected&&result.value.configurationRevision!==null&&result.value.disclosureBindings?.every(ref=>ref.active)?{routeId:result.value.selected.routeId,configurationRevision:result.value.configurationRevision,disclosureBindings:result.value.disclosureBindings}:null;}, freshPolicy: workspaceId => policyService.startPolicy(workspaceId), askPermission: (taskId, command) => policyService.askRuntimePermission(taskId, command), routeApproval:(workspaceId,routeId)=>sharedAuthority?identitySession.withAccess(access=>sharedAuthority.routeApproval(access,workspaceId,routeId)):Promise.resolve(null),routeCheck:(workspaceId,request)=>sharedAuthority?identitySession.withAccess(access=>sharedAuthority.routeEligibilityCheck(access,workspaceId,request)):Promise.resolve(null),onAuthorityUnavailable:()=>{taskSessionChanged();usageChanged(true);}, ...((quotaSmoke||visualSmoke)?{authorityDiagnostic:(stage:string,scope:string)=>logger.info(`smoke Task authority: ${stage}/${scope} monotonic_ms=${Math.floor(performance.now()/10)*10}`)}:{}), onProgressChanged: () => { for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:tasks-progress-changed'); }, onAccepted: () => usageChanged()});
   usage = new UsageService({runtime: policyRuntime, identity: identitySession, policy: policyService, onChanged: usageChanged});
   environments = new EnvironmentService({runtime: policyRuntime, identity: identitySession, policy: policyService, routes});
   providerService.setRouteInvalidator((id) => routes!.invalidate(id));
@@ -834,6 +834,18 @@ void app.whenReady().then(async () => {
       if (!principal) throw new Error('Signed out');
       if (sourceGuest?.principal !== principal) sourceGuest = { principal, tasks: new WslTasks(sourceTaskRoot, principal) };
       return sourceGuest.tasks.binding(taskId)?.backend === 'windows' ? host : wslStagingTarget(sourceGuest.tasks);
+    },
+    // A new Task always starts in the Linux guest on Windows: the runtime stages this manifest through the guest broker before the first turn.
+    startMaterial: (operationId) => {
+      if (process.platform !== 'win32') return null;
+      const principal = identitySession.principalId();
+      if (!principal) return null;
+      if (sourceGuest?.principal !== principal) sourceGuest = { principal, tasks: new WslTasks(sourceTaskRoot, principal) };
+      const folder = path.win32.join(sourceGuest.tasks.storage, 'material');
+      ensurePrivateDirectory(folder);
+      // A manifest is removed once its start is answered; one left by an interrupted run is removed here.
+      for (const name of fs.readdirSync(folder)) { const stale = path.win32.join(folder, name); try { if (Date.now() - fs.statSync(stale).mtimeMs > 3_600_000) fs.rmSync(stale, { force: true }); } catch { /* the next start retries */ } }
+      return path.win32.join(folder, `${operationId}.json`);
     },
     policyGate: () => sourcesPolicyGate(policyLoad),
     taskState: async (taskId, workspaceId) => {

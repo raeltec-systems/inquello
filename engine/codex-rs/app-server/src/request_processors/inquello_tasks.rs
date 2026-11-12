@@ -732,6 +732,7 @@ impl InquelloRequestProcessor {
             status:status_name(status).into(),request,accepted:run.thread_id.is_some() && run.turn_id.is_some(),reason:if status==TaskRunStatus::SetupFailed {Some(match run.setup_failure {
                 Some(TaskSetupFailure::AuthorityUnavailable)=>"Current authority unavailable before first-turn submission. Private Task retained; draft preserved. Nothing will be retried automatically.",
                 Some(TaskSetupFailure::TurnNotIdle)=>"First turn was not accepted because the retained thread was not idle. Private Task and draft retained; no steering or retry.",
+                Some(TaskSetupFailure::MaterialNotStaged)=>"The attached material could not be placed in the Task folder, so the first request was not sent. Your draft and attachments are preserved; nothing will be retried automatically.",
                 _=>"Private thread setup failed before first-turn submission. Private Task and draft retained; no automatic retry.",
             }.into())} else if matches!(status,TaskRunStatus::Uncertain|TaskRunStatus::Failed) {Some("Execution could not be confirmed; retained work will not be automatically retried".into())} else {None}}.into()))
     }
@@ -877,6 +878,27 @@ impl InquelloRequestProcessor {
             .validate()
             .map_err(domain_error)
             .map_err(before_effect)?;
+        // Story 2.1: desktop-prepared material is staged by the Linux guest
+        // broker before the first turn. A retried operation returns its Task
+        // below and never stages again.
+        let material = match &params.attached_material {
+            None => None,
+            Some(material) if cfg!(windows) => Some(
+                crate::inquello_wsl::StartMaterial::new(&intent.operation_id, &material.sha256)
+                    .map_err(|_| {
+                        before_effect(refusal(
+                            "material_unavailable",
+                            "Attached material identity is invalid",
+                        ))
+                    })?,
+            ),
+            Some(_) => {
+                return Err(before_effect(refusal(
+                    "material_unavailable",
+                    "Attached material at Task start needs the Linux Task sandbox",
+                )));
+            }
+        };
         let (store, actor) = self.context(connection).await.map_err(before_effect)?;
         let lease_domain = self.ensure_task_runtime_lease().map_err(before_effect)?;
         store
@@ -1164,6 +1186,7 @@ impl InquelloRequestProcessor {
                     &effective_choices,
                     &runtime,
                     TaskAuthorizationContext(authorization.clone()),
+                    material,
                 )
                 .await?;
             setup_failure = TaskSetupFailure::AuthorityUnavailable;
@@ -1217,6 +1240,16 @@ impl InquelloRequestProcessor {
             }
         }
         .await;
+        if let Err(error) = &result
+            && !submission_started
+            && error
+                .data
+                .as_ref()
+                .and_then(|data| data["inquello"]["kind"].as_str())
+                == Some("material_unavailable")
+        {
+            setup_failure = TaskSetupFailure::MaterialNotStaged;
+        }
         if result.is_err() {
             authorization.cancellation.cancel();
             if submission_started {
@@ -2715,6 +2748,28 @@ mod tests {
             invalid[field] = json!("untrusted");
             assert!(serde_json::from_value::<InquelloTasksStartParams>(invalid).is_err());
         }
+        // Story 2.1: material is named only by its manifest digest, never a path.
+        assert!(params.attached_material.is_none());
+        assert!(!serde_json::to_string(&params).unwrap().contains("attachedMaterial"));
+        let mut attached = base.clone();
+        attached["attachedMaterial"] = json!({"sha256": "0".repeat(64)});
+        let params: InquelloTasksStartParams =
+            serde_json::from_value(attached.clone()).expect("material by digest");
+        assert_eq!(params.attached_material.unwrap().sha256, "0".repeat(64));
+        for extra in ["path", "entries", "taskId"] {
+            let mut invalid = attached.clone();
+            invalid["attachedMaterial"][extra] = json!("C:\\Engagement");
+            assert!(serde_json::from_value::<InquelloTasksStartParams>(invalid).is_err());
+        }
+    }
+    #[test]
+    fn material_setup_failure_has_its_own_plain_reason() {
+        let encoded = serde_json::to_string(&TaskSetupFailure::MaterialNotStaged).unwrap();
+        assert_eq!(encoded, "\"material-not-staged\"");
+        assert_eq!(
+            serde_json::from_str::<TaskSetupFailure>(&encoded).unwrap(),
+            TaskSetupFailure::MaterialNotStaged
+        );
     }
     #[tokio::test]
     async fn classification_refusal_creates_no_private_task() {

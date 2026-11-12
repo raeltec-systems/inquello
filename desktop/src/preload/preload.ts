@@ -172,7 +172,7 @@ const api = Object.freeze({
     attach: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(SOURCES_ATTACH_CHANNEL, ...args),
     /** `{ attachmentId }`; forgets an attachment that was not staged. Originals are never touched. */
     discard: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(SOURCES_DISCARD_CHANNEL, ...args),
-    /** `{ taskId, workspaceId, attachmentId, firstTurn }`; stages into an idle Task, or after the first turn of a Task just started. */
+    /** `{ taskId, workspaceId, attachmentId }`; stages into an idle Task. Material attached on the start view goes with `tasks.start` as `attachmentIds`. */
     stage: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(SOURCES_STAGE_CHANNEL, ...args),
     /** `{ taskId, workspaceId }`; the Task's attached material, Coverage and checked references. */
     view: (...args: unknown[]): Promise<unknown> => ipcRenderer.invoke(SOURCES_VIEW_CHANNEL, ...args),

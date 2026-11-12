@@ -357,7 +357,23 @@ fn create_bwrap_flags(
     args.push("--new-session".to_string());
     args.push("--die-with-parent".to_string());
     args.extend(filesystem_args);
-    if options.mask_wsl_interop {
+    // A denied ancestor (for example `/run`) already hides the interop folder,
+    // and its read-only mask cannot take a new mount point. Like the WSLg mask,
+    // apply this one only where no denial covers it or a writable grant reopens it.
+    let interop = Path::new(WSL_INTEROP_DIR);
+    let writable_roots = file_system_sandbox_policy.get_writable_roots_with_cwd(sandbox_policy_cwd);
+    let interop_already_hidden = file_system_sandbox_policy
+        .get_unreadable_roots_with_cwd(sandbox_policy_cwd)
+        .iter()
+        .any(|denied| {
+            interop.starts_with(denied.as_path())
+                && !writable_roots.iter().any(|root| {
+                    root.root.as_path().starts_with(denied.as_path())
+                        && (interop.starts_with(root.root.as_path())
+                            || root.root.as_path().starts_with(interop))
+                })
+        });
+    if options.mask_wsl_interop && !interop_already_hidden {
         // WSL's Windows-process bridge uses Unix sockets under /run/WSL.
         // Mask them after all filesystem binds so network access cannot bypass
         // the Linux filesystem policy by launching an unrestricted Windows process.

@@ -8,7 +8,8 @@ function safe<T>(fn:(a:readonly unknown[])=>T):PayloadValidator<T>{return a=>{tr
 const candidate=(r:Record<string,unknown>):TaskCandidateInput=>{const configurationRevision=integer(r.configurationRevision);if(configurationRevision===0)throw new Error();return{workspaceId:uuid(r.workspaceId),routeId:routeId(r.routeId),configurationRevision};};
 const keys=['workspaceId','routeId','configurationRevision'];
 export const taskPreflightPayload=safe(a=>candidate(fields(a,keys)));
-export const taskStartPayload=safe<StartTaskInput>(a=>{const r=fields(a,[...keys,'operationId','engagementId','folderId','request','reasoning','speed']);if(typeof r.request!=='string'||!r.request.trim()||Buffer.byteLength(r.request,'utf8')>131072||/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/.test(r.request))throw new Error();return{...candidate(r),operationId:uuid(r.operationId),engagementId:r.engagementId===null?null:uuid(r.engagementId),folderId:r.folderId===null?null:uuid(r.folderId),request:r.request,reasoning:identifier(r.reasoning),speed:identifier(r.speed)};});
+// `attachmentIds` (Story 2.1) is optional: up to eight IDs of material main holds; never a path.
+export const taskStartPayload=safe<StartTaskInput>(a=>{const attached=a.length===1&&!!a[0]&&typeof a[0]==='object'&&Object.hasOwn(a[0] as object,'attachmentIds');const r=fields(a,[...keys,'operationId','engagementId','folderId','request','reasoning','speed',...(attached?['attachmentIds']:[])]);if(typeof r.request!=='string'||!r.request.trim()||Buffer.byteLength(r.request,'utf8')>131072||/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/.test(r.request))throw new Error();let attachmentIds:string[]|undefined;if(attached){if(!Array.isArray(r.attachmentIds)||r.attachmentIds.length<1||r.attachmentIds.length>8)throw new Error();attachmentIds=r.attachmentIds.map(uuid);if(new Set(attachmentIds).size!==attachmentIds.length)throw new Error();}return{...candidate(r),operationId:uuid(r.operationId),engagementId:r.engagementId===null?null:uuid(r.engagementId),folderId:r.folderId===null?null:uuid(r.folderId),request:r.request,reasoning:identifier(r.reasoning),speed:identifier(r.speed),...(attachmentIds?{attachmentIds}:{})};});
 export const taskReconcilePayload=safe(a=>{const r=fields(a,['operationId']);return{operationId:uuid(r.operationId)};});
 
 export const taskActivityPayload=safe(a=>{const r=fields(a,['taskId','workspaceId']);return{taskId:uuid(r.taskId),workspaceId:uuid(r.workspaceId)};});
@@ -19,7 +20,7 @@ const lifecyclePayload=(kind:'steer'|'stop'|'resume')=>safe(a=>{const r=fields(a
 // Attached material (Story 2.1): the renderer names a dialog kind, an attachment ID or a Task, never a path.
 export const sourcesAttachPayload=safe(a=>{const r=fields(a,['kind']);if(r.kind!=='files'&&r.kind!=='folder')throw new Error();return{kind:r.kind as 'files'|'folder'};});
 export const sourcesDiscardPayload=safe(a=>{const r=fields(a,['attachmentId']);return{attachmentId:uuid(r.attachmentId)};});
-export const sourcesStagePayload=safe(a=>{const r=fields(a,['taskId','workspaceId','attachmentId','firstTurn']);if(typeof r.firstTurn!=='boolean')throw new Error();return{taskId:uuid(r.taskId),workspaceId:uuid(r.workspaceId),attachmentId:uuid(r.attachmentId),firstTurn:r.firstTurn};});
+export const sourcesStagePayload=safe(a=>{const r=fields(a,['taskId','workspaceId','attachmentId']);return{taskId:uuid(r.taskId),workspaceId:uuid(r.workspaceId),attachmentId:uuid(r.attachmentId)};});
 export const sourcesViewPayload=safe(a=>{const r=fields(a,['taskId','workspaceId']);return{taskId:uuid(r.taskId),workspaceId:uuid(r.workspaceId)};});
 export const taskSteerPayload=lifecyclePayload('steer');
 export const taskStopPayload=lifecyclePayload('stop');

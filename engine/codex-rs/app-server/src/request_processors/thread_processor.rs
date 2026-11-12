@@ -7155,6 +7155,7 @@ impl ThreadRequestProcessor {
     pub(crate) fn inquello_reserve_thread_id(&self) -> ThreadId {
         self.thread_manager.reserve_thread_id()
     }
+    #[allow(clippy::too_many_arguments)]
     pub(crate) async fn inquello_start_private_thread(
         &self,
         connection: ConnectionId,
@@ -7163,6 +7164,7 @@ impl ThreadRequestProcessor {
         choices: &inquello_domain::usage::Choices,
         profile: &codex_app_server_protocol::InquelloRuntimeProfile,
         authorization: codex_core::inquello_inference::TaskAuthorizationContext,
+        material: Option<crate::inquello_wsl::StartMaterial>,
     ) -> Result<Arc<CodexThread>, JSONRPCErrorError> {
         self.inquello_open_private_thread(
             connection,
@@ -7172,6 +7174,7 @@ impl ThreadRequestProcessor {
             profile,
             authorization,
             None,
+            material,
         )
         .await
     }
@@ -7320,6 +7323,7 @@ impl ThreadRequestProcessor {
             profile,
             authorization,
             Some(history),
+            None,
         )
         .await
     }
@@ -7336,6 +7340,7 @@ impl ThreadRequestProcessor {
         profile: &codex_app_server_protocol::InquelloRuntimeProfile,
         authorization: codex_core::inquello_inference::TaskAuthorizationContext,
         history: Option<InitialHistory>,
+        material: Option<crate::inquello_wsl::StartMaterial>,
     ) -> Result<Arc<CodexThread>, JSONRPCErrorError> {
         codex_core::inquello_inference::mark_task_thread(&thread_id.to_string())
             .map_err(|_| invalid_request("Private runtime ownership unavailable"))?;
@@ -7508,6 +7513,12 @@ impl ThreadRequestProcessor {
             workspace_roots: vec![codex_utils_path_uri::PathUri::from_abs_path(&config.cwd)],
             config: codex_protocol::protocol::EnvironmentConfigState::FromThread,
         };
+        if material.is_some() && !cfg!(windows) {
+            // Only the Linux guest broker stages material before a first turn.
+            return Err(invalid_request(
+                "Attached material at Task start needs the Linux Task sandbox",
+            ));
+        }
         if cfg!(windows) {
             let principal = authorization
                 .0
@@ -7552,10 +7563,21 @@ impl ThreadRequestProcessor {
                 !profile.writable_roots.is_empty(),
                 profile.network_allowlist.clone().unwrap_or_default(),
                 &mut retirement.setup_phase,
+                material.as_ref(),
             )
             .await
             .map_err(|error| {
                 tracing::warn!("Linux Task setup unavailable: {error:#}");
+                if let Some(missing) = error.downcast_ref::<crate::inquello_wsl::MaterialNotStaged>()
+                {
+                    return JSONRPCErrorError {
+                        code: crate::error_code::INVALID_REQUEST_ERROR_CODE,
+                        message: format!(
+                            "Attached material was not staged ({missing}); the Task did not start"
+                        ),
+                        data: Some(serde_json::json!({"inquello": {"kind": "material_unavailable"}})),
+                    };
+                }
                 invalid_request("Linux Task storage or isolation unavailable; no local fallback")
             })?;
             let environment_id = format!("inquello-wsl-{}", retirement.generation);
