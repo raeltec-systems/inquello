@@ -217,3 +217,35 @@
   evidence: The launcher starts Electron with a hidden-window start-up flag, and Windows can let that flag swallow the process's first show request, depending on start-up timing. A temporary diagnostic showed `visible=false` at failure, with "Onboarding capture deadline" and "Dialog focus did not start visibly inside". `desktop/src/main/main.ts` now shows and focuses the onboarding smoke window before the probe; six consecutive passes followed immediately after a rebuild. This supersedes the "cause not established" entry above. Still worth doing: let the probe record a short fixed-vocabulary cause on failure. The separate `permissions` report stall is not explained by this, because the ordinary smoke window is hidden by design.
 
 ---
+
+## Story 2.1 review pass 1 (2026-11-12)
+
+Deferred from the triage log in `spec-2-1-work-folder-references.md`; each item names the review IDs.
+
+- source_spec: `spec-2-1-work-folder-references.md`
+  summary: Per-file inventory and per-location verification (BH4, EC5, EC30).
+  evidence: Verification reads the whole file per citation, and inventory and verification each run under one 120 s sandbox bound, so a large or scanned bundle can time out as a whole. Long PDFs have no page budget.
+- source_spec: `spec-2-1-work-folder-references.md`
+  summary: Move attachment hashing and staging off the main thread (BH5, EC34).
+  evidence: Up to 192 MiB is hashed, read and base64-encoded with synchronous IO in the Electron main process; the window can freeze for seconds.
+- source_spec: `spec-2-1-work-folder-references.md`
+  summary: Refuse or rename a staged path already held with different content (BH6, EC9).
+  evidence: A second attachment with the same relative path replaces the earlier staged file; earlier references then show "changed since attached".
+- source_spec: `spec-2-1-work-folder-references.md`
+  summary: Word tracked moves (EC24).
+  evidence: `moveFrom` and `moveTo` are not handled, so moved text counts as current in two places.
+- source_spec: `spec-2-1-work-folder-references.md`
+  summary: Full-access Tasks on Windows cannot run Coverage or verification (EC10, EC38).
+  evidence: Checks run `/usr/bin/python3` through the sandbox; refuse attaching with a reason or add a Windows path.
+- source_spec: `spec-2-1-work-folder-references.md`
+  summary: Signal when an answer about attached material cites nothing (BH10).
+  evidence: Product gap for Epic 2: without any reference marker the answer shows no chips and no notice, so the auditor cannot tell nothing was checked.
+- source_spec: `spec-2-1-work-folder-references.md`
+  summary: Smaller robustness items (EC7, EC8, EC13, EC14, EC15, EC17, EC27, EC3, EC4, BH8 delete, BH11, BH13, VG3).
+  evidence: Staging races, store write and delete faults, the renderer's 20,000-entry parse bound, chart and SmartArt text, legacy files not probed at inventory, no per-Task deletion caller, other export formats and OCR languages, an untested Rust failure-message mapping. Details in the triage log.
+- source_spec: `spec-2-1-work-folder-references.md`
+  summary: Start-time material folder is not covered by a data-policy category.
+  evidence: Manifests under `<profile>\material\` are removed at each start and at app start, but inspection and export do not account for them.
+- source_spec: `spec-2-1-work-folder-references.md`
+  summary: Real-data qualification proof bound to the pre-Story-2.1 data policy.
+  evidence: Two `inquello-domain` `capability_register` tests fail by design until re-qualification on the pilot release candidate.

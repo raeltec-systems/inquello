@@ -33,7 +33,7 @@
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 
 generated: 10-27-2026 19:11
-last_updated: 2026-11-10
+last_updated: 2026-11-12
 project: inquello
 project_key: INQUELLO
 tracking_system: file-system
@@ -41,7 +41,7 @@ story_location: _bmad-output/implementation-artifacts
 development_status:
   epic-1: in-progress
   epic-1-retrospective: optional
-  epic-2: backlog
+  epic-2: in-progress
   epic-2-retrospective: optional
   epic-3: backlog
   epic-3-retrospective: optional
@@ -92,7 +92,7 @@ development_status:
   1-30-find-and-reopen-only-permitted-saved-work: in-progress # 2026-11-01 scoped native 14 distinct witnesses, desktop/schema 417 + affected shell 74, Electron navigation pass; manual/epic acceptance remains open
   # Owner-approved extension 2026-11-01; preserves Story 1.11 operator-only historical scope.
   1-31-customer-onboarding: in-progress
-  2-1-understand-an-existing-work-folder-with-precise-references: backlog
+  2-1-understand-an-existing-work-folder-with-precise-references: done
   2-2-use-images-and-screenshots-as-attributable-context: backlog
   2-3-capture-selections-and-application-snapshots-with-saved-or-l: backlog
   2-4-attach-connector-identity-entity-scope-and-extraction-contex: backlog

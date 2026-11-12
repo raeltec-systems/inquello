@@ -2,7 +2,7 @@
 title: 'Story 2.1: understand attached files or a work folder and answer with verified references'
 type: 'feature'
 created: '2026-11-11'
-status: 'in-review'
+status: 'done'
 baseline_commit: 'e2fd81b9e06ed0877fbe93431b151c5d6737059e'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -198,6 +198,13 @@ Written 2026-11-11 by the implementation agent. Nothing is committed.
 *Checks.* `probe-sandbox.sh` and `test/sources-sandbox.test.ts` run the same socket check: no socket file anywhere in the sandbox that the command did not create, none connectable (including entries in `/proc/net/unix`), the system socket locations absent or empty masks, and a command can bind, listen, connect and exchange data on its own socket. The probe also proves the check catches a socket bound from outside the sandbox in the Task folder.
 
 *Not done or deviations.* A real Task start with a model turn was not run end to end (no provider and no scripted fixture turn in these suites); the start path is covered by engine unit tests, desktop unit and renderer tests, and a sandbox test that publishes the manifest with the same broker `replace` and reads it from a Task command. The committed app-server schema fixtures (`app-server-protocol/schema/`) were already stale before this work (many Inquello types missing) and were not regenerated; the new type adds to that gap. `inquello-domain`'s `capability_register` test fails because `desktop/data-policy.json` changed in Part 1; not touched here. Production export of `source-extracts` (owner decision 3) remains open.
+
+**Final verification, 2026-11-12, at `1055f3188f`** (coordinating session; Windows, offline, storage proof renewed with owner approval the same day):
+- Full desktop suite `pnpm test`: 126 files passed, 4 skipped; 2,350 tests passed, 21 skipped, 0 failed (22.3 minutes). The run at `ba675599b5` before the review fixes had 3 failures, all tests or records that predated this story; fixed in review pass 1.
+- Full seeded smoke `node scripts/run-seeded-smoke.cjs`: ok, all 20 required reports, including `source-references` (9 minutes).
+- Both type checks exit 0; `pnpm run build` passes with the data-policy check.
+- Engine: `codex-app-server` lib Inquello tests 171/171, `codex-linux-sandbox` lib 162/162 in the guest, `probe-sandbox.sh` all checks including socket isolation (part 3 agent's runs). Two `inquello-domain` `capability_register` tests fail by design: the real-data proof is bound to the previous data policy until re-qualification on the pilot release candidate.
+- Not run: a Task start with a real model turn (no provider is authorised); the manual check of the attach control, reference chips and Coverage in the running app.
 
 ## Review Triage Log
 
