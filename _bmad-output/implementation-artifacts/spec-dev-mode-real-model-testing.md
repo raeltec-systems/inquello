@@ -2,7 +2,7 @@
 title: 'Development mode: test every capability with real model providers on the owner''s machine'
 type: 'feature'
 created: '2026-11-12'
-status: 'in-review'
+status: 'done'
 route: 'oneshot'
 review_loop_iteration: 0
 baseline_commit: 'd764404611'
@@ -156,3 +156,13 @@ Layers on Sonnet: blind hunter (BH, 11), edge-case hunter (EC, 16), verification
 - **File badge shows "XLS" for a CSV.** `desktop/src/renderer/primitives/FileChip.tsx` has only PDF/XLS/DOC/DIR tags. Show the file's real type (CSV, XLSX and so on).
 - Then: apply the Pass 1 `patch` rows above, rebuild (`pnpm run build`; engine only if `engine/` changes), relaunch `pnpm run dev` for the owner, and commit development mode plus the Story 2.1 owner fixes. The full suite run started 20:44 (`.tmp/devmode-full-vitest.log`) had not finished when this was written.
 - Full suite at the uncommitted development-mode tree (started 20:44, 2026-11-12): 2,356 passed, 3 failed, 21 skipped. All three failures are Linux-sandbox tests (two in `sources-sandbox`, one in `permissions-integration`): two timeouts and one "Local sandbox unavailable on this device". The owner's development window was using the same sandbox at the time. Re-run the sandbox files on their own with no app open before treating these as defects; if "WSL boot changed" appears, the storage proof needs renewing (owner approval).
+
+## Verification record (2026-11-12, at `967507a639`)
+
+- Large-file send and CSV badge fixed (`wsl-tasks.ts` base64 check without a regex; `chipType` shows the real extension). The old check was shown to throw "Maximum call stack size exceeded" on a 24 MiB file; `test/transfer-large-entry.test.ts` and `test/file-chip-type.test.tsx` pass.
+- Both type checks exit 0; engine debug binaries and `pnpm run build` rebuilt.
+- Full `pnpm test`: 2,346 passed, 24 failed, 21 skipped. All 24 failures were the six Linux-sandbox files, refused with "WSL storage needs at least 32 GiB free on D:" (29.8 GiB free). The coordinating session removed 446 stale test executables and symbol files older than two days from `engine/codex-rs/target/debug/deps` (19.9 GiB, regenerable build output), leaving 49.3 GiB free.
+- The six sandbox files re-run alone: 6 files, 29 of 29 passed (17 minutes). With the rest of the suite already green, no failure remains.
+- The earlier run's three sandbox failures (20:44) were most likely the same low-space refusal.
+- Launcher: development window opened, `development-ready` with `signedIn: true, member: true`.
+- Not yet run: a Task with a real provider (the owner's check).
