@@ -2,7 +2,7 @@
 import csv
 import io
 
-from .common import Reading, check_size, span
+from .common import Line, Reading, check_size, span
 from .read_text import decode
 
 EXTENSIONS = {'.csv', '.tsv'}
@@ -41,5 +41,5 @@ def select(reading, locator):
         raise ValueError('CSV locations are row ranges such as R2-R9')
     start, end = span(locator[1:])
     rows = [line for line in reading.lines if start <= line.meta['row'] <= end]
-    header = [line for line in reading.lines if line.meta.get('header')]
+    header = [Line(line.label, line.text, dict(line.meta, context=True)) for line in reading.lines if line.meta.get('header')]
     return (header if start > 1 else []) + rows

@@ -37,7 +37,7 @@ import { attachmentView, AttachRefused, inventoryAttachment, mergeEntries, reade
 import { formatOf, locationLabel, parseCitations, parseMarkers, type CitationProblem, type ComputedMarker, type InferenceMarker } from './citations';
 import { coverage, parseSandboxInventory, type CoverageView, type SandboxFile } from './coverage';
 import { ExtractStore, principalKey, type RetainedExtract, type TaskSourceRecord } from './store';
-import { VERIFY_BOOT, verifyCitations, type ReferenceView, type RunInTask, type ToolRun } from './verify';
+import { CHECK_NOT_RUN, VERIFY_BOOT, verifyCitations, type ReferenceView, type RunInTask, type ToolRun } from './verify';
 import type { WslTasks } from '../runtime/wsl-tasks';
 
 export type SourcesResult<T> = { ok: true; value: T } | { ok: false; reason: string };
@@ -96,6 +96,7 @@ export const SOURCES_REASONS = {
   signedOut: 'Sign in to attach material.',
   unknown: 'This attachment is no longer available. Attach the material again.',
   busy: 'The Task is running. Attach material after the current turn finishes; nothing was staged.',
+  uncertain: 'The outcome of the Task’s last turn is uncertain, so nothing was staged. Attach material once the Task has been resumed and its turn has finished.',
   stageFailed: 'The attached material could not be staged in the Task folder. Nothing in the original files changed.',
   nothingStaged: 'None of the chosen files can be attached.',
   taskUnavailable: 'This Task cannot be read right now, so nothing was staged. Try again when the conversation is shown.',
@@ -122,14 +123,30 @@ export function sourcesPolicyGate(load: PolicyLoad): { ok: true } | { ok: false;
 
 const MARKER = /:inquello-(?:source|computed|inference)\{/;
 const CACHE_LIMIT = 256;
+/** A failed examination of staged material is retried after this long, or sooner when the Task's status changes. */
+export const EXAMINE_RETRY_MS = 60_000;
+/**
+ * A Task whose turn has ended. `uncertain` is not settled here: its turn may still hold the Task folder or produce
+ * output, so nothing is staged, examined or verified until it is resumed or reconciled.
+ */
+export const settledProgress = (status: string): boolean => terminalProgress(status) && status !== 'uncertain';
+
+/** Removes every start-time manifest left in a material folder (each is a full copy of the material); returns how many. */
+export function removeStartManifests(folder: string): number {
+  let names: string[];
+  try { names = fs.readdirSync(folder); } catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return 0; throw error; }
+  let removed = 0;
+  for (const name of names) { const file = path.join(folder, name); try { if (fs.lstatSync(file).isFile()) { fs.rmSync(file, { force: true }); removed++; } } catch { /* the next start retries */ } }
+  return removed;
+}
 
 export class SourcesService {
   private readonly pending = new Map<string, { principal: string; attachment: Attachment }>();
   /** Task starts whose outcome was uncertain: recorded on the Task once reconciliation confirms it. */
   private readonly inDoubt = new Map<string, { principal: string; attachmentIds: string[]; views: AttachmentView[]; stagedAt: string }>();
-  /** Staged material not yet examined in the sandbox is examined once its Task is idle; a failed examination is not retried in this app run. */
+  /** Staged material not yet examined in the sandbox is examined once its Task is idle; a failed examination is retried after `EXAMINE_RETRY_MS` or when the Task's status changes. */
   private readonly examining = new Map<string, Promise<void>>();
-  private readonly failures = new Set<string>();
+  private readonly failures = new Map<string, { at: number; status: string }>();
   private readonly checked = new Map<string, MessageReferences>();
   private readonly checking = new Map<string, Promise<MessageReferences>>();
   readonly store: ExtractStore;
@@ -150,6 +167,7 @@ export class SourcesService {
       this.options.logger.warn(`sources: the chosen material could not be inventoried (${(error as NodeJS.ErrnoException).code ?? 'error'})`);
       return { ok: false, reason: 'The chosen material could not be read. Nothing was attached.' };
     }
+    if (attachment.files.length === 0) return { ok: false, reason: SOURCES_REASONS.nothingStaged };
     if (principal !== this.principal()) return { ok: false, reason: SOURCES_REASONS.signedOut };
     this.pending.set(attachment.attachmentId, { principal, attachment });
     if (this.pending.size > 32) this.pending.delete(this.pending.keys().next().value!);
@@ -206,9 +224,11 @@ export class SourcesService {
     if (!principal) return { ok: false, reason: SOURCES_REASONS.signedOut };
     const state = await this.taskState(taskId, workspaceId);
     if (!state) return { ok: false, reason: SOURCES_REASONS.taskUnavailable };
-    if (!terminalProgress(state.status)) return { ok: false, reason: SOURCES_REASONS.busy };
+    if (state.status === 'uncertain') return { ok: false, reason: SOURCES_REASONS.uncertain };
+    if (!settledProgress(state.status)) return { ok: false, reason: SOURCES_REASONS.busy };
     const staged = await this.stage(taskId, attachmentId);
     if (!staged.ok) return staged;
+    this.options.onChanged?.(taskId);
     return { ok: true, value: { state: 'staged', attachment: staged.value.attachment, coverage: staged.value.coverage, note: sourcesNote([staged.value.attachment.label]) } };
   }
 
@@ -226,7 +246,11 @@ export class SourcesService {
     const ids = [...new Set(attachmentIds)];
     const held = ids.map(id => this.pending.get(id));
     if (!ids.length || held.some(item => !item || item.principal !== principal)) return { ok: false, reason: SOURCES_REASONS.unknown };
-    const file = this.options.startMaterial?.(operationId) ?? null;
+    let file: string | null;
+    try { file = this.options.startMaterial?.(operationId) ?? null; } catch (error) {
+      this.options.logger.warn(`sources: the start material folder is unavailable (${(error as Error).message.slice(0, 200)})`);
+      return { ok: false, reason: SOURCES_REASONS.startFailed };
+    }
     if (!file) return { ok: false, reason: SOURCES_REASONS.startUnavailable };
     let entries: Entry[] = [];
     const attachments: Attachment[] = [];
@@ -300,7 +324,7 @@ export class SourcesService {
   }
 
   /** Examines material staged at Task start once the Task is idle (the running first turn holds the Task folder). */
-  private examineStarted(principal: string, taskId: string): Promise<void> {
+  private examineStarted(principal: string, taskId: string, status: string): Promise<void> {
     const running = this.examining.get(taskId);
     if (running) return running;
     const work = (async () => {
@@ -308,11 +332,20 @@ export class SourcesService {
       const record = this.store.task(principal, taskId);
       if (!record || principal !== this.principal()) return;
       if (inventory) this.store.saveTask(principal, { ...record, inventory });
-      else this.failures.add(taskId);
+      else this.failures.set(taskId, { at: Date.now(), status });
       this.options.onChanged?.(taskId);
     })().finally(() => this.examining.delete(taskId));
     this.examining.set(taskId, work);
     return work;
+  }
+
+  /** Whether examining the Task's material failed recently; a failure is forgotten after `EXAMINE_RETRY_MS` or when the status changed. */
+  private failed(taskId: string, status: string): boolean {
+    const failure = this.failures.get(taskId);
+    if (!failure) return false;
+    if (failure.status === status && Date.now() - failure.at < EXAMINE_RETRY_MS) return true;
+    this.failures.delete(taskId);
+    return false;
   }
 
   private async taskState(taskId: string, workspaceId: string): Promise<TaskTurnState | null> {
@@ -353,7 +386,8 @@ export class SourcesService {
   }
 
   /** One agent message's references: verified once the turn has ended, then kept for this staged state of the Task. */
-  private async messageReferences(principal: string, taskId: string, message: { itemId: string; text: string }, idle: boolean, record: TaskSourceRecord | null): Promise<MessageReferences> {
+  private async messageReferences(principal: string, taskId: string, message: { itemId: string; text: string }, status: string, record: TaskSourceRecord | null): Promise<MessageReferences> {
+    const idle = settledProgress(status);
     const key = JSON.stringify([principalKey(principal), taskId, message.itemId, createHash('sha256').update(message.text).digest('hex'), record?.stagedAt ?? '']);
     const cached = this.checked.get(key);
     if (cached) return cached;
@@ -362,14 +396,15 @@ export class SourcesService {
     const mark = (views: ReferenceView[]): MarkedReference[] => views.map(view => ({ ...view, start: citations[view.index]!.start, end: citations[view.index]!.end, raw: citations[view.index]!.raw }));
     const unchecked = (reason: string): ReferenceView[] => citations.map((citation, index) => ({ index, id: citation.id, at: citation.at, quote: citation.quote, format: formatOf(citation.id), location: locationLabel(formatOf(citation.id), citation.at), status: 'unverified', reason, file: null, extract: null }));
     if (citations.length === 0 || !idle) {
-      return { itemId: message.itemId, state: citations.length > 0 ? 'waiting' : 'checked', references: mark(unchecked('Not yet checked: the turn is still running')), problems, computed, inferences };
+      return { itemId: message.itemId, state: citations.length > 0 ? 'waiting' : 'checked', references: mark(unchecked(status === 'uncertain' ? 'Not yet checked: the outcome of the turn is uncertain' : 'Not yet checked: the turn is still running')), problems, computed, inferences };
     }
     let running = this.checking.get(key);
     if (!running) {
       running = (async () => {
         const result = await this.references(taskId, message.text);
-        const value: MessageReferences = { itemId: message.itemId, state: 'checked', references: mark(result.ok ? result.value.references : unchecked(`The reference could not be checked: ${result.reason}`)), problems, computed, inferences };
-        if (result.ok) { this.checked.set(key, value); if (this.checked.size > CACHE_LIMIT) this.checked.delete(this.checked.keys().next().value!); }
+        const value: MessageReferences = { itemId: message.itemId, state: 'checked', references: mark(result.ok ? result.value.references : unchecked(`${CHECK_NOT_RUN}: ${result.reason}`)), problems, computed, inferences };
+        // Only a check that ran is kept: when the sandbox, a timeout or the script stopped it, the next view checks again.
+        if (result.ok && !result.value.references.some(view => view.reason?.startsWith(CHECK_NOT_RUN))) { this.checked.set(key, value); if (this.checked.size > CACHE_LIMIT) this.checked.delete(this.checked.keys().next().value!); }
         return value;
       })().finally(() => this.checking.delete(key));
       this.checking.set(key, running);
@@ -386,10 +421,12 @@ export class SourcesService {
     const state = await this.taskState(taskId, workspaceId);
     const messages: MessageReferences[] = [];
     if (state) {
-      const idle = terminalProgress(state.status);
+      const idle = settledProgress(state.status);
       // Material staged at Task start is examined once the first turn has ended.
-      if (idle && record && record.inventory === null && !this.failures.has(taskId)) { await this.examineStarted(principal, taskId); record = this.store.task(principal, taskId); }
-      for (const message of state.messages.slice(-64)) if (MARKER.test(message.text)) messages.push(await this.messageReferences(principal, taskId, message, idle, record));
+      // Checked on every view, so a status seen while a turn runs clears an earlier failure.
+      const recentFailure = this.failed(taskId, state.status);
+      if (idle && record && record.inventory === null && !recentFailure) { await this.examineStarted(principal, taskId, state.status); record = this.store.task(principal, taskId); }
+      for (const message of state.messages.slice(-64)) if (MARKER.test(message.text)) messages.push(await this.messageReferences(principal, taskId, message, state.status, record));
     }
     if (principal !== this.principal()) return { ok: false, reason: SOURCES_REASONS.signedOut };
     const attachments: AttachedSummary[] = (record?.attachments ?? []).map(item => ({ attachmentId: item.attachmentId, label: item.label, kind: item.files.some(file => file.relative.includes('/')) || item.notSearched.some(file => file.relative.includes('/')) ? 'folder' : 'files', files: item.files.length }));

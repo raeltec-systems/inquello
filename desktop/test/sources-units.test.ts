@@ -15,7 +15,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { deleteCategories, exportData, governedRoots, importData, loadShippedPolicy, takeInventory, type DataPolicy } from '../src/main/data';
 import {
   coverage, ExtractStore, formatOf, inventoryAttachment, locationLabel, MAX_ATTACHED_BYTES, MAX_ATTACHED_FILES, mergeEntries, parseCitations, parseMarkers, readerDigests, SKILL_DIR, SourcesService,
-  stagingEntries, validLocator, VERIFY_BOOT, verifyCitations, attachmentView, type ReferenceView, type RunInTask,
+  stagingEntries, validLocator, VERIFY_BOOT, verifyCitations, attachmentView, quotedIn, type ReferenceView, type RunInTask,
 } from '../src/main/sources';
 import { recordingLogger, removeTempDirs, tempDir } from './helpers';
 
@@ -97,6 +97,17 @@ describe('attachment inventory on the Windows side', () => {
     expect(attachment.notSearched).toEqual(expect.arrayContaining([{ relative: 'Linked/original.txt', reason: 'Hard-linked file; not staged' }, { relative: 'Linked/second-name.txt', reason: 'Hard-linked file; not staged' }]));
     expect(attachment.incomplete[0]).toBe(`Only part of the material was attached: the bound is ${MAX_ATTACHED_FILES} files and ${MAX_ATTACHED_BYTES / 1024 ** 2} MiB.`);
     expect(coverage([attachmentView(attachment)], null).incomplete).toBe(true);
+  });
+
+  it('lists dot-prefixed files and macro-enabled Word files as not searched, as the sandbox inventory does (review pass 1)', () => {
+    const folder = path.join(tempDir('sources-hidden'), 'Engagement');
+    write(path.join(folder, 'ledger.csv'), 'a,b\n1,2\n');
+    write(path.join(folder, '.hidden.csv'), 'a,b\n1,2\n');
+    write(path.join(folder, 'policy.docm'), 'PK');
+    const attachment = inventoryAttachment({ files: [], folders: [folder] });
+    expect(attachment.files.map(file => file.relative)).toEqual(['Engagement/ledger.csv']);
+    expect(attachment.notSearched).toEqual(expect.arrayContaining([{ relative: 'Engagement/.hidden.csv', reason: 'Hidden file (name starts with a dot); not searched' }, { relative: 'Engagement/policy.docm', reason: 'Unsupported file type' }]));
+    expect(formatOf('policy.docm')).toBe('unsupported');
   });
 
   it('treats a single attached file like a one-file folder', () => {
@@ -183,6 +194,16 @@ describe('verification decisions', () => {
       expect([ref!.status, ref!.reason, ref!.extract]).toEqual(['unverified', reason, null]);
     }
   });
+
+  it('matches a quote only in the cited text, as a whole: not in a context header, a formula or a longer number (review pass 1)', async () => {
+    const lines = [{ label: 'R1', text: 'Vendor | Amount', context: true }, { label: 'R2', text: 'Northwind | 1100    (formula =SUM(C3:C7))', match: 'Northwind | 1100' }];
+    const check = async (quote: string) => (await verifyCitations(parseCitations(`:inquello-source{id="attached/ledger.csv" at="R2" quote="${quote}"}`).citations, view, readerDigests(skillRoot), runner([{ ok: true, sha256: file.sha256, lines }])))[0]!;
+    for (const quote of ['Vendor', '100', 'C3', 'SUM', 'Northwin', 'wind']) expect([quote, (await check(quote)).status]).toEqual([quote, 'unverified']);
+    for (const quote of ['1100', 'Northwind', 'Northwind | 1100']) expect([quote, (await check(quote)).status]).toEqual([quote, 'verified']);
+    // The extract shown keeps every line read, the context header and the formula included.
+    expect((await check('1100')).extract!.text).toBe('R1: Vendor | Amount\nR2: Northwind | 1100    (formula =SUM(C3:C7))');
+    expect([quotedIn('a 100 b', '100'), quotedIn('1100 100', '100'), quotedIn('x1100', '100'), quotedIn('(£1,890.50)', '£1,890.50'), quotedIn('é100', '100')]).toEqual([true, true, false, true, false]);
+  });
 });
 
 describe('the private extract store', () => {
@@ -240,6 +261,16 @@ describe('Coverage and the policy gate', () => {
     expect(result).toMatchObject({ filesAttached: 2, filesRead: 1, rows: { read: 2, present: 2, unknown: 1 }, incomplete: true, unreadable: [{ relative: 'b.xlsx', reason: 'corrupt or not an Office file' }] });
     expect(result.statement).toBe('1 of 2 attached files read; 2 of 2 rows read in the readable tables, rows of 1 unreadable table(s) not counted. The input set is incomplete.');
     expect(coverage([view], [{ path: 'attached/a.csv', status: 'readable', counts: { rows: 2 } }, { path: 'attached/b.xlsx', status: 'readable', counts: { sheets: { S: { rows: 3 } } } }]).incomplete).toBe(false);
+  });
+
+  it('counts a table cut by the line bound short and says the input set is incomplete (review pass 1)', () => {
+    const view = attachmentView(inventoryAttachment({ files: [write(path.join(tempDir('sources-cut'), 'a.csv'), 'h\n1\n2\n'), write(path.join(tempDir('sources-cut2'), 'b.xlsx'), 'PK')], folders: [] }));
+    const result = coverage([view], [
+      { path: 'attached/a.csv', status: 'readable', counts: { rows: 2, rowsRead: 1, partly: ['reading cut at the bound of 2 lines'] } },
+      { path: 'attached/b.xlsx', status: 'readable', counts: { sheets: { S: { rows: 3, rowsRead: 2 }, T: { rows: 4, rowsRead: 0 } }, partly: ['reading cut at the bound of 9 lines'] } },
+    ]);
+    expect(result).toMatchObject({ filesRead: 2, rows: { read: 3, present: 9, unknown: 0 }, incomplete: true, partlyRead: [{ relative: 'a.csv', reason: 'Partly read: reading cut at the bound of 2 lines' }, { relative: 'b.xlsx', reason: 'Partly read: reading cut at the bound of 9 lines' }] });
+    expect(result.statement).toBe('2 of 2 attached files read; 3 of 9 rows read in the readable tables. The input set is incomplete.');
   });
 
   it('makes attaching unavailable with the blocking reason when the category is not enabled', async () => {

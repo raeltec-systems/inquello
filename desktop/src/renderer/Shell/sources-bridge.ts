@@ -14,7 +14,7 @@ export function sourcesNote(labels:readonly string[]):string {return `Attached m
 /** Appends the note to a draft once. */
 export function withSourcesNote(draft:string,note:string):string {return draft.includes(note)?draft:draft.trim()?`${draft.replace(/\s+$/,'')}\n\n${note}`:note;}
 /** Replaces an earlier note left unedited in the draft, or appends the new one; null removes it. */
-export function replaceSourcesNote(draft:string,before:string|null,after:string|null):string {if(before&&before!==after&&draft.includes(before)){const next=draft.replace(before,after??'');return after?next:next.replace(/\s+$/,'');}return after?withSourcesNote(draft,after):draft;}
+export function replaceSourcesNote(draft:string,before:string|null,after:string|null):string {if(before&&before!==after&&draft.includes(before)){const next=draft.replace(before,()=>after??'');return after?next:next.replace(/\s+$/,'');}return after?withSourcesNote(draft,after):draft;}
 /** Why attaching waits while a turn runs; main refuses with `SOURCES_REASONS.busy` in `src/main/sources/service.ts` if asked anyway. */
 export const SOURCES_RUNNING_REASON='Attach material after the current turn finishes.';
 

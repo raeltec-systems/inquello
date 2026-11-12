@@ -42,7 +42,8 @@ Every statement that relies on a file carries one directive, right after the sta
 `:inquello-source{id="attached/<file>" at="<LOCATION>" quote="<exact text from that location>"}`
 
 - Copy `quote` exactly from the `read` output at that location (a short, distinctive part is
-  enough). The app re-reads the location itself; a citation whose quote is not there is shown
+  enough, in whole words or whole numbers). For a cell, quote its stored value, not the formula
+  text; the header row shown with CSV rows is context and cannot be quoted for them. The app re-reads the location itself; a citation whose quote is not there is shown
   as unverified.
 - A figure you computed is not a quote. Mark it, right after the figure, with the exact command
   that produced it so a reviewer can re-perform it:

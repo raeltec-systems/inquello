@@ -47,9 +47,10 @@ export function coverage(attachments: AttachmentView[], inventory: SandboxFile[]
     if (item.status !== 'readable') { unreadable.push({ relative: file.relative, reason: item.reason ?? 'Unreadable' }); if (isTable) unknown++; continue; }
     filesRead++;
     const counts = item.counts ?? {};
+    // `rowsRead` is present only when the reading was cut by the line bound; then fewer rows were read than are present.
     if (isTable) {
-      if (file.format === 'csv') { const rows = Number(counts.rows ?? 0); read += rows; present += rows; }
-      else for (const sheet of Object.values((counts.sheets ?? {}) as Record<string, { rows?: number }>)) { const rows = Number(sheet.rows ?? 0); read += rows; present += rows; }
+      if (file.format === 'csv') { const rows = Number(counts.rows ?? 0); present += rows; read += counts.rowsRead === undefined ? rows : Math.min(Number(counts.rowsRead) || 0, rows); }
+      else for (const sheet of Object.values((counts.sheets ?? {}) as Record<string, { rows?: number; rowsRead?: number }>)) { const rows = Number(sheet.rows ?? 0); present += rows; read += sheet.rowsRead === undefined ? rows : Math.min(Number(sheet.rowsRead) || 0, rows); }
     }
     const partly = (counts as { partly?: unknown }).partly;
     if (Array.isArray(partly) && partly.length) partlyRead.push({ relative: relativeOf(attachments, file.id), reason: `Partly read: ${partly.join(', ')}` });

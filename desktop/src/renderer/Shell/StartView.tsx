@@ -11,6 +11,7 @@ import {AttachControl} from './AttachControl';
 import {parseAttachment,replaceSourcesNote,sourcesBridge,sourcesNote,sourcesValue,type AttachmentView} from './sources-bridge';
 interface Routes {catalog():Promise<unknown>;onChanged?(fn:(change?:ModelAuthorityChange)=>void):()=>void}
 const routesBridge=():Routes|null=>(globalThis as {inquello?:{routes?:Routes}}).inquello?.routes??null;
+const MAX_START_ATTACHMENTS=8,START_ATTACHMENTS_FULL='Eight attachments is the most one request can carry. Remove one before attaching more; nothing else was attached.';
 export interface StartViewProps {onPendingChange?:(pending:boolean)=>void;runtimeEpoch?:number;workspaceId:string;engagementId:string|null;folderId:string|null;draft:DraftBinding;active:boolean;operationIds:()=>string;onAccepted:(task:StartedTask)=>void}
 /** Only Send creates work. Candidate inspection never persists a Task or starts inference. */
 export function StartView({onPendingChange,runtimeEpoch = 0,workspaceId,engagementId,folderId,draft,active,operationIds,onAccepted}:StartViewProps):ReactElement {
@@ -24,7 +25,8 @@ export function StartView({onPendingChange,runtimeEpoch = 0,workspaceId,engageme
  // The visible note for the agent follows the attachments in the draft; an edited note is left alone.
  const noteFor=(list:AttachmentView[])=>list.length?sourcesNote(list.map(item=>item.label)):null;
  const holdAttached=(next:AttachmentView[])=>{const before=noteFor(attachedRef.current);attachedRef.current=next;setAttached(next);currentDraft.current.onChange(replaceSourcesNote(currentDraft.current.value,before,noteFor(next)));};
- const attach=async(kind:'files'|'folder')=>{const api=sourcesBridge();if(!api||attaching)return;setAttaching(true);setAttachNotice(null);try{const value=sourcesValue(await api.attach({kind}));if(value!==null&&mounted.current){const next=parseAttachment(value);holdAttached([...attachedRef.current.filter(item=>item.attachmentId!==next.attachmentId),next].slice(-8));}}catch(error){if(mounted.current)setAttachNotice(error instanceof Error?error.message:'Nothing was attached.');}finally{if(mounted.current)setAttaching(false);}};
+ // A start carries at most eight attachments (`tasks.start` refuses more); a ninth is refused here and released in main, never held silently.
+ const attach=async(kind:'files'|'folder')=>{const api=sourcesBridge();if(!api||attaching)return;if(attachedRef.current.length>=MAX_START_ATTACHMENTS){setAttachNotice(START_ATTACHMENTS_FULL);return;}setAttaching(true);setAttachNotice(null);try{const value=sourcesValue(await api.attach({kind}));if(value!==null&&mounted.current){const next=parseAttachment(value);const rest=attachedRef.current.filter(item=>item.attachmentId!==next.attachmentId);if(rest.length>=MAX_START_ATTACHMENTS){void api.discard({attachmentId:next.attachmentId}).catch(()=>undefined);setAttachNotice(START_ATTACHMENTS_FULL);}else holdAttached([...rest,next]);}}catch(error){if(mounted.current)setAttachNotice(error instanceof Error?error.message:'Nothing was attached.');}finally{if(mounted.current)setAttaching(false);}};
  const removeAttachment=(attachmentId:string)=>{holdAttached(attachedRef.current.filter(item=>item.attachmentId!==attachmentId));void sourcesBridge()?.discard({attachmentId}).catch(()=>undefined);};
  /** The start request carried the held material; main staged it in the Task folder before the first turn, so it is no longer held here. */
  const attachToStarted=(_started:StartedTask)=>{if(!attachedRef.current.length)return;attachedRef.current=[];setAttached([]);setAttachNotice(null);};

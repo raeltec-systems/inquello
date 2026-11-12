@@ -12,6 +12,8 @@ import re
 from .common import OCR_LABEL, Reading, Unreadable, TOOL_UNAVAILABLE, check_size, run, span, tool
 
 EXTENSIONS = {'.pdf'}
+# A page whose text layer has fewer non-whitespace characters than this is also read by OCR.
+SPARSE_TEXT = 40
 
 
 def info(path):
@@ -24,7 +26,7 @@ def info(path):
             raise Unreadable('corrupt or unsupported PDF')
         pages = re.search(r'^Pages:\s+(\d+)', text, re.M)
         encrypted = re.search(r'^Encrypted:\s+yes', text, re.M)
-        return int(pages.group(1)) if pages else 0, bool(encrypted)
+        return counted(int(pages.group(1)) if pages else 0), bool(encrypted)
     try:
         import pypdf
     except Exception:
@@ -33,11 +35,18 @@ def info(path):
         document = pypdf.PdfReader(path)
         if document.is_encrypted and not document.decrypt(''):
             raise Unreadable('password-protected')
-        return len(document.pages), document.is_encrypted
+        return counted(len(document.pages)), document.is_encrypted
     except Unreadable:
         raise
     except Exception:
         raise Unreadable('corrupt or unsupported PDF')
+
+
+def counted(pages):
+    """A PDF with no pages has nothing to read; it is never listed as readable."""
+    if pages < 1:
+        raise Unreadable('no pages found; corrupt or unsupported PDF')
+    return pages
 
 
 def page_text(path, number):
@@ -81,6 +90,18 @@ def read(path):
     for number in range(1, pages + 1):
         text = page_text(path, number)
         ocr = False
+        if text.strip() and len(re.sub(r'\s', '', text)) < SPARSE_TEXT:
+            # A scanned page often carries a small text layer (a Bates number, a stamp, a footer). It is read by OCR as
+            # well: the text-layer lines come first, then the recognised lines, labelled as OCR.
+            layer = clean(text)
+            recognised = ocr_page(path, number)
+            extra = clean(recognised) if recognised and recognised.strip() else []
+            if extra:
+                ocr_pages.append(number)
+            reading.add('PG%d' % number, 'page %d%s' % (number, ' - text layer, then %s' % OCR_LABEL if extra else ''), page=number, header=True)
+            for line_number, line in enumerate(layer + extra, 1):
+                reading.add('PG%d:L%d' % (number, line_number), line, page=number, line=line_number, ocr=line_number > len(layer))
+            continue
         if not text.strip():
             recognised = ocr_page(path, number)
             if recognised is None:

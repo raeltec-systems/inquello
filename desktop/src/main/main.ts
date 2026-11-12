@@ -5,7 +5,7 @@ import { configureDesktopStorage } from './runtime/desktop-storage';
 import { smokeCatalogArgs } from './runtime/smoke-catalog';
 import { wslDataStorage } from './runtime/wsl-data';
 import { WslTasks } from './runtime/wsl-tasks';
-import { SourcesService, hostStagingTarget, sourcesPolicyGate, wslStagingTarget } from './sources';
+import { SourcesService, hostStagingTarget, removeStartManifests, sourcesPolicyGate, wslStagingTarget } from './sources';
 import { ensurePrivateDirectory } from './runtime/private-paths';
 import {createDataAuthority} from './data/authority';
 import { taskBootstrap } from './tasks/bootstrap';
@@ -858,6 +858,9 @@ void app.whenReady().then(async () => {
   });
   // An interrupted extract write leaves only a temporary file; it is discarded, never restored.
   try { const discarded = sourcesService.store.recover(); if (discarded) logger.info(`sources: discarded ${discarded} interrupted extract write(s)`); } catch (error) { logger.warn(`sources: extract recovery failed (${(error as Error).message})`); }
+  // A start-time manifest is a full copy of the attached material. One left by an earlier run (the app ended before its
+  // start was answered) is removed now, whatever its age; no start of this run exists yet.
+  if (process.platform === 'win32') try { let removed = 0; for (const scope of WslTasks.discoverScopes(sourceTaskRoot)) removed += removeStartManifests(path.win32.join(WslTasks.forScope(sourceTaskRoot, scope).storage, 'material')); if (removed) logger.info(`sources: removed ${removed} start manifest(s) left by an earlier run`); } catch (error) { logger.warn(`sources: leftover start manifests could not be removed (${(error as Error).message})`); }
   sources = sourcesService;
   const dataOptions: DataServiceOptions = {
     ...(process.platform === 'win32' ? { taskStorage: wslDataStorage(taskFoldersRoot(userData), () => identitySession.principalId()) } : {}),

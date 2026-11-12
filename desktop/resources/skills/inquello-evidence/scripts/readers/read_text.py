@@ -20,7 +20,10 @@ def read(path):
     with open(path, 'rb') as source:
         text, encoding = decode(source.read())
     reading = Reading('text', notes=['encoding %s' % encoding])
-    lines = text.splitlines()
+    # Lines end only at \n, \r\n or \r; form feeds and other separators stay inside a line, so numbers match editors.
+    lines = text.replace('\r\n', '\n').replace('\r', '\n').split('\n')
+    if lines and lines[-1] == '':
+        lines.pop()
     for number, line in enumerate(lines, 1):
         reading.add('L%d' % number, line, line=number)
     reading.counts = {'lines': len(lines)}

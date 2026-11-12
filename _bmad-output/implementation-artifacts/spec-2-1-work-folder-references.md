@@ -2,7 +2,7 @@
 title: 'Story 2.1: understand attached files or a work folder and answer with verified references'
 type: 'feature'
 created: '2026-11-11'
-status: 'in-progress'
+status: 'in-review'
 baseline_commit: 'e2fd81b9e06ed0877fbe93431b151c5d6737059e'
 route: 'dispatch'
 review_loop_iteration: 0
@@ -199,6 +199,67 @@ Written 2026-11-11 by the implementation agent. Nothing is committed.
 
 *Not done or deviations.* A real Task start with a model turn was not run end to end (no provider and no scripted fixture turn in these suites); the start path is covered by engine unit tests, desktop unit and renderer tests, and a sandbox test that publishes the manifest with the same broker `replace` and reads it from a Task command. The committed app-server schema fixtures (`app-server-protocol/schema/`) were already stale before this work (many Inquello types missing) and were not regenerated; the new type adds to that gap. `inquello-domain`'s `capability_register` test fails because `desktop/data-policy.json` changed in Part 1; not touched here. Production export of `source-extracts` (owner decision 3) remains open.
 
+## Review Triage Log
+
+### Pass 1 — 2026-11-12
+
+Layers on Sonnet: blind hunter (BH, 13), edge-case hunter (EC, 38), verification gap (VG, 3 gaps and 2 other). Diff `e2fd81b9e0..ba675599b5`. Verdicts are the coordinating session's; overlapping findings share a row.
+
+| ID | Finding | Verdict | Evidence | Route |
+|---|---|---|---|---|
+| BH3, EC21, EC22 | Quote check passes on the CSV header row, on a substring of a longer number, or on XLSX formula text | high | `verify.ts` joins every line `select()` returns; `read_csv.py` prepends the header as context; matching is a plain substring with no boundaries. A wrong figure can show as verified. | patch: drop context and formula lines from the haystack, require non-alphanumeric boundaries at both ends |
+| BH1, VG-o1, EC2, EC37 | Coverage "rows read of rows present" always equal; truncation by the line bound never surfaces | medium | `coverage.ts` adds the same `rows` to both; `common.py` sets `flags['truncated']`, which `details()` never exports. The incomplete-input notice the spec requires cannot appear for a truncated table. | patch: export truncation as partly read and count it short |
+| EC31, EC29, BH2 (TIFF) | OCR failure reported as "no recognisable text"; a zero-page PDF counted readable; only the first TIFF frame read | medium | `read_image.py` ignores tesseract's exit code; `read_pdf.py` accepts `pages == 0`; the multi-frame note is not a partly-read flag. | patch |
+| EC28 | Scanned page with a small text layer (Bates stamp, footer) is never OCR'd | medium | `read_pdf.py` OCRs only when the page text is empty; audit bundles are often stamped. | patch: OCR below a small character threshold |
+| EC32 | `splitlines()` splits on form feeds and other separators, shifting line numbers | medium | `read_text.py:23`. Citations then point at the wrong line. | patch |
+| EC1 | One reader exception aborts `verify-batch`, failing every citation | medium | `verify` and `verify_batch` lack the `except Exception` that `inventory()` has. | patch |
+| VG2, EC6, EC12 | A failed sandbox check is cached as the answer's result, and an examination failure stays for the app run | medium | `messageReferences` caches any `ok:true` result, including all-unverified from a run failure; `failures` never expires. | patch: do not cache run failures, expire examination failures, add the `view` test VG2 names |
+| EC18 | Attaching between turns leaves the panel stale | medium | `stageIdle` does not call `onChanged`; the view key is unchanged. | patch |
+| BH8 (manifest) | Start-time manifest, a full copy of the evidence, can be left on disk after a crash | medium | Cleaned only by a later start, after one hour. | patch: clean the material folder at app start; data-policy coverage of that folder deferred |
+| BH7 | An attachment with no supported files is accepted | low | `SOURCES_REASONS.nothingStaged` exists and is unused. | patch: refuse with it |
+| BH12, EC20 | A ninth attachment silently drops the oldest, which stays held in main | low | `StartView.tsx` `slice(-8)`. | patch: refuse past eight with a reason |
+| EC16 | `startMaterial` throwing makes the start look uncertain instead of refused | low | Called before the `try` in `stageBeforeFirstTurn`. | patch |
+| EC19 | A file name containing `$&` corrupts the draft note | low | `String.replace` with a string replacement. | patch: function replacement |
+| EC25, EC26, EC33, EC23 | Non-numeric footnote id makes a DOCX unreadable; a slide without a relationship is dropped unflagged; dotfiles staged but skipped by the sandbox walk; `.docm` listed but never readable | low | Each confirmed at the cited lines. | patch |
+| EC11 | Task status "uncertain" treated as idle for staging and checks | maybe-false | Needs a read of how `service.ts` classifies terminal states. | patch if confirmed, otherwise reject with evidence |
+| VG1 | Python `normalise` and TS `normaliseQuote` parity only checked in the database-gated sandbox suite | medium | Filed pre-verified. | patch: make `test/sources-sandbox.test.ts` a named Verification command; a cross-language parity test is deferred |
+| BH4, EC5, EC30 | Whole-file reads per citation; one 120 s bound makes inventory or verification all-or-nothing; no page budget for long PDFs | medium | Real for large or scanned material. | defer: per-file inventory and per-location reads |
+| BH5, EC34 | Hashing and staging up to 192 MiB with synchronous IO on the main thread | medium | The window can freeze for seconds. | defer: move to async or a worker |
+| BH6, EC9 | Same staged path in two attachments replaces the earlier file | medium | Earlier references then show "changed since attached", so it is visible, not silently wrong. | defer: refuse or rename on collision |
+| EC24 | Word tracked moves counted as current text in two places | medium | `moveFrom`/`moveTo` not handled. | defer |
+| EC10, EC38 | Full-access Tasks on Windows: Coverage and verification cannot run | medium | Known limitation, stated in the Part 2 notes. | defer: refuse attach with a reason or add a Windows path |
+| BH10 | No signal when an answer about attached files cites nothing | medium | Product gap: the auditor cannot tell nothing was checked. | defer: backlog for Epic 2 |
+| EC8, EC7 | Snapshot-then-replace race with a starting turn; concurrent staging, last write wins | low | Narrow windows; staging refuses while a turn runs. | defer |
+| BH8 (delete), VG-o2, EC36 | No product caller of `SourcesService.deleteTask` | low | The desktop has no per-Task deletion; category deletion removes `sources/**`. | defer until Task deletion exists |
+| EC13, EC14, EC15, BH13 | Store write or delete errors escape; a corrupt extract is never rewritten; a corrupt `task.json` is silent | low | Real but needs disk faults. | defer |
+| EC17 | Renderer parse bound of 20,000 entries | low | Needs a folder with more than 20,000 excluded items. | defer: summarise in main |
+| EC27, EC3, EC4 | Charts and SmartArt not flagged; PDF page-text counts not exported; legacy files not probed at inventory | low | Partial-read signals; read time still reports failures. | defer |
+| BH11 | HTML or XML exports named `.xls`, other formats, OCR languages | low | Listed as not searched with a reason. | defer |
+| VG3 | Rust mapping from staging failure to the plain reason untested | low | Filed pre-verified; message-only. | defer |
+| BH9, EC35 (sockets) | Socket grant reaches sockets outside the hidden folders | false | The check walks all of `/` and tries every address in `/proc/net/unix`, abstract ones included. The owner approved the grant on 2026-11-11 and the spec records the qualification impact. | reject |
+| EC35 (path) | Engine hard-codes `D:\Inquello\profiles` | false | Same fixed root the engine already uses at `inquello_wsl.rs:170,509,777`; main writes under the same topology. | reject |
+
+Not a reviewer finding, recorded here: two `inquello-domain` `capability_register` tests fail because the committed real-data qualification proof is bound to the previous `desktop/data-policy.json` digest. That is the qualification gate working as designed; re-qualification is deferred to the pilot release candidate (owner decision).
+
+**Pass 1 fixes applied (2026-11-12, uncommitted).** Each behaviour fix has a regression test that was run against the old code and failed there (12 desktop tests; the sandbox test's nine Python checks, run against the old readers in the guest, all gave the old result).
+
+- BH3, EC21, EC22: done. `verify` marks context lines (the CSV header brought along with later rows, and merged-cell notes) and gives each cell's stored value; `verify.ts` matches only non-context lines, uses the stored value instead of the formula text, and needs no letter or digit directly before or after the quote (`quotedIn`). A cited CSV row that does not exist is now "nothing at that location" instead of matching the header. Normalisation is unchanged on both sides.
+- BH1, VG-o1, EC2, EC37: done. `details()` exports truncation as partly read ("reading cut at the bound of N lines") and `rowsRead` (CSV data rows; per sheet, rows before the cut); Coverage counts rows read from it, so the incomplete-input notice appears.
+- EC31, EC29, BH2: done in part. A non-zero Tesseract exit is "OCR failed" (partly read). `pages < 1` is unreadable ("no pages found"). The TIFF claim is false: Tesseract reads every page of a multi-page TIFF (checked in the guest), so TIFF is not flagged and its label now says "all frames read". An animated GIF is read from its first frame only, so a multi-frame non-TIFF image is flagged partly read; an animated WebP makes Tesseract fail, which now shows as "OCR failed".
+- EC28: done. A page whose text layer has fewer than 40 non-whitespace characters is also read by OCR; text-layer lines first, then OCR lines labelled as OCR.
+- EC32: done. Lines split only at `\n`, `\r\n` and `\r`.
+- EC1: done. A reader exception fails only its own citations, with "the reader failed on this file".
+- VG2, EC6, EC12: done. A result in which any reference "could not be checked" is not cached; examination failures expire after 60 seconds or when the Task's status changes. The `view` test VG2 names is in `sources-service.test.ts`.
+- EC18: done. `stageIdle` calls `onChanged` after a successful stage.
+- BH8 (manifest): done. At app start, main removes every file in each of this desktop profile's `material` folders, whatever its age; the per-start cleanup stays.
+- BH7: done. An attachment with no supported files is refused with `SOURCES_REASONS.nothingStaged`.
+- BH12, EC20: done. The start view refuses a ninth attachment with a plain reason before the dialog opens; if one arrives anyway, it is released in main.
+- EC16: done. A throwing `startMaterial` is a refused start with `SOURCES_REASONS.startFailed`.
+- EC19: done. `replaceSourcesNote` uses a function replacement.
+- EC25, EC26, EC33, EC23: done. A footnote without a numeric id is skipped and flagged; a slide without a relationship target is flagged; dot-prefixed files are listed as not searched on the Windows side ("Hidden file (name starts with a dot); not searched"); `.docm` is no longer supported (python-docx refuses its content type), so it is listed as an unsupported file type.
+- EC11: confirmed and done. `terminalProgress` counts `uncertain` as ended. The sources service now treats it as not idle: staging is refused with a new reason, material staged at start is not examined, and references stay "not yet checked".
+- VG1: done. `test/sources-sandbox.test.ts` is a named command under Verification.
+
 ## Design Notes
 
 Earlier drafts of this spec built document parsers in the desktop's main process. That was replaced after checking how Codex works: the agent reads files itself through its shell tool, and document formats are handled by skills that carry scripts. Following that pattern means one set of reading scripts, run in the sandbox, used both by the agent and by the app when it verifies a citation. The app never trusts the agent's quoted text; it re-reads the location itself.
@@ -217,6 +278,7 @@ Citation form, following the Codex directive: `:inquello-source{id="<sourceId>" 
 - `pnpm exec tsc -p tsconfig.json --noEmit` and `pnpm exec tsc -p tsconfig.renderer.json --noEmit` -- expected: exit 0
 - `pnpm exec vitest run --configLoader runner test/sources-*.test.* test/data-policy.test.ts test/data-operations.test.ts test/data-recovery.test.ts` -- expected: all pass
 - `pnpm run build` -- expected: success, data-policy check passes
+- `pnpm exec vitest run --configLoader runner test/sources-sandbox.test.ts` -- the reading scripts in the real Task sandbox, including the Python `normalise` and quote check against the answer key. Needs, in PowerShell from the repository root: `. .tmp/story121-env.ps1` (sets the test database URL; without it the suite is skipped, which is not a pass), `D:\Toolchains\cargo\bin` on `PATH`, `COREPACK_ENABLE_NETWORK=0`, `ELECTRON_SKIP_BINARY_DOWNLOAD=1`, the built `codex-app-server` and `inquello-dev-topology`, at least 32 GiB free on D: and a current WSL storage proof (`docs/lessons-epic-1.md`). Expected: 8 tests pass, none skipped
 - `pnpm test` -- expected: no new failure
 - `node scripts/run-seeded-smoke.cjs` -- expected: all reports pass, including `source-references`
 

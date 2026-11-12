@@ -41,7 +41,7 @@ describe('current-route authorization desktop negative suite (fixtures, not nati
   const d=device();expect((await d.service.exportData()).ok).toBe(true);const marker=path.join(d.root,'data','recovery-unvalidated');fs.writeFileSync(marker,'unvalidated');
   expect((await d.service.importData()).ok).toBe(false);expect(fs.existsSync(marker)).toBe(true);d.runtime.start.mockClear();
   expect((await d.service.deleteData(['device-id'])).ok).toBe(false);expect(fs.existsSync(marker)).toBe(true);expect(d.runtime.start).not.toHaveBeenCalled();
-  expect((await d.service.deleteData(['working-store','task-history','task-folders'])).ok).toBe(true);expect(fs.existsSync(marker)).toBe(false);
+  expect((await d.service.deleteData(['working-store','task-history','task-folders','source-extracts'])).ok).toBe(true);expect(fs.existsSync(marker)).toBe(false);
   expect((await d.service.importData()).ok).toBe(true);expect(fs.readFileSync(d.file,'utf8')).toContain('INV-104');
  });
  it('historical export paths are only disclosed to the same current owner after awaits',async()=>{

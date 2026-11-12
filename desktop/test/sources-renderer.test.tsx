@@ -23,7 +23,7 @@ import { AttachControl } from '../src/renderer/Shell/AttachControl';
 import { AttachedMaterial, MessageWithSources } from '../src/renderer/Shell/SourceReferences';
 import { TaskLifecycle } from '../src/renderer/Shell/TaskLifecycle';
 import { TaskProgress } from '../src/renderer/Shell/TaskProgress';
-import { parseSourcesView, type AttachmentView, type MarkedReference, type MessageReferences, type SourcesView } from '../src/renderer/Shell/sources-bridge';
+import { parseSourcesView, replaceSourcesNote, sourcesNote, type AttachmentView, type MarkedReference, type MessageReferences, type SourcesView } from '../src/renderer/Shell/sources-bridge';
 import type { ProgressSnapshot } from '../src/renderer/Shell/tasks-bridge';
 
 afterEach(() => { cleanup(); delete (globalThis as { inquello?: unknown }).inquello; });
@@ -139,6 +139,15 @@ describe('Coverage with the answer', () => {
 const attachment: AttachmentView = { attachmentId: 'a1', label: 'Engagement', createdAt: '2026-11-11T00:00:00.000Z', bytes: 100, files: [{ id: 'attached/Engagement/a.csv', name: 'a.csv', relative: 'Engagement/a.csv', bytes: 100, modifiedAt: '2026-11-11T00:00:00.000Z', sha256: HASH, format: 'csv' }], notSearched: [{ relative: 'Engagement/tool.exe', reason: 'Unsupported file type' }], inaccessible: [{ relative: 'Engagement/locked.txt', reason: 'Permission denied by the operating system' }], incomplete: ['2 item(s) were not attached; see Not searched.'] };
 
 describe('the attach control', () => {
+  it('replaces the note for the agent literally, whatever the attached names contain (review pass 1)', () => {
+    const before = sourcesNote(['Ledger']), after = sourcesNote(['Costs $& fees', "$' and $`"]);
+    expect(replaceSourcesNote(`Check the ledger.
+
+${before}`, before, after)).toBe(`Check the ledger.
+
+${after}`);
+  });
+
   it('summarises an attachment, removes it on request and carries an unavailable reason', () => {
     const onRemove = vi.fn(), onAttach = vi.fn();
     render(<AttachControl attachments={[attachment]} onAttach={onAttach} onRemove={onRemove} />);

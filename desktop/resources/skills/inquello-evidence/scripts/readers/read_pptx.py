@@ -71,6 +71,7 @@ def read(path):
         number += 1
         target = rels.get(entry.get(R + 'id'))
         if not target:
+            reading.flags.setdefault('partly', []).append('slide %d' % number)
             continue
         slide = zip_xml(archive, target[1])
         if slide is None:

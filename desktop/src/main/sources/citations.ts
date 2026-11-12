@@ -26,7 +26,7 @@ export interface CitationProblem { start: number; end: number; raw: string; reas
 const EXTENSIONS: Record<string, SourceFormat> = {
   '.txt': 'text', '.md': 'text', '.markdown': 'text', '.json': 'text', '.xml': 'text', '.log': 'text', '.yaml': 'text', '.yml': 'text',
   '.ini': 'text', '.cfg': 'text', '.html': 'text', '.htm': 'text', '.sql': 'text', '.eml': 'text',
-  '.csv': 'csv', '.tsv': 'csv', '.xlsx': 'xlsx', '.xlsm': 'xlsx', '.xls': 'xls', '.docx': 'docx', '.docm': 'docx', '.doc': 'doc',
+  '.csv': 'csv', '.tsv': 'csv', '.xlsx': 'xlsx', '.xlsm': 'xlsx', '.xls': 'xls', '.docx': 'docx', '.doc': 'doc',
   '.pptx': 'pptx', '.pptm': 'pptx', '.ppt': 'ppt', '.pdf': 'pdf',
   '.png': 'image', '.jpg': 'image', '.jpeg': 'image', '.tif': 'image', '.tiff': 'image', '.gif': 'image', '.bmp': 'image', '.webp': 'image',
 };

@@ -25,7 +25,7 @@ import { afterAll, describe, expect, it, vi } from 'vitest';
 
 import { loadShippedPolicy, type DataPolicy } from '../src/main/data';
 import { createOperations, OperationError } from '../src/main/security/operations';
-import { SOURCES_REASONS, SourcesService, hostStagingTarget, sourcesPolicyGate, type StagingTarget, type TaskTurnState } from '../src/main/sources';
+import { SOURCES_REASONS, SourcesService, hostStagingTarget, removeStartManifests, sourcesPolicyGate, type StagingTarget, type TaskTurnState } from '../src/main/sources';
 import { validateTransfer, type Entry } from '../src/main/runtime/wsl-tasks';
 import { sourcesAttachPayload, sourcesStagePayload, sourcesViewPayload, taskStartPayload } from '../src/main/tasks/validators';
 import { recordingLogger, removeTempDirs, tempDir } from './helpers';
@@ -37,6 +37,7 @@ const TASK = '6f1c1d1e-0000-4000-8000-0000000000aa';
 const WORKSPACE = '6f1c1d1e-0000-4000-8000-0000000000bb';
 const OPERATION = '6f1c1d1e-0000-4000-8000-0000000000cc';
 const write = (file: string, content: string) => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, content); return file; };
+const ok = <T,>(result: { ok: true; value: T } | { ok: false; reason: string }): T => { if (!result.ok) throw new Error(result.reason); return result.value; };
 
 /** A sandbox that answers the skill's commands from a table of located lines. */
 function fakeSandbox(lines: Record<string, Array<{ label: string; text: string }>>) {
@@ -300,6 +301,101 @@ describe('references in a Task’s answers', () => {
     expect(after.value.messages[0]!.references.every(r => r.status === 'unverified')).toBe(true);
     expect(x.service.extracts(TASK)).toEqual({ ok: true, value: [] });
     expect(fs.readFileSync(path.join(x.folder, 'ledger.csv'), 'utf8')).toBe('Vendor,Amount\nNorthwind,10\n');
+  });
+});
+
+describe('review pass 1 (2026-11-12)', () => {
+  const started = (status: string) => ({ ok: true as const, value: { operationId: OPERATION, taskId: TASK, runId: TASK, threadId: 'thread-1', status, request: 'r', accepted: status === 'running' } });
+  const sandboxDown = async () => ({ ok: false as const, reason: 'Local sandbox unavailable on this device' });
+
+  it('checks an answer again when the first check did not run, and keeps a check that ran (VG2)', async () => {
+    const x = harness();
+    const attached = await x.service.attach('folder');
+    if (!attached.ok || !attached.value) throw new Error('attach failed');
+    ok(await x.service.stageIdle(TASK, WORKSPACE, attached.value.attachmentId));
+    x.setState({ status: 'completed', messages: [{ itemId: 'm1', text: answer }] });
+    x.sandbox.runTool.mockImplementationOnce(sandboxDown);
+    const first = ok(await x.service.view(TASK, WORKSPACE));
+    expect(first.messages[0]!.references.map(r => [r.status, r.reason])).toEqual([['unverified', 'The reference could not be checked: Local sandbox unavailable on this device'], ['unverified', 'The reference could not be checked: Local sandbox unavailable on this device']]);
+    // Same staged state, same answer: the check runs again instead of repeating the failure.
+    const second = ok(await x.service.view(TASK, WORKSPACE));
+    expect(second.messages[0]!.references.map(r => r.status)).toEqual(['verified', 'unverified']);
+    await x.service.view(TASK, WORKSPACE);
+    expect(x.sandbox.calls.filter(c => c === 'verify-batch')).toHaveLength(1);
+  });
+
+  it('examines start-time material again after a failed examination, once the status changes or a minute has passed', async () => {
+    const x = harness();
+    const attached = await x.service.attach('folder');
+    if (!attached.ok || !attached.value) throw new Error('attach failed');
+    expect(await x.service.startTask(OPERATION, [attached.value.attachmentId], async () => started('running'))).toMatchObject({ ok: true });
+    x.setState({ status: 'completed', messages: [] });
+    x.sandbox.runTool.mockImplementationOnce(sandboxDown);
+    expect(ok(await x.service.view(TASK, WORKSPACE)).problem).toBe(SOURCES_REASONS.notExamined);
+    expect(ok(await x.service.view(TASK, WORKSPACE)).problem).toBe(SOURCES_REASONS.notExamined);
+    expect(x.sandbox.calls).toEqual([]);
+    // A minute later the same idle Task is examined again.
+    const now = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now + 61_000);
+    try {
+      x.sandbox.runTool.mockImplementationOnce(sandboxDown);
+      expect(ok(await x.service.view(TASK, WORKSPACE)).problem).toBe(SOURCES_REASONS.notExamined);
+      // A new turn (the status changes) also clears the failure; once idle again it is examined and succeeds.
+      x.setState({ status: 'running', messages: [] });
+      expect(ok(await x.service.view(TASK, WORKSPACE)).problem).toBeNull();
+      x.setState({ status: 'completed', messages: [] });
+      const done = ok(await x.service.view(TASK, WORKSPACE));
+      expect([done.problem, done.coverage?.filesRead]).toEqual([null, 2]);
+    } finally { clock.mockRestore(); }
+    expect(x.sandbox.calls).toEqual(['inventory']);
+  });
+
+  it('tells the Task view when material was attached between turns (EC18)', async () => {
+    const x = harness();
+    const attached = await x.service.attach('folder');
+    if (!attached.ok || !attached.value) throw new Error('attach failed');
+    ok(await x.service.stageIdle(TASK, WORKSPACE, attached.value.attachmentId));
+    expect(x.changed).toEqual([TASK]);
+  });
+
+  it('refuses an attachment with no supported files (BH7)', async () => {
+    const x = harness();
+    fs.rmSync(path.join(x.folder, 'ledger.csv'));
+    fs.rmSync(path.join(x.folder, 'notes.txt'));
+    expect(await x.service.attach('folder')).toEqual({ ok: false, reason: SOURCES_REASONS.nothingStaged });
+  });
+
+  it('refuses a start, before sending, when the material folder cannot be prepared (EC16)', async () => {
+    const x = harness({ startMaterial: () => { throw new Error('EPERM: operation not permitted'); } });
+    const attached = await x.service.attach('folder');
+    if (!attached.ok || !attached.value) throw new Error('attach failed');
+    const never = vi.fn(async () => started('running'));
+    expect(await x.service.startTask(OPERATION, [attached.value.attachmentId], never)).toEqual({ ok: false, code: 'refused', reason: SOURCES_REASONS.startFailed });
+    expect(never).not.toHaveBeenCalled();
+  });
+
+  it('treats a Task whose outcome is uncertain as not idle: nothing staged, examined or checked (EC11)', async () => {
+    const x = harness();
+    const attached = await x.service.attach('folder');
+    if (!attached.ok || !attached.value) throw new Error('attach failed');
+    x.setState({ status: 'uncertain', messages: [] });
+    expect(await x.service.stageIdle(TASK, WORKSPACE, attached.value.attachmentId)).toEqual({ ok: false, reason: SOURCES_REASONS.uncertain });
+    expect(x.staged).toEqual([]);
+    expect(await x.service.startTask(OPERATION, [attached.value.attachmentId], async () => started('running'))).toMatchObject({ ok: true });
+    x.setState({ status: 'uncertain', messages: [{ itemId: 'm1', text: answer }] });
+    const view = ok(await x.service.view(TASK, WORKSPACE));
+    expect(view.messages[0]!.state).toBe('waiting');
+    expect(view.messages[0]!.references.every(r => r.reason === 'Not yet checked: the outcome of the turn is uncertain')).toBe(true);
+    expect(x.sandbox.calls).toEqual([]);
+  });
+
+  it('removes every start-time manifest left in the material folder, whatever its age (BH8)', () => {
+    const folder = tempDir('sources-material');
+    write(path.join(folder, `${OPERATION}.json`), '[]');
+    write(path.join(folder, `${OPERATION}.json.1.tmp`), '[');
+    expect(removeStartManifests(folder)).toBe(2);
+    expect(fs.readdirSync(folder)).toEqual([]);
+    expect(removeStartManifests(path.join(folder, 'missing'))).toBe(0);
   });
 });
 

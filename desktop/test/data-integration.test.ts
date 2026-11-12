@@ -159,6 +159,7 @@ describe('a real runtime home', () => {
       { category: 'task-history', label: 'Task history', files: 2 },
       { category: 'working-store', label: 'Private work organisation', files: 0 },
       { category: 'task-folders', label: 'Task working folders', files: 0 },
+      { category: 'source-extracts', label: 'Source references and extracts', files: 0 },
     ]);
     expect(exported.export.attribution).toEqual({ principal: null, appVersion: '0.0.0-test', runtimeVersion: schemaStamp.runtimeVersion });
     expect(exported.export.omissions.map((omission) => omission.category)).toEqual(expect.arrayContaining(['identity-session', 'chromium-profile', 'runtime-state', 'desktop-stderr-log']));
@@ -183,6 +184,7 @@ describe('a real runtime home', () => {
       { category: 'task-history', label: 'Task history', files: 2 },
       { category: 'working-store', label: 'Private work organisation', files: 0 },
       { category: 'task-folders', label: 'Task working folders', files: 0 },
+      { category: 'source-extracts', label: 'Source references and extracts', files: 0 },
     ]);
     // Opaque stderr logs are excluded, never restored or attributed as owned content.
     expect(imported.import.notRestored).toEqual([]);

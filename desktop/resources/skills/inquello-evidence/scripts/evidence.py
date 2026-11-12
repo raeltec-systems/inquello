@@ -61,6 +61,9 @@ def details(kind, module, path):
     counts = dict(reading.counts)
     if reading.flags.get('partly'):
         counts['partly'] = list(reading.flags['partly'])
+    if reading.flags.get('truncated'):
+        counts['partly'] = counts.get('partly', []) + ['reading cut at the bound of %d lines' % len(reading.lines)]
+        rows_read(kind, reading, counts)
     if kind in ('xlsx', 'xls'):
         sheets = counts.get('sheets', {})
         parts = ['%s%s %d rows' % (name, ' (hidden)' if item['hidden'] else '', item['rows']) for name, item in sheets.items()]
@@ -75,6 +78,24 @@ def details(kind, module, path):
     if kind == 'image':
         return counts, '%s %dx%d' % (counts['format'], counts['width'], counts['height'])
     return counts, '%d lines' % counts.get('lines', 0)
+
+
+def rows_read(kind, reading, counts):
+    """Rows actually read when the line bound cut a table: CSV data rows, or per sheet the rows before the cut."""
+    if kind == 'csv':
+        counts['rowsRead'] = sum(1 for line in reading.lines if line.meta.get('row', 0) > 1)
+    elif kind in ('xlsx', 'xls'):
+        last = reading.lines[-1].meta if reading.lines else {}
+        reached = False
+        for name, item in counts.get('sheets', {}).items():
+            if reached:
+                item['rowsRead'] = 0
+            elif name == last.get('sheet'):
+                # The row being read when the bound was hit may be incomplete, so it is not counted.
+                item['rowsRead'] = max(last.get('row', 0) - 1, 0)
+                reached = True
+            else:
+                item['rowsRead'] = item['rows']
 
 
 def inventory(root, as_json=False):
@@ -162,6 +183,17 @@ def search(root, needle):
     return 0
 
 
+def located(line):
+    """One line for the app's quote check: context lines (a CSV header brought along with later rows, a merged-cell
+    note) are marked so they are never matched, and a cell's stored value is what a quote is matched against."""
+    item = {'label': line.label, 'text': line.text}
+    if line.meta.get('context') or line.meta.get('merged'):
+        item['context'] = True
+    elif isinstance(line.meta.get('value'), str):
+        item['match'] = line.meta['value']
+    return item
+
+
 def verify(path, locator, expected_sha, emit=True):
     """JSON for the app: the text at a location, read again from the staged file."""
     result = {'ok': False, 'path': path, 'locator': locator}
@@ -173,12 +205,12 @@ def verify(path, locator, expected_sha, emit=True):
         else:
             kind, module, reading = reading_of(path)
             lines = module.select(reading, locator)
-            result.update({'kind': kind, 'lines': [{'label': line.label, 'text': line.text} for line in lines],
+            result.update({'kind': kind, 'lines': [located(line) for line in lines],
                            'ocr': any(line.meta.get('ocr') for line in lines) or (bool(reading.flags.get('ocr')) and kind == 'image'),
                            'converted': bool(reading.flags.get('converted')), 'notes': reading.notes,
                            'originalSha256': reading.flags.get('originalSha256'), 'noText': bool(reading.flags.get('noText'))})
-            result['ok'] = bool(lines)
-            if not lines:
+            result['ok'] = any(not item.get('context') for item in result['lines'])
+            if not result['ok']:
                 result['reason'] = 'nothing at that location'
     except Unreadable as error:
         result['reason'] = str(error)
@@ -186,6 +218,8 @@ def verify(path, locator, expected_sha, emit=True):
         result['reason'] = 'invalid location: %s' % error
     except (OSError, KeyError):
         result['reason'] = 'the cited file is not in the attached material'
+    except Exception:
+        result['reason'] = 'the reader failed on this file'
     if emit:
         print(json.dumps(result, ensure_ascii=False))
     return result

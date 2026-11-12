@@ -75,6 +75,8 @@ export function inventoryAttachment(selection: { files: readonly string[]; folde
     const staged = `${ATTACHED_DIR}/${relative}`;
     try { validateTransferName(staged); } catch { attachment.notSearched.push({ relative, reason: 'File name cannot be staged' }); return; }
     if (seen.has(staged.toLowerCase())) { attachment.notSearched.push({ relative, reason: 'Duplicate name; only the first was attached' }); return; }
+    // The skill's sandbox inventory skips dot-prefixed files, so they are not staged and say why.
+    if (path.posix.basename(relative).startsWith('.')) { attachment.notSearched.push({ relative, reason: 'Hidden file (name starts with a dot); not searched' }); return; }
     const format = formatOf(relative);
     if (format === 'unsupported') { attachment.notSearched.push({ relative, reason: 'Unsupported file type' }); return; }
     if (info.size > MAX_FILE_BYTES) { attachment.notSearched.push({ relative, reason: `Over the size bound (${MAX_FILE_BYTES / 1024 ** 2} MiB per file)` }); return; }

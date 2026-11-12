@@ -60,7 +60,23 @@ exec(compile(code['evidence.py'], 'evidence.py', 'exec'), main.__dict__)
 sys.exit(main.main(sys.argv[2:]))
 `;
 
-interface BatchResult { ok: boolean; reason?: string; sha256?: string; lines?: Array<{ label: string; text: string }>; ocr?: boolean; converted?: boolean; originalSha256?: string | null; noText?: boolean }
+/** `context` lines (a CSV header brought along, a merged-cell note) are never matched; `match` is a cell's stored value, matched instead of the shown text with its formula. */
+interface BatchResult { ok: boolean; reason?: string; sha256?: string; lines?: Array<{ label: string; text: string; context?: boolean; match?: string }>; ocr?: boolean; converted?: boolean; originalSha256?: string | null; noText?: boolean }
+
+/** The prefix of every reason that means the check itself did not run (sandbox, timeout, script), not that the quote is wrong. */
+export const CHECK_NOT_RUN = 'The reference could not be checked';
+
+const WORD = /[\p{L}\p{N}]/u;
+/** True when `needle` occurs in `haystack` as a whole: not directly preceded or followed by a letter or digit, so `100` is not found in `1100`. */
+export function quotedIn(haystack: string, needle: string): boolean {
+  if (!needle) return false;
+  for (let at = haystack.indexOf(needle); at >= 0; at = haystack.indexOf(needle, at + 1)) {
+    const before = Array.from(haystack.slice(Math.max(0, at - 2), at)).pop() ?? '';
+    const after = String.fromCodePoint(haystack.codePointAt(at + needle.length) ?? 32);
+    if (!WORD.test(before) && !WORD.test(after)) return true;
+  }
+  return false;
+}
 
 const unverified = (citation: Citation, index: number, reason: string, file: ReferenceFile | null = null): ReferenceView =>
   ({ index, id: citation.id, at: citation.at, quote: citation.quote, format: formatOf(citation.id), location: locationLabel(formatOf(citation.id), citation.at), status: 'unverified', reason, file, extract: null });
@@ -82,20 +98,20 @@ export async function verifyCitations(citations: readonly Citation[], attached: 
   const request = pending.map(view => [view.id, view.at, view.file!.sha256]);
   const result = await run(['/usr/bin/python3', '-I', '-c', VERIFY_BOOT, JSON.stringify(digests), 'verify-batch', JSON.stringify(request)]);
   const fail = (reason: string) => { for (const view of pending) view.reason = reason; return views; };
-  if (!result.ok) return fail(`The reference could not be checked: ${result.reason}`);
-  if (result.value.exitCode !== 0) return fail('The reference could not be checked: the reading script failed');
+  if (!result.ok) return fail(`${CHECK_NOT_RUN}: ${result.reason}`);
+  if (result.value.exitCode !== 0) return fail(`${CHECK_NOT_RUN}: the reading script failed`);
   let parsed: unknown;
-  try { parsed = JSON.parse(result.value.stdout); } catch { return fail('The reference could not be checked: unreadable result'); }
+  try { parsed = JSON.parse(result.value.stdout); } catch { return fail(`${CHECK_NOT_RUN}: unreadable result`); }
   if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && 'skillChanged' in parsed) return fail('The reading scripts in the Task folder were changed; references cannot be checked');
-  if (!Array.isArray(parsed) || parsed.length !== pending.length) return fail('The reference could not be checked: incomplete result');
+  if (!Array.isArray(parsed) || parsed.length !== pending.length) return fail(`${CHECK_NOT_RUN}: incomplete result`);
   pending.forEach((view, position) => {
     const item = parsed[position] as BatchResult;
     if (!item || typeof item !== 'object' || item.ok !== true || !Array.isArray(item.lines)) { view.reason = typeof item?.reason === 'string' ? item.reason : 'Nothing at that location'; return; }
     if (item.sha256 !== view.file!.sha256) { view.reason = 'The staged copy changed since it was attached'; return; }
     const text = item.lines.map(line => `${line.label}: ${line.text}`).join('\n');
     const wholeFile = view.format === 'image' && view.at === '';
-    const haystack = normaliseQuote(item.lines.map(line => line.text).join(' '));
-    if (!wholeFile && !haystack.includes(normaliseQuote(view.quote))) { view.reason = 'The quoted text is not at that location'; return; }
+    const haystack = normaliseQuote(item.lines.filter(line => line.context !== true).map(line => typeof line.match === 'string' ? line.match : line.text).join(' '));
+    if (!wholeFile && !quotedIn(haystack, normaliseQuote(view.quote))) { view.reason = 'The quoted text is not at that location'; return; }
     view.status = 'verified';
     view.reason = null;
     view.extract = { text, ocr: item.ocr === true, converted: item.converted === true, originalSha256: typeof item.originalSha256 === 'string' ? item.originalSha256 : null, wholeFile };

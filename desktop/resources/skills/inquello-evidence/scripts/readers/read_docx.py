@@ -10,7 +10,7 @@ import re
 
 from .common import Reading, Unreadable, TOOL_UNAVAILABLE, check_size, safe_zip, zip_xml
 
-EXTENSIONS = {'.docx', '.docm'}
+EXTENSIONS = {'.docx'}
 W = '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
 
 
@@ -125,9 +125,14 @@ def read(path, changes=False):
         for note in footnotes.findall(W + 'footnote'):
             if note.get(W + 'type') in ('separator', 'continuationSeparator', 'continuationNotice'):
                 continue
+            try:
+                identifier = int(note.get(W + 'id'))
+            except (TypeError, ValueError):
+                reading.flags.setdefault('partly', []).append('a footnote without a numeric id')
+                continue
             count_footnotes += 1
             text = ' '.join(Walker(changes).text(p) for p in note.iter(W + 'p')).strip()
-            reading.add('F%s' % note.get(W + 'id'), 'footnote %s: %s' % (note.get(W + 'id'), text), footnote=int(note.get(W + 'id')))
+            reading.add('F%d' % identifier, 'footnote %d: %s' % (identifier, text), footnote=identifier)
     comments = zip_xml(archive, 'word/comments.xml')
     count_comments = 0
     if comments is not None:

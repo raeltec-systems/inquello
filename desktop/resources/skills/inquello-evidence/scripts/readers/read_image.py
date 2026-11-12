@@ -26,13 +26,22 @@ def read(path):
     except Exception:
         raise Unreadable('corrupt or unsupported image')
     reading = Reading('image', counts={'width': width, 'height': height, 'frames': frames, 'format': kind})
-    reading.add('IMG', 'image %s, %d x %d pixels%s' % (kind, width, height, ', %d frames (first frame read)' % frames if frames > 1 else ''), header=True)
+    # Tesseract reads every page of a multi-page TIFF, but only the first frame of other formats (GIF, WebP).
+    all_frames = kind == 'TIFF'
+    reading.add('IMG', 'image %s, %d x %d pixels%s' % (kind, width, height, (', %d frames (%s)' % (frames, 'all frames read' if all_frames else 'first frame read')) if frames > 1 else ''), header=True)
+    if frames > 1 and not all_frames:
+        reading.flags['partly'] = ['frames 2 to %d not read' % frames]
     if not tool('tesseract'):
         reading.notes.append('text not read: %s' % TOOL_UNAVAILABLE)
         reading.flags['partly'] = ['OCR']
         return reading
     code, out, err = run(['tesseract', path, 'stdout', '-l', 'eng', '--psm', '4'])
-    lines = out.decode('utf-8', 'replace').replace('\f', '').split('\n') if code == 0 else []
+    if code != 0:
+        # A failed recognition is not an image without text: the content is unread, so the file is partly read.
+        reading.notes.append('OCR failed; the text of the image was not read')
+        reading.flags['partly'] = reading.flags.get('partly', []) + ['OCR failed']
+        return reading
+    lines = out.decode('utf-8', 'replace').replace('\f', '').split('\n')
     while lines and not lines[-1].strip():
         lines.pop()
     if not any(line.strip() for line in lines):

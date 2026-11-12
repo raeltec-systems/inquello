@@ -120,4 +120,13 @@ describe('Story 2.1 attached material at Task start',()=>{
   await choices();fireEvent.click(screen.getByLabelText('Send'));await waitFor(()=>expect(start).toHaveBeenCalledTimes(3));
   expect(start.mock.calls[2]![0]).not.toHaveProperty('attachmentIds');
  });
+ it('refuses a ninth attachment with a plain reason and never drops a held one silently (review pass 1)',async()=>{
+  let n=0;const bridge={...sources(),attach:vi.fn(async()=>{n++;return{ok:true,value:{...attachment,attachmentId:`6f1c1d1e-0000-4000-8000-0000000000b${n}`,label:`Folder ${n}`}};})};setup(undefined,bridge);
+  const button=await screen.findByRole('button',{name:'Attach folder'});
+  for(let i=1;i<=8;i++){await waitFor(()=>expect(button.getAttribute('aria-disabled')).not.toBe('true'));fireEvent.click(button);await waitFor(()=>expect(document.querySelectorAll('[data-attachment]')).toHaveLength(i));}
+  await waitFor(()=>expect(button.getAttribute('aria-disabled')).not.toBe('true'));fireEvent.click(button);
+  await waitFor(()=>expect(document.querySelector('[data-attach-notice]')!.textContent).toBe('Eight attachments is the most one request can carry. Remove one before attaching more; nothing else was attached.'));
+  expect(bridge.attach).toHaveBeenCalledTimes(8);expect(bridge.discard).not.toHaveBeenCalled();
+  expect([...document.querySelectorAll('[data-attachment]')].map(item=>item.getAttribute('data-attachment'))).toEqual(Array.from({length:8},(_,i)=>`6f1c1d1e-0000-4000-8000-0000000000b${i+1}`));
+ });
 });

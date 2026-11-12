@@ -303,4 +303,140 @@ describe.skipIf(!databaseConfigured)('evidence reading in the real Task sandbox'
     const coverage = ok(service.coverage(task));
     expect(coverage?.unreadable.every(item => item.reason === 'Not yet examined in the sandbox')).toBe(true);
   }, 300_000);
+
+  // Review pass 1 (2026-11-12): each check below failed on the readers and quote check before the fixes.
+  it('matches quotes only in the cited text, reports partial and failed reads, and survives a reader failure (review pass 1)', async () => {
+    const own = tempDir('sources-review');
+    const ledger = path.join(own, 'ledger.csv'), lines = path.join(own, 'lines.txt');
+    fs.writeFileSync(ledger, 'Vendor,Amount\nNorthwind,1100\nContoso,200\n');
+    fs.writeFileSync(lines, 'first\fstill first\r\nsecond\rthird\n');
+    const folder = path.join(fixtures, 'folder');
+    const { task, service } = await preparedTask('Review fixes', { files: [ledger, lines, ...['ap-ledger.xlsx', 'sample-report.pdf', 'purchasing-policy.docx', 'planning-deck.pptx', 'confirmation-letter.png'].map(name => path.join(folder, name))], folders: [] });
+    const attached = await service.attach('files');
+    if (!attached.ok || !attached.value) throw new Error('attach failed');
+    const staged = ok(await service.stage(task, attached.value.attachmentId));
+    expect(staged.coverage.unreadable).toEqual([]);
+    // The CSV header brought along with later rows, a longer number and a formula's text never verify a quote; lines end only at \n, \r\n or \r.
+    const answer = [
+      ':inquello-source{id="attached/ledger.csv" at="R2" quote="Vendor"}', ':inquello-source{id="attached/ledger.csv" at="R2" quote="100"}',
+      ':inquello-source{id="attached/ledger.csv" at="R2" quote="1100"}', ':inquello-source{id="attached/ledger.csv" at="R9" quote="Vendor"}',
+      ':inquello-source{id="attached/ap-ledger.xlsx" at="Ledger!C8" quote="C3"}', ':inquello-source{id="attached/ap-ledger.xlsx" at="Ledger!C8" quote="12346"}',
+      ':inquello-source{id="attached/lines.txt" at="L2" quote="second"}',
+    ].join('\n');
+    const checked = ok(await service.references(task, answer));
+    expect(checked.references.map(view => [view.status, view.reason])).toEqual([
+      ['unverified', 'The quoted text is not at that location'], ['unverified', 'The quoted text is not at that location'], ['verified', null], ['unverified', 'nothing at that location'],
+      ['unverified', 'The quoted text is not at that location'], ['verified', null], ['verified', null],
+    ]);
+    const script = String.raw`
+import contextlib, io, json, os, re, sys, zipfile
+sys.path.insert(0, 'skills/inquello-evidence/scripts')
+import readers, readers.common as common, evidence
+from PIL import Image
+out = {}
+def check(name, fn):
+    try: out[name] = fn()
+    except BaseException as error: out[name] = 'error: %s: %s' % (type(error).__name__, error)
+def rewrite(source, target, part, change):
+    with zipfile.ZipFile(source) as old, zipfile.ZipFile(target, 'w', zipfile.ZIP_DEFLATED) as new:
+        for info in old.infolist():
+            data = old.read(info.filename)
+            new.writestr(info, change(data.decode('utf-8')).encode('utf-8') if info.filename == part else data)
+os.makedirs('work', exist_ok=True)
+def truncated():
+    try:
+        common.MAX_OUTPUT_LINES = 2
+        csv_counts = evidence.details('csv', readers.read_csv, 'attached/ledger.csv')[0]
+        common.MAX_OUTPUT_LINES = 12
+        xlsx_counts = evidence.details('xlsx', readers.read_xlsx, 'attached/ap-ledger.xlsx')[0]
+    finally:
+        common.MAX_OUTPUT_LINES = 200000
+    return {'csv': csv_counts, 'sheets': xlsx_counts['sheets'], 'xlsxPartly': xlsx_counts.get('partly')}
+check('truncated', truncated)
+def reader_failure():
+    original = readers.read_csv.read
+    readers.read_csv.read = lambda path: 1 / 0
+    try:
+        single = evidence.verify('attached/ledger.csv', 'R2', '', emit=False)
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            evidence.verify_batch(json.dumps([['attached/ledger.csv', 'R2', ''], ['attached/lines.txt', 'L1', '']]))
+        return {'single': single.get('reason'), 'batch': [[item['ok'], item.get('reason')] for item in json.loads(buffer.getvalue())]}
+    finally:
+        readers.read_csv.read = original
+check('readerFailure', reader_failure)
+def ocr_failed():
+    original = readers.read_image.run
+    readers.read_image.run = lambda argv, **kwargs: (1, b'', 'failed')
+    try:
+        reading = readers.read_image.read('attached/confirmation-letter.png')
+        return {'partly': reading.flags.get('partly'), 'noText': bool(reading.flags.get('noText'))}
+    finally:
+        readers.read_image.run = original
+check('ocrFailed', ocr_failed)
+def frames():
+    pictures = [Image.new('L', (200, 100), 255), Image.new('L', (200, 100), 0)]
+    result = {}
+    for name in ('two.gif', 'two.tif'):
+        pictures[0].save('work/' + name, save_all=True, append_images=pictures[1:])
+        reading = readers.read_image.read('work/' + name)
+        result[name] = {'partly': reading.flags.get('partly'), 'header': reading.lines[0].text}
+    return result
+check('frames', frames)
+def sparse():
+    page_text, ocr_page = readers.read_pdf.page_text, readers.read_pdf.ocr_page
+    readers.read_pdf.page_text = lambda path, number: 'BATES-000123\n'
+    readers.read_pdf.ocr_page = lambda path, number: 'Invoice total 500\nPaid in full\n'
+    try:
+        reading = readers.read_pdf.read('attached/sample-report.pdf')
+        return [[line.label, line.text, bool(line.meta.get('ocr'))] for line in reading.lines if line.meta.get('page') == 1]
+    finally:
+        readers.read_pdf.page_text, readers.read_pdf.ocr_page = page_text, ocr_page
+check('sparse', sparse)
+def footnote():
+    rewrite('attached/purchasing-policy.docx', 'work/footnote.docx', 'word/footnotes.xml', lambda xml: xml.replace('w:id="1"', 'w:id="x"', 1))
+    reading = readers.read_docx.read('work/footnote.docx')
+    return {'partly': reading.flags.get('partly'), 'paragraphs': reading.counts['paragraphs']}
+check('footnote', footnote)
+def slide():
+    rewrite('attached/planning-deck.pptx', 'work/slides.pptx', 'ppt/_rels/presentation.xml.rels', lambda xml: re.sub(r'<Relationship [^>]*Target="slides/slide2\.xml"[^>]*/>', '', xml))
+    reading = readers.read_pptx.read('work/slides.pptx')
+    return {'partly': reading.flags.get('partly'), 'slides': reading.counts['slides']}
+check('slide', slide)
+def zero_pages():
+    import pypdf
+    pypdf.PdfWriter().write('work/empty.pdf')
+    original = readers.read_pdf.tool
+    readers.read_pdf.tool = lambda name: None
+    try:
+        return evidence.details('pdf', readers.read_pdf, 'work/empty.pdf')[1]
+    finally:
+        readers.read_pdf.tool = original
+check('zeroPages', zero_pages)
+check('text', lambda: [[line.label, line.text] for line in readers.read_text.read('attached/lines.txt').lines])
+print(json.dumps(out))
+`;
+    const result = await run(task, ['/usr/bin/python3', '-I', '-c', script], 120_000);
+    expect(result.exitCode).toBe(0);
+    const report = JSON.parse(result.stdout) as Record<string, unknown>;
+    // The line bound: partly read, and fewer rows read than present (CSV rows; the workbook's cut sheet and every sheet after it).
+    const truncated = report.truncated as { csv: Record<string, unknown>; sheets: Record<string, { rows: number; rowsRead?: number }>; xlsxPartly: string[] };
+    expect(truncated.csv).toMatchObject({ rows: 2, rowsRead: 1, partly: ['reading cut at the bound of 2 lines'] });
+    expect(truncated.xlsxPartly).toEqual(['reading cut at the bound of 12 lines']);
+    const sheets = Object.values(truncated.sheets);
+    expect(sheets[0]!.rowsRead).toBeLessThan(sheets[0]!.rows);
+    expect(sheets.slice(1).every(sheet => sheet.rowsRead === 0)).toBe(true);
+    // One reader failing fails only its own citations.
+    expect(report.readerFailure).toEqual({ single: 'the reader failed on this file', batch: [[false, 'the reader failed on this file'], [true, null]] });
+    // A failed recognition is partly read, not "no recognisable text"; an animated GIF is read from its first frame only, a multi-page TIFF in full.
+    expect(report.ocrFailed).toEqual({ partly: ['OCR failed'], noText: false });
+    expect(report.frames).toEqual({ 'two.gif': { partly: ['frames 2 to 2 not read'], header: 'image GIF, 200 x 100 pixels, 2 frames (first frame read)' }, 'two.tif': { partly: null, header: 'image TIFF, 200 x 100 pixels, 2 frames (all frames read)' } });
+    // A page with a tiny text layer (a Bates number) is read by OCR as well, after its text-layer lines.
+    expect(report.sparse).toEqual([['PG1', 'page 1 - text layer, then recognised text (OCR)', false], ['PG1:L1', 'BATES-000123', false], ['PG1:L2', 'Invoice total 500', true], ['PG1:L3', 'Paid in full', true]]);
+    expect(report.footnote).toMatchObject({ partly: ['a footnote without a numeric id'] });
+    expect(report.slide).toEqual({ partly: ['slide 2'], slides: 3 });
+    // A PDF without pages is unreadable, never "read" with nothing in it (pypdf gives the page count where Poppler is absent).
+    expect(report.zeroPages).toBe('error: Unreadable: no pages found; corrupt or unsupported PDF');
+    expect(report.text).toEqual([['L1', 'first\fstill first'], ['L2', 'second'], ['L3', 'third']]);
+  }, 600_000);
 });
